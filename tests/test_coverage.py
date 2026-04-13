@@ -4,9 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+
 from roboclaws.core.engine import AgentState
 from roboclaws.core.vlm import MockProvider
-
 from roboclaws.games.coverage import CoverageGame, CoverageResult, _pos_to_cell
 
 # ---------------------------------------------------------------------------
@@ -301,7 +301,8 @@ def test_coverage_pct_zero_without_total_cells():
 def test_coverage_pct_correct_with_total_cells():
     engine = _make_engine(agent_count=1)
     engine.get_all_agent_states.return_value = [_state(0, x=0.0)]
-    engine.step.side_effect = lambda agent_id, action, **kw: _state(agent_id, x=0.0)  # stays in place
+    # side_effect: agent stays in place
+    engine.step.side_effect = lambda agent_id, action, **kw: _state(agent_id, x=0.0)
     game = CoverageGame(
         engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5, total_cells=20
     )

@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint + mock tests (every push and PR)
+  # ---------------------------------------------------------------------------
+  lint-and-mock:
+    name: Lint & mock tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      # Cache the AI2-THOR Unity binary (~1 GB) so it doesn't re-download each run.
+      # The cache is populated on first run; subsequent runs restore instantly.
+      - name: Cache AI2-THOR Unity build
+        uses: actions/cache@v4
+        with:
+          path: ~/.ai2thor
+          key: ${{ runner.os }}-ai2thor-v1
+
+      # Xvfb provides a virtual display for AI2-THOR's Unity renderer.
+      # libgl1 / libglib2.0-0 are runtime libraries Unity needs on Linux.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff check)
+        run: ruff check .
+
+      - name: Format check (ruff format --check)
+        run: ruff format --check .
+
+      # All current tests use unittest.mock — no Unity build needed.
+      # Future AI2-THOR integration tests should be wrapped with xvfb-run.
+      - name: Run tests
+        run: pytest
+
+      # Upload report.html if reporter.py (issue #15) has generated one.
+      # Uses if-no-files-found: ignore so this step never fails the build.
+      - name: Upload HTML report (if present)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-mock
+          path: "**/report.html"
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Real-model smoke test (push to main only, to control API cost)
+  # ---------------------------------------------------------------------------
+  real-model-smoke:
+    name: Real-model smoke test (Kimi)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      # Validate that the secret is set and the Kimi API returns a parseable
+      # JSON action.  Cost: ~$0.0001 per run.
+      - name: Validate KIMI_API_KEY
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: python scripts/check_kimi_key.py
+
+      # TODO(#10): Run a full 5-step territory game once examples/territory_game.py
+      # is implemented.  Planned command:
+      #   xvfb-run python examples/territory_game.py \
+      #       --model kimi --agents 2 --steps 5 --output-dir /tmp/smoke-out
+      # After that, report.html from reporter.py (#15) can be uploaded here.
+
+      - name: Upload HTML report (if present)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-real-model
+          path: "**/report.html"
+          if-no-files-found: ignore
