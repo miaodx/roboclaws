@@ -141,6 +141,7 @@ class ReplayRecorder:
         termination_reason: str = "unknown",
         generate_gif: bool = True,
         gif_fps: float = 4.0,
+        generate_report: bool = False,
     ) -> Path:
         """Persist all recorded data to *output_dir*.
 
@@ -166,6 +167,8 @@ class ReplayRecorder:
             termination_reason: Why the game ended ("max_steps", "coverage_reached", …).
             generate_gif: Write ``replay.gif`` when ``imageio`` is available.
             gif_fps: Frames per second for the output GIF.
+            generate_report: Generate a self-contained ``report.html`` via
+                :mod:`roboclaws.core.reporter` after saving. Defaults to ``False``.
 
         Returns:
             Resolved ``Path`` to the output directory.
@@ -228,6 +231,11 @@ class ReplayRecorder:
 
         if generate_gif and composite_frames and _HAS_IMAGEIO:
             self.generate_gif(composite_frames, out / "replay.gif", fps=gif_fps)
+
+        if generate_report:
+            from roboclaws.core.reporter import generate as _gen_report  # noqa: PLC0415
+
+            _gen_report(out)
 
         return out
 
