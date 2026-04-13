@@ -15,6 +15,8 @@ _COST_PER_M: dict[str, dict[str, float]] = {
     "gpt-4o": {"input": 5.00, "output": 15.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "kimi-k2-5": {"input": 1.00, "output": 3.00},
+    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
+    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
 }
 
 _SYSTEM_PROMPT = (
@@ -60,6 +62,38 @@ class VLMProvider(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# AgentAction Pydantic model (built lazily; requires pydantic + instructor)
+# ---------------------------------------------------------------------------
+
+
+def _build_agent_action_model() -> type:
+    """Return AgentAction Pydantic model. Called once per provider __init__."""
+    from typing import Literal
+
+    from pydantic import BaseModel
+
+    class AgentAction(BaseModel):
+        """Structured VLM response — instructor enforces schema and auto-retries."""
+
+        reasoning: str
+        # mirrors NAVIGATION_ACTIONS in roboclaws/core/engine.py
+        action: Literal[
+            "MoveAhead",
+            "MoveBack",
+            "MoveLeft",
+            "MoveRight",
+            "RotateLeft",
+            "RotateRight",
+            "LookUp",
+            "LookDown",
+            "Teleport",
+            "Done",
+        ]
+
+    return AgentAction
+
+
+# ---------------------------------------------------------------------------
 # MockProvider
 # ---------------------------------------------------------------------------
 
@@ -93,7 +127,7 @@ class MockProvider:
 
 
 class OpenAIProvider:
-    """GPT-4o / GPT-4o-mini via the official OpenAI SDK."""
+    """GPT-4o / GPT-4o-mini via the OpenAI SDK with instructor structured output."""
 
     def __init__(
         self,
@@ -102,10 +136,15 @@ class OpenAIProvider:
         max_tokens: int = 256,
     ) -> None:
         try:
+            import instructor
             from openai import OpenAI  # type: ignore[import-untyped]
         except ImportError as exc:
-            raise ImportError("openai package required: pip install openai") from exc
-        self._client = OpenAI(api_key=api_key or os.environ["OPENAI_API_KEY"])
+            raise ImportError(
+                "openai and instructor packages required: pip install openai instructor"
+            ) from exc
+        self._AgentAction = _build_agent_action_model()
+        raw_client = OpenAI(api_key=api_key or os.environ["OPENAI_API_KEY"])
+        self._client = instructor.from_openai(raw_client)
         self.model = model
         self._max_tokens = max_tokens
         self._cost = 0.0
@@ -139,11 +178,11 @@ class OpenAIProvider:
         state: dict[str, Any],
     ) -> dict[str, Any]:
         messages = self._build_messages(images, state)
-        response = self._client.chat.completions.create(
+        result, response = self._client.chat.completions.create_with_completion(
             model=self.model,
             messages=[{"role": "system", "content": _SYSTEM_PROMPT}] + messages,  # type: ignore[arg-type]
             max_tokens=self._max_tokens,
-            response_format={"type": "json_object"},
+            response_model=self._AgentAction,
         )
         usage = response.usage
         if usage:
@@ -151,36 +190,23 @@ class OpenAIProvider:
                 usage.prompt_tokens / 1_000_000 * self._cost_table["input"]
                 + usage.completion_tokens / 1_000_000 * self._cost_table["output"]
             )
-        raw = response.choices[0].message.content or ""
-        return _parse_response(raw)
+        return {"reasoning": result.reasoning, "action": result.action}
 
 
 # ---------------------------------------------------------------------------
-# KimiProvider
+# _AnthropicBase — shared logic for AnthropicProvider + KimiProvider
 # ---------------------------------------------------------------------------
 
 
-class KimiProvider:
-    """Kimi (Moonshot) via the Anthropic SDK with a custom base_url."""
+class _AnthropicBase:
+    """Shared implementation for Anthropic-SDK providers (native Claude + Kimi)."""
 
-    def __init__(
-        self,
-        model: str = "kimi-k2-5",
-        api_key: str | None = None,
-        max_tokens: int = 256,
-    ) -> None:
-        try:
-            import anthropic  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise ImportError("anthropic package required: pip install anthropic") from exc
-        self._client = anthropic.Anthropic(
-            api_key=api_key or os.environ["KIMI_API_KEY"],
-            base_url="https://api.kimi.com/coding",
-        )
-        self.model = model
-        self._max_tokens = max_tokens
-        self._cost = 0.0
-        self._cost_table = _COST_PER_M.get(model, {"input": 1.00, "output": 3.00})
+    _model: str
+    _max_tokens: int
+    _cost: float
+    _cost_table: dict[str, float]
+    _client: Any
+    _AgentAction: type
 
     @property
     def cumulative_cost(self) -> float:
@@ -208,10 +234,11 @@ class KimiProvider:
             )
         content.append({"type": "text", "text": json.dumps(state, indent=2)})
 
-        response = self._client.messages.create(
-            model=self.model,
+        result, response = self._client.messages.create_with_completion(
+            model=self._model,
             max_tokens=self._max_tokens,
             system=_SYSTEM_PROMPT,
+            response_model=self._AgentAction,
             messages=[{"role": "user", "content": content}],
         )
         usage = response.usage
@@ -220,30 +247,62 @@ class KimiProvider:
                 usage.input_tokens / 1_000_000 * self._cost_table["input"]
                 + usage.output_tokens / 1_000_000 * self._cost_table["output"]
             )
-        raw = response.content[0].text if response.content else ""
-        return _parse_response(raw)
+        return {"reasoning": result.reasoning, "action": result.action}
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+class AnthropicProvider(_AnthropicBase):
+    """Claude models via the native Anthropic SDK with instructor structured output."""
+
+    def __init__(
+        self,
+        model: str = "claude-3-5-sonnet-20241022",
+        api_key: str | None = None,
+        max_tokens: int = 256,
+    ) -> None:
+        try:
+            import anthropic  # type: ignore[import-untyped]
+            import instructor
+        except ImportError as exc:
+            raise ImportError(
+                "anthropic and instructor packages required: pip install anthropic instructor"
+            ) from exc
+        self._AgentAction = _build_agent_action_model()
+        raw_client = anthropic.Anthropic(
+            api_key=api_key or os.environ["ANTHROPIC_API_KEY"],
+        )
+        self._client = instructor.from_anthropic(raw_client)
+        self._model = model
+        self._max_tokens = max_tokens
+        self._cost = 0.0
+        self._cost_table = _COST_PER_M.get(model, {"input": 3.00, "output": 15.00})
 
 
-def _parse_response(raw: str) -> dict[str, Any]:
-    """Parse model output; fall back to a random action on failure."""
-    raw = raw.strip()
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        lines = raw.splitlines()
-        raw = "\n".join(lines[1:-1]) if len(lines) > 2 else raw
-    try:
-        result = json.loads(raw)
-        if isinstance(result, dict) and result.get("action") in NAVIGATION_ACTIONS:
-            return result
-    except (json.JSONDecodeError, KeyError):
-        pass
-    fallback = random.choice(NAVIGATION_ACTIONS)
-    return {"reasoning": f"Parse error; falling back to {fallback}", "action": fallback}
+class KimiProvider(_AnthropicBase):
+    """Kimi (Moonshot) via the Anthropic SDK with a custom base_url and instructor."""
+
+    def __init__(
+        self,
+        model: str = "kimi-k2-5",
+        api_key: str | None = None,
+        max_tokens: int = 256,
+    ) -> None:
+        try:
+            import anthropic  # type: ignore[import-untyped]
+            import instructor
+        except ImportError as exc:
+            raise ImportError(
+                "anthropic and instructor packages required: pip install anthropic instructor"
+            ) from exc
+        self._AgentAction = _build_agent_action_model()
+        raw_client = anthropic.Anthropic(
+            api_key=api_key or os.environ["KIMI_API_KEY"],
+            base_url="https://api.kimi.com/coding",
+        )
+        self._client = instructor.from_anthropic(raw_client)
+        self._model = model
+        self._max_tokens = max_tokens
+        self._cost = 0.0
+        self._cost_table = _COST_PER_M.get(model, {"input": 1.00, "output": 3.00})
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +315,9 @@ _MODEL_ALIASES: dict[str, str] = {
     "gpt-4o-mini": "gpt-4o-mini",
     "kimi": "kimi-k2-5",
     "kimi-k2-5": "kimi-k2-5",
+    "anthropic": "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022",
+    "claude-3-haiku-20240307": "claude-3-haiku-20240307",
 }
 
 
@@ -263,7 +325,8 @@ def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
     """Map a --model CLI flag to a provider instance.
 
     Args:
-        model: One of "mock", "gpt-4o", "gpt-4o-mini", "kimi".
+        model: One of "mock", "gpt-4o", "gpt-4o-mini", "kimi", "anthropic",
+               or a full model name like "claude-3-5-sonnet-20241022".
         **kwargs: Forwarded to the provider constructor.
 
     Returns:
@@ -276,5 +339,7 @@ def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
         return MockProvider(**kwargs)
     if canonical in ("gpt-4o", "gpt-4o-mini"):
         return OpenAIProvider(model=canonical, **kwargs)
+    if canonical.startswith("claude"):
+        return AnthropicProvider(model=canonical, **kwargs)
     # kimi-k2-5
     return KimiProvider(model=canonical, **kwargs)
