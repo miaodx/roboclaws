@@ -1,68 +1,68 @@
 # Roboclaws 🦞🤖
 
-**多个 OpenClaw Agent 控制多个仿真机器人：对抗与协作实验平台**
+**Multiple OpenClaw Agents Controlling Multiple Simulated Robots: Competition & Cooperation**
 
-> 社区首个 OpenClaw 多 Agent 仿真机器人对抗/协作 demo
+> The first OpenClaw multi-agent simulated robotics demo
 
-## 这是什么
+## What is this
 
-Roboclaws 让多个 VLM/OpenClaw Agent 实例同时控制仿真环境中的多个机器人，进行对抗（领地争夺）和协作（区域覆盖）的实验。每个机器人由独立的 AI Agent 驱动，通过第一人称相机画面做出导航决策。
+Roboclaws lets multiple VLM/OpenClaw agent instances simultaneously control robots in a simulated environment, competing (territory control) or cooperating (area coverage). Each robot is driven by an independent AI agent that makes navigation decisions from first-person camera views.
 
-## 两个游戏场景
+## Two Game Scenarios
 
-**🗺️ 领地争夺（对抗）** — 2-3 个机器人在室内场景中竞争。走过的格子归你，别人不能再走。可以选择快速扩张，也可以去堵住对手的路。
+**🗺️ Territory Control (Adversarial)** — 2-3 robots compete in an indoor scene. Cells you walk over become yours; others can't claim them. Choose between rapid expansion or blocking your opponents' paths.
 
-**📸 协作覆盖（合作）** — 2-3 个机器人协同探索整个房间。目标是尽快让 95% 的区域被至少一个机器人"看到"。机器人需要自主判断谁去哪里。
+**📸 Cooperative Coverage** — 2-3 robots collaboratively explore an entire room. Goal: reach 95% area coverage as fast as possible. Robots must autonomously decide who goes where.
 
-## 快速开始
+## Quick Start
 
 ```bash
 pip install -e ".[dev]"
 
-# 单 Agent 探索
+# Single agent exploration
 python examples/single_agent_explore.py
 
-# 领地争夺（3 Agent）
+# Territory control (3 agents)
 python examples/territory_game.py --agents 3 --scene FloorPlan201
 
-# 协作覆盖（3 Agent）
+# Cooperative coverage (3 agents)
 python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ```
 
-需要设置 VLM API key：
+Set a VLM API key:
 ```bash
 export ANTHROPIC_API_KEY=sk-...    # Claude
-# 或
+# or
 export OPENAI_API_KEY=sk-...       # GPT-4o / GPT-4o-mini
 ```
 
-## 架构
+## Architecture
 
 ```
 VLM Agent 0 ──┐
-VLM Agent 1 ──┤── Game Controller ── AI2-THOR (多 Agent 仿真)
+VLM Agent 1 ──┤── Game Controller ── AI2-THOR (multi-agent sim)
 VLM Agent 2 ──┘
 
-每步循环：
-截图 → 生成俯瞰地图 → 构造 prompt → VLM 决策 → 执行动作 → 记录回放
+Per-step loop:
+screenshot → generate overhead map → build prompt → VLM decision → execute action → log replay
 ```
 
-Phase 1 直接调用 VLM API（Claude/GPT-4o），Phase 2 接入 OpenClaw Gateway 实现持久化 Agent 记忆和多渠道通信。
+Phase 1 calls VLM APIs directly (Claude/GPT-4o). Phase 2 integrates OpenClaw Gateway for persistent agent memory and multi-channel communication.
 
-## 路线图
+## Roadmap
 
-- [x] **Phase 0**: 技术调研与设计（本文档）
-- [ ] **Phase 1**: AI2-THOR + VLM API 多 Agent 对抗/协作 demo
-- [ ] **Phase 2**: OpenClaw 集成（Skill + Gateway + 记忆）
-- [ ] **Phase 3**: Isaac Lab 迁移（G1 人形机器人 + RL 运动策略）
+- [x] **Phase 0**: Technical research & design
+- [ ] **Phase 1**: AI2-THOR + VLM API multi-agent competition/cooperation demo
+- [ ] **Phase 2**: OpenClaw integration (Skill + Gateway + memory)
+- [ ] **Phase 3**: Isaac Lab migration (G1 humanoid + RL locomotion policy)
 
-## 相关项目
+## Related Projects
 
-- [Roboharness](https://github.com/MiaoDX/roboharness) — AI Coding Agent 的机器人仿真视觉测试工具
-- [Robowbc](https://github.com/MiaoDX/robowbc) — 全身控制（Whole Body Control）实验
-- [OpenClaw](https://github.com/openclaw/openclaw) — 开源个人 AI 助手
-- [ROSClaw](https://github.com/PlaiPin/rosclaw) — OpenClaw ↔ ROS 2 桥接
-- [AI2-THOR](https://github.com/allenai/ai2thor) — 交互式 3D 室内仿真环境
+- [Roboharness](https://github.com/MiaoDX/roboharness) — Visual testing harness for AI coding agents in robot simulation
+- [Robowbc](https://github.com/MiaoDX/robowbc) — Whole Body Control experiments
+- [OpenClaw](https://github.com/openclaw/openclaw) — Open-source personal AI assistant
+- [ROSClaw](https://github.com/PlaiPin/rosclaw) — OpenClaw ↔ ROS 2 bridge
+- [AI2-THOR](https://github.com/allenai/ai2thor) — Interactive 3D indoor simulation
 
 ## License
 

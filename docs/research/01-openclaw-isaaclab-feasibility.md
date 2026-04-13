@@ -1,68 +1,46 @@
-# OpenClaw + Isaac Lab：LLM 控制仿真机器人的可行性路线图
+# OpenClaw + Isaac Lab: Feasibility Roadmap for LLM-Controlled Simulated Robots
 
-> 调研日期：2026-04-13
-> 状态：已完成，结论已纳入技术设计
+> Research date: 2026-04-13
+> Status: Complete. Conclusions incorporated into technical design.
 
-## 核心结论
+## Key Finding
 
-将 OpenClaw 接入 Isaac Lab 控制仿真机器人技术上可行。社区已构建关键中间件：ROSClaw 提供 ROS 2 桥接，ClawBody 验证了 MuJoCo 仿真集成，DimensionalOS 在物理 Unitree G1 上跑通了带空间记忆的 OpenClaw。推荐架构是双层控制层级：OpenClaw 作为高层 VLM 规划器（1-10 Hz），底层由预训练 RL 运动策略执行关节控制（50-200 Hz）。
+Connecting OpenClaw to Isaac Lab for simulated robot control is technically feasible. The community has built critical middleware: ROSClaw provides a ROS 2 bridge, ClawBody validates MuJoCo simulation integration, and DimensionalOS has run OpenClaw on a physical Unitree G1 with spatial memory. The recommended architecture is a two-level control hierarchy: OpenClaw as high-level VLM planner (1-10 Hz), with a pre-trained RL locomotion policy for joint control (50-200 Hz).
 
-**但 Isaac Lab 不适合作为 2-3 天 PoC 的平台**——没有现成室内场景、需要 GPU、搭建复杂度高。最终决定 Phase 1 使用 AI2-THOR，Isaac Lab 留到 Phase 3。
+**However, Isaac Lab is not suitable for a 2-3 day PoC** — no ready-made indoor scenes, requires GPU, high setup complexity. Final decision: Phase 1 uses AI2-THOR; Isaac Lab deferred to Phase 3.
 
-## OpenClaw 机器人生态
+## OpenClaw Robotics Ecosystem
 
-OpenClaw（247K+ star）已有成熟的机器人集成层：
+OpenClaw (247K+ stars) already has a mature robotics integration layer:
 
-- **ROSClaw**（PlaiPin/rosclaw）：SF OpenClaw Hackathon 第一名。模型无关的 ROS 2 执行层，通过 rosbridge WebSocket 连接 OpenClaw Gateway 到 ROS 2。支持三种平台（轮式、四足、人形），四种模型后端。arXiv:2603.26997 记录了模型间高达 4.8× 的越界动作提议率差异。
-- **DimensionalOS**（dimensionalOS/dimos）：365 commits，将 OpenClaw 集成到 Unitree G1，引入空间代理记忆（Spatial Agent Memory）。
-- **ClawBody**（tomrikert/clawbody）：Reachy Mini + MuJoCo 仿真，25 Hz 人脸追踪。
-- **OpenGo**（arXiv:2604.01708）：Unitree Go2 上的 OpenClaw，三阶段技能流水线。
-- **NemoClaw**（NVIDIA/NemoClaw）：将 OpenClaw 沙箱化运行在 NVIDIA OpenShell 中。
+- **ROSClaw** (PlaiPin/rosclaw): SF OpenClaw Hackathon winner. Model-agnostic ROS 2 executive layer via rosbridge WebSocket. Deployed on 3 platform types (wheeled, quadruped, humanoid), 4 model backends. arXiv:2603.26997 documented up to 4.8× variation in out-of-policy action proposal rates across models.
+- **DimensionalOS** (dimensionalOS/dimos): 365 commits. Integrated OpenClaw with Unitree G1, introducing Spatial Agent Memory — a voxel-based world model.
+- **ClawBody** (tomrikert/clawbody): Reachy Mini + MuJoCo simulation, 25 Hz face tracking.
+- **OpenGo** (arXiv:2604.01708): OpenClaw on Unitree Go2, three-stage skill pipeline (LLM generate → sim validate → deploy).
+- **NemoClaw** (NVIDIA/NemoClaw): Sandboxed OpenClaw in NVIDIA OpenShell with managed inference.
 
-## Isaac Lab 的 G1 支持
+## Isaac Lab G1 Support
 
-Isaac Lab 原生支持 Unitree G1：
-- 预构建环境：`Unitree-G1-29dof-Velocity`
-- Locomanipulation：`Isaac-PickPlace-Locomanipulation-G1-Abs-v0`
-- TiledCamera 返回 GPU 端 PyTorch 张量，可编码为 base64 发给 VLM
-- ROS 2 桥接（`isaacsim.ros2.bridge`）可订阅 `/cmd_vel` 话题
-- 多机器人通过 `DirectMARLEnv`（PettingZoo API）支持
+Native Unitree G1 environments: `Unitree-G1-29dof-Velocity`, `Isaac-PickPlace-Locomanipulation-G1-Abs-v0`. TiledCamera returns GPU-resident PyTorch tensors encodable as base64 for VLM. ROS 2 bridge subscribes to `/cmd_vel`. Multi-robot via `DirectMARLEnv` (PettingZoo API).
 
-## 双层控制架构
+## Two-Level Control Architecture
 
 ```
-OpenClaw VLM (1-5 Hz) → 速度指令 (vx, vy, ωz) → RL 运动策略 (200 Hz) → 关节动作
+OpenClaw VLM (1-5 Hz) → velocity cmd (vx, vy, ωz) → RL policy (200 Hz) → joint actions
 ```
 
-先例：NaVILA（arXiv:2412.04453）用 VILA VLM + RL 策略在 Unitree Go2/H1 上实现 88% 真实世界导航成功率。
+Precedent: NaVILA (arXiv:2412.04453) achieved 88% real-world navigation success on Unitree Go2/H1 with VILA VLM + RL policy.
 
-## 三种集成选项
+## Multi-Agent Cost Concerns
 
-1. **ROS 2 桥接**（最灵活）：Isaac Sim ROS 2 bridge + ROSClaw
-2. **直接 Python 集成**（最简单原型）：Isaac Lab 脚本中直接调用 VLM API
-3. **MCP 桥接**：Isaac Sim MCP 扩展 + OpenClaw MCP 支持
+Claude Code embodied agent study (arXiv:2601.20334): $0.51-$5.60 per task. Five agents at 1 Hz generates substantial API traffic. Local model deployment (Qwen-VL or VILA) strongly recommended for multi-agent.
 
-## 多 Agent 成本
-
-Claude Code 具身 Agent 研究（arXiv:2601.20334）发现单任务成本 $0.51-$5.60。5 个 Agent 同时以 1 Hz 运行会产生大量 API 流量。多 Agent 场景建议本地模型部署（Qwen-VL 或 VILA）。
-
-## 操作技能的局限
-
-Claude Code 在通用操作基准上达到 85-96% 成功率，但钉子插入任务 0%——亚毫米精度仍是 LLM 驱动控制的未解问题。推荐路径：OpenClaw skill 系统 + 仿真验证的技能库，遵循 OpenGo 的三阶段模式。
-
-## 与 Claude Code/Codex 的对比
-
-Claude Code 擅长通过迭代编码解决离散操作任务；OpenClaw 擅长创建持续运行、可被人类监督的自主 Agent。两者定位不同：Claude Code 是代码生成 Agent，OpenClaw 是持久化 Agent 运行时。
-
-## 参考链接
+## References
 
 - ROSClaw: https://github.com/PlaiPin/rosclaw / arXiv:2603.26997
 - DimensionalOS: https://github.com/dimensionalOS/dimos
 - ClawBody: https://github.com/tomrikert/clawbody
-- OpenGo: arXiv:2604.01708
 - NemoClaw: https://github.com/NVIDIA/NemoClaw
 - NaVILA: arXiv:2412.04453
 - Isaac Lab: https://github.com/isaac-sim/IsaacLab / arXiv:2511.04831
-- Unitree Isaac Lab: https://github.com/unitreerobotics/unitree_sim_isaaclab
-- Claude Code 具身 Agent: arXiv:2601.20334
-- Project Fetch (Anthropic): Claude 控制 Unitree Go2
+- Claude Code embodied agent: arXiv:2601.20334

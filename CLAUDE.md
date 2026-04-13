@@ -1,12 +1,12 @@
 # Roboclaws
 
-多个 VLM/OpenClaw Agent 控制仿真机器人进行对抗和协作的实验平台。Python 3.10+，AI2-THOR 仿真。
+Multiple VLM/OpenClaw agents controlling simulated robots in competition and cooperation. Python 3.10+, AI2-THOR simulation.
 
-## 必读文档
+## Required reading
 
-开始写代码之前，按顺序读：
-1. `CLAUDE.md`（本文件）
-2. `docs/technical-design.md`（完整技术设计，包含 API 规格、游戏规则、架构图）
+Before writing any code, read in order:
+1. `CLAUDE.md` (this file)
+2. `docs/technical-design.md` (full technical spec: API details, game rules, architecture)
 
 ## Build & test
 
@@ -17,9 +17,9 @@ ruff format --check .
 pytest
 ```
 
-运行 demo（需要 AI2-THOR，自动下载 Unity build ~1GB）：
+Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB):
 ```bash
-# 需要设置 VLM API key
+# Requires a VLM API key
 export ANTHROPIC_API_KEY=sk-...
 
 python examples/single_agent_explore.py
@@ -29,76 +29,75 @@ python examples/coverage_game.py --agents 3
 
 ## Code style
 
-- Ruff 强制风格，不要重复 linter 规则
+- Ruff enforces style — do not duplicate linter rules here
 - Line length: 100
 - Target: Python 3.10
 - Type annotations on public APIs; `from __future__ import annotations` in all modules
-- 中文注释可以接受，但代码本身（变量名、函数名、类名）必须英文
 
 ## Architecture
 
-- `roboclaws/core/engine.py` — AI2-THOR controller 封装，多 Agent 管理
-- `roboclaws/core/vlm.py` — VLM API 统一接口（Claude Sonnet、GPT-4o、GPT-4o-mini）
-- `roboclaws/core/visualizer.py` — 俯瞰地图生成、画面拼接、GIF 输出
-- `roboclaws/core/replay.py` — 游戏回放记录（帧 + 状态 JSON）
-- `roboclaws/games/territory.py` — 领地争夺游戏逻辑
-- `roboclaws/games/coverage.py` — 协作覆盖游戏逻辑
-- `roboclaws/openclaw/` — OpenClaw Skill + Gateway 桥接（Phase 2）
-- `examples/` — 可直接运行的 demo 脚本
+- `roboclaws/core/engine.py` — AI2-THOR controller wrapper, multi-agent management
+- `roboclaws/core/vlm.py` — Unified VLM API interface (Claude Sonnet, GPT-4o, GPT-4o-mini)
+- `roboclaws/core/visualizer.py` — Overhead map generation, frame compositing, GIF output
+- `roboclaws/core/replay.py` — Game replay recording (frames + state JSON)
+- `roboclaws/games/territory.py` — Territory control game logic
+- `roboclaws/games/coverage.py` — Cooperative coverage game logic
+- `roboclaws/openclaw/` — OpenClaw Skill + Gateway bridge (Phase 2)
+- `examples/` — Directly runnable demo scripts
 
-### AI2-THOR 关键 API
+### AI2-THOR key APIs
 
 ```python
-# 多 Agent 初始化
+# Multi-agent initialization
 controller = Controller(scene="FloorPlan201", agentCount=3, gridSize=0.25)
 
-# 控制单个 Agent（每次 step 只能动一个）
+# Control a single agent (one agent per step() call)
 event = controller.step(action="MoveAhead", agentId=1)
 
-# 获取每个 Agent 的独立画面和状态
+# Get each agent's independent frame and state
 frame = event.events[agent_id].frame  # numpy (H, W, 3)
 pos = event.events[agent_id].metadata['agent']['position']
 
-# 俯瞰视角
+# Overhead view
 event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
 ```
 
-**注意：**
-- iTHOR 场景支持多 Agent，ProcTHOR 不支持（有 bug）
-- Agent 之间有物理碰撞，不能穿越
-- Agent 在彼此相机画面中可见
-- 场景范围：FloorPlan1-30（厨房）、201-230（客厅）、301-330（卧室）、401-430（浴室）
+**Important notes:**
+- iTHOR scenes support multi-agent; ProcTHOR does NOT (known bugs)
+- Agents physically collide — they cannot pass through each other
+- Agents are visible in each other's camera views
+- Scene ranges: FloorPlan1-30 (kitchens), 201-230 (living rooms), 301-330 (bedrooms), 401-430 (bathrooms)
 
-### VLM 调用模式
+### VLM call pattern
 
 ```python
-# 每步为每个 Agent 构造的 prompt 包含：
-# 1. 第一人称相机画面（base64 JPEG）
-# 2. 俯瞰 grid map（标注所有 Agent 位置和游戏状态）
-# 3. 结构化 JSON（位置、得分、剩余步数等）
+# Each agent's per-step prompt includes:
+# 1. First-person camera frame (base64 JPEG)
+# 2. Overhead grid map (marking all agent positions + game state)
+# 3. Structured JSON (position, score, remaining steps, etc.)
 #
-# VLM 返回 JSON：{"reasoning": "...", "action": "MoveAhead"}
+# VLM returns JSON: {"reasoning": "...", "action": "MoveAhead"}
 ```
 
 ## Git workflow
 
 - Branch from `main`
 - Commit messages: `type: description` (feat, fix, ci, docs, refactor)
-- PR 策略：push 到 PR 的源分支做修复，不要开新 PR
+- PR strategy: push fixes to the PR's source branch, don't open a new PR
 
-## 设计原则
+## Design principles
 
-| 原则 | 实践 |
-|------|------|
-| **薄而精** | 不做重框架，给好模型足够 context 就能跑 |
-| **先跑通再优化** | Day 1-2 用最简方案验证核心假设，Day 3+ 再加 OpenClaw |
-| **可视化优先** | 每个功能都要能生成可看的输出（截图/GIF/视频） |
-| **成本敏感** | 默认用 GPT-4o-mini 开发，正式 demo 才切 Claude/GPT-4o |
+| Principle | Practice |
+|-----------|----------|
+| **Thin & focused** | Not a heavy framework; give a good model enough context and it runs |
+| **Make it work first** | Day 1-2: simplest pipeline to validate core hypothesis. Day 3+: add OpenClaw |
+| **Visualization first** | Every feature must produce visible output (screenshots/GIFs/video) |
+| **Cost-aware** | Default to GPT-4o-mini for dev; switch to Claude/GPT-4o for final demos |
 
 ## Gotchas
 
-- AI2-THOR 首次运行会下载 Unity build（~1GB），需要网络
-- AI2-THOR 在 Linux 上需要 X server 或 headless 渲染（`ai2thor[headless]`）
-- macOS 上 AI2-THOR 渲染可能需要额外配置
-- VLM API 成本：3 Agent × 200 步 ≈ $0.02（GPT-4o-mini）到 $0.36（Claude Sonnet）
-- `controller.step()` 是同步的，一次只能移动一个 Agent——游戏引擎用轮流制
+- AI2-THOR downloads a Unity build (~1GB) on first run
+- AI2-THOR on Linux requires X server or headless rendering (`ai2thor[headless]`)
+- macOS may need additional AI2-THOR rendering configuration
+- VLM API cost: 3 agents × 200 steps ≈ $0.02 (GPT-4o-mini) to $0.36 (Claude Sonnet)
+- `controller.step()` is synchronous, one agent per call — game engine uses turn-based stepping

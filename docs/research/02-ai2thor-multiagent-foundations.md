@@ -1,133 +1,114 @@
-# AI2-THOR 多 Agent API 与 OpenClaw 集成技术细节
+# AI2-THOR Multi-Agent API & OpenClaw Integration Technical Details
 
-> 调研日期：2026-04-13
-> 状态：已完成，关键规格已纳入技术设计
+> Research date: 2026-04-13
+> Status: Complete. Key specs incorporated into technical design.
 
-## AI2-THOR 多 Agent API
+## AI2-THOR Multi-Agent API
 
-### 初始化与控制
+### Initialization & Control
 
-通过 `agentCount` 初始化多 Agent，通过 `agentId` 分别控制。每次 `controller.step()` 只能移动一个 Agent（同步轮流制）。返回的 event 包含所有 Agent 的独立 Event 对象。
+`agentCount` parameter at init, `agentId` per step. Each `controller.step()` moves one agent only (synchronous turn-based). Returns multi-agent event with independent Event objects per agent.
 
-### 每个 Agent 的独立数据
+### Per-Agent Independent Data
 
-- `event.events[i].frame`：独立的第一人称 RGB numpy 数组
-- `event.events[i].depth_frame`：深度图（float32，米制）
-- `event.events[i].metadata['agent']`：位置、旋转、cameraHorizon
-- `event.events[i].metadata['objects']`：带 per-agent `visible` 标记的物体列表
-- `event.events[i].metadata['lastActionSuccess']`：动作是否成功
+- `event.events[i].frame`: Independent first-person RGB numpy array
+- `event.events[i].depth_frame`: Depth map (float32, meters)
+- `event.events[i].metadata['agent']`: Position, rotation, cameraHorizon
+- `event.events[i].metadata['objects']`: Object list with per-agent `visible` flags
+- `event.events[i].metadata['lastActionSuccess']`: Action result
 
-### 碰撞与可见性
+### Collision & Visibility
 
-Agent 是 Unity 物理实体，**不能穿过彼此**。碰撞时动作失败（`lastActionSuccess=False`）。Agent **在彼此相机画面中可见**（作为胶囊体/角色模型）。FurnMove 基准明确要求 Agent "视觉预判碰撞"和"处理遮挡"。
+Agents are Unity physics entities — **cannot pass through each other**. Collisions cause action failure (`lastActionSuccess=False`). Agents **are visible in each other's camera views** as capsule/character models.
 
-### 移动模式
+### Movement Modes
 
-- **网格化**（默认）：`snapToGrid=True`，按 `gridSize` 步进，`rotateStepDegrees` 旋转
-- **连续**：`snapToGrid=False`，任意距离/角度移动，支持噪声模拟
+- **Grid-based** (default, `snapToGrid=True`): Discrete `gridSize` steps, `rotateStepDegrees` rotation
+- **Continuous** (`snapToGrid=False`): Arbitrary distance/angle, noise simulation supported
 
-### 俯瞰视角
+### Overhead View
 
-`GetMapViewCameraProperties` + `AddThirdPartyCamera` 获取正交俯瞰图。支持语义分割俯瞰。第三方相机可动态更新。
+`GetMapViewCameraProperties` + `AddThirdPartyCamera` for orthographic top-down. Supports semantic segmentation overlay. Third-party cameras dynamically updatable.
 
-### ProcTHOR 多 Agent Bug
+### ProcTHOR Multi-Agent Bug
 
-GitHub Issues #1169 和 #1265 记录：ProcTHOR 初始化 `agentCount=2` 只返回一个 event，控制 `agentId=1` 抛 TimeoutError。两个 issue 均未修复。**必须使用 iTHOR 场景。**
+GitHub Issues #1169 and #1265: ProcTHOR `agentCount=2` returns only one event; controlling `agentId=1` throws TimeoutError. Both unresolved. **Must use iTHOR scenes.**
 
-### 已知限制
+### Known Limitations
 
-- 无原生同时动作（只能轮流）
-- 无内置 Agent 间通信
-- 无 agentCount 上限文档，但渲染开销线性增长
-- 多 Agent 文档稀少，实用指导来自 GitHub Issues 和学术论文
-- 无可变形物体
+- No native simultaneous actions (turn-based only)
+- No built-in inter-agent communication
+- No documented agentCount upper limit; rendering overhead scales linearly
+- Sparse multi-agent documentation
+- No deformable objects
 
-## OpenClaw 架构
+## OpenClaw Architecture
 
-### SKILL.md 格式
+### SKILL.md Format
 
-YAML frontmatter（name, description, version, requirements）+ Markdown body（When to Use, How to Use, Rules, Examples）。存放在 `~/.openclaw/workspace/skills/<skill-name>/`。自动重载。可发布到 ClawHub（5,400+ 社区技能）。
+YAML frontmatter (name, description, version, requirements) + Markdown body (When to Use, How to Use, Rules, Examples). Located at `~/.openclaw/workspace/skills/<skill-name>/`. Auto-reloaded on changes. Published to ClawHub (5,400+ community skills).
 
 ### Gateway API
 
-WebSocket 服务器（默认 `ws://127.0.0.1:18789`），JSON-RPC 2.0 风格。两种角色：operator（控制面）和 node（能力宿主）。支持 Tailscale/SSH/VPN 远程访问。
+WebSocket server (default `ws://127.0.0.1:18789`), JSON-RPC 2.0 style. Two roles: operator (control plane) and node (capability host). Supports Tailscale/SSH/VPN remote access.
 
-### 多 Agent 路由
+### Multi-Agent Routing
 
-单个 Gateway 进程内运行多个完全隔离的 Agent。通过 bindings 确定性路由：匹配 channel, accountId, peer, guild/team ID。最具体的 binding 优先。每个 Agent 有独立的 workspace, SOUL.md, MEMORY.md, skills。
+Multiple fully isolated agents within one Gateway process. Deterministic routing via bindings matching channel, accountId, peer, guild/team ID. Most-specific binding wins. Each agent has independent workspace, SOUL.md, MEMORY.md, skills.
 
-### SOUL.md 和 MEMORY.md
+### SOUL.md and MEMORY.md
 
-- **SOUL.md**：Agent 人设（"角色卡"），注入每次会话上下文开头
-- **MEMORY.md**：Agent 自己写的长期记忆，三层：Tier 1（始终加载，~100 行）→ Tier 2（日期记忆，自动加载今天+昨天）→ Tier 3（深度知识，语义搜索检索）
-- 单文件截断限制 20,000 字符，聚合上限 150,000 字符
+- **SOUL.md**: Agent personality ("character sheet"), injected at session context start
+- **MEMORY.md**: Agent-written long-term memory. Three tiers: Tier 1 (always loaded, ~100 lines) → Tier 2 (date-based, auto-load today+yesterday) → Tier 3 (deep knowledge, semantic search retrieval)
+- Per-file truncation: 20,000 chars; aggregate cap: 150,000 chars
 
-### 图像处理
+### Image Processing
 
-独立 `imageModel` 配置，原生多模态模型（Claude Sonnet, GPT-4o）直接传原图。自动缩放到 JPEG 2048px。`detectImageReferences` 扫描文件路径和标注。
+Separate `imageModel` config. Native multimodal models (Claude Sonnet, GPT-4o) receive original images directly. Auto-resize to JPEG 2048px max.
 
-## VLM 导航 Prompt 策略
+## VLM Navigation Prompt Strategies
 
-### 五种已验证方法（按效果排序）
+### Five Validated Approaches (by effectiveness)
 
-1. **空间锚定（SPF/See-Point-Fly）**：VLM 在图像上输出像素坐标。Gemini 2.5 Pro 和 GPT-4.1 达到 100% 成功率。
-2. **视角选择（ImagineNav, ICLR 2025）**：VLM 从候选视角中选最佳方向。GPT-4o-mini，HM3D 62% 成功。
-3. **程序化状态（ProgPrompt）**：环境格式化为 Python 代码。
-4. **3D 场景图（SayNav）**：子图转文本 prompt。
-5. **拓扑地图（Guide-LLM）**：文本节点表示位置。
+1. **Spatial grounding (SPF/See-Point-Fly)**: VLM outputs pixel coordinates on image. 100% success (Gemini 2.5 Pro, GPT-4.1).
+2. **View selection (ImagineNav, ICLR 2025)**: VLM selects best direction from candidates. GPT-4o-mini, 62% on HM3D.
+3. **Programmatic state (ProgPrompt)**: Environment as Python code.
+4. **3D scene graph (SayNav)**: Subgraph to text prompt.
+5. **Topological map (Guide-LLM)**: Text nodes for locations.
 
-### Token 成本
+### Token Costs (320×240 images)
 
-320×240 图片：
-
-| 模型 | Tokens/图 | 100 步成本 |
-|------|----------|-----------|
+| Model | Tokens/image | Cost per 100 steps |
+|-------|-------------|-------------------|
 | GPT-4o-mini (low detail) | 85 | $0.002 |
 | GPT-4o (low detail) | 85 | $0.03 |
 | Claude Haiku 4.5 | ~102 | $0.012 |
 | Claude Sonnet 4.6 | ~102 | $0.037 |
 
-3 Agent × 1000 步的总成本：$0.04（GPT-4o-mini）到 $0.74（Claude Sonnet）。
+3 agents × 1000 steps total cost: $0.04 (GPT-4o-mini) to $0.74 (Claude Sonnet).
 
-## MAP-THOR 与多 Agent AI2-THOR 生态
+## MAP-THOR & Multi-Agent AI2-THOR Ecosystem
 
-### MAP-THOR（NeurIPS 2024）
+- **MAP-THOR** (NeurIPS 2024): 45 tasks × 5 floor plans, 1-5 agents. LLaMAR cognitive architecture (Plan-Act-Correct-Verify), 30% higher success than prior methods.
+- **FurnMove** (ECCV 2020): 2 agents moving furniture. SYNC-policies + CORDIAL, 58% completion.
+- **CoELA** (ICLR 2024): 5-module cognitive architecture, GPT-4 agents 40%+ efficiency improvement.
+- **PARTNR** (ICLR 2025, Habitat 3.0): 100K human-robot tasks. LLMs achieve only 30% vs humans 93%.
 
-45 任务 × 5 楼层平面 = 225 对。支持 1-5 Agent。配套 LLaMAR 认知架构（Plan-Act-Correct-Verify），比先前方法高 30% 成功率。
+## Inspiration Projects
 
-### FurnMove（ECCV 2020）
+- **Neural MMO**: 128+ agents; competition naturally drives territorial niche differentiation
+- **OpenAI Hide-and-Seek**: Simple competitive rewards produce 6-phase emergent strategies
+- **Voyager**: LLM lifelong learning with automatic curriculum + skill library + self-verification
+- **Concordia**: Game Master / Player separation architecture
+- **Stanford Generative Agents**: Observation → reflection → planning memory architecture
 
-2 Agent 在 AI2-THOR 客厅搬家具。SYNC-policies + CORDIAL loss，58% 完成率（比去中心化基线高 25 个百分点）。
-
-### 其他
-
-- **CoELA（ICLR 2024）**：5 模块认知架构，GPT-4 Agent 效率提升 40%+
-- **COMBO（ICLR 2025）**：组合世界模型 + 树搜索
-- **PARTNR（ICLR 2025, Habitat 3.0）**：100K 人机协作任务，LLM 仅 30% vs 人类 93%
-
-## 灵感项目
-
-- **Neural MMO**：128+ Agent 竞争自然驱动领地分化
-- **OpenAI Hide-and-Seek**：简单竞争目标产生 6 阶段涌现策略
-- **Voyager**：LLM 终身学习，自动课程 + 技能库 + 自验证
-- **Concordia**：Game Master / Player 分离架构
-- **Stanford Generative Agents**：观察 → 反思 → 规划的记忆架构
-
-## 参考链接
+## References
 
 - AI2-THOR: https://ai2thor.allenai.org/ / https://github.com/allenai/ai2thor
-- 多 Agent 示例: https://allenai.github.io/ai2thor-v2.1.0-documentation/examples
 - MAP-THOR: https://openreview.net/pdf?id=ZygZN5egzy
 - LLaMAR: https://github.com/nsidn98/LLaMAR
-- FurnMove: https://www.ecva.net/papers/eccv_2020/papers_ECCV/papers/123500460.pdf
-- CoELA: https://umass-embodied-agi.github.io/CoELA/
-- PARTNR: https://github.com/facebookresearch/partnr-planner
-- ImagineNav (ICLR 2025): arXiv:2410.09874
+- ImagineNav: arXiv:2410.09874
 - SayNav: arXiv:2309.04077
-- SPF (See-Point-Fly): https://spf-web.pages.dev/
-- Neural MMO: https://openai.com/index/neural-mmo/
+- SPF: https://spf-web.pages.dev/
 - Voyager: https://voyager.minedojo.org/
-- Concordia (DeepMind): Game Master/Player 架构
-- OpenClaw 多 Agent 路由: https://docs.openclaw.ai/concepts/multi-agent
-- OpenClaw Skill 文档: https://docs.openclaw.ai/tools/skills
-- Gateway 协议: https://openclawcn.com/en/docs/gateway/protocol/
+- OpenClaw multi-agent routing: https://docs.openclaw.ai/concepts/multi-agent
