@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.vlm import (
+    AnthropicProvider,
     KimiProvider,
     MockProvider,
     OpenAIProvider,
     VLMProvider,
-    _parse_response,
     create_provider,
 )
 
@@ -26,6 +25,28 @@ SAMPLE_STATE = {
     "score": 10,
     "remaining_steps": 150,
 }
+
+
+def _mock_action_result(reasoning: str = "ok", action: str = "MoveAhead") -> MagicMock:
+    """Return a mock AgentAction-like object with .reasoning and .action."""
+    r = MagicMock()
+    r.reasoning = reasoning
+    r.action = action
+    return r
+
+
+def _mock_openai_usage(prompt_tokens: int = 100, completion_tokens: int = 50) -> MagicMock:
+    usage = MagicMock()
+    usage.prompt_tokens = prompt_tokens
+    usage.completion_tokens = completion_tokens
+    return usage
+
+
+def _mock_anthropic_usage(input_tokens: int = 100, output_tokens: int = 50) -> MagicMock:
+    usage = MagicMock()
+    usage.input_tokens = input_tokens
+    usage.output_tokens = output_tokens
+    return usage
 
 
 # ---------------------------------------------------------------------------
@@ -113,39 +134,18 @@ def test_create_provider_kimi_alias(monkeypatch):
     assert isinstance(p, KimiProvider)
 
 
-# ---------------------------------------------------------------------------
-# _parse_response
-# ---------------------------------------------------------------------------
+def test_create_provider_anthropic(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    with patch("roboclaws.core.vlm.AnthropicProvider.__init__", return_value=None):
+        p = create_provider("anthropic")
+    assert isinstance(p, AnthropicProvider)
 
 
-def test_parse_valid_json():
-    raw = json.dumps({"reasoning": "Going ahead", "action": "MoveAhead"})
-    result = _parse_response(raw)
-    assert result["action"] == "MoveAhead"
-    assert result["reasoning"] == "Going ahead"
-
-
-def test_parse_strips_code_fence():
-    raw = '```json\n{"reasoning": "ok", "action": "RotateLeft"}\n```'
-    result = _parse_response(raw)
-    assert result["action"] == "RotateLeft"
-
-
-def test_parse_invalid_json_falls_back():
-    result = _parse_response("this is not json")
-    assert result["action"] in NAVIGATION_ACTIONS
-    assert "Parse error" in result["reasoning"]
-
-
-def test_parse_invalid_action_falls_back():
-    raw = json.dumps({"reasoning": "test", "action": "FlyAway"})
-    result = _parse_response(raw)
-    assert result["action"] in NAVIGATION_ACTIONS
-
-
-def test_parse_empty_string_falls_back():
-    result = _parse_response("")
-    assert result["action"] in NAVIGATION_ACTIONS
+def test_create_provider_claude_sonnet(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    with patch("roboclaws.core.vlm.AnthropicProvider.__init__", return_value=None):
+        p = create_provider("claude-3-5-sonnet-20241022")
+    assert isinstance(p, AnthropicProvider)
 
 
 # ---------------------------------------------------------------------------
@@ -153,49 +153,44 @@ def test_parse_empty_string_falls_back():
 # ---------------------------------------------------------------------------
 
 
-def _make_openai_mock(content: str, prompt_tokens: int = 100, completion_tokens: int = 50):
-    """Build a mock OpenAI chat completion response."""
-    usage = MagicMock()
-    usage.prompt_tokens = prompt_tokens
-    usage.completion_tokens = completion_tokens
-
-    choice = MagicMock()
-    choice.message.content = content
-
-    resp = MagicMock()
-    resp.choices = [choice]
-    resp.usage = usage
-    return resp
-
-
 @pytest.fixture()
 def openai_provider(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    mock_client = MagicMock()
-    mock_openai = MagicMock()
-    mock_openai.OpenAI.return_value = mock_client
-    with patch.dict("sys.modules", {"openai": mock_openai}):
+    mock_raw_client = MagicMock()
+    mock_instructor_client = MagicMock()
+
+    mock_openai_mod = MagicMock()
+    mock_openai_mod.OpenAI.return_value = mock_raw_client
+
+    mock_instructor_mod = MagicMock()
+    mock_instructor_mod.from_openai.return_value = mock_instructor_client
+
+    with patch.dict("sys.modules", {"openai": mock_openai_mod, "instructor": mock_instructor_mod}):
         provider = OpenAIProvider(model="gpt-4o-mini", api_key="test-key")
     provider._cost_table = {"input": 0.15, "output": 0.60}
-    return provider, mock_client
+    return provider, mock_instructor_client
 
 
 def test_openai_get_action_calls_api(openai_provider):
     provider, mock_client = openai_provider
-    mock_client.chat.completions.create.return_value = _make_openai_mock(
-        '{"reasoning": "Move ahead", "action": "MoveAhead"}'
+    mock_response = MagicMock()
+    mock_response.usage = _mock_openai_usage()
+    mock_client.chat.completions.create_with_completion.return_value = (
+        _mock_action_result("Move ahead", "MoveAhead"),
+        mock_response,
     )
     result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     assert result["action"] == "MoveAhead"
-    mock_client.chat.completions.create.assert_called_once()
+    mock_client.chat.completions.create_with_completion.assert_called_once()
 
 
 def test_openai_accumulates_cost(openai_provider):
     provider, mock_client = openai_provider
-    mock_client.chat.completions.create.return_value = _make_openai_mock(
-        '{"reasoning": "ok", "action": "RotateLeft"}',
-        prompt_tokens=1_000_000,
-        completion_tokens=1_000_000,
+    mock_response = MagicMock()
+    mock_response.usage = _mock_openai_usage(prompt_tokens=1_000_000, completion_tokens=1_000_000)
+    mock_client.chat.completions.create_with_completion.return_value = (
+        _mock_action_result("ok", "RotateLeft"),
+        mock_response,
     )
     provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     # 1M input @ $0.15/M + 1M output @ $0.60/M = $0.75
@@ -204,10 +199,11 @@ def test_openai_accumulates_cost(openai_provider):
 
 def test_openai_reset_cost(openai_provider):
     provider, mock_client = openai_provider
-    mock_client.chat.completions.create.return_value = _make_openai_mock(
-        '{"reasoning": "ok", "action": "Done"}',
-        prompt_tokens=100,
-        completion_tokens=50,
+    mock_response = MagicMock()
+    mock_response.usage = _mock_openai_usage(100, 50)
+    mock_client.chat.completions.create_with_completion.return_value = (
+        _mock_action_result("ok", "Done"),
+        mock_response,
     )
     provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     assert provider.cumulative_cost > 0
@@ -226,55 +222,61 @@ def test_openai_build_messages_includes_images(openai_provider):
     assert len(text_entries) == 1
 
 
+def test_openai_missing_api_key_raises(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    mock_openai = MagicMock()
+    mock_openai.OpenAI.side_effect = KeyError("OPENAI_API_KEY")
+    with patch.dict("sys.modules", {"openai": mock_openai, "instructor": MagicMock()}):
+        with pytest.raises(KeyError):
+            OpenAIProvider(model="gpt-4o-mini")
+
+
 # ---------------------------------------------------------------------------
 # KimiProvider (mocked)
 # ---------------------------------------------------------------------------
 
 
-def _make_kimi_mock(text: str, input_tokens: int = 100, output_tokens: int = 50):
-    """Build a mock Anthropic messages response."""
-    usage = MagicMock()
-    usage.input_tokens = input_tokens
-    usage.output_tokens = output_tokens
-
-    content_block = MagicMock()
-    content_block.text = text
-
-    resp = MagicMock()
-    resp.content = [content_block]
-    resp.usage = usage
-    return resp
-
-
 @pytest.fixture()
 def kimi_provider(monkeypatch):
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
-    mock_anthropic_cls = MagicMock()
-    mock_client = MagicMock()
-    mock_anthropic_cls.return_value = mock_client
-    with patch.dict("sys.modules", {"anthropic": MagicMock(Anthropic=mock_anthropic_cls)}):
+    mock_raw_client = MagicMock()
+    mock_instructor_client = MagicMock()
+
+    mock_anthropic_mod = MagicMock()
+    mock_anthropic_mod.Anthropic.return_value = mock_raw_client
+
+    mock_instructor_mod = MagicMock()
+    mock_instructor_mod.from_anthropic.return_value = mock_instructor_client
+
+    with patch.dict(
+        "sys.modules", {"anthropic": mock_anthropic_mod, "instructor": mock_instructor_mod}
+    ):
         provider = KimiProvider(model="kimi-k2-5", api_key="test-key")
-    provider._client = mock_client
+    provider._client = mock_instructor_client
     provider._cost_table = {"input": 1.00, "output": 3.00}
-    return provider, mock_client
+    return provider, mock_instructor_client
 
 
 def test_kimi_get_action_calls_api(kimi_provider):
     provider, mock_client = kimi_provider
-    mock_client.messages.create.return_value = _make_kimi_mock(
-        '{"reasoning": "Rotate", "action": "RotateRight"}'
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage()
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("Rotate", "RotateRight"),
+        mock_response,
     )
     result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     assert result["action"] == "RotateRight"
-    mock_client.messages.create.assert_called_once()
+    mock_client.messages.create_with_completion.assert_called_once()
 
 
 def test_kimi_accumulates_cost(kimi_provider):
     provider, mock_client = kimi_provider
-    mock_client.messages.create.return_value = _make_kimi_mock(
-        '{"reasoning": "ok", "action": "MoveAhead"}',
-        input_tokens=1_000_000,
-        output_tokens=1_000_000,
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage(input_tokens=1_000_000, output_tokens=1_000_000)
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("ok", "MoveAhead"),
+        mock_response,
     )
     provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     # 1M input @ $1.00/M + 1M output @ $3.00/M = $4.00
@@ -283,10 +285,11 @@ def test_kimi_accumulates_cost(kimi_provider):
 
 def test_kimi_reset_cost(kimi_provider):
     provider, mock_client = kimi_provider
-    mock_client.messages.create.return_value = _make_kimi_mock(
-        '{"reasoning": "ok", "action": "Done"}',
-        input_tokens=100,
-        output_tokens=50,
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage(100, 50)
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("ok", "Done"),
+        mock_response,
     )
     provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     assert provider.cumulative_cost > 0
@@ -296,17 +299,85 @@ def test_kimi_reset_cost(kimi_provider):
 
 def test_kimi_missing_api_key_raises(monkeypatch):
     monkeypatch.delenv("KIMI_API_KEY", raising=False)
-    mock_anthropic = MagicMock()
-    mock_anthropic.Anthropic.side_effect = KeyError("KIMI_API_KEY")
-    with patch.dict("sys.modules", {"anthropic": mock_anthropic}):
+    with patch.dict("sys.modules", {"anthropic": MagicMock(), "instructor": MagicMock()}):
         with pytest.raises(KeyError):
             KimiProvider(model="kimi-k2-5")
 
 
-def test_openai_missing_api_key_raises(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    mock_openai = MagicMock()
-    mock_openai.OpenAI.side_effect = KeyError("OPENAI_API_KEY")
-    with patch.dict("sys.modules", {"openai": mock_openai}):
+# ---------------------------------------------------------------------------
+# AnthropicProvider (mocked)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def anthropic_provider(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    mock_raw_client = MagicMock()
+    mock_instructor_client = MagicMock()
+
+    mock_anthropic_mod = MagicMock()
+    mock_anthropic_mod.Anthropic.return_value = mock_raw_client
+
+    mock_instructor_mod = MagicMock()
+    mock_instructor_mod.from_anthropic.return_value = mock_instructor_client
+
+    with patch.dict(
+        "sys.modules", {"anthropic": mock_anthropic_mod, "instructor": mock_instructor_mod}
+    ):
+        provider = AnthropicProvider(model="claude-3-5-sonnet-20241022", api_key="test-key")
+    provider._client = mock_instructor_client
+    provider._cost_table = {"input": 3.00, "output": 15.00}
+    return provider, mock_instructor_client
+
+
+def test_anthropic_get_action_calls_api(anthropic_provider):
+    provider, mock_client = anthropic_provider
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage()
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("Explore", "MoveAhead"),
+        mock_response,
+    )
+    result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+    assert result["action"] == "MoveAhead"
+    assert result["reasoning"] == "Explore"
+    mock_client.messages.create_with_completion.assert_called_once()
+
+
+def test_anthropic_accumulates_cost(anthropic_provider):
+    provider, mock_client = anthropic_provider
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage(input_tokens=1_000_000, output_tokens=1_000_000)
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("ok", "RotateLeft"),
+        mock_response,
+    )
+    provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+    # 1M input @ $3.00/M + 1M output @ $15.00/M = $18.00
+    assert abs(provider.cumulative_cost - 18.00) < 1e-9
+
+
+def test_anthropic_reset_cost(anthropic_provider):
+    provider, mock_client = anthropic_provider
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage(100, 50)
+    mock_client.messages.create_with_completion.return_value = (
+        _mock_action_result("ok", "Done"),
+        mock_response,
+    )
+    provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+    assert provider.cumulative_cost > 0
+    provider.reset_cost()
+    assert provider.cumulative_cost == 0.0
+
+
+def test_anthropic_missing_api_key_raises(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with patch.dict("sys.modules", {"anthropic": MagicMock(), "instructor": MagicMock()}):
         with pytest.raises(KeyError):
-            OpenAIProvider(model="gpt-4o-mini")
+            AnthropicProvider(model="claude-3-5-sonnet-20241022")
+
+
+def test_anthropic_satisfies_protocol(anthropic_provider):
+    provider, _ = anthropic_provider
+    assert isinstance(provider, VLMProvider)
