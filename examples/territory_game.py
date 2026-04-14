@@ -129,10 +129,18 @@ def run_territory_game(
     # origin_ix/origin_iz initialised inside try so KeyboardInterrupt is always caught
     origin_ix: int = 0
     origin_iz: int = 0
+    # AI2-THOR's third-party overhead camera is static, so capture the frame
+    # once and reuse it as the map background for every step.
+    overhead_bg: np.ndarray | None = None
+
     try:
         # Record starting position of agent 0 as the map origin for centring
         initial_states = engine.get_all_agent_states()
         origin_ix, origin_iz = _pos_to_world_idx(initial_states[0].position)
+        try:
+            overhead_bg = engine.get_overhead_frame()
+        except Exception:  # noqa: BLE001 - mock engines may omit this
+            overhead_bg = None
 
         while not game.is_over():
             # ----------------------------------------------------------------
@@ -161,6 +169,7 @@ def run_territory_game(
             map_img = viz.render_overhead_map(
                 agent_positions=agent_positions_viz,
                 claimed_cells=claimed_cells_viz,
+                base_frame=overhead_bg,
             )
             map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
 
@@ -217,6 +226,7 @@ def run_territory_game(
     final_map = viz.render_overhead_map(
         agent_positions=[(_CENTER_ROW, _CENTER_COL)] * agent_count,
         claimed_cells=final_claimed_viz,
+        base_frame=overhead_bg,
     )
     GameVisualizer.save_png(final_map, out_path / "territory_final.png")
 

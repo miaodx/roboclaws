@@ -36,6 +36,33 @@ from roboclaws.core.reporter import generate as _generate_report  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _FRAME_H, _FRAME_W = 96, 128
+_OVERHEAD_H, _OVERHEAD_W = 300, 300
+
+
+def _synth_overhead_frame() -> np.ndarray:
+    """Create a synthetic floorplan-ish overhead image for the demo reports.
+
+    A uniform beige "floor" with a few muted rectangles standing in for
+    furniture, so the mock demo map isn't a solid black or white background.
+    """
+    frame = np.full((_OVERHEAD_H, _OVERHEAD_W, 3), (232, 222, 198), dtype=np.uint8)
+    # Walls
+    frame[:8, :, :] = (160, 140, 110)
+    frame[-8:, :, :] = (160, 140, 110)
+    frame[:, :8, :] = (160, 140, 110)
+    frame[:, -8:, :] = (160, 140, 110)
+    # Sofa (left)
+    frame[80:140, 20:90, :] = (120, 150, 180)
+    # Coffee table (centre)
+    frame[130:170, 130:200, :] = (170, 130, 90)
+    # Rug (under table)
+    frame[110:200, 110:220, :] = (210, 180, 150)
+    frame[130:170, 130:200, :] = (170, 130, 90)  # table on top of rug
+    # TV cabinet (right)
+    frame[60:90, 230:290, :] = (90, 90, 90)
+    # Plant (bottom-left)
+    frame[230:270, 40:80, :] = (80, 140, 80)
+    return frame
 
 
 def _synth_frame(agent_id: int, step: int) -> np.ndarray:
@@ -77,6 +104,7 @@ class _FakeEngine:
         self.agent_count = agent_count
         self.grid_size = grid_size
         self._step_counter = 0
+        self._overhead_frame = _synth_overhead_frame()
         # Spread agents along +x so they start on distinct cells.
         self._positions: list[dict[str, float]] = [
             {"x": float(i) * grid_size * 2.0, "y": 0.9, "z": 0.0} for i in range(agent_count)
@@ -117,6 +145,9 @@ class _FakeEngine:
         self._positions[agent_id]["z"] = new_z
         self._step_counter += 1
         return self._build_state(agent_id)
+
+    def get_overhead_frame(self) -> np.ndarray:
+        return self._overhead_frame.copy()
 
     def close(self) -> None:  # pragma: no cover - nothing to release
         pass
