@@ -16,19 +16,36 @@ Roboclaws lets multiple VLM/OpenClaw agent instances simultaneously control robo
 
 ## Live Visualization
 
-Every CI run produces a self-contained, interactive `report.html` per game — step slider, overhead map, per-agent first-person frames, SVG metrics chart, and the full VLM reasoning log. Preview frames below; click the links for the full browsable reports.
+Every CI run produces a self-contained, interactive `report.html` per game — step slider, overhead map, per-agent first-person frames, SVG metrics chart, and the full VLM reasoning log. Three stacks run in parallel, from cheapest to most realistic:
 
-| Territory Control | Cooperative Coverage |
+### 1. Mock engine — every push, every branch
+
+Synthetic frames, no Unity, no API keys. Validates the visualization + reporting pipeline on every PR.
+
+| 🗺️ Territory Control | 📸 Cooperative Coverage |
 |---|---|
 | ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
 | [▶ Interactive report](https://miaodx.github.io/roboclaws/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/coverage/report.html) |
 
-Also available:
+### 2. Kimi on real AI2-THOR — push to `main`
 
-- 🎮 [**Real AI2-THOR + Kimi run**](https://miaodx.github.io/roboclaws/smoke/territory/report.html) — actual FloorPlan201 indoor scene rendered by Unity, driven by the Kimi VLM. Produced by the `real-model-smoke` CI job on every push to `main`.
-- [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) — two mock runs side-by-side.
+Real `FloorPlan201` rendered by Unity, first-person frames fed to the Kimi VLM. Produced by the `real-model-smoke` job. Runs up to 100 steps per game so the ground-truth termination logic (all reachable cells claimed, or 95% area covered) actually fires.
 
-The above two games use a mock engine so every branch push produces visualizations quickly without the ~1 GB AI2-THOR Unity build; the linked real-model report is the genuine simulated view.
+| 🗺️ Territory Control | 📸 Cooperative Coverage |
+|---|---|
+| ![kimi territory](https://miaodx.github.io/roboclaws/smoke/territory/replay.gif) | ![kimi coverage](https://miaodx.github.io/roboclaws/smoke/coverage/replay.gif) |
+| [▶ Interactive report](https://miaodx.github.io/roboclaws/smoke/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/smoke/coverage/report.html) |
+
+### 3. OpenClaw + Kimi — push to `main`
+
+Same VLM, but routed through the OpenClaw Gateway so each agent has a persistent `MEMORY.md`, a `SOUL.md` persona, and shows up as a first-class entity in the Gateway. Proves Phase 2 end-to-end. **Coming online with [#39](https://github.com/MiaoDX/roboclaws/issues/39)**; GIFs below auto-populate once the job turns green.
+
+| 🗺️ Territory Control | 📸 Cooperative Coverage |
+|---|---|
+| ![openclaw territory](https://miaodx.github.io/roboclaws/openclaw/territory/replay.gif) | ![openclaw coverage](https://miaodx.github.io/roboclaws/openclaw/coverage/replay.gif) |
+| [▶ Interactive report](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
+
+Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) (two mock runs side-by-side).
 
 > All reports are regenerated on every push to `main` and published to GitHub Pages by the CI workflow. To regenerate the mock demos locally: `python scripts/generate_demo_report.py --output-dir output/demo`.
 

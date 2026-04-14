@@ -125,28 +125,32 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: python scripts/check_kimi_key.py
 
-      # Real smoke test: 5-step territory game driven by Kimi inside a real
-      # AI2-THOR scene. Cost: a few cents per run.
+      # Real smoke test: territory game driven by Kimi inside a real AI2-THOR
+      # scene.  Budget is 100 steps so the #41 termination logic (all reachable
+      # cells claimed, or 2*agent_count stale steps) can actually fire for the
+      # right reason instead of always hitting max_steps at step 5.  Kimi cost
+      # is ~2 cents per 100-step agent → ~4 cents for this step.
       - name: Run territory smoke game (Kimi + AI2-THOR)
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
           xvfb-run -a python examples/territory_game.py \
-            --model kimi --agents 2 --steps 5 \
+            --model kimi --agents 2 --steps 100 \
             --output-dir output/smoke/territory
 
       - name: Generate HTML report from smoke replay
         run: python -m roboclaws.core.reporter output/smoke/territory
 
-      # Cooperative counterpart of the territory smoke: same 2-agent, 5-step
-      # budget, Kimi-driven, against a real AI2-THOR scene. Bounded at 5 steps
-      # to keep total Kimi cost sub-$0.01 per push.
+      # Cooperative counterpart of the territory smoke.  Same 100-step budget
+      # so the coverage-game 95% early-termination re-enabled by #41 has a real
+      # chance to fire before max_steps.  Total push cost stays well under the
+      # "few cents per run" budget noted above.
       - name: Run coverage smoke game (Kimi + AI2-THOR)
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
           xvfb-run -a python examples/coverage_game.py \
-            --model kimi --agents 2 --steps 5 \
+            --model kimi --agents 2 --steps 100 \
             --output-dir output/smoke/coverage
 
       - name: Generate HTML report from coverage smoke replay
