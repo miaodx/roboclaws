@@ -149,6 +149,11 @@ class _FakeEngine:
     def get_overhead_frame(self) -> np.ndarray:
         return self._overhead_frame.copy()
 
+    def get_reachable_positions(self) -> set[tuple[int, int]]:
+        # Match the ±4 m box agents move within in ``step()``.
+        span = int(round(4.0 / self.grid_size))
+        return {(ix, iz) for ix in range(-span, span + 1) for iz in range(-span, span + 1)}
+
     def close(self) -> None:  # pragma: no cover - nothing to release
         pass
 
