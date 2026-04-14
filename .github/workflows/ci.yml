@@ -161,7 +161,112 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # Job 3: Publish the latest reports to GitHub Pages (main only).
+  # Job 3: Optional Railway-hosted OpenClaw integration smoke (issue #40).
+  #
+  # Complements the in-CI / ephemeral OpenClaw smoke (#39) by proving that our
+  # bridge can talk to the user's long-running, persistent Railway deployment.
+  # Runs on push to main only and is non-blocking: if Railway is down, the job
+  # turns yellow but does NOT fail the overall CI run. The user can read this
+  # job's history as a poor-man's Railway uptime check.
+  # ---------------------------------------------------------------------------
+  openclaw-railway-smoke:
+    name: OpenClaw Railway integration (optional)
+    runs-on: ubuntu-latest
+    needs: lint-and-mock
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Job-level continue-on-error makes the whole job non-blocking — a Railway
+    # outage shows yellow on the run summary, never red.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      # Share the AI2-THOR Unity build cache with the other jobs (~1 GB).
+      - name: Cache AI2-THOR Unity build
+        uses: actions/cache@v4
+        with:
+          path: ~/.ai2thor
+          key: ${{ runner.os }}-ai2thor-v1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      # Step-level continue-on-error: skip the game gracefully if Railway is
+      # unreachable (cold start, deploy in progress, outright outage). Both
+      # this and the job-level guard are needed — the step guard prevents
+      # burning Kimi credits on a failed call, the job guard keeps the run
+      # green overall.
+      - name: Preflight Railway Gateway
+        id: preflight
+        continue-on-error: true
+        env:
+          OPENCLAW_RAILWAY_URL: ${{ secrets.OPENCLAW_RAILWAY_URL }}
+          OPENCLAW_RAILWAY_TOKEN: ${{ secrets.OPENCLAW_RAILWAY_TOKEN }}
+        run: |
+          if [ -z "${OPENCLAW_RAILWAY_URL}" ]; then
+            echo "::warning::OPENCLAW_RAILWAY_URL secret not set, skipping Railway smoke"
+            exit 1
+          fi
+          # Be generous with retries — Railway free tier can cold-start slowly.
+          for i in 1 2 3 4 5; do
+            if curl -fsS --max-time 10 \
+                -H "Authorization: Bearer ${OPENCLAW_RAILWAY_TOKEN}" \
+                "${OPENCLAW_RAILWAY_URL%/}/readyz"; then
+              exit 0
+            fi
+            echo "Railway readyz attempt $i failed, retrying..."
+            sleep $((i * 2))
+          done
+          echo "::warning::Railway Gateway unreachable after 5 attempts, skipping"
+          exit 1
+
+      # Minimal smoke (3 steps, 2 agents) — the bigger 5-step run lives in the
+      # ephemeral OpenClaw job (#39). This one only proves the live deployment
+      # is reachable from our bridge and accepts our payload end-to-end.
+      - name: Run 3-step territory game against Railway
+        if: steps.preflight.outcome == 'success'
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          OPENCLAW_GATEWAY_URL: ${{ secrets.OPENCLAW_RAILWAY_URL }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_RAILWAY_TOKEN }}
+        run: |
+          xvfb-run -a python examples/territory_game.py \
+            --backend openclaw --model kimi --agents 2 --steps 3 \
+            --output-dir output/openclaw-railway/territory
+
+      - name: Generate HTML report from Railway smoke replay
+        if: steps.preflight.outcome == 'success'
+        run: python -m roboclaws.core.reporter output/openclaw-railway/territory
+
+      # Separate artifact name from the ephemeral OpenClaw smoke so the two can
+      # be diffed side-by-side when investigating drift.
+      - name: Upload Railway smoke replay + HTML report
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-openclaw-railway
+          path: output/openclaw-railway/**
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Publish the latest reports to GitHub Pages (main only).
   # Combines the mock-engine demo (fast, every-push visualization of the report
   # infrastructure) and the real AI2-THOR + Kimi smoke output (real indoor
   # scene frames) into a single site served from
