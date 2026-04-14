@@ -95,6 +95,19 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
           restore-keys: ${{ runner.os }}-pip-
 
+      # Share the AI2-THOR Unity build cache with the mock job (~1 GB).
+      - name: Cache AI2-THOR Unity build
+        uses: actions/cache@v4
+        with:
+          path: ~/.ai2thor
+          key: ${{ runner.os }}-ai2thor-v1
+
+      # Xvfb + GL runtime libs are required for the headless Unity renderer.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
@@ -105,16 +118,23 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: python scripts/check_kimi_key.py
 
-      # TODO(#10): Run a full 5-step territory game once examples/territory_game.py
-      # is implemented.  Planned command:
-      #   xvfb-run python examples/territory_game.py \
-      #       --model kimi --agents 2 --steps 5 --output-dir /tmp/smoke-out
-      # After that, report.html from reporter.py (#15) can be uploaded here.
+      # Real smoke test: 5-step territory game driven by Kimi inside a real
+      # AI2-THOR scene. Cost: a few cents per run.
+      - name: Run territory smoke game (Kimi + AI2-THOR)
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: |
+          xvfb-run -a python examples/territory_game.py \
+            --model kimi --agents 2 --steps 5 \
+            --output-dir output/smoke/territory
 
-      - name: Upload HTML report (if present)
+      - name: Generate HTML report from smoke replay
+        run: python -m roboclaws.core.reporter output/smoke/territory
+
+      - name: Upload smoke replay + HTML report
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: report-real-model
-          path: "**/report.html"
-          if-no-files-found: ignore
+          path: output/smoke/**
+          if-no-files-found: warn
