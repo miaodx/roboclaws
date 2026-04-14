@@ -33,6 +33,9 @@ _BACKGROUND_COLOUR: tuple[int, int, int] = (255, 255, 255)
 _GRID_LINE_COLOUR: tuple[int, int, int] = (200, 200, 200)
 _COVERED_COLOUR: tuple[int, int, int] = (200, 240, 200)  # light green (coverage game)
 
+# Alpha for cell tints so a photographic base frame remains visible underneath.
+_CELL_TINT_ALPHA: int = 140
+
 _RESAMPLE = Image.Resampling.BILINEAR
 
 
@@ -102,20 +105,27 @@ class GameVisualizer:
         else:
             bg = Image.new("RGB", (self._map_w, self._map_h), _BACKGROUND_COLOUR)
 
-        draw = ImageDraw.Draw(bg)
+        # Draw cell tints on a separate RGBA overlay so the base frame shows
+        # through — solid fills would hide the AI2-THOR floorplan behind.
+        overlay = Image.new("RGBA", (self._map_w, self._map_h), (0, 0, 0, 0))
+        odraw = ImageDraw.Draw(overlay)
 
         # Covered cells (cooperative coverage game)
         if covered_cells:
+            tint = (*_COVERED_COLOUR, _CELL_TINT_ALPHA)
             for row, col in covered_cells:
-                self._fill_cell(draw, row, col, _COVERED_COLOUR)
+                self._fill_cell(odraw, row, col, tint)
 
         # Claimed cells (territory game) — per-agent tint
         if claimed_cells:
             for agent_id, cells in claimed_cells.items():
                 base_colour = _AGENT_COLOURS[agent_id % len(_AGENT_COLOURS)]
-                tint = _lighten(base_colour, 100)
+                tint = (*_lighten(base_colour, 60), _CELL_TINT_ALPHA)
                 for row, col in cells:
-                    self._fill_cell(draw, row, col, tint)
+                    self._fill_cell(odraw, row, col, tint)
+
+        bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(bg)
 
         # Grid lines
         self._draw_grid(draw)
@@ -132,7 +142,7 @@ class GameVisualizer:
         draw: ImageDraw.ImageDraw,
         row: int,
         col: int,
-        colour: tuple[int, int, int],
+        colour: tuple[int, ...],
     ) -> None:
         x0 = col * self.cell_px
         y0 = row * self.cell_px
