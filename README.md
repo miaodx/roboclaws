@@ -23,9 +23,14 @@ Every CI run produces a self-contained, interactive `report.html` per game — s
 | ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
 | [▶ Interactive report](https://miaodx.github.io/roboclaws/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/coverage/report.html) |
 
-Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) — two runs side-by-side.
+Also available:
 
-> The reports are regenerated on every push to `main` and published to GitHub Pages by the CI workflow. To regenerate locally: `python scripts/generate_demo_report.py --output-dir output/demo`.
+- 🎮 [**Real AI2-THOR + Kimi run**](https://miaodx.github.io/roboclaws/smoke/territory/report.html) — actual FloorPlan201 indoor scene rendered by Unity, driven by the Kimi VLM. Produced by the `real-model-smoke` CI job on every push to `main`.
+- [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) — two mock runs side-by-side.
+
+The above two games use a mock engine so every branch push produces visualizations quickly without the ~1 GB AI2-THOR Unity build; the linked real-model report is the genuine simulated view.
+
+> All reports are regenerated on every push to `main` and published to GitHub Pages by the CI workflow. To regenerate the mock demos locally: `python scripts/generate_demo_report.py --output-dir output/demo`.
 
 ## Quick Start
 

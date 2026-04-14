@@ -79,33 +79,8 @@ jobs:
           path: output/demo/**
           if-no-files-found: warn
 
-      # Package the demo folder for the deploy-pages job (push to main only).
-      - name: Upload Pages artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: output/demo
-
   # ---------------------------------------------------------------------------
-  # Job 2: Publish the latest demo reports to GitHub Pages (main only).
-  # Produces a stable URL (https://<owner>.github.io/<repo>/) that the README
-  # embeds, so anyone opening the project sees an interactive visualization.
-  # ---------------------------------------------------------------------------
-  deploy-pages:
-    name: Deploy demo reports to GitHub Pages
-    needs: lint-and-mock
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  # ---------------------------------------------------------------------------
-  # Job 3: Real-model smoke test (push to main only, to control API cost)
+  # Job 2: Real-model smoke test (push to main only, to control API cost)
   # ---------------------------------------------------------------------------
   real-model-smoke:
     name: Real-model smoke test (Kimi)
@@ -170,3 +145,51 @@ jobs:
           name: report-real-model
           path: output/smoke/**
           if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Publish the latest reports to GitHub Pages (main only).
+  # Combines the mock-engine demo (fast, every-push visualization of the report
+  # infrastructure) and the real AI2-THOR + Kimi smoke output (real indoor
+  # scene frames) into a single site served from
+  # https://<owner>.github.io/<repo>/.
+  # ---------------------------------------------------------------------------
+  publish-pages:
+    name: Publish reports to GitHub Pages
+    needs: [lint-and-mock, real-model-smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Need the repo checked out so scripts/write_pages_index.py is available.
+      - uses: actions/checkout@v4
+
+      - name: Download mock demo artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: report-mock
+          path: site
+
+      - name: Download real-model smoke artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: report-real-model
+          path: smoke-src
+
+      # Slot the real-AI2-THOR replay at /smoke/territory/ and rewrite index.html
+      # so the landing page exposes both the mock demo and the real-model run.
+      - name: Assemble Pages site
+        run: |
+          mkdir -p site/smoke
+          cp -r smoke-src/territory site/smoke/territory
+          python scripts/write_pages_index.py site --include-smoke
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
