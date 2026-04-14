@@ -23,6 +23,9 @@ import numpy as np
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 sys.path.insert(0, str(_REPO_ROOT / "examples"))
+sys.path.insert(0, str(_REPO_ROOT / "scripts"))
+
+from write_pages_index import write_index as _write_index  # noqa: E402
 
 from roboclaws.core.engine import AgentState  # noqa: E402
 from roboclaws.core.reporter import compare as _compare_reports  # noqa: E402
@@ -185,53 +188,14 @@ def main(argv: list[str] | None = None) -> None:
     print(f"[demo] Writing A/B comparison to {compare_out}")
     _compare_reports(territory_dir, coverage_dir, output_path=compare_out)
 
-    index_out = root / "index.html"
-    print(f"[demo] Writing landing index to {index_out}")
-    _write_index(index_out)
+    print(f"[demo] Writing landing index to {root / 'index.html'}")
+    index_out = _write_index(root, include_smoke=False)
 
     print("[demo] Done. Reports:")
     print(f"  - {territory_dir / 'report.html'}")
     print(f"  - {coverage_dir / 'report.html'}")
     print(f"  - {compare_out}")
     print(f"  - {index_out}")
-
-
-def _write_index(path: Path) -> None:
-    """Write a minimal landing page linking to each report.
-
-    This is the entry point served at the root of the GitHub Pages site, so
-    visitors can pick a report without needing to know the directory layout.
-    """
-    html = """<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8">
-<title>RoboClaws — Demo Reports</title>
-<style>
- body { font-family: system-ui, sans-serif; max-width: 720px; margin: 3rem auto;
-        padding: 0 1rem; color: #1a1a2e; background: #f5f6fa; }
- h1 { margin-bottom: 0.25rem; }
- .sub { color: #666; margin-top: 0; }
- ul { list-style: none; padding: 0; }
- li { background: #fff; margin: 0.5rem 0; padding: 1rem 1.2rem; border-radius: 8px;
-      box-shadow: 0 1px 3px #0001; }
- a { color: #2952cc; text-decoration: none; font-weight: 600; }
- a:hover { text-decoration: underline; }
- .desc { color: #555; font-size: 0.9rem; margin-top: 0.25rem; }
-</style></head><body>
-<h1>RoboClaws — Demo Reports</h1>
-<p class="sub">Regenerated on every push to <code>main</code> by GitHub Actions.</p>
-<ul>
-  <li><a href="territory/report.html">&#x25B6; Territory Control</a>
-      <div class="desc">2-3 VLM agents compete to claim grid cells.</div></li>
-  <li><a href="coverage/report.html">&#x25B6; Cooperative Coverage</a>
-      <div class="desc">2-3 VLM agents cooperate to cover a room.</div></li>
-  <li><a href="report_compare.html">&#x25B6; A/B Comparison</a>
-      <div class="desc">Two runs side-by-side.</div></li>
-</ul>
-<p><a href="https://github.com/MiaoDX/roboclaws">&larr; Back to the repository</a></p>
-</body></html>
-"""
-    path.write_text(html, encoding="utf-8")
 
 
 if __name__ == "__main__":
