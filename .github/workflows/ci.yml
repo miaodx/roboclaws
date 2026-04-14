@@ -58,15 +58,19 @@ jobs:
       - name: Run tests
         run: pytest
 
-      # Upload report.html if reporter.py (issue #15) has generated one.
-      # Uses if-no-files-found: ignore so this step never fails the build.
-      - name: Upload HTML report (if present)
+      # Drive the territory and coverage examples against a mocked engine so
+      # every push produces a browsable report.html artifact (issue #15).
+      # No AI2-THOR / Unity / API keys required.
+      - name: Generate demo HTML reports
+        run: python scripts/generate_demo_report.py --output-dir output/demo --steps 30
+
+      - name: Upload HTML reports
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: report-mock
-          path: "**/report.html"
-          if-no-files-found: ignore
+          path: output/demo/**
+          if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
   # Job 2: Real-model smoke test (push to main only, to control API cost)
