@@ -33,6 +33,7 @@ from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import create_provider
 from roboclaws.games.coverage import CoverageGame
+from roboclaws.openclaw.bridge import OpenClawProvider
 
 # ---------------------------------------------------------------------------
 # Grid constants — must match MultiAgentEngine grid_size
@@ -85,6 +86,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--model",
         default="mock",
         help="VLM model alias: mock | gpt-4o | gpt-4o-mini | kimi | anthropic",
+    )
+    p.add_argument(
+        "--backend",
+        default="vlm",
+        choices=("vlm", "openclaw"),
+        help="Decision backend: 'vlm' calls the provider directly, "
+        "'openclaw' routes through a running OpenClaw Gateway",
     )
     p.add_argument(
         "--output-dir",
@@ -152,6 +160,7 @@ def run_coverage_game(
     steps: int,
     model: str,
     output_dir: str,
+    backend: str = "vlm",
 ) -> dict[str, Any]:
     """Run a multi-agent cooperative coverage episode and save results to output_dir.
 
@@ -166,7 +175,7 @@ def run_coverage_game(
         Summary dict with keys ``cells_covered``, ``contribution``,
         ``work_balance``, ``termination_reason``, ``vlm_cost_usd``, and ``output_dir``.
     """
-    provider = create_provider(model)
+    provider = OpenClawProvider() if backend == "openclaw" else create_provider(model)
     engine = MultiAgentEngine(scene=scene, agent_count=agent_count, grid_size=_GRID_SIZE)
     reachable_cells = engine.get_reachable_positions()
     viz = GameVisualizer(
@@ -333,6 +342,7 @@ def main() -> None:
         steps=args.steps,
         model=args.model,
         output_dir=args.output_dir,
+        backend=args.backend,
     )
 
     print()
