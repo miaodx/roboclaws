@@ -85,6 +85,15 @@ event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=T
 - Commit messages: `type: description` (feat, fix, ci, docs, refactor)
 - PR strategy: push fixes to the PR's source branch, don't open a new PR
 
+## Cloud vs local development
+
+This project uses a two-topology dev setup — see `AGENTS.md §7` for the full spec. Short version:
+
+- **Cloud sessions** (this Claude Code web session): research, small bounded changes, CI/doc edits, anything validated by `lint-and-mock`. No API keys, no Unity, no GPU in the sandbox.
+- **Local sessions** (user's workstation): real Kimi / real AI2-THOR / real OpenClaw Gateway. Owns every task tagged `local-dev` on the issue tracker, plus any multi-round debug loop.
+
+Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavior, the first validation happens **locally**. CI is where that proof stays continuously live, not where it starts. In a cloud session, if you can't actually run the thing, say so explicitly in the PR — don't paper over it with "CI will tell us". File a `local-dev` issue (see #50 for template) and hand off.
+
 ## Design principles
 
 | Principle | Practice |
