@@ -52,6 +52,7 @@ class CoverageGame:
         max_steps: int = 200,
         grid_size: float = 0.25,
         total_cells: int | None = None,
+        reachable_cells: set[tuple[int, int]] | None = None,
     ) -> None:
         """Initialise the game.
 
@@ -61,12 +62,17 @@ class CoverageGame:
             max_steps: Maximum number of individual agent steps before the game ends.
             grid_size: Grid cell edge length in metres (must match engine's gridSize).
             total_cells: Known count of reachable floor cells; enables the 95% termination
-                condition.  Pass None to disable coverage-based early termination.
+                condition.  Pass None to derive from reachable_cells or disable termination.
+            reachable_cells: Ground-truth set of reachable grid cells from AI2-THOR's
+                GetReachablePositions.  When provided and total_cells is None, total_cells
+                defaults to len(reachable_cells), enabling real coverage fractions.
         """
         self.engine = engine
         self.provider = provider
         self.max_steps = max_steps
         self.grid_size = grid_size
+        if total_cells is None and reachable_cells is not None:
+            total_cells = len(reachable_cells)
         self._total_cells = total_cells
 
         # covered[cell] = agent_id of first visitor

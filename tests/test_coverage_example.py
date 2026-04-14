@@ -177,6 +177,8 @@ def mock_engine_cls():
         inst.get_overhead_frame.return_value = _make_frame(80)
         inst.get_agent_state.side_effect = lambda aid: [a0, a1][aid]
         inst.step.side_effect = lambda agent_id, action, **kw: [a0, a1][agent_id]
+        # Large reachable set so 2 covered cells don't immediately hit 95% target
+        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
         yield MockCls
 
@@ -350,6 +352,7 @@ def test_run_three_agents(tmp_path: Path) -> None:
         inst.get_overhead_frame.return_value = _make_frame(80)
         inst.get_agent_state.side_effect = lambda aid: agents[aid]
         inst.step.side_effect = lambda agent_id, action, **kw: agents[agent_id]
+        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
         result = run_coverage_game(
             scene="FloorPlan201",

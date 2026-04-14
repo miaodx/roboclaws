@@ -421,3 +421,90 @@ def test_run_blocking_events_in_result():
     with patch.object(game.provider, "get_action", return_value={"action": "MoveAhead"}):
         result = game.run()
     assert result.blocking_events > 0
+
+
+# ---------------------------------------------------------------------------
+# reachable_cells ground truth
+# ---------------------------------------------------------------------------
+
+
+def test_reachable_cells_terminates_all_claimed():
+    """Game ends with 'all_cells_claimed' when every reachable cell is taken."""
+    engine = _make_engine(agent_count=2)
+    # Only two reachable cells — already claimed at init (agents start there)
+    reachable = {(0, 0), (1, 0)}
+    game = TerritoryGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=100,
+        reachable_cells=reachable,
+    )
+    result = game.run()
+    assert result.termination_reason == "all_cells_claimed"
+    assert result.total_steps < 100
+
+
+def test_reachable_cells_terminates_stale():
+    """Game ends with 'stale' when agents cannot reach new reachable cells."""
+    engine = _make_engine(agent_count=2)
+    # Large reachable set; agents stay put → stale for 2 * agent_count steps
+    reachable = {(i, j) for i in range(10) for j in range(10)}
+    game = TerritoryGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=100,
+        reachable_cells=reachable,
+    )
+    result = game.run()
+    assert result.termination_reason == "stale"
+    assert result.total_steps == 2 * engine.agent_count  # stale threshold
+
+
+def test_reachable_cells_state_includes_total_reachable():
+    """get_state() exposes total_reachable when reachable_cells is provided."""
+    engine = _make_engine(agent_count=2)
+    reachable = {(0, 0), (1, 0), (2, 0)}
+    game = TerritoryGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells=reachable,
+    )
+    state = game.get_state()
+    assert "total_reachable" in state
+    assert state["total_reachable"] == 3
+
+
+def test_no_reachable_cells_state_excludes_total_reachable():
+    """get_state() omits total_reachable when reachable_cells is None."""
+    engine = _make_engine(agent_count=2)
+    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
+    state = game.get_state()
+    assert "total_reachable" not in state
+
+
+def test_reachable_cells_result_reason_max_steps_takes_priority():
+    """'max_steps' is reported when step limit is hit even with reachable_cells set."""
+    engine = _make_engine(agent_count=2)
+    counter = [0]
+
+    def step_fn(agent_id, action, **kw):
+        counter[0] += 1
+        return _state(agent_id, x=counter[0] * GRID_SIZE)
+
+    engine.step.side_effect = step_fn
+    # Large reachable set; agents keep moving to new cells → no stale
+    reachable = {(i, 0) for i in range(1000)}
+    game = TerritoryGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=4,
+        reachable_cells=reachable,
+    )
+    result = game.run()
+    assert result.termination_reason == "max_steps"
+    assert result.total_steps == 4
