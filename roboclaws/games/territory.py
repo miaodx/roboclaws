@@ -72,11 +72,15 @@ class TerritoryGame:
         provider: VLMProvider,
         max_steps: int = 200,
         grid_size: float = 0.25,
+        reachable_cells: set[tuple[int, int]] | None = None,
     ) -> None:
         self.engine = engine
         self.provider = provider
         self.max_steps = max_steps
         self.grid_size = grid_size
+
+        # Ground-truth reachable cells from AI2-THOR (None → use _all_seen fallback)
+        self._reachable_cells = reachable_cells
 
         # claimed[cell] = agent_id of first claimer
         self._claimed: dict[tuple[int, int], int] = {}
@@ -135,7 +139,7 @@ class TerritoryGame:
             }
             for s in self.engine.get_all_agent_states()
         }
-        return {
+        state: dict[str, Any] = {
             "game": "territory",
             "step": self._step_count,
             "remaining_steps": self.max_steps - self._step_count,
@@ -144,6 +148,9 @@ class TerritoryGame:
             "total_claimed": len(self._claimed),
             "blocking_events": self._blocking_events,
         }
+        if self._reachable_cells is not None:
+            state["total_reachable"] = len(self._reachable_cells)
+        return state
 
     def get_scores(self) -> dict[int, int]:
         """Return cells claimed per agent."""
@@ -153,13 +160,21 @@ class TerritoryGame:
         """Return True if the game has ended."""
         if self._step_count >= self.max_steps:
             return True
-        # All reachable cells claimed: no new discovery for a full agent round
-        if (
-            self._all_seen
-            and len(self._claimed) >= len(self._all_seen)
-            and self._stale_steps >= self.engine.agent_count
-        ):
-            return True
+        if self._reachable_cells is not None:
+            # Ground-truth available: terminate when every reachable cell is claimed
+            if self._reachable_cells and len(self._claimed) >= len(self._reachable_cells):
+                return True
+            # Also terminate if agents are stuck for 2 full rounds
+            if self._stale_steps >= 2 * self.engine.agent_count:
+                return True
+        else:
+            # Fallback: terminate when all seen cells claimed and stale for one round
+            if (
+                self._all_seen
+                and len(self._claimed) >= len(self._all_seen)
+                and self._stale_steps >= self.engine.agent_count
+            ):
+                return True
         return False
 
     def step(self) -> bool:
@@ -203,7 +218,18 @@ class TerritoryGame:
 
     def get_result(self) -> TerritoryResult:
         """Compute and return the final game result."""
-        reason = "max_steps" if self._step_count >= self.max_steps else "all_cells_claimed"
+        if self._step_count >= self.max_steps:
+            reason = "max_steps"
+        elif self._reachable_cells is not None and len(self._claimed) >= len(self._reachable_cells):
+            reason = "all_cells_claimed"
+        elif (
+            self._reachable_cells is None
+            and self._all_seen
+            and len(self._claimed) >= len(self._all_seen)
+        ):
+            reason = "all_cells_claimed"
+        else:
+            reason = "stale"
         return TerritoryResult(
             cells_claimed=self.get_scores(),
             connectivity_ratio={

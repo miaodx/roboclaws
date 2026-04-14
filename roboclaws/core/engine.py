@@ -53,6 +53,8 @@ class MultiAgentEngine:
         height: int = 480,
     ) -> None:
         self.agent_count = agent_count
+        self._grid_size = grid_size
+        self._reachable_positions: set[tuple[int, int]] | None = None
         self._controller = Controller(
             scene=scene,
             agentCount=agent_count,
@@ -107,6 +109,22 @@ class MultiAgentEngine:
         """
         self._last_event = self._controller.step(action=action, agentId=agent_id, **kwargs)
         return self.get_agent_state(agent_id)
+
+    def get_reachable_positions(self) -> set[tuple[int, int]]:
+        """Return the cached set of reachable grid cells as (ix, iz) tuples.
+
+        Calls AI2-THOR's GetReachablePositions once after scene reset and caches the result.
+        Cell indices use the same world→grid projection as the game modules:
+        ix = round(x / grid_size), iz = round(z / grid_size).
+        """
+        if self._reachable_positions is None:
+            event = self._controller.step(action="GetReachablePositions")
+            positions = event.metadata.get("actionReturn", []) or []
+            self._reachable_positions = {
+                (round(p["x"] / self._grid_size), round(p["z"] / self._grid_size))
+                for p in positions
+            }
+        return self._reachable_positions
 
     def get_overhead_frame(self) -> np.ndarray:
         """Return the most-recent top-down overhead camera frame as (H, W, 3) uint8."""

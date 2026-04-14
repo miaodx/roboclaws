@@ -428,3 +428,79 @@ def test_run_cells_covered_nonnegative():
     game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
     result = game.run()
     assert result.cells_covered >= 0
+
+
+# ---------------------------------------------------------------------------
+# reachable_cells ground truth
+# ---------------------------------------------------------------------------
+
+
+def test_reachable_cells_sets_total_cells():
+    """When reachable_cells is provided and total_cells is None, total_cells = len(reachable)."""
+    engine = _make_engine(agent_count=2)
+    reachable = {(i, j) for i in range(5) for j in range(5)}  # 25 cells
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells=reachable,
+    )
+    assert game._total_cells == 25
+
+
+def test_reachable_cells_explicit_total_cells_takes_precedence():
+    """An explicit total_cells value is not overridden by reachable_cells."""
+    engine = _make_engine(agent_count=2)
+    reachable = {(i, 0) for i in range(50)}
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        total_cells=99,
+        reachable_cells=reachable,
+    )
+    assert game._total_cells == 99
+
+
+def test_reachable_cells_enables_coverage_termination():
+    """With reachable_cells providing total_cells, coverage termination fires at 95%."""
+    engine = _make_engine(agent_count=1)
+    engine.get_all_agent_states.return_value = [_state(0, x=0.0)]
+    step_counter = [0]
+
+    def step_fn(agent_id, action, **kw):
+        step_counter[0] += 1
+        return _state(0, x=step_counter[0] * GRID_SIZE)
+
+    engine.step.side_effect = step_fn
+    # 10 reachable cells; starts with 1 covered → need 9.5 → 10 cells for 95%
+    reachable = {(i, 0) for i in range(10)}
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=200,
+        reachable_cells=reachable,
+    )
+    result = game.run()
+    assert result.termination_reason == "coverage_reached"
+    assert result.total_steps < 200
+
+
+def test_reachable_cells_coverage_pct_is_real():
+    """coverage_pct reflects the real fraction when reachable_cells sets total_cells."""
+    engine = _make_engine(agent_count=1)
+    engine.get_all_agent_states.return_value = [_state(0, x=0.0)]
+    engine.step.side_effect = lambda agent_id, action, **kw: _state(0, x=0.0)
+    reachable = {(i, 0) for i in range(20)}  # 20 reachable cells
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=5,
+        reachable_cells=reachable,
+    )
+    # Agent stays at (0,0) — 1 cell covered out of 20
+    assert game.get_coverage_pct() == pytest.approx(5.0)

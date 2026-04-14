@@ -200,6 +200,69 @@ def test_get_overhead_frame_is_nonzero(mock_ctrl):
 
 
 # ---------------------------------------------------------------------------
+# get_reachable_positions
+# ---------------------------------------------------------------------------
+
+
+def test_get_reachable_positions_returns_set(mock_ctrl):
+    engine = MultiAgentEngine(agent_count=2)
+    reachable_evt = _make_event(agent_count=2)
+    reachable_evt.metadata["actionReturn"] = [
+        {"x": 0.0, "y": 0.0, "z": 0.0},
+        {"x": 0.25, "y": 0.0, "z": 0.0},
+        {"x": 0.0, "y": 0.0, "z": 0.25},
+    ]
+    mock_ctrl.step.return_value = reachable_evt
+    result = engine.get_reachable_positions()
+    assert isinstance(result, set)
+    assert (0, 0) in result
+    assert (1, 0) in result
+    assert (0, 1) in result
+    assert len(result) == 3
+
+
+def test_get_reachable_positions_cached(mock_ctrl):
+    """Second call returns cached set without re-calling the controller."""
+    engine = MultiAgentEngine(agent_count=2)
+    reachable_evt = _make_event(agent_count=2)
+    reachable_evt.metadata["actionReturn"] = [{"x": 0.0, "y": 0.0, "z": 0.0}]
+    mock_ctrl.step.return_value = reachable_evt
+    mock_ctrl.step.reset_mock()
+
+    result1 = engine.get_reachable_positions()
+    result2 = engine.get_reachable_positions()
+
+    assert result1 is result2  # same object (cached)
+    # GetReachablePositions should have been called only once
+    calls = [str(c) for c in mock_ctrl.step.call_args_list]
+    assert sum(1 for c in calls if "GetReachablePositions" in c) == 1
+
+
+def test_get_reachable_positions_grid_projection(mock_ctrl):
+    """Positions are projected to grid indices using round(x / grid_size)."""
+    engine = MultiAgentEngine(agent_count=2, grid_size=0.25)
+    reachable_evt = _make_event(agent_count=2)
+    reachable_evt.metadata["actionReturn"] = [
+        {"x": 0.50, "y": 0.0, "z": 0.75},  # → (2, 3)
+        {"x": -0.25, "y": 0.0, "z": 0.0},  # → (-1, 0)
+    ]
+    mock_ctrl.step.return_value = reachable_evt
+    result = engine.get_reachable_positions()
+    assert (2, 3) in result
+    assert (-1, 0) in result
+
+
+def test_get_reachable_positions_empty_scene(mock_ctrl):
+    """When actionReturn is empty or None, result is an empty set."""
+    engine = MultiAgentEngine(agent_count=2)
+    reachable_evt = _make_event(agent_count=2)
+    reachable_evt.metadata["actionReturn"] = []
+    mock_ctrl.step.return_value = reachable_evt
+    result = engine.get_reachable_positions()
+    assert result == set()
+
+
+# ---------------------------------------------------------------------------
 # close
 # ---------------------------------------------------------------------------
 

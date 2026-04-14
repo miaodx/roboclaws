@@ -168,11 +168,18 @@ def run_coverage_game(
     """
     provider = create_provider(model)
     engine = MultiAgentEngine(scene=scene, agent_count=agent_count, grid_size=_GRID_SIZE)
+    reachable_cells = engine.get_reachable_positions()
     viz = GameVisualizer(
         grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
     )
     recorder = ReplayRecorder(agent_count=agent_count, game="coverage")
-    game = CoverageGame(engine=engine, provider=provider, max_steps=steps, grid_size=_GRID_SIZE)
+    game = CoverageGame(
+        engine=engine,
+        provider=provider,
+        max_steps=steps,
+        grid_size=_GRID_SIZE,
+        reachable_cells=reachable_cells,
+    )
 
     step_num = 0
     origin_ix: int = 0

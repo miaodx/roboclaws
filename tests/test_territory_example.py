@@ -153,6 +153,8 @@ def mock_engine_cls():
         inst.get_agent_state.side_effect = lambda aid: [a0, a1][aid]
         # step() always returns the same position (agents stay put → stale quickly)
         inst.step.side_effect = lambda agent_id, action, **kw: [a0, a1][agent_id]
+        # Large reachable set so short tests terminate via max_steps or stale, not all_claimed
+        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
         yield MockCls
 
@@ -261,7 +263,7 @@ def test_run_termination_reason_valid(mock_engine_cls, tmp_path: Path) -> None:
         model="mock",
         output_dir=str(tmp_path / "territory"),
     )
-    assert result["termination_reason"] in ("max_steps", "all_cells_claimed")
+    assert result["termination_reason"] in ("max_steps", "all_cells_claimed", "stale")
 
 
 def test_run_three_agents(tmp_path: Path) -> None:
@@ -274,6 +276,7 @@ def test_run_three_agents(tmp_path: Path) -> None:
         inst.get_overhead_frame.return_value = _make_frame(80)
         inst.get_agent_state.side_effect = lambda aid: agents[aid]
         inst.step.side_effect = lambda agent_id, action, **kw: agents[agent_id]
+        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
         result = run_territory_game(
             scene="FloorPlan201",
@@ -283,4 +286,4 @@ def test_run_three_agents(tmp_path: Path) -> None:
             output_dir=str(tmp_path / "territory3"),
         )
     assert len(result["cells_claimed"]) == 3
-    assert result["termination_reason"] in ("max_steps", "all_cells_claimed")
+    assert result["termination_reason"] in ("max_steps", "all_cells_claimed", "stale")
