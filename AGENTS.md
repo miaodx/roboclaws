@@ -94,3 +94,60 @@ This is a thin demo repo. Priorities:
 - Commit messages: `type: description` format
 - If a commit is created by Codex, include `Co-authored-by: Codex <codex@users.noreply.github.com>`
 - If a commit is created by another AI coding agent, include a corresponding co-author trailer.
+
+---
+
+## 7) Cloud vs local development split
+
+This project runs agents in two topologies that complement each other. Pick the right
+one for the task; don't try to validate a real-AI2-THOR / real-VLM outcome in a cloud
+sandbox and don't burn local wall-clock on tasks that a cloud session could close in
+minutes.
+
+### 7.1 Cloud agent (Claude Code on the web, this sandbox)
+
+No GPU, no display, no AI2-THOR Unity build, typically no VLM API keys. Good for:
+
+- Research / survey questions across the repo
+- Small bounded code changes fully covered by the `lint-and-mock` CI job
+- CI workflow edits, `ruff` / `pytest` fixes, doc edits
+- Opening issues / PRs, triaging labels, updating roadmaps
+- Anything whose success criterion is "tests pass" or "existing mock pipeline
+  still works"
+
+**Don't** use a cloud session to validate:
+
+- Real Kimi / Claude / GPT behavior on real frames
+- Real AI2-THOR rendering, multi-agent collision, or `GetReachablePositions`
+  correctness
+- Real OpenClaw Gateway docker-compose integration
+- Anything needing multi-round debug iteration against a live service
+
+If you wrote a change whose **claim** depends on real hardware / real API calls,
+say so explicitly in the PR description ("unvalidated locally, relies on the
+next CI run against `main`") rather than implying it was exercised.
+
+### 7.2 Local agent (user's workstation)
+
+Has real VLM keys, real AI2-THOR + GPU/X, can run the OpenClaw Gateway locally.
+Required for any task tagged `local-dev` on the issue tracker. Good for:
+
+- End-to-end validation of a new feature with real Kimi + real Unity
+- Long-running multi-round debug loops (agents stuck in furniture, VLM choosing
+  nonsense actions, OpenClaw session memory growth)
+- Taking the GIFs / screenshots that feed the README demo matrix
+- Anything that depends on the GitHub Actions CI **already being green** — the
+  local session is where the first run happens, CI is where it stays green
+
+### 7.3 Handoff protocol
+
+- **Cloud → local**: when a cloud session lands a change that needs real-world
+  validation, it opens a `local-dev` issue enumerating the exact commands to run
+  and the acceptance criteria (final `terminate_reason`, coverage fraction,
+  cost, etc.). Example template: see issue #50.
+- **Local → cloud**: when a local debug session uncovers a bug or concludes a
+  feature works, it either closes the `local-dev` issue with a dated comment
+  (log + `report.html` attached) or files a regression issue the cloud session
+  can pick up.
+- CI's role is **continuous proof**, not first validation. If a PR's only
+  evidence is "CI will tell us", that's a cloud-session habit to break.
