@@ -9,6 +9,7 @@ Usage::
     python scripts/write_pages_index.py output/demo
 
     # Full site including real-model smoke output at ./smoke/territory/
+    # and ./smoke/coverage/
     python scripts/write_pages_index.py site --include-smoke
 """
 
@@ -17,11 +18,17 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-_SMOKE_ITEM = (
-    '  <li><a href="smoke/territory/report.html">&#x25B6; Real AI2-THOR + Kimi</a>'
+_SMOKE_ITEMS = (
+    '  <li><a href="smoke/territory/report.html">'
+    "&#x25B6; Territory Control &mdash; Real AI2-THOR + Kimi</a>"
     '<span class="tag">real model</span>'
-    '      <div class="desc">Actual FloorPlan201 indoor scene, driven by the Kimi VLM '
-    "via the <code>real-model-smoke</code> CI job.</div></li>"
+    '      <div class="desc">Adversarial 2-agent territory game in a real indoor scene, '
+    "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>\n"
+    '  <li><a href="smoke/coverage/report.html">'
+    "&#x25B6; Cooperative Coverage &mdash; Real AI2-THOR + Kimi</a>"
+    '<span class="tag">real model</span>'
+    '      <div class="desc">Cooperative 2-agent coverage game in a real indoor scene, '
+    "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>"
 )
 
 _TEMPLATE = """<!DOCTYPE html>
@@ -67,7 +74,7 @@ def write_index(site_dir: Path, include_smoke: bool = False) -> Path:
     if include_smoke:
         smoke_section = (
             "<h2>Real AI2-THOR + Kimi (push to <code>main</code> only)</h2>\n<ul>\n"
-            f"{_SMOKE_ITEM}\n</ul>"
+            f"{_SMOKE_ITEMS}\n</ul>"
         )
     else:
         smoke_section = ""
@@ -83,7 +90,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "--include-smoke",
         action="store_true",
-        help="Include the link to smoke/territory/report.html",
+        help="Include links to smoke/territory/report.html and smoke/coverage/report.html",
     )
     args = p.parse_args(argv)
     args.site_dir.mkdir(parents=True, exist_ok=True)
