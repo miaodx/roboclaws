@@ -138,6 +138,20 @@ jobs:
       - name: Generate HTML report from smoke replay
         run: python -m roboclaws.core.reporter output/smoke/territory
 
+      # Cooperative counterpart of the territory smoke: same 2-agent, 5-step
+      # budget, Kimi-driven, against a real AI2-THOR scene. Bounded at 5 steps
+      # to keep total Kimi cost sub-$0.01 per push.
+      - name: Run coverage smoke game (Kimi + AI2-THOR)
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+        run: |
+          xvfb-run -a python examples/coverage_game.py \
+            --model kimi --agents 2 --steps 5 \
+            --output-dir output/smoke/coverage
+
+      - name: Generate HTML report from coverage smoke replay
+        run: python -m roboclaws.core.reporter output/smoke/coverage
+
       - name: Upload smoke replay + HTML report
         uses: actions/upload-artifact@v4
         if: always()
@@ -177,12 +191,14 @@ jobs:
           name: report-real-model
           path: smoke-src
 
-      # Slot the real-AI2-THOR replay at /smoke/territory/ and rewrite index.html
-      # so the landing page exposes both the mock demo and the real-model run.
+      # Slot the real-AI2-THOR replays at /smoke/territory/ and /smoke/coverage/
+      # and rewrite index.html so the landing page exposes both games alongside
+      # the mock demos.
       - name: Assemble Pages site
         run: |
           mkdir -p site/smoke
           cp -r smoke-src/territory site/smoke/territory
+          cp -r smoke-src/coverage site/smoke/coverage
           python scripts/write_pages_index.py site --include-smoke
 
       - name: Upload Pages artifact
