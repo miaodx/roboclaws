@@ -11,6 +11,10 @@ Usage::
     # Full site including real-model smoke output at ./smoke/territory/
     # and ./smoke/coverage/
     python scripts/write_pages_index.py site --include-smoke
+
+    # Also include OpenClaw Gateway reports at ./openclaw/territory/ and
+    # ./openclaw/coverage/
+    python scripts/write_pages_index.py site --include-smoke --include-openclaw
 """
 
 from __future__ import annotations
@@ -29,6 +33,20 @@ _SMOKE_ITEMS = (
     '<span class="tag">real model</span>'
     '      <div class="desc">Cooperative 2-agent coverage game in a real indoor scene, '
     "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>"
+)
+
+_OPENCLAW_ITEMS = (
+    '  <li><a href="openclaw/territory/report.html">'
+    "&#x25B6; Territory Control &mdash; OpenClaw + Kimi</a>"
+    '<span class="tag">openclaw</span>'
+    '      <div class="desc">Same adversarial territory game, but routed through an '
+    "ephemeral OpenClaw Gateway so each agent has a persistent SOUL + MEMORY "
+    "(<code>openclaw-smoke</code> CI job).</div></li>\n"
+    '  <li><a href="openclaw/coverage/report.html">'
+    "&#x25B6; Cooperative Coverage &mdash; OpenClaw + Kimi</a>"
+    '<span class="tag">openclaw</span>'
+    '      <div class="desc">Cooperative coverage game via the OpenClaw Gateway '
+    "(<code>openclaw-smoke</code> CI job).</div></li>"
 )
 
 _TEMPLATE = """<!DOCTYPE html>
@@ -63,22 +81,34 @@ _TEMPLATE = """<!DOCTYPE html>
   <li><a href="report_compare.html">&#x25B6; A/B Comparison</a>
       <div class="desc">Two runs side-by-side.</div></li>
 </ul>
-{smoke_section}
+{smoke_section}{openclaw_section}
 <p><a href="https://github.com/MiaoDX/roboclaws">&larr; Back to the repository</a></p>
 </body></html>
 """
 
 
-def write_index(site_dir: Path, include_smoke: bool = False) -> Path:
+def write_index(
+    site_dir: Path,
+    include_smoke: bool = False,
+    include_openclaw: bool = False,
+) -> Path:
     """Write ``index.html`` into *site_dir* and return its path."""
-    if include_smoke:
-        smoke_section = (
-            "<h2>Real AI2-THOR + Kimi (push to <code>main</code> only)</h2>\n<ul>\n"
-            f"{_SMOKE_ITEMS}\n</ul>"
-        )
-    else:
-        smoke_section = ""
-    html = _TEMPLATE.format(smoke_section=smoke_section)
+    smoke_section = (
+        "<h2>Real AI2-THOR + Kimi (push to <code>main</code> only)</h2>\n<ul>\n"
+        f"{_SMOKE_ITEMS}\n</ul>"
+        if include_smoke
+        else ""
+    )
+    openclaw_section = (
+        "\n<h2>OpenClaw Gateway (Phase 2, push to <code>main</code> only)</h2>\n<ul>\n"
+        f"{_OPENCLAW_ITEMS}\n</ul>"
+        if include_openclaw
+        else ""
+    )
+    html = _TEMPLATE.format(
+        smoke_section=smoke_section,
+        openclaw_section=openclaw_section,
+    )
     out = site_dir / "index.html"
     out.write_text(html, encoding="utf-8")
     return out
@@ -92,9 +122,18 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Include links to smoke/territory/report.html and smoke/coverage/report.html",
     )
+    p.add_argument(
+        "--include-openclaw",
+        action="store_true",
+        help="Include links to openclaw/territory/report.html and openclaw/coverage/report.html",
+    )
     args = p.parse_args(argv)
     args.site_dir.mkdir(parents=True, exist_ok=True)
-    out = write_index(args.site_dir, include_smoke=args.include_smoke)
+    out = write_index(
+        args.site_dir,
+        include_smoke=args.include_smoke,
+        include_openclaw=args.include_openclaw,
+    )
     print(f"Wrote {out}")
 
 
