@@ -84,6 +84,24 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="VLM model alias: mock | gpt-4o | gpt-4o-mini | kimi | anthropic",
     )
     p.add_argument(
+        "--backend",
+        default="direct",
+        choices=("direct", "openclaw"),
+        help="direct: call VLM SDK in-process; openclaw: POST to Gateway /tools/invoke",
+    )
+    p.add_argument(
+        "--gateway-url",
+        default="http://localhost:18789",
+        dest="gateway_url",
+        help="OpenClaw Gateway base URL (only used when --backend openclaw)",
+    )
+    p.add_argument(
+        "--gateway-token",
+        default=None,
+        dest="gateway_token",
+        help="Gateway bearer token; falls back to OPENCLAW_GATEWAY_TOKEN env var",
+    )
+    p.add_argument(
         "--output-dir",
         default="output/territory",
         dest="output_dir",
@@ -97,12 +115,35 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 # ---------------------------------------------------------------------------
 
 
+def _create_backend_provider(
+    model: str,
+    backend: str,
+    gateway_url: str,
+    gateway_token: str | None,
+):
+    """Return a VLMProvider-compatible object for the selected backend.
+
+    ``direct`` is the standard in-process SDK path.  ``openclaw`` routes
+    every per-step action decision through an OpenClaw Gateway via
+    :class:`~roboclaws.openclaw.bridge.OpenClawBridge`.
+    """
+    if backend == "openclaw":
+        from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawBridgeProvider
+
+        bridge = OpenClawBridge(gateway_url=gateway_url, token=gateway_token)
+        return OpenClawBridgeProvider(bridge)
+    return create_provider(model)
+
+
 def run_territory_game(
     scene: str,
     agent_count: int,
     steps: int,
     model: str,
     output_dir: str,
+    backend: str = "direct",
+    gateway_url: str = "http://localhost:18789",
+    gateway_token: str | None = None,
 ) -> dict[str, object]:
     """Run a multi-agent territory control episode and save results to *output_dir*.
 
@@ -117,7 +158,7 @@ def run_territory_game(
         Summary dict with keys ``cells_claimed``, ``blocking_events``,
         ``termination_reason``, ``vlm_cost_usd``, and ``output_dir``.
     """
-    provider = create_provider(model)
+    provider = _create_backend_provider(model, backend, gateway_url, gateway_token)
     engine = MultiAgentEngine(scene=scene, agent_count=agent_count, grid_size=_GRID_SIZE)
     reachable_cells = engine.get_reachable_positions()
     viz = GameVisualizer(
@@ -267,6 +308,9 @@ def main() -> None:
         steps=args.steps,
         model=args.model,
         output_dir=args.output_dir,
+        backend=args.backend,
+        gateway_url=args.gateway_url,
+        gateway_token=args.gateway_token,
     )
 
     print()
