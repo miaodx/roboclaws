@@ -14,6 +14,19 @@ Roboclaws lets multiple VLM/OpenClaw agent instances simultaneously control robo
 
 **📸 Cooperative Coverage** — 2-3 robots collaboratively explore an entire room. Goal: reach 95% area coverage as fast as possible. Robots must autonomously decide who goes where.
 
+## Live Visualization
+
+Every CI run produces a self-contained, interactive `report.html` per game — step slider, overhead map, per-agent first-person frames, SVG metrics chart, and the full VLM reasoning log. Preview frames below; click the links for the full browsable reports.
+
+| Territory Control | Cooperative Coverage |
+|---|---|
+| ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
+| [▶ Interactive report](https://miaodx.github.io/roboclaws/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/coverage/report.html) |
+
+Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) — two runs side-by-side.
+
+> The reports are regenerated on every push to `main` and published to GitHub Pages by the CI workflow. To regenerate locally: `python scripts/generate_demo_report.py --output-dir output/demo`.
+
 ## Quick Start
 
 ```bash
