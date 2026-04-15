@@ -1,8 +1,16 @@
 # Roboclaws 🦞🤖
 
+[![CI (main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml)
+[![Live Smoke Reports](https://img.shields.io/badge/live%20smoke-GitHub%20Pages-0A66C2)](https://miaodx.com/roboclaws/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](./pyproject.toml)
+[![Install](https://img.shields.io/badge/install-uv%20recommended-5E5CE6)](https://docs.astral.sh/uv/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
 **Multiple OpenClaw Agents Controlling Multiple Simulated Robots: Competition & Cooperation**
 
 > The first OpenClaw multi-agent simulated robotics demo
+>
+> Operational hint: if the live smoke reports look stale, check the `CI (main)` badge first. GitHub Pages republishes only after both `Lint & mock tests` and `Real-model smoke test (Kimi)` succeed on `main`.
 
 ## What is this
 
@@ -52,7 +60,7 @@ Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_
 ## Quick Start
 
 ```bash
-pip install -e ".[dev]"
+uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
 
 # Single agent exploration
 python examples/single_agent_explore.py
@@ -66,6 +74,8 @@ python examples/coverage_game.py --agents 3 --scene FloorPlan201
 
 Set a VLM API key:
 ```bash
+export KIMI_API_KEY=...            # Kimi / Moonshot
+# or
 export ANTHROPIC_API_KEY=sk-...    # Claude
 # or
 export OPENAI_API_KEY=sk-...       # GPT-4o / GPT-4o-mini
