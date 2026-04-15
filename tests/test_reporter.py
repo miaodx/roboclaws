@@ -115,6 +115,14 @@ class TestGenerate:
         assert "go ahead" in content
         assert "MoveAhead" in content
 
+    def test_report_contains_decision_snapshot_panel(self, tmp_path: Path) -> None:
+        replay_dir = _write_replay(tmp_path, n_steps=3)
+        content = generate(replay_dir).read_text()
+        assert "Latest Agent Decisions" in content
+        assert "Acting this step (step 0)." in content
+        assert "Chosen action:" in content
+        assert "No decision recorded yet." in content
+
     def test_report_contains_svg_chart(self, tmp_path: Path) -> None:
         replay_dir = _write_replay(tmp_path, n_steps=5)
         content = generate(replay_dir).read_text()

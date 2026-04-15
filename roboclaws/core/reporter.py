@@ -143,20 +143,41 @@ def _build_run_section(
 
     # Frame data (base64 images loaded once, stored in a JS array)
     frame_data: list[dict[str, Any]] = []
+    latest_decisions: dict[int, dict[str, Any]] = {}
     for rec in steps_data:
         step = rec.get("step", 0)
+        acting_agent = int(rec.get("agent_id", 0))
         tag = f"{step:04d}"
         agent_imgs = [
             _img_to_b64(replay_dir / "agent_frames" / f"{tag}_agent{aid}.png")
             for aid in range(agent_count)
         ]
         overhead_img = _img_to_b64(replay_dir / "overhead" / f"{tag}_overhead.png")
+        vlm_response = rec.get("vlm_response", {})
+        latest_decisions[acting_agent] = {
+            "agent_id": acting_agent,
+            "step": step,
+            "reasoning": str(vlm_response.get("reasoning") or ""),
+            "action": str(vlm_response.get("action") or ""),
+            "executed_action": str(vlm_response.get("executed_action") or ""),
+            "raw_action": str(vlm_response.get("raw_action") or ""),
+            "override_reason": str(vlm_response.get("override_reason") or ""),
+        }
+
+        decisions: list[dict[str, Any]] = []
+        for aid in range(agent_count):
+            decision = dict(latest_decisions.get(aid, {}))
+            decision.setdefault("agent_id", aid)
+            decision["is_current"] = aid == acting_agent
+            decisions.append(decision)
+
         frame_data.append(
             {
                 "step": step,
-                "agent_id": rec.get("agent_id", 0),
+                "agent_id": acting_agent,
                 "agent_imgs": agent_imgs,
                 "overhead_img": overhead_img,
+                "decisions": decisions,
             }
         )
 
@@ -174,6 +195,12 @@ def _build_run_section(
     )
     js_id = run_id.replace("-", "_")
     frames_json = json.dumps(frame_data)
+    initial_decisions = (
+        frame_data[0]["decisions"]
+        if frame_data
+        else [{"agent_id": aid, "is_current": False} for aid in range(agent_count)]
+    )
+    decision_cards_html = "".join(_render_decision_card(decision) for decision in initial_decisions)
 
     viewer_html = (
         f'<div class="viewer">'
@@ -189,7 +216,11 @@ def _build_run_section(
         f'<input type="range" id="{run_id}-slider" min="0" max="{max_idx}" value="0"'
         f' oninput="rc_{js_id}_set(parseInt(this.value))">'
         f'<button onclick="rc_{js_id}_change(1)">&#9654;</button>'
-        f'<span id="{run_id}-step-label">Step \u2014 / {max_idx}</span>'
+        f'<span id="{run_id}-step-label">Step — / {max_idx}</span>'
+        f"</div>"
+        f'<div class="decision-panel">'
+        f"<h3>Latest Agent Decisions</h3>"
+        f'<div id="{run_id}-decision-cards" class="decision-cards">{decision_cards_html}</div>'
         f"</div>"
         f"</div>"
         f"<script>"
@@ -197,6 +228,29 @@ def _build_run_section(
         f"var FRAMES={frames_json};"
         f'var rid="{_html.escape(run_id, quote=True)}";'
         f"var cur=0;"
+        f"function esc(s){{return String(s||'').replace(/&/g,'&amp;')"
+        f".replace(/</g,'&lt;').replace(/>/g,'&gt;')"
+        f".replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}}"
+        f"function decisionCardHtml(d){{"
+        f"var agentId = Number(d.agent_id || 0);"
+        f"var stepLabel = d.step === undefined ? 'No decision recorded yet.'"
+        f" : (d.is_current ? 'Acting this step (step ' + d.step + ').'"
+        f" : 'Latest decision from step ' + d.step + '.');"
+        f"var chosenAction = d.executed_action || d.action || '—';"
+        f"var rawLine = (d.raw_action && d.raw_action !== chosenAction)"
+        f" ? '<p><strong>Model action:</strong> ' + esc(d.raw_action) + '</p>' : '';"
+        f"var overrideLine = d.override_reason"
+        f" ? '<p><strong>Override:</strong> ' + esc(d.override_reason) + '</p>' : '';"
+        f"var reasoning = d.reasoning ? esc(d.reasoning) : 'No reasoning recorded yet.';"
+        f"var cardClass = 'decision-card' + (d.is_current ? ' decision-card-current' : '');"
+        f"return '<article class=\"' + cardClass + '\">' +"
+        f"  '<div class=\"decision-card-head\"><strong>Agent ' + agentId + "
+        f"  '</strong><span>' + esc(stepLabel) + '</span></div>' +"
+        f"  '<p><strong>Chosen action:</strong> ' + esc(chosenAction) + '</p>' +"
+        f"  rawLine + overrideLine +"
+        f"  '<p class=\"decision-reasoning\"><strong>Reasoning:</strong> ' + reasoning + '</p>' +"
+        f"  '</article>';"
+        f"}}"
         f"function upd(idx){{"
         f"if(!FRAMES.length)return;"
         f"idx=Math.max(0,Math.min(FRAMES.length-1,idx));"
@@ -207,6 +261,7 @@ def _build_run_section(
         f'document.getElementById(rid+"-slider").value=idx;'
         f'document.getElementById(rid+"-step-label").textContent='
         f'"Step "+f.step+" / {max_idx}";'
+        f'document.getElementById(rid+"-decision-cards").innerHTML=(f.decisions||[]).map(decisionCardHtml).join("");'
         f"}}"
         f"window.rc_{js_id}_set=function(v){{upd(v);}};  "
         f"window.rc_{js_id}_change=function(d){{upd(cur+d);}};  "
@@ -247,6 +302,44 @@ def _build_run_section(
     )
 
 
+def _render_decision_card(decision: dict[str, Any]) -> str:
+    """Render one agent's latest decision card for the viewer panel."""
+    agent_id = int(decision.get("agent_id", 0))
+    step = decision.get("step")
+    is_current = bool(decision.get("is_current"))
+    if step is None:
+        status = "No decision recorded yet."
+    elif is_current:
+        status = f"Acting this step (step {step})."
+    else:
+        status = f"Latest decision from step {step}."
+
+    chosen_action = str(decision.get("executed_action") or decision.get("action") or "—")
+    raw_action = str(decision.get("raw_action") or "")
+    override_reason = str(decision.get("override_reason") or "")
+    reasoning = str(decision.get("reasoning") or "No reasoning recorded yet.")
+    classes = "decision-card decision-card-current" if is_current else "decision-card"
+
+    raw_line = ""
+    if raw_action and raw_action != chosen_action:
+        raw_line = f"<p><strong>Model action:</strong> {_html.escape(raw_action)}</p>"
+
+    override_line = ""
+    if override_reason:
+        override_line = f"<p><strong>Override:</strong> {_html.escape(override_reason)}</p>"
+
+    return (
+        f'<article class="{classes}">'
+        f'<div class="decision-card-head"><strong>Agent {agent_id}</strong>'
+        f"<span>{_html.escape(status)}</span></div>"
+        f"<p><strong>Chosen action:</strong> {_html.escape(chosen_action)}</p>"
+        f"{raw_line}"
+        f"{override_line}"
+        f'<p class="decision-reasoning"><strong>Reasoning:</strong> {_html.escape(reasoning)}</p>'
+        f"</article>"
+    )
+
+
 def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
     """Wrap *body* in a complete self-contained HTML document."""
     safe_title = _html.escape(title)
@@ -275,6 +368,18 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         ".slider-row button { padding: 0.2rem 0.7rem; cursor: pointer;"
         "  border: 1px solid #bbb; border-radius: 4px; background: #fff; }"
         ".slider-row button:hover { background: #e8edf8; }"
+        ".decision-panel { margin-top: 1rem; }"
+        ".decision-cards { display: grid;"
+        "  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));"
+        "  gap: 0.75rem; }"
+        ".decision-card { border: 1px solid #d8dfeb; border-radius: 8px; padding: 0.75rem;"
+        "  background: #f8faff; min-height: 150px; }"
+        ".decision-card-current { border-color: #6b8cff; box-shadow: inset 0 0 0 1px #c6d5ff; }"
+        ".decision-card-head { display: flex; justify-content: space-between; gap: 0.75rem;"
+        "  align-items: baseline; margin-bottom: 0.5rem; }"
+        ".decision-card-head span { color: #5f6c85; font-size: 0.78rem; text-align: right; }"
+        ".decision-card p { margin: 0.35rem 0; font-size: 0.84rem; }"
+        ".decision-reasoning { line-height: 1.45; }"
         ".chart-section { background: #fff; border-radius: 8px; padding: 1rem;"
         "  box-shadow: 0 1px 4px #0001; margin-bottom: 1rem; }"
         ".vlm-log-section { background: #fff; border-radius: 8px; padding: 1rem;"
