@@ -89,6 +89,11 @@ def test_overhead_camera_setup_on_init(mock_ctrl):
     assert engine.agent_count == 2
 
 
+def test_field_of_view_exposed_on_engine(mock_ctrl):
+    engine = MultiAgentEngine(agent_count=2, field_of_view=75)
+    assert engine.field_of_view == 75
+
+
 # ---------------------------------------------------------------------------
 # get_agent_state
 # ---------------------------------------------------------------------------
