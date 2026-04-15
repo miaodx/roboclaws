@@ -59,6 +59,8 @@ def test_parse_args_defaults() -> None:
     assert args.steps == 200
     assert args.model == "mock"
     assert args.output_dir == "output/coverage"
+    assert args.thor_server_timeout == 100.0
+    assert args.thor_server_start_timeout == 300.0
 
 
 def test_parse_args_custom() -> None:
@@ -74,6 +76,10 @@ def test_parse_args_custom() -> None:
             "gpt-4o-mini",
             "--output-dir",
             "/tmp/coverage",
+            "--thor-server-timeout",
+            "240",
+            "--thor-server-start-timeout",
+            "420",
         ]
     )
     assert args.scene == "FloorPlan205"
@@ -81,6 +87,8 @@ def test_parse_args_custom() -> None:
     assert args.steps == 50
     assert args.model == "gpt-4o-mini"
     assert args.output_dir == "/tmp/coverage"
+    assert args.thor_server_timeout == 240.0
+    assert args.thor_server_start_timeout == 420.0
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +348,22 @@ def test_run_termination_reason_valid(mock_engine_cls, tmp_path: Path) -> None:
         output_dir=str(tmp_path / "coverage"),
     )
     assert result["termination_reason"] in ("max_steps", "coverage_reached")
+
+
+def test_run_passes_timeout_settings_to_engine(mock_engine_cls, tmp_path: Path) -> None:
+    run_coverage_game(
+        scene="FloorPlan201",
+        agent_count=2,
+        steps=1,
+        model="mock",
+        output_dir=str(tmp_path / "coverage"),
+        thor_server_timeout=240.0,
+        thor_server_start_timeout=420.0,
+    )
+    mock_engine_cls.assert_called()
+    kwargs = mock_engine_cls.call_args.kwargs
+    assert kwargs["server_timeout"] == 240.0
+    assert kwargs["server_start_timeout"] == 420.0
 
 
 def test_run_passes_two_images_to_provider(mock_engine_cls, tmp_path: Path) -> None:

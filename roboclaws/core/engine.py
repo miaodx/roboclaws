@@ -51,10 +51,14 @@ class MultiAgentEngine:
         field_of_view: int = 90,
         width: int = 640,
         height: int = 480,
+        server_timeout: float = 100.0,
+        server_start_timeout: float = 300.0,
     ) -> None:
         self.agent_count = agent_count
         self._grid_size = grid_size
         self.field_of_view = field_of_view
+        self.server_timeout = server_timeout
+        self.server_start_timeout = server_start_timeout
         self._reachable_positions: set[tuple[int, int]] | None = None
         self._controller = Controller(
             scene=scene,
@@ -65,6 +69,8 @@ class MultiAgentEngine:
             fieldOfView=field_of_view,
             width=width,
             height=height,
+            server_timeout=server_timeout,
+            server_start_timeout=server_start_timeout,
         )
         self._last_event = self._controller.last_event
         self._setup_overhead_camera()
