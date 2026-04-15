@@ -14,6 +14,7 @@ import base64
 import io
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,7 @@ import numpy as np
 from PIL import Image
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.vlm import ProviderStatus
 
 _DEFAULT_GATEWAY_URL = "http://localhost:18789"
 _DEFAULT_TOOL = "ai2thor-navigator"
@@ -238,6 +240,8 @@ class OpenClawProvider:
         self._work_dir.mkdir(parents=True, exist_ok=True)
         self._cost = 0.0
         self._step = 0
+        self.model = getattr(self._bridge, "_tool", _DEFAULT_TOOL)
+        self._status = ProviderStatus(provider_name="openclaw", model=self.model)
 
     # -- VLMProvider protocol -----------------------------------------
 
@@ -247,6 +251,9 @@ class OpenClawProvider:
 
     def reset_cost(self) -> None:
         self._cost = 0.0
+
+    def get_status(self) -> dict[str, Any]:
+        return self._status.to_dict()
 
     def get_action(
         self,
@@ -268,13 +275,29 @@ class OpenClawProvider:
             images[1] if len(images) > 1 else None, agent_id, step_idx, "map"
         )
 
-        result = self._bridge.step(
-            agent_id=agent_id,
-            frame_path=frame_path,
-            overhead_path=overhead_path,
-            state=state,
-            step_idx=step_idx,
-        )
+        started = time.monotonic()
+        try:
+            result = self._bridge.step(
+                agent_id=agent_id,
+                frame_path=frame_path,
+                overhead_path=overhead_path,
+                state=state,
+                step_idx=step_idx,
+            )
+        except Exception as exc:
+            self._status.total_calls += 1
+            self._status.failed_calls += 1
+            self._status.consecutive_failures += 1
+            self._status.last_error = str(exc)
+            self._status.last_error_kind = exc.__class__.__name__
+            self._status.last_call_duration_seconds = time.monotonic() - started
+            self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+            raise
+        self._status.total_calls += 1
+        self._status.successful_calls += 1
+        self._status.consecutive_failures = 0
+        self._status.last_call_duration_seconds = time.monotonic() - started
+        self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
         self._step += 1
         return result
 

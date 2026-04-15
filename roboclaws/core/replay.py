@@ -33,6 +33,7 @@ class StepRecord:
     game_state: dict[str, Any]
     vlm_prompt_state: dict[str, Any]
     vlm_response: dict[str, Any]
+    provider_status: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -46,6 +47,7 @@ class ReplaySummary:
     vlm_cost_usd: float
     final_scores: dict[str, Any] = field(default_factory=dict)
     termination_reason: str = "unknown"
+    provider_status: dict[str, Any] = field(default_factory=dict)
 
     def print(self) -> None:
         """Print a human-readable summary to stdout."""
@@ -57,6 +59,8 @@ class ReplaySummary:
         print(f"Termination   : {self.termination_reason}")
         if self.final_scores:
             print(f"Final scores  : {self.final_scores}")
+        if self.provider_status:
+            print(f"Provider      : {self.provider_status}")
 
 
 # ---------------------------------------------------------------------------
@@ -104,6 +108,7 @@ class ReplayRecorder:
         game_state: dict[str, Any],
         vlm_prompt_state: dict[str, Any],
         vlm_response: dict[str, Any],
+        provider_status: dict[str, Any] | None = None,
     ) -> None:
         """Append one step's worth of data to the internal buffer.
 
@@ -125,6 +130,7 @@ class ReplayRecorder:
                 game_state=game_state,
                 vlm_prompt_state=vlm_prompt_state,
                 vlm_response=vlm_response,
+                provider_status=dict(provider_status or {}),
             )
         )
 
@@ -142,6 +148,7 @@ class ReplayRecorder:
         generate_gif: bool = True,
         gif_fps: float = 4.0,
         generate_report: bool = False,
+        provider_status: dict[str, Any] | None = None,
     ) -> Path:
         """Persist all recorded data to *output_dir*.
 
@@ -204,6 +211,7 @@ class ReplayRecorder:
                     "game_state": _jsonify(rec.game_state),
                     "vlm_prompt_state": _jsonify(rec.vlm_prompt_state),
                     "vlm_response": _jsonify(rec.vlm_response),
+                    "provider_status": _jsonify(rec.provider_status),
                 }
             )
 
@@ -224,6 +232,7 @@ class ReplayRecorder:
                 "step_count": len(self._steps),
                 "game_duration_seconds": round(duration, 2),
                 "termination_reason": termination_reason,
+                "provider_status": _jsonify(provider_status or {}),
             },
             "steps": steps_data,
         }
@@ -310,6 +319,7 @@ class ReplayRecorder:
         vlm_cost_usd: float = 0.0,
         final_scores: dict[str, Any] | None = None,
         termination_reason: str = "unknown",
+        provider_status: dict[str, Any] | None = None,
     ) -> ReplaySummary:
         """Return a :class:`ReplaySummary` for the recorded session.
 
@@ -330,6 +340,7 @@ class ReplayRecorder:
             vlm_cost_usd=round(vlm_cost_usd, 6),
             final_scores=final_scores or {},
             termination_reason=termination_reason,
+            provider_status=provider_status or {},
         )
 
 

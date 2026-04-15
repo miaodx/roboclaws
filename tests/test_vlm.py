@@ -11,6 +11,7 @@ from roboclaws.core.vlm import (
     KimiProvider,
     MockProvider,
     OpenAIProvider,
+    ProviderHealthError,
     VLMProvider,
     create_provider,
 )
@@ -316,6 +317,56 @@ def test_kimi_retries_transient_overload(kimi_provider):
         result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
 
     assert result == {"reasoning": "retry ok", "action": "MoveRight"}
+    assert mock_client.messages.create_with_completion.call_count == 2
+    sleep.assert_called_once_with(retry_delay_seconds(0, base=1.0, cap=4.0))
+
+
+def test_kimi_status_tracks_retries(kimi_provider):
+    provider, mock_client = kimi_provider
+
+    class RateLimitError(Exception):
+        pass
+
+    transient_error = RateLimitError("The engine is currently overloaded, please try again later")
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage()
+    mock_client.messages.create_with_completion.side_effect = [
+        transient_error,
+        (_mock_action_result("retry ok", "MoveRight"), mock_response),
+    ]
+
+    with patch("roboclaws.core.vlm.time.sleep"):
+        provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    status = provider.get_status()
+    assert status["successful_calls"] == 1
+    assert status["retry_events"] == 1
+    assert status["transient_errors"] == 1
+    assert status["calls_with_retries"] == 1
+
+
+def test_kimi_stops_after_transient_error_budget(kimi_provider):
+    provider, mock_client = kimi_provider
+    provider._status.max_transient_errors = 2
+    provider._status.max_calls_with_retries = None
+
+    class RateLimitError(Exception):
+        pass
+
+    transient_error = RateLimitError("The engine is currently overloaded, please try again later")
+    mock_client.messages.create_with_completion.side_effect = [
+        transient_error,
+        transient_error,
+        (_mock_action_result("too late", "MoveAhead"), MagicMock()),
+    ]
+
+    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+        with pytest.raises(ProviderHealthError, match="transient_error_budget_exceeded"):
+            provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    status = provider.get_status()
+    assert status["stop_reason"] == "transient_error_budget_exceeded"
+    assert status["failed_calls"] == 1
     assert mock_client.messages.create_with_completion.call_count == 2
     sleep.assert_called_once_with(retry_delay_seconds(0, base=1.0, cap=4.0))
 
