@@ -370,11 +370,91 @@ def test_get_prompt_state_includes_action_hints():
     assert hints["MoveAhead"]["target_cell"] == [0, 1]
     assert hints["MoveAhead"]["target_status"] == "covered_by_self"
     assert hints["MoveAhead"]["estimated_new_cells"] == 0
+    assert hints["MoveAhead"]["nearest_uncovered_distance"] == 3
+    assert hints["MoveAhead"]["improves_frontier_distance"] is False
     assert hints["MoveRight"]["target_status"] == "occupied_by_agent_1"
     assert hints["MoveRight"]["estimated_new_cells"] == 0
+    assert hints["MoveRight"]["nearest_uncovered_distance"] is None
+    assert hints["MoveRight"]["improves_frontier_distance"] is False
     assert hints["RotateRight"]["front_cell_after_turn"] == [1, 0]
     assert hints["RotateRight"]["front_cell_status"] == "occupied_by_agent_1"
     assert hints["RotateRight"]["estimated_new_cells"] == 1
+    assert hints["RotateRight"]["nearest_uncovered_distance"] == 2
+    assert hints["RotateRight"]["improves_frontier_distance"] is False
+
+
+def test_nearest_uncovered_distance_tracks_frontier_progress():
+    engine = _make_engine(agent_count=1)
+    agent = _state(0, x=0.0, z=0.0, rotation_y=0.0)
+    engine.get_all_agent_states.return_value = [agent]
+    engine.get_agent_state.side_effect = lambda agent_id: agent
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells={(0, 0), (1, 0), (2, 0)},
+    )
+    game._covered = {(0, 0): 0, (1, 0): 0}
+    game._contribution[0] = 2
+
+    assert game._nearest_uncovered_distance((0, 0)) == 2
+    assert game._nearest_uncovered_distance((1, 0)) == 1
+    assert game._nearest_uncovered_distance((2, 0)) == 0
+
+
+def test_get_prompt_state_includes_stall_recovery_guidance():
+    engine = _make_engine(agent_count=1)
+    agent = _state(0, x=0.0, z=0.0, rotation_y=0.0)
+    engine.get_all_agent_states.return_value = [agent]
+    engine.get_agent_state.side_effect = lambda agent_id: agent
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells={(0, 0), (1, 0), (2, 0)},
+    )
+    game._covered = {(0, 0): 0, (1, 0): 0}
+    game._contribution[0] = 2
+    game._no_progress_steps = 2
+
+    prompt_state = game.get_prompt_state(0)
+    hints = prompt_state["action_hints"]
+    recovery = prompt_state["stall_recovery"]
+
+    assert hints["MoveRight"]["estimated_new_cells"] == 0
+    assert hints["MoveRight"]["nearest_uncovered_distance"] == 1
+    assert hints["MoveRight"]["improves_frontier_distance"] is True
+    assert recovery["active"] is True
+    assert recovery["current_frontier_distance"] == 2
+    assert recovery["recommended_move"] == "MoveRight"
+    assert recovery["recommended_move_frontier_distance"] == 1
+    assert recovery["recommended_move_estimated_new_cells"] == 0
+
+
+def test_decide_overrides_rotation_loop_with_frontier_move():
+    engine = _make_engine(agent_count=1)
+    agent = _state(0, x=0.0, z=0.0, rotation_y=0.0)
+    engine.get_all_agent_states.return_value = [agent]
+    engine.get_agent_state.side_effect = lambda agent_id: agent
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells={(0, 0), (1, 0), (2, 0)},
+    )
+    game._covered = {(0, 0): 0, (1, 0): 0}
+    game._contribution[0] = 2
+    game._no_progress_steps = 2
+
+    with patch.object(game.provider, "get_action", return_value={"action": "RotateRight"}):
+        response = game.decide(prompt_state=game.get_prompt_state(0))
+
+    assert response["raw_action"] == "RotateRight"
+    assert response["action"] == "MoveRight"
+    assert response["override_reason"] == "stall_recovery_frontier_move"
 
 
 # ---------------------------------------------------------------------------
