@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 import os
 import random
+import time
 from typing import Any, Protocol, runtime_checkable
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
 
 # ---------------------------------------------------------------------------
 # Cost tables (USD per 1 M tokens)
@@ -207,6 +209,7 @@ class _AnthropicBase:
     _cost_table: dict[str, float]
     _client: Any
     _AgentAction: type
+    _retry_attempts: int
 
     @property
     def cumulative_cost(self) -> float:
@@ -234,13 +237,26 @@ class _AnthropicBase:
             )
         content.append({"type": "text", "text": json.dumps(state, indent=2)})
 
-        result, response = self._client.messages.create_with_completion(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=_SYSTEM_PROMPT,
-            response_model=self._AgentAction,
-            messages=[{"role": "user", "content": content}],
-        )
+        last_exc: Exception | None = None
+        for attempt in range(self._retry_attempts):
+            try:
+                result, response = self._client.messages.create_with_completion(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    system=_SYSTEM_PROMPT,
+                    response_model=self._AgentAction,
+                    messages=[{"role": "user", "content": content}],
+                )
+                break
+            except Exception as exc:  # pragma: no cover - concrete types depend on installed SDKs
+                last_exc = exc
+                if attempt == self._retry_attempts - 1 or not is_transient_provider_error(exc):
+                    raise
+                time.sleep(retry_delay_seconds(attempt, base=1.0, cap=4.0))
+        else:  # pragma: no cover - loop always breaks or raises
+            assert last_exc is not None
+            raise last_exc
+
         usage = response.usage
         if usage:
             self._cost += (
@@ -258,6 +274,7 @@ class AnthropicProvider(_AnthropicBase):
         model: str = "claude-3-5-sonnet-20241022",
         api_key: str | None = None,
         max_tokens: int = 256,
+        retry_attempts: int = 3,
     ) -> None:
         try:
             import anthropic  # type: ignore[import-untyped]
@@ -273,6 +290,7 @@ class AnthropicProvider(_AnthropicBase):
         self._client = instructor.from_anthropic(raw_client)
         self._model = model
         self._max_tokens = max_tokens
+        self._retry_attempts = retry_attempts
         self._cost = 0.0
         self._cost_table = _COST_PER_M.get(model, {"input": 3.00, "output": 15.00})
 
@@ -285,6 +303,7 @@ class KimiProvider(_AnthropicBase):
         model: str = "kimi-k2-5",
         api_key: str | None = None,
         max_tokens: int = 256,
+        retry_attempts: int = 4,
     ) -> None:
         try:
             import anthropic  # type: ignore[import-untyped]
@@ -301,6 +320,7 @@ class KimiProvider(_AnthropicBase):
         self._client = instructor.from_anthropic(raw_client)
         self._model = model
         self._max_tokens = max_tokens
+        self._retry_attempts = retry_attempts
         self._cost = 0.0
         self._cost_table = _COST_PER_M.get(model, {"input": 1.00, "output": 3.00})
 

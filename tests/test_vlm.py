@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.provider_retry import retry_delay_seconds
 from roboclaws.core.vlm import (
     AnthropicProvider,
     KimiProvider,
@@ -295,6 +296,40 @@ def test_kimi_reset_cost(kimi_provider):
     assert provider.cumulative_cost > 0
     provider.reset_cost()
     assert provider.cumulative_cost == 0.0
+
+
+def test_kimi_retries_transient_overload(kimi_provider):
+    provider, mock_client = kimi_provider
+
+    class RateLimitError(Exception):
+        pass
+
+    transient_error = RateLimitError("The engine is currently overloaded, please try again later")
+    mock_response = MagicMock()
+    mock_response.usage = _mock_anthropic_usage()
+    mock_client.messages.create_with_completion.side_effect = [
+        transient_error,
+        (_mock_action_result("retry ok", "MoveRight"), mock_response),
+    ]
+
+    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+        result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    assert result == {"reasoning": "retry ok", "action": "MoveRight"}
+    assert mock_client.messages.create_with_completion.call_count == 2
+    sleep.assert_called_once_with(retry_delay_seconds(0, base=1.0, cap=4.0))
+
+
+def test_kimi_does_not_retry_non_transient_error(kimi_provider):
+    provider, mock_client = kimi_provider
+    mock_client.messages.create_with_completion.side_effect = ValueError("bad request")
+
+    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+        with pytest.raises(ValueError, match="bad request"):
+            provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    sleep.assert_not_called()
+    assert mock_client.messages.create_with_completion.call_count == 1
 
 
 def test_kimi_missing_api_key_raises(monkeypatch):
