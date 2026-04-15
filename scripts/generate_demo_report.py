@@ -99,10 +99,17 @@ class _FakeEngine:
         "LookDown": (0.0, 0.0),
     }
 
-    def __init__(self, scene: str, agent_count: int, grid_size: float = 0.25) -> None:
+    def __init__(
+        self,
+        scene: str,
+        agent_count: int,
+        grid_size: float = 0.25,
+        **_kwargs: object,
+    ) -> None:
         self.scene = scene
         self.agent_count = agent_count
         self.grid_size = grid_size
+        self.field_of_view = 90
         self._step_counter = 0
         self._overhead_frame = _synth_overhead_frame()
         # Spread agents along +x so they start on distinct cells.
