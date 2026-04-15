@@ -228,6 +228,52 @@ def test_failed_action_does_not_cover_new_cell():
     assert game.cells_covered() == covered_before
 
 
+def test_invalid_action_falls_back_to_rotate_right():
+    engine = _make_engine(agent_count=2)
+    game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
+    with patch.object(game.provider, "get_action", return_value={"action": "Teleport"}):
+        game.step()
+    engine.step.assert_called_once()
+    assert engine.step.call_args.kwargs["action"] == "RotateRight"
+
+
+def test_failed_move_allows_different_escape_move():
+    engine = _make_engine(agent_count=2)
+    game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
+    game._last_action_by_agent[0] = "MoveAhead"
+    engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, success=False)
+    with patch.object(game.provider, "get_action", return_value={"action": "MoveLeft"}):
+        game.step()
+    engine.step.assert_called_once()
+    assert engine.step.call_args.kwargs["action"] == "MoveLeft"
+
+
+def test_fov_coverage_can_increase_without_movement():
+    engine = _make_engine(agent_count=1)
+    engine.get_all_agent_states.return_value = [_state(0, x=0.0, z=0.0)]
+    engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, x=0.0, z=0.0)
+    engine.step.side_effect = lambda agent_id, action, **kw: AgentState(
+        agent_id=agent_id,
+        frame=np.zeros(FRAME_SHAPE, dtype=np.uint8),
+        position={"x": 0.0, "y": 0.0, "z": 0.0},
+        rotation={"x": 0.0, "y": 90.0, "z": 0.0},
+        camera_horizon=0.0,
+        last_action_success=True,
+        last_action_error="",
+    )
+    reachable_cells = {(0, 0), (0, 1), (1, 0)}
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=5,
+        reachable_cells=reachable_cells,
+    )
+    covered_before = game.cells_covered()
+    game.execute_action("RotateRight")
+    assert game.cells_covered() > covered_before
+
+
 # ---------------------------------------------------------------------------
 # get_state
 # ---------------------------------------------------------------------------
@@ -285,6 +331,15 @@ def test_get_state_includes_teammate_positions():
     for info in state["agents"].values():
         assert "position" in info
         assert "rotation" in info
+
+
+def test_get_prompt_state_includes_available_actions():
+    engine = _make_engine(agent_count=2)
+    game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
+    prompt_state = game.get_prompt_state()
+    assert prompt_state["my_agent_id"] == 0
+    assert prompt_state["available_actions"]
+    assert "no_progress_steps" in prompt_state
 
 
 # ---------------------------------------------------------------------------
