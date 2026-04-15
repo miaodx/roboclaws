@@ -351,19 +351,37 @@ jobs:
         run: |
           docker run -d --name openclaw-gateway \
             -p 18789:18789 \
-            -v "$PWD/skills/ai2thor-navigator:/root/.openclaw/workspace/skills/ai2thor-navigator:ro" \
+            -v "$PWD/skills/ai2thor-navigator:/home/node/.openclaw/workspace/skills/ai2thor-navigator:ro" \
             -e OPENCLAW_AUTH_MODE=token \
             -e OPENCLAW_AUTH_TOKEN="$GATEWAY_TOKEN" \
             -e OPENCLAW_ALLOWED_TOOLS=ai2thor-navigator \
             -e KIMI_API_KEY="$KIMI_API_KEY" \
             "$OPENCLAW_IMAGE"
 
+      # Recent OpenClaw images persist auth under /home/node/.openclaw and may
+      # ignore the env token we try to inject. Read the live config so the
+      # bridge uses the bearer token the container actually booted with.
+      - name: Resolve Gateway token from container config
+        id: resolved_token
+        if: steps.gateway.outcome == 'success'
+        continue-on-error: true
+        env:
+          MINTED_GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+        run: |
+          RAW_CONFIG="$(docker exec openclaw-gateway sh -lc 'cat /home/node/.openclaw/openclaw.json' || true)"
+          RESOLVED_TOKEN="$(RAW_CONFIG="$RAW_CONFIG" python -c 'import json, os; raw = os.environ.get("RAW_CONFIG", ""); print(json.loads(raw).get("gateway", {}).get("auth", {}).get("token", "") if raw else "")' 2>/dev/null || true)"
+          if [ -z "$RESOLVED_TOKEN" ]; then
+            echo "::warning::Could not read gateway.auth.token from container config; falling back to minted token"
+            RESOLVED_TOKEN="$MINTED_GATEWAY_TOKEN"
+          fi
+          echo "value=$RESOLVED_TOKEN" >> "$GITHUB_OUTPUT"
+
       - name: Wait for Gateway readiness
         id: preflight
         if: steps.gateway.outcome == 'success'
         continue-on-error: true
         env:
-          GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+          GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
         run: |
           for i in $(seq 1 30); do
             if curl -fsS --max-time 5 \
@@ -385,7 +403,7 @@ jobs:
         if: steps.preflight.outcome == 'success'
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
         run: |
           xvfb-run -a python examples/territory_game.py \
             --backend openclaw --model kimi --agents 2 --steps 5 \
@@ -399,7 +417,7 @@ jobs:
         if: steps.preflight.outcome == 'success'
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
         run: |
           xvfb-run -a python examples/coverage_game.py \
             --backend openclaw --model kimi --agents 2 --steps 5 \
