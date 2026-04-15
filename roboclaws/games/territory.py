@@ -19,6 +19,47 @@ _DECISION_ACTIONS: tuple[str, ...] = (
 )
 
 
+def _heading_index(rotation: dict[str, float]) -> int:
+    """Return the nearest 90-degree heading bucket as 0/1/2/3."""
+    return int(round(float(rotation.get("y", 0.0)) / 90.0)) % 4
+
+
+def _forward_delta(rotation: dict[str, float]) -> tuple[int, int]:
+    """Return the discrete forward delta for the given rotation."""
+    return (
+        (0, 1),
+        (1, 0),
+        (0, -1),
+        (-1, 0),
+    )[_heading_index(rotation)]
+
+
+def _rotation_after_turn(rotation: dict[str, float], action: str) -> dict[str, float]:
+    """Return the rotation after applying a 90-degree turn action."""
+    delta = -90.0 if action == "RotateLeft" else 90.0
+    new_rotation = dict(rotation)
+    new_rotation["y"] = (float(rotation.get("y", 0.0)) + delta) % 360.0
+    return new_rotation
+
+
+def _move_target_cell(
+    cell: tuple[int, int],
+    rotation: dict[str, float],
+    action: str,
+) -> tuple[int, int]:
+    """Return the destination cell for a discrete movement action."""
+    dx, dz = _forward_delta(rotation)
+    if action == "MoveAhead":
+        delta = (dx, dz)
+    elif action == "MoveBack":
+        delta = (-dx, -dz)
+    elif action == "MoveLeft":
+        delta = (-dz, dx)
+    else:
+        delta = (dz, -dx)
+    return (cell[0] + delta[0], cell[1] + delta[1])
+
+
 def _pos_to_cell(pos: dict[str, float], grid_size: float) -> tuple[int, int]:
     """Convert a continuous (x, z) position to a discrete grid cell index."""
     return (round(pos["x"] / grid_size), round(pos["z"] / grid_size))
@@ -170,6 +211,73 @@ class TerritoryGame:
                 break
         return names
 
+    def _cell_status(
+        self,
+        *,
+        cell: tuple[int, int],
+        agent_id: int,
+        occupied_cells: dict[tuple[int, int], int],
+    ) -> str:
+        """Classify a cell from the current agent's perspective."""
+        occupant = occupied_cells.get(cell)
+        if occupant is not None and occupant != agent_id:
+            return f"occupied_by_agent_{occupant}"
+        if self._reachable_cells is not None and cell not in self._reachable_cells:
+            return "blocked_unreachable"
+
+        owner = self._claimed.get(cell)
+        if owner is None:
+            return "unclaimed"
+        if owner == agent_id:
+            return "claimed_by_self"
+        return f"claimed_by_agent_{owner}"
+
+    def _build_action_hints(
+        self,
+        *,
+        agent_id: int,
+        current_state: Any,
+    ) -> dict[str, dict[str, Any]]:
+        """Return per-action guidance for the current local navigation state."""
+        current_cell = _pos_to_cell(current_state.position, self.grid_size)
+        occupied_cells = {
+            _pos_to_cell(state.position, self.grid_size): state.agent_id
+            for state in self.engine.get_all_agent_states()
+        }
+        action_hints: dict[str, dict[str, Any]] = {}
+
+        for action in self.ACTION_SPACE:
+            if action in _MOVE_ACTIONS:
+                target_cell = _move_target_cell(current_cell, current_state.rotation, action)
+                target_status = self._cell_status(
+                    cell=target_cell,
+                    agent_id=agent_id,
+                    occupied_cells=occupied_cells,
+                )
+                action_hints[action] = {
+                    "kind": "move",
+                    "target_cell": list(target_cell),
+                    "target_status": target_status,
+                    "would_claim_new_cell": target_status == "unclaimed",
+                }
+                continue
+
+            facing_after = _rotation_after_turn(current_state.rotation, action)
+            front_cell = _move_target_cell(current_cell, facing_after, "MoveAhead")
+            front_status = self._cell_status(
+                cell=front_cell,
+                agent_id=agent_id,
+                occupied_cells=occupied_cells,
+            )
+            action_hints[action] = {
+                "kind": "rotate",
+                "facing_after_degrees": int(round(float(facing_after.get("y", 0.0)))) % 360,
+                "front_cell_after_turn": list(front_cell),
+                "front_cell_status": front_status,
+            }
+
+        return action_hints
+
     # ------------------------------------------------------------------
     # Public interface
     # ------------------------------------------------------------------
@@ -212,6 +320,10 @@ class TerritoryGame:
         visible_names = self._visible_object_names(current_state.visible_objects)
         if visible_names:
             state["visible_objects"] = visible_names
+        state["action_hints"] = self._build_action_hints(
+            agent_id=agent_id,
+            current_state=current_state,
+        )
         if self._reachable_cells is not None:
             state["reachable_remaining"] = max(0, len(self._reachable_cells) - len(self._claimed))
         return state

@@ -54,6 +54,7 @@ class MultiAgentEngine:
     ) -> None:
         self.agent_count = agent_count
         self._grid_size = grid_size
+        self.field_of_view = field_of_view
         self._reachable_positions: set[tuple[int, int]] | None = None
         self._controller = Controller(
             scene=scene,

@@ -17,12 +17,18 @@ GRID_SIZE = 0.25
 FRAME_SHAPE = (480, 640, 3)
 
 
-def _state(agent_id: int, x: float = 0.0, z: float = 0.0, success: bool = True) -> AgentState:
+def _state(
+    agent_id: int,
+    x: float = 0.0,
+    z: float = 0.0,
+    success: bool = True,
+    rotation_y: float = 0.0,
+) -> AgentState:
     return AgentState(
         agent_id=agent_id,
         frame=np.zeros(FRAME_SHAPE, dtype=np.uint8),
         position={"x": x, "y": 0.0, "z": z},
-        rotation={"x": 0.0, "y": 0.0, "z": 0.0},
+        rotation={"x": 0.0, "y": rotation_y, "z": 0.0},
         camera_horizon=0.0,
         last_action_success=success,
         last_action_error="" if success else "Object blocking agent path",
@@ -33,6 +39,7 @@ def _make_engine(agent_count: int = 2) -> MagicMock:
     """Return a mock MultiAgentEngine with agents at distinct starting cells."""
     engine = MagicMock()
     engine.agent_count = agent_count
+    engine.field_of_view = 90
     # Agent i starts at x = i * GRID_SIZE
     engine.get_all_agent_states.return_value = [
         _state(i, x=i * GRID_SIZE) for i in range(agent_count)
@@ -340,6 +347,34 @@ def test_get_prompt_state_includes_available_actions():
     assert prompt_state["my_agent_id"] == 0
     assert prompt_state["available_actions"]
     assert "no_progress_steps" in prompt_state
+
+
+def test_get_prompt_state_includes_action_hints():
+    engine = _make_engine(agent_count=2)
+    a0 = _state(0, x=0.0, z=0.0, rotation_y=0.0)
+    a1 = _state(1, x=GRID_SIZE, z=0.0, rotation_y=0.0)
+    engine.get_all_agent_states.return_value = [a0, a1]
+    engine.get_agent_state.side_effect = lambda agent_id: [a0, a1][agent_id]
+    reachable = {(0, 0), (0, 1), (1, 0), (2, 0)}
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=10,
+        reachable_cells=reachable,
+    )
+
+    prompt_state = game.get_prompt_state(0)
+    hints = prompt_state["action_hints"]
+
+    assert hints["MoveAhead"]["target_cell"] == [0, 1]
+    assert hints["MoveAhead"]["target_status"] == "covered_by_self"
+    assert hints["MoveAhead"]["estimated_new_cells"] == 0
+    assert hints["MoveRight"]["target_status"] == "occupied_by_agent_1"
+    assert hints["MoveRight"]["estimated_new_cells"] == 0
+    assert hints["RotateRight"]["front_cell_after_turn"] == [1, 0]
+    assert hints["RotateRight"]["front_cell_status"] == "occupied_by_agent_1"
+    assert hints["RotateRight"]["estimated_new_cells"] == 1
 
 
 # ---------------------------------------------------------------------------
