@@ -78,6 +78,8 @@ def test_controller_created_with_correct_kwargs(mock_ctrl):
         fieldOfView=90,
         width=640,
         height=480,
+        server_timeout=100.0,
+        server_start_timeout=300.0,
     )
 
 
@@ -92,6 +94,12 @@ def test_overhead_camera_setup_on_init(mock_ctrl):
 def test_field_of_view_exposed_on_engine(mock_ctrl):
     engine = MultiAgentEngine(agent_count=2, field_of_view=75)
     assert engine.field_of_view == 75
+
+
+def test_timeout_settings_exposed_on_engine(mock_ctrl):
+    engine = MultiAgentEngine(agent_count=2, server_timeout=250.0, server_start_timeout=450.0)
+    assert engine.server_timeout == 250.0
+    assert engine.server_start_timeout == 450.0
 
 
 # ---------------------------------------------------------------------------

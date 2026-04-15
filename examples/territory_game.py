@@ -108,6 +108,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="output_dir",
         help="Directory to write replay files, GIF, and final territory map",
     )
+    p.add_argument(
+        "--thor-server-timeout",
+        dest="thor_server_timeout",
+        type=float,
+        default=100.0,
+        help="AI2-THOR backend action timeout in seconds for slow local runs",
+    )
+    p.add_argument(
+        "--thor-server-start-timeout",
+        dest="thor_server_start_timeout",
+        type=float,
+        default=300.0,
+        help="AI2-THOR Unity startup timeout in seconds",
+    )
     return p.parse_args(argv)
 
 
@@ -123,6 +137,8 @@ def run_territory_game(
     model: str,
     output_dir: str,
     backend: str = "vlm",
+    thor_server_timeout: float = 100.0,
+    thor_server_start_timeout: float = 300.0,
 ) -> dict[str, object]:
     """Run a multi-agent territory control episode and save results to *output_dir*.
 
@@ -132,13 +148,21 @@ def run_territory_game(
         steps: Maximum number of game steps.
         model: VLM model alias passed to :func:`~roboclaws.core.vlm.create_provider`.
         output_dir: Directory for replay files, GIF, and territory map.
+        thor_server_timeout: AI2-THOR backend action timeout for slow local runs.
+        thor_server_start_timeout: AI2-THOR Unity startup timeout.
 
     Returns:
         Summary dict with keys ``cells_claimed``, ``blocking_events``,
         ``termination_reason``, ``vlm_cost_usd``, and ``output_dir``.
     """
     provider = OpenClawProvider() if backend == "openclaw" else create_provider(model)
-    engine = MultiAgentEngine(scene=scene, agent_count=agent_count, grid_size=_GRID_SIZE)
+    engine = MultiAgentEngine(
+        scene=scene,
+        agent_count=agent_count,
+        grid_size=_GRID_SIZE,
+        server_timeout=thor_server_timeout,
+        server_start_timeout=thor_server_start_timeout,
+    )
     reachable_cells = engine.get_reachable_positions()
     viz = GameVisualizer(
         grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
@@ -288,6 +312,8 @@ def main() -> None:
     print(f"Agents     : {args.agents}")
     print(f"Steps      : {args.steps}")
     print(f"Model      : {args.model}")
+    print(f"THOR step timeout  : {args.thor_server_timeout}")
+    print(f"THOR start timeout : {args.thor_server_start_timeout}")
     print(f"Output dir : {args.output_dir}")
     print()
 
@@ -298,6 +324,8 @@ def main() -> None:
         model=args.model,
         output_dir=args.output_dir,
         backend=args.backend,
+        thor_server_timeout=args.thor_server_timeout,
+        thor_server_start_timeout=args.thor_server_start_timeout,
     )
 
     print()
