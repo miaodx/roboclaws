@@ -18,10 +18,13 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 import sys
 from pathlib import Path
 
 import numpy as np
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -60,6 +63,14 @@ def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int
 
 def _in_bounds(row: int, col: int) -> bool:
     return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
+
+
+def _frame_to_b64(frame: np.ndarray) -> str:
+    """Encode an RGB frame as a compact base64 JPEG string for VLM input."""
+    image = Image.fromarray(frame, mode="RGB").resize((320, 240), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=70)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 # ---------------------------------------------------------------------------
@@ -190,17 +201,27 @@ def run_territory_game(
             map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
 
             game_state = game.get_state()
-            current_agent = game_state["current_agent"]
+            current_agent = game.current_agent_id
+            prompt_state = game.get_prompt_state(current_agent)
+            prompt_images = [
+                _frame_to_b64(agent_states[current_agent].frame),
+                _frame_to_b64(map_frame),
+            ]
 
             # ----------------------------------------------------------------
             # Execute one game step (VLM decision + engine action internally)
             # ----------------------------------------------------------------
-            game.step()
+            response = game.decide(images=prompt_images, prompt_state=prompt_state)
+            executed_action = game.execute_action(response["action"])
+            response["executed_action"] = executed_action
 
             if step_num % 10 == 0:
                 scores = game.get_scores()
                 scores_str = "  ".join(f"A{a}:{c}" for a, c in sorted(scores.items()))
-                print(f"  step {step_num:4d}/{steps}  |  claimed: {scores_str}")
+                print(
+                    f"  step {step_num:4d}/{steps}  |  "
+                    f"claimed: {scores_str}  |  action: {executed_action}"
+                )
 
             recorder.record_step(
                 step=step_num,
@@ -208,8 +229,8 @@ def run_territory_game(
                 agent_frames=agent_frames,
                 overhead_frame=map_frame,
                 game_state=game_state,
-                vlm_prompt_state=game_state,
-                vlm_response={"action": "unknown", "reasoning": "handled by TerritoryGame"},
+                vlm_prompt_state=prompt_state,
+                vlm_response=response,
             )
 
             step_num += 1

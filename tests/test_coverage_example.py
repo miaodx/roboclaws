@@ -342,6 +342,55 @@ def test_run_termination_reason_valid(mock_engine_cls, tmp_path: Path) -> None:
     assert result["termination_reason"] in ("max_steps", "coverage_reached")
 
 
+def test_run_passes_two_images_to_provider(mock_engine_cls, tmp_path: Path) -> None:
+    class SpyProvider:
+        cumulative_cost = 0.0
+
+        def __init__(self) -> None:
+            self.calls: list[tuple[list[str], dict]] = []
+
+        def get_action(self, images, state):
+            self.calls.append((images, state))
+            return {"reasoning": "scan the frontier", "action": "RotateRight"}
+
+    spy = SpyProvider()
+    with patch("coverage_game.create_provider", return_value=spy):
+        run_coverage_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=1,
+            model="mock",
+            output_dir=str(tmp_path / "coverage"),
+        )
+    assert len(spy.calls) == 1
+    images, state = spy.calls[0]
+    assert len(images) == 2
+    assert all(images)
+    assert state["my_agent_id"] == 0
+
+
+def test_run_replay_records_real_vlm_response(mock_engine_cls, tmp_path: Path) -> None:
+    class SpyProvider:
+        cumulative_cost = 0.0
+
+        def get_action(self, images, state):
+            return {"reasoning": "scan the frontier", "action": "RotateRight"}
+
+    out_dir = tmp_path / "coverage"
+    with patch("coverage_game.create_provider", return_value=SpyProvider()):
+        run_coverage_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=1,
+            model="mock",
+            output_dir=str(out_dir),
+        )
+    replay = json.loads((out_dir / "replay.json").read_text())
+    first_step = replay["steps"][0]
+    assert first_step["vlm_response"]["reasoning"] == "scan the frontier"
+    assert first_step["vlm_response"]["action"] == "RotateRight"
+
+
 def test_run_three_agents(tmp_path: Path) -> None:
     """Three-agent game runs to completion without error."""
     with patch("coverage_game.MultiAgentEngine") as MockCls:

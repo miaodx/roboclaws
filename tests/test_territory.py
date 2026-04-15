@@ -209,6 +209,26 @@ def test_blocking_event_increments_each_failed_move():
     assert game._blocking_events == 2
 
 
+def test_invalid_action_falls_back_to_rotate_right():
+    engine = _make_engine(agent_count=2)
+    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
+    with patch.object(game.provider, "get_action", return_value={"action": "Teleport"}):
+        game.step()
+    engine.step.assert_called_once()
+    assert engine.step.call_args.kwargs["action"] == "RotateRight"
+
+
+def test_failed_move_allows_different_escape_move():
+    engine = _make_engine(agent_count=2)
+    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
+    game._last_action_by_agent[0] = "MoveAhead"
+    engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, success=False)
+    with patch.object(game.provider, "get_action", return_value={"action": "MoveLeft"}):
+        game.step()
+    engine.step.assert_called_once()
+    assert engine.step.call_args.kwargs["action"] == "MoveLeft"
+
+
 # ---------------------------------------------------------------------------
 # State consistency
 # ---------------------------------------------------------------------------
@@ -320,6 +340,15 @@ def test_get_state_remaining_steps_decrements():
     game.step()
     remaining_after = game.get_state()["remaining_steps"]
     assert remaining_after == remaining_before - 1
+
+
+def test_get_prompt_state_includes_available_actions():
+    engine = _make_engine(agent_count=2)
+    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
+    prompt_state = game.get_prompt_state()
+    assert prompt_state["my_agent_id"] == 0
+    assert prompt_state["available_actions"]
+    assert "stale_steps" in prompt_state
 
 
 # ---------------------------------------------------------------------------
