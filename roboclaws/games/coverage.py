@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
@@ -8,6 +9,7 @@ from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.core.vlm import VLMProvider
 
 _MOVE_ACTIONS: frozenset[str] = frozenset({"MoveAhead", "MoveBack", "MoveLeft", "MoveRight"})
+_MOVE_ACTION_ORDER: tuple[str, ...] = ("MoveAhead", "MoveBack", "MoveLeft", "MoveRight")
 _DECISION_ACTIONS: tuple[str, ...] = (
     "MoveAhead",
     "MoveBack",
@@ -102,6 +104,7 @@ class CoverageGame:
     VIEW_DISTANCE_METRES: float = 1.5
     ACTION_SPACE: tuple[str, ...] = _DECISION_ACTIONS
     SAFE_FALLBACK_ACTION: str = "RotateRight"
+    STALL_RECOVERY_NO_PROGRESS_FACTOR: int = 2
 
     def __init__(
         self,
@@ -225,6 +228,39 @@ class CoverageGame:
             return 0.0
         return len(self._covered) / self._total_cells
 
+    def _uncovered_reachable_cells(self) -> set[tuple[int, int]]:
+        """Return ground-truth reachable cells that are still uncovered."""
+        if not self._reachable_cells:
+            return set()
+        return self._reachable_cells - set(self._covered)
+
+    def _nearest_uncovered_distance(self, start_cell: tuple[int, int]) -> int | None:
+        """Return shortest grid distance to an uncovered reachable cell."""
+        if not self._reachable_cells or start_cell not in self._reachable_cells:
+            return None
+
+        uncovered = self._uncovered_reachable_cells()
+        if not uncovered:
+            return None
+        if start_cell in uncovered:
+            return 0
+
+        queue: deque[tuple[tuple[int, int], int]] = deque([(start_cell, 0)])
+        visited = {start_cell}
+
+        while queue:
+            cell, distance = queue.popleft()
+            for dx, dz in ((0, 1), (1, 0), (0, -1), (-1, 0)):
+                neighbor = (cell[0] + dx, cell[1] + dz)
+                if neighbor in visited or neighbor not in self._reachable_cells:
+                    continue
+                if neighbor in uncovered:
+                    return distance + 1
+                visited.add(neighbor)
+                queue.append((neighbor, distance + 1))
+
+        return None
+
     def _normalize_action(self, agent_id: int, action: Any) -> str:
         """Clamp a raw model action to the safe game-local action space."""
         action_name = str(action or "").strip()
@@ -302,6 +338,7 @@ class CoverageGame:
     ) -> dict[str, dict[str, Any]]:
         """Return per-action coverage estimates for the current local state."""
         current_cell = _pos_to_cell(current_state.position, self.grid_size)
+        current_frontier_distance = self._nearest_uncovered_distance(current_cell)
         occupied_cells = {
             _pos_to_cell(state.position, self.grid_size): state.agent_id
             for state in self.engine.get_all_agent_states()
@@ -317,6 +354,7 @@ class CoverageGame:
                     occupied_cells=occupied_cells,
                 )
                 estimated_new_cells = 0
+                frontier_distance: int | None = None
                 if (
                     not target_status.startswith("occupied_by_agent_")
                     and target_status != "blocked_unreachable"
@@ -328,11 +366,18 @@ class CoverageGame:
                         ),
                         rotation=current_state.rotation,
                     )
+                    frontier_distance = self._nearest_uncovered_distance(target_cell)
                 action_hints[action] = {
                     "kind": "move",
                     "target_cell": list(target_cell),
                     "target_status": target_status,
                     "estimated_new_cells": estimated_new_cells,
+                    "nearest_uncovered_distance": frontier_distance,
+                    "improves_frontier_distance": (
+                        current_frontier_distance is not None
+                        and frontier_distance is not None
+                        and frontier_distance < current_frontier_distance
+                    ),
                 }
                 continue
 
@@ -352,9 +397,98 @@ class CoverageGame:
                     position=current_state.position,
                     rotation=facing_after,
                 ),
+                "nearest_uncovered_distance": current_frontier_distance,
+                "improves_frontier_distance": False,
             }
 
         return action_hints
+
+    def _stall_recovery(
+        self,
+        *,
+        agent_id: int,
+        current_state: Any,
+        action_hints: dict[str, dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """Return frontier-based recovery guidance when coverage progress stalls."""
+        if not self._reachable_cells:
+            return None
+
+        current_cell = _pos_to_cell(current_state.position, self.grid_size)
+        current_frontier_distance = self._nearest_uncovered_distance(current_cell)
+        if current_frontier_distance is None:
+            return None
+
+        best_action: str | None = None
+        best_distance: int | None = None
+        best_estimated_new_cells = -1
+
+        for action in _MOVE_ACTION_ORDER:
+            hint = action_hints[action]
+            if hint["target_status"].startswith("occupied_by_agent_"):
+                continue
+            if hint["target_status"] == "blocked_unreachable":
+                continue
+            frontier_distance = hint["nearest_uncovered_distance"]
+            if frontier_distance is None:
+                continue
+            estimated_new_cells = int(hint["estimated_new_cells"])
+            if (
+                best_action is None
+                or frontier_distance < best_distance
+                or (
+                    frontier_distance == best_distance
+                    and estimated_new_cells > best_estimated_new_cells
+                )
+            ):
+                best_action = action
+                best_distance = frontier_distance
+                best_estimated_new_cells = estimated_new_cells
+
+        if (
+            best_action is None
+            or best_distance is None
+            or best_distance >= current_frontier_distance
+        ):
+            return {
+                "active": False,
+                "current_frontier_distance": current_frontier_distance,
+            }
+
+        no_progress_threshold = self.engine.agent_count * self.STALL_RECOVERY_NO_PROGRESS_FACTOR
+        return {
+            "active": self._no_progress_steps >= no_progress_threshold,
+            "current_frontier_distance": current_frontier_distance,
+            "recommended_move": best_action,
+            "recommended_move_frontier_distance": best_distance,
+            "recommended_move_estimated_new_cells": best_estimated_new_cells,
+            "no_progress_threshold": no_progress_threshold,
+        }
+
+    def _override_with_stall_recovery(
+        self,
+        *,
+        action_name: str,
+        prompt_state: dict[str, Any],
+    ) -> tuple[str, str | None]:
+        """Apply a conservative frontier-seeking override when stalled."""
+        recovery = prompt_state.get("stall_recovery")
+        if not isinstance(recovery, dict) or not recovery.get("active"):
+            return action_name, None
+
+        recommended_move = recovery.get("recommended_move")
+        if recommended_move not in _MOVE_ACTIONS or action_name == recommended_move:
+            return action_name, None
+
+        action_hints = prompt_state.get("action_hints", {})
+        chosen_hint = action_hints.get(action_name, {})
+        if action_name in _MOVE_ACTIONS and (
+            chosen_hint.get("estimated_new_cells", 0) > 0
+            or chosen_hint.get("improves_frontier_distance")
+        ):
+            return action_name, None
+
+        return str(recommended_move), "stall_recovery_frontier_move"
 
     # ------------------------------------------------------------------
     # Public interface
@@ -414,6 +548,13 @@ class CoverageGame:
             agent_id=agent_id,
             current_state=current_state,
         )
+        stall_recovery = self._stall_recovery(
+            agent_id=agent_id,
+            current_state=current_state,
+            action_hints=state["action_hints"],
+        )
+        if stall_recovery is not None:
+            state["stall_recovery"] = stall_recovery
         if self._total_cells is not None:
             state["cells_remaining"] = max(0, self._total_cells - len(self._covered))
         return state
@@ -429,10 +570,16 @@ class CoverageGame:
         prompt_state = prompt_state or self.get_prompt_state(agent_id)
         raw_response = self.provider.get_action(images=images or [], state=prompt_state)
         raw_action = raw_response.get("action", self.SAFE_FALLBACK_ACTION)
+        action_name = self._normalize_action(agent_id, raw_action)
+        action_name, override_reason = self._override_with_stall_recovery(
+            action_name=action_name,
+            prompt_state=prompt_state,
+        )
         return {
             "reasoning": str(raw_response.get("reasoning", "")),
-            "action": self._normalize_action(agent_id, raw_action),
+            "action": action_name,
             "raw_action": raw_action,
+            "override_reason": override_reason,
         }
 
     def execute_action(self, action: Any) -> str:
