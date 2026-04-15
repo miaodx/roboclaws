@@ -10,6 +10,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
+from roboclaws.core.vlm import ProviderHealthError
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 
 from coverage_game import (  # noqa: E402
@@ -413,6 +415,38 @@ def test_run_replay_records_real_vlm_response(mock_engine_cls, tmp_path: Path) -
     first_step = replay["steps"][0]
     assert first_step["vlm_response"]["reasoning"] == "scan the frontier"
     assert first_step["vlm_response"]["action"] == "RotateRight"
+
+
+def test_run_stops_cleanly_on_provider_health_error(mock_engine_cls, tmp_path: Path) -> None:
+    class FailingProvider:
+        cumulative_cost = 0.0
+        model = "kimi-k2-5"
+
+        def get_status(self):
+            return {
+                "provider_name": "kimi",
+                "model": self.model,
+                "retry_events": 4,
+                "transient_errors": 8,
+                "failed_calls": 1,
+                "stop_reason": "transient_error_budget_exceeded",
+            }
+
+        def get_action(self, images, state):
+            raise ProviderHealthError("kimi became unstable", status=self.get_status())
+
+    out_dir = tmp_path / "coverage"
+    with patch("coverage_game.create_provider", return_value=FailingProvider()):
+        result = run_coverage_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=3,
+            model="mock",
+            output_dir=str(out_dir),
+        )
+    replay = json.loads((out_dir / "replay.json").read_text())
+    assert result["termination_reason"] == "provider_unstable"
+    assert replay["summary"]["provider_status"]["stop_reason"] == "transient_error_budget_exceeded"
 
 
 def test_run_three_agents(tmp_path: Path) -> None:

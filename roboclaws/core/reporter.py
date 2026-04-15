@@ -120,6 +120,7 @@ def _build_run_section(
     scene = metadata.get("scene", "\u2014")
     termination = summary.get("termination_reason", "unknown")
     final_scores: dict[str, Any] = summary.get("final_scores", {})
+    provider_status: dict[str, Any] = summary.get("provider_status", {}) or {}
 
     if final_scores:
         scores_str = ", ".join(
@@ -127,6 +128,21 @@ def _build_run_section(
         )
     else:
         scores_str = "\u2014"
+
+    provider_badges = ""
+    if provider_status:
+        provider_name = _html.escape(str(provider_status.get("provider_name") or "—"))
+        provider_model = _html.escape(str(provider_status.get("model") or "—"))
+        retry_events = int(provider_status.get("retry_events") or 0)
+        transient_errors = int(provider_status.get("transient_errors") or 0)
+        failed_calls = int(provider_status.get("failed_calls") or 0)
+        provider_badges = (
+            f'<span class="badge">Provider: <strong>{provider_name}</strong></span>'
+            f'<span class="badge">Model: <strong>{provider_model}</strong></span>'
+            f'<span class="badge">Retries: <strong>{retry_events}</strong></span>'
+            f'<span class="badge">Transient errors: <strong>{transient_errors}</strong></span>'
+            f'<span class="badge">Failed calls: <strong>{failed_calls}</strong></span>'
+        )
 
     summary_bar = (
         f'<div class="summary-bar">'
@@ -138,8 +154,10 @@ def _build_run_section(
         f'<span class="badge">VLM cost: <strong>${vlm_cost:.6f}</strong></span>'
         f'<span class="badge">End: <strong>{_html.escape(str(termination))}</strong></span>'
         f'<span class="badge">Scores: <strong>{_html.escape(scores_str)}</strong></span>'
+        f"{provider_badges}"
         f"</div>"
     )
+    provider_health_html = _render_provider_health(provider_status)
 
     # Frame data (base64 images loaded once, stored in a JS array)
     frame_data: list[dict[str, Any]] = []
@@ -154,6 +172,7 @@ def _build_run_section(
         ]
         overhead_img = _img_to_b64(replay_dir / "overhead" / f"{tag}_overhead.png")
         vlm_response = rec.get("vlm_response", {})
+        provider_status_for_step = rec.get("provider_status", {}) or {}
         latest_decisions[acting_agent] = {
             "agent_id": acting_agent,
             "step": step,
@@ -178,6 +197,7 @@ def _build_run_section(
                 "agent_imgs": agent_imgs,
                 "overhead_img": overhead_img,
                 "decisions": decisions,
+                "provider_status": provider_status_for_step,
             }
         )
 
@@ -281,13 +301,20 @@ def _build_run_section(
         action = _html.escape(str(vlm_resp.get("action", "?")))
         reasoning = _html.escape(str(vlm_resp.get("reasoning", "")))
         prompt_json = _html.escape(json.dumps(rec.get("vlm_prompt_state", {}), indent=2))
+        provider_json = _html.escape(json.dumps(rec.get("provider_status", {}), indent=2))
+        provider_html = ""
+        if rec.get("provider_status"):
+            provider_html = (
+                f"<details><summary>Provider status</summary><pre>{provider_json}</pre></details>"
+            )
         vlm_items.append(
             f"<details>"
-            f"<summary>Step {step} \u2014 agent {agent_id} \u2014 {action}</summary>"
+            f"<summary>Step {step} — agent {agent_id} — {action}</summary>"
             f'<div class="vlm-entry">'
             f"<p><strong>Reasoning:</strong> {reasoning}</p>"
             f"<details><summary>Prompt state</summary>"
             f"<pre>{prompt_json}</pre></details>"
+            f"{provider_html}"
             f"</div></details>"
         )
     vlm_log_html = "\n".join(vlm_items) if vlm_items else "<p>No VLM data recorded.</p>"
@@ -295,6 +322,7 @@ def _build_run_section(
     return (
         f'<div class="run-section" id="{_html.escape(run_id)}">'
         f"{summary_bar}"
+        f"{provider_health_html}"
         f"{viewer_html}"
         f'<div class="chart-section"><h3>Metrics Timeline</h3>{svg_chart}</div>'
         f'<div class="vlm-log-section"><h3>VLM Reasoning Log</h3>{vlm_log_html}</div>'
@@ -340,6 +368,25 @@ def _render_decision_card(decision: dict[str, Any]) -> str:
     )
 
 
+def _render_provider_health(provider_status: dict[str, Any]) -> str:
+    """Render the final provider-health snapshot for the run summary."""
+    if not provider_status:
+        return ""
+
+    status_json = _html.escape(json.dumps(provider_status, indent=2))
+    title = _html.escape(str(provider_status.get("provider_name") or "provider"))
+    health = _html.escape(str("healthy" if provider_status.get("healthy", True) else "degraded"))
+    stop_reason = _html.escape(str(provider_status.get("stop_reason") or "none"))
+    return (
+        f'<div class="provider-health">'
+        f"<h3>Provider Health</h3>"
+        f"<p><strong>{title}</strong> ended the run in a <strong>{health}</strong> state. "
+        f"Stop reason: <strong>{stop_reason}</strong>.</p>"
+        f"<pre>{status_json}</pre>"
+        f"</div>"
+    )
+
+
 def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
     """Wrap *body* in a complete self-contained HTML document."""
     safe_title = _html.escape(title)
@@ -380,6 +427,11 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         ".decision-card-head span { color: #5f6c85; font-size: 0.78rem; text-align: right; }"
         ".decision-card p { margin: 0.35rem 0; font-size: 0.84rem; }"
         ".decision-reasoning { line-height: 1.45; }"
+        ".provider-health { background: #fff; border-radius: 8px; padding: 1rem;"
+        "  box-shadow: 0 1px 4px #0001; margin-bottom: 1rem; }"
+        ".provider-health p { margin: 0.3rem 0 0.8rem; font-size: 0.9rem; }"
+        ".provider-health pre { background: #f6f8fb; border-radius: 4px; padding: 0.6rem;"
+        "  overflow-x: auto; font-size: 0.78rem; border: 1px solid #e0e4ec; }"
         ".chart-section { background: #fff; border-radius: 8px; padding: 1rem;"
         "  box-shadow: 0 1px 4px #0001; margin-bottom: 1rem; }"
         ".vlm-log-section { background: #fff; border-radius: 8px; padding: 1rem;"

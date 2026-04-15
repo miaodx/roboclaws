@@ -147,6 +147,28 @@ def test_save_replay_json_step_fields(tmp_path) -> None:
     assert "vlm_response" in step
 
 
+def test_save_replay_json_includes_provider_status(tmp_path) -> None:
+    recorder = _make_recorder()
+    recorder.record_step(
+        step=0,
+        agent_id=0,
+        agent_frames=[_make_frame()],
+        overhead_frame=_make_frame(value=55),
+        game_state={"game": "test", "step": 0},
+        vlm_prompt_state={"step": 0},
+        vlm_response={"reasoning": "move", "action": "MoveAhead"},
+        provider_status={"provider_name": "kimi", "retry_events": 2},
+    )
+    out = recorder.save(
+        tmp_path / "run",
+        generate_gif=False,
+        provider_status={"provider_name": "kimi", "retry_events": 2},
+    )
+    manifest = json.loads((out / "replay.json").read_text())
+    assert manifest["summary"]["provider_status"]["provider_name"] == "kimi"
+    assert manifest["steps"][0]["provider_status"]["retry_events"] == 2
+
+
 def test_save_creates_composite_pngs(tmp_path) -> None:
     recorder = _make_recorder()
     _record_n_steps(recorder, n=3)

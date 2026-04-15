@@ -64,6 +64,7 @@ def _write_replay(
             game_state=_gs(i),
             vlm_prompt_state={"my_agent_id": i % agent_count, "step": i},
             vlm_response={"reasoning": "go ahead", "action": "MoveAhead"},
+            provider_status={"provider_name": "kimi", "retry_events": i, "transient_errors": i},
         )
 
     replay_dir = recorder.save(
@@ -72,6 +73,7 @@ def _write_replay(
         final_scores={0: 10, 1: 8},
         termination_reason="max_steps",
         generate_gif=False,
+        provider_status={"provider_name": "kimi", "retry_events": 2, "transient_errors": 2},
     )
     return replay_dir
 
@@ -114,6 +116,13 @@ class TestGenerate:
         content = generate(replay_dir).read_text()
         assert "go ahead" in content
         assert "MoveAhead" in content
+
+    def test_report_contains_provider_health(self, tmp_path: Path) -> None:
+        replay_dir = _write_replay(tmp_path, n_steps=3)
+        content = generate(replay_dir).read_text()
+        assert "Provider Health" in content
+        assert "Transient errors" in content
+        assert "Provider status" in content
 
     def test_report_contains_decision_snapshot_panel(self, tmp_path: Path) -> None:
         replay_dir = _write_replay(tmp_path, n_steps=3)

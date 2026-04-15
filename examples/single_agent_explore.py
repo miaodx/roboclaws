@@ -30,7 +30,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.visualizer import GameVisualizer
-from roboclaws.core.vlm import create_provider
+from roboclaws.core.vlm import (
+    ProviderHealthError,
+    create_provider,
+    format_provider_status,
+    provider_status_snapshot,
+)
 
 # ---------------------------------------------------------------------------
 # Grid constants
@@ -131,6 +136,8 @@ def run_exploration(
     origin_ix, origin_iz = _pos_to_world_idx(initial.position)
 
     visited_world: set[tuple[int, int]] = set()
+    termination_reason = "max_steps"
+    final_provider_status: dict[str, object] = provider_status_snapshot(provider)
 
     try:
         for step in range(steps):
@@ -167,16 +174,28 @@ def run_exploration(
             # Query VLM with agent FPV + overhead trail map
             agent_b64 = _frame_to_b64(state.frame)
             map_b64 = _frame_to_b64(map_frame)
-            response = provider.get_action(images=[agent_b64, map_b64], state=vlm_state)
+            try:
+                response = provider.get_action(images=[agent_b64, map_b64], state=vlm_state)
+            except ProviderHealthError as exc:
+                termination_reason = "provider_unstable"
+                final_provider_status = exc.status or provider_status_snapshot(provider)
+                print(
+                    f"  step {step:4d}/{steps}  |  provider stop: {exc}\n"
+                    f"  provider: {format_provider_status(final_provider_status)}"
+                )
+                break
+
             action = response.get("action", "MoveAhead")
             if action not in NAVIGATION_ACTIONS:
                 action = "MoveAhead"
+            provider_status = provider_status_snapshot(provider)
+            final_provider_status = provider_status
 
             if step % 10 == 0:
                 print(
                     f"  step {step:4d}/{steps}  |  "
                     f"cells visited: {len(visited_world):3d}  |  "
-                    f"action: {action}"
+                    f"action: {action}  |  provider: {format_provider_status(provider_status)}"
                 )
 
             # Record: use the rendered map frame as overhead so the GIF shows the trail
@@ -188,6 +207,7 @@ def run_exploration(
                 game_state=vlm_state,
                 vlm_prompt_state=vlm_state,
                 vlm_response=response,
+                provider_status=provider_status,
             )
 
             # Execute chosen action
@@ -202,14 +222,17 @@ def run_exploration(
         output_dir,
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={"cells_visited": len(visited_world)},
-        termination_reason="max_steps",
+        termination_reason=termination_reason,
         generate_gif=True,
+        provider_status=final_provider_status,
     )
 
     return {
         "cells_visited": len(visited_world),
         "vlm_cost_usd": provider.cumulative_cost,
         "output_dir": str(out_path),
+        "termination_reason": termination_reason,
+        "provider_status": final_provider_status,
     }
 
 
@@ -238,6 +261,7 @@ def main() -> None:
     print(f"Replay saved to : {result['output_dir']}")
     print(f"Cells visited   : {result['cells_visited']}")
     print(f"VLM cost        : ${result['vlm_cost_usd']:.6f}")
+    print(f"Provider        : {format_provider_status(result['provider_status'])}")
 
 
 if __name__ == "__main__":

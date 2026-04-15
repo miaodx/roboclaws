@@ -22,6 +22,7 @@ import base64
 import io
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from PIL import Image
@@ -31,7 +32,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.visualizer import GameVisualizer
-from roboclaws.core.vlm import create_provider
+from roboclaws.core.vlm import (
+    ProviderHealthError,
+    create_provider,
+    format_provider_status,
+    provider_status_snapshot,
+)
 from roboclaws.games.territory import TerritoryGame
 from roboclaws.openclaw.bridge import OpenClawProvider
 
@@ -183,6 +189,8 @@ def run_territory_game(
     # AI2-THOR's third-party overhead camera is static, so capture the frame
     # once and reuse it as the map background for every step.
     overhead_bg: np.ndarray | None = None
+    termination_reason_override: str | None = None
+    final_provider_status: dict[str, Any] = provider_status_snapshot(provider)
 
     try:
         # Record starting position of agent 0 as the map origin for centring
@@ -235,16 +243,29 @@ def run_territory_game(
             # ----------------------------------------------------------------
             # Execute one game step (VLM decision + engine action internally)
             # ----------------------------------------------------------------
-            response = game.decide(images=prompt_images, prompt_state=prompt_state)
+            try:
+                response = game.decide(images=prompt_images, prompt_state=prompt_state)
+            except ProviderHealthError as exc:
+                termination_reason_override = "provider_unstable"
+                final_provider_status = exc.status or provider_status_snapshot(provider)
+                print(
+                    f"  step {step_num:4d}/{steps}  |  provider stop: {exc}\n"
+                    f"  provider: {format_provider_status(final_provider_status)}"
+                )
+                break
+
             executed_action = game.execute_action(response["action"])
             response["executed_action"] = executed_action
+            provider_status = provider_status_snapshot(provider)
+            final_provider_status = provider_status
 
             if step_num % 10 == 0:
                 scores = game.get_scores()
                 scores_str = "  ".join(f"A{a}:{c}" for a, c in sorted(scores.items()))
                 print(
                     f"  step {step_num:4d}/{steps}  |  "
-                    f"claimed: {scores_str}  |  action: {executed_action}"
+                    f"claimed: {scores_str}  |  action: {executed_action}  |  "
+                    f"provider: {format_provider_status(provider_status)}"
                 )
 
             recorder.record_step(
@@ -255,6 +276,7 @@ def run_territory_game(
                 game_state=game_state,
                 vlm_prompt_state=prompt_state,
                 vlm_response=response,
+                provider_status=provider_status,
             )
 
             step_num += 1
@@ -265,14 +287,19 @@ def run_territory_game(
         engine.close()
 
     result = game.get_result()
+    termination_reason = termination_reason_override or result.termination_reason
+    final_provider_status = (
+        provider_status_snapshot(provider) if not final_provider_status else final_provider_status
+    )
 
     # Save replay (GIF + JSON)
     out_path = recorder.save(
         output_dir,
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={f"agent_{a}": c for a, c in result.cells_claimed.items()},
-        termination_reason=result.termination_reason,
+        termination_reason=termination_reason,
         generate_gif=True,
+        provider_status=final_provider_status,
     )
 
     # Save final territory map as a standalone PNG
@@ -294,9 +321,10 @@ def run_territory_game(
     return {
         "cells_claimed": result.cells_claimed,
         "blocking_events": result.blocking_events,
-        "termination_reason": result.termination_reason,
+        "termination_reason": termination_reason,
         "vlm_cost_usd": provider.cumulative_cost,
         "output_dir": str(out_path),
+        "provider_status": final_provider_status,
     }
 
 
@@ -335,6 +363,7 @@ def main() -> None:
         print(f"  Agent {agent_id} : {count} cells claimed")
     print(f"Replay     : {result['output_dir']}")
     print(f"VLM cost   : ${result['vlm_cost_usd']:.6f}")
+    print(f"Provider   : {format_provider_status(result['provider_status'])}")
 
 
 if __name__ == "__main__":
