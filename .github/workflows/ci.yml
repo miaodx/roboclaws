@@ -118,9 +118,11 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
-      # Validate that the secret is set and the Kimi API returns a parseable
-      # JSON action.  Cost: ~$0.0001 per run.
-      - name: Validate KIMI_API_KEY
+      # Advisory probe only: transient Kimi overloads should not block the real
+      # smoke run before it even starts. The actual smoke games below now have
+      # provider-level retries and are the authoritative gate for this job.
+      - name: Validate KIMI_API_KEY (advisory)
+        continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: python scripts/check_kimi_key.py
