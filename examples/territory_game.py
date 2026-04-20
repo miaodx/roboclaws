@@ -13,6 +13,9 @@ Usage::
     python examples/territory_game.py --agents 3 --scene FloorPlan201 --steps 200
     python examples/territory_game.py --model gpt-4o-mini --output-dir out/territory
     python examples/territory_game.py --model mock --steps 20 --output-dir /tmp/territory
+
+    # OpenClaw backend (requires a running Gateway; set OPENCLAW_GATEWAY_TOKEN):
+    python examples/territory_game.py --backend openclaw --agents 2 --steps 60
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from __future__ import annotations
 import argparse
 import base64
 import io
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -39,7 +43,6 @@ from roboclaws.core.vlm import (
     provider_status_snapshot,
 )
 from roboclaws.games.territory import TerritoryGame
-from roboclaws.openclaw.bridge import OpenClawProvider
 
 # ---------------------------------------------------------------------------
 # Grid constants — must match MultiAgentEngine grid_size
@@ -102,13 +105,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="VLM model alias: mock | gpt-4o | gpt-4o-mini | kimi | anthropic",
     )
     p.add_argument(
-        "--backend",
-        default="vlm",
-        choices=("vlm", "openclaw"),
-        help="Decision backend: 'vlm' calls the provider directly, "
-        "'openclaw' routes through a running OpenClaw Gateway",
-    )
-    p.add_argument(
         "--output-dir",
         default="output/territory",
         dest="output_dir",
@@ -128,6 +124,20 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=300.0,
         help="AI2-THOR Unity startup timeout in seconds",
     )
+    p.add_argument(
+        "--backend",
+        choices=["vlm", "openclaw", "direct"],  # "direct" is a deprecated alias for "vlm"
+        default="vlm",
+        dest="backend",
+        help="VLM transport: 'vlm' (cloud API) or 'openclaw' (local Gateway). "
+             "Token read from OPENCLAW_GATEWAY_TOKEN env var.",
+    )
+    p.add_argument(
+        "--gateway-url",
+        default=None,
+        dest="gateway_url",
+        help="OpenClaw Gateway base URL (debug override; default: http://localhost:18789)",
+    )
     return p.parse_args(argv)
 
 
@@ -137,12 +147,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def run_territory_game(
+    *,
     scene: str,
     agent_count: int,
     steps: int,
-    model: str,
+    model: str = "mock",
     output_dir: str,
     backend: str = "vlm",
+    gateway_url: str | None = None,
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
 ) -> dict[str, object]:
@@ -152,8 +164,12 @@ def run_territory_game(
         scene: AI2-THOR scene name.
         agent_count: Number of competing agents (2 or 3).
         steps: Maximum number of game steps.
-        model: VLM model alias passed to :func:`~roboclaws.core.vlm.create_provider`.
+        model: VLM model alias (used when ``backend="vlm"``).
         output_dir: Directory for replay files, GIF, and territory map.
+        backend: Transport backend — ``"vlm"`` (direct cloud API) or
+                 ``"openclaw"`` (local Gateway via :mod:`roboclaws.openclaw.bridge`).
+                 ``"direct"`` is a deprecated alias for ``"vlm"``.
+        gateway_url: Override the Gateway base URL (debug only).
         thor_server_timeout: AI2-THOR backend action timeout for slow local runs.
         thor_server_start_timeout: AI2-THOR Unity startup timeout.
 
@@ -161,7 +177,17 @@ def run_territory_game(
         Summary dict with keys ``cells_claimed``, ``blocking_events``,
         ``termination_reason``, ``vlm_cost_usd``, and ``output_dir``.
     """
-    provider = OpenClawProvider() if backend == "openclaw" else create_provider(model)
+    from roboclaws.openclaw.bridge import OpenClawUnavailable, build_openclaw_provider_or_die
+
+    # "direct" is a deprecated alias for "vlm"
+    effective_backend = "vlm" if backend == "direct" else backend
+
+    if effective_backend == "openclaw":
+        provider = build_openclaw_provider_or_die(
+            gateway_url=gateway_url, agent_count=agent_count
+        )
+    else:
+        provider = create_provider(model)
     engine = MultiAgentEngine(
         scene=scene,
         agent_count=agent_count,
@@ -170,8 +196,23 @@ def run_territory_game(
         server_start_timeout=thor_server_start_timeout,
     )
     reachable_cells = engine.get_reachable_positions()
+    # When using the openclaw backend, read AGENT_SOULS to drive SOUL badges in GIFs.
+    agent_labels: list[str] = []
+    if effective_backend == "openclaw":
+        souls_env = os.environ.get("AGENT_SOULS", "")
+        if souls_env:
+            # Accept positional csv (aggressive,defensive) or dict form (agent-0:aggressive,...)
+            if ":" in souls_env:
+                raw_map = dict(e.split(":", 1) for e in souls_env.split(",") if ":" in e)
+                agent_labels = [
+                    raw_map.get(f"agent-{i}", "default") for i in range(agent_count)
+                ]
+            else:
+                entries = souls_env.split(",")
+                agent_labels = [entries[i] if i < len(entries) else "default" for i in range(agent_count)]
     viz = GameVisualizer(
-        grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
+        grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count,
+        agent_labels=agent_labels if agent_labels else None,
     )
     recorder = ReplayRecorder(agent_count=agent_count, game="territory")
     game = TerritoryGame(
@@ -235,19 +276,26 @@ def run_territory_game(
             game_state = game.get_state()
             current_agent = game.current_agent_id
             prompt_state = game.get_prompt_state(current_agent)
-            prompt_images = [
-                _frame_to_b64(agent_states[current_agent].frame),
-                _frame_to_b64(map_frame),
-            ]
+            # OpenClawProvider.get_action expects numpy arrays; direct VLM expects b64 strings.
+            if effective_backend == "openclaw":
+                prompt_images: list[Any] = [agent_states[current_agent].frame, map_frame]
+            else:
+                prompt_images = [
+                    _frame_to_b64(agent_states[current_agent].frame),
+                    _frame_to_b64(map_frame),
+                ]
 
             # ----------------------------------------------------------------
             # Execute one game step (VLM decision + engine action internally)
             # ----------------------------------------------------------------
             try:
                 response = game.decide(images=prompt_images, prompt_state=prompt_state)
-            except ProviderHealthError as exc:
+            except (ProviderHealthError, OpenClawUnavailable) as exc:
                 termination_reason_override = "provider_unstable"
-                final_provider_status = exc.status or provider_status_snapshot(provider)
+                final_provider_status = (
+                    exc.status if isinstance(exc, ProviderHealthError) and exc.status
+                    else provider_status_snapshot(provider)
+                )
                 print(
                     f"  step {step_num:4d}/{steps}  |  provider stop: {exc}\n"
                     f"  provider: {format_provider_status(final_provider_status)}"
@@ -336,10 +384,15 @@ def run_territory_game(
 def main() -> None:
     args = _parse_args()
 
+    effective_backend = "vlm" if args.backend == "direct" else args.backend
+    if args.backend == "direct":
+        print("Warning: --backend direct is deprecated; use --backend vlm")
+
     print(f"Scene      : {args.scene}")
     print(f"Agents     : {args.agents}")
     print(f"Steps      : {args.steps}")
     print(f"Model      : {args.model}")
+    print(f"Backend    : {effective_backend}")
     print(f"THOR step timeout  : {args.thor_server_timeout}")
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
     print(f"Output dir : {args.output_dir}")
@@ -352,6 +405,7 @@ def main() -> None:
         model=args.model,
         output_dir=args.output_dir,
         backend=args.backend,
+        gateway_url=args.gateway_url,
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
     )

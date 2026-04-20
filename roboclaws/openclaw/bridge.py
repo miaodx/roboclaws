@@ -1,21 +1,30 @@
-"""HTTP client for a running OpenClaw Gateway.
+"""HTTP client for a running OpenClaw Gateway — Phase 2.1 transport.
 
-Implements a thin bridge that lets ``roboclaws`` drive a locally- or
-remotely-running OpenClaw Gateway through ``POST /tools/invoke``.  One
-``sessionKey`` is assigned per simulation agent so per-agent SOUL + MEMORY
-is preserved by the Gateway.
+Drives a locally- or remotely-running OpenClaw Gateway via its OpenAI-compatible
+``POST /v1/chat/completions`` endpoint.  Each simulation agent is routed to its
+own named Gateway agent (``model="openclaw/{agent_prefix}{agent_id}"``) so SOUL,
+MEMORY, and auth profile are isolated per agent — matching the
+``skills/ai2thor-navigator/SKILL.md`` promise that "each simulation agent runs
+as a separate OpenClaw instance".
 
-See issue #13 and https://docs.openclaw.ai/gateway/tools-invoke-http-api.
+The Gateway agent's system prompt already contains the workspace skill
+(``ai2thor-navigator``); a short per-turn user message steers it to reply in
+the skill's JSON shape.  Images flow inline as base64 data URLs — no bind
+mount, no shared filesystem.
+
+See ``docs/openclaw-local.md`` + ``scripts/openclaw-bootstrap.sh`` for the
+one-shot container setup that pre-creates the N named agents this bridge
+expects.
 """
 
 from __future__ import annotations
 
 import base64
 import io
+import json
 import os
-import tempfile
+import re
 import time
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -25,11 +34,18 @@ from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.vlm import ProviderStatus
 
 _DEFAULT_GATEWAY_URL = "http://localhost:18789"
-_DEFAULT_TOOL = "ai2thor-navigator"
+_DEFAULT_AGENT_PREFIX = "agent-"
+_CHAT_PATH = "/v1/chat/completions"
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+# Generous enough for reasoning models (e.g. nvidia/nemotron-nano-12b-v2-vl:free
+# on OpenRouter) whose hidden chain-of-thought easily consumes 200+ tokens
+# before producing the visible content. Non-reasoning models ignore the cap
+# if they answer shorter.
+_DEFAULT_MAX_TOKENS = 1024
 
 
 class OpenClawUnavailable(RuntimeError):
-    """Raised when the Gateway is unreachable or the skill is not allowlisted.
+    """Raised when the Gateway is unreachable or rejects our request.
 
     Callers (e.g. the CI wrapper) can catch this to skip/degrade the
     OpenClaw backend without masking unrelated HTTP errors.
@@ -37,7 +53,7 @@ class OpenClawUnavailable(RuntimeError):
 
 
 class OpenClawBridge:
-    """HTTP client for a single OpenClaw Gateway.
+    """HTTP client for a single OpenClaw Gateway using ``/v1/chat/completions``.
 
     Parameters
     ----------
@@ -48,11 +64,12 @@ class OpenClawBridge:
     token:
         Bearer token for ``Authorization: Bearer <token>``.  Falls back to
         the ``OPENCLAW_GATEWAY_TOKEN`` env var.
-    session_prefix:
-        Prefix for per-agent ``sessionKey``; the final key is
-        ``f"{session_prefix}-{agent_id}"``.
-    tool:
-        Tool name to invoke (default: ``"ai2thor-navigator"``).
+    agent_prefix:
+        Prefix applied to ``agent_id`` to derive the named Gateway agent,
+        e.g. ``agent_prefix="agent-"`` + ``agent_id=2`` →
+        ``model="openclaw/agent-2"``.  Matches the bootstrap script's
+        ``AGENT_PREFIX`` env var — single source of truth for the naming
+        scheme.
     timeout:
         Per-request timeout in seconds.
     """
@@ -61,9 +78,8 @@ class OpenClawBridge:
         self,
         gateway_url: str | None = None,
         token: str | None = None,
-        session_prefix: str = "roboclaws-agent",
-        tool: str = _DEFAULT_TOOL,
-        timeout: float = 30.0,
+        agent_prefix: str = _DEFAULT_AGENT_PREFIX,
+        timeout: float = 60.0,
     ) -> None:
         try:
             import httpx
@@ -74,8 +90,7 @@ class OpenClawBridge:
             gateway_url or os.environ.get("OPENCLAW_GATEWAY_URL") or _DEFAULT_GATEWAY_URL
         ).rstrip("/")
         self._token = token or os.environ.get("OPENCLAW_GATEWAY_TOKEN")
-        self._session_prefix = session_prefix
-        self._tool = tool
+        self._agent_prefix = agent_prefix
         self._timeout = timeout
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
@@ -119,35 +134,59 @@ class OpenClawBridge:
         return True
 
     # ------------------------------------------------------------------
-    # Tool invocation
+    # Named-agent helpers
     # ------------------------------------------------------------------
 
-    def session_key(self, agent_id: int) -> str:
-        """Return the ``sessionKey`` used for *agent_id*."""
-        return f"{self._session_prefix}-{agent_id}"
+    def model_id(self, agent_id: int) -> str:
+        """Return the ``model`` string routing to the named Gateway agent."""
+        return f"openclaw/{self._agent_prefix}{agent_id}"
+
+    def ping(self, agent_id: int = 0) -> str:
+        """One-shot PONG probe against a named agent.
+
+        Used by :class:`OpenClawProvider` / the demo script to fail fast if
+        the Gateway doesn't know about the requested agent before running
+        N simulation steps.  Returns the raw assistant reply string; raises
+        :class:`OpenClawUnavailable` on any transport / auth / routing
+        failure.
+        """
+        payload = {
+            "model": self.model_id(agent_id),
+            "messages": [
+                {"role": "user", "content": "Reply with only PONG."},
+            ],
+            "max_tokens": _DEFAULT_MAX_TOKENS,
+        }
+        body = self._post_chat(payload)
+        return _extract_content(body)
+
+    # ------------------------------------------------------------------
+    # Tool invocation
+    # ------------------------------------------------------------------
 
     def step(
         self,
         agent_id: int,
-        frame_path: Path | str,
-        overhead_path: Path | str,
+        frame: np.ndarray,
+        overhead: np.ndarray,
         state: dict[str, Any],
         step_idx: int,
     ) -> dict[str, Any]:
-        """Invoke the navigator skill for one agent and return its action.
+        """POST a turn to ``/v1/chat/completions`` for the named Gateway agent.
 
         Parameters
         ----------
         agent_id:
-            Simulation agent index, routed to its own Gateway session.
-        frame_path:
-            Path (visible to the Gateway container) of the first-person frame.
-        overhead_path:
-            Path (visible to the Gateway container) of the overhead map.
+            Simulation agent index.  Routed to ``openclaw/{agent_prefix}{agent_id}``.
+        frame:
+            First-person RGB frame as a ``(H, W, 3) uint8`` numpy array.
+        overhead:
+            Overhead map RGB as a ``(H, W, 3) uint8`` numpy array.
         state:
-            Structured game state dict passed verbatim to the skill.
+            Structured game state dict.  Serialised to JSON in the user
+            message for the agent to read.
         step_idx:
-            Monotonic step counter (used for observability + memory writes).
+            Monotonic step counter (included in the steer for observability).
 
         Returns
         -------
@@ -157,59 +196,192 @@ class OpenClawBridge:
         Raises
         ------
         OpenClawUnavailable
-            When the Gateway is unreachable or the tool is not allowlisted.
+            When the Gateway is unreachable, rejects auth, doesn't know the
+            named agent, or has ``/v1/chat/completions`` disabled.
         """
+        fpv_url = _ndarray_to_data_url(frame)
+        map_url = _ndarray_to_data_url(overhead)
+
+        agent_name = f"{self._agent_prefix}{agent_id}"
+        steer = (
+            f"You are RoboClaws {agent_name}, step {step_idx}. "
+            f"Follow the ai2thor-navigator skill. "
+            f"Current state (JSON): {json.dumps(state, default=str)}. "
+            "FPV and overhead map attached. "
+            'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.'
+        )
+
         payload = {
-            "tool": self._tool,
-            "action": "step",
-            "args": {
-                "frame_path": str(frame_path),
-                "overhead_path": str(overhead_path),
-                "state": state,
-                "step": step_idx,
-            },
-            "sessionKey": self.session_key(agent_id),
-            "dryRun": False,
+            "model": self.model_id(agent_id),
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": steer},
+                        {"type": "image_url", "image_url": {"url": fpv_url}},
+                        {"type": "image_url", "image_url": {"url": map_url}},
+                    ],
+                },
+            ],
+            # Reasoning models (OpenRouter :free nemotron-vl, Kimi-thinking)
+            # may consume hundreds of hidden tokens before the visible JSON.
+            # Without a generous cap they hit finish_reason=length and return
+            # content=null, which breaks _parse_action downstream.
+            "max_tokens": _DEFAULT_MAX_TOKENS,
         }
-        return self._post_and_parse("/tools/invoke", payload)
+        body = self._post_chat(payload)
+        content = _extract_content(body)
+        return _parse_action(content)
 
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
-    def _post_and_parse(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _post_chat(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """POST to ``/v1/chat/completions`` and normalise HTTP errors."""
         import httpx
 
         try:
-            resp = self._client.post(path, json=payload)
+            resp = self._client.post(_CHAT_PATH, json=payload)
         except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
             raise OpenClawUnavailable(f"Gateway unreachable: {exc}") from exc
         except httpx.HTTPError as exc:
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
 
-        if resp.status_code == 404:
-            raise OpenClawUnavailable(f"Tool {self._tool!r} not allowlisted on Gateway (404)")
         if resp.status_code == 401:
             raise OpenClawUnavailable("Gateway rejected bearer token (401)")
-        if resp.status_code >= 400:
+        if resp.status_code == 404:
             raise OpenClawUnavailable(
-                f"Gateway returned HTTP {resp.status_code}: {resp.text[:200]}"
+                "/v1/chat/completions not enabled (404) — re-run scripts/openclaw-bootstrap.sh"
             )
+        if resp.status_code == 400:
+            text = resp.text or ""
+            if "Invalid model" in text or "invalid model" in text.lower():
+                raise OpenClawUnavailable(
+                    f"Gateway rejected model id ({text.strip()[:200]}). "
+                    "The named agent is likely not registered — re-run "
+                    "scripts/openclaw-bootstrap.sh with AGENTS>=<agent_id>+1"
+                )
+            raise OpenClawUnavailable(f"Gateway returned HTTP 400: {text[:200]}")
+        if resp.status_code >= 400:
+            text = resp.text or ""
+            # Try to surface {"error": {"message": "..."}} OpenAI-style bodies
+            msg = text[:200]
+            try:
+                err = resp.json().get("error") or {}
+                if isinstance(err, dict) and err.get("message"):
+                    msg = str(err["message"])
+            except ValueError:
+                pass
+            raise OpenClawUnavailable(f"Gateway returned HTTP {resp.status_code}: {msg}")
 
         try:
-            body = resp.json()
+            return resp.json()
         except ValueError as exc:
             raise OpenClawUnavailable(f"Gateway returned non-JSON: {exc}") from exc
 
-        if not body.get("ok", False):
-            raise OpenClawUnavailable(f"Gateway reported error: {body!r}")
 
-        result = body.get("result") or {}
-        action = result.get("action", "MoveAhead")
-        reasoning = result.get("reasoning", "")
-        if action not in NAVIGATION_ACTIONS:
-            action = "MoveAhead"
-        return {"reasoning": reasoning, "action": action}
+# ---------------------------------------------------------------------------
+# OpenAI chat response → action parsing
+# ---------------------------------------------------------------------------
+
+
+def _extract_content(body: dict[str, Any]) -> str:
+    """Return ``choices[0].message.content`` as a string.
+
+    OpenAI-style responses may put the content directly on
+    ``message.content`` (a string) or as a list of content blocks with
+    ``{"type": "text", "text": "..."}`` entries.  Handle both.
+
+    Some reasoning-style models (e.g. NVIDIA Nemotron Nano VL via OpenRouter)
+    return ``content: null`` alongside a ``reasoning`` / ``reasoning_content``
+    string when they hit ``finish_reason: length``.  We fall back to the
+    reasoning field so downstream JSON extraction at least has the model's
+    partial thought to try to parse an ``action`` out of.
+    """
+    choices = body.get("choices") or []
+    if not choices:
+        raise OpenClawUnavailable(f"Gateway returned no choices: {body!r}")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        text = "".join(parts)
+    elif content is None:
+        text = ""
+    else:
+        text = str(content)
+    if text:
+        return text
+    # Reasoning-only fallback: some providers surface the chain-of-thought in
+    # a separate field when the answer got truncated.
+    for field in ("reasoning", "reasoning_content"):
+        val = message.get(field)
+        if isinstance(val, str) and val.strip():
+            return val
+    return text
+
+
+def _parse_action(content: str) -> dict[str, Any]:
+    """Parse ``{"reasoning": "...", "action": "..."}`` out of the LLM reply.
+
+    LLMs often wrap JSON in ```` ```json ... ``` ```` fences.  Strip any
+    fences, attempt ``json.loads``, and validate ``action`` is in
+    :data:`~roboclaws.core.engine.NAVIGATION_ACTIONS`.  On any parse or
+    validation failure, log a warning and fall back to ``MoveAhead`` so the
+    demo keeps moving instead of crashing.
+    """
+    stripped = _CODE_FENCE_RE.sub("", content).strip()
+
+    # If the LLM wrote text-then-JSON, pull the outermost {...} block.
+    if not stripped.startswith("{"):
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            stripped = stripped[start : end + 1]
+
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        _warn_malformed(content)
+        return {"reasoning": content.strip()[:500], "action": "MoveAhead"}
+
+    if not isinstance(parsed, dict):
+        _warn_malformed(content)
+        return {"reasoning": content.strip()[:500], "action": "MoveAhead"}
+
+    action = str(parsed.get("action", "MoveAhead"))
+    reasoning = str(parsed.get("reasoning", ""))
+    if action not in NAVIGATION_ACTIONS:
+        _warn_invalid_action(action)
+        action = "MoveAhead"
+    return {"reasoning": reasoning, "action": action}
+
+
+def _warn_malformed(content: str) -> None:
+    snippet = content.strip().replace("\n", " ")[:200]
+    print(f"[openclaw] warning: LLM returned non-JSON content, using MoveAhead: {snippet!r}")
+
+
+def _warn_invalid_action(action: str) -> None:
+    print(f"[openclaw] warning: LLM returned invalid action {action!r}, coercing to MoveAhead")
+
+
+def _ndarray_to_data_url(frame: np.ndarray, quality: int = 70) -> str:
+    """Encode an RGB numpy array as a ``data:image/jpeg;base64,...`` URL.
+
+    Resizes to a compact 320x240 to keep per-turn payloads well under any
+    prompt-token limit.  Matches the earlier base64-intermediate behaviour
+    of the demo but skips the filesystem round-trip.
+    """
+    image = Image.fromarray(frame, mode="RGB").resize((320, 240), Image.Resampling.BILINEAR)
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=quality)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
 
 
 # ---------------------------------------------------------------------------
@@ -220,9 +392,9 @@ class OpenClawBridge:
 class OpenClawProvider:
     """Drop-in :class:`~roboclaws.core.vlm.VLMProvider` backed by :class:`OpenClawBridge`.
 
-    Wraps the bridge so ``--backend openclaw`` slots into the existing game
-    loop without further changes.  Each call to :meth:`get_action` writes any
-    provided images to a temp directory and hands the paths to the Gateway.
+    Wraps the bridge so the demo's main loop can treat the Gateway like any
+    other VLM provider.  No filesystem exchange — frames flow inline as
+    base64 data URLs.
 
     Cost tracking is not available for an external Gateway; ``cumulative_cost``
     is always ``0.0``.
@@ -231,16 +403,13 @@ class OpenClawProvider:
     def __init__(
         self,
         bridge: OpenClawBridge | None = None,
-        work_dir: Path | str | None = None,
         **bridge_kwargs: Any,
     ) -> None:
         self._bridge = bridge or OpenClawBridge(**bridge_kwargs)
         self._owns_bridge = bridge is None
-        self._work_dir = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="openclaw-"))
-        self._work_dir.mkdir(parents=True, exist_ok=True)
         self._cost = 0.0
         self._step = 0
-        self.model = getattr(self._bridge, "_tool", _DEFAULT_TOOL)
+        self.model = f"openclaw:{self._bridge._agent_prefix}*"
         self._status = ProviderStatus(provider_name="openclaw", model=self.model)
 
     # -- VLMProvider protocol -----------------------------------------
@@ -257,30 +426,34 @@ class OpenClawProvider:
 
     def get_action(
         self,
-        images: list[str],
+        images: list[np.ndarray],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        """Route one VLM call to the Gateway.
+        """Route one turn to the Gateway for the requested agent.
 
-        ``images`` is the list of base64 JPEG strings the skill expects; the
-        first is treated as the first-person frame, the second (if present)
-        as the overhead map.  State keys ``my_agent_id`` (preferred) or
-        ``current_agent`` identify the routed agent.
+        Parameters
+        ----------
+        images:
+            Ordered list of numpy RGB frames.  ``images[0]`` is treated as
+            the first-person frame; ``images[1]`` (if present) as the
+            overhead map.  Missing or empty entries fall back to a 1×1
+            black placeholder so the named agent still gets a valid payload.
+        state:
+            Structured game state.  ``state["my_agent_id"]`` (preferred) or
+            ``state["current_agent"]`` routes the turn to the right agent.
         """
         agent_id = int(state.get("my_agent_id", state.get("current_agent", 0)))
         step_idx = int(state.get("step", self._step))
 
-        frame_path = self._write_image(images[0] if images else None, agent_id, step_idx, "fpv")
-        overhead_path = self._write_image(
-            images[1] if len(images) > 1 else None, agent_id, step_idx, "map"
-        )
+        frame = images[0] if images else _placeholder_frame()
+        overhead = images[1] if len(images) > 1 else _placeholder_frame()
 
         started = time.monotonic()
         try:
             result = self._bridge.step(
                 agent_id=agent_id,
-                frame_path=frame_path,
-                overhead_path=overhead_path,
+                frame=frame,
+                overhead=overhead,
                 state=state,
                 step_idx=step_idx,
             )
@@ -301,37 +474,69 @@ class OpenClawProvider:
         self._step += 1
         return result
 
+    # -- Convenience --------------------------------------------------
+
+    def ping(self, agent_id: int = 0) -> str:
+        """Expose :meth:`OpenClawBridge.ping` for precondition probes."""
+        return self._bridge.ping(agent_id)
+
     # -- Lifecycle ----------------------------------------------------
 
     def close(self) -> None:
         if self._owns_bridge:
             self._bridge.close()
 
-    # -- Internal -----------------------------------------------------
 
-    def _write_image(
-        self,
-        img_b64: str | None,
-        agent_id: int,
-        step_idx: int,
-        kind: str,
-    ) -> Path:
-        """Decode *img_b64* and write it to the shared work dir; return the path.
+def _placeholder_frame() -> np.ndarray:
+    """1×1 black RGB frame used when the caller omits an image."""
+    return np.zeros((1, 1, 3), dtype=np.uint8)
 
-        If *img_b64* is None, an empty placeholder is written so the Gateway
-        still receives a valid path (the skill may then skip vision).
-        """
-        step_dir = self._work_dir / f"step-{step_idx:04d}"
-        step_dir.mkdir(parents=True, exist_ok=True)
-        out = step_dir / f"agent-{agent_id}-{kind}.jpg"
 
-        if img_b64:
-            raw = base64.b64decode(img_b64)
-            # Verify it's a valid image; re-encode via PIL for safety.
-            Image.open(io.BytesIO(raw)).convert("RGB").save(out, format="JPEG", quality=80)
-        else:
-            # 1x1 black placeholder — cheap and keeps paths well-formed
-            Image.fromarray(np.zeros((1, 1, 3), dtype=np.uint8), mode="RGB").save(
-                out, format="JPEG"
+def build_openclaw_provider_or_die(
+    *,
+    gateway_url: str | None = None,
+    agent_count: int,
+) -> "OpenClawProvider":
+    """Construct an :class:`OpenClawProvider` and fail fast if the Gateway is unreachable.
+
+    Reads ``OPENCLAW_GATEWAY_TOKEN`` and ``OPENCLAW_AGENT_PREFIX`` from the
+    environment (no CLI flags — tokens must not appear in shell history).
+
+    Parameters
+    ----------
+    gateway_url:
+        Override the Gateway base URL.  Defaults to the ``OPENCLAW_GATEWAY_URL``
+        env var, then ``http://localhost:18789``.
+    agent_count:
+        Number of simulation agents; used to compose the hint message when
+        the Gateway is unreachable.
+
+    Raises
+    ------
+    SystemExit
+        With a human-readable hint when the Gateway is unreachable, the token
+        is expired, or the named agent hasn't been registered.
+    """
+    kwargs: dict[str, Any] = {}
+    if gateway_url is not None:
+        kwargs["gateway_url"] = gateway_url
+    agent_prefix = os.environ.get("OPENCLAW_AGENT_PREFIX", _DEFAULT_AGENT_PREFIX)
+    kwargs["agent_prefix"] = agent_prefix
+
+    provider = OpenClawProvider(**kwargs)
+    try:
+        provider.ping(agent_id=0)
+    except OpenClawUnavailable as exc:
+        provider.close()
+        msg = str(exc)
+        if "401" in msg or "bearer token" in msg.lower():
+            hint = "Token likely expired — re-capture with: TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+        elif "400" in msg and "Invalid model" in msg:
+            hint = (
+                f"Agent 0 not registered — re-run with AGENTS={agent_count}: "
+                "TOKEN=$(AGENTS={agent_count} ./scripts/openclaw-bootstrap.sh)"
             )
-        return out
+        else:
+            hint = "Gateway not running — check `docker ps` and re-run ./scripts/openclaw-bootstrap.sh"
+        raise SystemExit(f"Gateway precondition failed: {exc}\nHint: {hint}") from exc
+    return provider

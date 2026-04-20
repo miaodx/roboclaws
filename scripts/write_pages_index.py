@@ -12,8 +12,8 @@ Usage::
     # and ./smoke/coverage/
     python scripts/write_pages_index.py site --include-smoke
 
-    # Also include OpenClaw Gateway reports at ./openclaw/territory/ and
-    # ./openclaw/coverage/
+    # Include all available OpenClaw tiles (whichever subdirs exist under
+    # site/openclaw/ are auto-detected when --include-openclaw is passed)
     python scripts/write_pages_index.py site --include-smoke --include-openclaw
 """
 
@@ -35,19 +35,35 @@ _SMOKE_ITEMS = (
     "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>"
 )
 
-_OPENCLAW_ITEMS = (
+_OPENCLAW_ITEM_DEMO = (
+    '  <li><a href="openclaw/demo/report.html">'
+    "&#x25B6; Navigation Demo &mdash; OpenClaw + Kimi</a>"
+    '<span class="tag">openclaw</span>'
+    '      <div class="desc">Multi-agent AI2-THOR navigation routed through '
+    "a local OpenClaw Gateway (Phase 2.1 transport smoke).</div></li>"
+)
+
+_OPENCLAW_ITEM_TERRITORY = (
     '  <li><a href="openclaw/territory/report.html">'
     "&#x25B6; Territory Control &mdash; OpenClaw + Kimi</a>"
     '<span class="tag">openclaw</span>'
-    '      <div class="desc">Same adversarial territory game, but routed through an '
-    "ephemeral OpenClaw Gateway so each agent has a persistent SOUL + MEMORY "
-    "(<code>openclaw-smoke</code> CI job).</div></li>\n"
+    '      <div class="desc">Adversarial 2-agent territory game over OpenClaw with '
+    "per-agent SOULs (aggressive=red / defensive=blue trails). "
+    "Phase 2.2 long-running Gateway demo.</div></li>"
+)
+
+_OPENCLAW_ITEM_COVERAGE = (
     '  <li><a href="openclaw/coverage/report.html">'
     "&#x25B6; Cooperative Coverage &mdash; OpenClaw + Kimi</a>"
     '<span class="tag">openclaw</span>'
-    '      <div class="desc">Cooperative coverage game via the OpenClaw Gateway '
-    "(<code>openclaw-smoke</code> CI job).</div></li>"
+    '      <div class="desc">Cooperative 2-agent coverage game over OpenClaw with '
+    "cooperative SOUL personas (cooperative=green trails). "
+    "Phase 2.2 long-running Gateway demo.</div></li>"
 )
+
+# Legacy alias: the single-item _OPENCLAW_ITEMS string that older callers may
+# reference. Points at the demo tile for back-compat.
+_OPENCLAW_ITEMS = _OPENCLAW_ITEM_DEMO
 
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head>
@@ -92,19 +108,40 @@ def write_index(
     include_smoke: bool = False,
     include_openclaw: bool = False,
 ) -> Path:
-    """Write ``index.html`` into *site_dir* and return its path."""
+    """Write ``index.html`` into *site_dir* and return its path.
+
+    When ``include_openclaw`` is True, the OpenClaw section is built by
+    auto-detecting which tiles are present under ``site_dir/openclaw/``
+    (demo, territory, coverage). Missing tiles are silently omitted so a
+    partial CI run still produces a valid page.
+    """
     smoke_section = (
         "<h2>Real AI2-THOR + Kimi (push to <code>main</code> only)</h2>\n<ul>\n"
         f"{_SMOKE_ITEMS}\n</ul>"
         if include_smoke
         else ""
     )
+
+    openclaw_items: list[str] = []
+    if include_openclaw:
+        # Enumerate the 4 cases: none / demo-only / territory-only / coverage-only /
+        # any combination — missing artifact dir → omit tile (matches CI best-effort pattern).
+        openclaw_dir = site_dir / "openclaw"
+        if (openclaw_dir / "demo").is_dir():
+            openclaw_items.append(_OPENCLAW_ITEM_DEMO)
+        if (openclaw_dir / "territory").is_dir():
+            openclaw_items.append(_OPENCLAW_ITEM_TERRITORY)
+        if (openclaw_dir / "coverage").is_dir():
+            openclaw_items.append(_OPENCLAW_ITEM_COVERAGE)
+
     openclaw_section = (
         "\n<h2>OpenClaw Gateway (Phase 2, push to <code>main</code> only)</h2>\n<ul>\n"
-        f"{_OPENCLAW_ITEMS}\n</ul>"
-        if include_openclaw
+        + "\n".join(openclaw_items)
+        + "\n</ul>"
+        if openclaw_items
         else ""
     )
+
     html = _TEMPLATE.format(
         smoke_section=smoke_section,
         openclaw_section=openclaw_section,
@@ -125,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "--include-openclaw",
         action="store_true",
-        help="Include links to openclaw/territory/report.html and openclaw/coverage/report.html",
+        help="Include OpenClaw tiles (auto-detected from site_dir/openclaw/{demo,territory,coverage}/)",
     )
     args = p.parse_args(argv)
     args.site_dir.mkdir(parents=True, exist_ok=True)

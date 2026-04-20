@@ -33,6 +33,14 @@ _BACKGROUND_COLOUR: tuple[int, int, int] = (255, 255, 255)
 _GRID_LINE_COLOUR: tuple[int, int, int] = (200, 200, 200)
 _COVERED_COLOUR: tuple[int, int, int] = (200, 240, 200)  # light green (coverage game)
 
+# SOUL → badge colour mapping. Unknown souls fall back to grey.
+_SOUL_COLOURS: dict[str, tuple[int, int, int]] = {
+    "aggressive": (220, 50, 50),    # red
+    "defensive": (50, 120, 220),    # blue
+    "cooperative": (50, 180, 50),   # green
+    "default": (130, 130, 130),     # grey
+}
+
 # Alpha for cell tints so a photographic base frame remains visible underneath.
 _CELL_TINT_ALPHA: int = 140
 
@@ -60,11 +68,16 @@ class GameVisualizer:
         grid_cols: int = 20,
         cell_px: int = 20,
         agent_count: int = 2,
+        agent_labels: list[str] | None = None,
     ) -> None:
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
         self.cell_px = cell_px
         self.agent_count = agent_count
+        # Per-agent SOUL labels (e.g. ["aggressive", "defensive"]).
+        # When set, agent sprites get a SOUL badge and trail cells are tinted
+        # in the SOUL colour instead of the generic agent colour.
+        self.agent_labels: list[str] = agent_labels or []
         self._map_w = grid_cols * cell_px
         self._map_h = grid_rows * cell_px
 
@@ -119,7 +132,7 @@ class GameVisualizer:
         # Claimed cells (territory game) — per-agent tint
         if claimed_cells:
             for agent_id, cells in claimed_cells.items():
-                base_colour = _AGENT_COLOURS[agent_id % len(_AGENT_COLOURS)]
+                base_colour = self._agent_colour(agent_id)
                 tint = (*_lighten(base_colour, 60), _CELL_TINT_ALPHA)
                 for row, col in cells:
                     self._fill_cell(odraw, row, col, tint)
@@ -130,12 +143,22 @@ class GameVisualizer:
         # Grid lines
         self._draw_grid(draw)
 
-        # Agent markers
+        # Agent markers — colour and badge from SOUL label when available
         for idx, (row, col) in enumerate(agent_positions):
-            colour = _AGENT_COLOURS[idx % len(_AGENT_COLOURS)]
-            self._draw_agent_marker(draw, row, col, colour, label=str(idx))
+            colour = self._agent_colour(idx)
+            soul_label = self.agent_labels[idx] if idx < len(self.agent_labels) else ""
+            badge = soul_label[0].upper() if soul_label else str(idx)
+            self._draw_agent_marker(draw, row, col, colour, label=badge)
 
         return bg
+
+    def _agent_colour(self, agent_id: int) -> tuple[int, int, int]:
+        """Return the colour for an agent: SOUL colour if labelled, else palette."""
+        if agent_id < len(self.agent_labels):
+            soul = self.agent_labels[agent_id]
+            if soul in _SOUL_COLOURS:
+                return _SOUL_COLOURS[soul]
+        return _AGENT_COLOURS[agent_id % len(_AGENT_COLOURS)]
 
     def _fill_cell(
         self,
