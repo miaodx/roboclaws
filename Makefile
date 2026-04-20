@@ -1,13 +1,17 @@
 # Makefile — convenience targets for common local workflows.
 # Requires: docker, xvfb-run, KIMI_API_KEY (or NV_API_KEY) in environment.
 
-.PHONY: openclaw-nav openclaw-territory openclaw-coverage help
+.PHONY: openclaw-nav openclaw-territory openclaw-coverage kimi-territory kimi-coverage help
 
 help:
 	@echo "Layer 3 OpenClaw targets (requires a running Gateway):"
 	@echo "  make openclaw-nav        — navigation demo (2 agents, 10 steps)"
 	@echo "  make openclaw-territory  — territory game  (2 agents, 60 steps, aggressive/defensive)"
 	@echo "  make openclaw-coverage   — coverage game   (2 agents, 60 steps, cooperative)"
+	@echo ""
+	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
+	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
+	@echo "  make kimi-coverage       — coverage game   (2 agents, 60 steps, cooperative)"
 	@echo ""
 	@echo "Each target bootstraps the Gateway, runs the game, and tears down."
 	@echo "KIMI_API_KEY (or NV_API_KEY) must be set."
@@ -54,3 +58,25 @@ openclaw-coverage:
 	@echo "==> Stopping Gateway …"
 	docker rm -f openclaw-gateway || true
 	@echo "==> Done. Report: output/openclaw/coverage/report.html"
+
+# ---------------------------------------------------------------------------
+# Direct-Kimi targets — bypass the Gateway (which drops images when routing
+# to Kimi's anthropic-messages endpoint) and talk straight to Kimi via the
+# Anthropic SDK at api.kimi.com/coding.  Per-agent SOULs are injected into
+# the system prompt from AGENT_SOULS env + skills/ai2thor-navigator/souls/.
+# ---------------------------------------------------------------------------
+kimi-territory:
+	@echo "==> Running territory game (direct Kimi, aggressive vs defensive) …"
+	AGENT_SOULS=aggressive,defensive PYTHONUNBUFFERED=1 \
+		xvfb-run -a python -u examples/territory_game.py \
+		--backend vlm --model kimi-coding --agents 2 --steps 20 \
+		--output-dir output/kimi/territory
+	@echo "==> Done. Report: output/kimi/territory/report.html"
+
+kimi-coverage:
+	@echo "==> Running coverage game (direct Kimi, cooperative) …"
+	AGENT_SOULS=cooperative,cooperative PYTHONUNBUFFERED=1 \
+		xvfb-run -a python -u examples/coverage_game.py \
+		--backend vlm --model kimi-coding --agents 2 --steps 20 \
+		--output-dir output/kimi/coverage
+	@echo "==> Done. Report: output/kimi/coverage/report.html"

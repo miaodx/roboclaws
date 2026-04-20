@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Any
@@ -95,7 +96,7 @@ class TerritoryResult:
     connectivity_ratio: dict[int, float]  # agent_id → largest_component / total_claimed
     blocking_events: int
     total_steps: int
-    termination_reason: str  # "all_cells_claimed" | "stale" | "max_steps"
+    termination_reason: str  # "all_cells_claimed" | "stale" | "max_steps" | "time_limit"
 
 
 class TerritoryGame:
@@ -125,11 +126,17 @@ class TerritoryGame:
         max_steps: int = 200,
         grid_size: float = 0.25,
         reachable_cells: set[tuple[int, int]] | None = None,
+        max_wall_seconds: float | None = 1200.0,
     ) -> None:
         self.engine = engine
         self.provider = provider
         self.max_steps = max_steps
         self.grid_size = grid_size
+        # 20-minute default wallclock budget — caps total game runtime even
+        # when provider retries stretch individual steps.  Set to None to
+        # disable (tests/short fixtures).
+        self.max_wall_seconds = max_wall_seconds
+        self._wall_started_at: float | None = None
 
         # Ground-truth reachable cells from AI2-THOR (None → use _all_seen fallback)
         self._reachable_cells = reachable_cells
@@ -374,9 +381,17 @@ class TerritoryGame:
         """Return cells claimed per agent."""
         return {agent_id: len(cells) for agent_id, cells in self._agent_cells.items()}
 
+    def _wall_exceeded(self) -> bool:
+        """Return True if the wallclock budget has elapsed."""
+        if self.max_wall_seconds is None or self._wall_started_at is None:
+            return False
+        return (time.monotonic() - self._wall_started_at) >= self.max_wall_seconds
+
     def is_over(self) -> bool:
         """Return True if the game has ended."""
         if self._step_count >= self.max_steps:
+            return True
+        if self._wall_exceeded():
             return True
         if self._reachable_cells is not None:
             # Ground-truth available: terminate when every reachable cell is claimed
@@ -400,6 +415,8 @@ class TerritoryGame:
 
         Returns True if the game should continue, False if it is already over.
         """
+        if self._wall_started_at is None:
+            self._wall_started_at = time.monotonic()
         if self.is_over():
             return False
 
@@ -409,7 +426,9 @@ class TerritoryGame:
 
     def get_result(self) -> TerritoryResult:
         """Compute and return the final game result."""
-        if self._step_count >= self.max_steps:
+        if self._wall_exceeded() and self._step_count < self.max_steps:
+            reason = "time_limit"
+        elif self._step_count >= self.max_steps:
             reason = "max_steps"
         elif self._reachable_cells is not None and len(self._claimed) >= len(self._reachable_cells):
             reason = "all_cells_claimed"

@@ -401,6 +401,13 @@ mount_args=(
     # secret (KIMI_API_KEY or NV_API_KEY, depending on PROVIDER).
     -e "${PROVIDER_ENV_VAR}=${PROVIDER_API_KEY}"
 )
+# Optional: bump Gateway log level to DEBUG for upstream-traffic debugging.
+# Set GATEWAY_DEBUG=1 when you need to see what the Gateway sends to Kimi /
+# NVIDIA on a failing call.  Off by default — DEBUG is verbose.
+if [[ "${GATEWAY_DEBUG:-0}" == "1" ]]; then
+    mount_args+=(-e "OPENCLAW_LOG_LEVEL=debug" -e "DEBUG=*")
+    log "GATEWAY_DEBUG=1 — Gateway will log at DEBUG level"
+fi
 for aid in "${agent_ids[@]}"; do
     mount_args+=(-v "${SKILLS_DIR}:/home/node/.openclaw/workspaces/${aid}/skills/${skill_basename}:ro")
 done

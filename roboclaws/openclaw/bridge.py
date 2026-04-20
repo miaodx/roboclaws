@@ -42,6 +42,11 @@ _CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 # before producing the visible content. Non-reasoning models ignore the cap
 # if they answer shorter.
 _DEFAULT_MAX_TOKENS = 1024
+# OpenClawProvider retries upstream read timeouts this many times (incl. the first
+# attempt) with exponential backoff (2s, 4s, 8s) before raising a
+# "Model unavailable" error.  Connect errors, protocol errors, and HTTP 4xx/5xx
+# are NOT retried here — they fail fast so the caller can surface the root cause.
+_RETRY_ATTEMPTS = 3
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -71,7 +76,10 @@ class OpenClawBridge:
         ``AGENT_PREFIX`` env var — single source of truth for the naming
         scheme.
     timeout:
-        Per-request timeout in seconds.
+        Per-request timeout in seconds.  Defaults to 180s — long enough to
+        absorb the first image-bearing call to a cold Kimi session (prior
+        60s default timed out before the upstream replied).  Can be
+        overridden via the ``OPENCLAW_HTTP_TIMEOUT`` env var.
     """
 
     def __init__(
@@ -79,8 +87,11 @@ class OpenClawBridge:
         gateway_url: str | None = None,
         token: str | None = None,
         agent_prefix: str = _DEFAULT_AGENT_PREFIX,
-        timeout: float = 60.0,
+        timeout: float | None = None,
     ) -> None:
+        if timeout is None:
+            env_timeout = os.environ.get("OPENCLAW_HTTP_TIMEOUT")
+            timeout = float(env_timeout) if env_timeout else 180.0
         try:
             import httpx
         except ImportError as exc:  # pragma: no cover - httpx ships with instructor
@@ -243,8 +254,16 @@ class OpenClawBridge:
 
         try:
             resp = self._client.post(_CHAT_PATH, json=payload)
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
-            raise OpenClawUnavailable(f"Gateway unreachable: {exc}") from exc
+        except httpx.ConnectError as exc:
+            raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
+        except httpx.ReadTimeout as exc:
+            model_id = payload.get("model", "?")
+            raise OpenClawUnavailable(
+                f"Upstream read timeout after {self._timeout:.0f}s (model={model_id}) — "
+                f"raise via OPENCLAW_HTTP_TIMEOUT=<seconds>: {exc}"
+            ) from exc
+        except httpx.RemoteProtocolError as exc:
+            raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
         except httpx.HTTPError as exc:
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
 
@@ -449,30 +468,59 @@ class OpenClawProvider:
         overhead = images[1] if len(images) > 1 else _placeholder_frame()
 
         started = time.monotonic()
-        try:
-            result = self._bridge.step(
-                agent_id=agent_id,
-                frame=frame,
-                overhead=overhead,
-                state=state,
-                step_idx=step_idx,
-            )
-        except Exception as exc:
-            self._status.total_calls += 1
-            self._status.failed_calls += 1
-            self._status.consecutive_failures += 1
-            self._status.last_error = str(exc)
-            self._status.last_error_kind = exc.__class__.__name__
-            self._status.last_call_duration_seconds = time.monotonic() - started
-            self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
-            raise
-        self._status.total_calls += 1
-        self._status.successful_calls += 1
-        self._status.consecutive_failures = 0
-        self._status.last_call_duration_seconds = time.monotonic() - started
-        self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
-        self._step += 1
-        return result
+        last_exc: Exception | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                result = self._bridge.step(
+                    agent_id=agent_id,
+                    frame=frame,
+                    overhead=overhead,
+                    state=state,
+                    step_idx=step_idx,
+                )
+            except OpenClawUnavailable as exc:
+                last_exc = exc
+                self._status.last_error = str(exc)
+                self._status.last_error_kind = exc.__class__.__name__
+                is_timeout = "read timeout" in str(exc).lower()
+                if is_timeout and attempt < _RETRY_ATTEMPTS - 1:
+                    self._status.transient_errors += 1
+                    self._status.retry_events += 1
+                    delay = min(2.0 * (2**attempt), 8.0)
+                    self._status.total_retry_delay_seconds += delay
+                    time.sleep(delay)
+                    continue
+                self._status.total_calls += 1
+                self._status.failed_calls += 1
+                self._status.consecutive_failures += 1
+                self._status.last_call_duration_seconds = time.monotonic() - started
+                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                if is_timeout:
+                    raise OpenClawUnavailable(
+                        f"Model unavailable: openclaw/{self._bridge._agent_prefix}{agent_id} "
+                        f"timed out on {_RETRY_ATTEMPTS} consecutive attempts — last: {exc}"
+                    ) from exc
+                raise
+            except Exception as exc:
+                self._status.total_calls += 1
+                self._status.failed_calls += 1
+                self._status.consecutive_failures += 1
+                self._status.last_error = str(exc)
+                self._status.last_error_kind = exc.__class__.__name__
+                self._status.last_call_duration_seconds = time.monotonic() - started
+                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                raise
+            else:
+                self._status.total_calls += 1
+                self._status.successful_calls += 1
+                self._status.consecutive_failures = 0
+                self._status.last_call_duration_seconds = time.monotonic() - started
+                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                self._step += 1
+                return result
+        # Defensive: loop should always return or raise above.
+        assert last_exc is not None
+        raise last_exc
 
     # -- Convenience --------------------------------------------------
 
