@@ -75,7 +75,7 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       tint each agent's trail by SOUL color. Palette:
       `aggressive=red`, `defensive=blue`, `cooperative=green`, `default=grey`.
 
-### Active (Phase 2.4)
+### Active (Phase 2.4 + 2.5)
 
 - [x] **A-01** (image-payload contract): SHIPPED 2026-04-15 via commit
       `ddfb523` — `examples/territory_game.py:316` and
@@ -100,12 +100,25 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       `output/view-experiment/results.jsonl`. Bootstrap 95% CIs + paired
       Wilcoxon tests. Wallet gates: Kimi `--max-usd 15`, NVIDIA `--max-usd 5`,
       $20 hard cap. Decision record: which variant graduates to default.
-- [ ] **A-05** (ship winning variant as default): After A-04's decision
-      record, wire the winning variant into the default `--views` of
-      `openclaw_demo.py` / `territory_game.py` / `coverage_game.py`. Update
-      README Layer 3 narrative + CI job configs to exercise the new default.
-      Archive the losing variants behind an explicit `--views` flag for
-      reproducibility.
+- [ ] **A-05** (ship winning variant as default): DEFERRED 2026-04-20.
+      After A-04's decision record, would wire the winning variant into the
+      default `--views`. Was mapped to old Phase 2.5 ("ship winning view");
+      that phase was replaced by Phase 2.5 autonomous-nav (see A-06). A-05
+      is not dropped — it graduates to a new phase if/when Phase 2.4's
+      decision record lands. Scope: default `--views` switch + README +
+      CI smoke refresh.
+- [ ] **A-06** (agent-driven tool loop): Invert the OpenClaw integration.
+      Instead of the push model (`bridge.step()` shoves FPV+overhead per
+      step), one long-lived kickoff `/v1/chat/completions` call with
+      `wall_budget_s`; the agent pulls three tools from a local HTTP server
+      (`observe`, `move(direction)`, `done(reason)`) as needed. Stdin-based
+      human interjection piggybacks on tool responses via
+      `human_message`. Per-run workspace reset wipes
+      `/home/node/.openclaw/workspaces/agent-<id>/state/` before each
+      kickoff. Trace + `report.html` with 👁 (seen) / 🚶 (server-side) frame
+      badges. Shared bridge-client 180s timeout preserved (regression-
+      tested). Additive — does not touch push-model code paths.
+      Live-probe gate: T55 step 1 (container → host networking probe).
 
 ## v2 Requirements
 
@@ -158,11 +171,12 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-02 | Phase 2.4 | Complete (shipped 2026-04-15 pre-ingest) |
 | A-03 | Phase 2.4 (harness dependency) | Pending |
 | A-04 | Phase 2.4 | Pending |
-| A-05 | Phase 2.5 | Pending |
+| A-05 | (deferred — formerly Phase 2.5 "ship winning view"; awaits a new phase) | Deferred |
+| A-06 | Phase 2.5 (autonomous-nav) | Pending |
 
 **Coverage:**
-- v1 requirements: 16 total
-- Mapped to phases: 16
+- v1 requirements: 17 total (A-06 added 2026-04-20)
+- Mapped to phases: 16 active + 1 deferred
 - Unmapped: 0 ✓
 
 ---

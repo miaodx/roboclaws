@@ -100,6 +100,8 @@ This project uses a two-topology dev setup — see `AGENTS.md §7` for the full 
 
 Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavior, the first validation happens **locally**. CI is where that proof stays continuously live, not where it starts. In a cloud session, if you can't actually run the thing, say so explicitly in the PR — don't paper over it with "CI will tell us". File a `local-dev` issue (see #50 for template) and hand off.
 
+**If the session IS local** (you have `docker`, a real `KIMI_API_KEY` / `ANTHROPIC_API_KEY`, a running Gateway, and AI2-THOR installed): the cloud → local handoff protocol does not apply. Run the real thing yourself, iterate, and report what you observed. No need to file a `local-dev` issue or split bounded changes away from real-hardware probes — a local session owns both. The cloud/local split exists to stop *cloud* sessions from papering over missing validation; it does not constrain a local session from carrying a full phase end-to-end.
+
 For the OpenClaw Gateway path specifically, the exact local setup (Docker one-liner, required bind mount, troubleshooting) lives in `docs/openclaw-local.md`. Follow that before running `examples/openclaw_demo.py` locally.
 
 ## Design principles
