@@ -8,8 +8,11 @@ Before writing any code, read in order:
 1. `CLAUDE.md` (this file)
 2. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
 3. `docs/technical-design.md` (full technical spec: API details, game rules, architecture)
-4. `PLAN.md` (current phase + retrospectives) and `.planning/STATE.md` (if it exists — GSD-managed state)
+4. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
 5. `TODOS.md` (self-contained queued work)
+
+Shipped-phase history lives under `docs/retrospectives/` — not required reading,
+but the best source for "why was this decided?" context on prior phases.
 
 ## Build & test
 

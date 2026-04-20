@@ -10,8 +10,11 @@ Before running any command, read in this order:
 1. `AGENTS.md` (this file)
 2. `CLAUDE.md`
 3. `docs/technical-design.md` (complete technical spec, game rules, API details)
-4. `PLAN.md` (current phase + retrospectives) and `.planning/STATE.md` (if it exists — GSD-managed state)
+4. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
 5. `TODOS.md` (self-contained queued work)
+
+Shipped-phase history lives under `docs/retrospectives/` — not required reading,
+but the best source for "why was this decided?" context on prior phases.
 
 If instructions conflict, priority is:
 **system/developer/user prompt > AGENTS.md > CLAUDE.md > inferred defaults**.
