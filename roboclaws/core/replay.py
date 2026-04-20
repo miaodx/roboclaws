@@ -34,6 +34,7 @@ class StepRecord:
     vlm_prompt_state: dict[str, Any]
     vlm_response: dict[str, Any]
     provider_status: dict[str, Any] = field(default_factory=dict)
+    turn_metrics: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -109,6 +110,7 @@ class ReplayRecorder:
         vlm_prompt_state: dict[str, Any],
         vlm_response: dict[str, Any],
         provider_status: dict[str, Any] | None = None,
+        turn_metrics: dict[str, Any] | None = None,
     ) -> None:
         """Append one step's worth of data to the internal buffer.
 
@@ -131,6 +133,7 @@ class ReplayRecorder:
                 vlm_prompt_state=vlm_prompt_state,
                 vlm_response=vlm_response,
                 provider_status=dict(provider_status or {}),
+                turn_metrics=dict(turn_metrics or {}),
             )
         )
 
@@ -212,6 +215,7 @@ class ReplayRecorder:
                     "vlm_prompt_state": _jsonify(rec.vlm_prompt_state),
                     "vlm_response": _jsonify(rec.vlm_response),
                     "provider_status": _jsonify(rec.provider_status),
+                    "turn_metrics": _jsonify(rec.turn_metrics),
                 }
             )
 

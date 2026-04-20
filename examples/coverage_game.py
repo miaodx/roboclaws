@@ -21,12 +21,11 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import base64
-import io
 import json
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +36,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
+from roboclaws.core.turn_metrics import (
+    encode_frame_to_b64_jpeg,
+    get_provider_turn_metrics,
+    round_seconds,
+    serialize_prompt_state,
+    summarize_payload_metrics,
+)
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import (
     ProviderHealthError,
@@ -80,14 +86,6 @@ def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int
 
 def _in_bounds(row: int, col: int) -> bool:
     return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
-
-
-def _frame_to_b64(frame: np.ndarray) -> str:
-    """Encode an RGB frame as a compact base64 JPEG string for VLM input."""
-    image = Image.fromarray(frame, mode="RGB").resize((320, 240), Image.Resampling.BILINEAR)
-    buf = io.BytesIO()
-    image.save(buf, format="JPEG", quality=70)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 # ---------------------------------------------------------------------------
@@ -307,13 +305,20 @@ def run_coverage_game(
             overhead_bg = None
 
         while not game.is_over():
+            step_started = time.perf_counter()
+            turn_metrics: dict[str, Any] = {"timings": {}, "payload": {}}
             # ----------------------------------------------------------------
             # Capture state BEFORE this step for recording and visualisation
             # ----------------------------------------------------------------
+            state_capture_started = time.perf_counter()
             agent_states = engine.get_all_agent_states()
             agent_frames = [s.frame for s in agent_states]
+            turn_metrics["timings"]["state_capture_seconds"] = round_seconds(
+                time.perf_counter() - state_capture_started
+            )
 
             # Build per-agent covered-cell dicts in visualiser coordinates
+            map_render_started = time.perf_counter()
             covered_cells_viz: dict[int, list[tuple[int, int]]] = {
                 i: [] for i in range(agent_count)
             }
@@ -335,17 +340,49 @@ def run_coverage_game(
                 base_frame=overhead_bg,
             )
             map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
+            turn_metrics["timings"]["map_render_seconds"] = round_seconds(
+                time.perf_counter() - map_render_started
+            )
 
             game_state = game.get_state()
             current_agent = game.current_agent_id
+            prompt_state_started = time.perf_counter()
             prompt_state = game.get_prompt_state(current_agent)
+            turn_metrics["timings"]["prompt_state_seconds"] = round_seconds(
+                time.perf_counter() - prompt_state_started
+            )
+
+            prompt_state_text, prompt_state_metrics = serialize_prompt_state(prompt_state)
+            turn_metrics["timings"]["prompt_state_json_seconds"] = prompt_state_metrics[
+                "serialize_seconds"
+            ]
+
+            payload_metrics: dict[str, Any]
             if effective_backend == "openclaw":
                 prompt_images: list[Any] = [agent_states[current_agent].frame, map_frame]
+                payload_metrics = summarize_payload_metrics(
+                    transport="openclaw_ndarray",
+                    prompt_state_chars=prompt_state_metrics["chars"],
+                    image_metrics=[{"label": "fpv"}, {"label": "overhead"}],
+                )
+                turn_metrics["timings"]["image_encode_seconds"] = 0.0
             else:
-                prompt_images = [
-                    _frame_to_b64(agent_states[current_agent].frame),
-                    _frame_to_b64(map_frame),
-                ]
+                fpv_b64, fpv_metrics = encode_frame_to_b64_jpeg(agent_states[current_agent].frame)
+                map_b64, map_metrics = encode_frame_to_b64_jpeg(map_frame)
+                prompt_images = [fpv_b64, map_b64]
+                payload_metrics = summarize_payload_metrics(
+                    transport="vlm_base64_jpeg",
+                    prompt_state_chars=prompt_state_metrics["chars"],
+                    image_metrics=[
+                        {"label": "fpv", **fpv_metrics},
+                        {"label": "overhead", **map_metrics},
+                    ],
+                    extra={"prompt_state_preview": prompt_state_text[:120]},
+                )
+                turn_metrics["timings"]["image_encode_seconds"] = round_seconds(
+                    fpv_metrics["encode_seconds"] + map_metrics["encode_seconds"]
+                )
+            turn_metrics["payload"] = payload_metrics
 
             # Track coverage progression (cells covered before this step)
             cells_history.append(game.cells_covered())
@@ -353,6 +390,7 @@ def run_coverage_game(
             # ----------------------------------------------------------------
             # Execute one game step (VLM decision + engine action internally)
             # ----------------------------------------------------------------
+            provider_started = time.perf_counter()
             try:
                 response = game.decide(images=prompt_images, prompt_state=prompt_state)
             except (ProviderHealthError, OpenClawUnavailable) as exc:
@@ -380,9 +418,23 @@ def run_coverage_game(
                     f"  provider: {format_provider_status(final_provider_status)}"
                 )
                 break
+            turn_metrics["timings"]["provider_call_seconds"] = round_seconds(
+                time.perf_counter() - provider_started
+            )
+            provider_turn_metrics = get_provider_turn_metrics(provider)
+            if provider_turn_metrics:
+                turn_metrics["timings"].update(provider_turn_metrics.get("timings", {}))
+                if provider_turn_metrics.get("payload"):
+                    turn_metrics["payload"] = provider_turn_metrics["payload"]
+                if provider_turn_metrics.get("provider"):
+                    turn_metrics["provider"] = provider_turn_metrics["provider"]
 
+            execute_started = time.perf_counter()
             executed_action = game.execute_action(response["action"])
             response["executed_action"] = executed_action
+            turn_metrics["timings"]["execute_action_seconds"] = round_seconds(
+                time.perf_counter() - execute_started
+            )
             provider_status = provider_status_snapshot(provider)
             final_provider_status = provider_status
 
@@ -394,6 +446,7 @@ def run_coverage_game(
                     f"provider: {format_provider_status(provider_status)}"
                 )
 
+            record_started = time.perf_counter()
             recorder.record_step(
                 step=step_num,
                 agent_id=current_agent,
@@ -403,7 +456,16 @@ def run_coverage_game(
                 vlm_prompt_state=prompt_state,
                 vlm_response=response,
                 provider_status=provider_status,
+                turn_metrics=turn_metrics,
             )
+            turn_metrics["timings"]["record_step_seconds"] = round_seconds(
+                time.perf_counter() - record_started
+            )
+            recorder._steps[-1].turn_metrics = dict(turn_metrics)
+            turn_metrics["timings"]["step_loop_seconds"] = round_seconds(
+                time.perf_counter() - step_started
+            )
+            recorder._steps[-1].turn_metrics = dict(turn_metrics)
 
             step_num += 1
 

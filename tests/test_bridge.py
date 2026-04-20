@@ -164,6 +164,24 @@ def test_bridge_step_posts_to_chat_completions():
     bridge.close()
 
 
+def test_bridge_step_records_last_step_metrics():
+    bridge = OpenClawBridge(token="abc")
+    body = _chat_response('{"reasoning": "go", "action": "MoveAhead"}')
+    with patch.object(bridge._client, "post", return_value=_mock_response(200, body)):
+        bridge.step(
+            agent_id=1,
+            frame=_rgb_frame(),
+            overhead=_rgb_frame(color=32),
+            state={"step": 3, "my_agent_id": 1},
+            step_idx=3,
+        )
+    metrics = bridge.get_last_step_metrics()
+    assert metrics["timings"]["openclaw_gateway_request_seconds"] >= 0.0
+    assert metrics["payload"]["image_count"] == 2
+    assert metrics["payload"]["total_base64_chars"] > 0
+    bridge.close()
+
+
 def test_bridge_step_parses_action_from_response():
     """Action JSON wrapped in a code fence still parses correctly."""
     bridge = OpenClawBridge()
@@ -420,6 +438,28 @@ def test_provider_ping_delegates_to_bridge():
     provider = OpenClawProvider(bridge=bridge)
     assert provider.ping(agent_id=1) == "PONG"
     bridge.ping.assert_called_once_with(1)
+
+
+def test_provider_exposes_last_turn_metrics():
+    bridge = MagicMock(spec=OpenClawBridge)
+    bridge._agent_prefix = "agent-"
+    bridge.step.return_value = {"reasoning": "ok", "action": "RotateLeft"}
+    bridge.get_last_step_metrics.return_value = {
+        "timings": {"openclaw_gateway_request_seconds": 12.3},
+        "payload": {"image_count": 2},
+    }
+
+    provider = OpenClawProvider(bridge=bridge)
+    provider.get_action(
+        images=[_rgb_frame(), _rgb_frame(color=32)],
+        state={"my_agent_id": 2, "step": 7},
+    )
+
+    metrics = provider.get_last_turn_metrics()
+    assert metrics["timings"]["openclaw_provider_call_seconds"] >= 0.0
+    assert metrics["timings"]["openclaw_gateway_request_seconds"] == pytest.approx(12.3)
+    assert metrics["payload"]["image_count"] == 2
+    assert metrics["provider"]["attempts"] == 1
 
 
 # ---------------------------------------------------------------------------
