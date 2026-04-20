@@ -173,7 +173,7 @@ Plans:
 ### Phase 2.5: Autonomous OpenClaw loop (v1 single-agent nav + human steer)
 **Goal**: Invert the OpenClaw integration. Instead of pushing FPV/overhead into the agent per step, let the agent drive — one kickoff `/v1/chat/completions` call with a long wall-clock budget, and the agent pulls `observe`/`move`/`done` from a local HTTP tool server as needed. Adds stdin-based human interjection that piggybacks on tool responses.
 **Depends on**: Phase 2.2 (OpenClawBridge + skill infra). Runs in parallel to Phase 2.4 — different architectural bet; does not share code paths in v1.
-**Requirements**: A-06 (new — agent-driven tool loop; to be added to REQUIREMENTS.md at plan time)
+**Requirements**: A-06 (agent-driven tool loop — see REQUIREMENTS.md)
 **Source**: `docs/plans/phase-2.5-autonomous-nav.md` (reviewed, eng-cleared)
 **Success Criteria** (what must be TRUE):
   1. `python examples/openclaw_nav_autonomous.py --scene FloorPlan201 --max-moves 50 --wall-budget 300` runs end-to-end locally; agent calls `observe` within 30 s of kickoff, takes at least one `move`, terminates via `done` or wall-clock, produces `replay.gif` + `report.html` with 👁 (seen) and 🚶 (server-side) frame badges.
