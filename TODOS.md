@@ -10,48 +10,25 @@ context, no hidden notes — can resume directly.
 
 ---
 
-## Phase 2.2 — shipped (2026-04-16)
+## Shipped
 
-The following two items (formerly items 1 + 2) shipped together as Phase 2.2
-("Long-running OpenClaw games — territory + coverage") in commits
-`950087a` and earlier in the same run. See `PLAN.md § Phase 2.2 retrospective`
-for the detailed writeup.
+- **Phase 2.2** (2026-04-16) — Per-agent SOUL preset distribution + two
+  long-running Gateway game demos (territory + coverage). Shipped as a
+  single run; see `PLAN.md § Phase 2.2 retrospective`. Original items 1
+  + 2.
 
-- ~~**Item 1**: Phase 2.2 — Per-agent SOUL preset distribution~~
-- ~~**Item 2**: Phase 2.5 — Two long-running Gateway game demos (territory + coverage)~~
+## Declined
+
+- **Phase 2.3 — Pin OpenClaw Gateway image by digest** (decided
+  2026-04-20). Evaluated and rejected in favour of the existing
+  `:2026.4.14` tag. Rationale: the date-shaped tag reads as its release
+  date at a glance, which is more useful for humans skimming CI logs /
+  PRs / `docker pull` output than an opaque `sha256:7ea0...`. The
+  immutability gain from digest pinning is real but modest — upstream
+  re-tagging is a theoretical risk we haven't hit, and the `OPENCLAW_IMAGE`
+  repo-variable override already covers the escape hatch if we ever need
+  to pin to a specific digest. Revisit only if upstream actually re-tags.
 
 ---
 
-## 1. Phase 2.3 — Pin OpenClaw Gateway image by digest, not tag
-
-**What:** After the first green `openclaw-smoke` CI run with
-`ghcr.io/openclaw/openclaw:2026.4.14`, replace the tag pin in
-`.github/workflows/ci.yml` with the image digest:
-`ghcr.io/openclaw/openclaw@sha256:<digest>`.
-
-**Why:** Tags are mutable. Upstream can re-tag `2026.4.14` and silently
-change behavior. Digests are immutable content references. The Phase 2.1
-commit message already captures the digest for future reference, so this
-is mostly about promoting that record into an active pin.
-
-**Pros:**
-- True reproducibility (immutable content reference)
-- Eliminates the "image silently changed under us" failure class entirely
-- CI becomes bit-exact reproducible even across registry garbage collection
-
-**Cons:**
-- If upstream GCs the digest from the registry, `docker pull` fails hard
-  until we re-pin to a new digest
-- Tag pin is more forgiving (keeps working as long as the tag exists)
-
-**Context:** Phase 2 plan Task 4 pins to `ghcr.io/openclaw/openclaw:2026.4.14`
-as a tag. Task 5 records the digest in the merge commit for future reference.
-This TODO promotes that record into an active `.github/workflows/ci.yml` edit.
-
-**Depends on / blocked by:** First green CI run against `:2026.4.14`
-producing a stable digest.
-
-**Start point:**
-`docker inspect ghcr.io/openclaw/openclaw:2026.4.14 --format '{{index .RepoDigests 0}}'`
-→ copy the output (e.g. `ghcr.io/openclaw/openclaw@sha256:abc...`) →
-replace `OPENCLAW_IMAGE` default in `.github/workflows/ci.yml` → commit.
+_No active TODOs. Next work should come from a new plan or issue._
