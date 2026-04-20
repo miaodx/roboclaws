@@ -10,6 +10,11 @@ Before running any command, read in this order:
 1. `AGENTS.md` (this file)
 2. `CLAUDE.md`
 3. `docs/technical-design.md` (complete technical spec, game rules, API details)
+4. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
+5. `TODOS.md` (self-contained queued work)
+
+Shipped-phase history lives under `docs/retrospectives/` — not required reading,
+but the best source for "why was this decided?" context on prior phases.
 
 If instructions conflict, priority is:
 **system/developer/user prompt > AGENTS.md > CLAUDE.md > inferred defaults**.
@@ -151,3 +156,67 @@ Required for any task tagged `local-dev` on the issue tracker. Good for:
   can pick up.
 - CI's role is **continuous proof**, not first validation. If a PR's only
   evidence is "CI will tell us", that's a cloud-session habit to break.
+
+---
+
+## 8) Dual-stack workflow: gstack + GSD
+
+This repo is set up for both skill families. Use the right one per task.
+
+### 8.1 Which family owns what
+
+- **gstack** owns pre-plan (strategy, architecture review, design, autoplan)
+  and PR-creation (`/ship`, `/review`). Plan files can live anywhere; gstack
+  is filesystem-agnostic. Key commands: `/office-hours`, `/plan-ceo-review`,
+  `/plan-eng-review`, `/plan-design-review`, `/autoplan`, `/review`, `/ship`,
+  `/retro`, `/document-release`.
+- **GSD** owns phase execution, verification, and the `.planning/` lifecycle.
+  Key commands: `/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-verify-work`,
+  `/gsd-ship`, `/gsd-quick` (small tasks), `/gsd-fast` (trivial tasks),
+  `/gsd-debug` (investigation), `/gsd-next` (workflow routing),
+  `/gsd-progress` (status).
+
+### 8.2 Intended handoff
+
+**gstack produces a reviewed plan; GSD structures it into
+`.planning/phases/XX-name/` and executes.**
+
+Typical flow for a new phase:
+
+1. `/office-hours` — brainstorm + design doc for the phase
+2. `/plan-ceo-review` or `/plan-eng-review` — pressure-test scope + architecture
+3. `/autoplan` — full CEO + Design + Eng + DX review gauntlet
+4. `/gsd-ingest-docs` (first time) or `/gsd-plan-phase` — hand plan to GSD
+5. `/gsd-execute-phase` — build it
+6. `/gsd-verify-work` — UAT
+7. `/gsd-ship` — PR and land
+
+See CLAUDE.md § "Workflow: gstack for pre-plan, GSD for execution" for the
+command mapping.
+
+### 8.3 Current state (pre-GSD)
+
+The existing top-level `PLAN.md` is a pre-GSD convention: one file that
+accumulates phase plans and retrospectives linearly. Phases 2.0–2.3 live
+there.
+
+Phase 2.4 and later **may** migrate to `.planning/` once GSD is
+bootstrapped. Two paths:
+
+- `/gsd-ingest-docs` — ingest the existing `PLAN.md` into `.planning/`,
+  preserving the per-phase structure.
+- `/gsd-plan-phase` — start a fresh `.planning/phases/NN-name/PLAN.md` for
+  the new phase, leaving the old `PLAN.md` as the archived history of
+  phases 2.0–2.3.
+
+Either is fine; the decision is the user's, not a default.
+
+### 8.4 Don't mix mid-phase
+
+Once a phase is under GSD (has a `.planning/phases/XX-name/` directory),
+execute it with `/gsd-execute-phase` and ship with `/gsd-ship`. Don't
+switch back to `/ship` mid-phase; GSD tracks phase state and the mismatch
+will confuse the handoff.
+
+Conversely, don't run `/gsd-plan-phase` on a plan that's still being
+pressure-tested in gstack review. Finish the reviews first, then hand over.

@@ -92,3 +92,30 @@ Issue #52 should decide and implement one coherent story:
 
 Until that is resolved, the current `README.md` and `docs/technical-design.md`
 overstate what the real-model smoke on `main` actually proves.
+
+---
+
+## RESOLVED (2026-04-15)
+
+Both "Likely Cause" items were fixed the day after this report was
+written. This section is now a historical validation snapshot, not a
+description of current behavior.
+
+- **Images flow through the game loops.** Commit `ddfb523`
+  ("feat: improve multi-agent VLM game decisions", 2026-04-15 10:55)
+  wired `images=prompt_images` through `game.decide()` in both
+  `examples/territory_game.py:316` and `examples/coverage_game.py:357`.
+  The provider call now receives a non-empty image list per step.
+- **Coverage semantics are field-of-view.** `roboclaws/games/coverage.py:185-211`
+  computes visible cells via yaw + half-FOV angle math and distance cap,
+  then `_mark_covered` (line 213+) marks that set. Not visited-cells.
+- **Issue #52 closed 2026-04-15T05:13:18Z.**
+
+> **Note for future ingests:** this report's body describes the state
+> at 2026-04-14. When consumed by `/gsd-ingest-docs` on 2026-04-20, the
+> doc-synthesizer initially treated the "Likely Cause" section as
+> current-state findings (producing two stale WARNINGs in
+> `.planning/INGEST-CONFLICTS.md`). Both warnings were verified stale
+> against git log + live code and marked RESOLVED. The lesson —
+> always cross-check "current broken state" claims in dated validation
+> reports — is captured as a feedback memory.

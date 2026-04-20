@@ -674,3 +674,30 @@ def test_reachable_cells_coverage_pct_is_real():
     )
     # Agent stays at (0,0) — 1 cell covered out of 20
     assert game.get_coverage_pct() == pytest.approx(5.0)
+
+
+def test_wall_clock_is_primed_by_decide_not_only_step() -> None:
+    """Wall-time enforcement must kick in when the example harness drives the
+    game via decide()+execute_action() (bypassing ``step()``). Before the fix,
+    _wall_started_at stayed None and _wall_exceeded() was dead code — a 20-min
+    budget silently did nothing and the loop ran past its limit.
+    """
+    import time as _t
+
+    engine = _make_engine(agent_count=2)
+    game = CoverageGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=100,
+        max_wall_seconds=0.001,  # immediate expiry on next check
+    )
+    assert game._wall_started_at is None, "fixture precondition"
+    game.decide()
+    assert game._wall_started_at is not None, (
+        "decide() did not prime _wall_started_at — max_wall_seconds becomes "
+        "dead code for callers that drive the game outside step()"
+    )
+    _t.sleep(0.01)
+    assert game.is_over(), "wall clock should have fired after 0.01s"
+    assert game.get_result().termination_reason == "time_limit"
