@@ -31,6 +31,7 @@ import numpy as np
 from PIL import Image
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.turn_metrics import round_seconds
 from roboclaws.core.vlm import ProviderStatus
 
 _DEFAULT_GATEWAY_URL = "http://localhost:18789"
@@ -112,6 +113,7 @@ class OpenClawBridge:
             headers=headers,
             timeout=timeout,
         )
+        self._last_step_metrics: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -120,6 +122,10 @@ class OpenClawBridge:
     def close(self) -> None:
         """Close the underlying HTTP client."""
         self._client.close()
+
+    def get_last_step_metrics(self) -> dict[str, Any]:
+        """Return timing/payload telemetry for the last bridge step."""
+        return dict(self._last_step_metrics)
 
     def __enter__(self) -> OpenClawBridge:
         return self
@@ -210,14 +216,18 @@ class OpenClawBridge:
             When the Gateway is unreachable, rejects auth, doesn't know the
             named agent, or has ``/v1/chat/completions`` disabled.
         """
-        fpv_url = _ndarray_to_data_url(frame)
-        map_url = _ndarray_to_data_url(overhead)
+        step_started = time.perf_counter()
+        fpv_url, fpv_metrics = _ndarray_to_data_url(frame)
+        map_url, map_metrics = _ndarray_to_data_url(overhead)
 
         agent_name = f"{self._agent_prefix}{agent_id}"
+        state_started = time.perf_counter()
+        state_json = json.dumps(state, default=str)
+        state_json_seconds = time.perf_counter() - state_started
         steer = (
             f"You are RoboClaws {agent_name}, step {step_idx}. "
             f"Follow the ai2thor-navigator skill. "
-            f"Current state (JSON): {json.dumps(state, default=str)}. "
+            f"Current state (JSON): {state_json}. "
             "FPV and overhead map attached. "
             'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.'
         )
@@ -240,9 +250,39 @@ class OpenClawBridge:
             # content=null, which breaks _parse_action downstream.
             "max_tokens": _DEFAULT_MAX_TOKENS,
         }
+        request_started = time.perf_counter()
         body = self._post_chat(payload)
+        request_seconds = time.perf_counter() - request_started
+
+        parse_started = time.perf_counter()
         content = _extract_content(body)
-        return _parse_action(content)
+        result = _parse_action(content)
+        parse_seconds = time.perf_counter() - parse_started
+
+        self._last_step_metrics = {
+            "timings": {
+                "openclaw_encode_fpv_seconds": fpv_metrics["encode_seconds"],
+                "openclaw_encode_overhead_seconds": map_metrics["encode_seconds"],
+                "openclaw_state_json_seconds": round_seconds(state_json_seconds),
+                "openclaw_gateway_request_seconds": round_seconds(request_seconds),
+                "openclaw_response_parse_seconds": round_seconds(parse_seconds),
+                "openclaw_bridge_step_seconds": round_seconds(time.perf_counter() - step_started),
+            },
+            "payload": {
+                "transport": "openclaw_data_url",
+                "model": self.model_id(agent_id),
+                "image_count": 2,
+                "state_json_chars": len(state_json),
+                "steer_text_chars": len(steer),
+                "images": [
+                    {"label": "fpv", **fpv_metrics},
+                    {"label": "overhead", **map_metrics},
+                ],
+                "total_jpeg_bytes": fpv_metrics["jpeg_bytes"] + map_metrics["jpeg_bytes"],
+                "total_base64_chars": fpv_metrics["base64_chars"] + map_metrics["base64_chars"],
+            },
+        }
+        return result
 
     # ------------------------------------------------------------------
     # Internal
@@ -389,18 +429,27 @@ def _warn_invalid_action(action: str) -> None:
     print(f"[openclaw] warning: LLM returned invalid action {action!r}, coercing to MoveAhead")
 
 
-def _ndarray_to_data_url(frame: np.ndarray, quality: int = 70) -> str:
+def _ndarray_to_data_url(frame: np.ndarray, quality: int = 70) -> tuple[str, dict[str, Any]]:
     """Encode an RGB numpy array as a ``data:image/jpeg;base64,...`` URL.
 
     Resizes to a compact 320x240 to keep per-turn payloads well under any
     prompt-token limit.  Matches the earlier base64-intermediate behaviour
     of the demo but skips the filesystem round-trip.
     """
+    started = time.perf_counter()
     image = Image.fromarray(frame, mode="RGB").resize((320, 240), Image.Resampling.BILINEAR)
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=quality)
-    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-    return f"data:image/jpeg;base64,{b64}"
+    jpeg_bytes = buf.getvalue()
+    b64 = base64.b64encode(jpeg_bytes).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}", {
+        "jpeg_bytes": len(jpeg_bytes),
+        "base64_chars": len(b64),
+        "width": 320,
+        "height": 240,
+        "jpeg_quality": quality,
+        "encode_seconds": round_seconds(time.perf_counter() - started),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -430,6 +479,7 @@ class OpenClawProvider:
         self._step = 0
         self.model = f"openclaw:{self._bridge._agent_prefix}*"
         self._status = ProviderStatus(provider_name="openclaw", model=self.model)
+        self._last_turn_metrics: dict[str, Any] = {}
 
     # -- VLMProvider protocol -----------------------------------------
 
@@ -442,6 +492,9 @@ class OpenClawProvider:
 
     def get_status(self) -> dict[str, Any]:
         return self._status.to_dict()
+
+    def get_last_turn_metrics(self) -> dict[str, Any]:
+        return dict(self._last_turn_metrics)
 
     def get_action(
         self,
@@ -469,6 +522,7 @@ class OpenClawProvider:
 
         started = time.monotonic()
         last_exc: Exception | None = None
+        retry_delay_seconds_this_call = 0.0
         for attempt in range(_RETRY_ATTEMPTS):
             try:
                 result = self._bridge.step(
@@ -488,6 +542,7 @@ class OpenClawProvider:
                     self._status.retry_events += 1
                     delay = min(2.0 * (2**attempt), 8.0)
                     self._status.total_retry_delay_seconds += delay
+                    retry_delay_seconds_this_call += delay
                     time.sleep(delay)
                     continue
                 self._status.total_calls += 1
@@ -495,6 +550,21 @@ class OpenClawProvider:
                 self._status.consecutive_failures += 1
                 self._status.last_call_duration_seconds = time.monotonic() - started
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                self._last_turn_metrics = {
+                    "timings": {
+                        "openclaw_provider_call_seconds": round_seconds(
+                            time.monotonic() - started
+                        ),
+                        "openclaw_retry_delay_seconds": round_seconds(
+                            retry_delay_seconds_this_call
+                        ),
+                    },
+                    "provider": {
+                        "attempts": attempt + 1,
+                        "retries_this_call": attempt,
+                        "error_kind": exc.__class__.__name__,
+                    },
+                }
                 if is_timeout:
                     raise OpenClawUnavailable(
                         f"Model unavailable: openclaw/{self._bridge._agent_prefix}{agent_id} "
@@ -509,6 +579,21 @@ class OpenClawProvider:
                 self._status.last_error_kind = exc.__class__.__name__
                 self._status.last_call_duration_seconds = time.monotonic() - started
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                self._last_turn_metrics = {
+                    "timings": {
+                        "openclaw_provider_call_seconds": round_seconds(
+                            time.monotonic() - started
+                        ),
+                        "openclaw_retry_delay_seconds": round_seconds(
+                            retry_delay_seconds_this_call
+                        ),
+                    },
+                    "provider": {
+                        "attempts": attempt + 1,
+                        "retries_this_call": attempt,
+                        "error_kind": exc.__class__.__name__,
+                    },
+                }
                 raise
             else:
                 self._status.total_calls += 1
@@ -516,6 +601,29 @@ class OpenClawProvider:
                 self._status.consecutive_failures = 0
                 self._status.last_call_duration_seconds = time.monotonic() - started
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
+                bridge_metrics = self._bridge.get_last_step_metrics()
+                bridge_timings = (
+                    bridge_metrics.get("timings", {}) if isinstance(bridge_metrics, dict) else {}
+                )
+                bridge_payload = (
+                    bridge_metrics.get("payload", {}) if isinstance(bridge_metrics, dict) else {}
+                )
+                self._last_turn_metrics = {
+                    "timings": {
+                        "openclaw_provider_call_seconds": round_seconds(
+                            time.monotonic() - started
+                        ),
+                        "openclaw_retry_delay_seconds": round_seconds(
+                            retry_delay_seconds_this_call
+                        ),
+                        **bridge_timings,
+                    },
+                    "payload": bridge_payload,
+                    "provider": {
+                        "attempts": attempt + 1,
+                        "retries_this_call": attempt,
+                    },
+                }
                 self._step += 1
                 return result
         # Defensive: loop should always return or raise above.
@@ -578,13 +686,19 @@ def build_openclaw_provider_or_die(
         provider.close()
         msg = str(exc)
         if "401" in msg or "bearer token" in msg.lower():
-            hint = "Token likely expired — re-capture with: TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+            hint = (
+                "Token likely expired — re-capture with: "
+                "TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+            )
         elif "400" in msg and "Invalid model" in msg:
             hint = (
                 f"Agent 0 not registered — re-run with AGENTS={agent_count}: "
                 "TOKEN=$(AGENTS={agent_count} ./scripts/openclaw-bootstrap.sh)"
             )
         else:
-            hint = "Gateway not running — check `docker ps` and re-run ./scripts/openclaw-bootstrap.sh"
+            hint = (
+                "Gateway not running — check `docker ps` and re-run "
+                "./scripts/openclaw-bootstrap.sh"
+            )
         raise SystemExit(f"Gateway precondition failed: {exc}\nHint: {hint}") from exc
     return provider
