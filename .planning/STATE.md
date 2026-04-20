@@ -62,12 +62,18 @@ None yet.
 
 ### Blockers/Concerns
 
-[Issues that affect future work — gate Phase 2.4 execution]
+None currently.
 
-- **Phase 2.4 WARNING-1 (issue #52, coverage semantics)**: SPEC says field-of-view + 95% target; shipped code uses visited-cells + never hits 95%. Must be resolved to ONE coherent story before the A/B sweep's `coverage_fraction` metric is meaningful.
-- **Phase 2.4 WARNING-2 (issue #52, image-payload contract)**: Game loops currently call `provider.get_action(images=[], state=...)`. The A/B variants differ *only* in their image payload, so the harness measures noise until images flow through. Must be resolved before the T35 local-dev sweep.
-
-Both warnings carried forward verbatim from `.planning/INGEST-CONFLICTS.md` and the Phase 2.4 prerequisites in ROADMAP.md (plans 024-01 and 024-02).
+> **Resolved 2026-04-20:** The two WARNINGs initially carried from
+> `.planning/INGEST-CONFLICTS.md` (image-payload contract, coverage
+> semantics) were verified stale — both were already shipped in commit
+> `ddfb523` on 2026-04-15, and issue #52 was closed the same day. The
+> stale-ingest claim came from a dated validation report
+> (`docs/research/05-real-model-smoke-validation.md`, 2026-04-14) that
+> the synthesizer treated as current state. See
+> `.planning/INGEST-CONFLICTS.md` "UPDATE 2026-04-20" header for full
+> evidence and the `feedback_verify_ingest_claims` memory for the
+> lesson.
 
 ## Deferred Items
 
@@ -81,9 +87,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-20 (new-mode GSD ingest)
-Stopped at: Roadmap + state + requirements bootstrapped from `.planning/intel/`. Next action: `/gsd-plan-phase 2.4` (after owner confirms issue #52 resolution approach).
-Resume file: `/home/mi/ws/gogo/roboclaws/PLAN.md` (drafted Phase 2.4) + `.planning/INGEST-CONFLICTS.md` (2 WARNINGs)
+Last session: 2026-04-20 (new-mode GSD ingest + post-ingest verification)
+Stopped at: Roadmap + state + requirements bootstrapped from `.planning/intel/`; both ingest WARNINGs verified stale and marked RESOLVED. Next action: `/gsd-plan-phase 2.4`.
+Resume file: `/home/mi/ws/gogo/roboclaws/PLAN.md` (drafted Phase 2.4)
 
 ## Dual-Stack Workflow
 

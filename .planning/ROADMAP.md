@@ -36,7 +36,7 @@ is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phases 2.5 and
 - [x] **Phase 2.1: Transport correction** - `/v1/chat/completions` + named-agent routing + inline base64 (shipped)
 - [x] **Phase 2.2: Long-running OpenClaw games** - Per-agent SOULs + SOUL overlay + territory/coverage through Gateway (shipped)
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
-- [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline, after resolving issue #52
+- [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (issue #52 prereqs shipped pre-ingest 2026-04-15)
 - [ ] **Phase 2.5: Ship winning view as default** - Wire the Phase 2.4 winner into the default `--views` and CI narrative
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
@@ -151,23 +151,19 @@ and ≤$20 spend.
 
 ### Phase 2.4: View-experiment A/B
 **Goal**: Measure whether map-v2 (structured overhead) and map-v2+chase-cam help VLM agents outperform the baseline (FPV + photo overhead) across territory, coverage, and navigation games, then produce a decision record on which variant(s) graduate to the default.
-**Depends on**: Phase 2.2 **and** resolution of issue #52 (the two ingest WARNINGs: image-payload contract + coverage semantics). Per the intel synthesis, Phase 2.4 cannot produce meaningful data until both are resolved — the sweep must run as prerequisite tasks ahead of the harness.
-**Requirements**: A-01, A-02, A-03, A-04
+**Depends on**: Phase 2.2. Issue #52 prereqs (image-payload contract + coverage semantics) were shipped pre-ingest in commit `ddfb523` (2026-04-15); both initial ingest WARNINGs verified stale and resolved 2026-04-20 — see `.planning/INGEST-CONFLICTS.md` "UPDATE 2026-04-20" header.
+**Requirements**: A-03, A-04 (A-01 and A-02 shipped pre-ingest, marked Complete in REQUIREMENTS.md traceability)
 **Success Criteria** (what must be TRUE):
-  1. Territory and coverage game loops pass `images=[fpv, overhead]` (or the variant's image set) through to `provider.get_action` — verifiable by a mock-engine assertion that the provider received a non-empty `images` list.
-  2. Coverage semantics are documented and implemented as ONE coherent story (either field-of-view + matching 95% target, or visited-cells + matching docs); README, `docs/technical-design.md`, and the smoke-expectation narrative agree.
-  3. A contributor can run `examples/openclaw_demo.py --views {baseline,map-v2,map-v2+chase}` (and the same flag on `territory_game.py` / `coverage_game.py`) and observe distinct overhead rendering + optional chase-cam frame in the resulting artifacts.
-  4. After the overnight Kimi sweep + NVIDIA confirm, `output/view-experiment/results.jsonl` contains runs across variants × seeds × scenes × games within the `$20` hard cap; total spend is logged per `--max-usd` gate (Kimi `$15`, NVIDIA `$5`).
-  5. `docs/view-experiment-2026-04.md` ships a decision record: one-line verdict per question (map-v2 helps / doesn't, chase-cam helps / doesn't), bootstrap 95% CIs per `(variant, game)` for the primary metric, paired Wilcoxon p-values + effect sizes for {B vs A, C vs A, C vs B}, and sample GIFs per variant on a matching seed/scene.
+  1. A contributor can run `examples/openclaw_demo.py --views {baseline,map-v2,map-v2+chase}` (and the same flag on `territory_game.py` / `coverage_game.py`) and observe distinct overhead rendering + optional chase-cam frame in the resulting artifacts.
+  2. After the overnight Kimi sweep + NVIDIA confirm, `output/view-experiment/results.jsonl` contains runs across variants × seeds × scenes × games within the `$20` hard cap; total spend is logged per `--max-usd` gate (Kimi `$15`, NVIDIA `$5`).
+  3. `docs/view-experiment-2026-04.md` ships a decision record: one-line verdict per question (map-v2 helps / doesn't, chase-cam helps / doesn't), bootstrap 95% CIs per `(variant, game)` for the primary metric, paired Wilcoxon p-values + effect sizes for {B vs A, C vs A, C vs B}, and sample GIFs per variant on a matching seed/scene.
 **Plans**: TBD — awaiting `/gsd-plan-phase 2.4`. Expected shape (pre-plan draft in root `PLAN.md`):
 
 Plans:
-- [ ] 024-01: Resolve coverage semantics (A-02) — pick one and reconcile code + SPEC + README (prerequisite for the sweep's `coverage_fraction` to have one meaning)
-- [ ] 024-02: Wire images through the game loops (A-01) — `territory.py` + `coverage.py` pass `images=[...]` to `provider.get_action` (prerequisite for view variants to differ at all)
-- [ ] 024-03: NvidiaProvider extension (A-03) — structured-output via instructor, live-probe gate pre-merge
-- [ ] 024-04: `roboclaws/core/views.py` + `render_structured_map` + chase-cam API (A-04 build)
-- [ ] 024-05: Overnight Kimi workhorse sweep (`--max-usd 15`) + NVIDIA confirm (`--max-usd 5`) at local workstation (T35 local-dev only)
-- [ ] 024-06: Analysis script + `docs/view-experiment-2026-04.md` decision record
+- [ ] 024-01: NvidiaProvider extension (A-03) — structured-output via instructor, live-probe gate pre-merge
+- [ ] 024-02: `roboclaws/core/views.py` + `render_structured_map` + chase-cam API (A-04 build)
+- [ ] 024-03: Overnight Kimi workhorse sweep (`--max-usd 15`) + NVIDIA confirm (`--max-usd 5`) at local workstation (T35 local-dev only)
+- [ ] 024-04: Analysis script + `docs/view-experiment-2026-04.md` decision record
 **UI hint**: yes
 
 #### 📋 v1.2 Ship Winning View (Phase 2.5) — Planned

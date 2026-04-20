@@ -36,7 +36,9 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
 - [x] **CORE-05** (REQ-coverage-game): Cooperative coverage with per-agent
       contribution + work-balance metrics. Provide teammate positions +
       coverage map to each agent's prompt. `--backend {vlm,openclaw}`.
-      **Semantics under review — see Active requirement A-02 (issue #52).**
+      Field-of-view coverage accounting (`coverage.py:185-211`, yaw +
+      half-FOV angle math). Stale-ingest WARNING on semantics resolved
+      2026-04-20 — issue #52 closed 2026-04-15T05:13:18Z.
 - [x] **CORE-06** (REQ-game-replay-recorder): Record per-step all-agent
       frames + overhead + state JSON + VLM prompts/responses. Directory of
       numbered frames + `replay.json`. GIF via imageio. Summary report
@@ -73,17 +75,16 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       tint each agent's trail by SOUL color. Palette:
       `aggressive=red`, `defensive=blue`, `cooperative=green`, `default=grey`.
 
-### Active (issue #52 + Phase 2.4)
+### Active (Phase 2.4)
 
-- [ ] **A-01** (image-payload contract resolution): Fix game loops in
-      `roboclaws/games/{territory,coverage}.py` to pass
-      `images=[fpv, overhead]` through to `provider.get_action`. Currently
-      `images=[]`. Required for the A/B sweep to measure anything
-      image-related. Tracked via issue #52; ingest WARNING (2 of 2).
-- [ ] **A-02** (coverage semantics resolution): Pick ONE coherent coverage
-      definition between field-of-view (SPEC) and visited-cells (shipped).
-      Tracked via issue #52; ingest WARNING (1 of 2). Documentation must
-      match the final code choice. Smoke expectations updated accordingly.
+- [x] **A-01** (image-payload contract): SHIPPED 2026-04-15 via commit
+      `ddfb523` — `examples/territory_game.py:316` and
+      `examples/coverage_game.py:357` both pass `images=prompt_images`
+      through `game.decide()`. Stale-ingest WARNING resolved 2026-04-20;
+      issue #52 closed 2026-04-15T05:13:18Z.
+- [x] **A-02** (coverage semantics): SHIPPED — `coverage.py:185-211`
+      uses field-of-view accounting (yaw + half-FOV angle math).
+      Stale-ingest WARNING resolved 2026-04-20; issue #52 closed.
 - [ ] **A-03** (REQ-vlm-provider-pluggable — NvidiaProvider extension): Add
       `NvidiaProvider` against `https://integrate.api.nvidia.com/v1` with
       structured output (instructor). Canonical alias `"nvidia"` →
@@ -145,16 +146,16 @@ Which phases cover which requirements. Status reflects shipped state at
 | CORE-01 | Phase 1 | Complete |
 | CORE-02 | Phase 1 | Complete |
 | CORE-03 | Phase 1 | Complete |
-| CORE-04 | Phase 1 | Complete (semantics-clean pending A-01) |
-| CORE-05 | Phase 1 | Complete (semantics-clean pending A-01, A-02) |
+| CORE-04 | Phase 1 | Complete |
+| CORE-05 | Phase 1 | Complete (FOV accounting confirmed 2026-04-20) |
 | CORE-06 | Phase 1 | Complete |
 | CI-01 | Phase 1.5 | Complete |
 | CI-02 | Phase 1.5 | Complete |
 | OC-01 | Phase 2 (+ 2.1 transport correction) | Complete |
 | OC-02 | Phase 2.2 | Complete |
 | OC-03 | Phase 2.2 | Complete |
-| A-01 | Phase 2.4 (prereq task, gates the sweep) | Pending |
-| A-02 | Phase 2.4 (prereq task, gates the sweep) | Pending |
+| A-01 | Phase 2.4 | Complete (shipped 2026-04-15 pre-ingest) |
+| A-02 | Phase 2.4 | Complete (shipped 2026-04-15 pre-ingest) |
 | A-03 | Phase 2.4 (harness dependency) | Pending |
 | A-04 | Phase 2.4 | Pending |
 | A-05 | Phase 2.5 | Pending |

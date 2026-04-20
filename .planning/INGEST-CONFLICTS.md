@@ -1,5 +1,29 @@
 ## Conflict Detection Report
 
+> **UPDATE 2026-04-20 (same day):** Both WARNINGs below were found to be
+> **stale** when verified against the live code and issue tracker.
+> Root cause: `docs/research/05-real-model-smoke-validation.md` is a
+> dated validation report from 2026-04-14; the issues it describes were
+> fixed the next day. The doc-synthesizer reasoned over the doc bundle
+> and treated the dated report as current state. Both WARNINGs are
+> **RESOLVED — no blockers for Phase 2.4.**
+>
+> Evidence:
+> - Commit `ddfb523` (2026-04-15 10:55) — "feat: improve multi-agent
+>   VLM game decisions" — wired `images=prompt_images` through
+>   `game.decide()` in `examples/territory_game.py:316` and
+>   `examples/coverage_game.py:357`.
+> - `roboclaws/games/coverage.py:185-211` uses field-of-view
+>   accounting (yaw + half-FOV angle math), not visited-cells.
+> - Issue #52 **CLOSED** 2026-04-15T05:13:18Z.
+>
+> Lesson captured under `feedback_verify_ingest_claims` in
+> `~/.claude/projects/-home-mi-ws-gogo-roboclaws/memory/` — always
+> cross-check synthesizer claims about "current broken state"
+> against git log + live code.
+
+---
+
 Generated: 2026-04-20 (new-mode bootstrap)
 Precedence: ADR > SPEC > PRD > DOC
 Scope: 18 classified docs — 1 ADR (LOCKED), 2 SPECs, 15 DOCs.
@@ -21,9 +45,9 @@ new-mode with a single locked doc.
 
 No hard blockers. Synthesis is safe to consume for routing.
 
-### WARNINGS (2)
+### WARNINGS (2 — both RESOLVED on verification, see UPDATE above)
 
-[WARNING] Competing acceptance variants for REQ-coverage-game — field-of-view vs visited-cells
+[WARNING — RESOLVED 2026-04-20] Competing acceptance variants for REQ-coverage-game — field-of-view vs visited-cells
   Found:
     - source: docs/technical-design.md § Scenario B Cooperative Coverage
       requires "cells within an agent's field of view are marked as
@@ -52,7 +76,7 @@ No hard blockers. Synthesis is safe to consume for routing.
     revise docs/technical-design.md and the README smoke-expectation
     narrative to match.
 
-[WARNING] Competing acceptance variants for the territory/coverage VLM image-payload contract
+[WARNING — RESOLVED 2026-04-20] Competing acceptance variants for the territory/coverage VLM image-payload contract
   Found:
     - source: docs/technical-design.md § VLM Strategy § Prompt Structure
       and § Scenario A/B VLM-receives-per-step: both games feed the VLM
