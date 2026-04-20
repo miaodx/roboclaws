@@ -342,6 +342,12 @@ class TerritoryGame:
         prompt_state: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Query the provider and return a sanitized response for the current agent."""
+        # Prime the wall-clock the same way step() does so callers that drive
+        # the game via decide()+execute_action() (the example harnesses) get
+        # max_wall_seconds enforcement.  Otherwise _wall_started_at stays
+        # None and _wall_exceeded() is dead code.
+        if self._wall_started_at is None:
+            self._wall_started_at = time.monotonic()
         agent_id = self._current_agent
         prompt_state = prompt_state or self.get_prompt_state(agent_id)
         raw_response = self.provider.get_action(images=images or [], state=prompt_state)
