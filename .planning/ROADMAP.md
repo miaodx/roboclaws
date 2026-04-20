@@ -8,20 +8,22 @@ competition and cooperation. The journey: first prove the VLM-drives-a-robot
 core hypothesis directly against AI2-THOR (Phase 1), then layer CI +
 dev-topology to keep the demo continuously alive (Phase 1.5), then route
 control through an OpenClaw Gateway (Phases 2 → 2.1 → 2.2), then validate
-whether better map representations help a VLM win harder games (Phase 2.4),
-then ship the winning variant as the new default (Phase 2.5). Phase 3
-(Isaac Lab) is deferred indefinitely.
+whether better map representations help a VLM win harder games (Phase 2.4)
+and, in parallel, test a different architectural bet — let the agent drive
+via tool calls instead of the push model (Phase 2.5). Phase 3 (Isaac Lab)
+is deferred indefinitely.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
-is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phases 2.5 and
-3 are anticipated but not yet planned.
+is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phase 2.5 is
+drafted in `docs/plans/phase-2.5-autonomous-nav.md`, eng-reviewed, and
+ready for plan ingestion. Phase 3 remains deferred indefinitely.
 
 ## Milestones
 
 - ✅ **v1.0 Core + OpenClaw** - Phases 1, 1.5, 2, 2.1, 2.2 (shipped 2026-04-16)
 - ⛔ **Phase 2.3 (Digest pin)** - DECLINED 2026-04-20 (LOCKED ADR)
 - 🚧 **v1.1 Better Views** - Phase 2.4 (drafted, awaiting plan)
-- 📋 **v1.2 Ship Winning View** - Phase 2.5 (planned)
+- 📋 **v1.2 Autonomous OpenClaw Loop** - Phase 2.5 (drafted, ready for plan)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -37,7 +39,7 @@ is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phases 2.5 and
 - [x] **Phase 2.2: Long-running OpenClaw games** - Per-agent SOULs + SOUL overlay + territory/coverage through Gateway (shipped)
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
 - [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (issue #52 prereqs shipped pre-ingest 2026-04-15)
-- [ ] **Phase 2.5: Ship winning view as default** - Wire the Phase 2.4 winner into the default `--views` and CI narrative
+- [ ] **Phase 2.5: Autonomous OpenClaw loop (v1 single-agent nav + human steer)** - Pull-model architecture test: agent drives `observe`/`move`/`done` tools over local HTTP; stdin-based human interjection; runs parallel to Phase 2.4's push-model A/B (`docs/plans/phase-2.5-autonomous-nav.md`)
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -166,28 +168,36 @@ Plans:
 - [ ] 024-04: Analysis script + `docs/view-experiment-2026-04.md` decision record
 **UI hint**: yes
 
-#### 📋 v1.2 Ship Winning View (Phase 2.5) — Planned
+#### 📋 v1.2 Autonomous OpenClaw Loop (Phase 2.5) — Drafted, ready for plan
 
-### Phase 2.5: Ship winning view as default
-**Goal**: Wire the Phase 2.4 decision record's winner into the default view stack so the next contributor (and the next CI run) experiences the improvement without a flag.
-**Depends on**: Phase 2.4 (decision record)
-**Requirements**: A-05
+### Phase 2.5: Autonomous OpenClaw loop (v1 single-agent nav + human steer)
+**Goal**: Invert the OpenClaw integration. Instead of pushing FPV/overhead into the agent per step, let the agent drive — one kickoff `/v1/chat/completions` call with a long wall-clock budget, and the agent pulls `observe`/`move`/`done` from a local HTTP tool server as needed. Adds stdin-based human interjection that piggybacks on tool responses.
+**Depends on**: Phase 2.2 (OpenClawBridge + skill infra). Runs in parallel to Phase 2.4 — different architectural bet; does not share code paths in v1.
+**Requirements**: A-06 (agent-driven tool loop — see REQUIREMENTS.md)
+**Source**: `docs/plans/phase-2.5-autonomous-nav.md` (reviewed, eng-cleared)
 **Success Criteria** (what must be TRUE):
-  1. Running `python examples/openclaw_demo.py` (no `--views` flag) uses the Phase 2.4 winning variant; losing variants remain available behind explicit `--views` for reproducibility.
-  2. Layer 2 and Layer 3 CI jobs produce GIFs that are visibly distinguishable from their pre-2.5 counterparts (e.g. structured grid overhead, chase-cam frame) without changes to CI secrets.
-  3. README Layer 3 narrative + `docs/openclaw-local.md` describe the new default and point readers at the decision record for context.
-**Plans**: TBD — deferred until Phase 2.4 decision record exists.
+  1. `python examples/openclaw_nav_autonomous.py --scene FloorPlan201 --max-moves 50 --wall-budget 300` runs end-to-end locally; agent calls `observe` within 30 s of kickoff, takes at least one `move`, terminates via `done` or wall-clock, produces `replay.gif` + `report.html` with 👁 (seen) and 🚶 (server-side) frame badges.
+  2. Human interjection mid-run (stdin line) appears in `trace.jsonl` on a tool response, in `report.html`'s tool-call log, and the agent's subsequent reasoning references it.
+  3. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
+  4. `OpenClawBridge.step()` still honors its 180 s default timeout after a `start_run(wall_budget_s=600)` call (shared-client timeout-isolation regression guard).
+**Plans**: 8 tasks (T49 spike → T50-T54 build → T55 local-dev probes). See source plan for full detail.
 
 Plans:
-- [ ] 025-01: Default `--views` switch in all three example scripts + README/narrative update
-- [ ] 025-02: CI smoke refresh — confirm Layer 2 + Layer 3 jobs produce expected new-default artifacts
+- [ ] 025-01 (T49): Pre-build spike — long-poll + tool-format de-risk (local-dev; gates T50-T54)
+- [ ] 025-02 (T50): `roboclaws/openclaw/sim_server.py` — local HTTP tool server with frame-capture trace
+- [ ] 025-03 (T51): `skills/ai2thor-navigator/SKILL.md` tool declarations (observe/move/done + human_message)
+- [ ] 025-04 (T52): `OpenClawBridge.start_run(...)` — kickoff + blocking wait + workspace reset + shared-client timeout isolation
+- [ ] 025-05 (T53): `examples/openclaw_nav_autonomous.py` — stdin reader + SIGINT teardown + artifact render
+- [ ] 025-06 (T53-bis): `scripts/openclaw-bootstrap.sh` updates (SIM_SERVER_URL, --add-host, docs)
+- [ ] 025-07 (T54): Trace → `scripts/render_autonomous_replay.py` — `replay.gif` + `report.html` with 👁/🚶 badges
+- [ ] 025-08 (T55): Local-dev validation — 6 probes against real Gateway + Kimi (live-probe gate per `feedback_live_probe_gate.md`)
 **UI hint**: yes
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
 
 ### Phase 3: Isaac Lab migration
 **Goal**: Migrate from AI2-THOR to Isaac Lab for humanoid (Unitree G1) and multi-embodiment navigation, with a two-level architecture (OpenClaw VLM planner at 1–5 Hz producing `(vx, vy, ωz)` consumed by a pre-trained RL locomotion policy at 200 Hz).
-**Depends on**: Phase 2.5 **and** availability of indoor USD scenes + GPU hardware + 1–2 weeks of ramp-up time.
+**Depends on**: Phase 2.4 (decision record from view-experiment A/B — the winning view variant informs what Phase-3 scenes need to render) **and** availability of indoor USD scenes + GPU hardware + 1–2 weeks of ramp-up time. (Original dep on old-Phase-2.5 "ship winning view" is obsolete — that phase was replaced by the autonomous-nav track; the underlying decision record still lives in Phase 2.4.)
 **Requirements**: P3-01, P3-02, P3-03, P3-04, P3-05 (v2 requirements)
 **Success Criteria** (what must be TRUE):
   1. A contributor can run an Isaac Lab demo of one Unitree G1 navigating an indoor USD scene under OpenClaw-VLM high-level control + a pre-trained RL locomotion policy.
@@ -216,5 +226,5 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.2. Long-running OpenClaw games | v1.0 | 3/3 | Complete | 2026-04-16 |
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
 | 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
-| 2.5. Ship winning view as default | v1.2 | 0/2 | Not started | - |
+| 2.5. Autonomous OpenClaw loop | v1.2 | 0/8 | Not started (drafted, ready for plan) | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
