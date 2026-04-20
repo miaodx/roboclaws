@@ -153,11 +153,15 @@ class GameVisualizer:
         return bg
 
     def _agent_colour(self, agent_id: int) -> tuple[int, int, int]:
-        """Return the colour for an agent: SOUL colour if labelled, else palette."""
+        """Return the colour for an agent.
+
+        When ``agent_labels`` is set for this agent, use the SOUL colour
+        (unknown souls fall back to grey).  When no label is set, use the
+        generic agent palette so unlabelled games look the same as before.
+        """
         if agent_id < len(self.agent_labels):
             soul = self.agent_labels[agent_id]
-            if soul in _SOUL_COLOURS:
-                return _SOUL_COLOURS[soul]
+            return _SOUL_COLOURS.get(soul, _SOUL_COLOURS["default"])
         return _AGENT_COLOURS[agent_id % len(_AGENT_COLOURS)]
 
     def _fill_cell(

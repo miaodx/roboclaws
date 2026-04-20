@@ -25,6 +25,7 @@ import base64
 import io
 import json
 import os
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -41,9 +42,15 @@ from roboclaws.core.vlm import (
     ProviderHealthError,
     create_provider,
     format_provider_status,
+    load_agent_souls,
     provider_status_snapshot,
 )
 from roboclaws.games.coverage import CoverageGame
+
+_DEFAULT_SOULS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "skills", "ai2thor-navigator", "souls",
+)
 
 # ---------------------------------------------------------------------------
 # Grid constants — must match MultiAgentEngine grid_size
@@ -126,6 +133,14 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="AI2-THOR Unity startup timeout in seconds",
     )
     p.add_argument(
+        "--max-wall-seconds",
+        dest="max_wall_seconds",
+        type=float,
+        default=1200.0,
+        help="Total game wallclock budget in seconds (default 1200 = 20 min). "
+             "Pass 0 to disable.",
+    )
+    p.add_argument(
         "--backend",
         choices=["vlm", "openclaw", "direct"],  # "direct" is a deprecated alias for "vlm"
         default="vlm",
@@ -204,6 +219,7 @@ def run_coverage_game(
     gateway_url: str | None = None,
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
+    max_wall_seconds: float | None = 1200.0,
 ) -> dict[str, Any]:
     """Run a multi-agent cooperative coverage episode and save results to output_dir.
 
@@ -226,14 +242,30 @@ def run_coverage_game(
     """
     from roboclaws.openclaw.bridge import OpenClawUnavailable, build_openclaw_provider_or_die
 
+    # SIGTERM → raise KeyboardInterrupt so the try/finally below flushes a
+    # partial replay (including any report.html) before exit.  Matches how
+    # the run already handles Ctrl-C.
+    def _sigterm(signum: int, _frame: Any) -> None:
+        raise KeyboardInterrupt(f"Stopped by signal {signum}")
+
+    signal.signal(signal.SIGTERM, _sigterm)
+
     effective_backend = "vlm" if backend == "direct" else backend
+
+    souls_env = os.environ.get("AGENT_SOULS", "")
+    souls_dir = os.environ.get("SOULS_DIR", _DEFAULT_SOULS_DIR)
+    agent_labels, agent_soul_content = load_agent_souls(souls_env, agent_count, souls_dir)
 
     if effective_backend == "openclaw":
         provider = build_openclaw_provider_or_die(
             gateway_url=gateway_url, agent_count=agent_count
         )
     else:
-        provider = create_provider(model)
+        kwargs = {"agent_souls": agent_soul_content} if agent_soul_content else {}
+        try:
+            provider = create_provider(model, **kwargs)
+        except TypeError:
+            provider = create_provider(model)
     engine = MultiAgentEngine(
         scene=scene,
         agent_count=agent_count,
@@ -242,18 +274,6 @@ def run_coverage_game(
         server_start_timeout=thor_server_start_timeout,
     )
     reachable_cells = engine.get_reachable_positions()
-    agent_labels: list[str] = []
-    if effective_backend == "openclaw":
-        souls_env = os.environ.get("AGENT_SOULS", "")
-        if souls_env:
-            if ":" in souls_env:
-                raw_map = dict(e.split(":", 1) for e in souls_env.split(",") if ":" in e)
-                agent_labels = [
-                    raw_map.get(f"agent-{i}", "default") for i in range(agent_count)
-                ]
-            else:
-                entries = souls_env.split(",")
-                agent_labels = [entries[i] if i < len(entries) else "default" for i in range(agent_count)]
     viz = GameVisualizer(
         grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count,
         agent_labels=agent_labels if agent_labels else None,
@@ -265,6 +285,7 @@ def run_coverage_game(
         max_steps=steps,
         grid_size=_GRID_SIZE,
         reachable_cells=reachable_cells,
+        max_wall_seconds=max_wall_seconds,
     )
 
     step_num = 0
@@ -345,6 +366,20 @@ def run_coverage_game(
                     f"  provider: {format_provider_status(final_provider_status)}"
                 )
                 break
+            except Exception as exc:  # noqa: BLE001 - ensure partial-save on any provider error
+                # Kimi quota exhaustion, instructor retry wrappers, HTTP 4xx/5xx
+                # from upstream: none of these are transient (so the circuit
+                # breaker doesn't fire) but we still want a usable report for
+                # the steps completed so far.
+                termination_reason_override = "provider_error"
+                final_provider_status = provider_status_snapshot(provider)
+                exc_kind = exc.__class__.__name__
+                print(
+                    f"  step {step_num:4d}/{steps}  |  provider error "
+                    f"({exc_kind}): {str(exc)[:240]}\n"
+                    f"  provider: {format_provider_status(final_provider_status)}"
+                )
+                break
 
             executed_action = game.execute_action(response["action"])
             response["executed_action"] = executed_action
@@ -383,13 +418,14 @@ def run_coverage_game(
         provider_status_snapshot(provider) if not final_provider_status else final_provider_status
     )
 
-    # Save replay (GIF + JSON)
+    # Save replay (GIF + JSON + self-contained HTML report)
     out_path = recorder.save(
         output_dir,
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={f"agent_{a}": c for a, c in result.contribution.items()},
         termination_reason=termination_reason,
         generate_gif=True,
+        generate_report=True,
         provider_status=final_provider_status,
     )
 
@@ -453,6 +489,8 @@ def main() -> None:
     print(f"Backend    : {effective_backend}")
     print(f"THOR step timeout  : {args.thor_server_timeout}")
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
+    wall_budget = args.max_wall_seconds if args.max_wall_seconds > 0 else None
+    print(f"Wallclock budget   : {wall_budget if wall_budget else 'disabled'}")
     print(f"Output dir : {args.output_dir}")
     print()
 
@@ -466,6 +504,7 @@ def main() -> None:
         gateway_url=args.gateway_url,
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
+        max_wall_seconds=wall_budget,
     )
 
     print()
