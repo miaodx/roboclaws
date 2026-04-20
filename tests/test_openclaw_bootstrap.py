@@ -165,17 +165,95 @@ def test_nvidia_curated_to_single_multi_image_model() -> None:
 
 
 def test_kimi_branch_has_empty_extra_models() -> None:
-    """Kimi's built-in Gateway catalog already contains ``kimi/k2p5`` (and
-    ``kimi/kimi-code``), both aliased upstream to ``kimi-for-coding`` —
-    currently Kimi 2.6. The bootstrap doesn't (and shouldn't) override
-    the catalog entry. Guards against a drive-by edit that would shadow
-    the built-in plugin.
+    """Kimi's EXTRA_MODELS_JSON stays empty because the kimi branch now uses
+    the PROVIDER_ENTRY_JSON / mode=replace path (custom ``anthropic_kimi``
+    provider) rather than merging extra models into the built-in plugin's
+    catalog.  See :func:`test_kimi_branch_registers_anthropic_kimi_provider`
+    for the assertions on the custom entry itself.
     """
     models = _extract_extra_models_for("kimi")
     assert models == [], (
-        "kimi branch should keep EXTRA_MODELS_JSON='[]' unless you've verified "
-        "the override against the pinned image's built-in Kimi catalog."
+        "kimi branch should keep EXTRA_MODELS_JSON='[]' — its catalog entry "
+        "now lives in PROVIDER_ENTRY_JSON with mode=replace."
     )
+
+
+def _extract_provider_entry_for(provider: str) -> dict | None:
+    """Parse the ``PROVIDER_ENTRY_JSON`` heredoc-quoted JSON literal for a
+    given PROVIDER case.  Returns ``None`` when the branch is using the
+    legacy EXTRA_MODELS_JSON / mode=merge path (e.g. nvidia).
+    """
+    text = _read_bootstrap()
+    pattern = (
+        rf"^\s*{re.escape(provider)}\)\s*$"
+        r"(?:(?!^\s*[a-z_]+\)\s*$).)*?"
+        r"PROVIDER_ENTRY_JSON=\$\(cat <<JSON\n(.*?)\nJSON\n"
+    )
+    m = re.search(pattern, text, flags=re.MULTILINE | re.DOTALL)
+    if not m:
+        return None
+    return json.loads(m.group(1))
+
+
+def test_kimi_branch_registers_anthropic_kimi_provider() -> None:
+    """Kimi's bootstrap branch must register a custom ``anthropic_kimi``
+    provider (via PROVIDER_ENTRY_JSON / mode=replace) rather than relying
+    on the built-in ``kimi-coding`` plugin, which drives
+    ``api.kimi.com/coding/`` in a reasoning-heavy mode that serialises
+    every multi-image turn at 60-120s and regularly trips the Gateway's
+    idle watchdog (observed 2026-04-20).
+
+    The custom entry pins the request shape we want — anthropic-messages
+    at the same host, no forced reasoning, canonical
+    ``User-Agent: Claude-Code/1.0``.  Kimi's direct-probe path in
+    ``KimiCodingProvider`` uses the same host at a different surface for
+    the same reason (see comments in ``roboclaws/core/vlm.py``).
+    """
+    entry = _extract_provider_entry_for("kimi")
+    assert entry is not None, (
+        "kimi branch no longer declares PROVIDER_ENTRY_JSON. Revert to the "
+        "anthropic_kimi custom registration or this path silently falls back "
+        "to the slow built-in kimi-coding plugin."
+    )
+    assert entry["baseUrl"] == "https://api.kimi.com/coding/"
+    assert entry["api"] == "anthropic-messages"
+    assert entry["auth"] == "api-key"
+    # apiKey is interpolated from $PROVIDER_API_KEY by the heredoc at bootstrap
+    # time; the literal string before interpolation is the env var reference.
+    assert "${PROVIDER_API_KEY}" in entry["apiKey"] or entry["apiKey"].startswith("sk-"), (
+        "apiKey must be injected from KIMI_API_KEY (heredoc interpolation)."
+    )
+    headers = entry.get("headers", {})
+    assert headers.get("User-Agent") == "Claude-Code/1.0", (
+        "Kimi-For-Coding gate requires a recognised coding-agent User-Agent."
+    )
+    assert headers.get("anthropic-version"), (
+        "anthropic-messages calls require an ``anthropic-version`` header."
+    )
+    models = entry.get("models", [])
+    assert len(models) == 1, "curated to a single verified model"
+    m = models[0]
+    assert m["id"] == "k2.6-code-preview"
+    assert "image" in m.get("input", []), "demo sends 2 images per turn"
+    assert m.get("reasoning") is False, (
+        "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
+        "around — flipping this to true would re-introduce the slow path."
+    )
+
+
+def test_bootstrap_uses_mode_replace_when_custom_entry_present() -> None:
+    """When PROVIDER_ENTRY_JSON is supplied, the Python pre-seed block must
+    register the custom provider with ``mode: replace`` — not merge.  The
+    merge path would union our entry with the built-in plugin catalog and
+    the Gateway could still route via the slow built-in kimi model id
+    during request-shaping, defeating the fix.
+    """
+    text = _read_bootstrap()
+    assert re.search(
+        r'if provider_entry_json:.*?"mode":\s*"replace"',
+        text,
+        flags=re.DOTALL,
+    ), "bootstrap pre-seed must write mode=replace when PROVIDER_ENTRY_JSON is set"
 
 
 def test_only_two_providers_supported() -> None:

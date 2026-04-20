@@ -360,6 +360,23 @@ def test_run_replay_records_real_vlm_response(mock_engine_cls, tmp_path: Path) -
     assert first_step["vlm_response"]["action"] == "MoveAhead"
 
 
+def test_run_replay_records_turn_metrics(mock_engine_cls, tmp_path: Path) -> None:
+    out_dir = tmp_path / "territory"
+    run_territory_game(
+        scene="FloorPlan201",
+        agent_count=2,
+        steps=1,
+        model="mock",
+        output_dir=str(out_dir),
+    )
+    replay = json.loads((out_dir / "replay.json").read_text())
+    metrics = replay["steps"][0]["turn_metrics"]
+    assert metrics["timings"]["provider_call_seconds"] >= 0.0
+    assert metrics["timings"]["step_loop_seconds"] >= 0.0
+    assert metrics["payload"]["image_count"] == 2
+    assert metrics["payload"]["state_json_chars"] > 0
+
+
 def test_run_stops_cleanly_on_provider_health_error(mock_engine_cls, tmp_path: Path) -> None:
     class FailingProvider:
         cumulative_cost = 0.0
@@ -473,3 +490,38 @@ def test_backend_openclaw_passes_numpy_frames(mock_engine_cls, tmp_path: Path) -
     assert len(spy.calls) == 1
     for img in spy.calls[0]:
         assert isinstance(img, np.ndarray), f"expected ndarray, got {type(img)}"
+
+
+def test_backend_openclaw_replay_records_provider_turn_metrics(
+    mock_engine_cls, tmp_path: Path
+) -> None:
+    class SpyProvider:
+        cumulative_cost = 0.0
+
+        def get_action(self, images, state):
+            return {"reasoning": "move", "action": "MoveAhead"}
+
+        def get_last_turn_metrics(self):
+            return {
+                "timings": {"openclaw_gateway_request_seconds": 42.0},
+                "payload": {"image_count": 2, "transport": "openclaw_data_url"},
+                "provider": {"attempts": 1},
+            }
+
+    out_dir = tmp_path / "territory"
+    with patch(
+        "roboclaws.openclaw.bridge.build_openclaw_provider_or_die",
+        return_value=SpyProvider(),
+    ):
+        run_territory_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=1,
+            model="mock",
+            output_dir=str(out_dir),
+            backend="openclaw",
+        )
+    replay = json.loads((out_dir / "replay.json").read_text())
+    metrics = replay["steps"][0]["turn_metrics"]
+    assert metrics["timings"]["openclaw_gateway_request_seconds"] == pytest.approx(42.0)
+    assert metrics["payload"]["transport"] == "openclaw_data_url"

@@ -1,20 +1,42 @@
 # Makefile — convenience targets for common local workflows.
-# Requires: docker, xvfb-run, KIMI_API_KEY (or NV_API_KEY) in environment.
+# Requires: docker, xvfb-run, KIMI_API_KEY (or NV_API_KEY) in environment
+# OR in a project-local `.env` file (auto-sourced by the openclaw-* targets).
 
-.PHONY: openclaw-nav openclaw-territory openclaw-coverage kimi-territory kimi-coverage help
+.PHONY: openclaw-nav openclaw-territory openclaw-coverage \
+        openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
+        openclaw-gateway-up openclaw-gateway-down \
+        kimi-territory kimi-coverage help
+
+# Shell-side hygiene shared by every openclaw-* recipe:
+#   - auto-source .env (if present) so KIMI_API_KEY is available without
+#     the caller having to remember `set -a; source .env; set +a`
+#   - strip ROS env vars that shadow the venv's Python + confuse pytest/pip
+#     (machine-local feedback: `/opt/ros/jazzy/` hijacks sys.path otherwise)
+#   - PYTHONUNBUFFERED so progress prints stream live through `| tee`
+SOURCE_ENV := set -a; [ -f .env ] && . ./.env; set +a
+STRIP_ROS_ENV := env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u ROS_DISTRO -u ROS_VERSION
 
 help:
-	@echo "Layer 3 OpenClaw targets (requires a running Gateway):"
-	@echo "  make openclaw-nav        — navigation demo (2 agents, 10 steps)"
+	@echo "OpenClaw ephemeral targets (bootstrap + run + teardown in one shot):"
+	@echo "  make openclaw-nav        — navigation demo (2 agents, 10 steps, CI-parity smoke)"
 	@echo "  make openclaw-territory  — territory game  (2 agents, 60 steps, aggressive/defensive)"
 	@echo "  make openclaw-coverage   — coverage game   (2 agents, 60 steps, cooperative)"
+	@echo ""
+	@echo "OpenClaw long-running probes (200 steps, 60-min wall budget, real review artifacts):"
+	@echo "  make openclaw-probe-nav        — openclaw_demo 200-step run"
+	@echo "  make openclaw-probe-territory  — territory 200-step run"
+	@echo "  make openclaw-probe-coverage   — coverage 200-step run"
+	@echo ""
+	@echo "OpenClaw gateway lifecycle (use to run multiple probes against one gateway):"
+	@echo "  make openclaw-gateway-up       — bootstrap gateway, save token to .openclaw-token"
+	@echo "  make openclaw-gateway-down     — tear down gateway + volume"
+	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
 	@echo "  make kimi-coverage       — coverage game   (2 agents, 60 steps, cooperative)"
 	@echo ""
-	@echo "Each target bootstraps the Gateway, runs the game, and tears down."
-	@echo "KIMI_API_KEY (or NV_API_KEY) must be set."
+	@echo "KIMI_API_KEY must be set (or present in .env for auto-sourced openclaw-* targets)."
 
 # ---------------------------------------------------------------------------
 # Navigation demo — proves the Phase 2.1 transport end-to-end.
@@ -80,3 +102,81 @@ kimi-coverage:
 		--backend vlm --model kimi-coding --agents 2 --steps 20 \
 		--output-dir output/kimi/coverage
 	@echo "==> Done. Report: output/kimi/coverage/report.html"
+
+# ---------------------------------------------------------------------------
+# Long-running local review probes — 200-step cap, 60-min wall budget,
+# auto-convergence enforced, full report artifacts. Mirrors what was
+# live-probed on 2026-04-20 to verify the openclaw_demo auto-convergence
+# and games' wall-clock fix. Each probe bootstraps a fresh gateway, runs,
+# and tears down so runs don't pollute each other.
+# ---------------------------------------------------------------------------
+openclaw-probe-nav:
+	@echo "==> Bootstrapping Gateway for 200-step nav probe …"
+	@$(SOURCE_ENV); \
+	 TOKEN=$$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh) && \
+	 [ -n "$$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }; \
+	 echo "==> Running navigation demo (200 steps, auto-convergence) …"; \
+	 $(STRIP_ROS_ENV) OPENCLAW_GATEWAY_TOKEN=$$TOKEN PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_demo.py \
+	   --agents 2 --steps 200 \
+	   --output-dir output/openclaw-probe/nav; \
+	 echo "==> Stopping Gateway …"; \
+	 docker rm -f openclaw-gateway || true; \
+	 docker volume rm openclaw-gateway-config || true; \
+	 echo "==> Done. Report: output/openclaw-probe/nav/report.html"
+
+openclaw-probe-territory:
+	@echo "==> Bootstrapping Gateway for 200-step territory probe …"
+	@$(SOURCE_ENV); \
+	 TOKEN=$$(PROVIDER=kimi AGENTS=2 AGENT_SOULS=aggressive,defensive ./scripts/openclaw-bootstrap.sh) && \
+	 [ -n "$$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }; \
+	 echo "==> Running territory game (200 steps, 60-min wall) …"; \
+	 $(STRIP_ROS_ENV) OPENCLAW_GATEWAY_TOKEN=$$TOKEN AGENT_SOULS=aggressive,defensive PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/territory_game.py \
+	   --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \
+	   --output-dir output/openclaw-probe/territory; \
+	 echo "==> Stopping Gateway …"; \
+	 docker rm -f openclaw-gateway || true; \
+	 docker volume rm openclaw-gateway-config || true; \
+	 echo "==> Done. Report: output/openclaw-probe/territory/report.html"
+
+openclaw-probe-coverage:
+	@echo "==> Bootstrapping Gateway for 200-step coverage probe …"
+	@$(SOURCE_ENV); \
+	 TOKEN=$$(PROVIDER=kimi AGENTS=2 AGENT_SOULS=cooperative,cooperative PERSONALITY_PROBE=0 ./scripts/openclaw-bootstrap.sh) && \
+	 [ -n "$$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }; \
+	 echo "==> Running coverage game (200 steps, 60-min wall) …"; \
+	 $(STRIP_ROS_ENV) OPENCLAW_GATEWAY_TOKEN=$$TOKEN AGENT_SOULS=cooperative,cooperative PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/coverage_game.py \
+	   --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \
+	   --output-dir output/openclaw-probe/coverage; \
+	 echo "==> Stopping Gateway …"; \
+	 docker rm -f openclaw-gateway || true; \
+	 docker volume rm openclaw-gateway-config || true; \
+	 echo "==> Done. Report: output/openclaw-probe/coverage/report.html"
+
+# ---------------------------------------------------------------------------
+# Gateway lifecycle — use when you want to run several probes back-to-back
+# against one long-lived gateway (saves the ~30s bootstrap per run).
+# Token is persisted to .openclaw-token (gitignored); source it before running
+# demos manually.  Tear down with `make openclaw-gateway-down` when finished.
+# ---------------------------------------------------------------------------
+openclaw-gateway-up:
+	@echo "==> Bootstrapping gateway (2 agents, Kimi, TIMEOUT_SECONDS=600) …"
+	@$(SOURCE_ENV); \
+	 PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh > .openclaw-token && \
+	 echo "==> Token saved to .openclaw-token"; \
+	 echo ""; \
+	 echo "Next steps:"; \
+	 echo "  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)"; \
+	 echo "  source .venv/bin/activate"; \
+	 echo "  $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 python examples/territory_game.py \\"; \
+	 echo "    --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \\"; \
+	 echo "    --output-dir output/territory-probe"
+
+openclaw-gateway-down:
+	@echo "==> Tearing down gateway …"
+	docker rm -f openclaw-gateway || true
+	docker volume rm openclaw-gateway-config || true
+	rm -f .openclaw-token
+	@echo "==> Done."

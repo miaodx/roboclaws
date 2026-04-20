@@ -241,10 +241,14 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      # 10 steps × 2 agents keeps the job well under the ~3-4 min budget while
-      # still producing a watchable GIF. This job only proves the OpenClaw
-      # transport + skill mount end-to-end; the deep 100-step VLM smoke lives
-      # in real-model-smoke.
+      # Match the local-dev defaults (200-step cap + auto-convergence on
+      # `3*agent_count` stale steps).  The demo exits early with
+      # termination_reason="stale" once the two agents can't reach a new
+      # grid cell for 6 consecutive turns, which in FloorPlan201 typically
+      # fires well before step 60 — so actual Kimi spend stays comparable
+      # to the old 10-step cap while CI exercises the same code path a
+      # local user hits.  The deep game-mode VLM smokes still live in
+      # real-model-smoke.
       - name: Run OpenClaw navigation demo
         if: steps.gateway.outcome == 'success'
         env:
@@ -252,7 +256,7 @@ jobs:
           OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
         run: |
           xvfb-run -a python examples/openclaw_demo.py \
-            --agents 2 --steps 10 \
+            --agents 2 --steps 200 \
             --output-dir output/openclaw/demo
 
       - name: Generate demo HTML report

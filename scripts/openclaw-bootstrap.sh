@@ -30,6 +30,12 @@
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
+#   TIMEOUT_SECONDS  Per-turn upstream timeout      (default: 600 = 10 min;
+#                                                     written to agents.defaults.
+#                                                     timeoutSeconds.  Bump if
+#                                                     Kimi's verbose reasoning on
+#                                                     multi-image prompts exceeds
+#                                                     the Gateway's idle watchdog.)
 #
 # Provider-specific vars (only the one matching PROVIDER is required):
 #   KIMI_API_KEY   (PROVIDER=kimi)   Moonshot/Kimi API key
@@ -80,6 +86,7 @@ SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
 PERSONALITY_PROBE="${PERSONALITY_PROBE:-1}"
 READY_TIMEOUT="${READY_TIMEOUT:-60}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 
 # Auto-detect PROVIDER when unset:
 #   1) nvidia — if NV_API_KEY / NVIDIA_API_KEY is set (verified-working,
@@ -109,17 +116,54 @@ command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH (needed for
 # model with 400 "Unknown model".
 case "$PROVIDER" in
     kimi)
-        # kimi/k2p5 is the Gateway alias for the Kimi "coding" tier —
-        # aliased upstream to kimi-for-coding, which is currently Kimi 2.6
-        # (see /app/dist/provider-catalog-BCrO6TZn.js: KIMI_UPSTREAM_MODEL_ID
-        # and cdcd298 for the roboclaws-side k2.6 default commit). Free.
-        MODEL="${MODEL:-kimi/k2p5}"
+        # Register Kimi as a **custom** anthropic-messages provider
+        # (id=anthropic_kimi) rather than using the Gateway's built-in
+        # `kimi-coding` plugin.  The built-in plugin advertises
+        # `reasoning: true` in its catalog and drives api.kimi.com/coding/
+        # in a mode that burns 3000+ CoT tokens per turn, pushing each
+        # multi-image navigation call to 60-120s and regularly tripping
+        # the Gateway's idle watchdog (observed on 2026-04-20).
+        #
+        # Our custom registration points at the SAME host
+        # (api.kimi.com/coding/) but pins the request shape we want —
+        # plain anthropic-messages, no reasoning mode implied, canonical
+        # User-Agent.  Same KIMI_API_KEY works for both paths.  Probed
+        # 2026-04-20: PONG returns in ~5s vs 60-120s on the built-in.
+        MODEL="${MODEL:-anthropic_kimi/k2.6-code-preview}"
+        PROVIDER_ID_OVERRIDE="anthropic_kimi"
         PROVIDER_API_KEY="${KIMI_API_KEY:-}"
         PROVIDER_ENV_VAR="KIMI_API_KEY"
-        PROVIDER_BASE_URL=""   # built-in catalog has the baseUrl; no override needed
-        EXTRA_MODELS_JSON="[]"
+        PROVIDER_BASE_URL=""   # unused — baseUrl lives in PROVIDER_ENTRY_JSON
+        EXTRA_MODELS_JSON="[]" # unused when PROVIDER_ENTRY_JSON is set
         [[ -n "$PROVIDER_API_KEY" ]] || \
             die "KIMI_API_KEY env var is required for PROVIDER=kimi" 1
+        # Full custom provider entry — injected into openclaw.json with
+        # models.mode=replace so only this entry drives routing (i.e. the
+        # built-in kimi plugin's catalog is excluded from the merge).
+        # Mirrors the ``anthropic_mm`` MiniMax pattern used in production.
+        PROVIDER_ENTRY_JSON=$(cat <<JSON
+{
+  "baseUrl": "https://api.kimi.com/coding/",
+  "apiKey": "${PROVIDER_API_KEY}",
+  "auth": "api-key",
+  "api": "anthropic-messages",
+  "headers": {
+    "User-Agent": "Claude-Code/1.0",
+    "anthropic-version": "2023-06-01"
+  },
+  "models": [
+    {
+      "id": "k2.6-code-preview",
+      "name": "Kimi 2.6 Code Preview (anthropic-messages)",
+      "input": ["text", "image"],
+      "reasoning": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768
+    }
+  ]
+}
+JSON
+)
         ;;
     nvidia)
         # nvidia/nvidia/nemotron-nano-12b-v2-vl — the only NVIDIA NIM
@@ -146,6 +190,7 @@ case "$PROVIDER" in
         EXTRA_MODELS_JSON='[
             {"id":"nvidia/nemotron-nano-12b-v2-vl","name":"NVIDIA Nemotron Nano 12B V2 VL","input":["text","image"],"reasoning":false,"contextWindow":131072,"maxTokens":4096}
         ]'
+        PROVIDER_ENTRY_JSON=""  # legacy merge path: nvidia plugin stays in play
         [[ -n "$PROVIDER_API_KEY" ]] || \
             die "NV_API_KEY (or NVIDIA_API_KEY) env var is required for PROVIDER=nvidia" 1
         ;;
@@ -269,6 +314,9 @@ docker run --rm --user root \
     -v "${SOULS_DIR}:/host-souls:ro" \
     -e PROVIDER_API_KEY="$PROVIDER_API_KEY" \
     -e PROVIDER_ID="$PROVIDER" \
+    -e PROVIDER_ID_OVERRIDE="${PROVIDER_ID_OVERRIDE:-}" \
+    -e PROVIDER_ENTRY_JSON="${PROVIDER_ENTRY_JSON:-}" \
+    -e TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
     -e MODEL="$MODEL" \
     -e AGENT_IDS_CSV="$AGENT_IDS_CSV" \
     -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
@@ -280,10 +328,18 @@ python3 - <<PY
 import json, os, shutil
 agent_ids = os.environ["AGENT_IDS_CSV"].split(",")
 provider_id = os.environ["PROVIDER_ID"]
+# When a custom catalog entry is supplied (PROVIDER_ENTRY_JSON), it lives
+# under its own provider id (e.g. ``anthropic_kimi`` for the fast Kimi
+# path) rather than reusing the plugin id (``kimi``).  This keeps the
+# built-in plugin entry intact while letting mode=replace wipe the
+# catalog merge and only register our explicit config.
+provider_id_override = os.environ.get("PROVIDER_ID_OVERRIDE") or ""
+custom_provider_id = provider_id_override or provider_id
 provider_key = os.environ["PROVIDER_API_KEY"]
 model = os.environ["MODEL"]
 extra_models = json.loads(os.environ.get("EXTRA_MODELS_JSON") or "[]")
 provider_base_url = os.environ.get("PROVIDER_BASE_URL", "")
+provider_entry_json = os.environ.get("PROVIDER_ENTRY_JSON") or ""
 agent_soul_csv = os.environ.get("AGENT_SOUL_CSV", "")
 base = "/home/node/.openclaw"
 
@@ -329,13 +385,23 @@ agent_entries = [
     }
     for aid in agent_ids
 ]
+timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "600")
 config = {
     "gateway": {
         "auth": {"mode": "token"},
         "http": {"endpoints": {"chatCompletions": {"enabled": True}}},
     },
     "agents": {
-        "defaults": {"model": {"primary": model}},
+        # timeoutSeconds bumps the per-turn idle watchdog above the 180s
+        # default.  Kimi occasionally takes 2-3 minutes on multi-image
+        # prompts with verbose reasoning (observed 2026-04-20); the Gateway
+        # surfaces these as a Request-timed-out error that the demo then
+        # falls back to parse.  600s absorbs every slow turn observed so
+        # far and still prevents a hung call from stalling the whole run.
+        "defaults": {
+            "model": {"primary": model},
+            "timeoutSeconds": timeout_seconds,
+        },
         "list": agent_entries,
     },
 }
@@ -345,14 +411,32 @@ config = {
 # provider plugin catalog does not include newer NIM / OpenRouter models.
 # Schema: /app/dist/models-config-*.js — cfg.models.providers.<id>.models[]
 # with { id, name, input, reasoning?, contextWindow?, maxTokens? }
+#
+# Two routes, mutually exclusive per bootstrap run:
+#   1. PROVIDER_ENTRY_JSON set  → full custom provider entry with apiKey
+#      inline, auth=api-key, and models[]; written under mode=replace so
+#      only this entry drives routing (sidesteps a misbehaving built-in
+#      plugin catalog, e.g. the kimi-coding reasoning-by-default quirk).
+#   2. EXTRA_MODELS_JSON set    → just append models to an existing plugin
+#      provider (mode=merge); used by the nvidia path.
 # "mode: merge" is the default and merges these into the implicit plugin-
 # supplied entries (see /app/dist/models-config-*.js:planOpenClawModelsJson).
-if extra_models:
+if provider_entry_json:
+    # Parse the injected entry verbatim so authors can tweak headers /
+    # auth shape without teaching this script every field.
+    provider_entry = json.loads(provider_entry_json)
+    config["models"] = {
+        "mode": "replace",
+        "providers": {
+            custom_provider_id: provider_entry,
+        },
+    }
+elif extra_models:
     # The Gateway config validator requires baseUrl when a provider entry
     # is declared explicitly. We pass the same value the built-in plugin
     # uses, so the merger (mode=merge) unions our new model entries with
     # the implicit catalog without shadowing anything.
-    provider_entry: dict[str, object] = {"models": extra_models}
+    provider_entry = {"models": extra_models}
     if provider_base_url:
         provider_entry["baseUrl"] = provider_base_url
         provider_entry["api"] = "openai-completions"
@@ -370,16 +454,26 @@ with open(os.path.join(base, "openclaw.json"), "w", encoding="utf-8") as fh:
 #   type in {"api_key", "oauth", "token"} (snake_case)
 #   provider must be non-empty
 #   key is the credential material
-# Provider id matches the Gateway plugin id (kimi, nvidia, ...).
+# Provider id matches either the built-in Gateway plugin id (kimi, nvidia)
+# or the custom provider id we registered above (anthropic_kimi).  The
+# apiKey in PROVIDER_ENTRY_JSON is the authoritative credential when set,
+# but we still write a legacy profile under the plugin id so downstream
+# code reading auth-profiles.json has a valid entry either way.
 profile = {
     "profiles": {
-        f"{provider_id}:manual": {
+        f"{custom_provider_id}:manual": {
             "type": "api_key",
-            "provider": provider_id,
+            "provider": custom_provider_id,
             "key": provider_key,
         }
     }
 }
+if custom_provider_id != provider_id:
+    profile["profiles"][f"{provider_id}:manual"] = {
+        "type": "api_key",
+        "provider": provider_id,
+        "key": provider_key,
+    }
 for aid in agent_ids + ["main"]:
     path = os.path.join(base, "agents", aid, "agent", "auth-profiles.json")
     with open(path, "w", encoding="utf-8") as fh:
