@@ -167,123 +167,18 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # Job 3: Optional Railway-hosted OpenClaw integration smoke (issue #40).
+  # Job 3: Ephemeral OpenClaw navigation smoke (Phase 2 shipping path).
   #
-  # Complements the in-CI / ephemeral OpenClaw smoke (#39) by proving that our
-  # bridge can talk to the user's long-running, persistent Railway deployment.
-  # Runs on push to main only and is non-blocking: if Railway is down, the job
-  # turns yellow but does NOT fail the overall CI run. The user can read this
-  # job's history as a poor-man's Railway uptime check.
-  # ---------------------------------------------------------------------------
-  openclaw-railway-smoke:
-    name: OpenClaw Railway integration (optional)
-    runs-on: ubuntu-latest
-    needs: lint-and-mock
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    # Job-level continue-on-error makes the whole job non-blocking — a Railway
-    # outage shows yellow on the run summary, never red.
-    continue-on-error: true
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      # Share the AI2-THOR Unity build cache with the other jobs (~1 GB).
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      # Step-level continue-on-error: skip the game gracefully if Railway is
-      # unreachable (cold start, deploy in progress, outright outage). Both
-      # this and the job-level guard are needed — the step guard prevents
-      # burning Kimi credits on a failed call, the job guard keeps the run
-      # green overall.
-      - name: Preflight Railway Gateway
-        id: preflight
-        continue-on-error: true
-        env:
-          OPENCLAW_RAILWAY_URL: ${{ secrets.OPENCLAW_RAILWAY_URL }}
-          OPENCLAW_RAILWAY_TOKEN: ${{ secrets.OPENCLAW_RAILWAY_TOKEN }}
-        run: |
-          if [ -z "${OPENCLAW_RAILWAY_URL}" ]; then
-            echo "::warning::OPENCLAW_RAILWAY_URL secret not set, skipping Railway smoke"
-            exit 1
-          fi
-          # Be generous with retries — Railway free tier can cold-start slowly.
-          for i in 1 2 3 4 5; do
-            if curl -fsS --max-time 10 \
-                -H "Authorization: Bearer ${OPENCLAW_RAILWAY_TOKEN}" \
-                "${OPENCLAW_RAILWAY_URL%/}/readyz"; then
-              exit 0
-            fi
-            echo "Railway readyz attempt $i failed, retrying..."
-            sleep $((i * 2))
-          done
-          echo "::warning::Railway Gateway unreachable after 5 attempts, skipping"
-          exit 1
-
-      # Minimal smoke (3 steps, 2 agents) — the bigger 5-step run lives in the
-      # ephemeral OpenClaw job (#39). This one only proves the live deployment
-      # is reachable from our bridge and accepts our payload end-to-end.
-      - name: Run 3-step territory game against Railway
-        if: steps.preflight.outcome == 'success'
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          OPENCLAW_GATEWAY_URL: ${{ secrets.OPENCLAW_RAILWAY_URL }}
-          OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_RAILWAY_TOKEN }}
-        run: |
-          xvfb-run -a python examples/territory_game.py \
-            --backend openclaw --model kimi --agents 2 --steps 3 \
-            --output-dir output/openclaw-railway/territory
-
-      - name: Generate HTML report from Railway smoke replay
-        if: steps.preflight.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw-railway/territory
-
-      # Separate artifact name from the ephemeral OpenClaw smoke so the two can
-      # be diffed side-by-side when investigating drift.
-      - name: Upload Railway smoke replay + HTML report
-        if: always() && steps.preflight.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-openclaw-railway
-          path: output/openclaw-railway/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 4: Ephemeral OpenClaw multi-agent smoke (issue #39).
+  # Bootstraps a local OpenClaw Gateway with N named agents (agent-0, agent-1,
+  # ...) using scripts/openclaw-bootstrap.sh — same entry point users run
+  # locally (see docs/openclaw-local.md). Then runs examples/openclaw_demo.py
+  # which posts each turn to /v1/chat/completions with
+  # model="openclaw/agent-<id>". No bind mount: frames flow inline as
+  # data:image/jpeg;base64 URLs.
   #
-  # Spins up an OpenClaw Gateway as a Docker container alongside the job, mounts
-  # our skill into its workspace, waits for /healthz + /readyz, then runs
-  # territory + coverage games via `--backend openclaw`. Reports land at
-  # /openclaw/territory/ and /openclaw/coverage/ via the publish-pages job.
-  #
-  # The job is guarded with `continue-on-error: true` at the job level plus
-  # step-level guards so a mismatch between the real OpenClaw Docker image and
-  # our wiring degrades to a yellow warning rather than blocking `main`. Image
-  # tag and workspace layout are the two bits most likely to drift — see the
-  # `Start OpenClaw Gateway` step for the expected contract.
+  # Job-level continue-on-error keeps a Gateway-outage from blocking `main`;
+  # publish-pages still runs and simply omits the OpenClaw card when the
+  # artifact isn't uploaded.
   # ---------------------------------------------------------------------------
   openclaw-smoke:
     name: OpenClaw ephemeral integration (Kimi)
@@ -293,9 +188,10 @@ jobs:
     continue-on-error: true
 
     env:
-      # Override via repository variable if upstream renames the image.
-      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:latest' }}
-      OPENCLAW_GATEWAY_URL: http://localhost:18789
+      # Pinned digest-traceable tag — no :latest drift. Override via repository
+      # variable (or fork) if you need to pin to a different digest.
+      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.14' }}
+      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
 
     steps:
       - uses: actions/checkout@v4
@@ -326,108 +222,42 @@ jobs:
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
-      # Generate a per-run bearer token so the Gateway and bridge share the
-      # same secret without needing a long-lived repo secret.
-      - name: Mint per-run Gateway token
-        id: token
-        run: echo "value=$(python -c 'import secrets;print(secrets.token_urlsafe(32))')" >> "$GITHUB_OUTPUT"
-
-      # Pull the image up-front so a renamed tag fails fast (and is caught by
-      # continue-on-error) rather than deep in the container run.
-      - name: Pull OpenClaw Gateway image
-        id: pull
-        continue-on-error: true
-        run: docker pull "$OPENCLAW_IMAGE"
-
-      # Start the Gateway in the background with our skill mounted at the path
-      # the Gateway scans on boot. The exact workspace path + env-var names are
-      # the OpenClaw integration contract; if upstream changes either, update
-      # them here.
-      - name: Start OpenClaw Gateway
-        if: steps.pull.outcome == 'success'
+      # Single source of truth for Gateway setup — bootstrap.sh pulls/runs
+      # the pinned image, pre-seeds the config volume, registers N named
+      # agents (agent-0..agent-(AGENTS-1)) with per-agent Kimi auth, waits
+      # for /readyz, probes agent-0 with a PONG turn, and echoes the live
+      # bearer token on stdout. Everything else goes to stderr.
+      - name: Bootstrap OpenClaw Gateway (2 named agents)
         id: gateway
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+          IMAGE: ${{ env.OPENCLAW_IMAGE }}
+          AGENTS: "2"
+          HOST_IP: "127.0.0.1"
+          PORT: "18789"
         run: |
-          docker run -d --name openclaw-gateway \
-            -p 18789:18789 \
-            -v "$PWD/skills/ai2thor-navigator:/home/node/.openclaw/workspace/skills/ai2thor-navigator:ro" \
-            -e OPENCLAW_AUTH_MODE=token \
-            -e OPENCLAW_AUTH_TOKEN="$GATEWAY_TOKEN" \
-            -e OPENCLAW_ALLOWED_TOOLS=ai2thor-navigator \
-            -e KIMI_API_KEY="$KIMI_API_KEY" \
-            "$OPENCLAW_IMAGE"
+          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
-      # Recent OpenClaw images persist auth under /home/node/.openclaw and may
-      # ignore the env token we try to inject. Read the live config so the
-      # bridge uses the bearer token the container actually booted with.
-      - name: Resolve Gateway token from container config
-        id: resolved_token
+      # 10 steps × 2 agents keeps the job well under the ~3-4 min budget while
+      # still producing a watchable GIF. This job only proves the OpenClaw
+      # transport + skill mount end-to-end; the deep 100-step VLM smoke lives
+      # in real-model-smoke.
+      - name: Run OpenClaw navigation demo
         if: steps.gateway.outcome == 'success'
-        continue-on-error: true
         env:
-          MINTED_GATEWAY_TOKEN: ${{ steps.token.outputs.value }}
+          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
+          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
         run: |
-          RAW_CONFIG="$(docker exec openclaw-gateway sh -lc 'cat /home/node/.openclaw/openclaw.json' || true)"
-          RESOLVED_TOKEN="$(RAW_CONFIG="$RAW_CONFIG" python -c 'import json, os; raw = os.environ.get("RAW_CONFIG", ""); print(json.loads(raw).get("gateway", {}).get("auth", {}).get("token", "") if raw else "")' 2>/dev/null || true)"
-          if [ -z "$RESOLVED_TOKEN" ]; then
-            echo "::warning::Could not read gateway.auth.token from container config; falling back to minted token"
-            RESOLVED_TOKEN="$MINTED_GATEWAY_TOKEN"
-          fi
-          echo "value=$RESOLVED_TOKEN" >> "$GITHUB_OUTPUT"
+          xvfb-run -a python examples/openclaw_demo.py \
+            --agents 2 --steps 10 \
+            --output-dir output/openclaw/demo
 
-      - name: Wait for Gateway readiness
-        id: preflight
+      - name: Generate demo HTML report
         if: steps.gateway.outcome == 'success'
-        continue-on-error: true
-        env:
-          GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
-        run: |
-          for i in $(seq 1 30); do
-            if curl -fsS --max-time 5 \
-                -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
-                "${OPENCLAW_GATEWAY_URL}/readyz"; then
-              echo "Gateway ready after ${i} attempts"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "::warning::Gateway did not become ready within 60s"
-          docker logs openclaw-gateway || true
-          exit 1
-
-      # 5 steps × 2 agents keeps this job under the ~3-4 min budget from #39.
-      # The 100-step deep smoke still lives in `real-model-smoke`; this job
-      # only proves the OpenClaw transport + skill mount end-to-end.
-      - name: Run territory game via OpenClaw
-        if: steps.preflight.outcome == 'success'
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
-        run: |
-          xvfb-run -a python examples/territory_game.py \
-            --backend openclaw --model kimi --agents 2 --steps 5 \
-            --output-dir output/openclaw/territory
-
-      - name: Generate territory HTML report
-        if: steps.preflight.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw/territory
-
-      - name: Run coverage game via OpenClaw
-        if: steps.preflight.outcome == 'success'
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.resolved_token.outputs.value || steps.token.outputs.value }}
-        run: |
-          xvfb-run -a python examples/coverage_game.py \
-            --backend openclaw --model kimi --agents 2 --steps 5 \
-            --output-dir output/openclaw/coverage
-
-      - name: Generate coverage HTML report
-        if: steps.preflight.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw/coverage
+        run: python -m roboclaws.core.reporter output/openclaw/demo
 
       - name: Dump Gateway logs on failure
         if: failure() && steps.gateway.outcome == 'success'
@@ -438,11 +268,199 @@ jobs:
         run: docker rm -f openclaw-gateway || true
 
       - name: Upload OpenClaw reports
-        if: always() && steps.preflight.outcome == 'success'
+        if: always() && steps.gateway.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: report-openclaw
           path: output/openclaw/**
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 4a: Territory game over OpenClaw (Kimi, push to main only).
+  # Chained after openclaw-smoke to avoid hitting the Kimi rate budget
+  # simultaneously. continue-on-error so a yellow job doesn't block Pages.
+  # ---------------------------------------------------------------------------
+  territory-openclaw-smoke:
+    name: OpenClaw territory smoke (Kimi)
+    runs-on: ubuntu-latest
+    needs: openclaw-smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
+    concurrency:
+      group: openclaw-kimi
+      cancel-in-progress: false
+
+    env:
+      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.14' }}
+      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Cache AI2-THOR Unity build
+        uses: actions/cache@v4
+        with:
+          path: ~/.ai2thor
+          key: ${{ runner.os }}-ai2thor-v1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Bootstrap OpenClaw Gateway (2 agents — aggressive, defensive)
+        id: gateway
+        continue-on-error: true
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          IMAGE: ${{ env.OPENCLAW_IMAGE }}
+          AGENTS: "2"
+          AGENT_SOULS: "aggressive,defensive"
+          HOST_IP: "127.0.0.1"
+          PORT: "18789"
+        run: |
+          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Run territory game over OpenClaw
+        if: steps.gateway.outcome == 'success'
+        env:
+          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
+          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
+          AGENT_SOULS: "aggressive,defensive"
+        run: |
+          xvfb-run -a python examples/territory_game.py \
+            --backend openclaw --agents 2 --steps 30 \
+            --output-dir output/openclaw/territory
+
+      - name: Generate territory HTML report
+        if: steps.gateway.outcome == 'success'
+        run: python -m roboclaws.core.reporter output/openclaw/territory
+
+      - name: Dump Gateway logs on failure
+        if: failure() && steps.gateway.outcome == 'success'
+        run: docker logs openclaw-gateway || true
+
+      - name: Stop Gateway
+        if: always() && steps.gateway.outcome == 'success'
+        run: docker rm -f openclaw-gateway || true
+
+      - name: Upload OpenClaw territory reports
+        if: always() && steps.gateway.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-openclaw-territory
+          path: output/openclaw/territory/**
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 4b: Coverage game over OpenClaw (Kimi, push to main only).
+  # Chained after territory-openclaw-smoke to avoid rate-budget collisions.
+  # ---------------------------------------------------------------------------
+  coverage-openclaw-smoke:
+    name: OpenClaw coverage smoke (Kimi)
+    runs-on: ubuntu-latest
+    needs: territory-openclaw-smoke
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true
+    concurrency:
+      group: openclaw-kimi
+      cancel-in-progress: false
+
+    env:
+      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.14' }}
+      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Cache AI2-THOR Unity build
+        uses: actions/cache@v4
+        with:
+          path: ~/.ai2thor
+          key: ${{ runner.os }}-ai2thor-v1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+
+      - name: Install Python dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Bootstrap OpenClaw Gateway (2 agents — cooperative)
+        id: gateway
+        continue-on-error: true
+        env:
+          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+          IMAGE: ${{ env.OPENCLAW_IMAGE }}
+          AGENTS: "2"
+          AGENT_SOULS: "cooperative,cooperative"
+          PERSONALITY_PROBE: "0"
+          HOST_IP: "127.0.0.1"
+          PORT: "18789"
+        run: |
+          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Run coverage game over OpenClaw
+        if: steps.gateway.outcome == 'success'
+        env:
+          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
+          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
+          AGENT_SOULS: "cooperative,cooperative"
+        run: |
+          xvfb-run -a python examples/coverage_game.py \
+            --backend openclaw --agents 2 --steps 30 \
+            --output-dir output/openclaw/coverage
+
+      - name: Generate coverage HTML report
+        if: steps.gateway.outcome == 'success'
+        run: python -m roboclaws.core.reporter output/openclaw/coverage
+
+      - name: Dump Gateway logs on failure
+        if: failure() && steps.gateway.outcome == 'success'
+        run: docker logs openclaw-gateway || true
+
+      - name: Stop Gateway
+        if: always() && steps.gateway.outcome == 'success'
+        run: docker rm -f openclaw-gateway || true
+
+      - name: Upload OpenClaw coverage reports
+        if: always() && steps.gateway.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-openclaw-coverage
+          path: output/openclaw/coverage/**
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -454,11 +472,11 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-pages:
     name: Publish reports to GitHub Pages
-    # openclaw-smoke is listed but not hard-required: its `continue-on-error`
-    # means a failure surfaces as yellow and does NOT skip publish-pages. The
-    # download step below is best-effort so a missing artifact just omits the
-    # OpenClaw section from the landing page.
-    needs: [lint-and-mock, real-model-smoke, openclaw-smoke]
+    # All three openclaw jobs are listed but not hard-required: their
+    # `continue-on-error` means failures surface as yellow and do NOT block
+    # publish-pages. Each download step below is best-effort so missing
+    # artifacts simply omit that tile from the landing page.
+    needs: [lint-and-mock, real-model-smoke, openclaw-smoke, territory-openclaw-smoke, coverage-openclaw-smoke]
     if: |
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
       && needs.lint-and-mock.result == 'success'
@@ -484,28 +502,45 @@ jobs:
           path: smoke-src
 
       # Best-effort: runs where openclaw-smoke degraded to yellow won't have
-      # this artifact. `continue-on-error` keeps Pages publishing regardless.
-      - name: Download OpenClaw smoke artifact (best-effort)
+      # these artifacts. `continue-on-error` keeps Pages publishing regardless.
+      - name: Download OpenClaw nav demo artifact (best-effort)
         id: download_openclaw
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: report-openclaw
-          path: openclaw-src
+          path: openclaw-src/demo
+
+      - name: Download OpenClaw territory artifact (best-effort)
+        id: download_openclaw_territory
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: report-openclaw-territory
+          path: openclaw-src/territory
+
+      - name: Download OpenClaw coverage artifact (best-effort)
+        id: download_openclaw_coverage
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: report-openclaw-coverage
+          path: openclaw-src/coverage
 
       # Slot replays at /smoke/{territory,coverage}/ and (when present)
-      # /openclaw/{territory,coverage}/, then rewrite index.html so the landing
-      # page exposes every stack side-by-side.
+      # /openclaw/{demo,territory,coverage}/, then rewrite index.html so
+      # the landing page exposes every stack side-by-side.
       - name: Assemble Pages site
         run: |
           mkdir -p site/smoke
           cp -r smoke-src/territory site/smoke/territory
           cp -r smoke-src/coverage site/smoke/coverage
           INDEX_FLAGS="--include-smoke"
-          if [ -d openclaw-src/territory ] && [ -d openclaw-src/coverage ]; then
+          if [ -d openclaw-src/demo ] || [ -d openclaw-src/territory ] || [ -d openclaw-src/coverage ]; then
             mkdir -p site/openclaw
-            cp -r openclaw-src/territory site/openclaw/territory
-            cp -r openclaw-src/coverage site/openclaw/coverage
+            [ -d openclaw-src/demo ]      && cp -r openclaw-src/demo      site/openclaw/demo
+            [ -d openclaw-src/territory ] && cp -r openclaw-src/territory site/openclaw/territory
+            [ -d openclaw-src/coverage ]  && cp -r openclaw-src/coverage  site/openclaw/coverage
             INDEX_FLAGS="$INDEX_FLAGS --include-openclaw"
           fi
           python scripts/write_pages_index.py site $INDEX_FLAGS

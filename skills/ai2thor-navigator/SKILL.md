@@ -1,3 +1,11 @@
+---
+name: ai2thor-navigator
+description: Navigate a simulated robot one step at a time in an AI2-THOR indoor scene. Given a first-person camera frame, an overhead map, and structured game state, return a single navigation action as JSON.
+metadata:
+  openclaw:
+    emoji: 🤖
+---
+
 # AI2-THOR Navigator Skill
 
 An OpenClaw skill that drives a single simulation agent through an AI2-THOR indoor

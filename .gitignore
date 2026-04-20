@@ -24,4 +24,7 @@ htmlcov/
 # Demo / replay outputs
 output/
 
+# OpenClaw shared image directory (host ↔ Gateway bind mount)
+.openclaw-tmp/
+
 .env

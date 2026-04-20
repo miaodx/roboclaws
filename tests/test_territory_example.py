@@ -63,6 +63,24 @@ def test_parse_args_defaults() -> None:
     assert args.output_dir == "output/territory"
     assert args.thor_server_timeout == 100.0
     assert args.thor_server_start_timeout == 300.0
+    assert args.backend == "vlm"
+    assert args.gateway_url is None
+
+
+def test_parse_args_backend_openclaw() -> None:
+    args = _parse_args(["--backend", "openclaw"])
+    assert args.backend == "openclaw"
+
+
+def test_parse_args_backend_direct_accepted() -> None:
+    """'direct' is a deprecated alias for 'vlm'; parser must accept it."""
+    args = _parse_args(["--backend", "direct"])
+    assert args.backend == "direct"
+
+
+def test_parse_args_gateway_url() -> None:
+    args = _parse_args(["--backend", "openclaw", "--gateway-url", "http://custom:9999"])
+    assert args.gateway_url == "http://custom:9999"
 
 
 def test_parse_args_custom() -> None:
@@ -395,3 +413,63 @@ def test_run_three_agents(tmp_path: Path) -> None:
         )
     assert len(result["cells_claimed"]) == 3
     assert result["termination_reason"] in ("max_steps", "all_cells_claimed", "stale")
+
+
+# ---------------------------------------------------------------------------
+# OpenClaw backend: construction + numpy frame type contract
+# ---------------------------------------------------------------------------
+
+
+def test_backend_openclaw_constructs_provider(mock_engine_cls, tmp_path: Path) -> None:
+    """When backend='openclaw', build_openclaw_provider_or_die is called."""
+
+    class StubProvider:
+        cumulative_cost = 0.0
+
+        def get_action(self, images, state):
+            return {"reasoning": "move", "action": "MoveAhead"}
+
+    with patch(
+        "roboclaws.openclaw.bridge.build_openclaw_provider_or_die",
+        return_value=StubProvider(),
+    ) as mock_build:
+        run_territory_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=1,
+            model="mock",
+            output_dir=str(tmp_path / "territory"),
+            backend="openclaw",
+        )
+    mock_build.assert_called_once()
+
+
+def test_backend_openclaw_passes_numpy_frames(mock_engine_cls, tmp_path: Path) -> None:
+    """When backend='openclaw', images passed to provider are numpy arrays, not base64 strings."""
+
+    class SpyProvider:
+        cumulative_cost = 0.0
+
+        def __init__(self) -> None:
+            self.calls: list[list] = []
+
+        def get_action(self, images, state):
+            self.calls.append(images)
+            return {"reasoning": "move", "action": "MoveAhead"}
+
+    spy = SpyProvider()
+    with patch(
+        "roboclaws.openclaw.bridge.build_openclaw_provider_or_die",
+        return_value=spy,
+    ):
+        run_territory_game(
+            scene="FloorPlan201",
+            agent_count=2,
+            steps=1,
+            model="mock",
+            output_dir=str(tmp_path / "territory"),
+            backend="openclaw",
+        )
+    assert len(spy.calls) == 1
+    for img in spy.calls[0]:
+        assert isinstance(img, np.ndarray), f"expected ndarray, got {type(img)}"

@@ -46,12 +46,18 @@ Real `FloorPlan201` rendered by Unity, first-person frames fed to the Kimi VLM. 
 
 ### 3. OpenClaw + Kimi — push to `main`
 
-Same VLM, but routed through the OpenClaw Gateway so each agent has a persistent `MEMORY.md`, a `SOUL.md` persona, and shows up as a first-class entity in the Gateway. Proves Phase 2 end-to-end. **Coming online with [#39](https://github.com/MiaoDX/roboclaws/issues/39)**; GIFs below auto-populate once the job turns green.
+Routes the same three demos through a long-running local Gateway with per-agent personalities
+(aggressive / defensive / cooperative SOULs from `skills/ai2thor-navigator/souls/`).
+Layer 3 GIFs include SOUL badges + colored trails — aggressive=red, defensive=blue, cooperative=green.
 
-| 🗺️ Territory Control | 📸 Cooperative Coverage |
-|---|---|
-| ![openclaw territory](https://miaodx.github.io/roboclaws/openclaw/territory/replay.gif) | ![openclaw coverage](https://miaodx.github.io/roboclaws/openclaw/coverage/replay.gif) |
-| [▶ Interactive report](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
+**First local run takes ~15 min** (Docker pull + Unity download). See `docs/openclaw-local.md`.
+Already set up? `make openclaw-territory`
+
+| Demo | GIF | Report |
+|------|-----|--------|
+| Navigation | ![nav](https://miaodx.github.io/roboclaws/openclaw/demo/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/demo/report.html) |
+| Territory  | ![ter](https://miaodx.github.io/roboclaws/openclaw/territory/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) |
+| Coverage   | ![cov](https://miaodx.github.io/roboclaws/openclaw/coverage/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
 
 Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) (two mock runs side-by-side).
 
@@ -98,7 +104,8 @@ Phase 1 calls VLM APIs directly (Claude/GPT-4o). Phase 2 integrates OpenClaw Gat
 
 - [x] **Phase 0**: Technical research & design
 - [ ] **Phase 1**: AI2-THOR + VLM API multi-agent competition/cooperation demo
-- [ ] **Phase 2**: OpenClaw integration (Skill + Gateway + memory)
+- [x] **Phase 2**: OpenClaw integration (Skill + Gateway + memory)
+- [x] **Phase 2.2**: long-running OpenClaw games (territory + coverage) with per-agent SOULs
 - [ ] **Phase 3**: Isaac Lab migration (G1 humanoid + RL locomotion policy)
 
 ## Related Projects
