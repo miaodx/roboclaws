@@ -6,7 +6,10 @@ Multiple VLM/OpenClaw agents controlling simulated robots in competition and coo
 
 Before writing any code, read in order:
 1. `CLAUDE.md` (this file)
-2. `docs/technical-design.md` (full technical spec: API details, game rules, architecture)
+2. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
+3. `docs/technical-design.md` (full technical spec: API details, game rules, architecture)
+4. `PLAN.md` (current phase + retrospectives) and `.planning/STATE.md` (if it exists — GSD-managed state)
+5. `TODOS.md` (self-contained queued work)
 
 ## Build & test
 
@@ -113,7 +116,34 @@ For the OpenClaw Gateway path specifically, the exact local setup (Docker one-li
 - VLM API cost: 3 agents × 200 steps ≈ $0.02 (GPT-4o-mini) to $0.36 (Claude Sonnet)
 - `controller.step()` is synchronous, one agent per call — game engine uses turn-based stepping
 
-## Skill routing
+## Workflow: gstack for pre-plan, GSD for execution
+
+This repo uses two complementary skill families:
+
+- **gstack** (pre-plan, review, ship) — `/office-hours`, `/plan-ceo-review`,
+  `/plan-eng-review`, `/autoplan`, `/review`, `/ship`. Produces strategic
+  reviews, reviewed plan drafts, and PRs. Plan files are plain markdown
+  (e.g., `PLAN.md`, `docs/plans/*.md`); gstack is agnostic about layout.
+- **GSD** (phase execution) — `/gsd-plan-phase`, `/gsd-execute-phase`,
+  `/gsd-verify-work`, `/gsd-ship`, `/gsd-quick`, `/gsd-debug`. Owns the
+  `.planning/` directory and the phase lifecycle (context → plan →
+  execute → verify → summary). Manages `.planning/phases/XX-name/` artifacts.
+
+**Handoff rule of thumb:**
+- Rough idea, strategic direction, architecture review, scope decisions →
+  gstack (`/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/autoplan`)
+- Once a plan is reviewed and approved → GSD (`/gsd-plan-phase` to structure
+  it into `.planning/phases/XX-name/`, then `/gsd-execute-phase`)
+- Small fixes, doc edits, quick experiments → `/gsd-quick` or `/gsd-fast`
+- Debug loops → `/gsd-debug`
+- Shipping → `/ship` (gstack) if no phase is under GSD, else `/gsd-ship`
+
+Phases 2.0–2.3 live in the top-level `PLAN.md` (pre-GSD). Phase 2.4+ may
+migrate to `.planning/phases/` once GSD is bootstrapped via
+`/gsd-ingest-docs` (to ingest the existing `PLAN.md` content) or
+`/gsd-plan-phase` (for a fresh phase start).
+
+## Skill routing (gstack)
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
 tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
@@ -132,3 +162,17 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Skill routing (GSD)
+
+For phase execution, verification, and work that needs `.planning/` structure,
+invoke GSD commands first:
+- Plan a phase in detail → `/gsd-plan-phase`
+- Execute a planned phase → `/gsd-execute-phase`
+- Verify UAT on built work → `/gsd-verify-work`
+- Create PR for a completed phase → `/gsd-ship`
+- Investigation / root cause → `/gsd-debug`
+- Small / bounded fix → `/gsd-quick` or `/gsd-fast`
+- What's the next step in the workflow? → `/gsd-next` or `/gsd-progress`
+- Ingest existing plan docs into `.planning/` → `/gsd-ingest-docs`
+- Start a fresh project / milestone under GSD → `/gsd-new-project` or `/gsd-new-milestone`
