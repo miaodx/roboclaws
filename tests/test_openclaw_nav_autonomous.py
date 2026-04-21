@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -12,6 +13,49 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 
 from openclaw_nav_autonomous import _kickoff_prompt, _parse_args, run_autonomous_navigation  # noqa: E402
 from roboclaws.openclaw.bridge import OpenClawUnavailable, RunResult  # noqa: E402
+
+
+def _make_fake_mcp_server(snapshot_metrics: dict | None = None) -> MagicMock:
+    """Build a MagicMock shaped like a RoboclawsMCPServer.
+
+    Covers the five methods + attributes the example relies on
+    (see roboclaws/openclaw/mcp_server.py public surface). `done_event`
+    is a real threading.Event so tests can set() it if needed.
+    """
+    fake = MagicMock(
+        spec_set=[
+            "done_event",
+            "host",
+            "port",
+            "run_in_thread",
+            "close",
+            "enqueue_human_message",
+            "snapshot_metrics",
+            "write_runtime_event",
+        ]
+    )
+    fake.done_event = threading.Event()
+    fake.host = "127.0.0.1"
+    fake.port = 18788
+    fake.run_in_thread = MagicMock()
+    fake.close = MagicMock()
+    fake.enqueue_human_message = MagicMock()
+    fake.write_runtime_event = MagicMock()
+    fake.snapshot_metrics = MagicMock(
+        return_value=snapshot_metrics
+        if snapshot_metrics is not None
+        else {
+            "runtime_s": 0.0,
+            "last_trace_age_s": 0.0,
+            "queued_human_messages": 0,
+            "observed_once": True,
+            "moves_since_observe": 0,
+            "done_event_set": False,
+            "done_reason": None,
+            "tool_event_counts": {},
+        }
+    )
+    return fake
 
 
 def test_parse_args_defaults() -> None:
@@ -81,21 +125,28 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         if cmd == ["./scripts/openclaw-bootstrap.sh"]:
             env = kwargs["env"]
             assert env["TIMEOUT_SECONDS"] == "360"
-            assert env["SIM_SERVER_URL"] == "http://host.docker.internal:18788"
+            # Example must pass ROBOCLAWS_MCP_URL; SIM_SERVER_URL stays out
+            # of the example entirely in phase 02.6-04 (bootstrap still
+            # accepts it from operators one more wave).
+            assert env["ROBOCLAWS_MCP_URL"] == "http://host.docker.internal:18788/mcp"
+            assert "SIM_SERVER_URL" not in env
             return SimpleNamespace(stdout="token-123\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
+    fake_server = _make_fake_mcp_server(
+        snapshot_metrics={"observed_once": True, "moves_since_observe": 0}
+    )
+
     with (
         patch("openclaw_nav_autonomous.MultiAgentEngine") as engine_cls,
-        patch("openclaw_nav_autonomous.SimHTTPServer") as server_cls,
+        patch(
+            "openclaw_nav_autonomous.make_roboclaws_mcp",
+            return_value=fake_server,
+        ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
     ):
-        server = server_cls.return_value
-        server.port = 18788
-        server.done_event = MagicMock()
-        server.snapshot_metrics.return_value = {"observed_once": True, "moves_since_observe": 0}
         bridge = bridge_cls.return_value
         bridge.start_run.return_value = bridge_result
         bridge.get_last_run_metrics.return_value = {
@@ -117,9 +168,14 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert (output_dir / "start_run_metrics.json").exists()
     run_result_json = json.loads((output_dir / "run_result.json").read_text(encoding="utf-8"))
     assert run_result_json["bridge_metrics"]["prompt_chars"] == 123
+    # Key name 'sim_server_metrics' is frozen for report.html compat even
+    # though the backing server is now MCP.
     assert run_result_json["sim_server_metrics"]["observed_once"] is True
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-123")
     bridge.start_run.assert_called_once()
+    # MCP factory was called and the server was started in a thread.
+    mcp_factory.assert_called_once()
+    fake_server.run_in_thread.assert_called_once()
     assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
     assert [
         sys.executable,
@@ -129,7 +185,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     ] in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
-    server.close.assert_called_once()
+    fake_server.close.assert_called_once()
     bridge.close.assert_called_once()
 
 
@@ -147,18 +203,19 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
         subprocess_calls.append(cmd)
         return SimpleNamespace(stdout="", returncode=0)
 
+    fake_server = _make_fake_mcp_server(snapshot_metrics={})
+
     with (
         patch("openclaw_nav_autonomous.MultiAgentEngine") as engine_cls,
-        patch("openclaw_nav_autonomous.SimHTTPServer") as server_cls,
+        patch(
+            "openclaw_nav_autonomous.make_roboclaws_mcp",
+            return_value=fake_server,
+        ),
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
         patch.dict("openclaw_nav_autonomous.os.environ", {"OPENCLAW_GATEWAY_TOKEN": "token-xyz"}),
     ):
-        server = server_cls.return_value
-        server.port = 18788
-        server.done_event = MagicMock()
-        server.snapshot_metrics.return_value = {}
         bridge = bridge_cls.return_value
         bridge.start_run.return_value = bridge_result
         bridge.get_last_run_metrics.return_value = {}
@@ -176,7 +233,7 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
     assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] not in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
-    server.close.assert_called_once()
+    fake_server.close.assert_called_once()
     bridge.close.assert_called_once()
 
 
@@ -193,17 +250,18 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
             return SimpleNamespace(stdout="token-123\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
+    fake_server = _make_fake_mcp_server(snapshot_metrics={"observed_once": True})
+
     with (
         patch("openclaw_nav_autonomous.MultiAgentEngine") as engine_cls,
-        patch("openclaw_nav_autonomous.SimHTTPServer") as server_cls,
+        patch(
+            "openclaw_nav_autonomous.make_roboclaws_mcp",
+            return_value=fake_server,
+        ),
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
     ):
-        server = server_cls.return_value
-        server.port = 18788
-        server.done_event = MagicMock()
-        server.snapshot_metrics.return_value = {"observed_once": True}
         bridge = bridge_cls.return_value
         bridge.start_run.side_effect = OpenClawUnavailable("Gateway protocol error: boom")
         bridge.get_last_run_metrics.return_value = {"gateway_error": "remote_protocol_error"}
@@ -226,5 +284,64 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
     assert (diagnostics_dir / "gateway.workspace-state.txt").exists()
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
-    server.close.assert_called_once()
+    fake_server.close.assert_called_once()
     bridge.close.assert_called_once()
+
+
+def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
+    """Operator-supplied ROBOCLAWS_MCP_URL wins over the loopback default.
+
+    Regression guard for threat T-02.6-23: a future edit using `env[...] = "..."`
+    instead of `env.setdefault(...)` for ROBOCLAWS_MCP_URL would silently
+    override a value the operator set (e.g. for the local-probe gate).
+    """
+    output_dir = tmp_path / "autonomous"
+    bridge_result = RunResult(
+        final_message="done",
+        wallclock_s=1.0,
+        terminated_by="done",
+    )
+    captured_env: dict[str, str] = {}
+
+    def _subprocess_run(*args, **kwargs):
+        cmd = list(args[0])
+        if cmd == ["./scripts/openclaw-bootstrap.sh"]:
+            captured_env.update(kwargs["env"])
+            return SimpleNamespace(stdout="token-override\n", returncode=0)
+        return SimpleNamespace(stdout="", returncode=0)
+
+    override_url = "http://override.test:9999/mcp"
+    fake_server = _make_fake_mcp_server()
+
+    with (
+        patch("openclaw_nav_autonomous.MultiAgentEngine"),
+        patch(
+            "openclaw_nav_autonomous.make_roboclaws_mcp",
+            return_value=fake_server,
+        ),
+        patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
+        patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
+        patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
+        patch.dict(
+            "openclaw_nav_autonomous.os.environ",
+            {"ROBOCLAWS_MCP_URL": override_url},
+        ),
+    ):
+        bridge = bridge_cls.return_value
+        bridge.start_run.return_value = bridge_result
+        bridge.get_last_run_metrics.return_value = {}
+
+        run_autonomous_navigation(
+            scene="FloorPlan201",
+            max_moves=10,
+            wall_budget=30.0,
+            output_dir=output_dir,
+            skip_bootstrap=False,
+        )
+
+    # Operator-supplied value was preserved (setdefault, not assignment).
+    assert captured_env.get("ROBOCLAWS_MCP_URL") == override_url
+    # The example no longer sets SIM_SERVER_URL itself. A pre-existing value
+    # in os.environ (inherited) is acceptable, but the example is not the
+    # source of the legacy URL anymore.
+    assert captured_env.get("SIM_SERVER_URL") != "http://host.docker.internal:18788"
