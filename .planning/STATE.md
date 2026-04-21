@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
-status: executing
-stopped_at: Phase 02.6 complete — plan 07 docs update shipped (openclaw-local.md, openclaw-gateway-internals.md, retrospectives/phase-2.6.md)
-last_updated: "2026-04-21T12:24:54.970Z"
+status: planning
+stopped_at: Phase 02.4 planned into .planning/phases/02.4-view-experiment-ab; next step is 02.4-01 openclaw-demo-view-variants
+last_updated: "2026-04-21T12:59:13Z"
 last_activity: 2026-04-21
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
-  percent: 100
+  total_plans: 4
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-20)
+See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 02.6 — openclaw-mcp-tools-integration
+**Current focus:** Phase 02.4 — view-experiment-ab
 
 ## Current Position
 
-Phase: 02.6 (openclaw-mcp-tools-integration) — COMPLETE
-Plan: 7 of 7 — COMPLETE (docs-update + phase retrospective).
-Status: Phase 02.6 shipped 2026-04-21 — ready for ship gate or next phase (2.4 view-experiment A/B is next in numeric order).
+Phase: 02.4 (view-experiment-ab) — PLANNED
+Plan: 0 of 4 — READY TO EXECUTE (`02.4-01` is the single-agent OpenClaw slice).
+Status: Phase 02.4 was migrated from the root `PLAN.md` draft into `.planning/phases/02.4-view-experiment-ab/` on 2026-04-21. Phase 02.6 remains shipped; the next execution step is `02.4-01`.
 Last activity: 2026-04-21
 
-Progress: [██████████] 100%
-(23 of 23 historical+active plans complete within the 02.6 phase scope; Phase 2.4 awaits planning; Phase 3 deferred and excluded from the denominator)
+Progress: [----------] 0%
+(Phase 02.4 now has a 4-plan GSD breakdown; the first plan intentionally lands `examples/openclaw_demo.py` before territory/coverage. Phase 02.6 shipped on 2026-04-21 and remains the latest completed phase.)
 
 ## Performance Metrics
 
@@ -54,8 +54,8 @@ Progress: [██████████] 100%
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 2.1, 2.2, 2.3 (declined)
-- Trend: Stable (Phase 2.2 shipped clean 2026-04-16, Phase 2.3 cleanly declined 2026-04-20)
+- Last 3 shipped phases: 2.2, 2.3 (declined), 2.6
+- Trend: Stable (Phase 2.6 shipped cleanly on 2026-04-21; focus now shifts back to the unexecuted 2.4 views track)
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -72,6 +72,7 @@ Progress: [██████████] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
 - **Phase 02.6 plan 01 (2026-04-21)**: MCP server default bind is `127.0.0.1` (localhost-only) per threat model T-02.6-01; Gateway container reaches via `host.docker.internal` → host-gateway → loopback. Bind is NOT env-configurable — only via explicit argument.
 - **Phase 02.6 plan 01 (2026-04-21)**: Trace schema additive-only rule: `tests/fixtures/trace_schema_reference.json` freezes sim_server.py key-sets at phase entry; MCP server emits a SUPERSET. `snapshot_metrics` is the one exception — EQUALITY checked because `run_result_json["sim_server_metrics"]` consumers depend on exact names.
 - **Phase 02.6 plan 01 (2026-04-21)**: `mcp[cli]>=1.27` in `dev` + new `openclaw` extra; NOT in top-level `[project].dependencies` (core library stays installable without the Gateway path, mirroring ai2thor).
@@ -124,8 +125,8 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21T12:24:54.967Z
-Stopped at: Phase 02.6 complete — plan 07 docs update shipped (openclaw-local.md, openclaw-gateway-internals.md, retrospectives/phase-2.6.md)
+Last session: 2026-04-21T12:59:13Z
+Stopped at: Phase 02.4 planned into .planning/phases/02.4-view-experiment-ab; next step is 02.4-01 openclaw-demo-view-variants
 Resume file: None
 
 ## Dual-Stack Workflow
@@ -134,4 +135,4 @@ Resume file: None
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Planned Phase:** 02.6 (openclaw-mcp-tools-integration) — 7 plans — 2026-04-21T09:00:34.851Z
+**Planned Phase:** 02.4 (view-experiment-ab) — 4 plans — 2026-04-21T12:59:13Z

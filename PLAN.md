@@ -10,7 +10,14 @@ This file holds the **current phase** only. Shipped phases live under
 
 ---
 
-# Phase 2.4 — Map representation & view composition A/B
+> **Status (2026-04-21):** Phase 2.4 has been ingested into GSD at
+> [`.planning/phases/02.4-view-experiment-ab/`](.planning/phases/02.4-view-experiment-ab/).
+> This root file now serves as the pre-GSD source draft. The authoritative
+> execution order lives in the GSD phase files, with `02.4-01` explicitly
+> landing the single-agent `examples/openclaw_demo.py` path first before
+> territory/coverage and the experiment harness.
+
+# Phase 2.4 — Map representation & view composition A/B (Source Draft)
 
 ## Problem Statement
 
@@ -428,5 +435,4 @@ capped at $20 hard via `--max-usd` wallet gates.
 
 Sequential. T30-T32 all touch `roboclaws/core/`; T33 depends on T32;
 T34 depends on T33's JSONL shape. No fan-out wins here. Keep on `main`.
-
 
