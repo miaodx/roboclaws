@@ -31,10 +31,22 @@ What this module delivers:
   stay stable.
 
 Binding rationale (threat model T-02.6-01): `host` defaults to `127.0.0.1`,
-**not** `0.0.0.0`. The Gateway container reaches this server via
-`host.docker.internal` → host-gateway → loopback on the host, and no LAN
-peer can reach port 18788 to drive the AI2-THOR engine. The bind is NOT
-configurable via environment variable — only via explicit argument.
+**not** `0.0.0.0`. On macOS and on Linux with Docker's host networking
+mode, the Gateway container reaches this server via `host.docker.internal`
+→ host-gateway → loopback on the host, and no LAN peer can reach port
+18788 to drive the AI2-THOR engine.
+
+Caveat — Linux with Docker 29.x default bridge: `host.docker.internal`
+resolves to the bridge gateway (172.17.0.1) and **cannot** reach the
+host's 127.0.0.1. On that topology the only production caller
+(`examples/openclaw_nav_autonomous.py`) must — and does — override to
+`host="0.0.0.0"`. See probe gate 02.6-06 in the phase planning for the
+live evidence. The LAN-exposure risk is accepted for single-operator
+local-dev on a trusted workstation; this is not a server for untrusted
+networks.
+
+The bind is NOT configurable via environment variable — only via explicit
+argument — so the choice is visible at call-sites and greppable.
 """
 
 from __future__ import annotations
@@ -61,6 +73,13 @@ __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 # Gateway reaches this via `host.docker.internal` → host-gateway → loopback,
 # while LAN peers on the same subnet cannot reach the AI2-THOR engine.
 # Not configurable via env — only via explicit argument.
+#
+# NOTE: On Linux with Docker 29.x default bridge, `host.docker.internal`
+# cannot reach host loopback; callers on that topology must override to
+# host="0.0.0.0". See module docstring + examples/openclaw_nav_autonomous.py
+# for the rationale. `test_example_binds_to_all_interfaces_on_linux` in
+# tests/test_openclaw_nav_autonomous.py guards that override from being
+# "fixed" back to the default.
 _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
 

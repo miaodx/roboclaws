@@ -182,6 +182,16 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     bridge.start_run.assert_called_once()
     # MCP factory was called and the server was started in a thread.
     mcp_factory.assert_called_once()
+    # WR-03 regression guard: the example must override host to 0.0.0.0
+    # on Linux (spike 02.6-06). 127.0.0.1 is unreachable from Docker's
+    # default bridge on 6.x kernels + Docker 29.x. If someone "fixes" the
+    # module-docstring contradiction by reverting the override, Linux
+    # local-dev breaks silently — this test flips the regression visibly.
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("host") == "0.0.0.0", (
+        "example must override host to 0.0.0.0 on Linux (spike 02.6-06); "
+        "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
+    )
     fake_server.run_in_thread.assert_called_once()
     assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
     assert [
