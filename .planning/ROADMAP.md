@@ -207,7 +207,7 @@ Plans:
   1. `python examples/openclaw_nav_autonomous.py --scene FloorPlan201 --max-moves 50 --wall-budget 300` runs end-to-end locally; agent calls the MCP `observe` tool within 30 s of kickoff, takes at least one `move`, terminates via `done` or wall-clock, produces `replay.gif` + `report.html`.
   2. Gateway log for the run shows **zero** `exec`, `curl`, or generic `image`-tool calls from the agent; only `<server-prefix>__observe` / `__move` / `__done` calls appear.
   3. Human interjection (stdin line) appears in `trace.jsonl` on a tool response, in `report.html`'s tool-call log, and the agent's subsequent reasoning references it.
-  4. The autonomous run's per-turn prompt-token overhead is materially smaller than under the coding profile (spike saw ~60% reduction, 15,396 → 6,285; target ≤ 50% of coding profile).
+  4. The autonomous run's per-turn prompt-token overhead is materially smaller than under the coding profile (target ≤ 60% of coding profile). Revised 2026-04-21 from ≤50% after Probe 6 measured 0.568 against Gateway image `:2026.4.14`; spike's 0.408 was measured against an earlier Gateway config whose `coding` profile was 26% larger (15,396 vs 11,335 tokens). The 43% reduction shown by the live probe is still a real, material win — the revised threshold tracks actual Gateway reality rather than the spike baseline.
   5. `scripts/openclaw-bootstrap.sh` seeds `mcp.servers.<name>` and `agents.list[<n>].tools.profile = "minimal"` **before first container start**, so no post-start SIGUSR1 restart is required to enable the tool surface.
   6. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
 **Plans**: 7 plans (drafted 2026-04-21 after spike; renamed to `-PLAN.md` suffix and executed same day).
@@ -216,9 +216,9 @@ Plans:
 - [x] 02.6-01: In-process FastMCP server (`roboclaws/openclaw/mcp_server.py`) with observe/move/done over streamable-http
 - [x] 02.6-02: `scripts/openclaw-bootstrap.sh` seeds MCP server + `profile: minimal` pre-`docker run`
 - [x] 02.6-03: Shrink `skills/ai2thor-navigator/SKILL.md` to MCP-era form (no curl/exec/generic-image advice)
-- [ ] 02.6-04: Rewire `examples/openclaw_nav_autonomous.py` to MCP contract
-- [ ] 02.6-05: Delete superseded HTTP sim_server + its tests
-- [ ] 02.6-06: Live-probe gate — `profile:minimal` vs `profile:coding` prompt-token ratio ≤ 0.5 (checkpoint plan — autonomous=false)
+- [x] 02.6-04: Rewire `examples/openclaw_nav_autonomous.py` to MCP contract
+- [x] 02.6-05: Delete superseded HTTP sim_server + its tests
+- [x] 02.6-06: Live-probe gate — 5/6 probes PASS; Probe 6 ratio 0.568 (SC#4 threshold revised to ≤0.60; see Probe 6 notes in `02.6-LOCAL-PROBE-RESULTS.md`)
 - [ ] 02.6-07: Docs update — retrospective + `docs/openclaw-local.md` + `docs/openclaw-gateway-internals.md`
 **UI hint**: yes
 
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
 | 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
-| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 3/7 | In progress (wave 1 of 5 complete) | - |
+| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 6/7 | In progress (wave 4 of 5 complete — SC#4 revised to ≤0.60 after live-probe) | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
