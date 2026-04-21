@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: executing
-stopped_at: Phase 02.6 plan 05 (delete-sim-server) complete. Wave 3 kicked off; plans 06-07 pending.
-last_updated: "2026-04-21T10:43:11Z"
+stopped_at: Phase 02.6 plan 06 (live-probe-gate) executed — 5/6 PASS, 1 FAIL (Probe 6 ratio 0.568 > 0.50). Task 8 checkpoint pending operator review.
+last_updated: "2026-04-21T12:08:58.403Z"
 last_activity: 2026-04-21 -- Phase 02.6 plan 05 (delete-sim-server) complete
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 6
+  percent: 86
 ---
 
 # Project State
@@ -62,6 +62,7 @@ Progress: [█████████████████░░░] 91%
 | Phase 02.6 P03 | 5min  | 1 task  | 1 file  |
 | Phase 02.6 P04 | 7min  | 3 tasks | 2 files |
 | Phase 02.6 P05 | 7min  | 1 task  | 3 files (2 deleted, 1 edited) |
+| Phase 02.6 P06 | 32min | 6 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - **Phase 02.6 plan 03 (2026-04-21)**: Prefixed tool-name convention (`roboclaws__observe` etc., double-underscore separator per spike F-2) is load-bearing in SKILL.md — the agent reads exactly the name the tool registry exposes, no translation. Dropped the optional SOULs pointer because SOULs load into `SOUL.md` via bootstrap, not via skill-file reference.
 - **Phase 02.6 plan 04 (2026-04-21)**: Kickoff prompt delegates loop mechanics to SKILL.md rather than duplicating tool recipes — shrunk from 38 source lines / 13 non-empty to 7 source lines / 5 non-empty. No "if X fails, try Y" fallback language (that pattern is what let Kimi drift back to `exec` under Phase 2.5). `run_result_json["sim_server_metrics"]` JSON key kept verbatim across the HTTP -> MCP swap — the 8-key snapshot_metrics contract is stable so the JSON shape doesn't change; inline comment at emission site documents the name-vs-backing mismatch. `env.setdefault("ROBOCLAWS_MCP_URL", ...)` pattern (not `env[...]=...`) honors operator-supplied URLs; dual-layer regression coverage — bootstrap side (plan 02 Task 3) + example side (plan 04 Task 3) — guards threat T-02.6-23.
 - **Phase 02.6 plan 05 (2026-04-21)**: Pure-deletion plan pattern works when upstream plans fully migrate callers — a recursive grep across `roboclaws/ examples/ tests/ scripts/` returned zero live importers before the `git rm`, and full pytest (475 passed, 1 skipped) held post-delete. Kept historical doc-comments referencing `sim_server.py` in mcp_server.py docstring + example + fixtures — the dependency-scan pattern scoped to `from/import sim_server|openclaw\.sim_server|SimHTTPServer` deliberately excludes prose refs, because the `sim_server_metrics` JSON key + trace-schema source-pointer metadata are frozen contracts that document schema continuity. Kept the plan-02 `SIM_SERVER_URL→ROBOCLAWS_MCP_URL` deprecation-warning fallback in the bootstrap (graceful-degrade for stale shells); only the dead `-e SIM_SERVER_URL=...` docker-run arg was removed.
+- Phase 02.6 plan 06 (2026-04-21): Probe 1 uncovered plan 01 T-02.6-01 assumption error — 127.0.0.1 MCP bind unreachable from Gateway container on Linux kernel 6.17 + Docker 29.2.1; fix was host='0.0.0.0' at the example call site (not a default change in mcp_server.py), preserving threat-model intent for other callers.
+- Phase 02.6 plan 06 (2026-04-21): Probe 6 prompt-token ratio = 0.568 against live Gateway image 2026.4.14 — not the 0.408 from the spike. The ROADMAP SC#4 threshold of <=0.50 cannot be honored without action; Task 8 operator to choose (revise threshold | trim MCP | image drift investigation).
 
 ### Pending Todos
 
@@ -92,7 +95,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None currently.
+currently.
 
 > **Resolved 2026-04-20:** The two WARNINGs initially carried from
 > `.planning/INGEST-CONFLICTS.md` (image-payload contract, coverage
@@ -104,6 +107,8 @@ None currently.
 > `.planning/INGEST-CONFLICTS.md` "UPDATE 2026-04-20" header for full
 > evidence and the `feedback_verify_ingest_claims` memory for the
 > lesson.
+
+- Phase 02.6 plan 06 Probe 6 FAIL: prompt-token ratio 0.568 > 0.50 threshold. Operator decision needed at Task 8 checkpoint.
 
 ## Deferred Items
 
@@ -117,9 +122,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21T10:43:11Z
-Stopped at: Phase 02.6 plan 05 (delete-sim-server) complete. Plans 01-05 done; plans 06-07 (live-probe-gate + docs-update) pending orchestrator dispatch.
-Resume file: None
+Last session: 2026-04-21T12:08:58.019Z
+Stopped at: Phase 02.6 plan 06 (live-probe-gate) executed — 5/6 PASS, 1 FAIL (Probe 6 ratio 0.568 > 0.50). Task 8 checkpoint pending operator review.
+Resume file: Probe 6 ratio threshold exceeded (0.568 vs 0.50) — operator decision needed at Task 8: revise SC#4 threshold, slim MCP surface, or investigate image drift.
 
 ## Dual-Stack Workflow
 
