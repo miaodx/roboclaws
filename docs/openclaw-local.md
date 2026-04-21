@@ -216,6 +216,50 @@ docker volume rm openclaw-gateway-config
 - Pinned `agents.defaults.model.primary = $MODEL` and each agent's
   `model.primary = $MODEL` so the first turn has a valid default.
 
+## Autonomous loop — sim server networking (Phase 2.5)
+
+The autonomous-loop path (`examples/openclaw_nav_autonomous.py`) flips the
+integration around: the Gateway still receives one long-running
+`POST /v1/chat/completions` kickoff, but the agent then calls host-side tools
+(`observe`, `move`, `done`) on a local sim server. That sim server runs on the
+host, not in the container, so the Gateway container needs a reliable route back
+to `http://127.0.0.1:18788`.
+
+The bootstrap now adds `--add-host=host.docker.internal:host-gateway`
+unconditionally. On Docker 20.10+ Linux this resolves `host-gateway` to the
+bridge gateway IP, which gives the container a stable name for the host. On
+Docker Desktop for macOS and Windows, `host.docker.internal` already resolves
+natively, so the same setting works there too. This is the default path for the
+autonomous loop because it keeps normal port publishing (`-p 127.0.0.1:18789:18789`)
+intact while still letting the container reach the host-side sim server.
+
+Bootstrap also accepts `SIM_SERVER_URL`, which defaults to
+`http://host.docker.internal:18788`, and passes it into the container. Use that
+when you need the autonomous-loop caller to point at a non-default port or a
+different host alias. The durable tool contract in
+`skills/ai2thor-navigator/SKILL.md` is written against the default URL above, so
+if you override `SIM_SERVER_URL` locally keep the skill contract and runtime
+routing aligned for your probe.
+
+Linux-only fallback: `--network host`. If `--add-host=host.docker.internal:host-gateway`
+does not resolve on a specific machine, the escape hatch is to edit
+`scripts/openclaw-bootstrap.sh` locally and replace the published-port +
+`--add-host` pair with `--network host`. In that mode Docker does not publish
+`-p "${HOST_IP}:${PORT}:18789"` because the container shares the host network
+stack directly; the Gateway simply binds to `18789` on the host. This fallback
+is Linux-only and not portable to Docker Desktop on macOS or Windows.
+
+Before a real autonomous run, do the live probe from inside the container:
+
+```bash
+docker exec openclaw-gateway curl -sf \
+  http://host.docker.internal:18788/observe | head -c 200
+```
+
+A `200` plus the first chunk of JSON is the green light that the container can
+see the host-side sim server. If that probe fails, fix the networking first; do
+not treat the later autonomous-loop failure as an agent bug.
+
 ## Troubleshooting
 
 ### `bootstrap.sh` exits 2 on pre-seed

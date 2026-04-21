@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Autonomous nav replay — {{ run_id }}</title>
+    <style>
+      body {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        margin: 24px;
+        color: #222;
+      }
+      .header {
+        margin-bottom: 16px;
+      }
+      .header h1 {
+        margin: 0 0 4px 0;
+      }
+      .run-id {
+        color: #666;
+        margin-bottom: 12px;
+      }
+      .stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 24px;
+        font-size: 14px;
+        color: #555;
+      }
+      .timeline {
+        display: flex;
+        align-items: flex-start;
+        overflow-x: auto;
+        gap: 6px;
+        padding: 12px 0;
+        border-top: 1px solid #ddd;
+        border-bottom: 1px solid #ddd;
+      }
+      .frame {
+        min-width: {{ thumbnail_size }}px;
+        max-width: {{ thumbnail_size }}px;
+        position: relative;
+        background: #fff;
+      }
+      .frame img {
+        width: 100%;
+        display: block;
+      }
+      .frame.seen {
+        border: 3px solid #2ca02c;
+      }
+      .frame.unseen {
+        border: 2px dashed #888888;
+      }
+      .frame .badge {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 16px;
+        padding: 0 4px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 3px;
+      }
+      .frame .meta {
+        font-size: 12px;
+        color: #555;
+        margin-top: 4px;
+      }
+      .batched {
+        border-left: 4px solid #f0ad4e;
+        background: #fff7e6;
+        padding: 4px 8px;
+        font-size: 12px;
+        margin: 4px 0;
+        display: inline-block;
+        white-space: nowrap;
+      }
+      .log {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        margin-top: 24px;
+        background: #f6f6f6;
+        padding: 12px;
+        border-radius: 4px;
+      }
+      .log h2 {
+        margin-top: 0;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      .log-entry {
+        margin-bottom: 6px;
+      }
+      .human {
+        background: #fff3cd;
+        padding: 0 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Autonomous nav replay</h1>
+      <div class="run-id">run_id: {{ run_id }}</div>
+      <div class="stats">
+        <span>terminated_by: <b>{{ summary.terminated_by }}</b></span>
+        <span>wallclock: <b>{{ "%.1f"|format(summary.wallclock_seconds) }}s</b></span>
+        <span>observes: <b>{{ summary.observes_by_agent }}</b></span>
+        <span>moves: <b>{{ summary.moves }}</b></span>
+        <span>unseen frames: <b>{{ summary.frames_unseen_by_agent }}</b></span>
+        <span>observe/move: <b>{{ "%.2f"|format(summary.observe_to_move_ratio) }}</b></span>
+        <span>human msgs: <b>{{ summary.human_messages_delivered }}</b></span>
+      </div>
+    </div>
+
+    <div class="timeline">
+      {% for item in timeline %}
+      {% if item.kind == "frame" %}
+      <div class="frame {{ 'seen' if item.seen_by_agent else 'unseen' }}" title="{{ item.tooltip }}">
+        <img src="data:image/jpeg;base64,{{ item.fpv }}" alt="fpv">
+        <span class="badge">{{ item.badge }}</span>
+        <div class="meta">{{ "%.1f"|format(item.ts) }}s</div>
+      </div>
+      {% elif item.kind == "batched_warning" %}
+      <div class="batched">batched without observing ({{ item.count }} moves)</div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="log">
+      <h2>Tool-call log</h2>
+      {% for entry in tool_log %}
+      <div class="log-entry">
+        [{{ "%7.2f"|format(entry.ts) }}s] {{ entry.tool }}: {{ entry.summary }}
+        {% if entry.human_message %}
+        <span class="human">human_message: {{ entry.human_message }}</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </body>
+</html>

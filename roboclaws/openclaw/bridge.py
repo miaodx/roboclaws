@@ -24,8 +24,12 @@ import io
 import json
 import os
 import re
+import subprocess
+import sys
+import threading
 import time
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 import numpy as np
 from PIL import Image
@@ -48,6 +52,13 @@ _DEFAULT_MAX_TOKENS = 1024
 # "Model unavailable" error.  Connect errors, protocol errors, and HTTP 4xx/5xx
 # are NOT retried here — they fail fast so the caller can surface the root cause.
 _RETRY_ATTEMPTS = 3
+
+
+@dataclass
+class RunResult:
+    final_message: str
+    wallclock_s: float
+    terminated_by: Literal["done", "wall_clock", "error"]
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -176,6 +187,53 @@ class OpenClawBridge:
         }
         body = self._post_chat(payload)
         return _extract_content(body)
+
+    def start_run(
+        self,
+        agent_id: int,
+        prompt: str,
+        wall_budget_s: float,
+        done_event: threading.Event,
+    ) -> RunResult:
+        """Kick off a long-running autonomous Gateway run for one named agent."""
+        del done_event  # Reserved for future early-abort integration from the sim server.
+
+        self._reset_workspace_state(agent_id)
+        started = time.monotonic()
+        payload = {
+            "model": self.model_id(agent_id),
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": _DEFAULT_MAX_TOKENS,
+        }
+        per_call_timeout = wall_budget_s + 60.0
+
+        import httpx
+
+        try:
+            resp = self._client.post(
+                _CHAT_PATH,
+                json=payload,
+                timeout=per_call_timeout,
+            )
+        except httpx.ReadTimeout:
+            return RunResult(
+                final_message="<wall-clock timeout - no final message>",
+                wallclock_s=round_seconds(time.monotonic() - started),
+                terminated_by="wall_clock",
+            )
+        except httpx.ConnectError as exc:
+            raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
+        except httpx.RemoteProtocolError as exc:
+            raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+
+        body = self._parse_json_response(resp)
+        return RunResult(
+            final_message=_extract_content(body),
+            wallclock_s=round_seconds(time.monotonic() - started),
+            terminated_by="done",
+        )
 
     # ------------------------------------------------------------------
     # Tool invocation
@@ -306,7 +364,16 @@ class OpenClawBridge:
             raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
         except httpx.HTTPError as exc:
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+        return self._parse_json_response(resp)
 
+    def _parse_json_response(self, resp: Any) -> dict[str, Any]:
+        self._raise_for_http_status(resp)
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise OpenClawUnavailable(f"Gateway returned non-JSON: {exc}") from exc
+
+    def _raise_for_http_status(self, resp: Any) -> None:
         if resp.status_code == 401:
             raise OpenClawUnavailable("Gateway rejected bearer token (401)")
         if resp.status_code == 404:
@@ -324,7 +391,6 @@ class OpenClawBridge:
             raise OpenClawUnavailable(f"Gateway returned HTTP 400: {text[:200]}")
         if resp.status_code >= 400:
             text = resp.text or ""
-            # Try to surface {"error": {"message": "..."}} OpenAI-style bodies
             msg = text[:200]
             try:
                 err = resp.json().get("error") or {}
@@ -334,10 +400,28 @@ class OpenClawBridge:
                 pass
             raise OpenClawUnavailable(f"Gateway returned HTTP {resp.status_code}: {msg}")
 
-        try:
-            return resp.json()
-        except ValueError as exc:
-            raise OpenClawUnavailable(f"Gateway returned non-JSON: {exc}") from exc
+    def _reset_workspace_state(self, agent_id: int) -> None:
+        agent_name = f"{self._agent_prefix}{agent_id}"
+        cmd = [
+            "docker",
+            "exec",
+            "openclaw-gateway",
+            "sh",
+            "-c",
+            f"rm -rf /home/node/.openclaw/workspaces/{agent_name}/state/*",
+        ]
+        result = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()[:200]
+            print(
+                f"[openclaw] warning: workspace reset failed for {agent_name}: {detail}",
+                file=sys.stderr,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -552,9 +636,7 @@ class OpenClawProvider:
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -581,9 +663,7 @@ class OpenClawProvider:
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -610,9 +690,7 @@ class OpenClawProvider:
                 )
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -687,8 +765,7 @@ def build_openclaw_provider_or_die(
         msg = str(exc)
         if "401" in msg or "bearer token" in msg.lower():
             hint = (
-                "Token likely expired — re-capture with: "
-                "TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+                "Token likely expired — re-capture with: TOKEN=$(./scripts/openclaw-bootstrap.sh)"
             )
         elif "400" in msg and "Invalid model" in msg:
             hint = (
@@ -697,8 +774,7 @@ def build_openclaw_provider_or_die(
             )
         else:
             hint = (
-                "Gateway not running — check `docker ps` and re-run "
-                "./scripts/openclaw-bootstrap.sh"
+                "Gateway not running — check `docker ps` and re-run ./scripts/openclaw-bootstrap.sh"
             )
         raise SystemExit(f"Gateway precondition failed: {exc}\nHint: {hint}") from exc
     return provider

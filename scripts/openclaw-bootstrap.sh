@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # openclaw-bootstrap.sh — idempotent first-run setup for a local OpenClaw Gateway
 # with N named agents (agent-0, agent-1, ...), each with its own isolated
-# workspace, auth profile, and bind-mounted skill.
+# workspace, auth profile, and bind-mounted skill. Supports both the existing
+# push-model demos and the Phase 2.5 autonomous loop, where the Gateway needs to
+# reach a host-side sim tool server.
 #
 # Does:
 #   1. Pre-create every dir the Gateway + all N agents will need (as root).
@@ -10,7 +12,8 @@
 #        - agents map: each agent-i entry with its own workspace + model pin
 #   3. Seed each agent-i's auth-profiles.json with the provider api_key.
 #   4. Chown the volume to uid 1000 (node user).
-#   5. Start the Gateway — one --mount per agent so each has its own skill dir.
+#   5. Start the Gateway — one --mount per agent so each has its own skill dir,
+#      plus host-gateway routing for autonomous-loop tool calls back to the host.
 #   6. Wait for /readyz.
 #   7. Probe /v1/chat/completions on agent-0 with a PONG turn (fail fast if
 #      anything in the skill/auth/model chain is broken).
@@ -25,17 +28,21 @@
 #   VOLUME       Named volume for /home/node/.openclaw (default: openclaw-gateway-config)
 #   HOST_IP      Bind address on the host            (default: 127.0.0.1)
 #   PORT         Gateway port                        (default: 18789)
+#   SIM_SERVER_URL URL for host-side sim tools       (default: http://host.docker.internal:18788)
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
-#   TIMEOUT_SECONDS  Per-turn upstream timeout      (default: 600 = 10 min;
+#   TIMEOUT_SECONDS  Upstream timeout               (default: 600 = 10 min;
 #                                                     written to agents.defaults.
 #                                                     timeoutSeconds.  Bump if
 #                                                     Kimi's verbose reasoning on
 #                                                     multi-image prompts exceeds
-#                                                     the Gateway's idle watchdog.)
+#                                                     the Gateway's idle watchdog,
+#                                                     or set to wall_budget + 60
+#                                                     for long-running autonomous
+#                                                     loop kickoff calls.)
 #
 # Provider-specific vars (only the one matching PROVIDER is required):
 #   KIMI_API_KEY   (PROVIDER=kimi)   Moonshot/Kimi API key
@@ -81,6 +88,7 @@ IMAGE="${IMAGE:-ghcr.io/openclaw/openclaw:2026.4.14}"
 VOLUME="${VOLUME:-openclaw-gateway-config}"
 HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT="${PORT:-18789}"
+SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
 SKILLS_DIR="${SKILLS_DIR:-${PWD}/skills/ai2thor-navigator}"
 SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
@@ -212,6 +220,7 @@ log "image        : $IMAGE"
 log "container    : $CONTAINER"
 log "volume       : $VOLUME"
 log "bind         : ${HOST_IP}:${PORT}"
+log "sim server   : $SIM_SERVER_URL"
 log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGENT_PREFIX}$((AGENTS-1)))"
 log "provider     : $PROVIDER"
 log "model        : $MODEL"
@@ -489,7 +498,9 @@ skill_basename="$(basename "$SKILLS_DIR")"
 mount_args=(
     -p "${HOST_IP}:${PORT}:18789"
     -v "$VOLUME:/home/node/.openclaw"
+    --add-host=host.docker.internal:host-gateway
     -e OPENCLAW_AUTH_MODE=token
+    -e "SIM_SERVER_URL=${SIM_SERVER_URL}"
     # Gateway plugins read the provider key from the env var named by the plugin
     # manifest (providerAuthEnvVars); the value comes from the roboclaws-side
     # secret (KIMI_API_KEY or NV_API_KEY, depending on PROVIDER).
