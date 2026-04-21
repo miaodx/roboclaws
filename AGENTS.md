@@ -29,6 +29,10 @@ If instructions conflict, priority is:
 uv --version && uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
 ```
 
+Prefer `uv` when available — it's faster and already used for the venv at `.venv/`.
+If a new optional-extras group is needed (e.g. `[openclaw]` for the MCP server),
+install it with `uv pip install -e ".[dev,openclaw]"`.
+
 ### 1.2 Verify AI2-THOR is available
 
 ```bash
@@ -39,10 +43,55 @@ Note: AI2-THOR will download a Unity build (~1GB) on first use.
 
 ### 1.3 Verify VLM access
 
+Local sessions keep API keys in the repo-local `.env` (gitignored). Load them into
+the current shell before running anything that calls a real VLM:
+
 ```bash
-# At least one of these should be set
-python -c "import os; assert os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('OPENAI_API_KEY'), 'No VLM API key set'"
+set -a && source .env && set +a
+# Expected keys after source:
+#   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
+#   NV_API_KEY           — Nvidia inference endpoints (optional, for Phase 2.4)
+#   ANTHROPIC_API_KEY or OPENAI_API_KEY — direct VLM path (optional)
 ```
+
+Sanity check:
+
+```bash
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('OPENAI_API_KEY'), 'No VLM API key set — did you source .env?'"
+```
+
+`.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.
+
+### 1.4 Docker hygiene (OpenClaw local runs)
+
+Before starting a new Gateway, make sure no stale one is still bound to the ports:
+
+```bash
+docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -E 'openclaw-gateway' || echo "no stale gateway"
+# If a gateway is still running from an earlier session:
+docker rm -f openclaw-gateway
+
+# While you're there, consider stopping other unused containers on the same host
+# that you no longer need — Gateway needs ports 18788/18789 free:
+docker ps --format '{{.Names}}\t{{.Image}}'
+```
+
+After your run, leave the Gateway on `profile: minimal` (production-intent state) or
+tear it down explicitly: `docker rm -f openclaw-gateway`. Do NOT leave it on
+`profile: coding` — see `.planning/phases/02.6-openclaw-mcp-tools-integration/` threat T-02.6-27.
+
+### 1.5 Pytest env isolation (machine-local)
+
+On systems with ROS jazzy installed (this host, for example), `pytest` picks up
+`/opt/ros/jazzy/lib/python3.12/site-packages/launch_testing` and fails on a missing
+`lark` import. Strip the parent env before running pytest:
+
+```bash
+env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" \
+  .venv/bin/pytest -x -q
+```
+
+This is a machine-local quirk, not a repo issue.
 
 ---
 

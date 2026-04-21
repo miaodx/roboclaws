@@ -102,7 +102,26 @@ Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavio
 
 **If the session IS local** (you have `docker`, a real `KIMI_API_KEY` / `ANTHROPIC_API_KEY`, a running Gateway, and AI2-THOR installed): the cloud → local handoff protocol does not apply. Run the real thing yourself, iterate, and report what you observed. No need to file a `local-dev` issue or split bounded changes away from real-hardware probes — a local session owns both. The cloud/local split exists to stop *cloud* sessions from papering over missing validation; it does not constrain a local session from carrying a full phase end-to-end.
 
-For the OpenClaw Gateway path specifically, the exact local setup (Docker one-liner, required bind mount, troubleshooting) lives in `docs/openclaw-local.md`. Follow that before running `examples/openclaw_demo.py` locally.
+### Local preflight ritual (quick reference)
+
+Full checklist in `AGENTS.md § 1`. Short form before any real-hardware run:
+
+```bash
+# 1. Load repo-local keys (gitignored; never commit .env)
+set -a && source .env && set +a          # exports KIMI_API_KEY, NV_API_KEY, etc.
+
+# 2. Install / refresh deps with uv if anything pyproject-side changed
+uv pip install -e ".[dev,openclaw]"      # omit [openclaw] if not touching the MCP path
+
+# 3. Docker hygiene — free ports 18788/18789 before bootstrapping a Gateway
+docker ps -a --format '{{.Names}}\t{{.Status}}' | grep openclaw-gateway && docker rm -f openclaw-gateway
+# (also scan `docker ps` for unrelated containers you no longer need)
+
+# 4. Pytest on this host needs ROS env stripped (lark import fails otherwise):
+env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" .venv/bin/pytest -x -q
+```
+
+For the OpenClaw Gateway path specifically, the exact local setup (Docker one-liner, required bind mount, troubleshooting) lives in `docs/openclaw-local.md`. Follow that before running `examples/openclaw_demo.py` or `examples/openclaw_nav_autonomous.py` locally.
 
 ## Design principles
 
