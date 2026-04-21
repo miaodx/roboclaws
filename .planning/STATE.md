@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: executing
-stopped_at: "Phase 02.6 plan 01 (mcp-server) complete. Wave 1 awaiting orchestrator to advance."
-last_updated: "2026-04-21T10:00:55Z"
+stopped_at: Phase 02.6 plan 02 (bootstrap-seeds-mcp-and-profile) complete. Wave 1 continues.
+last_updated: "2026-04-21T10:14:31.601Z"
 last_activity: 2026-04-21 -- Phase 02.6 plan 01 (mcp-server) complete
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
-  percent: 14
+  completed_plans: 2
+  percent: 29
 ---
 
 # Project State
@@ -58,6 +58,7 @@ Progress: [█████████████████░░░] 83%
 - Trend: Stable (Phase 2.2 shipped clean 2026-04-16, Phase 2.3 cleanly declined 2026-04-20)
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
+| Phase 02.6 P02 | 25min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,7 @@ Recent decisions affecting current work:
 - **Phase 2.2 (2026-04-16)**: "Long-running" = within a single game run; no cross-run MEMORY persistence.
 - **Phase 2.1**: Gateway transport is `POST /v1/chat/completions` with `model="openclaw/<agentId>"`; not `/tools/invoke`.
 - **Phase 2.1**: Inline base64 image transport; no bind mount.
+- Phase 02.6 plan 02 (2026-04-21): ROBOCLAWS_TOOL_PROFILE validated against {minimal, coding, messaging} with hard die 1 on typos (T-02.6-06). SIM_SERVER_URL kept as translate-and-warn fallback one wave; plan 05 removes it. main fallback agent intentionally left without tools.profile (Gateway insists on it existing but never routes). Test pattern: line-based heredoc extraction + base-path replacement exec's python3 against tmp config root (docker-free regression coverage).
 
 ### Pending Todos
 
@@ -108,9 +110,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21 (Phase 02.6 plan 01 execution — sequential executor)
-Stopped at: Phase 02.6 plan 01 (mcp-server) complete. 4 tasks committed (e2337cd, 836492c, 979fe3e, 6a0e79d). 14 unit tests passing, ruff clean, localhost bind by default. Wave 1 ready for orchestrator to advance.
-Resume file: `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-01-mcp-server-SUMMARY.md`
+Last session: 2026-04-21T10:14:26.373Z
+Stopped at: Phase 02.6 plan 02 (bootstrap-seeds-mcp-and-profile) complete. Wave 1 continues.
+Resume file: None
 
 ## Dual-Stack Workflow
 
