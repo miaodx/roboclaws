@@ -23,18 +23,46 @@ def test_parse_args_defaults() -> None:
     assert args.skip_bootstrap is False
 
 
-def test_kickoff_prompt_describes_exec_http_flow() -> None:
+def test_kickoff_prompt_is_mcp_era_and_short() -> None:
+    """The kickoff prompt targets the MCP tool surface (plan 02.6-04 D-07).
+
+    <= 10 non-empty lines, mentions the three roboclaws__ tools, preserves
+    the observe-before-act + human_message behaviors called out in CONTEXT.md,
+    and contains zero references to the Phase-2.5 curl/exec/image/tmp escape
+    hatches.
+    """
     prompt = _kickoff_prompt(50)
-    assert "use the read tool to read skills/ai2thor-navigator/SKILL.md" in prompt
-    assert "Do not claim that paired nodes" in prompt
-    assert "curl -sS http://host.docker.internal:18788/observe" in prompt
-    assert "target budget is 50 physical moves" in prompt
-    assert "Default behavior is observe -> think -> move" in prompt
-    assert '"direction":"MoveAhead","reason":"clear hallway continues"' in prompt
-    assert "Do not detour through OpenClaw's generic image tool" in prompt
-    assert "do not use /tmp paths because the Gateway rejects them" in prompt
-    assert "Be agentic" in prompt
-    assert "explicitly mention the human_message" in prompt
+
+    # Budget: <= 10 non-empty lines.
+    non_empty = [line for line in prompt.splitlines() if line.strip()]
+    assert len(non_empty) <= 10, f"prompt has {len(non_empty)} non-empty lines: {non_empty!r}"
+
+    # Forbidden substrings — none of the Phase-2.5 escape hatches may appear.
+    forbidden = [
+        "curl",
+        "exec",
+        "/tmp",
+        "image tool",
+        "data:image",
+        "base64",
+        "host.docker.internal",
+        "18788",
+        "HTTP",
+    ]
+    hits = [f for f in forbidden if f in prompt]
+    assert hits == [], f"forbidden substrings in kickoff prompt: {hits}"
+
+    # Required content.
+    assert "roboclaws" in prompt, "prompt must name the roboclaws MCP server namespace"
+    assert "observe" in prompt
+    assert "move" in prompt
+    assert "done" in prompt
+    # Budget interpolation must happen.
+    assert "50" in prompt, "max_moves budget must be interpolated into prompt"
+    # Preserve the human_message ack behavior (D-10, plan must-have).
+    assert "human_message" in prompt
+    # Delegate to the skill, don't duplicate it.
+    assert "SKILL.md" in prompt or "skill" in prompt.lower()
 
 
 def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:

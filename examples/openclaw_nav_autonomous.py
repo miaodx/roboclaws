@@ -48,44 +48,25 @@ def _default_output_dir() -> Path:
 
 
 def _kickoff_prompt(max_moves: int) -> str:
+    # MCP-era kickoff (phase 02.6 D-07): delegate the loop mechanics to
+    # skills/ai2thor-navigator/SKILL.md and name the three roboclaws MCP
+    # tools directly. Under profile: minimal the agent has exactly
+    # session_status + roboclaws__{observe,move,done} — no fallbacks to
+    # mention, no curl/exec/image escape hatches to warn against.
     return (
-        "You are navigating a simulated indoor room through tool calls.\n\n"
-        f"Your target budget is {max_moves} physical moves for this run. Treat that as the "
-        "intended horizon, not merely a ceiling: keep working until you are stuck, the budget "
-        "is nearly exhausted, or you have a concrete reason to stop.\n"
-        "Before acting, use the read tool to read "
-        "skills/ai2thor-navigator/SKILL.md and follow it exactly.\n"
-        "The local execution environment is already live. Do not claim that paired nodes, "
-        "companion apps, or execution environments are missing unless the exact curl commands "
-        "below fail in exec.\n"
-        "In this Gateway runtime, observe/move/done are plain HTTP endpoints that you call "
-        "from the exec tool with curl; they are not native OpenClaw tool slots.\n"
-        "Use these exact forms from exec:\n"
-        "- observe: curl -sS http://host.docker.internal:18788/observe\n"
-        "- move: curl -sS -X POST http://host.docker.internal:18788/move "
-        '-H "Content-Type: application/json" '
-        '-d \'{"direction":"MoveAhead","reason":"clear hallway continues"}\'\n'
-        "- done: curl -sS -X POST http://host.docker.internal:18788/done "
-        '-H "Content-Type: application/json" '
-        '-d \'{"reason":"<short reason>"}\'\n'
-        "Start by calling observe through exec before any analysis. Parse the JSON responses, "
-        "then decide the next step. Default behavior is observe -> think -> move. You may take a "
-        "short burst of repeated moves only when you have a concrete local reason such as a clear "
-        "hallway, a safe backtrack, or following a human-directed maneuver; when you do, include "
-        "a brief natural-language reason in the move payload.\n"
-        "Do not detour through OpenClaw's generic image tool for observe frames unless you are "
-        "truly blocked on the JSON response. If you absolutely must use the image tool, pass "
-        "base64 data:image URLs directly or write files under the current workspace/media roots; "
-        "do not use /tmp paths because the Gateway rejects them.\n"
-        "Be agentic: choose the exploration strategy that fits the room, even if it departs from "
-        "a narrow implied checklist, but keep every choice grounded in what you actually "
-        "observed. If a tool response includes human_message, acknowledge it, use the overhead "
-        "map to address the request, and do not call done until you have taken at least one "
-        "follow-up action after receiving the message. When you eventually call done, explicitly "
-        "mention the human_message and what you did about it in the done reason.\n\n"
-        "Avoid ending early just because the room looks quiet. Prefer a sustained exploration "
-        "within the move budget. Call done only when you are stuck, the budget is nearly "
-        "exhausted, or you have clearly completed what seems worthwhile from the current run."
+        "You are navigating an indoor room. Read skills/ai2thor-navigator/SKILL.md "
+        "and follow it exactly.\n"
+        "Use the observe / move / done tools exposed by the `roboclaws` MCP server "
+        "(roboclaws__observe, roboclaws__move, roboclaws__done). Call "
+        "roboclaws__observe before any other action.\n"
+        f"Budget: up to {max_moves} physical moves plus the wall-clock set by the "
+        "caller; pace yourself against both.\n"
+        "Loop observe -> think -> move until you are stuck, the budget is nearly "
+        "exhausted, or you have a concrete reason to stop; then call "
+        "roboclaws__done with a short reason.\n"
+        "If an observe or move response includes a non-null human_message, "
+        "acknowledge it in your next move.reason and take at least one follow-up "
+        "action before calling done."
     )
 
 
