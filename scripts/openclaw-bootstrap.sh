@@ -614,10 +614,6 @@ mount_args=(
     --add-host=host.docker.internal:host-gateway
     -e OPENCLAW_AUTH_MODE=token
     -e "ROBOCLAWS_MCP_URL=${ROBOCLAWS_MCP_URL}"
-    # SIM_SERVER_URL is a no-op placeholder this phase — the Gateway no longer
-    # reads it (MCP tool surface supersedes the HTTP sim-server path).  Plan
-    # 05 Task 1 removes this line entirely when sim_server.py is deleted.
-    -e "SIM_SERVER_URL=${SIM_SERVER_URL}"
     # Gateway plugins read the provider key from the env var named by the plugin
     # manifest (providerAuthEnvVars); the value comes from the roboclaws-side
     # secret (KIMI_API_KEY or NV_API_KEY, depending on PROVIDER).
