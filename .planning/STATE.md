@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
-status: planning
-stopped_at: "Roadmap + state + requirements bootstrapped from `.planning/intel/`; both ingest WARNINGs verified stale and marked RESOLVED. Next action: `/gsd-plan-phase 2.4`."
-last_updated: "2026-04-21T09:00:34.855Z"
-last_activity: 2026-04-20 — new-mode GSD ingest bootstrap (18 docs → intel → roadmap)
+status: executing
+stopped_at: "Phase 02.6 plan 01 (mcp-server) complete. Wave 1 awaiting orchestrator to advance."
+last_updated: "2026-04-21T10:00:55Z"
+last_activity: 2026-04-21 -- Phase 02.6 plan 01 (mcp-server) complete
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 82
+  total_plans: 7
+  completed_plans: 1
+  percent: 14
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-20)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 2.4 — View-experiment A/B (drafted in root `PLAN.md`, awaiting `/gsd-plan-phase 2.4`)
+**Current focus:** Phase 02.6 — openclaw-mcp-tools-integration
 
 ## Current Position
 
-Phase: 2.4 of 3 (View-experiment A/B)
-Plan: 0 of 6 (tentative plan count — refined during planning)
-Status: Ready to plan
-Last activity: 2026-04-20 — new-mode GSD ingest bootstrap (18 docs → intel → roadmap)
+Phase: 02.6 (openclaw-mcp-tools-integration) — EXECUTING
+Plan: 1 of 7 — COMPLETE (mcp-server)
+Status: Executing Phase 02.6; Wave 1 plan complete, awaiting orchestrator
+Last activity: 2026-04-21 -- Phase 02.6 plan 01 (mcp-server) complete
 
-Progress: [████████████████░░░░] 82%
-(18 of 22 historical+active plans complete; Phase 2.4 + 2.5 not started; Phase 3 deferred and excluded from the denominator)
+Progress: [█████████████████░░░] 83%
+(19 of 23 historical+active plans complete; Phase 2.4 + remaining 02.6 plans pending; Phase 3 deferred and excluded from the denominator)
 
 ## Performance Metrics
 
@@ -66,6 +66,9 @@ Progress: [████████████████░░░░] 82%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- **Phase 02.6 plan 01 (2026-04-21)**: MCP server default bind is `127.0.0.1` (localhost-only) per threat model T-02.6-01; Gateway container reaches via `host.docker.internal` → host-gateway → loopback. Bind is NOT env-configurable — only via explicit argument.
+- **Phase 02.6 plan 01 (2026-04-21)**: Trace schema additive-only rule: `tests/fixtures/trace_schema_reference.json` freezes sim_server.py key-sets at phase entry; MCP server emits a SUPERSET. `snapshot_metrics` is the one exception — EQUALITY checked because `run_result_json["sim_server_metrics"]` consumers depend on exact names.
+- **Phase 02.6 plan 01 (2026-04-21)**: `mcp[cli]>=1.27` in `dev` + new `openclaw` extra; NOT in top-level `[project].dependencies` (core library stays installable without the Gateway path, mirroring ai2thor).
 - **Phase 2.3 (LOCKED, 2026-04-20)**: Decline digest-pinning the Gateway image; keep `ghcr.io/openclaw/openclaw:2026.4.14`. One-click rollback digest recorded in ADR.
 - **Phase 2.2 (2026-04-16)**: Ship 3 symmetric Layer 3 tiles (nav / territory / coverage); reject UC1 Persona Showdown framing.
 - **Phase 2.2 (2026-04-16)**: "Long-running" = within a single game run; no cross-run MEMORY persistence.
@@ -105,9 +108,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-20 (new-mode GSD ingest + post-ingest verification)
-Stopped at: Roadmap + state + requirements bootstrapped from `.planning/intel/`; both ingest WARNINGs verified stale and marked RESOLVED. Next action: `/gsd-plan-phase 2.4`.
-Resume file: `/home/mi/ws/gogo/roboclaws/PLAN.md` (drafted Phase 2.4)
+Last session: 2026-04-21 (Phase 02.6 plan 01 execution — sequential executor)
+Stopped at: Phase 02.6 plan 01 (mcp-server) complete. 4 tasks committed (e2337cd, 836492c, 979fe3e, 6a0e79d). 14 unit tests passing, ruff clean, localhost bind by default. Wave 1 ready for orchestrator to advance.
+Resume file: `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-01-mcp-server-SUMMARY.md`
 
 ## Dual-Stack Workflow
 
