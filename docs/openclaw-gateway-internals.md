@@ -110,6 +110,89 @@ actual `/v1/chat/completions` path with a plain "reply PONG" prompt; if
 the model returns a tool call instead of text content, it won't survive
 under the Gateway's agent framework in its default config.
 
+## MCP config in openclaw.json
+
+Phase 2.6 added an MCP tool surface — the autonomous-loop agent reaches the
+AI2-THOR engine through three first-class MCP tools (`roboclaws__observe`,
+`roboclaws__move`, `roboclaws__done`) over streamable-http, not via the
+Phase 2.5 `exec`-and-`curl` contract. The Gateway's MCP loader lives at
+`/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (image `2026.4.14`) and
+expects this exact shape under `mcp.servers.<name>`:
+
+```jsonc
+{
+  "transport": "streamable-http",  // literal "transport", NOT "type"
+  "url": "http://host.docker.internal:18788/mcp"
+}
+```
+
+Accepted `transport` values: `"streamable-http"` or `"sse"`. Anything else
+(e.g., `"http"`) fails silently at load — the Gateway logs
+`[bundle-mcp] failed to start server "<name>" (<url>): Error: SSE error: Non-200 status code (400)`
+and the agent reports "I don't have access to a tool named `<name>`" when
+asked to call it. The `openclaw mcp set` CLI does NOT validate the JSON; it
+writes whatever you give it straight to config. `scripts/openclaw-bootstrap.sh`
+seeds the correct shape before first container start — don't hand-roll an
+alternate.
+
+### Restart gotcha: seed MCP config before first start
+
+Changing `mcp.servers` on a running Gateway triggers:
+
+```
+[reload] config change requires gateway restart (mcp)
+[gateway] signal SIGUSR1 received
+[gateway] restart mode: full process restart (spawned pid 174)
+```
+
+In Docker, that PID-1 restart **is** a container exit (`Exited (0)`).
+Recovery requires `docker start openclaw-gateway`. Bootstrap mitigates this
+by seeding `mcp.servers` (and the matching `agents.list[<n>].tools.profile`)
+into `openclaw.json` via the pre-seed python heredoc BEFORE the first
+`docker run`. Don't use `openclaw mcp set` on a live container unless you
+mean to restart.
+
+### Tool-policy profiles
+
+`agents.list[<n>].tools.profile` controls the agent's tool allowlist and
+accepts exactly three values: `"minimal"`, `"coding"`, or `"messaging"`
+(source: `/app/dist/tool-policy-CwZyJfFc.js:352-354`).
+
+- `minimal` — `session_status` + `update_plan` only, plus whatever MCP
+  servers expose. No `exec`, no `read`/`write`, no generic `image`, no
+  `browser`, no `web_fetch`. Phase 2.6 uses this; live probe 3 in
+  `02.6-LOCAL-PROBE-RESULTS.md` confirms the agent enumerates exactly 4
+  tools (`session_status` + three `roboclaws__*`) under this profile.
+- `coding` — the default if `tools` is unset. ~25 tools including the
+  escape hatches (`exec`, fs, `image`, `browser`). Correct for general agent
+  work; wrong for autonomous AI2-THOR navigation — Phase 2.5 proved the
+  agent drifts straight back to `exec`-and-`curl` when those tools are
+  available, no matter what the prompt says.
+- `messaging` — a middle ground; unused in roboclaws today.
+
+### Tool-name prefix convention
+
+Tools registered by an MCP server named `"roboclaws"` with internal tool
+name `observe` appear to the agent as `roboclaws__observe` — double-underscore
+separator, server name prefix. The Gateway surfaces tools under this
+convention regardless of the transport. Phase 2.6 acceptance criteria
+(`grep "roboclaws__observe" logs`) rely on this exact shape.
+
+### Context-overhead
+
+Under `profile: minimal` + three MCP tools, per-turn prompt overhead is
+roughly 43% smaller than under `profile: coding` against the pinned
+`ghcr.io/openclaw/openclaw:2026.4.14` image (live measurement: 6,440
+tokens vs 11,335 tokens — ratio 0.568). That saves budget for Kimi's
+multi-image reasoning on long autonomous runs. Full live-probed numbers
++ the spike-vs-live baseline comparison live in
+`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`
+(Probe 6). Spike evidence for the transport-key and SIGUSR1 gotchas lives
+in
+`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`.
+The Phase 2.6 lessons narrative lives in
+[`retrospectives/phase-2.6.md`](retrospectives/phase-2.6.md).
+
 ## Useful spelunking commands
 
 ```bash
