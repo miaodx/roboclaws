@@ -94,6 +94,40 @@ VOLUME="${VOLUME:-openclaw-gateway-config}"
 HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT="${PORT:-18789}"
 SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
+
+# ROBOCLAWS_MCP_URL seeds mcp.servers.roboclaws.url in openclaw.json so the
+# Gateway exposes our MCP tool surface (observe/move/done) to the agent.  Must
+# be set BEFORE first container start — mutating mcp.* on a running Gateway
+# triggers SIGUSR1 → PID-1 exit → container stop (spike F-3).  Default uses
+# host.docker.internal (container→host loopback), same route SIM_SERVER_URL
+# used.  Legacy SIM_SERVER_URL still accepted as a deprecated fallback that
+# appends /mcp and emits a warning; plan 05 removes it entirely when the
+# sim_server.py HTTP path is deleted.
+if [[ -n "${ROBOCLAWS_MCP_URL:-}" ]]; then
+    :  # explicit override wins
+elif [[ -n "${SIM_SERVER_URL:-}" && "${SIM_SERVER_URL}" != "http://host.docker.internal:18788" ]]; then
+    # Only warn when the legacy var was set to a non-default value — the
+    # default is baked into line 96 above and callers who never touched
+    # SIM_SERVER_URL should not see a deprecation message.
+    printf '[bootstrap] %s\n' "WARN: SIM_SERVER_URL is deprecated and ignored as the primary; use ROBOCLAWS_MCP_URL" >&2
+    ROBOCLAWS_MCP_URL="${SIM_SERVER_URL%/}/mcp"
+else
+    ROBOCLAWS_MCP_URL="http://host.docker.internal:18788/mcp"
+fi
+
+# ROBOCLAWS_TOOL_PROFILE controls which tool allowlist the Gateway applies to
+# every agent.  Default "minimal" keeps the surface to session_status + our
+# MCP tools (spike F-2).  "coding" and "messaging" exist for local probes
+# only; a typo dies 1 rather than silently broadening the attack surface.
+ROBOCLAWS_TOOL_PROFILE="${ROBOCLAWS_TOOL_PROFILE:-minimal}"
+case "$ROBOCLAWS_TOOL_PROFILE" in
+    minimal|coding|messaging) ;;
+    *)
+        printf '[bootstrap] ERROR: %s\n' "Unsupported ROBOCLAWS_TOOL_PROFILE: '$ROBOCLAWS_TOOL_PROFILE' (supported: minimal, coding, messaging)" >&2
+        exit 1
+        ;;
+esac
+
 SKILLS_DIR="${SKILLS_DIR:-${PWD}/skills/ai2thor-navigator}"
 SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
@@ -262,7 +296,8 @@ log "image        : $IMAGE"
 log "container    : $CONTAINER"
 log "volume       : $VOLUME"
 log "bind         : ${HOST_IP}:${PORT}"
-log "sim server   : $SIM_SERVER_URL"
+log "mcp url      : $ROBOCLAWS_MCP_URL"
+log "tool profile : $ROBOCLAWS_TOOL_PROFILE"
 log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGENT_PREFIX}$((AGENTS-1)))"
 log "provider     : $PROVIDER"
 [[ "$PROVIDER" == "kimi" ]] && log "provider mode: $KIMI_PROVIDER_MODE"
@@ -376,6 +411,8 @@ docker run --rm --user root \
     -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
     -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
     -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
+    -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
+    -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
     "$IMAGE" sh -lc '
 set -eu
 python3 - <<'"'"'PY'"'"'
@@ -551,6 +588,10 @@ mount_args=(
     -v "$VOLUME:/home/node/.openclaw"
     --add-host=host.docker.internal:host-gateway
     -e OPENCLAW_AUTH_MODE=token
+    -e "ROBOCLAWS_MCP_URL=${ROBOCLAWS_MCP_URL}"
+    # SIM_SERVER_URL is a no-op placeholder this phase — the Gateway no longer
+    # reads it (MCP tool surface supersedes the HTTP sim-server path).  Plan
+    # 05 Task 1 removes this line entirely when sim_server.py is deleted.
     -e "SIM_SERVER_URL=${SIM_SERVER_URL}"
     # Gateway plugins read the provider key from the env var named by the plugin
     # manifest (providerAuthEnvVars); the value comes from the roboclaws-side
