@@ -46,7 +46,7 @@ Phase 3 remains deferred indefinitely.
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
 - [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (issue #52 prereqs shipped pre-ingest 2026-04-15)
 - [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
-- [ ] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21
+- [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -219,7 +219,7 @@ Plans:
 - [x] 02.6-04: Rewire `examples/openclaw_nav_autonomous.py` to MCP contract
 - [x] 02.6-05: Delete superseded HTTP sim_server + its tests
 - [x] 02.6-06: Live-probe gate — 5/6 probes PASS; Probe 6 ratio 0.568 (SC#4 threshold revised to ≤0.60; see Probe 6 notes in `02.6-LOCAL-PROBE-RESULTS.md`)
-- [ ] 02.6-07: Docs update — retrospective + `docs/openclaw-local.md` + `docs/openclaw-gateway-internals.md`
+- [x] 02.6-07: Docs update — retrospective + `docs/openclaw-local.md` + `docs/openclaw-gateway-internals.md`
 **UI hint**: yes
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
@@ -257,5 +257,5 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
 | 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
-| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 6/7 | In progress (wave 4 of 5 complete — SC#4 revised to ≤0.60 after live-probe) | - |
+| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
