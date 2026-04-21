@@ -75,7 +75,7 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       tint each agent's trail by SOUL color. Palette:
       `aggressive=red`, `defensive=blue`, `cooperative=green`, `default=grey`.
 
-### Active (Phase 2.4 + 2.6)
+### Active (Phase 2.4; Phase 2.6 shipped)
 
 - [x] **A-01** (image-payload contract): SHIPPED 2026-04-15 via commit
       `ddfb523` — `examples/territory_game.py:316` and
@@ -100,6 +100,10 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       `output/view-experiment/results.jsonl`. Bootstrap 95% CIs + paired
       Wilcoxon tests. Wallet gates: Kimi `--max-usd 15`, NVIDIA `--max-usd 5`,
       $20 hard cap. Decision record: which variant graduates to default.
+      Planned in GSD on 2026-04-21 under
+      `.planning/phases/02.4-view-experiment-ab/`; `02.4-01` lands
+      `openclaw_demo.py` first, `02.4-02` expands the same surface to
+      territory/coverage.
 - [ ] **A-05** (ship winning variant as default): DEFERRED 2026-04-20.
       After A-04's decision record, would wire the winning variant into the
       default `--views`. Was mapped to old Phase 2.5 ("ship winning view");
@@ -181,7 +185,7 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-03 | Phase 2.4 (harness dependency) | Pending |
 | A-04 | Phase 2.4 | Pending |
 | A-05 | (deferred — formerly Phase 2.5 "ship winning view"; awaits a new phase) | Deferred |
-| A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Pending |
+| A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Complete (shipped 2026-04-21) |
 
 **Coverage:**
 - v1 requirements: 17 total (A-06 added 2026-04-20)

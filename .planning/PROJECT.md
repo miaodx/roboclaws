@@ -40,17 +40,16 @@ visible output (GIFs, report.html) for every feature.
 
 - [ ] **REQ-view-experiment-ab** — A/B/C experiment across baseline / map-v2 /
       map-v2+chase-cam; Kimi workhorse sweep + NVIDIA confirm; decision record
-      on which variant graduates as default. (Drafted in PLAN.md § Phase 2.4;
-      not yet planned in GSD.)
+      on which variant graduates as default. Planned in GSD under
+      `.planning/phases/02.4-view-experiment-ab/`; `02.4-01` scopes the
+      single-agent `openclaw_demo.py` path first.
 - [ ] **REQ-vlm-provider-pluggable — NvidiaProvider extension** — extend the
       provider protocol with a fourth curated provider (`nvidia/nvidia/nemotron-nano-12b-v2-vl`)
       for the A/B NVIDIA confirm arm. Subsumed under REQ-vlm-provider-pluggable.
-- [ ] **Image-payload contract resolution (issue #52 prerequisite)** — game
-      loops currently pass `images=[]` to `provider.get_action`; the view
-      experiment requires real image flow-through. Resolve before A/B sweep.
-- [ ] **Coverage semantics resolution (issue #52 prerequisite)** —
-      field-of-view vs visited-cells disagreement between SPEC and shipped
-      code. Resolve before A/B sweep so `coverage_fraction` has one meaning.
+- [x] **Image-payload contract resolution (issue #52 prerequisite)** — shipped
+      2026-04-15 pre-ingest (`ddfb523`); no longer blocks Phase 2.4 planning.
+- [x] **Coverage semantics resolution (issue #52 prerequisite)** — shipped
+      pre-ingest; field-of-view accounting is the canonical shipped behavior.
 
 ### Out of Scope
 
@@ -107,11 +106,10 @@ visible output (GIFs, report.html) for every feature.
   smoke is Kimi coding-tier (~$0.10 per 100-step 2-game run). Phase 2.4
   wallet gates: `--max-usd 15` Kimi sweep, `--max-usd 5` NVIDIA confirm,
   $20 hard cap.
-- **Known open design questions (issue #52).** The SPEC and shipped code
-  disagree on (a) whether game loops pass images to `get_action` (SPEC:
-  yes, shipped: `images=[]`), and (b) coverage semantics (SPEC: field of
-  view, shipped: visited-cells). Both gate Phase 2.4's A/B producing
-  meaningful data.
+- **Issue #52 prerequisites are resolved.** The original ingest warning
+  around image flow-through + coverage semantics was verified stale on
+  2026-04-20; the shipped code already matched the intended Phase 2.4
+  contract before GSD planning.
 
 ## Constraints
 
@@ -177,4 +175,4 @@ visible output (GIFs, report.html) for every feature.
 | **DEC-phase-2.2-matrix-not-showdown**. Ship 3 symmetric Layer 3 tiles (nav / territory / coverage); reject UC1 "Persona Showdown" framing. | User strategic call at 2026-04-16 final gate despite subagent CEO critique. | ✓ Good |
 
 ---
-*Last updated: 2026-04-20 after new-mode ingest bootstrap (18 docs → intel/ → roadmap)*
+*Last updated: 2026-04-21 after planning Phase 2.4 into GSD (`.planning/phases/02.4-view-experiment-ab/`)*
