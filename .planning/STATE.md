@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: executing
-stopped_at: Phase 02.6 plan 02 (bootstrap-seeds-mcp-and-profile) complete. Wave 1 continues.
-last_updated: "2026-04-21T10:14:31.601Z"
-last_activity: 2026-04-21 -- Phase 02.6 plan 01 (mcp-server) complete
+stopped_at: Phase 02.6 plan 03 (skill-md-shrink) complete. Wave 1 done; plans 04-07 pending.
+last_updated: "2026-04-21T10:21:00Z"
+last_activity: 2026-04-21 -- Phase 02.6 plan 03 (skill-md-shrink) complete
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
-  percent: 29
+  completed_plans: 3
+  percent: 43
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-20)
 ## Current Position
 
 Phase: 02.6 (openclaw-mcp-tools-integration) — EXECUTING
-Plan: 1 of 7 — COMPLETE (mcp-server)
-Status: Executing Phase 02.6; Wave 1 plan complete, awaiting orchestrator
-Last activity: 2026-04-21 -- Phase 02.6 plan 01 (mcp-server) complete
+Plan: 3 of 7 — COMPLETE (skill-md-shrink). Wave 1 (plans 01, 02, 03) done.
+Status: Executing Phase 02.6; Wave 1 plans complete, awaiting orchestrator to dispatch plans 04-07
+Last activity: 2026-04-21 -- Phase 02.6 plan 03 (skill-md-shrink) complete
 
 Progress: [█████████████████░░░] 83%
 (19 of 23 historical+active plans complete; Phase 2.4 + remaining 02.6 plans pending; Phase 3 deferred and excluded from the denominator)
@@ -59,6 +59,7 @@ Progress: [█████████████████░░░] 83%
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
+| Phase 02.6 P03 | 5min  | 1 task  | 1 file  |
 
 ## Accumulated Context
 
@@ -76,6 +77,8 @@ Recent decisions affecting current work:
 - **Phase 2.1**: Gateway transport is `POST /v1/chat/completions` with `model="openclaw/<agentId>"`; not `/tools/invoke`.
 - **Phase 2.1**: Inline base64 image transport; no bind mount.
 - Phase 02.6 plan 02 (2026-04-21): ROBOCLAWS_TOOL_PROFILE validated against {minimal, coding, messaging} with hard die 1 on typos (T-02.6-06). SIM_SERVER_URL kept as translate-and-warn fallback one wave; plan 05 removes it. main fallback agent intentionally left without tools.profile (Gateway insists on it existing but never routes). Test pattern: line-based heredoc extraction + base-path replacement exec's python3 against tmp config root (docker-free regression coverage).
+- **Phase 02.6 plan 03 (2026-04-21)**: SKILL.md budget is body-only (post second-`---`, non-blank lines), measured via awk extractor not `wc -l`. Final: 10 body lines / 25 total (down from 245, ~90% reduction). Don't enumerate forbidden tools in SKILL.md — profile: minimal removes them from the agent surface, so documenting "don't use exec" both wastes tokens AND risks re-teaching the behavior.
+- **Phase 02.6 plan 03 (2026-04-21)**: Prefixed tool-name convention (`roboclaws__observe` etc., double-underscore separator per spike F-2) is load-bearing in SKILL.md — the agent reads exactly the name the tool registry exposes, no translation. Dropped the optional SOULs pointer because SOULs load into `SOUL.md` via bootstrap, not via skill-file reference.
 
 ### Pending Todos
 
@@ -110,8 +113,8 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21T10:14:26.373Z
-Stopped at: Phase 02.6 plan 02 (bootstrap-seeds-mcp-and-profile) complete. Wave 1 continues.
+Last session: 2026-04-21T10:21:00Z
+Stopped at: Phase 02.6 plan 03 (skill-md-shrink) complete. Wave 1 done; plans 04-07 pending orchestrator dispatch.
 Resume file: None
 
 ## Dual-Stack Workflow
