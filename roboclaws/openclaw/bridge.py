@@ -24,8 +24,12 @@ import io
 import json
 import os
 import re
+import subprocess
+import sys
+import threading
 import time
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 import numpy as np
 from PIL import Image
@@ -48,6 +52,14 @@ _DEFAULT_MAX_TOKENS = 1024
 # "Model unavailable" error.  Connect errors, protocol errors, and HTTP 4xx/5xx
 # are NOT retried here — they fail fast so the caller can surface the root cause.
 _RETRY_ATTEMPTS = 3
+
+
+@dataclass
+class RunResult:
+    final_message: str
+    wallclock_s: float
+    terminated_by: Literal["done", "wall_clock", "error"]
+    debug: dict[str, Any] = field(default_factory=dict)
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -114,6 +126,7 @@ class OpenClawBridge:
             timeout=timeout,
         )
         self._last_step_metrics: dict[str, Any] = {}
+        self._last_run_metrics: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -126,6 +139,10 @@ class OpenClawBridge:
     def get_last_step_metrics(self) -> dict[str, Any]:
         """Return timing/payload telemetry for the last bridge step."""
         return dict(self._last_step_metrics)
+
+    def get_last_run_metrics(self) -> dict[str, Any]:
+        """Return timing/payload telemetry for the last autonomous start_run call."""
+        return dict(self._last_run_metrics)
 
     def __enter__(self) -> OpenClawBridge:
         return self
@@ -176,6 +193,114 @@ class OpenClawBridge:
         }
         body = self._post_chat(payload)
         return _extract_content(body)
+
+    def start_run(
+        self,
+        agent_id: int,
+        prompt: str,
+        wall_budget_s: float,
+        done_event: threading.Event,
+    ) -> RunResult:
+        """Kick off a long-running autonomous Gateway run for one named agent."""
+        del done_event  # Reserved for future early-abort integration from the sim server.
+
+        per_call_timeout = wall_budget_s + 60.0
+        run_metrics: dict[str, Any] = {
+            "model": self.model_id(agent_id),
+            "agent_id": agent_id,
+            "wall_budget_s": round_seconds(wall_budget_s),
+            "http_timeout_s": round_seconds(per_call_timeout),
+            "prompt_chars": len(prompt),
+            "prompt_lines": prompt.count("\n") + 1,
+        }
+        reset_started = time.perf_counter()
+        self._reset_workspace_state(agent_id)
+        run_metrics["workspace_reset_seconds"] = round_seconds(time.perf_counter() - reset_started)
+        started = time.monotonic()
+        payload = {
+            "model": self.model_id(agent_id),
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": _DEFAULT_MAX_TOKENS,
+        }
+        run_metrics["request_payload_chars"] = len(json.dumps(payload))
+        self._last_run_metrics = dict(run_metrics)
+
+        import httpx
+
+        try:
+            resp = self._client.post(
+                _CHAT_PATH,
+                json=payload,
+                timeout=per_call_timeout,
+            )
+        except httpx.ReadTimeout:
+            run_metrics.update(
+                {
+                    "terminated_by": "wall_clock",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "read_timeout",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
+            return RunResult(
+                final_message="<wall-clock timeout - no final message>",
+                wallclock_s=round_seconds(time.monotonic() - started),
+                terminated_by="wall_clock",
+                debug=dict(run_metrics),
+            )
+        except httpx.ConnectError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "connect_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
+            raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
+        except httpx.RemoteProtocolError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "remote_protocol_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
+            raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
+        except httpx.HTTPError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "http_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
+            raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+
+        body = self._parse_json_response(resp)
+        final_message = _extract_content(body)
+        usage = body.get("usage")
+        choice = ((body.get("choices") or [{}])[0]) if isinstance(body, dict) else {}
+        run_metrics.update(
+            {
+                "terminated_by": "done",
+                "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                "http_status_code": int(resp.status_code),
+                "response_bytes": len(resp.content),
+                "finish_reason": choice.get("finish_reason"),
+                "usage": usage if isinstance(usage, dict) else None,
+                "final_message_chars": len(final_message),
+            }
+        )
+        self._last_run_metrics = dict(run_metrics)
+        return RunResult(
+            final_message=final_message,
+            wallclock_s=round_seconds(time.monotonic() - started),
+            terminated_by="done",
+            debug=dict(run_metrics),
+        )
 
     # ------------------------------------------------------------------
     # Tool invocation
@@ -306,7 +431,16 @@ class OpenClawBridge:
             raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
         except httpx.HTTPError as exc:
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+        return self._parse_json_response(resp)
 
+    def _parse_json_response(self, resp: Any) -> dict[str, Any]:
+        self._raise_for_http_status(resp)
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise OpenClawUnavailable(f"Gateway returned non-JSON: {exc}") from exc
+
+    def _raise_for_http_status(self, resp: Any) -> None:
         if resp.status_code == 401:
             raise OpenClawUnavailable("Gateway rejected bearer token (401)")
         if resp.status_code == 404:
@@ -324,7 +458,6 @@ class OpenClawBridge:
             raise OpenClawUnavailable(f"Gateway returned HTTP 400: {text[:200]}")
         if resp.status_code >= 400:
             text = resp.text or ""
-            # Try to surface {"error": {"message": "..."}} OpenAI-style bodies
             msg = text[:200]
             try:
                 err = resp.json().get("error") or {}
@@ -334,10 +467,28 @@ class OpenClawBridge:
                 pass
             raise OpenClawUnavailable(f"Gateway returned HTTP {resp.status_code}: {msg}")
 
-        try:
-            return resp.json()
-        except ValueError as exc:
-            raise OpenClawUnavailable(f"Gateway returned non-JSON: {exc}") from exc
+    def _reset_workspace_state(self, agent_id: int) -> None:
+        agent_name = f"{self._agent_prefix}{agent_id}"
+        cmd = [
+            "docker",
+            "exec",
+            "openclaw-gateway",
+            "sh",
+            "-c",
+            f"rm -rf /home/node/.openclaw/workspaces/{agent_name}/state/*",
+        ]
+        result = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()[:200]
+            print(
+                f"[openclaw] warning: workspace reset failed for {agent_name}: {detail}",
+                file=sys.stderr,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -377,8 +528,8 @@ def _extract_content(body: dict[str, Any]) -> str:
         return text
     # Reasoning-only fallback: some providers surface the chain-of-thought in
     # a separate field when the answer got truncated.
-    for field in ("reasoning", "reasoning_content"):
-        val = message.get(field)
+    for reasoning_field in ("reasoning", "reasoning_content"):
+        val = message.get(reasoning_field)
         if isinstance(val, str) and val.strip():
             return val
     return text
@@ -552,9 +703,7 @@ class OpenClawProvider:
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -581,9 +730,7 @@ class OpenClawProvider:
                 self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -610,9 +757,7 @@ class OpenClawProvider:
                 )
                 self._last_turn_metrics = {
                     "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(
-                            time.monotonic() - started
-                        ),
+                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
                         "openclaw_retry_delay_seconds": round_seconds(
                             retry_delay_seconds_this_call
                         ),
@@ -687,8 +832,7 @@ def build_openclaw_provider_or_die(
         msg = str(exc)
         if "401" in msg or "bearer token" in msg.lower():
             hint = (
-                "Token likely expired — re-capture with: "
-                "TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+                "Token likely expired — re-capture with: TOKEN=$(./scripts/openclaw-bootstrap.sh)"
             )
         elif "400" in msg and "Invalid model" in msg:
             hint = (
@@ -697,8 +841,7 @@ def build_openclaw_provider_or_die(
             )
         else:
             hint = (
-                "Gateway not running — check `docker ps` and re-run "
-                "./scripts/openclaw-bootstrap.sh"
+                "Gateway not running — check `docker ps` and re-run ./scripts/openclaw-bootstrap.sh"
             )
         raise SystemExit(f"Gateway precondition failed: {exc}\nHint: {hint}") from exc
     return provider
