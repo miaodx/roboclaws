@@ -31,4 +31,36 @@ context, no hidden notes — can resume directly.
 
 ---
 
-_No active TODOs. Next work should come from a new plan or issue._
+## Active
+
+- **Autonomous-nav `report.html` parity with VLM report** (flagged 2026-04-21
+  while reviewing Phase 2.6 Probe 4 artifact). The VLM implementation's
+  `report.html` has per-step reasoning (from the assistant's JSON
+  `reasoning` field) and the frame viewer has back/forward arrows to step
+  through scenes. The OpenClaw autonomous-nav report (plan 02.6-04 →
+  `scripts/render_autonomous_replay.py`) lacks both:
+    - No reasoning surface — OpenClaw's Gateway hides the model's
+      per-turn thinking inside the session; the bridge only sees
+      tool-call JSON and the final assistant text. A future report
+      could surface an explicit "reasoning trace" by either (a)
+      instructing the agent in its kickoff prompt to emit a short
+      `<reason>...</reason>` tag before each tool call and extracting
+      those for display, or (b) querying Gateway logs post-hoc for the
+      per-turn `assistant_reasoning` internal field if the Gateway
+      exposes one.
+    - No frame-by-frame navigation — current layout is a single scroll
+      with all frames inline. A "◀ Prev | N/M | Next ▶" control on a
+      single active frame would match the VLM report's UX.
+  Start point: diff `scripts/render_autonomous_replay.py` (OpenClaw) vs.
+  `roboclaws/core/visualizer.py` report generation (VLM) to see how the
+  VLM side surfaces reasoning; pick the contract that works for OpenClaw
+  given the Gateway's opacity.
+
+- **Phase 2.6 deferred-items sweep** (from plan 02.6-05 — see
+  `.planning/phases/02.6-openclaw-mcp-tools-integration/deferred-items.md`).
+  5 ruff check errors + 6 format diffs in unrelated Phase 2.2 / Kimi-era
+  files surfaced during the phase-wide gate. Scoped out of 2.6 to keep
+  the sim_server deletion commit focused. Resolve as a standalone
+  `chore: ruff cleanup` PR.
+
+_If this list empties, next work should come from a new plan or issue._

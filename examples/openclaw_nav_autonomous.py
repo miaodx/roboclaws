@@ -211,7 +211,14 @@ def run_autonomous_navigation(
             engine,
             agent_id=0,
             run_dir=output_dir,
-            host="127.0.0.1",
+            # Linux Docker-bridge reality check (probe gate 02.6-06, Rule 1 fix):
+            # plan 01's threat model T-02.6-01 assumed 127.0.0.1 was reachable via
+            # `host.docker.internal` → host-gateway on Linux. That's false on
+            # 6.x kernels with Docker 29.x — the bridge routes to 172.17.0.1,
+            # which cannot reach host loopback. `0.0.0.0` matches the spike +
+            # Phase 2.5 retros + docs/openclaw-local.md. LAN-exposure risk is
+            # accepted: single-operator local-dev on a trusted workstation.
+            host="0.0.0.0",
             port=18788,
         )
         mcp_server.run_in_thread()

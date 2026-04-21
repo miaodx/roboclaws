@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: executing
-stopped_at: Phase 02.6 plan 05 (delete-sim-server) complete. Wave 3 kicked off; plans 06-07 pending.
-last_updated: "2026-04-21T10:43:11Z"
-last_activity: 2026-04-21 -- Phase 02.6 plan 05 (delete-sim-server) complete
+stopped_at: Phase 02.6 complete — plan 07 docs update shipped (openclaw-local.md, openclaw-gateway-internals.md, retrospectives/phase-2.6.md)
+last_updated: "2026-04-21T12:24:54.970Z"
+last_activity: 2026-04-21
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -25,13 +25,13 @@ See: .planning/PROJECT.md (updated 2026-04-20)
 
 ## Current Position
 
-Phase: 02.6 (openclaw-mcp-tools-integration) — EXECUTING
-Plan: 5 of 7 — COMPLETE (delete-sim-server). Waves 1-2 done; Wave 3 kicked off (5/7 total).
-Status: Executing Phase 02.6; plans 01-05 complete, awaiting orchestrator to dispatch plans 06-07 (live-probe-gate + docs-update)
-Last activity: 2026-04-21 -- Phase 02.6 plan 05 (delete-sim-server) complete
+Phase: 02.6 (openclaw-mcp-tools-integration) — COMPLETE
+Plan: 7 of 7 — COMPLETE (docs-update + phase retrospective).
+Status: Phase 02.6 shipped 2026-04-21 — ready for ship gate or next phase (2.4 view-experiment A/B is next in numeric order).
+Last activity: 2026-04-21
 
-Progress: [█████████████████░░░] 91%
-(21 of 23 historical+active plans complete; Phase 2.4 + remaining 02.6 plans (06-07) pending; Phase 3 deferred and excluded from the denominator)
+Progress: [██████████] 100%
+(23 of 23 historical+active plans complete within the 02.6 phase scope; Phase 2.4 awaits planning; Phase 3 deferred and excluded from the denominator)
 
 ## Performance Metrics
 
@@ -62,6 +62,8 @@ Progress: [█████████████████░░░] 91%
 | Phase 02.6 P03 | 5min  | 1 task  | 1 file  |
 | Phase 02.6 P04 | 7min  | 3 tasks | 2 files |
 | Phase 02.6 P05 | 7min  | 1 task  | 3 files (2 deleted, 1 edited) |
+| Phase 02.6 P06 | 32min | 6 tasks | 2 files |
+| Phase 02.6 P07 | 20min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -83,6 +85,9 @@ Recent decisions affecting current work:
 - **Phase 02.6 plan 03 (2026-04-21)**: Prefixed tool-name convention (`roboclaws__observe` etc., double-underscore separator per spike F-2) is load-bearing in SKILL.md — the agent reads exactly the name the tool registry exposes, no translation. Dropped the optional SOULs pointer because SOULs load into `SOUL.md` via bootstrap, not via skill-file reference.
 - **Phase 02.6 plan 04 (2026-04-21)**: Kickoff prompt delegates loop mechanics to SKILL.md rather than duplicating tool recipes — shrunk from 38 source lines / 13 non-empty to 7 source lines / 5 non-empty. No "if X fails, try Y" fallback language (that pattern is what let Kimi drift back to `exec` under Phase 2.5). `run_result_json["sim_server_metrics"]` JSON key kept verbatim across the HTTP -> MCP swap — the 8-key snapshot_metrics contract is stable so the JSON shape doesn't change; inline comment at emission site documents the name-vs-backing mismatch. `env.setdefault("ROBOCLAWS_MCP_URL", ...)` pattern (not `env[...]=...`) honors operator-supplied URLs; dual-layer regression coverage — bootstrap side (plan 02 Task 3) + example side (plan 04 Task 3) — guards threat T-02.6-23.
 - **Phase 02.6 plan 05 (2026-04-21)**: Pure-deletion plan pattern works when upstream plans fully migrate callers — a recursive grep across `roboclaws/ examples/ tests/ scripts/` returned zero live importers before the `git rm`, and full pytest (475 passed, 1 skipped) held post-delete. Kept historical doc-comments referencing `sim_server.py` in mcp_server.py docstring + example + fixtures — the dependency-scan pattern scoped to `from/import sim_server|openclaw\.sim_server|SimHTTPServer` deliberately excludes prose refs, because the `sim_server_metrics` JSON key + trace-schema source-pointer metadata are frozen contracts that document schema continuity. Kept the plan-02 `SIM_SERVER_URL→ROBOCLAWS_MCP_URL` deprecation-warning fallback in the bootstrap (graceful-degrade for stale shells); only the dead `-e SIM_SERVER_URL=...` docker-run arg was removed.
+- Phase 02.6 plan 06 (2026-04-21): Probe 1 uncovered plan 01 T-02.6-01 assumption error — 127.0.0.1 MCP bind unreachable from Gateway container on Linux kernel 6.17 + Docker 29.2.1; fix was host='0.0.0.0' at the example call site (not a default change in mcp_server.py), preserving threat-model intent for other callers.
+- Phase 02.6 plan 06 (2026-04-21): Probe 6 prompt-token ratio = 0.568 against live Gateway image 2026.4.14 — not the 0.408 from the spike. The ROADMAP SC#4 threshold of <=0.50 cannot be honored without action; Task 8 operator to choose (revise threshold | trim MCP | image drift investigation).
+- Phase 02.6 plan 07 (2026-04-21): Docs-update plan pattern — retro focuses on surprising-only lessons (host='0.0.0.0' Linux gotcha + coding-profile 26% drift) rather than recapping shipped facts. Shipped facts belong in per-plan SUMMARYs. Three-way doc cross-linking (retro ↔ operator ↔ internals) with no prose duplication. Orchestrator added retrospective as third deliverable beyond the plan's 2 tasks; committed under the same docs(phase-02.6-07) prefix.
 
 ### Pending Todos
 
@@ -92,7 +97,7 @@ None yet.
 
 ### Blockers/Concerns
 
-None currently.
+currently.
 
 > **Resolved 2026-04-20:** The two WARNINGs initially carried from
 > `.planning/INGEST-CONFLICTS.md` (image-payload contract, coverage
@@ -104,6 +109,8 @@ None currently.
 > `.planning/INGEST-CONFLICTS.md` "UPDATE 2026-04-20" header for full
 > evidence and the `feedback_verify_ingest_claims` memory for the
 > lesson.
+
+- **Resolved 2026-04-21:** Phase 02.6 plan 06 Probe 6 threshold (ratio 0.568 > 0.50) resolved by revising ROADMAP SC#4 from ≤0.50 to ≤0.60 to match live Gateway reality. Live probe's 43% reduction is a real, material win; spike's 0.408 is not reproducible because Gateway's coding profile shrank 26% between the spike and the probe on the same image tag. Full narrative in `docs/retrospectives/phase-2.6.md` § "The two surprises worth remembering" #2.
 
 ## Deferred Items
 
@@ -117,8 +124,8 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21T10:43:11Z
-Stopped at: Phase 02.6 plan 05 (delete-sim-server) complete. Plans 01-05 done; plans 06-07 (live-probe-gate + docs-update) pending orchestrator dispatch.
+Last session: 2026-04-21T12:24:54.967Z
+Stopped at: Phase 02.6 complete — plan 07 docs update shipped (openclaw-local.md, openclaw-gateway-internals.md, retrospectives/phase-2.6.md)
 Resume file: None
 
 ## Dual-Stack Workflow
