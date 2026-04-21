@@ -30,7 +30,7 @@ class SimHTTPServer:
         engine: MultiAgentEngine,
         agent_id: int,
         run_dir: Path,
-        host: str = "127.0.0.1",
+        host: str = "0.0.0.0",
         port: int = 18788,
     ) -> None:
         self.engine = engine

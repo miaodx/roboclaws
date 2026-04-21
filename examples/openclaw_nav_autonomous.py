@@ -10,13 +10,14 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.openclaw.bridge import OpenClawBridge, RunResult
+from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
 from roboclaws.openclaw.sim_server import SimHTTPServer
 
 log = logging.getLogger("openclaw-nav-autonomous")
@@ -31,6 +32,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-moves", type=int, default=200)
     parser.add_argument("--wall-budget", type=float, default=600.0)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--skip-bootstrap",
+        action="store_true",
+        help="Reuse an already-running Gateway instead of bootstrapping/removing the container.",
+    )
     return parser.parse_args(argv)
 
 
@@ -43,12 +49,31 @@ def _kickoff_prompt(max_moves: int) -> str:
     return (
         "You are navigating a simulated indoor room through tool calls.\n\n"
         f"You may take up to {max_moves} physical moves before the run ends.\n"
-        "Use the observe, move, and done tools declared in "
-        "skills/ai2thor-navigator/SKILL.md. Follow the Human messages contract "
-        "documented there too — if a tool response includes human_message, acknowledge it in "
-        "your reasoning and decide whether to follow it.\n\n"
-        "Start by calling observe. Then explore the room methodically. Call done when you are "
-        "finished or stuck."
+        "Before acting, use the read tool to read "
+        "skills/ai2thor-navigator/SKILL.md and follow it exactly.\n"
+        "The local execution environment is already live. Do not claim that paired nodes, "
+        "companion apps, or execution environments are missing unless the exact curl commands "
+        "below fail in exec.\n"
+        "In this Gateway runtime, observe/move/done are plain HTTP endpoints that you call "
+        "from the exec tool with curl; they are not native OpenClaw tool slots.\n"
+        "Use these exact forms from exec:\n"
+        "- observe: curl -sS http://host.docker.internal:18788/observe\n"
+        "- move: curl -sS -X POST http://host.docker.internal:18788/move "
+        "-H \"Content-Type: application/json\" "
+        "-d '{\"direction\":\"MoveAhead\"}'\n"
+        "- done: curl -sS -X POST http://host.docker.internal:18788/done "
+        "-H \"Content-Type: application/json\" "
+        "-d '{\"reason\":\"<short reason>\"}'\n"
+        "Start by calling observe through exec before any analysis. Parse the JSON responses, "
+        "then decide the next step. If a tool response includes human_message, acknowledge it, "
+        "use the overhead map to address the request, and do not call done until you have taken "
+        "at least one follow-up action after receiving the message. When you eventually call "
+        "done, explicitly mention the human_message and what you did about it in the done "
+        "reason.\n\n"
+        "Take at least three moves unless the first observe proves you are completely blocked or "
+        "a tool call fails. Do not call done immediately after a single successful move. Call "
+        "done only when you are stuck, the budget is nearly exhausted, or you have finished a "
+        "meaningful short exploration."
     )
 
 
@@ -82,6 +107,7 @@ def run_autonomous_navigation(
     max_moves: int,
     wall_budget: float,
     output_dir: Path,
+    skip_bootstrap: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -98,22 +124,35 @@ def run_autonomous_navigation(
         engine = MultiAgentEngine(scene=scene, agent_count=1)
 
         sim_server = SimHTTPServer(engine, agent_id=0, run_dir=output_dir, port=18788)
-        log.info("SimHTTPServer listening on http://127.0.0.1:%s", sim_server.port)
-
-        env = dict(os.environ)
-        env["TIMEOUT_SECONDS"] = str(int(wall_budget + 60))
-        env["SIM_SERVER_URL"] = "http://host.docker.internal:18788"
-        log.info("bootstrapping Gateway (TIMEOUT_SECONDS=%s)", env["TIMEOUT_SECONDS"])
-        bootstrap = subprocess.run(
-            ["./scripts/openclaw-bootstrap.sh"],
-            capture_output=True,
-            text=True,
-            env=env,
-            check=True,
+        log.info(
+            "SimHTTPServer listening on %s:%s (Gateway route http://host.docker.internal:%s)",
+            sim_server.host,
+            sim_server.port,
+            sim_server.port,
         )
-        token = bootstrap.stdout.strip()
-        gateway_started = True
-        log.info("Gateway started, bearer token captured")
+
+        if skip_bootstrap:
+            token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
+            if not token:
+                raise RuntimeError(
+                    "--skip-bootstrap requires OPENCLAW_GATEWAY_TOKEN for the running Gateway"
+                )
+            log.info("reusing existing Gateway from OPENCLAW_GATEWAY_TOKEN")
+        else:
+            env = dict(os.environ)
+            env["TIMEOUT_SECONDS"] = str(int(wall_budget + 60))
+            env["SIM_SERVER_URL"] = "http://host.docker.internal:18788"
+            log.info("bootstrapping Gateway (TIMEOUT_SECONDS=%s)", env["TIMEOUT_SECONDS"])
+            bootstrap = subprocess.run(
+                ["./scripts/openclaw-bootstrap.sh"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+            token = bootstrap.stdout.strip()
+            gateway_started = True
+            log.info("Gateway started, bearer token captured")
 
         stdin_thread = _start_stdin_thread(sim_server, stdin_stop)
 
@@ -121,12 +160,20 @@ def run_autonomous_navigation(
             gateway_url="http://127.0.0.1:18789",
             token=token,
         )
-        run_result = bridge.start_run(
-            agent_id=0,
-            prompt=_kickoff_prompt(max_moves),
-            wall_budget_s=wall_budget,
-            done_event=sim_server.done_event,
-        )
+        run_started = time.monotonic()
+        try:
+            run_result = bridge.start_run(
+                agent_id=0,
+                prompt=_kickoff_prompt(max_moves),
+                wall_budget_s=wall_budget,
+                done_event=sim_server.done_event,
+            )
+        except OpenClawUnavailable as exc:
+            run_result = RunResult(
+                final_message=str(exc),
+                wallclock_s=round(time.monotonic() - run_started, 3),
+                terminated_by="error",
+            )
         log.info(
             "start_run returned: terminated_by=%s wallclock=%.1fs",
             run_result.terminated_by,
@@ -191,6 +238,7 @@ def main() -> None:
         max_moves=args.max_moves,
         wall_budget=args.wall_budget,
         output_dir=output_dir,
+        skip_bootstrap=args.skip_bootstrap,
     )
     print(f"terminated_by: {result['terminated_by']}")
     print(f"wallclock_s: {result['wallclock_s']:.1f}")

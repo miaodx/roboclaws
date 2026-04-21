@@ -223,7 +223,9 @@ integration around: the Gateway still receives one long-running
 `POST /v1/chat/completions` kickoff, but the agent then calls host-side tools
 (`observe`, `move`, `done`) on a local sim server. That sim server runs on the
 host, not in the container, so the Gateway container needs a reliable route back
-to `http://127.0.0.1:18788`.
+to the host-side listener on port `18788`. In the current implementation the sim
+server binds `0.0.0.0` so the container can reach it through the host-gateway
+bridge while the Gateway port itself remains localhost-only.
 
 The bootstrap now adds `--add-host=host.docker.internal:host-gateway`
 unconditionally. On Docker 20.10+ Linux this resolves `host-gateway` to the
@@ -255,6 +257,35 @@ Before a real autonomous run, do the live probe from inside the container:
 docker exec openclaw-gateway curl -sf \
   http://host.docker.internal:18788/observe | head -c 200
 ```
+
+### Reuse one long-lived Gateway for repeated probes
+
+For local validation, it is often faster to bootstrap once and reuse the same Gateway
+container across multiple autonomous runs:
+
+```bash
+export OPENCLAW_GATEWAY_TOKEN=$(./scripts/openclaw-bootstrap.sh)
+
+python examples/openclaw_nav_autonomous.py --skip-bootstrap \
+  --scene FloorPlan201 --max-moves 50 --wall-budget 300
+python examples/openclaw_nav_autonomous.py --skip-bootstrap \
+  --scene FloorPlan201 --max-moves 50 --wall-budget 300
+```
+
+`--skip-bootstrap` tells the example to reuse the running Gateway referenced by
+`OPENCLAW_GATEWAY_TOKEN` instead of creating and removing the container on every run.
+This is the path used for Phase 2.5's back-to-back local reset probe.
+
+If the bootstrap script's built-in `PONG` smoke probe is flaky on a provider even
+though the container is healthy, verify the service directly first:
+
+```bash
+curl -sf http://127.0.0.1:18789/readyz
+```
+
+If that returns `{"ready":true}`, the Gateway itself is up. The live bearer token is
+stored in `/home/node/.openclaw/openclaw.json` inside the container and can be read
+there for a manual reuse-session export when needed.
 
 A `200` plus the first chunk of JSON is the green light that the container can
 see the host-side sim server. If that probe fails, fix the networking first; do

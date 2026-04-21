@@ -120,6 +120,10 @@ back to the AI2-THOR engine.
 For the Phase 2.5 autonomous loop, the agent can call three HTTP tools served by the
 local simulation bridge at `http://host.docker.internal:18788`.
 
+In the current OpenClaw Gateway image, these are not exposed as native structured tool
+slots. Read this skill file first, then use the generic `exec` tool with `curl` to call
+the endpoints below and parse their JSON responses.
+
 ### `observe`
 
 - HTTP: `GET http://host.docker.internal:18788/observe`
@@ -209,7 +213,9 @@ Tool responses from `observe` and `move` may include a `human_message` field. Wh
 present, it is a directive from a human observer watching the run. Treat it as a
 high-priority hint: follow it when compatible with your current goal, and acknowledge
 it explicitly in your reasoning either way. If you cannot follow it, say why. If you
-choose to follow it, say so. The human is steering you, not interrupting you.
+choose to follow it, say so. If you later call `done`, mention the human message and
+what you did about it in the `done.reason`. The human is steering you, not
+interrupting you.
 
 Example tool response:
 
