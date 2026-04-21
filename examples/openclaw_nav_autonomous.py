@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
-from roboclaws.openclaw.sim_server import SimHTTPServer
+from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 
 log = logging.getLogger("openclaw-nav-autonomous")
 _WATCHDOG_INTERVAL_S = 15.0
@@ -48,49 +48,30 @@ def _default_output_dir() -> Path:
 
 
 def _kickoff_prompt(max_moves: int) -> str:
+    # MCP-era kickoff (phase 02.6 D-07): delegate the loop mechanics to
+    # skills/ai2thor-navigator/SKILL.md and name the three roboclaws MCP
+    # tools directly. Under profile: minimal the agent has exactly
+    # session_status + roboclaws__{observe,move,done} — no fallbacks to
+    # mention, no curl/exec/image escape hatches to warn against.
     return (
-        "You are navigating a simulated indoor room through tool calls.\n\n"
-        f"Your target budget is {max_moves} physical moves for this run. Treat that as the "
-        "intended horizon, not merely a ceiling: keep working until you are stuck, the budget "
-        "is nearly exhausted, or you have a concrete reason to stop.\n"
-        "Before acting, use the read tool to read "
-        "skills/ai2thor-navigator/SKILL.md and follow it exactly.\n"
-        "The local execution environment is already live. Do not claim that paired nodes, "
-        "companion apps, or execution environments are missing unless the exact curl commands "
-        "below fail in exec.\n"
-        "In this Gateway runtime, observe/move/done are plain HTTP endpoints that you call "
-        "from the exec tool with curl; they are not native OpenClaw tool slots.\n"
-        "Use these exact forms from exec:\n"
-        "- observe: curl -sS http://host.docker.internal:18788/observe\n"
-        "- move: curl -sS -X POST http://host.docker.internal:18788/move "
-        '-H "Content-Type: application/json" '
-        '-d \'{"direction":"MoveAhead","reason":"clear hallway continues"}\'\n'
-        "- done: curl -sS -X POST http://host.docker.internal:18788/done "
-        '-H "Content-Type: application/json" '
-        '-d \'{"reason":"<short reason>"}\'\n'
-        "Start by calling observe through exec before any analysis. Parse the JSON responses, "
-        "then decide the next step. Default behavior is observe -> think -> move. You may take a "
-        "short burst of repeated moves only when you have a concrete local reason such as a clear "
-        "hallway, a safe backtrack, or following a human-directed maneuver; when you do, include "
-        "a brief natural-language reason in the move payload.\n"
-        "Do not detour through OpenClaw's generic image tool for observe frames unless you are "
-        "truly blocked on the JSON response. If you absolutely must use the image tool, pass "
-        "base64 data:image URLs directly or write files under the current workspace/media roots; "
-        "do not use /tmp paths because the Gateway rejects them.\n"
-        "Be agentic: choose the exploration strategy that fits the room, even if it departs from "
-        "a narrow implied checklist, but keep every choice grounded in what you actually "
-        "observed. If a tool response includes human_message, acknowledge it, use the overhead "
-        "map to address the request, and do not call done until you have taken at least one "
-        "follow-up action after receiving the message. When you eventually call done, explicitly "
-        "mention the human_message and what you did about it in the done reason.\n\n"
-        "Avoid ending early just because the room looks quiet. Prefer a sustained exploration "
-        "within the move budget. Call done only when you are stuck, the budget is nearly "
-        "exhausted, or you have clearly completed what seems worthwhile from the current run."
+        "You are navigating an indoor room. Read skills/ai2thor-navigator/SKILL.md "
+        "and follow it exactly.\n"
+        "Use the observe / move / done tools exposed by the `roboclaws` MCP server "
+        "(roboclaws__observe, roboclaws__move, roboclaws__done). Call "
+        "roboclaws__observe before any other action.\n"
+        f"Budget: up to {max_moves} physical moves plus the wall-clock set by the "
+        "caller; pace yourself against both.\n"
+        "Loop observe -> think -> move until you are stuck, the budget is nearly "
+        "exhausted, or you have a concrete reason to stop; then call "
+        "roboclaws__done with a short reason.\n"
+        "If an observe or move response includes a non-null human_message, "
+        "acknowledge it in your next move.reason and take at least one follow-up "
+        "action before calling done."
     )
 
 
 def _start_stdin_thread(
-    sim_server: SimHTTPServer,
+    mcp_server: RoboclawsMCPServer,
     stop_event: threading.Event,
 ) -> threading.Thread | None:
     if not sys.stdin.isatty():
@@ -104,7 +85,7 @@ def _start_stdin_thread(
                 break
             message = line.strip()
             if message:
-                sim_server.enqueue_human_message(message)
+                mcp_server.enqueue_human_message(message)
                 log.info("queued human message: %s", message[:80])
 
     thread = threading.Thread(target=_stdin_pump, daemon=True, name="stdin-pump")
@@ -186,14 +167,14 @@ def _capture_gateway_diagnostics(
 
 
 def _start_watchdog_thread(
-    sim_server: SimHTTPServer,
+    mcp_server: RoboclawsMCPServer,
     stop_event: threading.Event,
     *,
     interval_s: float = _WATCHDOG_INTERVAL_S,
 ) -> threading.Thread:
     def _watchdog() -> None:
         while not stop_event.wait(interval_s):
-            sim_server.write_runtime_event("watchdog", metrics=sim_server.snapshot_metrics())
+            mcp_server.write_runtime_event("watchdog", metrics=mcp_server.snapshot_metrics())
 
     thread = threading.Thread(target=_watchdog, daemon=True, name="autonomous-watchdog")
     thread.start()
@@ -211,7 +192,7 @@ def run_autonomous_navigation(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     engine: MultiAgentEngine | None = None
-    sim_server: SimHTTPServer | None = None
+    mcp_server: RoboclawsMCPServer | None = None
     bridge: OpenClawBridge | None = None
     stdin_thread: threading.Thread | None = None
     watchdog_thread: threading.Thread | None = None
@@ -226,8 +207,18 @@ def run_autonomous_navigation(
         log.info("starting MultiAgentEngine(scene=%s, agent_count=1)", scene)
         engine = MultiAgentEngine(scene=scene, agent_count=1)
 
-        sim_server = SimHTTPServer(engine, agent_id=0, run_dir=output_dir, port=18788)
-        sim_server.write_runtime_event(
+        mcp_server = make_roboclaws_mcp(
+            engine,
+            agent_id=0,
+            run_dir=output_dir,
+            host="127.0.0.1",
+            port=18788,
+        )
+        mcp_server.run_in_thread()
+        # Runtime-event key 'sim_server_metrics' is frozen for schema compat with
+        # tests/test_openclaw_nav_autonomous.py and scripts/render_autonomous_replay.py.
+        # The underlying server is now MCP, not HTTP.
+        mcp_server.write_runtime_event(
             "run_started",
             scene=scene,
             max_moves=max_moves,
@@ -235,12 +226,13 @@ def run_autonomous_navigation(
             skip_bootstrap=skip_bootstrap,
         )
         log.info(
-            "SimHTTPServer listening on %s:%s (Gateway route http://host.docker.internal:%s)",
-            sim_server.host,
-            sim_server.port,
-            sim_server.port,
+            "Roboclaws MCP server listening on %s:%s "
+            "(Gateway route http://host.docker.internal:%s/mcp)",
+            mcp_server.host,
+            mcp_server.port,
+            mcp_server.port,
         )
-        watchdog_thread = _start_watchdog_thread(sim_server, watchdog_stop)
+        watchdog_thread = _start_watchdog_thread(mcp_server, watchdog_stop)
 
         if skip_bootstrap:
             token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
@@ -248,13 +240,16 @@ def run_autonomous_navigation(
                 raise RuntimeError(
                     "--skip-bootstrap requires OPENCLAW_GATEWAY_TOKEN for the running Gateway"
                 )
-            sim_server.write_runtime_event("gateway_bootstrap_skipped", container=gateway_container)
+            mcp_server.write_runtime_event("gateway_bootstrap_skipped", container=gateway_container)
             log.info("reusing existing Gateway from OPENCLAW_GATEWAY_TOKEN")
         else:
             env = dict(os.environ)
             env["TIMEOUT_SECONDS"] = str(int(wall_budget + 60))
-            env["SIM_SERVER_URL"] = "http://host.docker.internal:18788"
-            sim_server.write_runtime_event(
+            # Honor operator-supplied ROBOCLAWS_MCP_URL (e.g. local-probe runs) by
+            # using setdefault; fall back to the container->host loopback URL. This
+            # is what plan 02 Task 3's test_mcp_url_env_override_honored exercises.
+            env.setdefault("ROBOCLAWS_MCP_URL", "http://host.docker.internal:18788/mcp")
+            mcp_server.write_runtime_event(
                 "gateway_bootstrap_begin",
                 timeout_seconds=env["TIMEOUT_SECONDS"],
                 container=gateway_container,
@@ -269,17 +264,17 @@ def run_autonomous_navigation(
             )
             token = bootstrap.stdout.strip()
             gateway_started = True
-            sim_server.write_runtime_event("gateway_bootstrap_done", container=gateway_container)
+            mcp_server.write_runtime_event("gateway_bootstrap_done", container=gateway_container)
             log.info("Gateway started, bearer token captured")
 
-        stdin_thread = _start_stdin_thread(sim_server, stdin_stop)
+        stdin_thread = _start_stdin_thread(mcp_server, stdin_stop)
 
         bridge = OpenClawBridge(
             gateway_url="http://127.0.0.1:18789",
             token=token,
         )
         kickoff_prompt = _kickoff_prompt(max_moves)
-        sim_server.write_runtime_event(
+        mcp_server.write_runtime_event(
             "start_run_begin",
             prompt_chars=len(kickoff_prompt),
             prompt_lines=kickoff_prompt.count("\n") + 1,
@@ -291,7 +286,7 @@ def run_autonomous_navigation(
                 agent_id=0,
                 prompt=kickoff_prompt,
                 wall_budget_s=wall_budget,
-                done_event=sim_server.done_event,
+                done_event=mcp_server.done_event,
             )
         except OpenClawUnavailable as exc:
             run_result = RunResult(
@@ -300,12 +295,12 @@ def run_autonomous_navigation(
                 terminated_by="error",
             )
         bridge_metrics = _metrics_dict(bridge.get_last_run_metrics())
-        sim_server.write_runtime_event(
+        mcp_server.write_runtime_event(
             "start_run_end",
             terminated_by=run_result.terminated_by,
             wallclock_s=run_result.wallclock_s,
             bridge_metrics=bridge_metrics,
-            sim_server_metrics=sim_server.snapshot_metrics(),
+            sim_server_metrics=mcp_server.snapshot_metrics(),
         )
         log.info(
             "start_run returned: terminated_by=%s wallclock=%.1fs",
@@ -329,7 +324,10 @@ def run_autonomous_navigation(
                 "wallclock_s": run_result.wallclock_s,
                 "final_message": run_result.final_message,
                 "bridge_metrics": bridge_metrics,
-                "sim_server_metrics": sim_server.snapshot_metrics(),
+                # Key 'sim_server_metrics' kept verbatim for report.html +
+                # render_autonomous_replay.py schema compat; backing data
+                # comes from mcp_server.snapshot_metrics() (same 8-key contract).
+                "sim_server_metrics": mcp_server.snapshot_metrics(),
                 "diagnostics_files": diagnostics_files,
             },
         )
@@ -345,9 +343,9 @@ def run_autonomous_navigation(
         if watchdog_thread is not None:
             log.info("teardown: stopping watchdog thread")
             watchdog_thread.join(timeout=0.2)
-        if sim_server is not None:
-            log.info("teardown: stopping sim server")
-            sim_server.close()
+        if mcp_server is not None:
+            log.info("teardown: stopping MCP server")
+            mcp_server.close()
         if gateway_started:
             log.info("teardown: removing openclaw-gateway container")
             subprocess.run(
