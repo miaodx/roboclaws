@@ -11,7 +11,14 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 
-from openclaw_nav_autonomous import _kickoff_prompt, _parse_args, run_autonomous_navigation  # noqa: E402
+import subprocess  # noqa: E402
+
+from openclaw_nav_autonomous import (  # noqa: E402
+    _kickoff_prompt,
+    _parse_args,
+    _run_capture,
+    run_autonomous_navigation,
+)
 from roboclaws.openclaw.bridge import OpenClawUnavailable, RunResult  # noqa: E402
 
 
@@ -345,3 +352,46 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
     # in os.environ (inherited) is acceptable, but the example is not the
     # source of the legacy URL anymore.
     assert captured_env.get("SIM_SERVER_URL") != "http://host.docker.internal:18788"
+
+
+def test_run_capture_applies_timeout_and_surfaces_timeout_exit_code() -> None:
+    """WR-02: diagnostic subprocesses must not hang indefinitely.
+
+    Pre-fix `_run_capture` called `subprocess.run(..., timeout=?)` with no
+    timeout kwarg, so a wedged `docker exec` during teardown could stall
+    the process forever. Post-fix it passes `timeout=`, and on
+    `TimeoutExpired` returns (124, stdout, stderr+"timed out after …").
+    """
+    calls: list[dict] = []
+
+    def _fake_run(cmd, **kwargs):
+        calls.append({"cmd": cmd, "kwargs": kwargs})
+        # Simulate a hung process by raising TimeoutExpired — this is what
+        # subprocess.run does internally when the wall-clock cap elapses.
+        raise subprocess.TimeoutExpired(cmd=cmd, timeout=kwargs["timeout"])
+
+    with patch("openclaw_nav_autonomous.subprocess.run", side_effect=_fake_run):
+        rc, stdout, stderr = _run_capture(["docker", "inspect", "wedged"], timeout=0.5)
+
+    assert len(calls) == 1
+    # The timeout kwarg was forwarded to subprocess.run — this is the core fix.
+    assert calls[0]["kwargs"].get("timeout") == 0.5
+    # 124 matches coreutils `timeout(1)` so log grep keeps working.
+    assert rc == 124
+    assert "timed out after" in stderr
+    assert isinstance(stdout, str)
+
+
+def test_run_capture_has_default_timeout() -> None:
+    """_run_capture must pass a non-None default timeout when caller omits one."""
+    captured: dict = {}
+
+    def _fake_run(cmd, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+    with patch("openclaw_nav_autonomous.subprocess.run", side_effect=_fake_run):
+        _run_capture(["docker", "inspect", "foo"])
+
+    assert captured.get("timeout") is not None
+    assert captured["timeout"] > 0
