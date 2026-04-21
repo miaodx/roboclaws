@@ -48,6 +48,8 @@ class SimHTTPServer:
         self._trace_lock = threading.Lock()
         self._human_queue: deque[str] = deque(maxlen=10)
         self._trace_fp = self.trace_path.open("a", encoding="utf-8", buffering=1)
+        self._last_trace_monotonic = time.monotonic()
+        self._tool_event_counts: dict[str, int] = {}
 
         server = self
 
@@ -101,6 +103,26 @@ class SimHTTPServer:
                 dropped_message=dropped[:80],
                 retained_message=message[:80],
             )
+
+    def snapshot_metrics(self) -> dict[str, Any]:
+        with self._trace_lock:
+            tool_event_counts = dict(self._tool_event_counts)
+            last_trace_age_s = round(time.monotonic() - self._last_trace_monotonic, 3)
+        with self._queue_lock:
+            queued_human_messages = len(self._human_queue)
+        return {
+            "runtime_s": round(time.monotonic() - self._started, 3),
+            "last_trace_age_s": last_trace_age_s,
+            "queued_human_messages": queued_human_messages,
+            "observed_once": self._observed_once,
+            "moves_since_observe": self._moves_since_observe,
+            "done_event_set": self.done_event.is_set(),
+            "done_reason": self._done_reason,
+            "tool_event_counts": tool_event_counts,
+        }
+
+    def write_runtime_event(self, event: str, **data: Any) -> None:
+        self._write_trace(tool="<runtime>", event=event, **data)
 
     def _handle_get(self, handler: BaseHTTPRequestHandler) -> None:
         path = urlparse(handler.path).path
@@ -313,6 +335,9 @@ class SimHTTPServer:
             **data,
         }
         with self._trace_lock:
+            self._last_trace_monotonic = time.monotonic()
+            key = f"{tool}:{event}"
+            self._tool_event_counts[key] = self._tool_event_counts.get(key, 0) + 1
             self._trace_fp.write(json.dumps(payload) + "\n")
 
 

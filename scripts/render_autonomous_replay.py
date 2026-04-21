@@ -113,6 +113,14 @@ def write_replay_gif(images: list[Image.Image], gif_path: Path) -> None:
 
 
 def build_summary(events: list[dict[str, Any]], frames: list[dict[str, Any]]) -> dict[str, Any]:
+    return _build_summary_from_events(events, frames, {})
+
+
+def _build_summary_from_events(
+    events: list[dict[str, Any]],
+    frames: list[dict[str, Any]],
+    run_result: dict[str, Any],
+) -> dict[str, Any]:
     observe_events = [
         event
         for event in events
@@ -150,8 +158,8 @@ def build_summary(events: list[dict[str, Any]], frames: list[dict[str, Any]]) ->
     else:
         observe_to_move_ratio = 0.0
 
-    wallclock_seconds = 0.0
-    if frames:
+    wallclock_seconds = float(run_result.get("wallclock_s", 0.0))
+    if wallclock_seconds <= 0.0 and frames:
         wallclock_seconds = max(
             0.0,
             float(frames[-1].get("wallclock_elapsed", 0.0))
@@ -171,8 +179,11 @@ def build_summary(events: list[dict[str, Any]], frames: list[dict[str, Any]]) ->
         "observe_to_move_ratio": observe_to_move_ratio,
         "decision_modes": decision_modes,
         "wallclock_seconds": wallclock_seconds,
-        "terminated_by": "done" if done_events else "wall_clock",
+        "terminated_by": (
+            run_result.get("terminated_by") or ("done" if done_events else "wall_clock")
+        ),
         "human_messages_delivered": human_delivered,
+        "final_message": run_result.get("final_message"),
     }
 
 
@@ -343,7 +354,11 @@ def main(argv: list[str] | None = None) -> int:
     composite_images = build_composite_images(frames)
     write_replay_gif(composite_images, args.run_dir / "replay.gif")
 
-    summary = build_summary(events, frames)
+    run_result_path = args.run_dir / "run_result.json"
+    run_result = {}
+    if run_result_path.is_file():
+        run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+    summary = _build_summary_from_events(events, frames, run_result)
     (args.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     render_report(

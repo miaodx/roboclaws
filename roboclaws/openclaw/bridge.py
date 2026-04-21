@@ -28,7 +28,7 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import numpy as np
@@ -59,6 +59,7 @@ class RunResult:
     final_message: str
     wallclock_s: float
     terminated_by: Literal["done", "wall_clock", "error"]
+    debug: dict[str, Any] = field(default_factory=dict)
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -125,6 +126,7 @@ class OpenClawBridge:
             timeout=timeout,
         )
         self._last_step_metrics: dict[str, Any] = {}
+        self._last_run_metrics: dict[str, Any] = {}
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -137,6 +139,10 @@ class OpenClawBridge:
     def get_last_step_metrics(self) -> dict[str, Any]:
         """Return timing/payload telemetry for the last bridge step."""
         return dict(self._last_step_metrics)
+
+    def get_last_run_metrics(self) -> dict[str, Any]:
+        """Return timing/payload telemetry for the last autonomous start_run call."""
+        return dict(self._last_run_metrics)
 
     def __enter__(self) -> OpenClawBridge:
         return self
@@ -198,14 +204,26 @@ class OpenClawBridge:
         """Kick off a long-running autonomous Gateway run for one named agent."""
         del done_event  # Reserved for future early-abort integration from the sim server.
 
+        per_call_timeout = wall_budget_s + 60.0
+        run_metrics: dict[str, Any] = {
+            "model": self.model_id(agent_id),
+            "agent_id": agent_id,
+            "wall_budget_s": round_seconds(wall_budget_s),
+            "http_timeout_s": round_seconds(per_call_timeout),
+            "prompt_chars": len(prompt),
+            "prompt_lines": prompt.count("\n") + 1,
+        }
+        reset_started = time.perf_counter()
         self._reset_workspace_state(agent_id)
+        run_metrics["workspace_reset_seconds"] = round_seconds(time.perf_counter() - reset_started)
         started = time.monotonic()
         payload = {
             "model": self.model_id(agent_id),
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": _DEFAULT_MAX_TOKENS,
         }
-        per_call_timeout = wall_budget_s + 60.0
+        run_metrics["request_payload_chars"] = len(json.dumps(payload))
+        self._last_run_metrics = dict(run_metrics)
 
         import httpx
 
@@ -216,23 +234,72 @@ class OpenClawBridge:
                 timeout=per_call_timeout,
             )
         except httpx.ReadTimeout:
+            run_metrics.update(
+                {
+                    "terminated_by": "wall_clock",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "read_timeout",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
             return RunResult(
                 final_message="<wall-clock timeout - no final message>",
                 wallclock_s=round_seconds(time.monotonic() - started),
                 terminated_by="wall_clock",
+                debug=dict(run_metrics),
             )
         except httpx.ConnectError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "connect_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
             raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
         except httpx.RemoteProtocolError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "remote_protocol_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
             raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
         except httpx.HTTPError as exc:
+            run_metrics.update(
+                {
+                    "terminated_by": "error",
+                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                    "gateway_error": "http_error",
+                }
+            )
+            self._last_run_metrics = dict(run_metrics)
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
 
         body = self._parse_json_response(resp)
+        final_message = _extract_content(body)
+        usage = body.get("usage")
+        choice = ((body.get("choices") or [{}])[0]) if isinstance(body, dict) else {}
+        run_metrics.update(
+            {
+                "terminated_by": "done",
+                "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                "http_status_code": int(resp.status_code),
+                "response_bytes": len(resp.content),
+                "finish_reason": choice.get("finish_reason"),
+                "usage": usage if isinstance(usage, dict) else None,
+                "final_message_chars": len(final_message),
+            }
+        )
+        self._last_run_metrics = dict(run_metrics)
         return RunResult(
-            final_message=_extract_content(body),
+            final_message=final_message,
             wallclock_s=round_seconds(time.monotonic() - started),
             terminated_by="done",
+            debug=dict(run_metrics),
         )
 
     # ------------------------------------------------------------------
@@ -461,8 +528,8 @@ def _extract_content(body: dict[str, Any]) -> str:
         return text
     # Reasoning-only fallback: some providers surface the chain-of-thought in
     # a separate field when the answer got truncated.
-    for field in ("reasoning", "reasoning_content"):
-        val = message.get(field)
+    for reasoning_field in ("reasoning", "reasoning_content"):
+        val = message.get(reasoning_field)
         if isinstance(val, str) and val.strip():
             return val
     return text

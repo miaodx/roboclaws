@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -40,6 +41,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         final_message="done exploring",
         wallclock_s=12.5,
         terminated_by="done",
+        debug={"prompt_chars": 123, "gateway_request_seconds": 12.5},
     )
     subprocess_calls: list[list[str]] = []
 
@@ -63,8 +65,13 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         server = server_cls.return_value
         server.port = 18788
         server.done_event = MagicMock()
+        server.snapshot_metrics.return_value = {"observed_once": True, "moves_since_observe": 0}
         bridge = bridge_cls.return_value
         bridge.start_run.return_value = bridge_result
+        bridge.get_last_run_metrics.return_value = {
+            "prompt_chars": 123,
+            "gateway_request_seconds": 12.5,
+        }
 
         result = run_autonomous_navigation(
             scene="FloorPlan201",
@@ -77,6 +84,10 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert result["terminated_by"] == "done"
     assert result["final_message"] == "done exploring"
     assert (output_dir / "run_result.json").exists()
+    assert (output_dir / "start_run_metrics.json").exists()
+    run_result_json = json.loads((output_dir / "run_result.json").read_text(encoding="utf-8"))
+    assert run_result_json["bridge_metrics"]["prompt_chars"] == 123
+    assert run_result_json["sim_server_metrics"]["observed_once"] is True
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-123")
     bridge.start_run.assert_called_once()
     assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
@@ -117,8 +128,10 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
         server = server_cls.return_value
         server.port = 18788
         server.done_event = MagicMock()
+        server.snapshot_metrics.return_value = {}
         bridge = bridge_cls.return_value
         bridge.start_run.return_value = bridge_result
+        bridge.get_last_run_metrics.return_value = {}
 
         result = run_autonomous_navigation(
             scene="FloorPlan201",
@@ -160,8 +173,10 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
         server = server_cls.return_value
         server.port = 18788
         server.done_event = MagicMock()
+        server.snapshot_metrics.return_value = {"observed_once": True}
         bridge = bridge_cls.return_value
         bridge.start_run.side_effect = OpenClawUnavailable("Gateway protocol error: boom")
+        bridge.get_last_run_metrics.return_value = {"gateway_error": "remote_protocol_error"}
 
         result = run_autonomous_navigation(
             scene="FloorPlan201",
@@ -173,6 +188,12 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
 
     assert result["terminated_by"] == "error"
     assert "Gateway protocol error: boom" in result["final_message"]
+    diagnostics_dir = output_dir / "diagnostics"
+    assert diagnostics_dir.exists()
+    assert (diagnostics_dir / "gateway.inspect.json").exists()
+    assert (diagnostics_dir / "gateway.docker.log").exists()
+    assert (diagnostics_dir / "gateway.inner.log").exists()
+    assert (diagnostics_dir / "gateway.workspace-state.txt").exists()
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
     server.close.assert_called_once()

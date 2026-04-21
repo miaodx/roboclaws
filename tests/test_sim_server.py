@@ -261,3 +261,23 @@ def test_close_joins_server_thread(tmp_path: Path) -> None:
     server.close()
     assert server._server_thread.is_alive() is False
     assert server._trace_fp.closed is True
+
+
+def test_snapshot_metrics_and_runtime_events(tmp_path: Path) -> None:
+    engine = _engine()
+    with SimHTTPServer(engine, agent_id=0, run_dir=tmp_path, port=0) as server:
+        server.write_runtime_event("watchdog", note="boot")
+        _request_json("GET", f"http://127.0.0.1:{server.port}/observe")
+        _request_json(
+            "POST",
+            f"http://127.0.0.1:{server.port}/move",
+            {"direction": "MoveAhead", "reason": "clear hallway continues"},
+        )
+        metrics = server.snapshot_metrics()
+
+    assert metrics["observed_once"] is True
+    assert metrics["moves_since_observe"] == 1
+    assert metrics["tool_event_counts"]["<runtime>:watchdog"] == 1
+    assert metrics["tool_event_counts"]["observe:request"] == 1
+    assert metrics["tool_event_counts"]["move:request"] == 1
+    assert metrics["last_trace_age_s"] >= 0.0

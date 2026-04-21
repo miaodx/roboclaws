@@ -21,6 +21,8 @@ from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunRe
 from roboclaws.openclaw.sim_server import SimHTTPServer
 
 log = logging.getLogger("openclaw-nav-autonomous")
+_WATCHDOG_INTERVAL_S = 15.0
+_DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -107,6 +109,93 @@ def _start_stdin_thread(
     return thread
 
 
+def _metrics_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _run_capture(cmd: list[str]) -> tuple[int, str, str]:
+    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    return (
+        int(getattr(result, "returncode", 1)),
+        str(getattr(result, "stdout", "")),
+        str(getattr(result, "stderr", "")),
+    )
+
+
+def _write_capture(path: Path, cmd: list[str]) -> bool:
+    returncode, stdout, stderr = _run_capture(cmd)
+    text = stdout if stdout.strip() else stderr
+    if not text:
+        text = f"<no output> (returncode={returncode})\n"
+    path.write_text(text, encoding="utf-8")
+    return returncode == 0
+
+
+def _capture_gateway_diagnostics(
+    *,
+    output_dir: Path,
+    container_name: str,
+    agent_id: int,
+) -> dict[str, Any]:
+    diagnostics_dir = output_dir / "diagnostics"
+    diagnostics_dir.mkdir(parents=True, exist_ok=True)
+    files: dict[str, str] = {}
+
+    inspect_path = diagnostics_dir / "gateway.inspect.json"
+    if _write_capture(inspect_path, ["docker", "inspect", container_name]):
+        files["gateway_inspect"] = inspect_path.name
+
+    outer_log_path = diagnostics_dir / "gateway.docker.log"
+    if _write_capture(outer_log_path, ["docker", "logs", "--tail", "200", container_name]):
+        files["gateway_docker_log"] = outer_log_path.name
+
+    inner_log_path = diagnostics_dir / "gateway.inner.log"
+    inner_log_cmd = [
+        "docker",
+        "exec",
+        container_name,
+        "sh",
+        "-lc",
+        "LATEST=$(ls -1 /tmp/openclaw/openclaw-*.log 2>/dev/null | tail -n 1); "
+        'if [ -n "$LATEST" ]; then tail -n 200 "$LATEST"; else echo "<no inner log>"; fi',
+    ]
+    if _write_capture(inner_log_path, inner_log_cmd):
+        files["gateway_inner_log"] = inner_log_path.name
+
+    workspace_state_path = diagnostics_dir / "gateway.workspace-state.txt"
+    workspace_state_cmd = [
+        "docker",
+        "exec",
+        container_name,
+        "sh",
+        "-lc",
+        f"ls -R /home/node/.openclaw/workspaces/agent-{agent_id}/state 2>&1 || true",
+    ]
+    _write_capture(workspace_state_path, workspace_state_cmd)
+    files["gateway_workspace_state"] = workspace_state_path.name
+
+    return files
+
+
+def _start_watchdog_thread(
+    sim_server: SimHTTPServer,
+    stop_event: threading.Event,
+    *,
+    interval_s: float = _WATCHDOG_INTERVAL_S,
+) -> threading.Thread:
+    def _watchdog() -> None:
+        while not stop_event.wait(interval_s):
+            sim_server.write_runtime_event("watchdog", metrics=sim_server.snapshot_metrics())
+
+    thread = threading.Thread(target=_watchdog, daemon=True, name="autonomous-watchdog")
+    thread.start()
+    return thread
+
+
 def run_autonomous_navigation(
     *,
     scene: str,
@@ -121,21 +210,33 @@ def run_autonomous_navigation(
     sim_server: SimHTTPServer | None = None
     bridge: OpenClawBridge | None = None
     stdin_thread: threading.Thread | None = None
+    watchdog_thread: threading.Thread | None = None
     stdin_stop = threading.Event()
+    watchdog_stop = threading.Event()
     gateway_started = False
     run_result: RunResult | None = None
+    diagnostics_files: dict[str, str] = {}
+    gateway_container = os.environ.get("OPENCLAW_GATEWAY_CONTAINER", _DEFAULT_GATEWAY_CONTAINER)
 
     try:
         log.info("starting MultiAgentEngine(scene=%s, agent_count=1)", scene)
         engine = MultiAgentEngine(scene=scene, agent_count=1)
 
         sim_server = SimHTTPServer(engine, agent_id=0, run_dir=output_dir, port=18788)
+        sim_server.write_runtime_event(
+            "run_started",
+            scene=scene,
+            max_moves=max_moves,
+            wall_budget_s=wall_budget,
+            skip_bootstrap=skip_bootstrap,
+        )
         log.info(
             "SimHTTPServer listening on %s:%s (Gateway route http://host.docker.internal:%s)",
             sim_server.host,
             sim_server.port,
             sim_server.port,
         )
+        watchdog_thread = _start_watchdog_thread(sim_server, watchdog_stop)
 
         if skip_bootstrap:
             token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
@@ -143,11 +244,17 @@ def run_autonomous_navigation(
                 raise RuntimeError(
                     "--skip-bootstrap requires OPENCLAW_GATEWAY_TOKEN for the running Gateway"
                 )
+            sim_server.write_runtime_event("gateway_bootstrap_skipped", container=gateway_container)
             log.info("reusing existing Gateway from OPENCLAW_GATEWAY_TOKEN")
         else:
             env = dict(os.environ)
             env["TIMEOUT_SECONDS"] = str(int(wall_budget + 60))
             env["SIM_SERVER_URL"] = "http://host.docker.internal:18788"
+            sim_server.write_runtime_event(
+                "gateway_bootstrap_begin",
+                timeout_seconds=env["TIMEOUT_SECONDS"],
+                container=gateway_container,
+            )
             log.info("bootstrapping Gateway (TIMEOUT_SECONDS=%s)", env["TIMEOUT_SECONDS"])
             bootstrap = subprocess.run(
                 ["./scripts/openclaw-bootstrap.sh"],
@@ -158,6 +265,7 @@ def run_autonomous_navigation(
             )
             token = bootstrap.stdout.strip()
             gateway_started = True
+            sim_server.write_runtime_event("gateway_bootstrap_done", container=gateway_container)
             log.info("Gateway started, bearer token captured")
 
         stdin_thread = _start_stdin_thread(sim_server, stdin_stop)
@@ -166,11 +274,18 @@ def run_autonomous_navigation(
             gateway_url="http://127.0.0.1:18789",
             token=token,
         )
+        kickoff_prompt = _kickoff_prompt(max_moves)
+        sim_server.write_runtime_event(
+            "start_run_begin",
+            prompt_chars=len(kickoff_prompt),
+            prompt_lines=kickoff_prompt.count("\n") + 1,
+            bridge_timeout_s=wall_budget + 60.0,
+        )
         run_started = time.monotonic()
         try:
             run_result = bridge.start_run(
                 agent_id=0,
-                prompt=_kickoff_prompt(max_moves),
+                prompt=kickoff_prompt,
                 wall_budget_s=wall_budget,
                 done_event=sim_server.done_event,
             )
@@ -180,22 +295,39 @@ def run_autonomous_navigation(
                 wallclock_s=round(time.monotonic() - run_started, 3),
                 terminated_by="error",
             )
+        bridge_metrics = _metrics_dict(bridge.get_last_run_metrics())
+        sim_server.write_runtime_event(
+            "start_run_end",
+            terminated_by=run_result.terminated_by,
+            wallclock_s=run_result.wallclock_s,
+            bridge_metrics=bridge_metrics,
+            sim_server_metrics=sim_server.snapshot_metrics(),
+        )
         log.info(
             "start_run returned: terminated_by=%s wallclock=%.1fs",
             run_result.terminated_by,
             run_result.wallclock_s,
         )
 
-        (output_dir / "run_result.json").write_text(
-            json.dumps(
-                {
-                    "terminated_by": run_result.terminated_by,
-                    "wallclock_s": run_result.wallclock_s,
-                    "final_message": run_result.final_message,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
+        _write_json(output_dir / "start_run_metrics.json", bridge_metrics)
+
+        if run_result.terminated_by in {"wall_clock", "error"}:
+            diagnostics_files = _capture_gateway_diagnostics(
+                output_dir=output_dir,
+                container_name=gateway_container,
+                agent_id=0,
+            )
+
+        _write_json(
+            output_dir / "run_result.json",
+            {
+                "terminated_by": run_result.terminated_by,
+                "wallclock_s": run_result.wallclock_s,
+                "final_message": run_result.final_message,
+                "bridge_metrics": bridge_metrics,
+                "sim_server_metrics": sim_server.snapshot_metrics(),
+                "diagnostics_files": diagnostics_files,
+            },
         )
 
         log.info("rendering replay.gif + report.html")
@@ -205,13 +337,17 @@ def run_autonomous_navigation(
         )
         log.info("artifacts at %s", output_dir)
     finally:
+        watchdog_stop.set()
+        if watchdog_thread is not None:
+            log.info("teardown: stopping watchdog thread")
+            watchdog_thread.join(timeout=0.2)
         if sim_server is not None:
             log.info("teardown: stopping sim server")
             sim_server.close()
         if gateway_started:
             log.info("teardown: removing openclaw-gateway container")
             subprocess.run(
-                ["docker", "rm", "-f", "openclaw-gateway"],
+                ["docker", "rm", "-f", gateway_container],
                 check=False,
                 capture_output=True,
                 text=True,

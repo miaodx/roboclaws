@@ -393,3 +393,33 @@ def test_html_is_well_formed(tmp_path: Path) -> None:
     assert parser.ok
     assert report_text.lstrip().lower().startswith("<!doctype html>")
     assert report_text.rstrip().lower().endswith("</html>")
+
+
+def test_summary_prefers_run_result_wallclock(tmp_path: Path) -> None:
+    run_dir = tmp_path / "wallclock"
+    events = [
+        _make_tool_event(
+            event_type="request",
+            tool="observe",
+            wallclock=0.0,
+            request={},
+        ),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+    ]
+    _write_trace(run_dir, events)
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "terminated_by": "wall_clock",
+                "wallclock_s": 660.1,
+                "final_message": "<wall-clock timeout - no final message>",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _run_renderer(run_dir)
+
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["wallclock_seconds"] == 660.1
+    assert summary["terminated_by"] == "wall_clock"
