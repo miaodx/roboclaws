@@ -126,6 +126,17 @@ def build_summary(events: list[dict[str, Any]], frames: list[dict[str, Any]]) ->
     ]
     seen_frames = [frame for frame in frames if frame.get("seen_by_agent") is True]
     unseen_frames = [frame for frame in frames if frame.get("seen_by_agent") is False]
+    decision_modes = {
+        "fresh_observe": 0,
+        "reasoned_batch": 0,
+        "blind_batch": 0,
+    }
+    for frame in frames:
+        if frame.get("tool") != "move":
+            continue
+        decision_mode = str(frame.get("decision_mode", ""))
+        if decision_mode in decision_modes:
+            decision_modes[decision_mode] += 1
     human_delivered = sum(
         1
         for event in events
@@ -158,6 +169,7 @@ def build_summary(events: list[dict[str, Any]], frames: list[dict[str, Any]]) ->
         "observes_by_agent": len(seen_frames),
         "frames_unseen_by_agent": len(unseen_frames),
         "observe_to_move_ratio": observe_to_move_ratio,
+        "decision_modes": decision_modes,
         "wallclock_seconds": wallclock_seconds,
         "terminated_by": "done" if done_events else "wall_clock",
         "human_messages_delivered": human_delivered,
@@ -174,24 +186,39 @@ def _format_position(agent_state: dict[str, Any]) -> str:
     return str(position)
 
 
+def _decision_descriptor(frame: dict[str, Any]) -> tuple[str, str]:
+    if frame.get("tool") == "observe":
+        return ("fresh observation", "observe")
+
+    decision_mode = frame.get("decision_mode")
+    if decision_mode == "fresh_observe":
+        return ("fresh observe-driven move", "fresh-observe")
+    if decision_mode == "reasoned_batch":
+        reason = str(frame.get("move_reason", "")).strip()
+        if reason:
+            return (f"reasoned continuation: {reason}", "reasoned-batch")
+        return ("reasoned continuation", "reasoned-batch")
+    if decision_mode == "blind_batch":
+        return ("blind batch", "blind-batch")
+    return ("move", "move")
+
+
 def build_timeline(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
     timeline: list[dict[str, Any]] = []
-    unseen_run = 0
-
     for frame in frames:
         seen_by_agent = bool(frame.get("seen_by_agent"))
-        if not seen_by_agent:
-            unseen_run += 1
-        else:
-            if unseen_run >= 5:
-                timeline.append({"kind": "batched_warning", "count": unseen_run})
-            unseen_run = 0
-
+        decision_label, decision_class = _decision_descriptor(frame)
         agent_state = frame.get("agent_state", {})
+        tool = str(frame.get("tool", "frame"))
+        move_direction = frame.get("move_direction")
         tooltip_lines = [
             f"t={float(frame.get('wallclock_elapsed', 0.0)):.1f}s",
+            f"tool={tool}",
+            f"decision={decision_label}",
             f"position={_format_position(agent_state if isinstance(agent_state, dict) else {})}",
         ]
+        if move_direction:
+            tooltip_lines.append(f"direction={move_direction}")
         human_message = frame.get("human_message")
         if human_message:
             tooltip_lines.append(f"human_message={human_message}")
@@ -202,16 +229,18 @@ def build_timeline(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "seen_by_agent": seen_by_agent,
                 "ts": float(frame.get("wallclock_elapsed", 0.0)),
                 "fpv": frame.get("fpv", ""),
+                "overhead": frame.get("overhead", ""),
                 "agent_state": agent_state,
                 "human_message": human_message,
                 "tooltip": "\n".join(tooltip_lines),
                 "badge": SEEN_BADGE if seen_by_agent else UNSEEN_BADGE,
+                "decision_label": decision_label,
+                "decision_class": decision_class,
+                "tool": tool,
+                "move_direction": move_direction,
+                "position": _format_position(agent_state if isinstance(agent_state, dict) else {}),
             }
         )
-
-    if unseen_run >= 5:
-        timeline.append({"kind": "batched_warning", "count": unseen_run})
-
     return timeline
 
 
@@ -226,7 +255,11 @@ def build_tool_log(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             request = event.get("request", {})
             summary = ""
             if tool == "move":
-                summary = f"direction={request.get('direction', '?')}"
+                summary_parts = [f"direction={request.get('direction', '?')}"]
+                reason = str(request.get("reason", "")).strip()
+                if reason:
+                    summary_parts.append(f"reason={reason}")
+                summary = " ".join(summary_parts)
             elif tool == "done":
                 summary = f"reason={request.get('reason', '?')}"
             elif tool == "observe":

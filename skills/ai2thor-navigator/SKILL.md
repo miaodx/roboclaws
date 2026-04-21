@@ -156,7 +156,8 @@ the endpoints below and parse their JSON responses.
 
 ```json
 {
-  "direction": "MoveAhead | MoveBack | MoveLeft | MoveRight | RotateLeft | RotateRight | LookUp | LookDown"
+  "direction": "MoveAhead | MoveBack | MoveLeft | MoveRight | RotateLeft | RotateRight | LookUp | LookDown",
+  "reason": "<optional brief natural-language rationale>"
 }
 ```
 
@@ -178,7 +179,11 @@ the endpoints below and parse their JSON responses.
 
 - Usage: Call `move` to take one physical step in the world. The response gives you
   updated state but does not include new images, so call `observe` again when you need
-  to re-look. The `server_warning` field is optional and appears when the server needs
+  to re-look. Default behavior is `observe -> think -> move`. You may take a short
+  burst of repeated `move` calls when you have a concrete local reason such as a clear
+  hallway, a safe backtrack, or following a human-directed maneuver. When you do, send
+  a short `reason` string so the replay can explain why you continued without a fresh
+  observation. The `server_warning` field is optional and appears when the server needs
   to flag a non-fatal issue such as moving before the first observation.
 
 ### `done`
@@ -204,8 +209,10 @@ the endpoints below and parse their JSON responses.
 - Usage: Call `done` when the navigation goal is achieved or you are stuck and further
   moves will not help. This ends the run cleanly.
 
-Call `observe` when you need to see the world. Call `move` to take a physical step.
-Call `done` when the navigation goal is achieved or you're stuck.
+Call `observe` when you need to see the world. Prefer `observe -> think -> move`, but
+stay agentic: if the scene clearly supports a short continuation, you may keep moving
+and justify it with `move.reason`. Call `done` when the navigation goal is achieved or
+you're stuck.
 
 ## Human messages
 

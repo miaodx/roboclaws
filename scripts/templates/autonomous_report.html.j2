@@ -36,14 +36,26 @@
         border-bottom: 1px solid #ddd;
       }
       .frame {
-        min-width: {{ thumbnail_size }}px;
-        max-width: {{ thumbnail_size }}px;
+        min-width: {{ thumbnail_size * 2 + 12 }}px;
+        max-width: {{ thumbnail_size * 2 + 12 }}px;
         position: relative;
         background: #fff;
+        border-radius: 6px;
+        padding: 4px;
       }
-      .frame img {
+      .image-strip {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+      }
+      .image-panel img {
         width: 100%;
         display: block;
+      }
+      .image-label {
+        font-size: 11px;
+        color: #666;
+        margin: 2px 0 4px 0;
       }
       .frame.seen {
         border: 3px solid #2ca02c;
@@ -60,19 +72,46 @@
         background: rgba(255, 255, 255, 0.9);
         border-radius: 3px;
       }
+      .decision {
+        display: inline-block;
+        margin-top: 6px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .decision.observe {
+        background: #e8f5e9;
+        color: #1b5e20;
+      }
+      .decision.fresh-observe {
+        background: #e3f2fd;
+        color: #0d47a1;
+      }
+      .decision.reasoned-batch {
+        background: #fff8e1;
+        color: #8d6e00;
+      }
+      .decision.blind-batch {
+        background: #ffebee;
+        color: #b71c1c;
+      }
+      .decision.move {
+        background: #eeeeee;
+        color: #555;
+      }
       .frame .meta {
         font-size: 12px;
         color: #555;
         margin-top: 4px;
       }
-      .batched {
-        border-left: 4px solid #f0ad4e;
-        background: #fff7e6;
-        padding: 4px 8px;
+      .frame .human-note {
+        margin-top: 6px;
+        background: #fff3cd;
+        color: #6a4f00;
+        padding: 4px 6px;
         font-size: 12px;
-        margin: 4px 0;
-        display: inline-block;
-        white-space: nowrap;
+        border-radius: 4px;
       }
       .log {
         font-family: ui-monospace, Menlo, monospace;
@@ -106,6 +145,12 @@
         <span>moves: <b>{{ summary.moves }}</b></span>
         <span>unseen frames: <b>{{ summary.frames_unseen_by_agent }}</b></span>
         <span>observe/move: <b>{{ "%.2f"|format(summary.observe_to_move_ratio) }}</b></span>
+        <span>
+          decision modes:
+          <b>{{ summary.decision_modes.fresh_observe }}</b> fresh /
+          <b>{{ summary.decision_modes.reasoned_batch }}</b> reasoned /
+          <b>{{ summary.decision_modes.blind_batch }}</b> blind
+        </span>
         <span>human msgs: <b>{{ summary.human_messages_delivered }}</b></span>
       </div>
     </div>
@@ -114,12 +159,24 @@
       {% for item in timeline %}
       {% if item.kind == "frame" %}
       <div class="frame {{ 'seen' if item.seen_by_agent else 'unseen' }}" title="{{ item.tooltip }}">
-        <img src="data:image/jpeg;base64,{{ item.fpv }}" alt="fpv">
+        <div class="image-strip">
+          <div class="image-panel">
+            <img src="data:image/jpeg;base64,{{ item.fpv }}" alt="fpv">
+            <div class="image-label">FPV</div>
+          </div>
+          <div class="image-panel">
+            <img src="data:image/jpeg;base64,{{ item.overhead }}" alt="overhead">
+            <div class="image-label">Overhead</div>
+          </div>
+        </div>
         <span class="badge">{{ item.badge }}</span>
-        <div class="meta">{{ "%.1f"|format(item.ts) }}s</div>
+        <div class="decision {{ item.decision_class }}">{{ item.decision_label }}</div>
+        <div class="meta">{{ "%.1f"|format(item.ts) }}s · {{ item.tool }}{% if item.move_direction %} · {{ item.move_direction }}{% endif %}</div>
+        <div class="meta">{{ item.position }}</div>
+        {% if item.human_message %}
+        <div class="human-note">human_message: {{ item.human_message }}</div>
+        {% endif %}
       </div>
-      {% elif item.kind == "batched_warning" %}
-      <div class="batched">batched without observing ({{ item.count }} moves)</div>
       {% endif %}
       {% endfor %}
     </div>

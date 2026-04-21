@@ -27,7 +27,10 @@ def test_kickoff_prompt_describes_exec_http_flow() -> None:
     assert "use the read tool to read skills/ai2thor-navigator/SKILL.md" in prompt
     assert "Do not claim that paired nodes" in prompt
     assert "curl -sS http://host.docker.internal:18788/observe" in prompt
-    assert "Take at least three moves" in prompt
+    assert "target budget is 50 physical moves" in prompt
+    assert "Default behavior is observe -> think -> move" in prompt
+    assert '"direction":"MoveAhead","reason":"clear hallway continues"' in prompt
+    assert "Be agentic" in prompt
     assert "explicitly mention the human_message" in prompt
 
 

@@ -41,6 +41,7 @@ class SimHTTPServer:
         self.done_event = threading.Event()
         self._done_reason: str | None = None
         self._observed_once = False
+        self._moves_since_observe = 0
         self._started = time.monotonic()
         self._controller_lock = threading.Lock()
         self._queue_lock = threading.Lock()
@@ -153,35 +154,43 @@ class SimHTTPServer:
 
     def _handle_move(self, handler: BaseHTTPRequestHandler, request: dict[str, Any]) -> None:
         direction = str(request.get("direction", ""))
+        reason = str(request.get("reason", "")).strip() or None
         if direction not in NAVIGATION_ACTIONS:
             body = {"error": "invalid direction", "valid": NAVIGATION_ACTIONS}
             self._send_json(handler, HTTPStatus.BAD_REQUEST, body)
             self._write_trace(tool="move", event="response", response=body)
             return
 
-        server_warning: str | None = None
-        if not self._observed_once:
-            server_warning = "move before first observe"
-            self._write_trace(
-                tool="move",
-                event="server_warning",
-                warning=server_warning,
-            )
-
         with self._controller_lock:
+            server_warning: str | None = None
+            if not self._observed_once:
+                server_warning = "move before first observe"
+                self._write_trace(
+                    tool="move",
+                    event="server_warning",
+                    warning=server_warning,
+                )
             state = self.engine.step(self.agent_id, direction)
             overhead = self.engine.get_overhead_frame()
+            decision_mode = self._classify_move_decision(reason)
+            self._moves_since_observe += 1
+
+        human_message = self._pop_human_message()
 
         frame_payload = self._frame_capture_payload(
             state=state,
             overhead=overhead,
             seen_by_agent=False,
+            decision_mode=decision_mode,
+            human_message=human_message,
+            move_direction=direction,
+            move_reason=reason,
         )
         self._write_trace(tool="move", event="frame_capture", **frame_payload)
 
         response = {
             "state": self._state_payload(state),
-            "human_message": self._pop_human_message(),
+            "human_message": human_message,
         }
         if server_warning is not None:
             response["server_warning"] = server_warning
@@ -201,18 +210,21 @@ class SimHTTPServer:
         with self._controller_lock:
             state = self.engine.get_agent_state(self.agent_id)
             overhead = self.engine.get_overhead_frame()
-        self._observed_once = True
+            self._observed_once = True
+            self._moves_since_observe = 0
+        human_message = self._pop_human_message()
         frame_payload = self._frame_capture_payload(
             state=state,
             overhead=overhead,
             seen_by_agent=True,
+            human_message=human_message,
         )
         self._write_trace(tool="observe", event="frame_capture", **frame_payload)
         return {
             "fpv": frame_payload["fpv"],
             "overhead": frame_payload["overhead"],
             "state": self._state_payload(state),
-            "human_message": self._pop_human_message(),
+            "human_message": human_message,
         }
 
     def _frame_capture_payload(
@@ -221,13 +233,26 @@ class SimHTTPServer:
         state: AgentState,
         overhead: np.ndarray,
         seen_by_agent: bool,
+        decision_mode: str | None = None,
+        human_message: str | None = None,
+        move_direction: str | None = None,
+        move_reason: str | None = None,
     ) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "seen_by_agent": seen_by_agent,
             "fpv": _encode_frame_b64(state.frame),
             "overhead": _encode_frame_b64(overhead),
             "agent_state": self._state_payload(state),
         }
+        if decision_mode is not None:
+            payload["decision_mode"] = decision_mode
+        if human_message is not None:
+            payload["human_message"] = human_message
+        if move_direction is not None:
+            payload["move_direction"] = move_direction
+        if move_reason is not None:
+            payload["move_reason"] = move_reason
+        return payload
 
     def _state_payload(self, state: AgentState) -> dict[str, Any]:
         return {
@@ -244,6 +269,15 @@ class SimHTTPServer:
             if not self._human_queue:
                 return None
             return self._human_queue.popleft()
+
+    def _classify_move_decision(self, reason: str | None) -> str:
+        if not self._observed_once:
+            return "blind_batch"
+        if self._moves_since_observe == 0:
+            return "fresh_observe"
+        if reason:
+            return "reasoned_batch"
+        return "blind_batch"
 
     def _read_json_body(self, handler: BaseHTTPRequestHandler) -> dict[str, Any] | None:
         try:

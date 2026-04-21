@@ -94,6 +94,9 @@ def test_move_valid_direction_dispatches_to_engine(tmp_path: Path) -> None:
 
     frame_events = [event for event in _trace(tmp_path) if event["event"] == "frame_capture"]
     assert frame_events[-1]["seen_by_agent"] is False
+    assert frame_events[-1]["decision_mode"] == "fresh_observe"
+    assert frame_events[-1]["move_direction"] == "MoveAhead"
+    assert frame_events[-1].get("move_reason") is None
 
 
 def test_move_rejects_invalid_direction(tmp_path: Path) -> None:
@@ -124,6 +127,49 @@ def test_move_before_observe_returns_warning(tmp_path: Path) -> None:
     assert body["server_warning"] == "move before first observe"
     warning_events = [event for event in _trace(tmp_path) if event["event"] == "server_warning"]
     assert len(warning_events) == 1
+    frame_events = [event for event in _trace(tmp_path) if event["event"] == "frame_capture"]
+    assert frame_events[-1]["decision_mode"] == "blind_batch"
+
+
+def test_move_reasoned_batch_after_first_unseen_move(tmp_path: Path) -> None:
+    engine = _engine()
+    with SimHTTPServer(engine, agent_id=0, run_dir=tmp_path, port=0) as server:
+        _request_json("GET", f"http://127.0.0.1:{server.port}/observe")
+        _request_json(
+            "POST",
+            f"http://127.0.0.1:{server.port}/move",
+            {"direction": "MoveAhead"},
+        )
+        status, _ = _request_json(
+            "POST",
+            f"http://127.0.0.1:{server.port}/move",
+            {"direction": "MoveAhead", "reason": "clear hallway continues"},
+        )
+
+    assert status == 200
+    frame_events = [event for event in _trace(tmp_path) if event["event"] == "frame_capture"]
+    assert frame_events[-1]["decision_mode"] == "reasoned_batch"
+    assert frame_events[-1]["move_reason"] == "clear hallway continues"
+
+
+def test_move_without_reason_after_unseen_move_is_blind_batch(tmp_path: Path) -> None:
+    engine = _engine()
+    with SimHTTPServer(engine, agent_id=0, run_dir=tmp_path, port=0) as server:
+        _request_json("GET", f"http://127.0.0.1:{server.port}/observe")
+        _request_json(
+            "POST",
+            f"http://127.0.0.1:{server.port}/move",
+            {"direction": "MoveAhead"},
+        )
+        status, _ = _request_json(
+            "POST",
+            f"http://127.0.0.1:{server.port}/move",
+            {"direction": "RotateLeft"},
+        )
+
+    assert status == 200
+    frame_events = [event for event in _trace(tmp_path) if event["event"] == "frame_capture"]
+    assert frame_events[-1]["decision_mode"] == "blind_batch"
 
 
 def test_human_message_queue_drains_one_per_tool_call(tmp_path: Path) -> None:

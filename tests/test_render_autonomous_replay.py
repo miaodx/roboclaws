@@ -45,12 +45,17 @@ def _make_tool_event(
 def _make_frame_event(
     *,
     wallclock: float,
+    tool: str,
     seen_by_agent: bool,
     colour: str = "blue",
     human_message: str | None = None,
+    decision_mode: str | None = None,
+    move_reason: str | None = None,
+    move_direction: str | None = None,
 ) -> dict:
     event: dict[str, object] = {
         "event": "frame_capture",
+        "tool": tool,
         "wallclock_elapsed": wallclock,
         "seen_by_agent": seen_by_agent,
         "fpv": _tiny_jpeg_b64(colour),
@@ -59,6 +64,12 @@ def _make_frame_event(
     }
     if human_message is not None:
         event["human_message"] = human_message
+    if decision_mode is not None:
+        event["decision_mode"] = decision_mode
+    if move_reason is not None:
+        event["move_reason"] = move_reason
+    if move_direction is not None:
+        event["move_direction"] = move_direction
     return event
 
 
@@ -95,14 +106,21 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
             wallclock=0.0,
             request={},
         ),
-        _make_frame_event(wallclock=0.1, seen_by_agent=True, colour="green"),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
         _make_tool_event(
             event_type="request",
             tool="move",
             wallclock=0.2,
             request={"direction": "MoveAhead"},
         ),
-        _make_frame_event(wallclock=0.3, seen_by_agent=False, colour="red"),
+        _make_frame_event(
+            wallclock=0.3,
+            tool="move",
+            seen_by_agent=False,
+            colour="red",
+            decision_mode="fresh_observe",
+            move_direction="MoveAhead",
+        ),
     ]
     _write_trace(run_dir, events)
 
@@ -118,35 +136,75 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     report_text = report_html.read_text(encoding="utf-8")
     assert "👁" in report_text
     assert "🚶" in report_text
+    assert 'alt="overhead"' in report_text
+    assert "fresh observation" in report_text
+    assert "fresh observe-driven move" in report_text
     assert summary_json.exists()
 
 
-def test_batched_without_observing_highlight(tmp_path: Path) -> None:
+def test_reasoned_and_blind_batch_labels(tmp_path: Path) -> None:
     run_dir = tmp_path / "batched"
     events = [
         _make_tool_event(
             event_type="request",
+            tool="observe",
+            wallclock=0.0,
+            request={},
+        ),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+        _make_tool_event(
+            event_type="request",
             tool="move",
-            wallclock=float(index),
+            wallclock=0.2,
             request={"direction": "MoveAhead"},
-        )
-        for index in range(7)
-    ]
-    events.extend(
+        ),
         _make_frame_event(
-            wallclock=float(index) + 0.1,
+            wallclock=0.3,
+            tool="move",
             seen_by_agent=False,
             colour="orange",
-        )
-        for index in range(7)
-    )
+            decision_mode="fresh_observe",
+            move_direction="MoveAhead",
+        ),
+        _make_tool_event(
+            event_type="request",
+            tool="move",
+            wallclock=0.4,
+            request={"direction": "MoveAhead", "reason": "clear hallway continues"},
+        ),
+        _make_frame_event(
+            wallclock=0.5,
+            tool="move",
+            seen_by_agent=False,
+            colour="yellow",
+            decision_mode="reasoned_batch",
+            move_reason="clear hallway continues",
+            move_direction="MoveAhead",
+        ),
+        _make_tool_event(
+            event_type="request",
+            tool="move",
+            wallclock=0.6,
+            request={"direction": "MoveRight"},
+        ),
+        _make_frame_event(
+            wallclock=0.7,
+            tool="move",
+            seen_by_agent=False,
+            colour="red",
+            decision_mode="blind_batch",
+            move_direction="MoveRight",
+        ),
+    ]
     _write_trace(run_dir, events)
 
     _run_renderer(run_dir)
 
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
-    assert "batched without observing (7 moves)" in report_text
-    assert 'class="batched"' in report_text
+    assert "reasoned continuation: clear hallway continues" in report_text
+    assert "blind batch" in report_text
+    assert 'class="decision reasoned-batch"' in report_text
+    assert 'class="decision blind-batch"' in report_text
 
 
 def test_summary_json_key_integrity(tmp_path: Path) -> None:
@@ -164,7 +222,7 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
             wallclock=0.05,
             response={},
         ),
-        _make_frame_event(wallclock=0.1, seen_by_agent=True, colour="green"),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
         _make_tool_event(
             event_type="request",
             tool="move",
@@ -177,7 +235,14 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
             wallclock=0.25,
             response={},
         ),
-        _make_frame_event(wallclock=0.3, seen_by_agent=False, colour="red"),
+        _make_frame_event(
+            wallclock=0.3,
+            tool="move",
+            seen_by_agent=False,
+            colour="red",
+            decision_mode="fresh_observe",
+            move_direction="MoveAhead",
+        ),
         _make_tool_event(
             event_type="request",
             tool="observe",
@@ -192,6 +257,7 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
         ),
         _make_frame_event(
             wallclock=0.5,
+            tool="observe",
             seen_by_agent=True,
             colour="blue",
             human_message="check the overhead map",
@@ -208,12 +274,19 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
             wallclock=0.65,
             response={},
         ),
-        _make_frame_event(wallclock=0.7, seen_by_agent=False, colour="yellow"),
+        _make_frame_event(
+            wallclock=0.7,
+            tool="move",
+            seen_by_agent=False,
+            colour="yellow",
+            decision_mode="fresh_observe",
+            move_direction="RotateLeft",
+        ),
         _make_tool_event(
             event_type="request",
             tool="move",
             wallclock=0.8,
-            request={"direction": "MoveAhead"},
+            request={"direction": "MoveAhead", "reason": "clear hallway continues"},
         ),
         _make_tool_event(
             event_type="response",
@@ -221,11 +294,39 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
             wallclock=0.85,
             response={},
         ),
-        _make_frame_event(wallclock=0.9, seen_by_agent=False, colour="purple"),
+        _make_frame_event(
+            wallclock=0.9,
+            tool="move",
+            seen_by_agent=False,
+            colour="purple",
+            decision_mode="reasoned_batch",
+            move_reason="clear hallway continues",
+            move_direction="MoveAhead",
+        ),
+        _make_tool_event(
+            event_type="request",
+            tool="move",
+            wallclock=1.0,
+            request={"direction": "MoveRight"},
+        ),
+        _make_tool_event(
+            event_type="response",
+            tool="move",
+            wallclock=1.05,
+            response={},
+        ),
+        _make_frame_event(
+            wallclock=1.1,
+            tool="move",
+            seen_by_agent=False,
+            colour="orange",
+            decision_mode="blind_batch",
+            move_direction="MoveRight",
+        ),
         _make_tool_event(
             event_type="request",
             tool="done",
-            wallclock=1.0,
+            wallclock=1.2,
             request={"reason": "finished"},
         ),
     ]
@@ -234,12 +335,17 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
     _run_renderer(run_dir)
 
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["total_tool_calls"] == 6
-    assert summary["tool_calls_by_type"] == {"observe": 2, "move": 3, "done": 1}
+    assert summary["total_tool_calls"] == 7
+    assert summary["tool_calls_by_type"] == {"observe": 2, "move": 4, "done": 1}
     assert summary["observes_by_agent"] == 2
-    assert summary["frames_unseen_by_agent"] == 3
-    assert summary["moves"] == 3
+    assert summary["frames_unseen_by_agent"] == 4
+    assert summary["moves"] == 4
     assert summary["human_messages_delivered"] == 1
+    assert summary["decision_modes"] == {
+        "fresh_observe": 2,
+        "reasoned_batch": 1,
+        "blind_batch": 1,
+    }
     assert summary["terminated_by"] == "done"
 
 
@@ -252,14 +358,21 @@ def test_html_is_well_formed(tmp_path: Path) -> None:
             wallclock=0.0,
             request={},
         ),
-        _make_frame_event(wallclock=0.1, seen_by_agent=True, colour="green"),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
         _make_tool_event(
             event_type="request",
             tool="move",
             wallclock=0.2,
             request={"direction": "MoveAhead"},
         ),
-        _make_frame_event(wallclock=0.3, seen_by_agent=False, colour="red"),
+        _make_frame_event(
+            wallclock=0.3,
+            tool="move",
+            seen_by_agent=False,
+            colour="red",
+            decision_mode="fresh_observe",
+            move_direction="MoveAhead",
+        ),
     ]
     _write_trace(run_dir, events)
 
