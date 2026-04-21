@@ -4,10 +4,10 @@ milestone: v1.1
 milestone_name: Better Views
 status: planning
 stopped_at: "Roadmap + state + requirements bootstrapped from `.planning/intel/`; both ingest WARNINGs verified stale and marked RESOLVED. Next action: `/gsd-plan-phase 2.4`."
-last_updated: "2026-04-20T12:46:04.822Z"
+last_updated: "2026-04-21T09:00:34.855Z"
 last_activity: 2026-04-20 — new-mode GSD ingest bootstrap (18 docs → intel → roadmap)
 progress:
-  total_phases: 3
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -115,4 +115,4 @@ Resume file: `/home/mi/ws/gogo/roboclaws/PLAN.md` (drafted Phase 2.4)
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Planned Phase:** 2.5 (Autonomous OpenClaw loop (v1 single-agent nav + human steer)) — 8 plans — 2026-04-20T12:46:04.817Z
+**Planned Phase:** 02.6 (openclaw-mcp-tools-integration) — 7 plans — 2026-04-21T09:00:34.851Z
