@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/main-autoplan-restore-20260421-110640.md -->
 # Phase 2.5 — Autonomous OpenClaw Loop (v1: single-agent nav + human steer)
 
 Parallel to Phase 2.4 (`PLAN.md`). Phase 2.4 measures *which images help*
@@ -20,11 +21,19 @@ Measured cost (the existing `output/coverage-openclaw-probe/` run,
 across a 44-step run (context accumulation). Coverage run terminated at
 22 % of its 200-step budget on `provider_unstable`.
 
-**The inversion.** Let the agent drive. One kickoff prompt — *"navigate
-the room for up to N moves"* — and the agent calls tools at its own
-pace: `observe()`, `move(direction)`, `done(reason)`. Our Python just
-babysits the AI2-THOR controller and serves tool requests over local
-HTTP.
+**The inversion.** Let the agent drive. One kickoff prompt, a real move
+budget, and the agent calls tools at its own pace:
+`observe()`, `move(direction, reason?)`, `done(reason)`. Our Python
+just babysits the AI2-THOR controller and serves tool requests over
+local HTTP.
+
+**Behavioral policy.** v1 is ReAct-preferred, not ReAct-hard-gated. The
+agent should usually `observe -> think -> move`. It MAY take a short
+burst of repeated moves when it has a concrete local reason such as a
+clear hallway, safe backtrack, or following a human-directed maneuver.
+When it does, the move request should carry a brief natural-language
+reason so the replay can distinguish a reasoned continuation from a
+blind batch.
 
 **Side channel for human steering.** A terminal user should be able to
 type commands like *"draw a circle showing your path"* mid-run and have
@@ -41,7 +50,7 @@ world observations. No interrupt, no extra protocol.
 - **One agent, one scene.** Single-agent autonomous loop only. Demo
   script: `examples/openclaw_nav_autonomous.py`.
 - **Three tools**: `observe` (returns FPV + overhead as base64 JPEGs +
-  state JSON + pending `human_message`), `move(direction)` (advances
+  state JSON + pending `human_message`), `move(direction, reason?)` (advances
   sim, returns new state + pending `human_message`), `done(reason)`
   (signals end of run).
 - **Local HTTP tool server** at `localhost:18788` — new module
@@ -66,15 +75,15 @@ world observations. No interrupt, no extra protocol.
 - **Telemetry from the tool-server side** — every tool call logged to
   `output/openclaw-autonomous/<run-id>/trace.jsonl`. Every frame capture
   carries a `seen_by_agent: bool` flag (true for `/observe` responses,
-  false for server-side snapshots taken during `/move`). Replay script
-  reads the trace and produces `replay.gif` + `report.html`.
-- **HTML report with agent-consumption hints.** `report.html` lays out
-  every captured frame in a scrollable timeline. Each frame is visually
-  tagged: a green border + 👁 badge means the agent saw this frame
-  (came from `/observe`); a grey border + 🚶 badge means it was captured
-  server-side during a `/move` and the agent never looked at it. The
-  badges make the agent's observation cadence legible at a glance — you
-  can see whether the agent batches moves or re-observes frequently.
+  false for server-side snapshots taken during `/move`) plus enough
+  metadata to classify a repeated move as `reasoned_batch` or
+  `blind_batch`. Replay script reads the trace and produces
+  `replay.gif` + `report.html`.
+- **HTML report as a decision audit.** `report.html` lays out every
+  captured step in a scrollable timeline with both FPV and overhead
+  visible. Each step keeps the green 👁 / grey 🚶 visibility hint, but
+  also labels the step as fresh observe-driven, reasoned continuation,
+  or unjustified blind batch so the agent's autonomy is legible.
 - **Clean shutdown** — all internal threads `daemon=True`; the example
   wraps the full run in `try/finally` so SIGINT tears down sim server +
   Gateway container + stdin thread in order, even on Ctrl+C.
@@ -179,11 +188,10 @@ our local sim, not a remote we poke per step.
   already; piggybacking notes on tool responses costs zero new plumbing.
 - **Telemetry is trivial.** Every tool call is a local HTTP request we
   log on our side. No need to tail Gateway logs.
-- **Fewer VLM calls could fall out naturally.** The agent may batch
-  ("three `move`s without re-observing") if confident, saving tokens.
-  Or it may think more per-decision (two calls per motion). Direction
-  is unclear — acceptance criterion below treats latency as diagnostic,
-  not pass/fail.
+- **Agentic without being sloppy.** The agent is free to continue along
+  a clear path without fresh observation every turn, but the system
+  makes that choice auditable instead of silently treating every
+  repeated move as equivalent.
 
 ## Implementation Plan
 
@@ -240,7 +248,7 @@ either answer invalidates the pull-model shape, escalate before writing code.
      **Also writes a frame-capture event to trace.jsonl with
      `seen_by_agent: true`.**
    - `POST /move` — body `{"direction": "MoveAhead"|"MoveBack"|
-     "RotateLeft"|"RotateRight"|"LookUp"|"LookDown"}`. Validated
+     "RotateLeft"|"RotateRight"|"LookUp"|"LookDown", "reason"?: "<brief natural-language rationale>"}`. Validated
      against `NAVIGATION_ACTIONS`. Calls `engine.step(agent_id,
      direction)` under the controller mutex. Returns new state +
      pending `human_message`.
@@ -248,7 +256,11 @@ either answer invalidates the pull-model shape, escalate before writing code.
      server-side and writes a frame-capture event to trace.jsonl with
      `seen_by_agent: false` — the response body does NOT include the
      images (no extra bytes to the agent).** This is what gives the
-     HTML report smooth frame coverage between observations.
+     HTML report smooth frame coverage between observations. The move
+     capture should also carry a semantic decision mode:
+     `fresh_observe` for the first move after `/observe`,
+     `reasoned_batch` for subsequent moves with a short `reason`,
+     `blind_batch` for subsequent moves without a reason.
      **Spec on ordering:** `/move` before any `/observe` succeeds with
      a 200, plus a warning field `server_warning: "move before first
      observe"` in the response AND a warning event in trace.jsonl. We
@@ -456,10 +468,11 @@ the networking end-to-end.
    - `observes_by_agent` (count of `seen_by_agent=true` captures)
    - `frames_unseen_by_agent` (count of `seen_by_agent=false`)
    - `observe_to_move_ratio` (informative — high means over-observing)
+   - `decision_modes` (count of `fresh_observe`, `reasoned_batch`, `blind_batch`)
    - `wallclock_seconds`
    - `terminated_by`
    - `human_messages_delivered`
-3. **`report.html` — agent-consumption aware.** A single-file HTML
+3. **`report.html` — decision-audit aware.** A single-file HTML
    report (Jinja2 template + inline CSS, no JS framework) with:
    - Header: run metadata, summary stats, termination reason.
    - **Frame timeline**: a horizontal scrollable grid of every frame
@@ -476,15 +489,19 @@ the networking end-to-end.
    - **Tool-call log**: below the timeline, a monospace transcript of
      every tool call (observe/move/done), with human-message
      deliveries highlighted inline.
-   - **Unseen streak warnings**: if there are ≥5 consecutive
-     `seen_by_agent=false` frames, the timeline highlights that run in
-     amber with a "batched without observing (N moves)" label. Lets you
-     spot over-confident or under-confident strategies visually.
+   - **Continuation labels**:
+     - if repeated unseen frames carry move reasons, the timeline marks
+       them as a reasoned continuation and shows the short rationale
+     - if repeated unseen frames have no reason, the timeline highlights
+       that run in amber as an unjustified blind batch
 4. Tests:
    - Synthetic trace with both true/false frame captures → assert GIF
-     is non-empty, HTML file exists, contains both 👁 and 🚶 spans.
+     is non-empty, HTML file exists, contains both 👁 and 🚶 spans and
+     displays both FPV and overhead.
    - Synthetic trace with 7 consecutive false frames → assert HTML
-     contains the amber "batched without observing" label.
+     contains the blind-batch warning.
+   - Synthetic trace with repeated false frames carrying reasons →
+     assert HTML contains a reasoned-continuation label.
    - Summary.json has all keys, counts match trace.
    - HTML is well-formed (parseable by stdlib `html.parser`).
 
@@ -501,13 +518,15 @@ Docker). Per `CLAUDE.md § cloud vs local development` +
    This is the **live-probe gate** for this phase. Do NOT merge until
    this returns 200 with JSON.
 2. **Dry run**: `python examples/openclaw_nav_autonomous.py --scene
-   FloorPlan201 --max-moves 50 --wall-budget 300`. Success criteria:
+   FloorPlan201 --max-moves 200 --wall-budget 600`. Success criteria:
    - Agent calls `observe` within 30 s of kickoff.
-   - At least one `move` before wall-clock expires.
+   - The default cadence is observe-think-move, but short continued
+     moves are acceptable when the report shows a concrete reason.
    - Termination via `done` OR wall-clock, both acceptable.
    - `replay.gif` + `report.html` both render.
-   - `report.html` opens in a browser with both 👁 and 🚶 badges
-     visible (assuming the agent did at least one observe + one move).
+   - `report.html` opens in a browser with both FPV and overhead
+     visible, with 👁 and 🚶 badges and with semantic continuation
+     labels when batching occurs.
 3. **Interjection probe**: same run, but 60 s in, type
    *"check the overhead map and describe what's around you"* into
    stdin. Assert:
@@ -545,7 +564,8 @@ Docker). Per `CLAUDE.md § cloud vs local development` +
 | **[REGRESSION]** `start_run` doesn't mutate step()'s timeout | call start_run, assert subsequent step() honours 180s default | `tests/test_bridge_start_run.py` | cloud |
 | `start_run` wipes workspace state/ before kickoff | mocked docker-exec, assert called once pre-POST | `tests/test_bridge_start_run.py` | cloud |
 | trace → replay GIF renders (both seen_by_agent true + false) | synthetic trace → non-empty GIF, HTML exists, both 👁 and 🚶 in DOM | `tests/test_render_autonomous_replay.py` | cloud |
-| HTML "batched without observing" highlight | 7 consecutive seen_by_agent=false in synthetic trace → amber label | `tests/test_render_autonomous_replay.py` | cloud |
+| HTML blind-batch warning | 7 consecutive seen_by_agent=false with no reasons in synthetic trace → amber blind-batch label | `tests/test_render_autonomous_replay.py` | cloud |
+| HTML reasoned continuation label | repeated seen_by_agent=false frames carrying move reasons → semantic continuation label | `tests/test_render_autonomous_replay.py` | cloud |
 | summary.json key/count integrity | synthetic trace → expected keys + counts | `tests/test_render_autonomous_replay.py` | cloud |
 | Skill tool declarations parse | bootstrap gateway + kickoff → first `observe` within 30 s | T51 step 4 | **local-dev** |
 | Host-network container → host HTTP | `docker exec ... curl /observe` returns 200 | T55 step 1 | **local-dev** |
