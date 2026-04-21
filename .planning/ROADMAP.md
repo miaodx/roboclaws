@@ -14,12 +14,15 @@ via tool calls instead of the push model (Phase 2.5 → 2.6). Phase 3 (Isaac
 Lab) is deferred indefinitely.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
-is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phase 2.5 was
+was planned into GSD on 2026-04-21 under
+`.planning/phases/02.4-view-experiment-ab/`; `02.4-01` lands the
+single-agent `openclaw_demo.py` path first, then the same view surface
+rolls through territory/coverage and the experiment harness. Phase 2.5 was
 drafted around a curl-in-exec tool-call contract that local probing on
 2026-04-21 proved structurally wrong (agent fights the Gateway's exec
 allowlist instead of using native tools) — it is SUPERSEDED by Phase 2.6,
-which rebuilds the autonomous loop on first-class MCP tools + a `minimal`
-tool profile (spike-proven 2026-04-21; see
+which shipped the autonomous loop on first-class MCP tools + a `minimal`
+tool profile (see
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`).
 Phase 3 remains deferred indefinitely.
 
@@ -27,9 +30,9 @@ Phase 3 remains deferred indefinitely.
 
 - ✅ **v1.0 Core + OpenClaw** - Phases 1, 1.5, 2, 2.1, 2.2 (shipped 2026-04-16)
 - ⛔ **Phase 2.3 (Digest pin)** - DECLINED 2026-04-20 (LOCKED ADR)
-- 🚧 **v1.1 Better Views** - Phase 2.4 (drafted, awaiting plan)
+- 🚧 **v1.1 Better Views** - Phase 2.4 (planned in GSD 2026-04-21; ready to execute)
 - ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
-- 📋 **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — spike-proven, awaiting plan)
+- ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -166,13 +169,13 @@ and ≤$20 spend.
   1. A contributor can run `examples/openclaw_demo.py --views {baseline,map-v2,map-v2+chase}` (and the same flag on `territory_game.py` / `coverage_game.py`) and observe distinct overhead rendering + optional chase-cam frame in the resulting artifacts.
   2. After the overnight Kimi sweep + NVIDIA confirm, `output/view-experiment/results.jsonl` contains runs across variants × seeds × scenes × games within the `$20` hard cap; total spend is logged per `--max-usd` gate (Kimi `$15`, NVIDIA `$5`).
   3. `docs/view-experiment-2026-04.md` ships a decision record: one-line verdict per question (map-v2 helps / doesn't, chase-cam helps / doesn't), bootstrap 95% CIs per `(variant, game)` for the primary metric, paired Wilcoxon p-values + effect sizes for {B vs A, C vs A, C vs B}, and sample GIFs per variant on a matching seed/scene.
-**Plans**: TBD — awaiting `/gsd-plan-phase 2.4`. Expected shape (pre-plan draft in root `PLAN.md`):
+**Plans**: 4 plans. Phase 2.4 was ingested into GSD on 2026-04-21. Execution order intentionally starts with the single-agent push-model OpenClaw demo (`examples/openclaw_demo.py`) before the territory/coverage rollout.
 
 Plans:
-- [ ] 024-01: NvidiaProvider extension (A-03) — structured-output via instructor, live-probe gate pre-merge
-- [ ] 024-02: `roboclaws/core/views.py` + `render_structured_map` + chase-cam API (A-04 build)
-- [ ] 024-03: Overnight Kimi workhorse sweep (`--max-usd 15`) + NVIDIA confirm (`--max-usd 5`) at local workstation (T35 local-dev only)
-- [ ] 024-04: Analysis script + `docs/view-experiment-2026-04.md` decision record
+- [ ] 02.4-01: Shared view primitives + `examples/openclaw_demo.py --views ...` rollout (single-agent OpenClaw first)
+- [ ] 02.4-02: Territory + coverage rollout onto the shared view builder
+- [ ] 02.4-03: `NvidiaProvider` + `examples/view_experiment.py` harness with wallet gates
+- [ ] 02.4-04: Analysis script + local-dev sweep + `docs/view-experiment-2026-04.md` decision record
 **UI hint**: yes
 
 #### ⛔ v1.2 Autonomous OpenClaw Loop — Phase 2.5 SUPERSEDED by Phase 2.6
@@ -196,7 +199,7 @@ Plans:
 - [⛔] 025-07 (T54): `scripts/render_autonomous_replay.py` — replay.gif + report.html — **carries forward into 2.6 unchanged**
 - [⛔] 025-08 (T55): Local-dev validation (6 probes) — **carries forward into 2.6 as live-probe gate**
 
-#### 📋 v1.2 Autonomous OpenClaw Loop (Phase 2.6) — Drafted, ready for plan
+#### ✅ v1.2 Autonomous OpenClaw Loop (Phase 2.6) — Shipped
 
 ### Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)
 **Goal**: Same user-visible outcome as superseded Phase 2.5 (single-agent autonomous nav + human steer), rebuilt on the architecture the 2026-04-21 spike proved works: `observe` / `move` / `done` as first-class MCP tools served over streamable-http, agent running under Gateway tool `profile: minimal` so it literally cannot fall back to `exec`/`curl`/generic-`image`.
@@ -255,7 +258,7 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.1. Transport correction | v1.0 | 3/3 | Complete | 2026-04 |
 | 2.2. Long-running OpenClaw games | v1.0 | 3/3 | Complete | 2026-04-16 |
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
-| 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
+| 2.4. View-experiment A/B | v1.1 | 0/4 | Planned in GSD; ready to execute (02.4-01 next) | - |
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
