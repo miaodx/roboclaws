@@ -107,7 +107,8 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       is not dropped — it graduates to a new phase if/when Phase 2.4's
       decision record lands. Scope: default `--views` switch + README +
       CI smoke refresh.
-- [ ] **A-06** (agent-driven tool loop): Invert the OpenClaw integration.
+- [x] **A-06
+** (agent-driven tool loop): Invert the OpenClaw integration.
       Instead of the push model (`bridge.step()` shoves FPV+overhead per
       step), one long-lived kickoff `/v1/chat/completions` call with
       `wall_budget_s`; the agent pulls three tools (`observe`,

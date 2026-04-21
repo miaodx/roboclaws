@@ -22,6 +22,7 @@ Gateway image).
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -32,6 +33,118 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = ROOT / "scripts" / "openclaw-bootstrap.sh"
 IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.14"
+
+
+# ---------------------------------------------------------------------------
+# Pre-seed heredoc runner
+# ---------------------------------------------------------------------------
+#
+# ``scripts/openclaw-bootstrap.sh`` materialises ``openclaw.json`` inside a
+# short-lived throwaway container via a python3 heredoc.  The D-04 / spike F-3
+# contract (mcp.servers + tools.profile must be present BEFORE first container
+# start) is encoded entirely in that heredoc — so the regression tests have to
+# execute the heredoc against a tmp config root and inspect the resulting
+# openclaw.json.  Spinning docker for every test would be slow and require the
+# pinned image, which is not available in lint-and-mock CI.  Instead: extract
+# the heredoc body, patch the hard-coded ``/home/node/.openclaw`` root to
+# ``tmp_path``, and exec it with ``python3`` directly.  This is the same shape
+# the Gateway container runs, minus Docker's isolation.
+
+
+def _extract_preseed_heredoc(script_src: str) -> str:
+    """Return the body of the pre-seed python3 heredoc in ``openclaw-bootstrap.sh``.
+
+    Structure on disk (confirmed against the live file, see 02.6-02 plan):
+
+        ... docker run --rm ... "$IMAGE" sh -lc '
+        set -eu
+        python3 - <<'"'"'PY'"'"'
+        <BODY>
+        PY
+        chown -R 1000:1000 /home/node/.openclaw
+        ' >&2 || die ...
+
+    The opening fence line contains ``python3 - <<`` (followed by the shell
+    quoting dance for ``PY``).  The closing fence is a line whose stripped
+    content is exactly ``PY``.  Simple line-based scanning is more robust
+    than a regex over the multi-layer quoting.
+    """
+    lines = script_src.splitlines()
+    start: int | None = None
+    for idx, line in enumerate(lines):
+        if "python3 - <<" in line and "'PY'" in line:
+            start = idx + 1
+            break
+    if start is None:
+        raise AssertionError(
+            "could not locate pre-seed python heredoc opener in openclaw-bootstrap.sh"
+        )
+    end: int | None = None
+    for idx in range(start, len(lines)):
+        if lines[idx].rstrip() == "PY":
+            end = idx
+            break
+    if end is None:
+        raise AssertionError(
+            "could not locate pre-seed python heredoc closing PY fence in openclaw-bootstrap.sh"
+        )
+    return "\n".join(lines[start:end])
+
+
+def _run_preseed(tmp_path: Path, env_overrides: dict[str, str]) -> Path:
+    """Execute the pre-seed python heredoc against a tmp config root.
+
+    Returns the path to the generated ``openclaw.json``.  The heredoc is
+    unchanged code that normally runs inside the Gateway image's throwaway
+    container; we redirect its ``/home/node/.openclaw`` paths to ``tmp_path``
+    so the test can be executed on the host without Docker.
+    """
+    script_src = BOOTSTRAP.read_text(encoding="utf-8")
+    heredoc_body = _extract_preseed_heredoc(script_src)
+
+    # Redirect the one hard-coded config root to tmp_path.  The heredoc uses
+    # ``base = "/home/node/.openclaw"`` exactly once and derives every other
+    # path from it — so a single-point string replacement is sufficient.
+    patched = heredoc_body.replace(
+        'base = "/home/node/.openclaw"',
+        f"base = {json.dumps(str(tmp_path))}",
+    )
+
+    script_file = tmp_path / "preseed.py"
+    script_file.write_text(patched)
+
+    # Minimum env the heredoc reads via os.environ (including the Phase 2.6
+    # additions ROBOCLAWS_MCP_URL + ROBOCLAWS_TOOL_PROFILE).  Tests only
+    # override what they care about; everything else gets a safe default.
+    env = {
+        "PROVIDER_API_KEY": "sk-fake",
+        "PROVIDER_ID": "kimi",
+        "PROVIDER_ID_OVERRIDE": "",
+        "PROVIDER_ENTRY_JSON": "",
+        "PROVIDER_BASE_URL": "",
+        "MODEL": "kimi/k2p5",
+        "IMAGE_MODEL": "kimi/k2p5",
+        "TIMEOUT_SECONDS": "600",
+        "AGENT_IDS_CSV": "agent-0",
+        "EXTRA_MODELS_JSON": "[]",
+        "AGENT_SOUL_CSV": "",
+        "ROBOCLAWS_MCP_URL": "http://host.docker.internal:18788/mcp",
+        "ROBOCLAWS_TOOL_PROFILE": "minimal",
+    }
+    env.update(env_overrides)
+    for k in ("PATH", "HOME", "LANG", "LC_ALL"):
+        if k in os.environ:
+            env[k] = os.environ[k]
+
+    subprocess.run(
+        ["python3", str(script_file)],
+        env=env,
+        check=True,
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    return Path(tmp_path) / "openclaw.json"
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +370,7 @@ def test_kimi_provider_mode_defaults_to_custom_and_supports_plugin() -> None:
         "existing local runs keep the faster path unless explicitly changed."
     )
     assert re.search(r"^\s{12}plugin\)\s*$", text, flags=re.MULTILINE), (
-        "Kimi bootstrap should expose a plugin mode for stock OpenClaw "
-        "provider comparisons."
+        "Kimi bootstrap should expose a plugin mode for stock OpenClaw provider comparisons."
     )
     assert 'MODEL="${MODEL:-kimi/k2p5}"' in text, (
         "plugin mode should route to the stock kimi/k2p5 Gateway alias."
@@ -544,4 +656,109 @@ def test_bootstrap_personality_probe_is_skippable() -> None:
     assert "PERSONALITY_PROBE" in text, (
         "bootstrap.sh does not reference PERSONALITY_PROBE; there is no way to "
         "skip the probe for identical-soul runs (e.g. cooperative,cooperative)"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 2.6: MCP + tools.profile seeding (D-03, D-04; spike F-1, F-3)
+# ---------------------------------------------------------------------------
+
+
+def test_mcp_seeds_server_transport_and_url(tmp_path: Path) -> None:
+    """The pre-seed must write ``mcp.servers.roboclaws`` with the
+    ``transport`` key (not ``type``) set to ``streamable-http`` and the url
+    taken from ROBOCLAWS_MCP_URL (default http://host.docker.internal:18788/mcp).
+
+    Spike F-1: other combinations silently fail with a 400 on the SSE
+    handshake and the agent reports "I don't have that tool". This test
+    guards against anyone "fixing" the key to match other MCP client
+    conventions (`type`) and accidentally dropping the tool surface.
+    """
+    cfg_path = _run_preseed(tmp_path, {})
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    server = cfg["mcp"]["servers"]["roboclaws"]
+    assert server["transport"] == "streamable-http", (
+        f"mcp.servers.roboclaws.transport={server.get('transport')!r}; "
+        "Gateway MCP loader at /app/dist/pi-bundle-mcp-tools-*.js accepts "
+        "only 'streamable-http' or 'sse' on this key."
+    )
+    assert server["url"] == "http://host.docker.internal:18788/mcp"
+    # Spike F-1 regression guard: `type` is the key you reach for from MCP
+    # client docs; the Gateway wants `transport`.
+    assert "type" not in server, (
+        "mcp.servers.roboclaws must use 'transport' key, not 'type' — "
+        "see spike F-1 in 02.6-SPIKE-FINDINGS.md"
+    )
+
+
+def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
+    """Every agent in ``agents.list`` carries ``tools.profile = "minimal"``
+    by default (D-03).  The Gateway's tool-policy loader reads this per-agent
+    and applies the restriction before any tool dispatch; a missing entry
+    falls back to the implicit "coding" profile and re-opens exec/curl.
+    """
+    cfg_path = _run_preseed(tmp_path, {"AGENT_IDS_CSV": "agent-0,agent-1"})
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    agent_ids = {entry["id"] for entry in cfg["agents"]["list"]}
+    assert agent_ids == {"agent-0", "agent-1"}, (
+        f"agents.list does not match AGENT_IDS_CSV; got ids={agent_ids!r}"
+    )
+    for entry in cfg["agents"]["list"]:
+        assert entry["tools"]["profile"] == "minimal", (
+            f"agent {entry['id']!r} missing tools.profile=minimal; entry={entry!r}"
+        )
+        # D-03 locks the tools block to profile only. Nothing else should
+        # sneak in — no alsoAllow, no deny, no custom overrides.
+        assert set(entry["tools"].keys()) == {"profile"}, (
+            f"agent {entry['id']!r} tools block has extra keys beyond "
+            f"'profile': {set(entry['tools'].keys())!r}"
+        )
+
+
+def test_mcp_url_env_override_honored(tmp_path: Path) -> None:
+    """ROBOCLAWS_MCP_URL env override flows through to the seeded
+    openclaw.json — no hard-coded default shadows it.
+    """
+    cfg_path = _run_preseed(tmp_path, {"ROBOCLAWS_MCP_URL": "http://example.test:9999/mcp"})
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg["mcp"]["servers"]["roboclaws"]["url"] == "http://example.test:9999/mcp"
+
+
+def test_tool_profile_env_override_honored(tmp_path: Path) -> None:
+    """ROBOCLAWS_TOOL_PROFILE=coding (used by the live-probe plan 02.6-06)
+    rewrites every agent's tools.profile to "coding" — no minimal lock-in
+    past the env var.
+    """
+    cfg_path = _run_preseed(
+        tmp_path,
+        {
+            "AGENT_IDS_CSV": "agent-0,agent-1",
+            "ROBOCLAWS_TOOL_PROFILE": "coding",
+        },
+    )
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    for entry in cfg["agents"]["list"]:
+        assert entry["tools"]["profile"] == "coding", (
+            f"agent {entry['id']!r} tools.profile did not honor "
+            f"ROBOCLAWS_TOOL_PROFILE=coding override; entry={entry!r}"
+        )
+
+
+def test_mcp_seed_is_idempotent(tmp_path: Path) -> None:
+    """Running the pre-seed twice against the same tmp config root produces
+    identical openclaw.json — no duplicated mcp.servers entries, no growing
+    agents.list.  Idempotency is required because operators re-run
+    openclaw-bootstrap.sh to pick up model changes and expect the resulting
+    config to converge rather than accumulate.
+    """
+    first = _run_preseed(tmp_path, {})
+    first_contents = first.read_text(encoding="utf-8")
+    # Run again against the same tmp_path; the heredoc's os.makedirs calls
+    # are exist_ok=True and json.dump overwrites the file, so re-running
+    # should be a no-op at the content level.
+    second = _run_preseed(tmp_path, {})
+    second_contents = second.read_text(encoding="utf-8")
+    assert first_contents == second_contents, (
+        "pre-seed is not idempotent — re-running produced a different "
+        "openclaw.json. Diff the two contents to find the drift."
     )

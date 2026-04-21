@@ -15,6 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40", "instructor>=1.5"]
 openai = ["openai>=1.50", "instructor>=1.5"]
+openclaw = ["mcp[cli]>=1.27"]
 dev = [
     "ai2thor>=5.0",
     "anthropic>=0.40",
@@ -27,6 +28,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.7",
     "imageio>=2.30",
+    "mcp[cli]>=1.27",
 ]
 
 [build-system]
