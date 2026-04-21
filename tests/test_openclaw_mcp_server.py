@@ -244,3 +244,29 @@ def test_navigation_actions_includes_expected(server: RoboclawsMCPServer) -> Non
     # Sanity check on the constant the move tool validates against.
     assert "MoveAhead" in NAVIGATION_ACTIONS
     assert "RotateLeft" in NAVIGATION_ACTIONS
+
+
+# ---------------------------------------------------------------------------
+# Thread-safety: close() vs concurrent trace writers (WR-01 regression guard)
+# ---------------------------------------------------------------------------
+
+
+def test_write_trace_after_close_is_safe(tmp_path: Path) -> None:
+    """WR-01: write_runtime_event after close() must not raise.
+
+    In production the watchdog + stdin threads in
+    examples/openclaw_nav_autonomous.py join with a 0.2s timeout, so
+    close() can race with a writer that's already called `snapshot_metrics`
+    and is about to call `write_runtime_event`. Pre-fix this raised
+    `ValueError: I/O operation on closed file.` Post-fix it's a silent
+    no-op.
+    """
+    engine = FakeEngine()
+    srv = make_roboclaws_mcp(engine, agent_id=0, run_dir=tmp_path, port=0)
+    srv._do_observe()
+    srv.close()
+    # Must not raise; must not re-open the file.
+    srv.write_runtime_event("watchdog", metrics={"x": 1})
+    srv.enqueue_human_message("post-close message")
+    # Calling close() again is idempotent.
+    srv.close()

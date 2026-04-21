@@ -376,10 +376,17 @@ class RoboclawsMCPServer:
         return thread
 
     def close(self) -> None:
-        """Attempt graceful shutdown; daemon thread is the safety net."""
+        """Attempt graceful shutdown; daemon thread is the safety net.
+
+        Thread-safety (WR-01): the watchdog + stdin threads in the example
+        may still be mid-`_write_trace` when close() runs (their joins use a
+        0.2s timeout). We flip `_closed` under `_trace_lock` and close the
+        file handle inside the same critical section so no writer can be
+        mid-write when the file descriptor disappears. `_write_trace`
+        re-checks `_closed` under the same lock before writing.
+        """
         if self._closed:
             return
-        self._closed = True
         # FastMCP has no documented shutdown hook yet; swallow AttributeError
         # and rely on the daemon flag for process-exit cleanup.
         try:
@@ -388,10 +395,12 @@ class RoboclawsMCPServer:
                 shutdown()
         except Exception:  # pragma: no cover - defensive cleanup
             pass
-        try:
-            self._trace_fp.close()
-        except Exception:  # pragma: no cover - defensive cleanup
-            pass
+        with self._trace_lock:
+            self._closed = True
+            try:
+                self._trace_fp.close()
+            except Exception:  # pragma: no cover - defensive cleanup
+                pass
         if self._server_thread is not None:
             self._server_thread.join(timeout=0.5)
 
@@ -452,6 +461,13 @@ class RoboclawsMCPServer:
         return "blind_batch"
 
     def _write_trace(self, *, tool: str, event: str, **data: Any) -> None:
+        # WR-01 fix: gate writes against close(). The watchdog + stdin
+        # threads in examples/openclaw_nav_autonomous.py join with a 0.2s
+        # timeout, so close() can run while a writer is in flight. Early
+        # bail-out is cheap; the in-lock re-check avoids the race where
+        # close() flips `_closed` after we read it but before we write.
+        if self._closed:
+            return
         payload = {
             "ts": time.time(),
             "tool": tool,
@@ -460,6 +476,8 @@ class RoboclawsMCPServer:
             **data,
         }
         with self._trace_lock:
+            if self._closed:  # re-check under lock (close() holds this lock)
+                return
             self._last_trace_monotonic = time.monotonic()
             key = f"{tool}:{event}"
             self._tool_event_counts[key] = self._tool_event_counts.get(key, 0) + 1
