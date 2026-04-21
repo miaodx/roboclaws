@@ -114,3 +114,127 @@ back to the AI2-THOR engine.
 | GPT-4o | ~$0.0004 | ~$0.24 |
 | Claude Sonnet | ~$0.0006 | ~$0.36 |
 | Mock (CI) | $0.00 | $0.00 |
+
+## Tools
+
+For the Phase 2.5 autonomous loop, the agent can call three HTTP tools served by the
+local simulation bridge at `http://host.docker.internal:18788`.
+
+In the current OpenClaw Gateway image, these are not exposed as native structured tool
+slots. Read this skill file first, then use the generic `exec` tool with `curl` to call
+the endpoints below and parse their JSON responses.
+
+### `observe`
+
+- HTTP: `GET http://host.docker.internal:18788/observe`
+- Request body: none
+- Response body:
+
+```json
+{
+  "fpv": "<base64 JPEG 320x240>",
+  "overhead": "<base64 JPEG 320x240>",
+  "state": {
+    "agent_id": 0,
+    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "camera_horizon": 0.0,
+    "last_action_success": true
+  },
+  "human_message": null
+}
+```
+
+- Usage: Call `observe` when you need to see the world. It returns the current
+  first-person view, an overhead map, and the latest physical state. Start every run
+  with one `observe`.
+
+### `move`
+
+- HTTP: `POST http://host.docker.internal:18788/move`
+- Request body:
+
+```json
+{
+  "direction": "MoveAhead | MoveBack | MoveLeft | MoveRight | RotateLeft | RotateRight | LookUp | LookDown",
+  "reason": "<optional brief natural-language rationale>"
+}
+```
+
+- Response body:
+
+```json
+{
+  "state": {
+    "agent_id": 0,
+    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "rotation": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "camera_horizon": 0.0,
+    "last_action_success": true
+  },
+  "human_message": null,
+  "server_warning": "move before first observe"
+}
+```
+
+- Usage: Call `move` to take one physical step in the world. The response gives you
+  updated state but does not include new images, so call `observe` again when you need
+  to re-look. Default behavior is `observe -> think -> move`. You may take a short
+  burst of repeated `move` calls when you have a concrete local reason such as a clear
+  hallway, a safe backtrack, or following a human-directed maneuver. When you do, send
+  a short `reason` string so the replay can explain why you continued without a fresh
+  observation. The `server_warning` field is optional and appears when the server needs
+  to flag a non-fatal issue such as moving before the first observation.
+
+### `done`
+
+- HTTP: `POST http://host.docker.internal:18788/done`
+- Request body:
+
+```json
+{
+  "reason": "<short natural-language reason>"
+}
+```
+
+- Response body:
+
+```json
+{
+  "status": "ok",
+  "reason": "<same reason>"
+}
+```
+
+- Usage: Call `done` when the navigation goal is achieved or you are stuck and further
+  moves will not help. This ends the run cleanly.
+
+Call `observe` when you need to see the world. Prefer `observe -> think -> move`, but
+stay agentic: if the scene clearly supports a short continuation, you may keep moving
+and justify it with `move.reason`. Call `done` when the navigation goal is achieved or
+you're stuck.
+
+## Human messages
+
+Tool responses from `observe` and `move` may include a `human_message` field. When
+present, it is a directive from a human observer watching the run. Treat it as a
+high-priority hint: follow it when compatible with your current goal, and acknowledge
+it explicitly in your reasoning either way. If you cannot follow it, say why. If you
+choose to follow it, say so. If you later call `done`, mention the human message and
+what you did about it in the `done.reason`. The human is steering you, not
+interrupting you.
+
+Example tool response:
+
+```json
+{
+  "state": {
+    "agent_id": 0
+  },
+  "human_message": "try rotating left to see the window"
+}
+```
+
+Your next reasoning step should reference the message before calling the next tool, for
+example: "human observer suggests rotating left; compatible with exploring the east
+wall, rotating now."
