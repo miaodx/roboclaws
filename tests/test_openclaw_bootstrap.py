@@ -8,7 +8,8 @@ locks in is:
 
 2. Each supported ``PROVIDER=…`` branch has a corresponding auth-profile
    entry with a non-empty ``EXTRA_MODELS_JSON`` array (except Kimi where
-   the built-in catalog already has the single model we use) and a
+   the bootstrap either uses a custom provider override or the built-in
+   plugin path) and a
    provider id that matches a Gateway plugin manifest at
    ``/app/dist/extensions/<id>/openclaw.plugin.json``.
 
@@ -69,18 +70,20 @@ def _extract_extra_models_for(provider: str) -> list[dict]:
     """
     text = _read_bootstrap()
     # Match the case branch, then capture the EXTRA_MODELS_JSON='[...]' literal.
-    # Bash single-quote can't contain single quotes, so the regex is simple.
+    # Limit "next branch" detection to the top-level PROVIDER case labels.
+    # The Kimi branch contains a nested case (KIMI_PROVIDER_MODE), so a
+    # generic `^\s*[a-z]+\)$` pattern would stop at `custom)` / `plugin)`.
     pattern = (
-        rf"^\s*{re.escape(provider)}\)\s*$"  # case label
-        r"(?:(?!^\s*[a-z]+\)\s*$).)*?"  # up to next case label
+        rf"^    {re.escape(provider)}\)\s*$"  # top-level case label
+        r"(?:(?!^    [a-z]+\)\s*$).)*?"  # up to next top-level case label
         r"EXTRA_MODELS_JSON='(\[.*?\])'"
     )
     m = re.search(pattern, text, flags=re.MULTILINE | re.DOTALL)
     if not m:
         # Kimi branch uses "[]" double-quoted instead of single.
         pattern_alt = (
-            rf"^\s*{re.escape(provider)}\)\s*$"
-            r"(?:(?!^\s*[a-z]+\)\s*$).)*?"
+            rf"^    {re.escape(provider)}\)\s*$"
+            r"(?:(?!^    [a-z]+\)\s*$).)*?"
             r'EXTRA_MODELS_JSON="(\[.*?\])"'
         )
         m = re.search(pattern_alt, text, flags=re.MULTILINE | re.DOTALL)
@@ -99,8 +102,8 @@ def _extract_provider_base_urls() -> dict[str, str]:
     text = _read_bootstrap()
     out: dict[str, str] = {}
     for provider_match in re.finditer(
-        r"^\s*([a-z][a-z0-9]*)\)\s*$"
-        r"(?:(?!^\s*[a-z]+\)\s*$).)*?"
+        r"^    ([a-z][a-z0-9]*)\)\s*$"
+        r"(?:(?!^    [a-z]+\)\s*$).)*?"
         r'PROVIDER_BASE_URL="([^"]*)"',
         text,
         flags=re.MULTILINE | re.DOTALL,
@@ -185,8 +188,8 @@ def _extract_provider_entry_for(provider: str) -> dict | None:
     """
     text = _read_bootstrap()
     pattern = (
-        rf"^\s*{re.escape(provider)}\)\s*$"
-        r"(?:(?!^\s*[a-z_]+\)\s*$).)*?"
+        rf"^    {re.escape(provider)}\)\s*$"
+        r"(?:(?!^    [a-z_]+\)\s*$).)*?"
         r"PROVIDER_ENTRY_JSON=\$\(cat <<JSON\n(.*?)\nJSON\n"
     )
     m = re.search(pattern, text, flags=re.MULTILINE | re.DOTALL)
@@ -231,13 +234,34 @@ def test_kimi_branch_registers_anthropic_kimi_provider() -> None:
         "anthropic-messages calls require an ``anthropic-version`` header."
     )
     models = entry.get("models", [])
-    assert len(models) == 1, "curated to a single verified model"
-    m = models[0]
-    assert m["id"] == "k2.6-code-preview"
-    assert "image" in m.get("input", []), "demo sends 2 images per turn"
-    assert m.get("reasoning") is False, (
-        "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
-        "around — flipping this to true would re-introduce the slow path."
+    ids = {m["id"] for m in models}
+    assert ids == {"k2p5", "k2.6"}, (
+        "custom anthropic_kimi provider should advertise both k2p5 and k2.6 "
+        "so local probes can compare model behavior without switching provider mode."
+    )
+    for model in models:
+        assert "image" in model.get("input", []), "demo sends 2 images per turn"
+        assert model.get("reasoning") is False, (
+            "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
+            "around — flipping this to true would re-introduce the slow path."
+        )
+
+
+def test_kimi_provider_mode_defaults_to_custom_and_supports_plugin() -> None:
+    """Kimi bootstrap should default to the custom provider override while
+    exposing an explicit stock-plugin escape hatch for local A/B probes.
+    """
+    text = _read_bootstrap()
+    assert 'KIMI_PROVIDER_MODE="${KIMI_PROVIDER_MODE:-custom}"' in text, (
+        "Kimi bootstrap must default to the custom provider override so "
+        "existing local runs keep the faster path unless explicitly changed."
+    )
+    assert re.search(r"^\s{12}plugin\)\s*$", text, flags=re.MULTILINE), (
+        "Kimi bootstrap should expose a plugin mode for stock OpenClaw "
+        "provider comparisons."
+    )
+    assert 'MODEL="${MODEL:-kimi/k2p5}"' in text, (
+        "plugin mode should route to the stock kimi/k2p5 Gateway alias."
     )
 
 
@@ -256,6 +280,27 @@ def test_bootstrap_uses_mode_replace_when_custom_entry_present() -> None:
     ), "bootstrap pre-seed must write mode=replace when PROVIDER_ENTRY_JSON is set"
 
 
+def test_bootstrap_pins_image_model_to_current_model_by_default() -> None:
+    """The pre-seeded config should set ``agents.defaults.imageModel`` so the
+    generic ``image`` tool does not auto-pair to some other image-capable
+    catalog entry on the same provider.
+
+    This matters for the custom Kimi path: without an explicit imageModel,
+    Gateway's image-tool resolver picks the first image-capable entry from the
+    provider catalog, which made image analysis silently route through
+    ``anthropic_kimi/k2p5`` during local debugging even when the main model was
+    pinned to ``anthropic_kimi/k2.6``.
+    """
+    text = _read_bootstrap()
+    assert 'image_model = os.environ.get("IMAGE_MODEL") or model' in text
+    assert '"imageModel": {"primary": image_model}' in text, (
+        "bootstrap pre-seed must write agents.defaults.imageModel.primary."
+    )
+    assert '-e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \\' in text, (
+        "docker pre-seed call must pass IMAGE_MODEL through to the config writer."
+    )
+
+
 def test_only_two_providers_supported() -> None:
     """The bootstrap's ``case "$PROVIDER"`` statement should list exactly
     the two curated providers: kimi and nvidia. If this test fails because
@@ -267,13 +312,13 @@ def test_only_two_providers_supported() -> None:
       4. Updated docs/openclaw-local.md
     """
     text = _read_bootstrap()
-    case_labels = re.findall(r"^\s*([a-z][a-z0-9]*)\)\s*$", text, flags=re.MULTILINE)
+    case_labels = re.findall(r"^    ([a-z][a-z0-9]*)\)\s*$", text, flags=re.MULTILINE)
     # Filter to labels inside the provider case block (between
     # `case "$PROVIDER" in` and the closing `esac`).
     m = re.search(r'case "\$PROVIDER" in(.*?)\nesac', text, flags=re.DOTALL)
     assert m, "could not find the PROVIDER case block"
     block = m.group(1)
-    provider_labels = re.findall(r"^\s*([a-z][a-z0-9]*)\)\s*$", block, flags=re.MULTILINE)
+    provider_labels = re.findall(r"^    ([a-z][a-z0-9]*)\)\s*$", block, flags=re.MULTILINE)
     assert set(provider_labels) == {"kimi", "nvidia"}, (
         f"bootstrap.sh PROVIDER case declares {sorted(set(provider_labels))!r}; "
         "expected exactly {'kimi', 'nvidia'} per curated contract."
