@@ -102,8 +102,38 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-def _run_capture(cmd: list[str]) -> tuple[int, str, str]:
-    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+_DIAGNOSTIC_CAPTURE_TIMEOUT_S = 15.0
+
+
+def _run_capture(
+    cmd: list[str],
+    *,
+    timeout: float = _DIAGNOSTIC_CAPTURE_TIMEOUT_S,
+) -> tuple[int, str, str]:
+    """Run `cmd` capturing stdout/stderr, with a hard wall-clock cap.
+
+    WR-02 fix: diagnostics fire on the wall_clock / error termination paths
+    (see `_capture_gateway_diagnostics`). If the Gateway container is wedged
+    — often the reason we got there — an un-timed `docker exec` would hang
+    indefinitely during teardown, turning a budget-enforced termination into
+    an unbounded stall. A 15s cap per call bounds worst-case cleanup to
+    ~1 minute across the four diagnostic commands.
+    """
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raw_stdout = exc.stdout or ""
+        raw_stderr = exc.stderr or ""
+        stdout = (
+            raw_stdout if isinstance(raw_stdout, str) else raw_stdout.decode("utf-8", "replace")
+        )
+        stderr_base = (
+            raw_stderr if isinstance(raw_stderr, str) else raw_stderr.decode("utf-8", "replace")
+        )
+        stderr = stderr_base + f"\n<diagnostic command timed out after {timeout:.0f}s>"
+        # 124 matches coreutils `timeout(1)` so operators grepping logs
+        # recognize the failure mode.
+        return (124, stdout, stderr)
     return (
         int(getattr(result, "returncode", 1)),
         str(getattr(result, "stdout", "")),
