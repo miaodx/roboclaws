@@ -210,7 +210,16 @@ Plans:
   4. The autonomous run's per-turn prompt-token overhead is materially smaller than under the coding profile (spike saw ~60% reduction, 15,396 → 6,285; target ≤ 50% of coding profile).
   5. `scripts/openclaw-bootstrap.sh` seeds `mcp.servers.<name>` and `agents.list[<n>].tools.profile = "minimal"` **before first container start**, so no post-start SIGUSR1 restart is required to enable the tool surface.
   6. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
-**Plans**: TBD — awaiting `/gsd-plan-phase 2.6`.
+**Plans**: 7 plans (drafted 2026-04-21 after spike; renamed to `-PLAN.md` suffix and executed same day).
+
+Plans:
+- [x] 02.6-01: In-process FastMCP server (`roboclaws/openclaw/mcp_server.py`) with observe/move/done over streamable-http
+- [x] 02.6-02: `scripts/openclaw-bootstrap.sh` seeds MCP server + `profile: minimal` pre-`docker run`
+- [x] 02.6-03: Shrink `skills/ai2thor-navigator/SKILL.md` to MCP-era form (no curl/exec/generic-image advice)
+- [ ] 02.6-04: Rewire `examples/openclaw_nav_autonomous.py` to MCP contract
+- [ ] 02.6-05: Delete superseded HTTP sim_server + its tests
+- [ ] 02.6-06: Live-probe gate — `profile:minimal` vs `profile:coding` prompt-token ratio ≤ 0.5 (checkpoint plan — autonomous=false)
+- [ ] 02.6-07: Docs update — retrospective + `docs/openclaw-local.md` + `docs/openclaw-gateway-internals.md`
 **UI hint**: yes
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
@@ -248,5 +257,5 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
 | 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
-| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 0/TBD | Not started (spike-proven, awaiting plan) | - |
+| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 3/7 | In progress (wave 1 of 5 complete) | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
