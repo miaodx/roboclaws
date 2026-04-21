@@ -432,6 +432,11 @@ extra_models = json.loads(os.environ.get("EXTRA_MODELS_JSON") or "[]")
 provider_base_url = os.environ.get("PROVIDER_BASE_URL", "")
 provider_entry_json = os.environ.get("PROVIDER_ENTRY_JSON") or ""
 agent_soul_csv = os.environ.get("AGENT_SOUL_CSV", "")
+# Phase 2.6 additions (D-03, D-04): seed the MCP server block + per-agent
+# tool profile BEFORE first container start so the Gateway does not
+# SIGUSR1-restart when mcp.servers changes (spike F-3).
+mcp_url = os.environ["ROBOCLAWS_MCP_URL"]
+tool_profile = os.environ["ROBOCLAWS_TOOL_PROFILE"]
 base = "/home/node/.openclaw"
 
 # Pre-create every dir so Docker doesnt create intermediate bind-mount
@@ -473,6 +478,11 @@ agent_entries = [
         "workspace": f"/home/node/.openclaw/workspaces/{aid}",
         "agentDir": f"/home/node/.openclaw/agents/{aid}/agent",
         "model": {"primary": model},
+        # tools.profile restricts the agent tool surface to
+        # session_status + whatever MCP tools we expose (spike U2).
+        # D-03 locks this to a single key — do NOT add alsoAllow or
+        # any other sibling keys without re-running the profile probe.
+        "tools": {"profile": tool_profile},
     }
     for aid in agent_ids
 ]
@@ -501,6 +511,21 @@ config = {
         },
         "list": agent_entries,
     },
+}
+# MCP server block (Phase 2.6, D-04): seeded BEFORE first container start
+# because adding mcp.servers to a running Gateway fires SIGUSR1 → container
+# exit (spike F-3).  The key is `transport` (not `type`); only
+# "streamable-http" and "sse" parse — anything else silently fails with
+# [bundle-mcp] SSE error: Non-200 status code (400) and the agent reports
+# it has no such tool (spike F-1).  Source of truth for the loader:
+# /app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170.
+config["mcp"] = {
+    "servers": {
+        "roboclaws": {
+            "transport": "streamable-http",
+            "url": mcp_url,
+        }
+    }
 }
 # Inject extra model catalog entries so the Gateways model-catalog merger
 # recognizes the models we want to use. Without this, the Gateway rejects
