@@ -234,14 +234,17 @@ def test_kimi_branch_registers_anthropic_kimi_provider() -> None:
         "anthropic-messages calls require an ``anthropic-version`` header."
     )
     models = entry.get("models", [])
-    assert len(models) == 1, "curated to a single verified model"
-    m = models[0]
-    assert m["id"] == "k2.6-code-preview"
-    assert "image" in m.get("input", []), "demo sends 2 images per turn"
-    assert m.get("reasoning") is False, (
-        "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
-        "around — flipping this to true would re-introduce the slow path."
+    ids = {m["id"] for m in models}
+    assert ids == {"k2p5", "k2.6"}, (
+        "custom anthropic_kimi provider should advertise both k2p5 and k2.6 "
+        "so local probes can compare model behavior without switching provider mode."
     )
+    for model in models:
+        assert "image" in model.get("input", []), "demo sends 2 images per turn"
+        assert model.get("reasoning") is False, (
+            "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
+            "around — flipping this to true would re-introduce the slow path."
+        )
 
 
 def test_kimi_provider_mode_defaults_to_custom_and_supports_plugin() -> None:

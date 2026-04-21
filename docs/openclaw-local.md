@@ -71,10 +71,10 @@ the Gateway's tool-bearing agent framework):
 | Provider | Default model                           | Upstream                                      | Free | Vision | Multi-image |
 |----------|-----------------------------------------|-----------------------------------------------|------|--------|-------------|
 | `nvidia` | `nvidia/nvidia/nemotron-nano-12b-v2-vl` | `https://integrate.api.nvidia.com/v1`         | yes  | yes    | yes         |
-| `kimi`   | `anthropic_kimi/k2.6-code-preview`      | `https://api.kimi.com/coding/` (→ Kimi 2.6)   | yes  | yes    | yes         |
+| `kimi`   | `anthropic_kimi/k2.6`                   | `https://api.kimi.com/coding/` (→ Kimi 2.6)   | yes  | yes    | yes         |
 
 > ℹ️ By default the repo does **not** use the stock `kimi/k2p5` plugin path.
-> It registers a custom provider override (`anthropic_kimi/k2.6-code-preview`)
+> It registers a custom provider override (`anthropic_kimi/k2.6`)
 > at the same Kimi host so the request shape stays on plain
 > `anthropic-messages` without the built-in plugin's reasoning-heavy defaults.
 > Set `KIMI_PROVIDER_MODE=plugin` to compare against the stock OpenClaw Kimi

@@ -156,7 +156,7 @@ case "$PROVIDER" in
                 # plain anthropic-messages, no reasoning mode implied, canonical
                 # User-Agent.  Same KIMI_API_KEY works for both paths.  Probed
                 # 2026-04-20: PONG returns in ~5s vs 60-120s on the built-in.
-                MODEL="${MODEL:-anthropic_kimi/k2.6-code-preview}"
+                MODEL="${MODEL:-anthropic_kimi/k2.6}"
                 PROVIDER_ID_OVERRIDE="anthropic_kimi"
                 PROVIDER_BASE_URL=""   # unused — baseUrl lives in PROVIDER_ENTRY_JSON
                 EXTRA_MODELS_JSON="[]" # unused when PROVIDER_ENTRY_JSON is set
@@ -176,8 +176,16 @@ case "$PROVIDER" in
   },
   "models": [
     {
-      "id": "k2.6-code-preview",
-      "name": "Kimi 2.6 Code Preview (anthropic-messages)",
+      "id": "k2p5",
+      "name": "Kimi K2.5 (anthropic-messages)",
+      "input": ["text", "image"],
+      "reasoning": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768
+    },
+    {
+      "id": "k2.6",
+      "name": "Kimi 2.6 (anthropic-messages)",
       "input": ["text", "image"],
       "reasoning": false,
       "contextWindow": 262144,
