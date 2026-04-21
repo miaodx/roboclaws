@@ -32,6 +32,11 @@
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
+#   IMAGE_MODEL  Vision model used by the Gateway's  (default: same as MODEL;
+#                generic `image` tool path            set this explicitly when
+#                                                     the main model is text-only
+#                                                     or you want deterministic
+#                                                     image-tool routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
 #   TIMEOUT_SECONDS  Upstream timeout               (default: 600 = 10 min;
@@ -124,32 +129,47 @@ command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH (needed for
 # model with 400 "Unknown model".
 case "$PROVIDER" in
     kimi)
-        # Register Kimi as a **custom** anthropic-messages provider
-        # (id=anthropic_kimi) rather than using the Gateway's built-in
-        # `kimi-coding` plugin.  The built-in plugin advertises
-        # `reasoning: true` in its catalog and drives api.kimi.com/coding/
-        # in a mode that burns 3000+ CoT tokens per turn, pushing each
-        # multi-image navigation call to 60-120s and regularly tripping
-        # the Gateway's idle watchdog (observed on 2026-04-20).
+        # Two Kimi provider modes are supported:
+        #   custom (default) → register our explicit anthropic-messages
+        #                      provider override at the same Kimi host
+        #   plugin           → leave the Gateway's built-in kimi-coding
+        #                      plugin untouched and route via kimi/k2p5
         #
-        # Our custom registration points at the SAME host
-        # (api.kimi.com/coding/) but pins the request shape we want —
-        # plain anthropic-messages, no reasoning mode implied, canonical
-        # User-Agent.  Same KIMI_API_KEY works for both paths.  Probed
-        # 2026-04-20: PONG returns in ~5s vs 60-120s on the built-in.
-        MODEL="${MODEL:-anthropic_kimi/k2.6-code-preview}"
-        PROVIDER_ID_OVERRIDE="anthropic_kimi"
+        # Keep the default on "custom" because the built-in plugin
+        # historically advertised reasoning-heavy behavior that pushed
+        # multi-image navigation turns into 60-120s and tripped the
+        # Gateway's idle watchdog. The explicit switch exists so local
+        # debugging can A/B the two provider paths without editing code.
+        KIMI_PROVIDER_MODE="${KIMI_PROVIDER_MODE:-custom}"
         PROVIDER_API_KEY="${KIMI_API_KEY:-}"
         PROVIDER_ENV_VAR="KIMI_API_KEY"
-        PROVIDER_BASE_URL=""   # unused — baseUrl lives in PROVIDER_ENTRY_JSON
-        EXTRA_MODELS_JSON="[]" # unused when PROVIDER_ENTRY_JSON is set
         [[ -n "$PROVIDER_API_KEY" ]] || \
             die "KIMI_API_KEY env var is required for PROVIDER=kimi" 1
-        # Full custom provider entry — injected into openclaw.json with
-        # models.mode=replace so only this entry drives routing (i.e. the
-        # built-in kimi plugin's catalog is excluded from the merge).
-        # Mirrors the ``anthropic_mm`` MiniMax pattern used in production.
-        PROVIDER_ENTRY_JSON=$(cat <<JSON
+
+        case "$KIMI_PROVIDER_MODE" in
+            custom)
+                # Register Kimi as a **custom** anthropic-messages provider
+                # (id=anthropic_kimi) rather than using the Gateway's built-in
+                # `kimi-coding` plugin.  The built-in plugin advertises
+                # `reasoning: true` in its catalog and drives api.kimi.com/coding/
+                # in a mode that burns 3000+ CoT tokens per turn, pushing each
+                # multi-image navigation call to 60-120s and regularly tripping
+                # the Gateway's idle watchdog (observed on 2026-04-20).
+                #
+                # Our custom registration points at the SAME host
+                # (api.kimi.com/coding/) but pins the request shape we want —
+                # plain anthropic-messages, no reasoning mode implied, canonical
+                # User-Agent.  Same KIMI_API_KEY works for both paths.  Probed
+                # 2026-04-20: PONG returns in ~5s vs 60-120s on the built-in.
+                MODEL="${MODEL:-anthropic_kimi/k2.6}"
+                PROVIDER_ID_OVERRIDE="anthropic_kimi"
+                PROVIDER_BASE_URL=""   # unused — baseUrl lives in PROVIDER_ENTRY_JSON
+                EXTRA_MODELS_JSON="[]" # unused when PROVIDER_ENTRY_JSON is set
+                # Full custom provider entry — injected into openclaw.json with
+                # models.mode=replace so only this entry drives routing (i.e. the
+                # built-in kimi plugin's catalog is excluded from the merge).
+                # Mirrors the ``anthropic_mm`` MiniMax pattern used in production.
+                PROVIDER_ENTRY_JSON=$(cat <<JSON
 {
   "baseUrl": "https://api.kimi.com/coding/",
   "apiKey": "${PROVIDER_API_KEY}",
@@ -161,8 +181,16 @@ case "$PROVIDER" in
   },
   "models": [
     {
-      "id": "k2.6-code-preview",
-      "name": "Kimi 2.6 Code Preview (anthropic-messages)",
+      "id": "k2p5",
+      "name": "Kimi K2.5 (anthropic-messages)",
+      "input": ["text", "image"],
+      "reasoning": false,
+      "contextWindow": 262144,
+      "maxTokens": 32768
+    },
+    {
+      "id": "k2.6",
+      "name": "Kimi 2.6 (anthropic-messages)",
       "input": ["text", "image"],
       "reasoning": false,
       "contextWindow": 262144,
@@ -172,6 +200,20 @@ case "$PROVIDER" in
 }
 JSON
 )
+                ;;
+            plugin)
+                # Keep the stock Gateway Kimi provider/plugin active:
+                # `kimi/k2p5` is the built-in alias to Kimi's coding tier.
+                MODEL="${MODEL:-kimi/k2p5}"
+                PROVIDER_ID_OVERRIDE=""
+                PROVIDER_BASE_URL=""
+                EXTRA_MODELS_JSON="[]"
+                PROVIDER_ENTRY_JSON=""
+                ;;
+            *)
+                die "Unsupported KIMI_PROVIDER_MODE: '$KIMI_PROVIDER_MODE' (supported: custom, plugin)" 1
+                ;;
+        esac
         ;;
     nvidia)
         # nvidia/nvidia/nemotron-nano-12b-v2-vl — the only NVIDIA NIM
@@ -223,7 +265,9 @@ log "bind         : ${HOST_IP}:${PORT}"
 log "sim server   : $SIM_SERVER_URL"
 log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGENT_PREFIX}$((AGENTS-1)))"
 log "provider     : $PROVIDER"
+[[ "$PROVIDER" == "kimi" ]] && log "provider mode: $KIMI_PROVIDER_MODE"
 log "model        : $MODEL"
+log "image model  : ${IMAGE_MODEL:-<auto>}"
 log "skill        : $SKILLS_DIR"
 [[ -n "$AGENT_SOULS" ]] && log "souls        : $AGENT_SOULS (dir: $SOULS_DIR)"
 
@@ -327,13 +371,14 @@ docker run --rm --user root \
     -e PROVIDER_ENTRY_JSON="${PROVIDER_ENTRY_JSON:-}" \
     -e TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
     -e MODEL="$MODEL" \
+    -e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \
     -e AGENT_IDS_CSV="$AGENT_IDS_CSV" \
     -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
     -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
     -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
     "$IMAGE" sh -lc '
 set -eu
-python3 - <<PY
+python3 - <<'"'"'PY'"'"'
 import json, os, shutil
 agent_ids = os.environ["AGENT_IDS_CSV"].split(",")
 provider_id = os.environ["PROVIDER_ID"]
@@ -395,6 +440,7 @@ agent_entries = [
     for aid in agent_ids
 ]
 timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "600")
+image_model = os.environ.get("IMAGE_MODEL") or model
 config = {
     "gateway": {
         "auth": {"mode": "token"},
@@ -409,6 +455,11 @@ config = {
         # far and still prevents a hung call from stalling the whole run.
         "defaults": {
             "model": {"primary": model},
+            # Pin the generic `image` tool path to the same model by default
+            # so OpenClaw does not auto-pair to the first image-capable
+            # catalog entry for the provider (which made the custom Kimi path
+            # silently route image analysis through `anthropic_kimi/k2p5`).
+            "imageModel": {"primary": image_model},
             "timeoutSeconds": timeout_seconds,
         },
         "list": agent_entries,

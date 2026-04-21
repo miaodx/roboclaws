@@ -18,7 +18,7 @@ _COST_PER_M: dict[str, dict[str, float]] = {
     "gpt-4o": {"input": 5.00, "output": 15.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "kimi-k2-5": {"input": 1.00, "output": 3.00},
-    "kimi-k2.6-code-preview": {"input": 1.00, "output": 3.00},
+    "kimi-k2.6": {"input": 1.00, "output": 3.00},
     "kimi-for-coding": {"input": 1.00, "output": 3.00},
     "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
@@ -575,7 +575,7 @@ class KimiProvider(_AnthropicBase):
 
     def __init__(
         self,
-        model: str = "kimi-k2.6-code-preview",
+        model: str = "kimi-k2.6",
         api_key: str | None = None,
         max_tokens: int = 256,
         retry_attempts: int = 4,
@@ -1056,9 +1056,9 @@ _MODEL_ALIASES: dict[str, str] = {
     "mock": "mock",
     "gpt-4o": "gpt-4o",
     "gpt-4o-mini": "gpt-4o-mini",
-    "kimi": "kimi-k2.6-code-preview",
+    "kimi": "kimi-k2.6",
     "kimi-k2-5": "kimi-k2-5",
-    "kimi-k2.6-code-preview": "kimi-k2.6-code-preview",
+    "kimi-k2.6": "kimi-k2.6",
     "kimi-coding": "kimi-for-coding",
     "kimi-for-coding": "kimi-for-coding",
     "anthropic": "claude-3-5-sonnet-20241022",
@@ -1090,5 +1090,5 @@ def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
         return AnthropicProvider(model=canonical, **kwargs)
     if canonical == "kimi-for-coding":
         return KimiCodingProvider(model=canonical, **kwargs)
-    # kimi-k2-5 or kimi-k2.6-code-preview (anthropic-messages path)
+    # kimi-k2-5 or kimi-k2.6 (anthropic-messages path)
     return KimiProvider(model=canonical, **kwargs)

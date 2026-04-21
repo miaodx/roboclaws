@@ -27,6 +27,9 @@ TOKEN=$(AGENTS=2 ./scripts/openclaw-bootstrap.sh)
 # Kimi — explicit selection (or default when only KIMI_API_KEY is set):
 export KIMI_API_KEY=sk-...
 TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+
+# Kimi via the stock Gateway plugin/provider instead of the custom override:
+TOKEN=$(PROVIDER=kimi KIMI_PROVIDER_MODE=plugin AGENTS=2 ./scripts/openclaw-bootstrap.sh)
 ```
 
 That one command does every first-run step: pulls the pinned image, creates
@@ -47,6 +50,7 @@ Useful overrides:
 | Var                 | Default                                   | Notes                                                           |
 |---------------------|-------------------------------------------|-----------------------------------------------------------------|
 | `PROVIDER`          | `nvidia` if `NV_API_KEY` set, else `kimi` | `nvidia` \| `kimi`.                                             |
+| `KIMI_PROVIDER_MODE` | `custom`                                 | Kimi only: `custom` (repo default) \| `plugin` (stock Gateway Kimi provider). |
 | `AGENTS`            | `2`                                       | Number of named agents (`1..8`).                                |
 | `AGENT_PREFIX`      | `agent-`                                  | Must match `--agent-prefix` on the demo.                        |
 | `AGENT_SOULS`       | `` (empty)                                | Csv of soul names per agent, e.g. `aggressive,defensive`. Supports dict form `agent-0:aggressive,agent-2:cooperative`. |
@@ -54,6 +58,7 @@ Useful overrides:
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
 | `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.14`     | Pinned digest-traceable tag.                                    |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
+| `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
 | `HOST_IP`           | `127.0.0.1`                               | Gateway port is localhost-only by default.                      |
 | `PORT`              | `18789`                                   | Gateway HTTP port.                                              |
 | `CONTAINER`         | `openclaw-gateway`                        | Docker container name.                                          |
@@ -67,13 +72,25 @@ the Gateway's tool-bearing agent framework):
 | Provider | Default model                           | Upstream                                      | Free | Vision | Multi-image |
 |----------|-----------------------------------------|-----------------------------------------------|------|--------|-------------|
 | `nvidia` | `nvidia/nvidia/nemotron-nano-12b-v2-vl` | `https://integrate.api.nvidia.com/v1`         | yes  | yes    | yes         |
-| `kimi`   | `kimi/k2p5`                             | `https://api.kimi.com/coding/` (→ Kimi 2.6)   | yes  | yes    | yes         |
+| `kimi`   | `anthropic_kimi/k2.6`                   | `https://api.kimi.com/coding/` (→ Kimi 2.6)   | yes  | yes    | yes         |
 
-> ℹ️ `kimi/k2p5` is the Gateway's legacy alias; it resolves upstream to
-> `kimi-for-coding` — the current Kimi 2.6 coding-tier model — per
-> `/app/dist/provider-catalog-BCrO6TZn.js`. If the Kimi coding quota is
-> exhausted the Gateway surfaces a `rate_limit_error` in the first turn
-> (the probe catches it and the bootstrap exits 4).
+> ℹ️ By default the repo does **not** use the stock `kimi/k2p5` plugin path.
+> It registers a custom provider override (`anthropic_kimi/k2.6`)
+> at the same Kimi host so the request shape stays on plain
+> `anthropic-messages` without the built-in plugin's reasoning-heavy defaults.
+> The bootstrap also pins `agents.defaults.imageModel.primary` to the same
+> model (or `IMAGE_MODEL` if you override it) so OpenClaw's generic `image`
+> tool does not auto-pair to a different image-capable Kimi catalog entry.
+> Set `KIMI_PROVIDER_MODE=plugin` to compare against the stock OpenClaw Kimi
+> provider. In that mode, `kimi/k2p5` is the Gateway's legacy alias to
+> `kimi-for-coding` per `/app/dist/provider-catalog-BCrO6TZn.js`. If the Kimi
+> coding quota is exhausted the Gateway surfaces a `rate_limit_error` in the
+> first turn (the probe catches it and the bootstrap exits 4).
+
+For image-analysis flows, prefer base64 `data:image/...` payloads or files
+written under the agent workspace / OpenClaw media roots. Avoid ad-hoc `/tmp/*`
+paths inside the container: the Gateway's local-media allowlist rejects files
+outside its configured workspace/media/temp roots.
 
 ### Why just these two
 
