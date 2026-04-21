@@ -58,6 +58,7 @@ Useful overrides:
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
 | `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.14`     | Pinned digest-traceable tag.                                    |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
+| `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
 | `HOST_IP`           | `127.0.0.1`                               | Gateway port is localhost-only by default.                      |
 | `PORT`              | `18789`                                   | Gateway HTTP port.                                              |
 | `CONTAINER`         | `openclaw-gateway`                        | Docker container name.                                          |
@@ -77,11 +78,19 @@ the Gateway's tool-bearing agent framework):
 > It registers a custom provider override (`anthropic_kimi/k2.6`)
 > at the same Kimi host so the request shape stays on plain
 > `anthropic-messages` without the built-in plugin's reasoning-heavy defaults.
+> The bootstrap also pins `agents.defaults.imageModel.primary` to the same
+> model (or `IMAGE_MODEL` if you override it) so OpenClaw's generic `image`
+> tool does not auto-pair to a different image-capable Kimi catalog entry.
 > Set `KIMI_PROVIDER_MODE=plugin` to compare against the stock OpenClaw Kimi
 > provider. In that mode, `kimi/k2p5` is the Gateway's legacy alias to
 > `kimi-for-coding` per `/app/dist/provider-catalog-BCrO6TZn.js`. If the Kimi
 > coding quota is exhausted the Gateway surfaces a `rate_limit_error` in the
 > first turn (the probe catches it and the bootstrap exits 4).
+
+For image-analysis flows, prefer base64 `data:image/...` payloads or files
+written under the agent workspace / OpenClaw media roots. Avoid ad-hoc `/tmp/*`
+paths inside the container: the Gateway's local-media allowlist rejects files
+outside its configured workspace/media/temp roots.
 
 ### Why just these two
 

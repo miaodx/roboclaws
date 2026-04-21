@@ -124,6 +124,11 @@ In the current OpenClaw Gateway image, these are not exposed as native structure
 slots. Read this skill file first, then use the generic `exec` tool with `curl` to call
 the endpoints below and parse their JSON responses.
 
+If you choose to use OpenClaw's built-in `image` tool anyway, prefer passing
+base64 `data:image/...` payloads directly or files written under the current
+workspace/media roots. Avoid `/tmp/...` paths inside the Gateway container — the
+local-media policy rejects paths outside the allowed workspace/media/temp roots.
+
 ### `observe`
 
 - HTTP: `GET http://host.docker.internal:18788/observe`

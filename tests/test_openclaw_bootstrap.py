@@ -280,6 +280,27 @@ def test_bootstrap_uses_mode_replace_when_custom_entry_present() -> None:
     ), "bootstrap pre-seed must write mode=replace when PROVIDER_ENTRY_JSON is set"
 
 
+def test_bootstrap_pins_image_model_to_current_model_by_default() -> None:
+    """The pre-seeded config should set ``agents.defaults.imageModel`` so the
+    generic ``image`` tool does not auto-pair to some other image-capable
+    catalog entry on the same provider.
+
+    This matters for the custom Kimi path: without an explicit imageModel,
+    Gateway's image-tool resolver picks the first image-capable entry from the
+    provider catalog, which made image analysis silently route through
+    ``anthropic_kimi/k2p5`` during local debugging even when the main model was
+    pinned to ``anthropic_kimi/k2.6``.
+    """
+    text = _read_bootstrap()
+    assert 'image_model = os.environ.get("IMAGE_MODEL") or model' in text
+    assert '"imageModel": {"primary": image_model}' in text, (
+        "bootstrap pre-seed must write agents.defaults.imageModel.primary."
+    )
+    assert '-e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \\' in text, (
+        "docker pre-seed call must pass IMAGE_MODEL through to the config writer."
+    )
+
+
 def test_only_two_providers_supported() -> None:
     """The bootstrap's ``case "$PROVIDER"`` statement should list exactly
     the two curated providers: kimi and nvidia. If this test fails because

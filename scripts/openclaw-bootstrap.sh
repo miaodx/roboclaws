@@ -32,6 +32,11 @@
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
+#   IMAGE_MODEL  Vision model used by the Gateway's  (default: same as MODEL;
+#                generic `image` tool path            set this explicitly when
+#                                                     the main model is text-only
+#                                                     or you want deterministic
+#                                                     image-tool routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
 #   TIMEOUT_SECONDS  Upstream timeout               (default: 600 = 10 min;
@@ -262,6 +267,7 @@ log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGEN
 log "provider     : $PROVIDER"
 [[ "$PROVIDER" == "kimi" ]] && log "provider mode: $KIMI_PROVIDER_MODE"
 log "model        : $MODEL"
+log "image model  : ${IMAGE_MODEL:-<auto>}"
 log "skill        : $SKILLS_DIR"
 [[ -n "$AGENT_SOULS" ]] && log "souls        : $AGENT_SOULS (dir: $SOULS_DIR)"
 
@@ -365,13 +371,14 @@ docker run --rm --user root \
     -e PROVIDER_ENTRY_JSON="${PROVIDER_ENTRY_JSON:-}" \
     -e TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
     -e MODEL="$MODEL" \
+    -e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \
     -e AGENT_IDS_CSV="$AGENT_IDS_CSV" \
     -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
     -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
     -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
     "$IMAGE" sh -lc '
 set -eu
-python3 - <<PY
+python3 - <<'"'"'PY'"'"'
 import json, os, shutil
 agent_ids = os.environ["AGENT_IDS_CSV"].split(",")
 provider_id = os.environ["PROVIDER_ID"]
@@ -433,6 +440,7 @@ agent_entries = [
     for aid in agent_ids
 ]
 timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "600")
+image_model = os.environ.get("IMAGE_MODEL") or model
 config = {
     "gateway": {
         "auth": {"mode": "token"},
@@ -447,6 +455,11 @@ config = {
         # far and still prevents a hung call from stalling the whole run.
         "defaults": {
             "model": {"primary": model},
+            # Pin the generic `image` tool path to the same model by default
+            # so OpenClaw does not auto-pair to the first image-capable
+            # catalog entry for the provider (which made the custom Kimi path
+            # silently route image analysis through `anthropic_kimi/k2p5`).
+            "imageModel": {"primary": image_model},
             "timeoutSeconds": timeout_seconds,
         },
         "list": agent_entries,

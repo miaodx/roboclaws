@@ -31,6 +31,8 @@ def test_kickoff_prompt_describes_exec_http_flow() -> None:
     assert "target budget is 50 physical moves" in prompt
     assert "Default behavior is observe -> think -> move" in prompt
     assert '"direction":"MoveAhead","reason":"clear hallway continues"' in prompt
+    assert "Do not detour through OpenClaw's generic image tool" in prompt
+    assert "do not use /tmp paths because the Gateway rejects them" in prompt
     assert "Be agentic" in prompt
     assert "explicitly mention the human_message" in prompt
 
