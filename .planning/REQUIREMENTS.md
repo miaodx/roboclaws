@@ -75,7 +75,7 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       tint each agent's trail by SOUL color. Palette:
       `aggressive=red`, `defensive=blue`, `cooperative=green`, `default=grey`.
 
-### Active (Phase 2.4 + 2.5)
+### Active (Phase 2.4 + 2.6)
 
 - [x] **A-01** (image-payload contract): SHIPPED 2026-04-15 via commit
       `ddfb523` — `examples/territory_game.py:316` and
@@ -110,15 +110,23 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
 - [ ] **A-06** (agent-driven tool loop): Invert the OpenClaw integration.
       Instead of the push model (`bridge.step()` shoves FPV+overhead per
       step), one long-lived kickoff `/v1/chat/completions` call with
-      `wall_budget_s`; the agent pulls three tools from a local HTTP server
-      (`observe`, `move(direction)`, `done(reason)`) as needed. Stdin-based
-      human interjection piggybacks on tool responses via
-      `human_message`. Per-run workspace reset wipes
+      `wall_budget_s`; the agent pulls three tools (`observe`,
+      `move(direction)`, `done(reason)`) as needed. Stdin-based human
+      interjection piggybacks on tool responses via `human_message`.
+      Per-run workspace reset wipes
       `/home/node/.openclaw/workspaces/agent-<id>/state/` before each
       kickoff. Trace + `report.html` with 👁 (seen) / 🚶 (server-side) frame
       badges. Shared bridge-client 180s timeout preserved (regression-
       tested). Additive — does not touch push-model code paths.
-      Live-probe gate: T55 step 1 (container → host networking probe).
+      **Tool-surface contract (locked 2026-04-21 after Phase 2.5 superseded)**:
+      the three tools are exposed as **first-class MCP tools** served over
+      streamable-http from roboclaws; the agent runs under Gateway tool
+      `profile: minimal` (no `exec`, no generic `image`, no `curl`-via-shell)
+      so its only path to the world is the MCP surface. The earlier
+      Phase 2.5 contract (agent curls the HTTP server from `exec`) is
+      explicitly out of scope — see Phase 2.5 in ROADMAP.md for the lesson.
+      Live-probe gate: container → host MCP streamable-http probe + agent
+      verifies `observe` returns multimodal images (spike baseline 2026-04-21).
 
 ## v2 Requirements
 
@@ -172,7 +180,7 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-03 | Phase 2.4 (harness dependency) | Pending |
 | A-04 | Phase 2.4 | Pending |
 | A-05 | (deferred — formerly Phase 2.5 "ship winning view"; awaits a new phase) | Deferred |
-| A-06 | Phase 2.5 (autonomous-nav) | Pending |
+| A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Pending |
 
 **Coverage:**
 - v1 requirements: 17 total (A-06 added 2026-04-20)

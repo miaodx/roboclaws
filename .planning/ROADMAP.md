@@ -10,27 +10,33 @@ dev-topology to keep the demo continuously alive (Phase 1.5), then route
 control through an OpenClaw Gateway (Phases 2 → 2.1 → 2.2), then validate
 whether better map representations help a VLM win harder games (Phase 2.4)
 and, in parallel, test a different architectural bet — let the agent drive
-via tool calls instead of the push model (Phase 2.5). Phase 3 (Isaac Lab)
-is deferred indefinitely.
+via tool calls instead of the push model (Phase 2.5 → 2.6). Phase 3 (Isaac
+Lab) is deferred indefinitely.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
-is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phase 2.5 is
-drafted in `docs/plans/phase-2.5-autonomous-nav.md`, eng-reviewed, and
-ready for plan ingestion. Phase 3 remains deferred indefinitely.
+is drafted in `PLAN.md` and awaiting `/gsd-plan-phase 2.4`. Phase 2.5 was
+drafted around a curl-in-exec tool-call contract that local probing on
+2026-04-21 proved structurally wrong (agent fights the Gateway's exec
+allowlist instead of using native tools) — it is SUPERSEDED by Phase 2.6,
+which rebuilds the autonomous loop on first-class MCP tools + a `minimal`
+tool profile (spike-proven 2026-04-21; see
+`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`).
+Phase 3 remains deferred indefinitely.
 
 ## Milestones
 
 - ✅ **v1.0 Core + OpenClaw** - Phases 1, 1.5, 2, 2.1, 2.2 (shipped 2026-04-16)
 - ⛔ **Phase 2.3 (Digest pin)** - DECLINED 2026-04-20 (LOCKED ADR)
 - 🚧 **v1.1 Better Views** - Phase 2.4 (drafted, awaiting plan)
-- 📋 **v1.2 Autonomous OpenClaw Loop** - Phase 2.5 (drafted, ready for plan)
+- ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
+- 📋 **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — spike-proven, awaiting plan)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5): Sub-phases within Milestone 2 (OpenClaw integration track)
+- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5, 2.6): Sub-phases within Milestone 2 (OpenClaw integration track)
 
 - [x] **Phase 1: Core simulation + games** - Direct-VLM multi-agent territory + coverage on AI2-THOR (shipped)
 - [x] **Phase 1.5: CI + dev topology** - Three-layer demo matrix + cloud/local workflow (shipped)
@@ -39,7 +45,8 @@ ready for plan ingestion. Phase 3 remains deferred indefinitely.
 - [x] **Phase 2.2: Long-running OpenClaw games** - Per-agent SOULs + SOUL overlay + territory/coverage through Gateway (shipped)
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
 - [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (issue #52 prereqs shipped pre-ingest 2026-04-15)
-- [ ] **Phase 2.5: Autonomous OpenClaw loop (v1 single-agent nav + human steer)** - Pull-model architecture test: agent drives `observe`/`move`/`done` tools over local HTTP; stdin-based human interjection; runs parallel to Phase 2.4's push-model A/B (`docs/plans/phase-2.5-autonomous-nav.md`)
+- [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
+- [ ] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -168,29 +175,42 @@ Plans:
 - [ ] 024-04: Analysis script + `docs/view-experiment-2026-04.md` decision record
 **UI hint**: yes
 
-#### 📋 v1.2 Autonomous OpenClaw Loop (Phase 2.5) — Drafted, ready for plan
+#### ⛔ v1.2 Autonomous OpenClaw Loop — Phase 2.5 SUPERSEDED by Phase 2.6
 
-### Phase 2.5: Autonomous OpenClaw loop (v1 single-agent nav + human steer)
-**Goal**: Invert the OpenClaw integration. Instead of pushing FPV/overhead into the agent per step, let the agent drive — one kickoff `/v1/chat/completions` call with a long wall-clock budget, and the agent pulls `observe`/`move`/`done` from a local HTTP tool server as needed. Adds stdin-based human interjection that piggybacks on tool responses.
-**Depends on**: Phase 2.2 (OpenClawBridge + skill infra). Runs in parallel to Phase 2.4 — different architectural bet; does not share code paths in v1.
+### Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract) — SUPERSEDED
+**Status**: SUPERSEDED 2026-04-21 by Phase 2.6. Plans were drafted in `docs/plans/phase-2.5-autonomous-nav.md` and the 8 plan files exist under `.planning/phases/02.5-.../`, but none were executed. Kept as a lesson — **do not resurrect**.
+**Why superseded**: The contract was "agent calls `observe`/`move`/`done` by shelling out to `curl http://host.docker.internal:18788/...` from the Gateway's `exec` tool, and uses the generic `image` tool for frames." Local probing on 2026-04-21 (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + the Phase 2.6 spike findings) proved this architecture is structurally wrong:
+  - Gateway's `exec` allowlist rejects the `curl | python3 decode.py` patterns the agent naturally emits (`exec preflight: complex interpreter invocation detected`)
+  - Generic `image` tool aborts on workspace-local media paths and rejects `/tmp/...`
+  - Prompt-level steering ("don't use exec", "don't use /tmp") doesn't hold under long runs — the agent drifts back to coding-agent defaults
+  - Both `custom` and `plugin` Kimi paths ended on Gateway `read_timeout` (wall_clock)
+**Replacement**: Phase 2.6 rebuilds the same user-visible goal on a first-class MCP tool surface + `profile: minimal` tool allowlist. See below.
+**Original goal (preserved for reference)**: Invert the OpenClaw integration. Instead of pushing FPV/overhead into the agent per step, let the agent drive — one kickoff call with a long wall-clock budget, and the agent pulls `observe`/`move`/`done` as needed. Add stdin-based human interjection.
+**Original plans (archived, not executed)**:
+- [⛔] 025-01 (T49): Pre-build spike — long-poll + tool-format de-risk — **superseded by 2.6 MCP spike (2026-04-21)**
+- [⛔] 025-02 (T50): `roboclaws/openclaw/sim_server.py` — HTTP tool server — **superseded by 2.6 MCP server**
+- [⛔] 025-03 (T51): `skills/ai2thor-navigator/SKILL.md` tool declarations (curl recipes) — **superseded by 2.6 thin SKILL.md**
+- [⛔] 025-04 (T52): `OpenClawBridge.start_run(...)` — kickoff + blocking wait — **carries forward into 2.6 with minor adjustments**
+- [⛔] 025-05 (T53): `examples/openclaw_nav_autonomous.py` — stdin reader + SIGINT teardown — **carries forward into 2.6; drop curl prompt block**
+- [⛔] 025-06 (T53-bis): `scripts/openclaw-bootstrap.sh` updates (SIM_SERVER_URL, --add-host) — **superseded by 2.6 bootstrap that seeds `mcp.servers` + `tools.profile = "minimal"` before first start**
+- [⛔] 025-07 (T54): `scripts/render_autonomous_replay.py` — replay.gif + report.html — **carries forward into 2.6 unchanged**
+- [⛔] 025-08 (T55): Local-dev validation (6 probes) — **carries forward into 2.6 as live-probe gate**
+
+#### 📋 v1.2 Autonomous OpenClaw Loop (Phase 2.6) — Drafted, ready for plan
+
+### Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)
+**Goal**: Same user-visible outcome as superseded Phase 2.5 (single-agent autonomous nav + human steer), rebuilt on the architecture the 2026-04-21 spike proved works: `observe` / `move` / `done` as first-class MCP tools served over streamable-http, agent running under Gateway tool `profile: minimal` so it literally cannot fall back to `exec`/`curl`/generic-`image`.
+**Depends on**: Phase 2.2 (OpenClawBridge + skill infra). Runs in parallel to Phase 2.4 — different architectural bet; does not share code paths.
 **Requirements**: A-06 (agent-driven tool loop — see REQUIREMENTS.md)
-**Source**: `docs/plans/phase-2.5-autonomous-nav.md` (reviewed, eng-cleared)
+**Source**: `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-CONTEXT.md` + `02.6-SPIKE-FINDINGS.md`
 **Success Criteria** (what must be TRUE):
-  1. `python examples/openclaw_nav_autonomous.py --scene FloorPlan201 --max-moves 50 --wall-budget 300` runs end-to-end locally; agent calls `observe` within 30 s of kickoff, takes at least one `move`, terminates via `done` or wall-clock, produces `replay.gif` + `report.html` with 👁 (seen) and 🚶 (server-side) frame badges.
-  2. Human interjection mid-run (stdin line) appears in `trace.jsonl` on a tool response, in `report.html`'s tool-call log, and the agent's subsequent reasoning references it.
-  3. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
-  4. `OpenClawBridge.step()` still honors its 180 s default timeout after a `start_run(wall_budget_s=600)` call (shared-client timeout-isolation regression guard).
-**Plans**: 8 tasks (T49 spike → T50-T54 build → T55 local-dev probes). See source plan for full detail.
-
-Plans:
-- [ ] 025-01 (T49): Pre-build spike — long-poll + tool-format de-risk (local-dev; gates T50-T54)
-- [ ] 025-02 (T50): `roboclaws/openclaw/sim_server.py` — local HTTP tool server with frame-capture trace
-- [ ] 025-03 (T51): `skills/ai2thor-navigator/SKILL.md` tool declarations (observe/move/done + human_message)
-- [ ] 025-04 (T52): `OpenClawBridge.start_run(...)` — kickoff + blocking wait + workspace reset + shared-client timeout isolation
-- [ ] 025-05 (T53): `examples/openclaw_nav_autonomous.py` — stdin reader + SIGINT teardown + artifact render
-- [ ] 025-06 (T53-bis): `scripts/openclaw-bootstrap.sh` updates (SIM_SERVER_URL, --add-host, docs)
-- [ ] 025-07 (T54): Trace → `scripts/render_autonomous_replay.py` — `replay.gif` + `report.html` with 👁/🚶 badges
-- [ ] 025-08 (T55): Local-dev validation — 6 probes against real Gateway + Kimi (live-probe gate per `feedback_live_probe_gate.md`)
+  1. `python examples/openclaw_nav_autonomous.py --scene FloorPlan201 --max-moves 50 --wall-budget 300` runs end-to-end locally; agent calls the MCP `observe` tool within 30 s of kickoff, takes at least one `move`, terminates via `done` or wall-clock, produces `replay.gif` + `report.html`.
+  2. Gateway log for the run shows **zero** `exec`, `curl`, or generic `image`-tool calls from the agent; only `<server-prefix>__observe` / `__move` / `__done` calls appear.
+  3. Human interjection (stdin line) appears in `trace.jsonl` on a tool response, in `report.html`'s tool-call log, and the agent's subsequent reasoning references it.
+  4. The autonomous run's per-turn prompt-token overhead is materially smaller than under the coding profile (spike saw ~60% reduction, 15,396 → 6,285; target ≤ 50% of coding profile).
+  5. `scripts/openclaw-bootstrap.sh` seeds `mcp.servers.<name>` and `agents.list[<n>].tools.profile = "minimal"` **before first container start**, so no post-start SIGUSR1 restart is required to enable the tool surface.
+  6. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
+**Plans**: TBD — awaiting `/gsd-plan-phase 2.6`.
 **UI hint**: yes
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
@@ -215,7 +235,8 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.5 → 3
+Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 3
+(Phase 2.5 superseded 2026-04-21 — skipped in execution order; see Phase Details)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -226,5 +247,6 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.2. Long-running OpenClaw games | v1.0 | 3/3 | Complete | 2026-04-16 |
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
 | 2.4. View-experiment A/B | v1.1 | 0/6 | Not started (drafted, awaiting plan) | - |
-| 2.5. Autonomous OpenClaw loop | v1.2 | 0/8 | Not started (drafted, ready for plan) | - |
+| 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
+| 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 0/TBD | Not started (spike-proven, awaiting plan) | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
