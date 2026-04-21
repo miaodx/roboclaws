@@ -31,10 +31,22 @@ What this module delivers:
   stay stable.
 
 Binding rationale (threat model T-02.6-01): `host` defaults to `127.0.0.1`,
-**not** `0.0.0.0`. The Gateway container reaches this server via
-`host.docker.internal` → host-gateway → loopback on the host, and no LAN
-peer can reach port 18788 to drive the AI2-THOR engine. The bind is NOT
-configurable via environment variable — only via explicit argument.
+**not** `0.0.0.0`. On macOS and on Linux with Docker's host networking
+mode, the Gateway container reaches this server via `host.docker.internal`
+→ host-gateway → loopback on the host, and no LAN peer can reach port
+18788 to drive the AI2-THOR engine.
+
+Caveat — Linux with Docker 29.x default bridge: `host.docker.internal`
+resolves to the bridge gateway (172.17.0.1) and **cannot** reach the
+host's 127.0.0.1. On that topology the only production caller
+(`examples/openclaw_nav_autonomous.py`) must — and does — override to
+`host="0.0.0.0"`. See probe gate 02.6-06 in the phase planning for the
+live evidence. The LAN-exposure risk is accepted for single-operator
+local-dev on a trusted workstation; this is not a server for untrusted
+networks.
+
+The bind is NOT configurable via environment variable — only via explicit
+argument — so the choice is visible at call-sites and greppable.
 """
 
 from __future__ import annotations
@@ -61,6 +73,13 @@ __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 # Gateway reaches this via `host.docker.internal` → host-gateway → loopback,
 # while LAN peers on the same subnet cannot reach the AI2-THOR engine.
 # Not configurable via env — only via explicit argument.
+#
+# NOTE: On Linux with Docker 29.x default bridge, `host.docker.internal`
+# cannot reach host loopback; callers on that topology must override to
+# host="0.0.0.0". See module docstring + examples/openclaw_nav_autonomous.py
+# for the rationale. `test_example_binds_to_all_interfaces_on_linux` in
+# tests/test_openclaw_nav_autonomous.py guards that override from being
+# "fixed" back to the default.
 _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
 
@@ -376,10 +395,17 @@ class RoboclawsMCPServer:
         return thread
 
     def close(self) -> None:
-        """Attempt graceful shutdown; daemon thread is the safety net."""
+        """Attempt graceful shutdown; daemon thread is the safety net.
+
+        Thread-safety (WR-01): the watchdog + stdin threads in the example
+        may still be mid-`_write_trace` when close() runs (their joins use a
+        0.2s timeout). We flip `_closed` under `_trace_lock` and close the
+        file handle inside the same critical section so no writer can be
+        mid-write when the file descriptor disappears. `_write_trace`
+        re-checks `_closed` under the same lock before writing.
+        """
         if self._closed:
             return
-        self._closed = True
         # FastMCP has no documented shutdown hook yet; swallow AttributeError
         # and rely on the daemon flag for process-exit cleanup.
         try:
@@ -388,10 +414,12 @@ class RoboclawsMCPServer:
                 shutdown()
         except Exception:  # pragma: no cover - defensive cleanup
             pass
-        try:
-            self._trace_fp.close()
-        except Exception:  # pragma: no cover - defensive cleanup
-            pass
+        with self._trace_lock:
+            self._closed = True
+            try:
+                self._trace_fp.close()
+            except Exception:  # pragma: no cover - defensive cleanup
+                pass
         if self._server_thread is not None:
             self._server_thread.join(timeout=0.5)
 
@@ -452,6 +480,13 @@ class RoboclawsMCPServer:
         return "blind_batch"
 
     def _write_trace(self, *, tool: str, event: str, **data: Any) -> None:
+        # WR-01 fix: gate writes against close(). The watchdog + stdin
+        # threads in examples/openclaw_nav_autonomous.py join with a 0.2s
+        # timeout, so close() can run while a writer is in flight. Early
+        # bail-out is cheap; the in-lock re-check avoids the race where
+        # close() flips `_closed` after we read it but before we write.
+        if self._closed:
+            return
         payload = {
             "ts": time.time(),
             "tool": tool,
@@ -460,6 +495,8 @@ class RoboclawsMCPServer:
             **data,
         }
         with self._trace_lock:
+            if self._closed:  # re-check under lock (close() holds this lock)
+                return
             self._last_trace_monotonic = time.monotonic()
             key = f"{tool}:{event}"
             self._tool_event_counts[key] = self._tool_event_counts.get(key, 0) + 1
