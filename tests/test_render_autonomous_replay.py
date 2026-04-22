@@ -52,7 +52,12 @@ def _make_frame_event(
     decision_mode: str | None = None,
     move_reason: str | None = None,
     move_direction: str | None = None,
+    view_variant: str = "baseline",
+    image_labels: list[str] | None = None,
+    baseline_colour: str | None = None,
+    chase_colour: str | None = None,
 ) -> dict:
+    resolved_labels = image_labels or ["fpv", "overhead"]
     event: dict[str, object] = {
         "event": "frame_capture",
         "tool": tool,
@@ -60,6 +65,8 @@ def _make_frame_event(
         "seen_by_agent": seen_by_agent,
         "fpv": _tiny_jpeg_b64(colour),
         "overhead": _tiny_jpeg_b64("white"),
+        "view_variant": view_variant,
+        "image_labels": resolved_labels,
         "agent_state": {"position": {"x": 1.0, "y": 0.0, "z": 2.0}},
     }
     if human_message is not None:
@@ -70,6 +77,10 @@ def _make_frame_event(
         event["move_reason"] = move_reason
     if move_direction is not None:
         event["move_direction"] = move_direction
+    if baseline_colour is not None:
+        event["baseline_overhead"] = _tiny_jpeg_b64(baseline_colour)
+    if chase_colour is not None:
+        event["chase"] = _tiny_jpeg_b64(chase_colour)
     return event
 
 
@@ -120,6 +131,10 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
             colour="red",
             decision_mode="fresh_observe",
             move_direction="MoveAhead",
+            view_variant="map-v2+chase",
+            image_labels=["fpv", "map_v2", "chase"],
+            baseline_colour="gray",
+            chase_colour="purple",
         ),
     ]
     _write_trace(run_dir, events)
@@ -134,9 +149,13 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     assert replay_gif.stat().st_size > 100
     assert report_html.exists()
     report_text = report_html.read_text(encoding="utf-8")
-    assert "👁" in report_text
-    assert "🚶" in report_text
-    assert 'alt="overhead"' in report_text
+    assert 'type="range"' in report_text
+    assert "Current Frame" in report_text
+    assert "Click any panel to zoom." in report_text
+    assert "frame-lightbox" in report_text
+    assert report_text.index("FPV") < report_text.index("Chase") < report_text.index("Map V2")
+    assert "Map V2" in report_text
+    assert "Chase" in report_text
     assert "fresh observation" in report_text
     assert "fresh observe-driven move" in report_text
     assert summary_json.exists()
@@ -203,8 +222,8 @@ def test_reasoned_and_blind_batch_labels(tmp_path: Path) -> None:
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")
     assert "reasoned continuation: clear hallway continues" in report_text
     assert "blind batch" in report_text
-    assert 'class="decision reasoned-batch"' in report_text
-    assert 'class="decision blind-batch"' in report_text
+    assert "reasoned-batch" in report_text
+    assert "blind-batch" in report_text
 
 
 def test_summary_json_key_integrity(tmp_path: Path) -> None:

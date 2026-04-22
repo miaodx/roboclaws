@@ -304,6 +304,7 @@ def run_openclaw_demo(
                 "position": active_state.position,
                 "rotation": active_state.rotation,
                 "views": views,
+                "image_labels": list(prompt_bundle.image_labels),
                 "available_actions": NAVIGATION_ACTIONS,
             }
 
@@ -323,11 +324,22 @@ def run_openclaw_demo(
                     f"provider: {format_provider_status(provider_status)}"
                 )
 
+            primary_view_label = (
+                prompt_bundle.image_labels[1] if len(prompt_bundle.image_labels) > 1 else "overhead"
+            )
+            extra_views: list[tuple[str, Any]] = []
+            if prompt_bundle.structured_overhead_frame is not None:
+                extra_views.append(("overhead", prompt_bundle.baseline_overhead_frame))
+            if prompt_bundle.chase_cam_frame is not None:
+                extra_views.append(("chase", prompt_bundle.chase_cam_frame))
+
             recorder.record_step(
                 step=step,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
                 overhead_frame=prompt_bundle.trace_overhead_frame,
+                overhead_label=primary_view_label,
+                extra_views=extra_views,
                 game_state={
                     "visited_cells": len(view_context.visited_world),
                     "current_agent": current_agent,

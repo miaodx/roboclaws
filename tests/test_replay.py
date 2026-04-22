@@ -146,6 +146,8 @@ def test_save_replay_json_step_fields(tmp_path) -> None:
     assert "vlm_prompt_state" in step
     assert "vlm_response" in step
     assert "turn_metrics" in step
+    assert "overhead_label" in step
+    assert "extra_views" in step
 
 
 def test_save_replay_json_includes_provider_status(tmp_path) -> None:
@@ -215,6 +217,31 @@ def test_save_creates_overhead_pngs(tmp_path) -> None:
     out = recorder.save(tmp_path / "run", generate_gif=False)
     overheads = list((out / "overhead").glob("*_overhead.png"))
     assert len(overheads) == 3
+
+
+def test_save_persists_extra_scene_views(tmp_path) -> None:
+    recorder = _make_recorder(agent_count=1)
+    recorder.record_step(
+        step=0,
+        agent_id=0,
+        agent_frames=[_make_frame(value=10)],
+        overhead_frame=_make_frame(value=20),
+        overhead_label="map_v2",
+        extra_views=[
+            ("overhead", _make_frame(value=30)),
+            ("chase", _make_frame(value=40)),
+        ],
+        game_state={"game": "test", "step": 0},
+        vlm_prompt_state={"step": 0},
+        vlm_response={"action": "MoveAhead"},
+    )
+    out = recorder.save(tmp_path / "run", generate_gif=False)
+    manifest = json.loads((out / "replay.json").read_text())
+    step = manifest["steps"][0]
+
+    assert step["overhead_label"] == "map_v2"
+    assert [view["label"] for view in step["extra_views"]] == ["overhead", "chase"]
+    assert len(list((out / "scene_views").glob("*.png"))) == 2
 
 
 def test_save_empty_recorder(tmp_path) -> None:
@@ -390,6 +417,17 @@ def test_make_composite_width_increases_with_agents() -> None:
     out2 = _make_composite([_make_frame(), _make_frame()], overhead)
     out3 = _make_composite([_make_frame(), _make_frame(), _make_frame()], overhead)
     assert out3.width > out2.width
+
+
+def test_make_composite_width_increases_with_extra_views() -> None:
+    overhead = _make_frame()
+    base = _make_composite([_make_frame()], overhead)
+    with_chase = _make_composite(
+        [_make_frame()],
+        overhead,
+        extra_frames=[_make_frame(value=90)],
+    )
+    assert with_chase.width > base.width
 
 
 # ---------------------------------------------------------------------------

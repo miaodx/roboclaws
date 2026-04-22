@@ -82,17 +82,115 @@ def _image_to_array(image: Image.Image) -> np.ndarray:
     return np.asarray(image.convert("RGB"), dtype=np.uint8)
 
 
+def _embed_image(encoded: str, *, trim_border: bool = False) -> str:
+    if not encoded:
+        return ""
+    image = _decode_jpeg(encoded, fallback_label="missing frame")
+    if trim_border:
+        image = _trim_uniform_border(image)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _format_panel_label(label: str) -> str:
+    normalized = str(label).replace("-", "_").strip("_ ")
+    if not normalized:
+        return "View"
+    parts = [part for part in normalized.split("_") if part]
+    pretty: list[str] = []
+    for part in parts:
+        upper = part.upper()
+        if upper in {"FPV", "VLM"}:
+            pretty.append(upper)
+        elif part.isdigit():
+            pretty.append(part)
+        else:
+            pretty.append(part.capitalize())
+    return " ".join(pretty)
+
+
+def _normalize_panel_key(label: str) -> str:
+    return str(label).replace("-", "_").strip("_ ").lower()
+
+
+def _ordered_panel_labels(labels: list[str]) -> list[str]:
+    preferred = {"fpv": 0, "chase": 1, "map_v2": 2, "overhead": 3}
+    return sorted(labels, key=lambda value: (preferred.get(_normalize_panel_key(value), 50), value))
+
+
+def _trim_uniform_border(image: Image.Image, tolerance: int = 10, padding: int = 2) -> Image.Image:
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    if width < 3 or height < 3:
+        return rgb
+
+    arr = np.asarray(rgb, dtype=np.int16)
+    corners = np.asarray(
+        [arr[0, 0], arr[0, -1], arr[-1, 0], arr[-1, -1]],
+        dtype=np.int16,
+    )
+    if np.abs(corners - corners[0]).max() > tolerance:
+        return rgb
+
+    background = corners.mean(axis=0)
+    mask = np.abs(arr - background).max(axis=2) > tolerance
+    if not mask.any():
+        return rgb
+
+    ys, xs = np.where(mask)
+    top = max(0, int(ys.min()) - padding)
+    bottom = min(height, int(ys.max()) + padding + 1)
+    left = max(0, int(xs.min()) - padding)
+    right = min(width, int(xs.max()) + padding + 1)
+    if top == 0 and left == 0 and bottom == height and right == width:
+        return rgb
+    return rgb.crop((left, top, right, bottom))
+
+
+def _frame_panels(frame: dict[str, Any]) -> list[tuple[str, str]]:
+    image_labels = [str(label) for label in frame.get("image_labels", [])]
+    panels: list[tuple[str, str]] = [("fpv", str(frame.get("fpv", "")))]
+
+    primary_label = image_labels[1] if len(image_labels) > 1 else "overhead"
+    panels.append((primary_label, str(frame.get("overhead", ""))))
+
+    if frame.get("baseline_overhead") and primary_label != "overhead":
+        panels.append(("overhead", str(frame.get("baseline_overhead", ""))))
+
+    chase_label = image_labels[2] if len(image_labels) > 2 else "chase"
+    if frame.get("chase"):
+        existing_labels = {label for label, _ in panels}
+        if chase_label not in existing_labels:
+            panels.append((chase_label, str(frame.get("chase", ""))))
+
+    return panels
+
+
 def build_composite_images(frames: list[dict[str, Any]]) -> list[Image.Image]:
     from roboclaws.core.replay import _make_composite
 
     composite_images: list[Image.Image] = []
     for index, frame in enumerate(frames):
-        fpv = _decode_jpeg(frame.get("fpv", ""), fallback_label=f"missing fpv #{index}")
-        overhead = _decode_jpeg(
-            frame.get("overhead", ""),
-            fallback_label=f"missing overhead #{index}",
+        panels = _frame_panels(frame)
+        fpv = _decode_jpeg(panels[0][1], fallback_label=f"missing fpv #{index}")
+        if len(panels) >= 2:
+            primary = _decode_jpeg(
+                panels[1][1],
+                fallback_label=f"missing {panels[1][0]} #{index}",
+            )
+            extra_frames = [
+                _image_to_array(_decode_jpeg(encoded, fallback_label=f"missing {label} #{index}"))
+                for label, encoded in panels[2:]
+            ]
+        else:
+            primary = _placeholder_image(f"missing overhead #{index}")
+            extra_frames = []
+        composite = _make_composite(
+            [_image_to_array(fpv)],
+            _image_to_array(primary),
+            extra_frames=extra_frames,
         )
-        composite = _make_composite([_image_to_array(fpv)], _image_to_array(overhead))
         composite_images.append(composite)
     if composite_images:
         return composite_images
@@ -121,19 +219,26 @@ def _build_summary_from_events(
     frames: list[dict[str, Any]],
     run_result: dict[str, Any],
 ) -> dict[str, Any]:
-    observe_events = [
+    observe_request_events = [
         event
         for event in events
         if event.get("tool") == "observe" and event.get("event") == "request"
     ]
-    move_events = [
+    move_request_events = [
         event for event in events if event.get("tool") == "move" and event.get("event") == "request"
     ]
-    done_events = [
+    done_request_events = [
         event for event in events if event.get("tool") == "done" and event.get("event") == "request"
     ]
     seen_frames = [frame for frame in frames if frame.get("seen_by_agent") is True]
     unseen_frames = [frame for frame in frames if frame.get("seen_by_agent") is False]
+    observe_count = len(observe_request_events) or sum(
+        1 for frame in frames if frame.get("tool") == "observe"
+    )
+    move_count = len(move_request_events) or sum(
+        1 for frame in frames if frame.get("tool") == "move"
+    )
+    done_count = len(done_request_events) or int(run_result.get("terminated_by") == "done")
     decision_modes = {
         "fresh_observe": 0,
         "reasoned_batch": 0,
@@ -151,9 +256,9 @@ def _build_summary_from_events(
         if event.get("event") == "response" and event.get("response", {}).get("human_message")
     )
 
-    if move_events:
-        observe_to_move_ratio = len(observe_events) / len(move_events)
-    elif observe_events:
+    if move_count:
+        observe_to_move_ratio = observe_count / move_count
+    elif observe_count:
         observe_to_move_ratio = math.inf
     else:
         observe_to_move_ratio = 0.0
@@ -166,21 +271,25 @@ def _build_summary_from_events(
             - float(frames[0].get("wallclock_elapsed", 0.0)),
         )
 
+    latest_frame = frames[-1] if frames else {}
+
     return {
-        "total_tool_calls": len(observe_events) + len(move_events) + len(done_events),
+        "total_tool_calls": observe_count + move_count + done_count,
         "tool_calls_by_type": {
-            "observe": len(observe_events),
-            "move": len(move_events),
-            "done": len(done_events),
+            "observe": observe_count,
+            "move": move_count,
+            "done": done_count,
         },
-        "moves": len(move_events),
+        "moves": move_count,
         "observes_by_agent": len(seen_frames),
         "frames_unseen_by_agent": len(unseen_frames),
         "observe_to_move_ratio": observe_to_move_ratio,
         "decision_modes": decision_modes,
         "wallclock_seconds": wallclock_seconds,
+        "frame_count": len(frames),
+        "view_variant": latest_frame.get("view_variant", "baseline"),
         "terminated_by": (
-            run_result.get("terminated_by") or ("done" if done_events else "wall_clock")
+            run_result.get("terminated_by") or ("done" if done_count else "wall_clock")
         ),
         "human_messages_delivered": human_delivered,
         "final_message": run_result.get("final_message"),
@@ -214,9 +323,10 @@ def _decision_descriptor(frame: dict[str, Any]) -> tuple[str, str]:
     return ("move", "move")
 
 
-def build_timeline(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    timeline: list[dict[str, Any]] = []
-    for frame in frames:
+def build_frame_data(frames: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+    panel_labels: list[str] = []
+    frame_data: list[dict[str, Any]] = []
+    for index, frame in enumerate(frames):
         seen_by_agent = bool(frame.get("seen_by_agent"))
         decision_label, decision_class = _decision_descriptor(frame)
         agent_state = frame.get("agent_state", {})
@@ -234,13 +344,21 @@ def build_timeline(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if human_message:
             tooltip_lines.append(f"human_message={human_message}")
 
-        timeline.append(
+        panel_map: dict[str, str] = {}
+        for label, encoded in _frame_panels(frame):
+            panel_map[label] = _embed_image(
+                encoded,
+                trim_border=_normalize_panel_key(label) == "overhead",
+            )
+            if label not in panel_labels:
+                panel_labels.append(label)
+
+        frame_data.append(
             {
-                "kind": "frame",
+                "index": index,
                 "seen_by_agent": seen_by_agent,
                 "ts": float(frame.get("wallclock_elapsed", 0.0)),
-                "fpv": frame.get("fpv", ""),
-                "overhead": frame.get("overhead", ""),
+                "_panel_map": panel_map,
                 "agent_state": agent_state,
                 "human_message": human_message,
                 "tooltip": "\n".join(tooltip_lines),
@@ -252,7 +370,13 @@ def build_timeline(frames: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "position": _format_position(agent_state if isinstance(agent_state, dict) else {}),
             }
         )
-    return timeline
+    if not panel_labels:
+        panel_labels = ["fpv", "overhead"]
+    panel_labels = _ordered_panel_labels(panel_labels)
+    for frame in frame_data:
+        panel_map = frame.pop("_panel_map")
+        frame["panel_images"] = [panel_map.get(label, "") for label in panel_labels]
+    return panel_labels, frame_data
 
 
 def build_tool_log(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -311,7 +435,8 @@ def render_report(
     *,
     run_dir: Path,
     summary: dict[str, Any],
-    timeline: list[dict[str, Any]],
+    panel_labels: list[str],
+    frame_data: list[dict[str, Any]],
     tool_log: list[dict[str, Any]],
     thumbnail_size: int,
 ) -> Path:
@@ -334,7 +459,9 @@ def render_report(
     html = template.render(
         run_id=run_dir.name,
         summary=summary,
-        timeline=timeline,
+        panel_headers=[_format_panel_label(label) for label in panel_labels],
+        panel_count=len(panel_labels),
+        frames_json=json.dumps(frame_data),
         tool_log=tool_log,
         thumbnail_size=thumbnail_size,
     )
@@ -360,11 +487,13 @@ def main(argv: list[str] | None = None) -> int:
         run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
     summary = _build_summary_from_events(events, frames, run_result)
     (args.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    panel_labels, frame_data = build_frame_data(frames)
 
     render_report(
         run_dir=args.run_dir,
         summary=summary,
-        timeline=build_timeline(frames),
+        panel_labels=panel_labels,
+        frame_data=frame_data,
         tool_log=build_tool_log(events),
         thumbnail_size=args.thumbnail_size,
     )
