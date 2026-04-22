@@ -61,6 +61,7 @@ class MultiAgentEngine:
         self.server_timeout = server_timeout
         self.server_start_timeout = server_start_timeout
         self._reachable_positions: set[tuple[int, int]] | None = None
+        self._overhead_camera_pose: dict[str, Any] | None = None
         self._overhead_camera_id = 0
         self._chase_camera_ids: dict[int, int] = {}
         self._controller = Controller(
@@ -83,6 +84,7 @@ class MultiAgentEngine:
         event = self._controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
         pose = copy.deepcopy(event.metadata["actionReturn"])
         pose["orthographic"] = True
+        self._overhead_camera_pose = copy.deepcopy(pose)
         self._controller.step(action="AddThirdPartyCamera", **pose, skyboxColor="white")
         self._last_event = self._controller.last_event
         self._overhead_camera_id = len(self._last_event.events[0].third_party_camera_frames) - 1
@@ -140,6 +142,12 @@ class MultiAgentEngine:
     def get_overhead_frame(self) -> np.ndarray:
         """Return the most-recent top-down overhead camera frame as (H, W, 3) uint8."""
         return self._last_event.events[0].third_party_camera_frames[self._overhead_camera_id]
+
+    def get_overhead_camera_properties(self) -> dict[str, Any]:
+        """Return the top-down camera pose used to render the overhead frame."""
+        if self._overhead_camera_pose is None:
+            raise RuntimeError("Overhead camera not initialized")
+        return copy.deepcopy(self._overhead_camera_pose)
 
     def add_chase_cam(self, agent_id: int) -> int:
         """Register a third-party chase camera for an agent and return its camera id."""

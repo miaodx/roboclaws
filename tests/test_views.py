@@ -105,6 +105,14 @@ class _FakeNavigationEngine:
     def get_overhead_frame(self) -> np.ndarray:
         return self._overhead
 
+    def get_overhead_camera_properties(self) -> dict[str, object]:
+        return {
+            "position": {"x": 0.25, "y": 2.5, "z": 0.5},
+            "rotation": {"x": 90.0, "y": 0.0, "z": 0.0},
+            "orthographicSize": 0.5,
+            "orthographic": True,
+        }
+
     def add_chase_cam(self, agent_id: int) -> int:
         return agent_id
 
@@ -130,6 +138,8 @@ def test_render_navigation_prompt_bundle_map_v2_chase_reuses_shared_surface() ->
     assert len(bundle.prompt_images) == 3
     assert bundle.structured_overhead_frame is not None
     assert bundle.trace_overhead_frame is bundle.structured_overhead_frame
+    assert bundle.baseline_overhead_frame.shape == engine.get_overhead_frame().shape
+    assert bundle.structured_overhead_frame.shape == engine.get_overhead_frame().shape
     assert bundle.chase_cam_frame is not None
     assert context.visited_world == {(1, 0)}
     assert engine.chase_updates == 1
