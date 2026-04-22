@@ -19,7 +19,11 @@ from openclaw_nav_autonomous import (  # noqa: E402
     _run_capture,
     run_autonomous_navigation,
 )
-from roboclaws.openclaw.bridge import OpenClawUnavailable, RunResult  # noqa: E402
+from roboclaws.openclaw.bridge import (  # noqa: E402
+    OpenClawUnavailable,
+    RunResult,
+    TranscriptMessage,
+)
 
 
 def _make_fake_mcp_server(snapshot_metrics: dict | None = None) -> MagicMock:
@@ -39,6 +43,7 @@ def _make_fake_mcp_server(snapshot_metrics: dict | None = None) -> MagicMock:
             "enqueue_human_message",
             "snapshot_metrics",
             "write_runtime_event",
+            "write_trace_event",
         ]
     )
     fake.done_event = threading.Event()
@@ -48,6 +53,7 @@ def _make_fake_mcp_server(snapshot_metrics: dict | None = None) -> MagicMock:
     fake.close = MagicMock()
     fake.enqueue_human_message = MagicMock()
     fake.write_runtime_event = MagicMock()
+    fake.write_trace_event = MagicMock()
     fake.snapshot_metrics = MagicMock(
         return_value=snapshot_metrics
         if snapshot_metrics is not None
@@ -71,7 +77,18 @@ def test_parse_args_defaults() -> None:
     assert args.max_moves == 200
     assert args.wall_budget == 600.0
     assert args.output_dir is None
+    assert args.views == "map-v2+chase"
     assert args.skip_bootstrap is False
+
+
+def test_parse_args_accepts_view_variants() -> None:
+    args = _parse_args(["--views", "map-v2+chase"])
+    assert args.views == "map-v2+chase"
+
+
+def test_parse_args_accepts_transcript_mode() -> None:
+    args = _parse_args(["--transcript-mode", "terminal-body"])
+    assert args.transcript_mode == "terminal-body"
 
 
 def test_kickoff_prompt_is_mcp_era_and_short() -> None:
@@ -112,6 +129,8 @@ def test_kickoff_prompt_is_mcp_era_and_short() -> None:
     assert "50" in prompt, "max_moves budget must be interpolated into prompt"
     # Preserve the human_message ack behavior (D-10, plan must-have).
     assert "human_message" in prompt
+    assert "view_variant" in prompt
+    assert "image_labels" in prompt
     # Delegate to the skill, don't duplicate it.
     assert "SKILL.md" in prompt or "skill" in prompt.lower()
 
@@ -122,6 +141,24 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         final_message="done exploring",
         wallclock_s=12.5,
         terminated_by="done",
+        transcript_capture_mode="stream",
+        transcript_source="stream",
+        transcript_messages=[
+            TranscriptMessage(
+                wallclock_s=1.2,
+                source="stream",
+                content="Checking session",
+                message_index=0,
+                chunk_index=0,
+            ),
+            TranscriptMessage(
+                wallclock_s=1.5,
+                source="stream",
+                content=" status.",
+                message_index=0,
+                chunk_index=1,
+            ),
+        ],
         debug={"prompt_chars": 123, "gateway_request_seconds": 12.5},
     )
     subprocess_calls: list[list[str]] = []
@@ -166,6 +203,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
+            views="map-v2+chase",
             skip_bootstrap=False,
         )
 
@@ -174,7 +212,18 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert (output_dir / "run_result.json").exists()
     assert (output_dir / "start_run_metrics.json").exists()
     run_result_json = json.loads((output_dir / "run_result.json").read_text(encoding="utf-8"))
+    assert run_result_json["view_variant"] == "map-v2+chase"
     assert run_result_json["bridge_metrics"]["prompt_chars"] == 123
+    assert run_result_json["transcript_capture_mode"] == "stream"
+    assert run_result_json["transcript_source"] == "stream"
+    assert run_result_json["transcript_messages"][0] == {
+        "wallclock_s": 1.2,
+        "source": "stream",
+        "content": "Checking session",
+        "message_index": 0,
+        "chunk_index": 0,
+        "is_final": False,
+    }
     # Key name 'sim_server_metrics' is frozen for report.html compat even
     # though the backing server is now MCP.
     assert run_result_json["sim_server_metrics"]["observed_once"] is True
@@ -192,7 +241,14 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "example must override host to 0.0.0.0 on Linux (spike 02.6-06); "
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
+    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     fake_server.run_in_thread.assert_called_once()
+    assert fake_server.write_trace_event.call_count == 2
+    first_trace = fake_server.write_trace_event.call_args_list[0].kwargs
+    assert first_trace["tool"] == "assistant"
+    assert first_trace["event"] == "assistant_transcript"
+    assert first_trace["content"] == "Checking session"
+    assert first_trace["wallclock_elapsed"] == 1.2
     assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
     assert [
         sys.executable,
@@ -227,7 +283,7 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ),
+        ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -242,16 +298,63 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
+            views="map-v2",
             skip_bootstrap=True,
         )
 
     assert result["terminated_by"] == "done"
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-xyz")
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("view_variant") == "map-v2"
     assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] not in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
     fake_server.close.assert_called_once()
     bridge.close.assert_called_once()
+
+
+def test_run_autonomous_navigation_passes_transcript_override(tmp_path: Path) -> None:
+    output_dir = tmp_path / "autonomous"
+    bridge_result = RunResult(
+        final_message="done exploring",
+        wallclock_s=9.5,
+        terminated_by="done",
+        transcript_capture_mode="terminal-body",
+        transcript_source="terminal-body",
+    )
+    fake_server = _make_fake_mcp_server(snapshot_metrics={})
+
+    with (
+        patch("openclaw_nav_autonomous.MultiAgentEngine"),
+        patch(
+            "openclaw_nav_autonomous.make_roboclaws_mcp",
+            return_value=fake_server,
+        ) as mcp_factory,
+        patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
+        patch("openclaw_nav_autonomous.subprocess.run", return_value=SimpleNamespace(stdout="", returncode=0)),
+        patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
+        patch.dict("openclaw_nav_autonomous.os.environ", {"OPENCLAW_GATEWAY_TOKEN": "token-xyz"}),
+    ):
+        bridge = bridge_cls.return_value
+        bridge.start_run.return_value = bridge_result
+        bridge.get_last_run_metrics.return_value = {}
+
+        run_autonomous_navigation(
+            scene="FloorPlan201",
+            max_moves=20,
+            wall_budget=60.0,
+            output_dir=output_dir,
+            skip_bootstrap=True,
+            transcript_mode="terminal-body",
+        )
+
+    bridge_cls.assert_called_once_with(
+        gateway_url="http://127.0.0.1:18789",
+        token="token-xyz",
+        transcript_mode="terminal-body",
+    )
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
 
 
 def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None:
@@ -274,7 +377,7 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ),
+        ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -299,6 +402,8 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
     assert (diagnostics_dir / "gateway.docker.log").exists()
     assert (diagnostics_dir / "gateway.inner.log").exists()
     assert (diagnostics_dir / "gateway.workspace-state.txt").exists()
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
     fake_server.close.assert_called_once()
@@ -335,7 +440,7 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ),
+        ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -358,6 +463,8 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
 
     # Operator-supplied value was preserved (setdefault, not assignment).
     assert captured_env.get("ROBOCLAWS_MCP_URL") == override_url
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     # The example no longer sets SIM_SERVER_URL itself. A pre-existing value
     # in os.environ (inherited) is acceptable, but the example is not the
     # source of the legacy URL anymore.

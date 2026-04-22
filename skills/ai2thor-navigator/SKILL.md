@@ -1,6 +1,6 @@
 ---
 name: ai2thor-navigator
-description: Navigate a simulated robot one step at a time in an AI2-THOR indoor scene. Given a first-person camera frame, an overhead map, and structured game state, return a single navigation action via MCP tools.
+description: Navigate a simulated robot one step at a time in an AI2-THOR indoor scene. Given a first-person camera frame, one or two navigation-support images, and structured game state, return a single navigation action via MCP tools.
 metadata:
   openclaw:
     emoji: 🤖
@@ -12,7 +12,7 @@ You drive one simulated agent through an AI2-THOR indoor room using the MCP tool
 
 ## Tools
 
-- `roboclaws__observe()` — returns the first-person camera frame, the overhead map, and the current structured state (position, yaw, scene, step count, budget_remaining, optional `human_message`). No arguments.
+- `roboclaws__observe()` — returns the first-person camera frame, one or two navigation-support images, and the current structured state (position, yaw, scene, step count, budget_remaining, optional `human_message`, plus `view_variant` and `image_labels` telling you what each returned image is). No arguments.
 - `roboclaws__move(direction, reason)` — take one physical step. `direction` must be one of: `MoveAhead`, `MoveBack`, `MoveLeft`, `MoveRight`, `RotateLeft`, `RotateRight`, `LookUp`, `LookDown`. `reason` is a short natural-language string used for replay narration.
 - `roboclaws__done(reason)` — end the run cleanly. Call when the goal is achieved or you are stuck.
 

@@ -17,6 +17,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.views import VIEW_VARIANTS
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 
@@ -35,9 +36,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--wall-budget", type=float, default=600.0)
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument(
+        "--views",
+        choices=VIEW_VARIANTS,
+        default="map-v2+chase",
+        help="Prompt image bundle variant returned by roboclaws__observe.",
+    )
+    parser.add_argument(
         "--skip-bootstrap",
         action="store_true",
         help="Reuse an already-running Gateway instead of bootstrapping/removing the container.",
+    )
+    parser.add_argument(
+        "--transcript-mode",
+        choices=("stream", "terminal-body"),
+        default=None,
+        help="Optional override for transcript capture mode; omit to use the bridge default.",
     )
     return parser.parse_args(argv)
 
@@ -61,6 +74,8 @@ def _kickoff_prompt(max_moves: int) -> str:
         "roboclaws__observe before any other action.\n"
         f"Budget: up to {max_moves} physical moves plus the wall-clock set by the "
         "caller; pace yourself against both.\n"
+        "Use observe.state.view_variant and observe.state.image_labels to interpret "
+        "the returned image bundle before deciding.\n"
         "Loop observe -> think -> move until you are stuck, the budget is nearly "
         "exhausted, or you have a concrete reason to stop; then call "
         "roboclaws__done with a short reason.\n"
@@ -217,7 +232,9 @@ def run_autonomous_navigation(
     max_moves: int,
     wall_budget: float,
     output_dir: Path,
+    views: str = "map-v2+chase",
     skip_bootstrap: bool = False,
+    transcript_mode: str | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -250,6 +267,7 @@ def run_autonomous_navigation(
             # accepted: single-operator local-dev on a trusted workstation.
             host="0.0.0.0",
             port=18788,
+            view_variant=views,
         )
         mcp_server.run_in_thread()
         # Runtime-event key 'sim_server_metrics' is frozen for schema compat with
@@ -260,6 +278,7 @@ def run_autonomous_navigation(
             scene=scene,
             max_moves=max_moves,
             wall_budget_s=wall_budget,
+            view_variant=views,
             skip_bootstrap=skip_bootstrap,
         )
         log.info(
@@ -306,16 +325,20 @@ def run_autonomous_navigation(
 
         stdin_thread = _start_stdin_thread(mcp_server, stdin_stop)
 
-        bridge = OpenClawBridge(
-            gateway_url="http://127.0.0.1:18789",
-            token=token,
-        )
+        bridge_kwargs: dict[str, Any] = {
+            "gateway_url": "http://127.0.0.1:18789",
+            "token": token,
+        }
+        if transcript_mode is not None:
+            bridge_kwargs["transcript_mode"] = transcript_mode
+        bridge = OpenClawBridge(**bridge_kwargs)
         kickoff_prompt = _kickoff_prompt(max_moves)
         mcp_server.write_runtime_event(
             "start_run_begin",
             prompt_chars=len(kickoff_prompt),
             prompt_lines=kickoff_prompt.count("\n") + 1,
             bridge_timeout_s=wall_budget + 60.0,
+            transcript_mode=transcript_mode,
         )
         run_started = time.monotonic()
         try:
@@ -330,6 +353,18 @@ def run_autonomous_navigation(
                 final_message=str(exc),
                 wallclock_s=round(time.monotonic() - run_started, 3),
                 terminated_by="error",
+                transcript_capture_mode=transcript_mode or "terminal-body",
+            )
+        for entry in run_result.transcript_messages:
+            mcp_server.write_trace_event(
+                tool="assistant",
+                event="assistant_transcript",
+                source=entry.source,
+                content=entry.content,
+                message_index=entry.message_index,
+                chunk_index=entry.chunk_index,
+                is_final=entry.is_final,
+                wallclock_elapsed=entry.wallclock_s,
             )
         bridge_metrics = _metrics_dict(bridge.get_last_run_metrics())
         mcp_server.write_runtime_event(
@@ -360,11 +395,17 @@ def run_autonomous_navigation(
                 "terminated_by": run_result.terminated_by,
                 "wallclock_s": run_result.wallclock_s,
                 "final_message": run_result.final_message,
+                "view_variant": views,
                 "bridge_metrics": bridge_metrics,
                 # Key 'sim_server_metrics' kept verbatim for report.html +
                 # render_autonomous_replay.py schema compat; backing data
                 # comes from mcp_server.snapshot_metrics() (same 8-key contract).
                 "sim_server_metrics": mcp_server.snapshot_metrics(),
+                "transcript_capture_mode": run_result.transcript_capture_mode,
+                "transcript_source": run_result.transcript_source,
+                "transcript_messages": [
+                    entry.to_dict() for entry in run_result.transcript_messages
+                ],
                 "diagnostics_files": diagnostics_files,
             },
         )
@@ -419,7 +460,9 @@ def main() -> None:
         max_moves=args.max_moves,
         wall_budget=args.wall_budget,
         output_dir=output_dir,
+        views=args.views,
         skip_bootstrap=args.skip_bootstrap,
+        transcript_mode=args.transcript_mode,
     )
     print(f"terminated_by: {result['terminated_by']}")
     print(f"wallclock_s: {result['wallclock_s']:.1f}")

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
-status: planning
-stopped_at: Phase 02.4 planned into .planning/phases/02.4-view-experiment-ab; next step is 02.4-01 openclaw-demo-view-variants
-last_updated: "2026-04-21T12:59:13Z"
-last_activity: 2026-04-21
+status: blocked
+stopped_at: Phase 02.4 still blocked on 02.4-04 full sweep + decision record via issue #70; a new queued follow-up phase (02.7, autonomous intermediate-message capture) was drafted on 2026-04-22 without changing the active phase
+last_updated: "2026-04-22T07:11:32Z"
+last_activity: 2026-04-22
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -25,19 +25,19 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 
 ## Current Position
 
-Phase: 02.4 (view-experiment-ab) — PLANNED
-Plan: 0 of 4 — READY TO EXECUTE (`02.4-01` is the single-agent OpenClaw slice).
-Status: Phase 02.4 was migrated from the root `PLAN.md` draft into `.planning/phases/02.4-view-experiment-ab/` on 2026-04-21. Phase 02.6 remains shipped; the next execution step is `02.4-01`.
-Last activity: 2026-04-21
+Phase: 02.4 (view-experiment-ab) — ACTIVE / BLOCKED ON LOCAL-DEV
+Plan: 3 of 4 — `02.4-01` through `02.4-03` are complete; `02.4-04` remains open for the live sweep and decision record.
+Status: Shared view primitives, chase-cam support, example rollout, `NvidiaProvider`, `examples/view_experiment.py`, and `scripts/analyze_view_experiment.py` are implemented. On 2026-04-22 a local workstation also completed a 50-step Kimi `openclaw_demo.py --views map-v2+chase` review run and a shipped-path follow-up proving the same view family works in Phase 02.6's autonomous MCP loop. The remaining gate is still the explicit full `02.4-04` sweep + write-up tracked in issue #70.
+Last activity: 2026-04-22
 
-Progress: [----------] 0%
-(Phase 02.4 now has a 4-plan GSD breakdown; the first plan intentionally lands `examples/openclaw_demo.py` before territory/coverage. Phase 02.6 shipped on 2026-04-21 and remains the latest completed phase.)
+Progress: [########--] 75%
+(Phase 02.4 now has its implementation-heavy plans complete. The final phase gate is intentionally the local-dev validation + decision-record step, not more cloud-side coding. Phase 02.6 shipped on 2026-04-21 and remains the latest fully completed phase.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 18 (historical retrofit from shipped phases)
+- Total plans completed: 21 (18 historical retrofit + 3 completed in Phase 02.4)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -51,11 +51,12 @@ Progress: [----------] 0%
 | 2.1. Transport correction | 3 | n/a | n/a |
 | 2.2. Long-running OpenClaw games | 3 | n/a | n/a |
 | 2.3. Digest pin (declined) | 1 | n/a | n/a |
+| 2.4. View-experiment A/B | 3 | n/a | n/a |
 
 **Recent Trend:**
 
 - Last 3 shipped phases: 2.2, 2.3 (declined), 2.6
-- Trend: Stable (Phase 2.6 shipped cleanly on 2026-04-21; focus now shifts back to the unexecuted 2.4 views track)
+- Trend: Stable; Phase 02.4 is 3/4 complete and intentionally paused at the full local-dev sweep/write-up gate (issue #70) after a successful local review demo and 02.6 bridge follow-up on 2026-04-22
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -73,6 +74,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
+- **Phase 02.4 execution checkpoint (2026-04-21):** Plans `02.4-01` through `02.4-03` are complete and the cloud-safe slice of `02.4-04` (`scripts/analyze_view_experiment.py` plus synthetic-data coverage) is implemented. The actual Kimi/NVIDIA sweep and `docs/view-experiment-2026-04.md` remain local-dev only and are tracked in issue #70.
+- **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
+- **Roadmap extension (2026-04-22):** Phase 02.7 was added as the next queued autonomous follow-up: compare real Gateway streaming vs terminal-body capture for intermediate assistant messages, prefer streaming if it is actually supported, and persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
 - **Phase 02.6 plan 01 (2026-04-21)**: MCP server default bind is `127.0.0.1` (localhost-only) per threat model T-02.6-01; Gateway container reaches via `host.docker.internal` → host-gateway → loopback. Bind is NOT env-configurable — only via explicit argument.
 - **Phase 02.6 plan 01 (2026-04-21)**: Trace schema additive-only rule: `tests/fixtures/trace_schema_reference.json` freezes sim_server.py key-sets at phase entry; MCP server emits a SUPERSET. `snapshot_metrics` is the one exception — EQUALITY checked because `run_result_json["sim_server_metrics"]` consumers depend on exact names.
 - **Phase 02.6 plan 01 (2026-04-21)**: `mcp[cli]>=1.27` in `dev` + new `openclaw` extra; NOT in top-level `[project].dependencies` (core library stays installable without the Gateway path, mirroring ai2thor).
@@ -98,7 +102,9 @@ None yet.
 
 ### Blockers/Concerns
 
-currently.
+- **Phase 02.4 local-dev gate (issue #70):** Shared implementation and local seam review are complete, but the phase still cannot be closed without a workstation running the full Kimi/NVIDIA sweep, generating `output/view-experiment/results.jsonl`, and writing `docs/view-experiment-2026-04.md`.
+- **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
+- **Environment split is real:** `uv run` had `ai2thor` available in the repo environment, but this session did not have an exported VLM key. No claims about real provider behavior or experiment outcome were made from cloud.
 
 > **Resolved 2026-04-20:** The two WARNINGs initially carried from
 > `.planning/INGEST-CONFLICTS.md` (image-payload contract, coverage
@@ -125,9 +131,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-21T12:59:13Z
-Stopped at: Phase 02.4 planned into .planning/phases/02.4-view-experiment-ab; next step is 02.4-01 openclaw-demo-view-variants
-Resume file: None
+Last session: 2026-04-22T07:11:32Z
+Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, and the queued 02.7 follow-up phase now exists under `.planning/phases/02.7-openclaw-intermediate-message-capture/`
+Resume file: .planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -135,4 +141,4 @@ Resume file: None
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Planned Phase:** 02.4 (view-experiment-ab) — 4 plans — 2026-04-21T12:59:13Z
+**Active Phase:** 02.4 (view-experiment-ab) — 3/4 plans complete; blocked on local-dev issue #70 after local review/bridge follow-up — 2026-04-22T07:11:32Z

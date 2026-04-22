@@ -41,6 +41,13 @@ from roboclaws.core.turn_metrics import (
     serialize_prompt_state,
     summarize_payload_metrics,
 )
+from roboclaws.core.views import (
+    VIEW_VARIANTS,
+    build_prompt_images,
+    compute_world_bbox,
+    encode_prompt_images,
+    image_labels_for_variant,
+)
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import (
     ProviderHealthError,
@@ -53,7 +60,9 @@ from roboclaws.games.territory import TerritoryGame
 
 _DEFAULT_SOULS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "skills", "ai2thor-navigator", "souls",
+    "skills",
+    "ai2thor-navigator",
+    "souls",
 )
 
 # ---------------------------------------------------------------------------
@@ -133,8 +142,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="max_wall_seconds",
         type=float,
         default=1200.0,
-        help="Total game wallclock budget in seconds (default 1200 = 20 min). "
-             "Pass 0 to disable.",
+        help="Total game wallclock budget in seconds (default 1200 = 20 min). Pass 0 to disable.",
     )
     p.add_argument(
         "--backend",
@@ -142,13 +150,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="vlm",
         dest="backend",
         help="VLM transport: 'vlm' (cloud API) or 'openclaw' (local Gateway). "
-             "Token read from OPENCLAW_GATEWAY_TOKEN env var.",
+        "Token read from OPENCLAW_GATEWAY_TOKEN env var.",
     )
     p.add_argument(
         "--gateway-url",
         default=None,
         dest="gateway_url",
         help="OpenClaw Gateway base URL (debug override; default: http://localhost:18789)",
+    )
+    p.add_argument(
+        "--views",
+        choices=VIEW_VARIANTS,
+        default="baseline",
+        help="Prompt image variant to use for each agent decision.",
     )
     return p.parse_args(argv)
 
@@ -170,6 +184,7 @@ def run_territory_game(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
+    views: str = "baseline",
 ) -> dict[str, object]:
     """Run a multi-agent territory control episode and save results to *output_dir*.
 
@@ -210,9 +225,7 @@ def run_territory_game(
     agent_labels, agent_soul_content = load_agent_souls(souls_env, agent_count, souls_dir)
 
     if effective_backend == "openclaw":
-        provider = build_openclaw_provider_or_die(
-            gateway_url=gateway_url, agent_count=agent_count
-        )
+        provider = build_openclaw_provider_or_die(gateway_url=gateway_url, agent_count=agent_count)
     else:
         # Pass soul content only to providers that support per-agent SOULs.
         # KimiProvider + AnthropicProvider both accept ``agent_souls``; others
@@ -230,8 +243,12 @@ def run_territory_game(
         server_start_timeout=thor_server_start_timeout,
     )
     reachable_cells = engine.get_reachable_positions()
+    world_bbox = compute_world_bbox(reachable_cells)
     viz = GameVisualizer(
-        grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count,
+        grid_rows=_GRID_ROWS,
+        grid_cols=_GRID_COLS,
+        cell_px=15,
+        agent_count=agent_count,
         agent_labels=agent_labels if agent_labels else None,
     )
     recorder = ReplayRecorder(agent_count=agent_count, game="territory")
@@ -253,6 +270,8 @@ def run_territory_game(
     overhead_bg: np.ndarray | None = None
     termination_reason_override: str | None = None
     final_provider_status: dict[str, Any] = provider_status_snapshot(provider)
+    final_agent_positions_world: list[tuple[int, int]] = []
+    final_agent_rotations: list[dict[str, float]] = []
 
     try:
         # Record starting position of agent 0 as the map origin for centring
@@ -272,6 +291,9 @@ def run_territory_game(
             state_capture_started = time.perf_counter()
             agent_states = engine.get_all_agent_states()
             agent_frames = [s.frame for s in agent_states]
+            agent_positions_world = [_pos_to_world_idx(state.position) for state in agent_states]
+            final_agent_positions_world = agent_positions_world
+            final_agent_rotations = [state.rotation for state in agent_states]
             turn_metrics["timings"]["state_capture_seconds"] = round_seconds(
                 time.perf_counter() - state_capture_started
             )
@@ -289,8 +311,7 @@ def run_territory_game(
 
             # Agent positions in visualiser coordinates
             agent_positions_viz: list[tuple[int, int]] = []
-            for s in agent_states:
-                wx, wz = _pos_to_world_idx(s.position)
+            for wx, wz in agent_positions_world:
                 rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
                 agent_positions_viz.append(rc if _in_bounds(*rc) else (_CENTER_ROW, _CENTER_COL))
 
@@ -300,6 +321,18 @@ def run_territory_game(
                 base_frame=overhead_bg,
             )
             map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
+            structured_map_frame: np.ndarray | None = None
+            if views != "baseline":
+                structured_img = viz.render_structured_map(
+                    agent_positions=agent_positions_world,
+                    agent_rotations=final_agent_rotations,
+                    reachable_cells=reachable_cells,
+                    claimed_cells={
+                        agent_id: list(cells) for agent_id, cells in game._agent_cells.items()
+                    },
+                    world_bbox=world_bbox,
+                )
+                structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
             turn_metrics["timings"]["map_render_seconds"] = round_seconds(
                 time.perf_counter() - map_render_started
             )
@@ -308,6 +341,7 @@ def run_territory_game(
             current_agent = game.current_agent_id
             prompt_state_started = time.perf_counter()
             prompt_state = game.get_prompt_state(current_agent)
+            prompt_state["views"] = views
             turn_metrics["timings"]["prompt_state_seconds"] = round_seconds(
                 time.perf_counter() - prompt_state_started
             )
@@ -315,32 +349,44 @@ def run_territory_game(
             turn_metrics["timings"]["prompt_state_json_seconds"] = prompt_state_metrics[
                 "serialize_seconds"
             ]
-            # OpenClawProvider.get_action expects numpy arrays; direct VLM expects b64 strings.
+            chase_cam_frame: np.ndarray | None = None
+            if views == "map-v2+chase":
+                engine.add_chase_cam(current_agent)
+                engine.update_chase_cam(current_agent)
+                chase_cam_frame = engine.get_chase_cam_frame(current_agent)
+
+            prompt_image_frames = build_prompt_images(
+                variant=views,
+                fpv_frame=agent_states[current_agent].frame,
+                baseline_overhead_frame=map_frame,
+                structured_overhead_frame=structured_map_frame,
+                chase_cam_frame=chase_cam_frame,
+            )
+            replay_overhead = (
+                structured_map_frame if structured_map_frame is not None else map_frame
+            )
             payload_metrics: dict[str, Any]
             if effective_backend == "openclaw":
-                prompt_images: list[Any] = [agent_states[current_agent].frame, map_frame]
+                prompt_images: list[Any] = list(prompt_image_frames)
                 payload_metrics = summarize_payload_metrics(
                     transport="openclaw_ndarray",
                     prompt_state_chars=prompt_state_metrics["chars"],
-                    image_metrics=[{"label": "fpv"}, {"label": "overhead"}],
+                    image_metrics=[{"label": label} for label in image_labels_for_variant(views)],
                 )
                 turn_metrics["timings"]["image_encode_seconds"] = 0.0
             else:
-                fpv_b64, fpv_metrics = encode_frame_to_b64_jpeg(agent_states[current_agent].frame)
-                map_b64, map_metrics = encode_frame_to_b64_jpeg(map_frame)
-                prompt_images = [fpv_b64, map_b64]
+                prompt_images, image_metrics, encode_seconds = encode_prompt_images(
+                    variant=views,
+                    image_frames=prompt_image_frames,
+                    encoder=encode_frame_to_b64_jpeg,
+                )
                 payload_metrics = summarize_payload_metrics(
                     transport="vlm_base64_jpeg",
                     prompt_state_chars=prompt_state_metrics["chars"],
-                    image_metrics=[
-                        {"label": "fpv", **fpv_metrics},
-                        {"label": "overhead", **map_metrics},
-                    ],
+                    image_metrics=image_metrics,
                     extra={"prompt_state_preview": prompt_state_text[:120]},
                 )
-                turn_metrics["timings"]["image_encode_seconds"] = round_seconds(
-                    fpv_metrics["encode_seconds"] + map_metrics["encode_seconds"]
-                )
+                turn_metrics["timings"]["image_encode_seconds"] = round_seconds(encode_seconds)
             turn_metrics["payload"] = payload_metrics
 
             # ----------------------------------------------------------------
@@ -352,7 +398,8 @@ def run_territory_game(
             except (ProviderHealthError, OpenClawUnavailable) as exc:
                 termination_reason_override = "provider_unstable"
                 final_provider_status = (
-                    exc.status if isinstance(exc, ProviderHealthError) and exc.status
+                    exc.status
+                    if isinstance(exc, ProviderHealthError) and exc.status
                     else provider_status_snapshot(provider)
                 )
                 print(
@@ -408,7 +455,7 @@ def run_territory_game(
                 step=step_num,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
-                overhead_frame=map_frame,
+                overhead_frame=replay_overhead,
                 game_state=game_state,
                 vlm_prompt_state=prompt_state,
                 vlm_response=response,
@@ -448,23 +495,32 @@ def run_territory_game(
     )
 
     # Save final territory map as a standalone PNG
-    final_claimed_viz: dict[int, list[tuple[int, int]]] = {}
-    for agent_id, cells in game._agent_cells.items():
-        final_claimed_viz[agent_id] = [
-            rc
-            for wx, wz in cells
-            if _in_bounds(*(rc := _world_to_viz(wx, wz, origin_ix, origin_iz)))
-        ]
-    # Use dummy positions for the final map (game is over, no active agents)
-    final_map = viz.render_overhead_map(
-        agent_positions=[(_CENTER_ROW, _CENTER_COL)] * agent_count,
-        claimed_cells=final_claimed_viz,
-        base_frame=overhead_bg,
-    )
+    if views == "baseline":
+        final_claimed_viz: dict[int, list[tuple[int, int]]] = {}
+        for agent_id, cells in game._agent_cells.items():
+            final_claimed_viz[agent_id] = [
+                rc
+                for wx, wz in cells
+                if _in_bounds(*(rc := _world_to_viz(wx, wz, origin_ix, origin_iz)))
+            ]
+        final_map = viz.render_overhead_map(
+            agent_positions=[(_CENTER_ROW, _CENTER_COL)] * agent_count,
+            claimed_cells=final_claimed_viz,
+            base_frame=overhead_bg,
+        )
+    else:
+        final_map = viz.render_structured_map(
+            agent_positions=final_agent_positions_world or [(0, 0)] * agent_count,
+            agent_rotations=final_agent_rotations or [{"y": 0.0}] * agent_count,
+            reachable_cells=reachable_cells,
+            claimed_cells={agent_id: list(cells) for agent_id, cells in game._agent_cells.items()},
+            world_bbox=world_bbox,
+        )
     GameVisualizer.save_png(final_map, out_path / "territory_final.png")
 
     return {
         "cells_claimed": result.cells_claimed,
+        "total_steps": result.total_steps,
         "blocking_events": result.blocking_events,
         "termination_reason": termination_reason,
         "vlm_cost_usd": provider.cumulative_cost,
@@ -494,6 +550,7 @@ def main() -> None:
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
     wall_budget = args.max_wall_seconds if args.max_wall_seconds > 0 else None
     print(f"Wallclock budget   : {wall_budget if wall_budget else 'disabled'}")
+    print(f"Views             : {args.views}")
     print(f"Output dir : {args.output_dir}")
     print()
 
@@ -508,6 +565,7 @@ def main() -> None:
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
         max_wall_seconds=wall_budget,
+        views=args.views,
     )
 
     print()

@@ -29,6 +29,7 @@ import sys
 import threading
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 import numpy as np
@@ -53,13 +54,70 @@ _DEFAULT_MAX_TOKENS = 1024
 # are NOT retried here — they fail fast so the caller can surface the root cause.
 _RETRY_ATTEMPTS = 3
 
+# Phase 02.7 live validation (2026-04-22) overturned the earlier HTTP-only
+# spike verdict: stream mode can emit real chunks, but on the autonomous loop
+# it fragmented into hundreds of tiny rows and overran the practical
+# wall-clock budget because each chunk reset the read-timeout window. The
+# bounded, operator-usable winner was terminal-body request mode plus the
+# Gateway session-store fallback, which produced a handful of coherent
+# assistant messages inside the expected budget.
+_DEFAULT_TRANSCRIPT_MODE: Literal["stream", "terminal-body"] = "terminal-body"
+_TRANSCRIPT_SOURCE = Literal["stream", "terminal-body", "session-store", "none"]
+_SESSION_STORE_SOURCE: Literal["session-store"] = "session-store"
+_GATEWAY_CONTAINER = "openclaw-gateway"
+
+
+@dataclass
+class TranscriptMessage:
+    wallclock_s: float
+    source: _TRANSCRIPT_SOURCE
+    content: str
+    message_index: int
+    chunk_index: int
+    is_final: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "wallclock_s": self.wallclock_s,
+            "source": self.source,
+            "content": self.content,
+            "message_index": self.message_index,
+            "chunk_index": self.chunk_index,
+            "is_final": self.is_final,
+        }
+
+
+@dataclass
+class _StartRunCapture:
+    terminated_by: Literal["done", "wall_clock", "error"]
+    final_message: str
+    transcript_source: _TRANSCRIPT_SOURCE
+    transcript_messages: list[TranscriptMessage] = field(default_factory=list)
+    http_status_code: int | None = None
+    response_bytes: int | None = None
+    finish_reason: str | None = None
+    usage: dict[str, Any] | None = None
+    gateway_error: str | None = None
+    stream_candidate_data_lines: int = 0
+    stream_parsed_json_lines: int = 0
+
 
 @dataclass
 class RunResult:
     final_message: str
     wallclock_s: float
     terminated_by: Literal["done", "wall_clock", "error"]
+    transcript_capture_mode: Literal["stream", "terminal-body"] = _DEFAULT_TRANSCRIPT_MODE
+    transcript_source: _TRANSCRIPT_SOURCE = "none"
+    transcript_messages: list[TranscriptMessage] = field(default_factory=list)
     debug: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class _SessionStoreCapture:
+    session_id: str
+    session_file: str
+    transcript_messages: list[TranscriptMessage]
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -101,6 +159,7 @@ class OpenClawBridge:
         token: str | None = None,
         agent_prefix: str = _DEFAULT_AGENT_PREFIX,
         timeout: float | None = None,
+        transcript_mode: Literal["stream", "terminal-body"] | None = None,
     ) -> None:
         if timeout is None:
             env_timeout = os.environ.get("OPENCLAW_HTTP_TIMEOUT")
@@ -116,6 +175,7 @@ class OpenClawBridge:
         self._token = token or os.environ.get("OPENCLAW_GATEWAY_TOKEN")
         self._agent_prefix = agent_prefix
         self._timeout = timeout
+        self._transcript_mode = transcript_mode or _DEFAULT_TRANSCRIPT_MODE
 
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self._token:
@@ -216,89 +276,136 @@ class OpenClawBridge:
         reset_started = time.perf_counter()
         self._reset_workspace_state(agent_id)
         run_metrics["workspace_reset_seconds"] = round_seconds(time.perf_counter() - reset_started)
+        preexisting_session_ids = self._session_store_ids(agent_id)
+        run_metrics["session_store_snapshot_count"] = len(preexisting_session_ids)
         started = time.monotonic()
+        started_wallclock = time.time()
         payload = {
             "model": self.model_id(agent_id),
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": _DEFAULT_MAX_TOKENS,
         }
         run_metrics["request_payload_chars"] = len(json.dumps(payload))
+        run_metrics["transcript_capture_mode"] = self._transcript_mode
         self._last_run_metrics = dict(run_metrics)
 
         import httpx
 
-        try:
-            resp = self._client.post(
-                _CHAT_PATH,
-                json=payload,
-                timeout=per_call_timeout,
-            )
-        except httpx.ReadTimeout:
-            run_metrics.update(
-                {
-                    "terminated_by": "wall_clock",
-                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
-                    "gateway_error": "read_timeout",
-                }
-            )
-            self._last_run_metrics = dict(run_metrics)
-            return RunResult(
-                final_message="<wall-clock timeout - no final message>",
-                wallclock_s=round_seconds(time.monotonic() - started),
-                terminated_by="wall_clock",
-                debug=dict(run_metrics),
-            )
-        except httpx.ConnectError as exc:
-            run_metrics.update(
-                {
-                    "terminated_by": "error",
-                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
-                    "gateway_error": "connect_error",
-                }
-            )
-            self._last_run_metrics = dict(run_metrics)
-            raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
-        except httpx.RemoteProtocolError as exc:
-            run_metrics.update(
-                {
-                    "terminated_by": "error",
-                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
-                    "gateway_error": "remote_protocol_error",
-                }
-            )
-            self._last_run_metrics = dict(run_metrics)
-            raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
-        except httpx.HTTPError as exc:
-            run_metrics.update(
-                {
-                    "terminated_by": "error",
-                    "gateway_request_seconds": round_seconds(time.monotonic() - started),
-                    "gateway_error": "http_error",
-                }
-            )
-            self._last_run_metrics = dict(run_metrics)
-            raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+        if self._transcript_mode == "stream":
+            try:
+                capture = self._stream_run(payload, timeout=per_call_timeout, started=started)
+            except httpx.ConnectError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "connect_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
+            except httpx.RemoteProtocolError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "remote_protocol_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
+            except httpx.HTTPError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "http_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
+        else:
+            try:
+                capture = self._terminal_body_run(payload, timeout=per_call_timeout, started=started)
+            except httpx.ReadTimeout:
+                capture = _StartRunCapture(
+                    final_message="<wall-clock timeout - no final message>",
+                    terminated_by="wall_clock",
+                    transcript_source="none",
+                    transcript_messages=[],
+                    gateway_error="read_timeout",
+                )
+            except httpx.ConnectError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "connect_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway unreachable (local ConnectError): {exc}") from exc
+            except httpx.RemoteProtocolError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "remote_protocol_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway protocol error: {exc}") from exc
+            except httpx.HTTPError as exc:
+                run_metrics.update(
+                    {
+                        "terminated_by": "error",
+                        "gateway_request_seconds": round_seconds(time.monotonic() - started),
+                        "gateway_error": "http_error",
+                    }
+                )
+                self._last_run_metrics = dict(run_metrics)
+                raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
 
-        body = self._parse_json_response(resp)
-        final_message = _extract_content(body)
-        usage = body.get("usage")
-        choice = ((body.get("choices") or [{}])[0]) if isinstance(body, dict) else {}
+        session_store_capture = self._recover_session_store_transcript(
+            agent_id=agent_id,
+            started_wallclock=started_wallclock,
+            preexisting_session_ids=preexisting_session_ids,
+        )
+        if not capture.transcript_messages and session_store_capture is not None:
+            capture.transcript_source = _SESSION_STORE_SOURCE
+            capture.transcript_messages = list(session_store_capture.transcript_messages)
+            run_metrics["session_store_session_id"] = session_store_capture.session_id
+            run_metrics["session_store_session_file"] = session_store_capture.session_file
+        if session_store_capture is not None:
+            run_metrics["session_store_message_count"] = len(
+                session_store_capture.transcript_messages
+            )
+
         run_metrics.update(
             {
-                "terminated_by": "done",
+                "terminated_by": capture.terminated_by,
                 "gateway_request_seconds": round_seconds(time.monotonic() - started),
-                "http_status_code": int(resp.status_code),
-                "response_bytes": len(resp.content),
-                "finish_reason": choice.get("finish_reason"),
-                "usage": usage if isinstance(usage, dict) else None,
-                "final_message_chars": len(final_message),
+                "http_status_code": capture.http_status_code,
+                "response_bytes": capture.response_bytes,
+                "finish_reason": capture.finish_reason,
+                "usage": capture.usage if isinstance(capture.usage, dict) else None,
+                "final_message_chars": len(capture.final_message),
+                "transcript_source": capture.transcript_source,
+                "transcript_message_count": len(capture.transcript_messages),
+                "stream_candidate_data_lines": capture.stream_candidate_data_lines,
+                "stream_parsed_json_lines": capture.stream_parsed_json_lines,
             }
         )
+        if capture.gateway_error:
+            run_metrics["gateway_error"] = capture.gateway_error
         self._last_run_metrics = dict(run_metrics)
         return RunResult(
-            final_message=final_message,
+            final_message=capture.final_message,
             wallclock_s=round_seconds(time.monotonic() - started),
-            terminated_by="done",
+            terminated_by=capture.terminated_by,
+            transcript_capture_mode=self._transcript_mode,
+            transcript_source=capture.transcript_source,
+            transcript_messages=list(capture.transcript_messages),
             debug=dict(run_metrics),
         )
 
@@ -433,6 +540,154 @@ class OpenClawBridge:
             raise OpenClawUnavailable(f"Gateway transport error: {exc}") from exc
         return self._parse_json_response(resp)
 
+    def _stream_run(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout: float,
+        started: float,
+    ) -> _StartRunCapture:
+        stream_payload = dict(payload)
+        stream_payload["stream"] = True
+        transcript_messages: list[TranscriptMessage] = []
+        candidate_data_lines = 0
+        parsed_json_lines = 0
+        response_bytes = 0
+        finish_reason: str | None = None
+
+        import httpx
+
+        try:
+            with self._client.stream(
+                "POST",
+                _CHAT_PATH,
+                json=stream_payload,
+                timeout=timeout,
+            ) as resp:
+                self._raise_for_http_status(resp)
+                for line in resp.iter_lines():
+                    response_bytes += len(line.encode("utf-8")) + 1
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data:
+                        continue
+                    if data == "[DONE]":
+                        break
+                    candidate_data_lines += 1
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    parsed_json_lines += 1
+                    choice = (
+                        (chunk.get("choices") or [{}])[0] if isinstance(chunk, dict) else {}
+                    )
+                    if isinstance(choice, dict):
+                        finish_reason = choice.get("finish_reason") or finish_reason
+                        delta_text = _extract_stream_delta_content(choice.get("delta") or {})
+                        if delta_text:
+                            transcript_messages.append(
+                                TranscriptMessage(
+                                    wallclock_s=round_seconds(time.monotonic() - started),
+                                    source="stream",
+                                    content=delta_text,
+                                    message_index=0,
+                                    chunk_index=len(transcript_messages),
+                                )
+                            )
+        except httpx.ReadTimeout:
+            return _StartRunCapture(
+                terminated_by="wall_clock",
+                final_message="<wall-clock timeout - no final message>",
+                transcript_source="stream" if transcript_messages else "none",
+                transcript_messages=transcript_messages,
+                response_bytes=response_bytes,
+                finish_reason=finish_reason,
+                gateway_error="read_timeout",
+                stream_candidate_data_lines=candidate_data_lines,
+                stream_parsed_json_lines=parsed_json_lines,
+            )
+        except httpx.RemoteProtocolError:
+            return _StartRunCapture(
+                terminated_by="error",
+                final_message="<gateway protocol error - no final message>",
+                transcript_source="stream" if transcript_messages else "none",
+                transcript_messages=transcript_messages,
+                response_bytes=response_bytes,
+                finish_reason=finish_reason,
+                gateway_error="remote_protocol_error",
+                stream_candidate_data_lines=candidate_data_lines,
+                stream_parsed_json_lines=parsed_json_lines,
+            )
+        except httpx.HTTPError:
+            return _StartRunCapture(
+                terminated_by="error",
+                final_message="<gateway transport error - no final message>",
+                transcript_source="stream" if transcript_messages else "none",
+                transcript_messages=transcript_messages,
+                response_bytes=response_bytes,
+                finish_reason=finish_reason,
+                gateway_error="http_error",
+                stream_candidate_data_lines=candidate_data_lines,
+                stream_parsed_json_lines=parsed_json_lines,
+            )
+
+        final_message = "".join(message.content for message in transcript_messages).strip()
+        return _StartRunCapture(
+            terminated_by="done",
+            final_message=final_message,
+            transcript_source="stream" if transcript_messages else "none",
+            transcript_messages=transcript_messages,
+            http_status_code=200,
+            response_bytes=response_bytes,
+            finish_reason=finish_reason,
+            stream_candidate_data_lines=candidate_data_lines,
+            stream_parsed_json_lines=parsed_json_lines,
+        )
+
+    def _terminal_body_run(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout: float,
+        started: float,
+    ) -> _StartRunCapture:
+        resp = self._client.post(
+            _CHAT_PATH,
+            json=payload,
+            timeout=timeout,
+        )
+        body = self._parse_json_response(resp)
+        final_message = _extract_content(body)
+        transcript_messages: list[TranscriptMessage] = []
+        transcript_source: Literal["terminal-body", "none"] = "none"
+        if final_message.strip():
+            transcript_messages.append(
+                TranscriptMessage(
+                    wallclock_s=round_seconds(time.monotonic() - started),
+                    source="terminal-body",
+                    content=final_message,
+                    message_index=0,
+                    chunk_index=0,
+                    is_final=True,
+                )
+            )
+            transcript_source = "terminal-body"
+
+        usage = body.get("usage")
+        choice = ((body.get("choices") or [{}])[0]) if isinstance(body, dict) else {}
+        return _StartRunCapture(
+            terminated_by="done",
+            final_message=final_message,
+            transcript_source=transcript_source,
+            transcript_messages=transcript_messages,
+            http_status_code=int(resp.status_code),
+            response_bytes=len(resp.content),
+            finish_reason=choice.get("finish_reason"),
+            usage=usage if isinstance(usage, dict) else None,
+        )
+
     def _parse_json_response(self, resp: Any) -> dict[str, Any]:
         self._raise_for_http_status(resp)
         try:
@@ -472,7 +727,7 @@ class OpenClawBridge:
         cmd = [
             "docker",
             "exec",
-            "openclaw-gateway",
+            _GATEWAY_CONTAINER,
             "sh",
             "-c",
             f"rm -rf /home/node/.openclaw/workspaces/{agent_name}/state/*",
@@ -489,6 +744,140 @@ class OpenClawBridge:
                 f"[openclaw] warning: workspace reset failed for {agent_name}: {detail}",
                 file=sys.stderr,
             )
+
+    def _session_store_ids(self, agent_id: int) -> set[str]:
+        agent_name = f"{self._agent_prefix}{agent_id}"
+        return {
+            str(entry.get("sessionId"))
+            for entry in self._read_session_store_index(agent_name)
+            if entry.get("sessionId")
+        }
+
+    def _recover_session_store_transcript(
+        self,
+        *,
+        agent_id: int,
+        started_wallclock: float,
+        preexisting_session_ids: set[str],
+    ) -> _SessionStoreCapture | None:
+        agent_name = f"{self._agent_prefix}{agent_id}"
+        candidates = self._read_session_store_index(agent_name)
+        started_ms = int(started_wallclock * 1000)
+
+        def _sort_key(entry: dict[str, Any]) -> tuple[int, str]:
+            started_at = entry.get("startedAt")
+            return (
+                int(started_at) if isinstance(started_at, int) else -1,
+                str(entry.get("sessionId", "")),
+            )
+
+        matching: list[dict[str, Any]] = []
+        for entry in candidates:
+            session_id = str(entry.get("sessionId", ""))
+            if not session_id or session_id in preexisting_session_ids:
+                continue
+            started_at = entry.get("startedAt")
+            if isinstance(started_at, int) and started_at >= started_ms - 5000:
+                matching.append(entry)
+        if not matching:
+            for entry in sorted(candidates, key=_sort_key, reverse=True):
+                started_at = entry.get("startedAt")
+                if isinstance(started_at, int) and started_at >= started_ms - 5000:
+                    matching = [entry]
+                    break
+        if not matching:
+            return None
+
+        selected = sorted(matching, key=_sort_key, reverse=True)[0]
+        session_id = str(selected.get("sessionId", ""))
+        session_file = str(selected.get("sessionFile", "")).strip()
+        if not session_id or not session_file:
+            return None
+        transcript_messages = self._read_session_store_transcript(
+            session_file=session_file,
+            started_wallclock=started_wallclock,
+        )
+        if not transcript_messages:
+            return None
+        return _SessionStoreCapture(
+            session_id=session_id,
+            session_file=session_file,
+            transcript_messages=transcript_messages,
+        )
+
+    def _read_session_store_index(self, agent_name: str) -> list[dict[str, Any]]:
+        path = f"/home/node/.openclaw/agents/{agent_name}/sessions/sessions.json"
+        result = subprocess.run(
+            ["docker", "exec", _GATEWAY_CONTAINER, "cat", path],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+        try:
+            payload = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(payload, dict):
+            return []
+
+        entries: list[dict[str, Any]] = []
+        session_root = f"/home/node/.openclaw/agents/{agent_name}/sessions/"
+        for value in payload.values():
+            if not isinstance(value, dict):
+                continue
+            session_file = value.get("sessionFile")
+            if isinstance(session_file, str) and session_file.startswith(session_root):
+                entries.append(value)
+        return entries
+
+    def _read_session_store_transcript(
+        self,
+        *,
+        session_file: str,
+        started_wallclock: float,
+    ) -> list[TranscriptMessage]:
+        result = subprocess.run(
+            ["docker", "exec", _GATEWAY_CONTAINER, "cat", session_file],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return []
+
+        transcript_messages: list[TranscriptMessage] = []
+        for line in result.stdout.splitlines():
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("type") != "message":
+                continue
+            message = entry.get("message") or {}
+            if not isinstance(message, dict) or message.get("role") != "assistant":
+                continue
+            content = _extract_text_blocks(message.get("content"))
+            if not content.strip():
+                continue
+            timestamp = _timestamp_to_epoch_seconds(entry.get("timestamp"))
+            transcript_messages.append(
+                TranscriptMessage(
+                    wallclock_s=max(
+                        0.0,
+                        round_seconds(
+                            timestamp - started_wallclock if timestamp is not None else 0.0
+                        ),
+                    ),
+                    source=_SESSION_STORE_SOURCE,
+                    content=content,
+                    message_index=len(transcript_messages),
+                    chunk_index=0,
+                    is_final=_is_terminal_stop_reason(message.get("stopReason")),
+                )
+            )
+        return transcript_messages
 
 
 # ---------------------------------------------------------------------------
@@ -514,16 +903,10 @@ def _extract_content(body: dict[str, Any]) -> str:
         raise OpenClawUnavailable(f"Gateway returned no choices: {body!r}")
     message = choices[0].get("message") or {}
     content = message.get("content")
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(str(block.get("text", "")))
-        text = "".join(parts)
-    elif content is None:
+    if content is None:
         text = ""
     else:
-        text = str(content)
+        text = _extract_text_blocks(content)
     if text:
         return text
     # Reasoning-only fallback: some providers surface the chain-of-thought in
@@ -533,6 +916,46 @@ def _extract_content(body: dict[str, Any]) -> str:
         if isinstance(val, str) and val.strip():
             return val
     return text
+
+
+def _extract_stream_delta_content(delta: dict[str, Any]) -> str:
+    content = delta.get("content")
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    return _extract_text_blocks(content)
+
+
+def _extract_text_blocks(content: Any) -> str:
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "".join(parts)
+    if isinstance(content, str):
+        return content
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _is_terminal_stop_reason(stop_reason: Any) -> bool:
+    if not isinstance(stop_reason, str):
+        return False
+    return stop_reason not in {"toolUse", "aborted"}
+
+
+def _timestamp_to_epoch_seconds(value: Any) -> float | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(
+            timezone.utc
+        ).timestamp()
+    except ValueError:
+        return None
 
 
 def _parse_action(content: str) -> dict[str, Any]:

@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import socket
 import threading
 import time
 from collections import deque
@@ -66,6 +67,12 @@ from mcp.server.fastmcp import Image as MCPImage
 from PIL import Image as PILImage
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, AgentState, MultiAgentEngine
+from roboclaws.core.views import (
+    image_labels_for_variant,
+    make_navigation_view_context,
+    render_navigation_prompt_bundle,
+    validate_view_variant,
+)
 
 __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 
@@ -82,6 +89,7 @@ __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 # "fixed" back to the default.
 _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
+_STARTUP_TIMEOUT_S = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +130,22 @@ def _encode_frame_jpeg_b64(frame: np.ndarray, quality: int = 70) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
+def _startup_probe_host(host: str) -> str:
+    """Map wildcard binds to a concrete loopback address for readiness probes."""
+    if host in {"0.0.0.0", "::"}:
+        return "127.0.0.1"
+    return host
+
+
+def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
+    """Return True when a TCP listener accepts connections on ``host:port``."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Server class
 # ---------------------------------------------------------------------------
@@ -143,6 +167,7 @@ class RoboclawsMCPServer:
         *,
         host: str = "127.0.0.1",
         port: int = 18788,
+        view_variant: str = "baseline",
     ) -> None:
         self.engine = engine
         self.agent_id = agent_id
@@ -151,6 +176,7 @@ class RoboclawsMCPServer:
         self.trace_path = self.run_dir / "trace.jsonl"
         self.host = host
         self.port = int(port)
+        self.view_variant = validate_view_variant(view_variant)
 
         # State / metrics
         self.done_event = threading.Event()
@@ -180,6 +206,10 @@ class RoboclawsMCPServer:
 
         self._server_thread: threading.Thread | None = None
         self._closed = False
+        self._view_context = make_navigation_view_context(
+            engine,
+            agent_count=getattr(engine, "agent_count", agent_id + 1),
+        )
 
     # ------------------------------------------------------------------
     # Tool registration
@@ -190,11 +220,11 @@ class RoboclawsMCPServer:
 
         @self._mcp.tool()
         def observe() -> list:
-            """Capture the current first-person view, overhead map, and agent state.
+            """Capture the current prompt-image bundle and structured agent state.
 
             Returns a text block (JSON-serialized state, with any pending
-            human_message folded in) plus two PNG images: the first-person
-            camera frame and the top-down overhead map.
+            human_message folded in) plus the PNG images for the configured
+            view variant.
             """
             return server._do_observe()
 
@@ -221,9 +251,17 @@ class RoboclawsMCPServer:
     # ------------------------------------------------------------------
 
     def _do_observe(self) -> list:
+        self._write_trace(tool="observe", event="request", request={})
         with self._controller_lock:
-            state = self.engine.get_agent_state(self.agent_id)
-            overhead = self.engine.get_overhead_frame()
+            agent_states = list(self.engine.get_all_agent_states())
+            state = agent_states[self.agent_id]
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=self.engine,
+                context=self._view_context,
+                agent_states=agent_states,
+                current_agent=self.agent_id,
+                variant=self.view_variant,
+            )
             self._observed_once = True
             self._moves_since_observe = 0
 
@@ -234,13 +272,13 @@ class RoboclawsMCPServer:
         # action — we carry the frozen key-set forward.
         frame_payload = self._frame_capture_payload(
             state=state,
-            overhead=overhead,
+            prompt_bundle=prompt_bundle,
             seen_by_agent=True,
             human_message=human_message,
         )
         self._write_trace(tool="observe", event="frame_capture", **frame_payload)
 
-        # MCP result: state-as-text + 2 images (PNG, SDK-encoded).
+        # MCP result: state-as-text + N images matching the chosen variant.
         state_text = json.dumps(
             {
                 "agent_id": state.agent_id,
@@ -252,23 +290,24 @@ class RoboclawsMCPServer:
                 "step": self._total_moves,
                 "budget_remaining": None,
                 "human_message": human_message,
+                "view_variant": self.view_variant,
+                "image_labels": list(prompt_bundle.image_labels),
             }
         )
-        fpv_png = _encode_frame_png(state.frame)
-        overhead_png = _encode_frame_png(overhead)
-
-        result: list[Any] = [
-            state_text,
-            MCPImage(data=fpv_png, format="png"),
-            MCPImage(data=overhead_png, format="png"),
-        ]
+        result: list[Any] = [state_text]
+        result.extend(
+            MCPImage(data=_encode_frame_png(frame), format="png")
+            for frame in prompt_bundle.prompt_images
+        )
         self._write_trace(
             tool="observe",
             event="response",
             response={
-                "content_blocks": 3,
+                "content_blocks": len(result),
                 "state": self._state_payload(state),
                 "human_message": human_message,
+                "view_variant": self.view_variant,
+                "image_labels": list(prompt_bundle.image_labels),
             },
         )
         return result
@@ -277,6 +316,10 @@ class RoboclawsMCPServer:
         normalized_reason: str | None = reason.strip() if reason else None
         if not normalized_reason:
             normalized_reason = None
+        request_payload: dict[str, Any] = {"direction": direction}
+        if normalized_reason is not None:
+            request_payload["reason"] = normalized_reason
+        self._write_trace(tool="move", event="request", request=request_payload)
 
         if direction not in NAVIGATION_ACTIONS:
             response = {
@@ -294,8 +337,16 @@ class RoboclawsMCPServer:
                     event="server_warning",
                     warning="move before first observe",
                 )
-            state = self.engine.step(self.agent_id, direction)
-            overhead = self.engine.get_overhead_frame()
+            self.engine.step(self.agent_id, direction)
+            agent_states = list(self.engine.get_all_agent_states())
+            state = agent_states[self.agent_id]
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=self.engine,
+                context=self._view_context,
+                agent_states=agent_states,
+                current_agent=self.agent_id,
+                variant=self.view_variant,
+            )
             decision_mode = self._classify_move_decision(normalized_reason)
             self._moves_since_observe += 1
             self._total_moves += 1
@@ -304,7 +355,7 @@ class RoboclawsMCPServer:
 
         frame_payload = self._frame_capture_payload(
             state=state,
-            overhead=overhead,
+            prompt_bundle=prompt_bundle,
             seen_by_agent=False,
             decision_mode=decision_mode,
             human_message=human_message,
@@ -319,11 +370,14 @@ class RoboclawsMCPServer:
             "state": self._state_payload(state),
             "human_message": human_message,
             "step": self._total_moves,
+            "view_variant": self.view_variant,
+            "image_labels": list(image_labels_for_variant(self.view_variant)),
         }
         self._write_trace(tool="move", event="response", response=response)
         return response
 
     def _do_done(self, reason: str) -> dict[str, Any]:
+        self._write_trace(tool="done", event="request", request={"reason": reason})
         if self._done_reason is None:
             self._done_reason = reason
         self.done_event.set()
@@ -378,7 +432,11 @@ class RoboclawsMCPServer:
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
         """Append a `tool=<runtime>` trace line (for example-level telemetry)."""
-        self._write_trace(tool="<runtime>", event=event, **data)
+        self.write_trace_event(tool="<runtime>", event=event, **data)
+
+    def write_trace_event(self, *, tool: str, event: str, **data: Any) -> None:
+        """Append an arbitrary trace line while preserving the frozen top-level keys."""
+        self._write_trace(tool=tool, event=event, **data)
 
     def run_in_thread(self) -> threading.Thread:
         """Start the FastMCP server on a daemon thread; return the thread."""
@@ -392,7 +450,20 @@ class RoboclawsMCPServer:
         )
         thread.start()
         self._server_thread = thread
-        return thread
+        if self.port == 0:
+            return thread
+
+        probe_host = _startup_probe_host(self.host)
+        deadline = time.monotonic() + _STARTUP_TIMEOUT_S
+        while time.monotonic() < deadline:
+            if not thread.is_alive():
+                raise RuntimeError(
+                    f"roboclaws MCP server failed to start on {self.host}:{self.port}"
+                )
+            if _port_accepting(probe_host, self.port):
+                return thread
+            time.sleep(0.05)
+        raise RuntimeError(f"roboclaws MCP server did not become ready on {self.host}:{self.port}")
 
     def close(self) -> None:
         """Attempt graceful shutdown; daemon thread is the safety net.
@@ -431,7 +502,7 @@ class RoboclawsMCPServer:
         self,
         *,
         state: AgentState,
-        overhead: np.ndarray,
+        prompt_bundle: Any,
         seen_by_agent: bool,
         decision_mode: str | None = None,
         human_message: str | None = None,
@@ -441,9 +512,17 @@ class RoboclawsMCPServer:
         payload: dict[str, Any] = {
             "seen_by_agent": seen_by_agent,
             "fpv": _encode_frame_jpeg_b64(state.frame),
-            "overhead": _encode_frame_jpeg_b64(overhead),
+            "overhead": _encode_frame_jpeg_b64(prompt_bundle.trace_overhead_frame),
             "agent_state": self._state_payload(state),
+            "view_variant": self.view_variant,
+            "image_labels": list(prompt_bundle.image_labels),
         }
+        if prompt_bundle.structured_overhead_frame is not None:
+            payload["baseline_overhead"] = _encode_frame_jpeg_b64(
+                prompt_bundle.baseline_overhead_frame
+            )
+        if prompt_bundle.chase_cam_frame is not None:
+            payload["chase"] = _encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame)
         if decision_mode is not None:
             payload["decision_mode"] = decision_mode
         if human_message is not None:
@@ -515,10 +594,18 @@ def make_roboclaws_mcp(
     *,
     host: str = "127.0.0.1",
     port: int = 18788,
+    view_variant: str = "baseline",
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 
     Defaults to `host=127.0.0.1` — see module docstring for threat-model
     rationale. Pass `port=0` in tests to avoid binding a real port.
     """
-    return RoboclawsMCPServer(engine, agent_id, run_dir, host=host, port=port)
+    return RoboclawsMCPServer(
+        engine,
+        agent_id,
+        run_dir,
+        host=host,
+        port=port,
+        view_variant=view_variant,
+    )

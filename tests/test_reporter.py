@@ -30,6 +30,7 @@ def _write_replay(
     agent_count: int = 2,
     n_steps: int = 3,
     game: str = "territory",
+    include_extra_views: bool = False,
 ) -> Path:
     """Create a minimal replay directory with replay.json and image files."""
     recorder = ReplayRecorder(agent_count=agent_count, game=game)
@@ -61,6 +62,15 @@ def _write_replay(
             agent_id=i % agent_count,
             agent_frames=[_make_frame(value=v * 20) for v in range(agent_count)],
             overhead_frame=_make_frame(value=50),
+            overhead_label="map_v2" if include_extra_views else "overhead",
+            extra_views=(
+                [
+                    ("overhead", _make_frame(value=60)),
+                    ("chase", _make_frame(value=90)),
+                ]
+                if include_extra_views
+                else None
+            ),
             game_state=_gs(i),
             vlm_prompt_state={"my_agent_id": i % agent_count, "step": i},
             vlm_response={"reasoning": "go ahead", "action": "MoveAhead"},
@@ -131,6 +141,15 @@ class TestGenerate:
         assert "Acting this step (step 0)." in content
         assert "Chosen action:" in content
         assert "No decision recorded yet." in content
+
+    def test_report_contains_dynamic_scene_panels(self, tmp_path: Path) -> None:
+        replay_dir = _write_replay(tmp_path, agent_count=1, n_steps=2, include_extra_views=True)
+        content = generate(replay_dir).read_text()
+        assert "Click any panel to zoom." in content
+        assert "lightbox" in content
+        assert content.index("FPV") < content.index("Chase") < content.index("Map V2")
+        assert "Map V2" in content
+        assert "Chase" in content
 
     def test_report_contains_svg_chart(self, tmp_path: Path) -> None:
         replay_dir = _write_replay(tmp_path, n_steps=5)

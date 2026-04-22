@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -35,6 +36,8 @@ class StepRecord:
     vlm_response: dict[str, Any]
     provider_status: dict[str, Any] = field(default_factory=dict)
     turn_metrics: dict[str, Any] = field(default_factory=dict)
+    overhead_label: str = "overhead"
+    extra_views: list[tuple[str, np.ndarray]] = field(default_factory=list)
 
 
 @dataclass
@@ -109,6 +112,8 @@ class ReplayRecorder:
         game_state: dict[str, Any],
         vlm_prompt_state: dict[str, Any],
         vlm_response: dict[str, Any],
+        overhead_label: str = "overhead",
+        extra_views: list[tuple[str, np.ndarray]] | None = None,
         provider_status: dict[str, Any] | None = None,
         turn_metrics: dict[str, Any] | None = None,
     ) -> None:
@@ -134,6 +139,8 @@ class ReplayRecorder:
                 vlm_response=vlm_response,
                 provider_status=dict(provider_status or {}),
                 turn_metrics=dict(turn_metrics or {}),
+                overhead_label=overhead_label,
+                extra_views=[(str(label), frame.copy()) for label, frame in (extra_views or [])],
             )
         )
 
@@ -188,6 +195,7 @@ class ReplayRecorder:
         (out / "frames").mkdir(exist_ok=True)
         (out / "agent_frames").mkdir(exist_ok=True)
         (out / "overhead").mkdir(exist_ok=True)
+        (out / "scene_views").mkdir(exist_ok=True)
 
         composite_frames: list[np.ndarray] = []
         steps_data: list[dict[str, Any]] = []
@@ -202,8 +210,23 @@ class ReplayRecorder:
             # Overhead frame
             Image.fromarray(rec.overhead_frame).save(str(out / "overhead" / f"{tag}_overhead.png"))
 
-            # Composite frame (agent frames + overhead side-by-side)
-            composite_img = _make_composite(rec.agent_frames, rec.overhead_frame)
+            extra_views_data: list[dict[str, Any]] = []
+            for extra_index, (label, frame) in enumerate(rec.extra_views):
+                filename = f"{tag}_view{extra_index}_{_panel_slug(label)}.png"
+                Image.fromarray(frame).save(str(out / "scene_views" / filename))
+                extra_views_data.append(
+                    {
+                        "label": label,
+                        "path": f"scene_views/{filename}",
+                    }
+                )
+
+            # Composite frame (agent frames + scene views side-by-side)
+            composite_img = _make_composite(
+                rec.agent_frames,
+                rec.overhead_frame,
+                extra_frames=[frame for _, frame in rec.extra_views],
+            )
             composite_img.save(str(out / "frames" / f"{tag}_composite.png"))
             composite_frames.append(np.asarray(composite_img.convert("RGB"), dtype=np.uint8))
 
@@ -216,6 +239,8 @@ class ReplayRecorder:
                     "vlm_response": _jsonify(rec.vlm_response),
                     "provider_status": _jsonify(rec.provider_status),
                     "turn_metrics": _jsonify(rec.turn_metrics),
+                    "overhead_label": rec.overhead_label,
+                    "extra_views": extra_views_data,
                 }
             )
 
@@ -356,6 +381,7 @@ class ReplayRecorder:
 def _make_composite(
     agent_frames: list[np.ndarray],
     overhead_frame: np.ndarray,
+    extra_frames: list[np.ndarray] | None = None,
     target_height: int = 240,
 ) -> Image.Image:
     """Create a side-by-side composite of agent frames and overhead map."""
@@ -366,10 +392,11 @@ def _make_composite(
         new_w = max(1, int(target_height * aspect))
         panels.append(img.resize((new_w, target_height), Image.Resampling.BILINEAR))
 
-    oh_img = Image.fromarray(overhead_frame).convert("RGB")
-    oh_aspect = oh_img.width / oh_img.height if oh_img.height > 0 else 1.0
-    oh_w = max(1, int(target_height * oh_aspect))
-    panels.append(oh_img.resize((oh_w, target_height), Image.Resampling.BILINEAR))
+    for frame in [overhead_frame, *(extra_frames or [])]:
+        panel_img = Image.fromarray(frame).convert("RGB")
+        panel_aspect = panel_img.width / panel_img.height if panel_img.height > 0 else 1.0
+        panel_w = max(1, int(target_height * panel_aspect))
+        panels.append(panel_img.resize((panel_w, target_height), Image.Resampling.BILINEAR))
 
     total_w = sum(p.width for p in panels)
     h = max(p.height for p in panels)
@@ -394,3 +421,9 @@ def _jsonify(obj: Any) -> Any:
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     return obj
+
+
+def _panel_slug(label: str) -> str:
+    """Return a filesystem-safe slug for a rendered panel label."""
+    slug = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_")
+    return slug or "view"

@@ -10,36 +10,42 @@ dev-topology to keep the demo continuously alive (Phase 1.5), then route
 control through an OpenClaw Gateway (Phases 2 → 2.1 → 2.2), then validate
 whether better map representations help a VLM win harder games (Phase 2.4)
 and, in parallel, test a different architectural bet — let the agent drive
-via tool calls instead of the push model (Phase 2.5 → 2.6). Phase 3 (Isaac
-Lab) is deferred indefinitely.
+via tool calls instead of the push model (Phase 2.5 → 2.6). The next follow-up
+on that autonomous branch is Phase 2.7: expose the agent's intermediate
+messages in artifacts, with a streaming-first preference if the real Gateway
+surface supports it cleanly. Phase 3 (Isaac Lab) is deferred indefinitely.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
-was planned into GSD on 2026-04-21 under
-`.planning/phases/02.4-view-experiment-ab/`; `02.4-01` lands the
-single-agent `openclaw_demo.py` path first, then the same view surface
-rolls through territory/coverage and the experiment harness. Phase 2.5 was
+is active under `.planning/phases/02.4-view-experiment-ab/`: plans
+`02.4-01` through `02.4-03` are complete, the cloud-safe analysis script
+for `02.4-04` is implemented, and the remaining live sweep + decision
+record are explicitly blocked on local-dev issue #70. Phase 2.5 was
 drafted around a curl-in-exec tool-call contract that local probing on
 2026-04-21 proved structurally wrong (agent fights the Gateway's exec
 allowlist instead of using native tools) — it is SUPERSEDED by Phase 2.6,
 which shipped the autonomous loop on first-class MCP tools + a `minimal`
 tool profile (see
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`).
-Phase 3 remains deferred indefinitely.
+Phase 2.7 is now planned as the additive observability follow-up: compare
+Gateway streaming vs terminal-body capture, then persist mid-run assistant
+messages into the autonomous replay artifacts. Phase 3 remains deferred
+indefinitely.
 
 ## Milestones
 
 - ✅ **v1.0 Core + OpenClaw** - Phases 1, 1.5, 2, 2.1, 2.2 (shipped 2026-04-16)
 - ⛔ **Phase 2.3 (Digest pin)** - DECLINED 2026-04-20 (LOCKED ADR)
-- 🚧 **v1.1 Better Views** - Phase 2.4 (planned in GSD 2026-04-21; ready to execute)
+- 🚧 **v1.1 Better Views** - Phase 2.4 (3/4 plans complete; local-dev sweep + decision record pending via issue #70)
 - ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
+- 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5, 2.6): Sub-phases within Milestone 2 (OpenClaw integration track)
+- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7): Sub-phases within Milestone 2 (OpenClaw integration track)
 
 - [x] **Phase 1: Core simulation + games** - Direct-VLM multi-agent territory + coverage on AI2-THOR (shipped)
 - [x] **Phase 1.5: CI + dev topology** - Three-layer demo matrix + cloud/local workflow (shipped)
@@ -47,9 +53,10 @@ Phase 3 remains deferred indefinitely.
 - [x] **Phase 2.1: Transport correction** - `/v1/chat/completions` + named-agent routing + inline base64 (shipped)
 - [x] **Phase 2.2: Long-running OpenClaw games** - Per-agent SOULs + SOUL overlay + territory/coverage through Gateway (shipped)
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
-- [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (issue #52 prereqs shipped pre-ingest 2026-04-15)
+- [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (3/4 complete; local-dev validation tracked in issue #70)
 - [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
+- [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -172,10 +179,12 @@ and ≤$20 spend.
 **Plans**: 4 plans. Phase 2.4 was ingested into GSD on 2026-04-21. Execution order intentionally starts with the single-agent push-model OpenClaw demo (`examples/openclaw_demo.py`) before the territory/coverage rollout.
 
 Plans:
-- [ ] 02.4-01: Shared view primitives + `examples/openclaw_demo.py --views ...` rollout (single-agent OpenClaw first)
-- [ ] 02.4-02: Territory + coverage rollout onto the shared view builder
-- [ ] 02.4-03: `NvidiaProvider` + `examples/view_experiment.py` harness with wallet gates
+- [x] 02.4-01: Shared view primitives + `examples/openclaw_demo.py --views ...` rollout (single-agent OpenClaw first)
+- [x] 02.4-02: Territory + coverage rollout onto the shared view builder
+- [x] 02.4-03: `NvidiaProvider` + `examples/view_experiment.py` harness with wallet gates
 - [ ] 02.4-04: Analysis script + local-dev sweep + `docs/view-experiment-2026-04.md` decision record
+
+**Status update (2026-04-22):** Plans `02.4-01` through `02.4-03` are implemented, and the cloud-safe slice of `02.4-04` also landed (`scripts/analyze_view_experiment.py` plus synthetic-data coverage). A local workstation has now completed the requested first-review seam: `examples/openclaw_demo.py --views map-v2+chase` ran for 50 Kimi steps and produced review artifacts under `output/openclaw-demo-kimi-mapv2chase-50/`. The phase is still open until the full Kimi/NVIDIA sweeps produce `output/view-experiment/results.jsonl` and the decision record lands in `docs/view-experiment-2026-04.md` (issue #70).
 **UI hint**: yes
 
 #### ⛔ v1.2 Autonomous OpenClaw Loop — Phase 2.5 SUPERSEDED by Phase 2.6
@@ -215,6 +224,12 @@ Plans:
   6. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
 **Plans**: 7 plans (drafted 2026-04-21 after spike; renamed to `-PLAN.md` suffix and executed same day).
 
+**Follow-up (2026-04-22):** The Phase 2.4 `baseline` / `map-v2` / `map-v2+chase` view family now also runs through the shipped autonomous MCP path. Local Kimi + AI2-THOR smoke artifacts:
+- `output/openclaw-autonomous-mapv2chase-smoke-rerun/` — real 3-move `done` run with shared view bundle
+- `output/openclaw-autonomous-mapv2chase-summaryfix-smoke/` — post-trace-fix smoke confirming `summary.json` reports `observe/move/done` counts correctly
+
+**Remaining artifact gap (tracked in Phase 2.7):** Current autonomous artifacts persist tool traffic and the final assistant message, but not the intermediate assistant transcript from the Gateway run.
+
 Plans:
 - [x] 02.6-01: In-process FastMCP server (`roboclaws/openclaw/mcp_server.py`) with observe/move/done over streamable-http
 - [x] 02.6-02: `scripts/openclaw-bootstrap.sh` seeds MCP server + `profile: minimal` pre-`docker run`
@@ -223,6 +238,27 @@ Plans:
 - [x] 02.6-05: Delete superseded HTTP sim_server + its tests
 - [x] 02.6-06: Live-probe gate — 5/6 probes PASS; Probe 6 ratio 0.568 (SC#4 threshold revised to ≤0.60; see Probe 6 notes in `02.6-LOCAL-PROBE-RESULTS.md`)
 - [x] 02.6-07: Docs update — retrospective + `docs/openclaw-local.md` + `docs/openclaw-gateway-internals.md`
+**UI hint**: yes
+
+#### 📋 v1.3 Autonomous Transcript Visibility (Phase 2.7) — Planned
+
+### Phase 2.7: Autonomous OpenClaw intermediate-message capture
+**Goal**: Preserve and display the assistant's mid-run messages in the shipped autonomous MCP loop so `report.html` shows not just tool traffic and the terminal answer, but the in-between reasoning/messages as they happen. Compare both acquisition paths first: true Gateway streaming vs terminal-body/fallback capture. Prefer streaming if the real Gateway surface supports it cleanly and reliably.
+**Depends on**: Phase 2.6 (shipped MCP tool loop). Additive follow-up; does not replace the tool surface or reopen the Phase 2.5 curl/exec dead end.
+**Requirements**: Follow-up to A-06 (same autonomous loop, improved transcript visibility for operators)
+**Source**: `.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-CONTEXT.md`
+**Success Criteria** (what must be TRUE):
+  1. A real-Gateway probe records the exact behavior of both routes on 2026-04-22-or-later: whether `/v1/chat/completions` streaming emits usable intermediate assistant text/events, and what terminal-body-only capture can recover if streaming is unavailable. The decision is written down with concrete payload evidence.
+  2. `examples/openclaw_nav_autonomous.py` persists a step-aligned assistant transcript into artifacts for the chosen primary route, with an additive schema change only: old traces remain renderable and new traces include intermediate assistant messages with timestamps and source metadata (`stream` vs `terminal-body`).
+  3. `scripts/render_autonomous_replay.py` + `report.html` show the transcript alongside tool traffic so an operator can step through the run and see what the assistant said between `observe` / `move` / `done`.
+  4. Local validation against a real Gateway + real Kimi confirms the transcript path works on a live run, and the write-up records whether streaming is production-viable or whether the repo should stay on a fallback capture path for now.
+**Plans**: 4 plans. Plan 01 is deliberately a capability spike before implementation; do not assume the streaming surface exists just because the user prefers it.
+
+Plans:
+- [ ] 02.7-01: Real-Gateway capability spike — compare streaming events vs terminal-body-only capture and lock the acquisition strategy
+- [ ] 02.7-02: Bridge/runtime persistence — capture intermediate assistant messages additively into `trace.jsonl` + `run_result.json`
+- [ ] 02.7-03: Replay/report surfacing — render transcript panels and message/timestamp audit in `report.html`
+- [ ] 02.7-04: Local-dev validation + write-up — confirm live behavior and document the chosen path
 **UI hint**: yes
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
@@ -247,7 +283,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 3
+Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 3
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; see Phase Details)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -258,7 +294,8 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.1. Transport correction | v1.0 | 3/3 | Complete | 2026-04 |
 | 2.2. Long-running OpenClaw games | v1.0 | 3/3 | Complete | 2026-04-16 |
 | 2.3. Gateway digest pin | — | 1/1 | Declined | 2026-04-20 |
-| 2.4. View-experiment A/B | v1.1 | 0/4 | Planned in GSD; ready to execute (02.4-01 next) | - |
+| 2.4. View-experiment A/B | v1.1 | 3/4 | Active; local-dev sweep + decision record pending (#70) | - |
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
+| 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
