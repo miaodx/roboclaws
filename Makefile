@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse \
+        chat chat-reuse chat-tail \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -36,6 +36,7 @@ help:
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
 	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open"
 	@echo "  make chat-reuse          — same, but attach to an already-running Gateway"
+	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
@@ -198,9 +199,16 @@ openclaw-gateway-down:
 # teardown on exit). Reads the bearer token from OPENCLAW_GATEWAY_TOKEN if
 # set, else pulls it out of the running container's openclaw.json.
 # ---------------------------------------------------------------------------
+#
+# PROVIDER=kimi is pinned (mirroring openclaw-probe-* targets). Without the
+# pin, bootstrap prefers nvidia whenever NV_API_KEY is set — and Kimi is what
+# we actually want here because the Gateway's OpenAI→anthropic-messages
+# adapter preserves tool-result images into the agent's prompt. NIM is fine
+# too, but Kimi's multi-image reasoning is what every other probe target uses,
+# and consistency beats a surprise provider switch.
 chat:
 	@$(SOURCE_ENV); \
-	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	 PROVIDER=$${PROVIDER:-kimi} $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   xvfb-run -a python examples/openclaw_interactive.py
 
 chat-reuse:
@@ -208,3 +216,13 @@ chat-reuse:
 	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   xvfb-run -a python examples/openclaw_interactive.py \
 	     --skip-bootstrap --keep-gateway
+
+# Pretty-tail whatever the user is typing in the Control UI chat tab.
+# Our host-side trace.jsonl only records the agent's tool-call side; the
+# Gateway keeps the user turn + assistant reply + tool round-trips in a
+# per-session JSONL inside the container. Run this in a second terminal
+# while `make chat` is live. Mirrors to output/openclaw-interactive/latest-chat.log
+# by default so the transcript survives the container being torn down.
+chat-tail:
+	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
+	    --log-file output/openclaw-interactive/latest-chat.log

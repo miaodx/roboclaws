@@ -143,6 +143,8 @@ def _print_banner(*, url: str, agent_name: str, token: str, output_dir: Path) ->
     print("    - Typing in this terminal queues a human_message that the")
     print("      agent's next observe/move call will see (bounded deque, 10).")
     print(f"    - Trace: {output_dir / 'trace.jsonl'}")
+    print("    - For a live mirror of the chat-tab transcript, run in another")
+    print("      terminal:    make chat-tail")
     print("    - Ctrl-C to shut down AI2-THOR + the MCP server.")
     print(bar)
     print(flush=True)
