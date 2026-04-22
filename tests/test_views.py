@@ -139,6 +139,7 @@ def test_render_navigation_prompt_bundle_map_v2_chase_reuses_shared_surface() ->
     assert bundle.structured_overhead_frame is not None
     assert bundle.trace_overhead_frame is bundle.structured_overhead_frame
     assert bundle.baseline_overhead_frame.shape == engine.get_overhead_frame().shape
+    assert bundle.structured_overhead_frame.shape == engine.get_overhead_frame().shape
     assert bundle.chase_cam_frame is not None
     assert context.visited_world == {(1, 0)}
     assert engine.chase_updates == 1

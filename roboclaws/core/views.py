@@ -229,13 +229,31 @@ def render_navigation_prompt_bundle(
 
     structured_overhead_frame: np.ndarray | None = None
     if validated != "baseline":
-        structured_map = context.visualizer.render_structured_map(
-            agent_positions=agent_positions_world,
-            agent_rotations=[state.rotation for state in agent_states],
-            reachable_cells=context.reachable_cells,
-            covered_cells=list(context.visited_world),
-            world_bbox=context.world_bbox,
-        )
+        if (
+            context.overhead_camera_pose is not None
+            and context.overhead_background is not None
+        ):
+            structured_map = context.visualizer.render_projected_structured_map(
+                agent_positions=agent_positions_world,
+                agent_rotations=[state.rotation for state in agent_states],
+                reachable_cells=context.reachable_cells,
+                covered_cells=list(context.visited_world),
+                world_bbox=context.world_bbox,
+                camera_pose=context.overhead_camera_pose,
+                image_size=(
+                    int(context.overhead_background.shape[1]),
+                    int(context.overhead_background.shape[0]),
+                ),
+                grid_size=_GRID_SIZE,
+            )
+        else:
+            structured_map = context.visualizer.render_structured_map(
+                agent_positions=agent_positions_world,
+                agent_rotations=[state.rotation for state in agent_states],
+                reachable_cells=context.reachable_cells,
+                covered_cells=list(context.visited_world),
+                world_bbox=context.world_bbox,
+            )
         structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
 
     chase_cam_frame: np.ndarray | None = None

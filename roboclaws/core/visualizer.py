@@ -320,6 +320,74 @@ class GameVisualizer:
 
         return img
 
+    def render_projected_structured_map(
+        self,
+        *,
+        agent_positions: list[tuple[int, int]],
+        agent_rotations: list[dict[str, float]],
+        reachable_cells: set[tuple[int, int]],
+        claimed_cells: dict[int, list[tuple[int, int]]] | None = None,
+        covered_cells: list[tuple[int, int]] | None = None,
+        world_bbox: tuple[int, int, int, int],
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float = 0.25,
+    ) -> Image.Image:
+        """Render map-v2 into the same projected camera frame as the overhead view."""
+        img = Image.new("RGB", image_size, _BACKGROUND_COLOUR)
+        draw = ImageDraw.Draw(img)
+
+        claimed_lookup: dict[tuple[int, int], int] = {}
+        for agent_id, cells in (claimed_cells or {}).items():
+            for cell in cells:
+                claimed_lookup[cell] = agent_id
+        covered_lookup = set(covered_cells or [])
+
+        min_ix, min_iz, max_ix, max_iz = world_bbox
+        for iz in range(min_iz, max_iz + 1):
+            for ix in range(min_ix, max_ix + 1):
+                cell = (ix, iz)
+                colour = _STRUCTURED_UNREACHABLE_COLOUR
+                if cell in reachable_cells:
+                    colour = _STRUCTURED_REACHABLE_COLOUR
+                if cell in covered_lookup:
+                    colour = _STRUCTURED_COVERED_COLOUR
+                if cell in claimed_lookup:
+                    colour = self._agent_colour(claimed_lookup[cell])
+                self._fill_projected_world_cell(
+                    draw,
+                    ix=ix,
+                    iz=iz,
+                    camera_pose=camera_pose,
+                    image_size=image_size,
+                    grid_size=grid_size,
+                    colour=colour,
+                )
+
+        self._draw_projected_world_grid(
+            draw,
+            world_bbox=world_bbox,
+            camera_pose=camera_pose,
+            image_size=image_size,
+            grid_size=grid_size,
+        )
+
+        for idx, (ix, iz) in enumerate(agent_positions):
+            rotation = agent_rotations[idx] if idx < len(agent_rotations) else {"y": 0.0}
+            self._draw_projected_heading_marker(
+                draw,
+                ix=ix,
+                iz=iz,
+                yaw_deg=float(rotation.get("y", 0.0)),
+                camera_pose=camera_pose,
+                image_size=image_size,
+                grid_size=grid_size,
+                colour=self._agent_colour(idx),
+                label=str(idx),
+            )
+
+        return img
+
     def _agent_colour(self, agent_id: int) -> tuple[int, int, int]:
         """Return the colour for an agent.
 
@@ -534,6 +602,74 @@ class GameVisualizer:
         try:
             font = ImageFont.load_default()
             draw.text((cx - r // 2, cy - r // 2), label, fill=(255, 255, 255), font=font)
+        except Exception:
+            pass
+
+    def _draw_projected_heading_marker(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        ix: int,
+        iz: int,
+        yaw_deg: float,
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float,
+        colour: tuple[int, int, int],
+        label: str,
+    ) -> None:
+        yaw_rad = np.deg2rad(yaw_deg)
+        forward_x = float(np.sin(yaw_rad))
+        forward_z = float(np.cos(yaw_rad))
+        perp_x = -forward_z
+        perp_z = forward_x
+
+        center_x = ix * grid_size
+        center_z = iz * grid_size
+        tip_world = (
+            center_x + forward_x * grid_size * 0.45,
+            center_z + forward_z * grid_size * 0.45,
+        )
+        base_center_world = (
+            center_x - forward_x * grid_size * 0.22,
+            center_z - forward_z * grid_size * 0.22,
+        )
+        left_world = (
+            base_center_world[0] + perp_x * grid_size * 0.28,
+            base_center_world[1] + perp_z * grid_size * 0.28,
+        )
+        right_world = (
+            base_center_world[0] - perp_x * grid_size * 0.28,
+            base_center_world[1] - perp_z * grid_size * 0.28,
+        )
+        center = self._project_overhead_world_point(
+            x=center_x,
+            z=center_z,
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        tip = self._project_overhead_world_point(
+            x=tip_world[0],
+            z=tip_world[1],
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        left = self._project_overhead_world_point(
+            x=left_world[0],
+            z=left_world[1],
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        right = self._project_overhead_world_point(
+            x=right_world[0],
+            z=right_world[1],
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        draw.polygon([tip, left, right], fill=colour, outline=(0, 0, 0))
+        try:
+            font = ImageFont.load_default()
+            draw.text((center[0] - 3, center[1] - 4), label, fill=(255, 255, 255), font=font)
         except Exception:
             pass
 

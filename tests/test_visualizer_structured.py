@@ -171,3 +171,50 @@ def test_world_overhead_map_projects_marker_into_camera_frame() -> None:
         image_size=img.size,
     )
     assert tuple(arr[int(round(cy)), int(round(cx))]) != (128, 128, 128)
+
+
+def test_projected_structured_map_matches_requested_image_size() -> None:
+    viz = GameVisualizer(cell_px=12, agent_count=1)
+    camera_pose = {
+        "position": {"x": 0.125, "y": 2.0, "z": 0.125},
+        "rotation": {"x": 90.0, "y": 0.0, "z": 0.0},
+        "orthographicSize": 0.25,
+        "orthographic": True,
+    }
+    img = viz.render_projected_structured_map(
+        agent_positions=[(1, 1)],
+        agent_rotations=[{"y": 90.0}],
+        reachable_cells={(1, 1)},
+        world_bbox=(0, 0, 1, 1),
+        camera_pose=camera_pose,
+        image_size=(80, 60),
+        grid_size=0.25,
+    )
+    assert img.size == (80, 60)
+
+
+def test_projected_structured_map_yaw_zero_points_up() -> None:
+    viz = GameVisualizer(cell_px=12, agent_count=1)
+    camera_pose = {
+        "position": {"x": 0.0, "y": 2.0, "z": 0.0},
+        "rotation": {"x": 90.0, "y": 0.0, "z": 0.0},
+        "orthographicSize": 0.25,
+        "orthographic": True,
+    }
+    img = viz.render_projected_structured_map(
+        agent_positions=[(0, 0)],
+        agent_rotations=[{"y": 0.0}],
+        reachable_cells={(0, 0)},
+        world_bbox=(0, 0, 0, 0),
+        camera_pose=camera_pose,
+        image_size=(80, 80),
+        grid_size=0.25,
+    )
+    arr = np.asarray(img)
+    cell = arr[20:60, 20:60]
+    up, down, left, right = _count_marker_pixels(cell)
+    dominant = max(
+        {"up": up, "down": down, "left": left, "right": right}.items(),
+        key=lambda item: item[1],
+    )[0]
+    assert dominant == "up"
