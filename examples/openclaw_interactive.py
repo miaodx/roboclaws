@@ -138,6 +138,8 @@ def _print_banner(*, url: str, agent_name: str, token: str, output_dir: Path) ->
     print(f"    Agent : {agent_name}")
     print()
     print("  Tips:")
+    print("    - An AI2-THOR Unity window should be open on your desktop —")
+    print("      watch the robot move there as you chat.")
     print("    - Paste the bearer token on the Overview tab to connect.")
     print("    - Switch to the Chat tab, pick the agent above, and talk.")
     print("    - Typing in this terminal queues a human_message that the")

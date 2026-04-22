@@ -208,15 +208,22 @@ openclaw-gateway-down:
 # adapter preserves tool-result images into the agent's prompt. NIM is fine
 # too, but Kimi's multi-image reasoning is what every other probe target uses,
 # and consistency beats a surprise provider switch.
+# Chat targets deliberately DO NOT use xvfb — unlike the probe/demo targets,
+# the whole point of chat is to watch the robot move in real time, so we
+# want AI2-THOR's Unity window on the operator's actual X display. Every
+# chat-* recipe below inherits $DISPLAY from the caller's shell. If the
+# recipe fails with "Unable to open display" or similar, either $DISPLAY
+# isn't set (SSH without -X / -Y, bare tmux in a headless VM) or xhost
+# is locking the server — fix the shell, don't reach for xvfb-run.
 chat:
 	@$(SOURCE_ENV); \
 	 PROVIDER=$${PROVIDER:-kimi} $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
-	   xvfb-run -a python examples/openclaw_interactive.py
+	   python examples/openclaw_interactive.py
 
 chat-reuse:
 	@$(SOURCE_ENV); \
 	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
-	   xvfb-run -a python examples/openclaw_interactive.py \
+	   python examples/openclaw_interactive.py \
 	     --skip-bootstrap --keep-gateway
 
 # Pretty-tail whatever the user is typing in the Control UI chat tab.
@@ -245,9 +252,9 @@ chat-tail:
 chat-plugin:
 	@$(SOURCE_ENV); \
 	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
-	   xvfb-run -a python examples/openclaw_interactive.py
+	   python examples/openclaw_interactive.py
 
 chat-nvidia:
 	@$(SOURCE_ENV); \
 	 PROVIDER=nvidia $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
-	   xvfb-run -a python examples/openclaw_interactive.py
+	   python examples/openclaw_interactive.py
