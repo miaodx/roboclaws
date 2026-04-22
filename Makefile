@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse chat-tail \
+        chat chat-reuse chat-tail chat-plugin chat-nvidia \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -34,8 +34,10 @@ help:
 	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
-	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open"
-	@echo "  make chat-reuse          — same, but attach to an already-running Gateway"
+	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open (Kimi custom)"
+	@echo "  make chat-plugin         — same, Kimi stock plugin (kimi/k2p5, reasoning on, slow)"
+	@echo "  make chat-nvidia         — same, NVIDIA NIM (nemotron vision)"
+	@echo "  make chat-reuse          — attach to an already-running Gateway"
 	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
@@ -226,3 +228,26 @@ chat-reuse:
 chat-tail:
 	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
 	    --log-file output/openclaw-interactive/latest-chat.log
+
+# Chat A/B variants — same entrypoint, different provider/mode. Use these to
+# diagnose image-upload drops, tool-call latency, or any provider-specific
+# misbehavior. Only one Gateway can exist at a time (container name is fixed),
+# so tear down the previous one before switching:  make openclaw-gateway-down
+#
+# chat-plugin   — stock Gateway Kimi plugin (kimi/k2p5). Reasoning mode ON →
+#                 3000+ CoT tokens/turn, 60-120s per multi-image call, idle
+#                 watchdog risk. Useful A/B target: different image-pipe code
+#                 path (openai-completions, not anthropic-messages) inside the
+#                 Gateway, so user-uploaded images may survive where the
+#                 default anthropic-messages path drops them.
+# chat-nvidia   — NVIDIA NIM nemotron-nano-12b-v2-vl (free tier, multi-image,
+#                 tool-use OK). Fastest of the three. No reasoning tokens.
+chat-plugin:
+	@$(SOURCE_ENV); \
+	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_interactive.py
+
+chat-nvidia:
+	@$(SOURCE_ENV); \
+	 PROVIDER=nvidia $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_interactive.py
