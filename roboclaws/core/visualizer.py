@@ -32,13 +32,17 @@ _AGENT_COLOURS: list[tuple[int, int, int]] = [
 _BACKGROUND_COLOUR: tuple[int, int, int] = (255, 255, 255)
 _GRID_LINE_COLOUR: tuple[int, int, int] = (200, 200, 200)
 _COVERED_COLOUR: tuple[int, int, int] = (200, 240, 200)  # light green (coverage game)
+_STRUCTURED_REACHABLE_COLOUR: tuple[int, int, int] = (230, 230, 230)
+_STRUCTURED_UNREACHABLE_COLOUR: tuple[int, int, int] = (60, 60, 60)
+_STRUCTURED_COVERED_COLOUR: tuple[int, int, int] = (180, 230, 180)
+_STRUCTURED_MARGIN_PX: int = 2
 
 # SOUL → badge colour mapping. Unknown souls fall back to grey.
 _SOUL_COLOURS: dict[str, tuple[int, int, int]] = {
-    "aggressive": (220, 50, 50),    # red
-    "defensive": (50, 120, 220),    # blue
-    "cooperative": (50, 180, 50),   # green
-    "default": (130, 130, 130),     # grey
+    "aggressive": (220, 50, 50),  # red
+    "defensive": (50, 120, 220),  # blue
+    "cooperative": (50, 180, 50),  # green
+    "default": (130, 130, 130),  # grey
 }
 
 # Alpha for cell tints so a photographic base frame remains visible underneath.
@@ -152,6 +156,63 @@ class GameVisualizer:
 
         return bg
 
+    def render_structured_map(
+        self,
+        *,
+        agent_positions: list[tuple[int, int]],
+        agent_rotations: list[dict[str, float]],
+        reachable_cells: set[tuple[int, int]],
+        claimed_cells: dict[int, list[tuple[int, int]]] | None = None,
+        covered_cells: list[tuple[int, int]] | None = None,
+        world_bbox: tuple[int, int, int, int],
+    ) -> Image.Image:
+        """Render a pure grid map from world-grid coordinates.
+
+        ``world_bbox`` is ``(min_ix, min_iz, max_ix, max_iz)``.
+        """
+        min_ix, min_iz, max_ix, max_iz = world_bbox
+        cols = max_ix - min_ix + 1
+        rows = max_iz - min_iz + 1
+        width = cols * self.cell_px + _STRUCTURED_MARGIN_PX * 2
+        height = rows * self.cell_px + _STRUCTURED_MARGIN_PX * 2
+        img = Image.new("RGB", (width, height), _STRUCTURED_UNREACHABLE_COLOUR)
+        draw = ImageDraw.Draw(img)
+
+        claimed_lookup: dict[tuple[int, int], int] = {}
+        for agent_id, cells in (claimed_cells or {}).items():
+            for cell in cells:
+                claimed_lookup[cell] = agent_id
+        covered_lookup = set(covered_cells or [])
+
+        for iz in range(min_iz, max_iz + 1):
+            for ix in range(min_ix, max_ix + 1):
+                cell = (ix, iz)
+                colour = _STRUCTURED_UNREACHABLE_COLOUR
+                if cell in reachable_cells:
+                    colour = _STRUCTURED_REACHABLE_COLOUR
+                if cell in covered_lookup:
+                    colour = _STRUCTURED_COVERED_COLOUR
+                if cell in claimed_lookup:
+                    colour = self._agent_colour(claimed_lookup[cell])
+                self._fill_world_cell(draw, ix, iz, min_ix, min_iz, colour)
+
+        self._draw_structured_grid(draw, cols=cols, rows=rows)
+
+        for idx, (ix, iz) in enumerate(agent_positions):
+            rotation = agent_rotations[idx] if idx < len(agent_rotations) else {"y": 0.0}
+            self._draw_heading_marker(
+                draw,
+                ix=ix,
+                iz=iz,
+                min_ix=min_ix,
+                min_iz=min_iz,
+                yaw_deg=float(rotation.get("y", 0.0)),
+                colour=self._agent_colour(idx),
+                label=str(idx),
+            )
+
+        return img
+
     def _agent_colour(self, agent_id: int) -> tuple[int, int, int]:
         """Return the colour for an agent.
 
@@ -175,6 +236,19 @@ class GameVisualizer:
         y0 = row * self.cell_px
         draw.rectangle([x0, y0, x0 + self.cell_px - 1, y0 + self.cell_px - 1], fill=colour)
 
+    def _fill_world_cell(
+        self,
+        draw: ImageDraw.ImageDraw,
+        ix: int,
+        iz: int,
+        min_ix: int,
+        min_iz: int,
+        colour: tuple[int, int, int],
+    ) -> None:
+        x0 = _STRUCTURED_MARGIN_PX + (ix - min_ix) * self.cell_px
+        y0 = _STRUCTURED_MARGIN_PX + (iz - min_iz) * self.cell_px
+        draw.rectangle([x0, y0, x0 + self.cell_px - 1, y0 + self.cell_px - 1], fill=colour)
+
     def _draw_grid(self, draw: ImageDraw.ImageDraw) -> None:
         for col in range(self.grid_cols + 1):
             x = col * self.cell_px
@@ -182,6 +256,24 @@ class GameVisualizer:
         for row in range(self.grid_rows + 1):
             y = row * self.cell_px
             draw.line([(0, y), (self._map_w, y)], fill=_GRID_LINE_COLOUR)
+
+    def _draw_structured_grid(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        cols: int,
+        rows: int,
+    ) -> None:
+        x0 = _STRUCTURED_MARGIN_PX
+        y0 = _STRUCTURED_MARGIN_PX
+        x1 = x0 + cols * self.cell_px
+        y1 = y0 + rows * self.cell_px
+        for col in range(cols + 1):
+            x = x0 + col * self.cell_px
+            draw.line([(x, y0), (x, y1)], fill=_GRID_LINE_COLOUR)
+        for row in range(rows + 1):
+            y = y0 + row * self.cell_px
+            draw.line([(x0, y), (x1, y)], fill=_GRID_LINE_COLOUR)
 
     def _draw_agent_marker(
         self,
@@ -198,6 +290,42 @@ class GameVisualizer:
         try:
             font = ImageFont.load_default()
             draw.text((cx - r // 2, cy - r // 2), label, fill=(255, 255, 255), font=font)
+        except Exception:
+            pass
+
+    def _draw_heading_marker(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        ix: int,
+        iz: int,
+        min_ix: int,
+        min_iz: int,
+        yaw_deg: float,
+        colour: tuple[int, int, int],
+        label: str,
+    ) -> None:
+        cx = _STRUCTURED_MARGIN_PX + (ix - min_ix) * self.cell_px + self.cell_px / 2.0
+        cy = _STRUCTURED_MARGIN_PX + (iz - min_iz) * self.cell_px + self.cell_px / 2.0
+        length = max(self.cell_px * 0.7, 6.0)
+        half_width = max(self.cell_px * 0.33, 4.0)
+
+        # AI2-THOR yaw=0 faces +z. On the rendered grid, +z points downward.
+        yaw_rad = np.deg2rad(yaw_deg)
+        dx = float(np.sin(yaw_rad))
+        dy = float(np.cos(yaw_rad))
+        px = -dy
+        py = dx
+
+        tip = (cx + dx * length, cy + dy * length)
+        base_center = (cx - dx * length * 0.45, cy - dy * length * 0.45)
+        left = (base_center[0] + px * half_width, base_center[1] + py * half_width)
+        right = (base_center[0] - px * half_width, base_center[1] - py * half_width)
+
+        draw.polygon([tip, left, right], fill=colour, outline=(0, 0, 0))
+        try:
+            font = ImageFont.load_default()
+            draw.text((cx - 3, cy - 4), label, fill=(255, 255, 255), font=font)
         except Exception:
             pass
 

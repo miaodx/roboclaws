@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
+from roboclaws.core.views import VIEW_VARIANTS, build_prompt_images, compute_world_bbox
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import format_provider_status, provider_status_snapshot
 from roboclaws.openclaw.bridge import OpenClawProvider, OpenClawUnavailable
@@ -159,6 +160,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=300.0,
         help="AI2-THOR Unity startup timeout in seconds",
     )
+    p.add_argument(
+        "--views",
+        choices=VIEW_VARIANTS,
+        default="baseline",
+        help="Prompt image variant to send to the Gateway agent.",
+    )
     return p.parse_args(argv)
 
 
@@ -178,6 +185,7 @@ def run_openclaw_demo(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_stale_steps: int | None = None,
+    views: str = "baseline",
 ) -> dict[str, Any]:
     """Run a multi-agent navigation demo driven by a local OpenClaw Gateway.
 
@@ -225,6 +233,7 @@ def run_openclaw_demo(
         server_timeout=thor_server_timeout,
         server_start_timeout=thor_server_start_timeout,
     )
+    reachable_cells = engine.get_reachable_positions()
     viz = GameVisualizer(
         grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
     )
@@ -248,6 +257,10 @@ def run_openclaw_demo(
     try:
         initial_states = engine.get_all_agent_states()
         origin_ix, origin_iz = _pos_to_world_idx(initial_states[0].position)
+        world_bbox = compute_world_bbox(
+            reachable_cells,
+            (_pos_to_world_idx(state.position) for state in initial_states),
+        )
 
         try:
             overhead_bg: np.ndarray | None = engine.get_overhead_frame()
@@ -269,10 +282,11 @@ def run_openclaw_demo(
             else:
                 stale_steps += 1
 
+            agent_positions_world = [_pos_to_world_idx(s.position) for s in agent_states]
+
             # Agent positions in visualiser coordinates
             agent_positions_viz: list[tuple[int, int]] = []
-            for s in agent_states:
-                wx, wz = _pos_to_world_idx(s.position)
+            for wx, wz in agent_positions_world:
                 rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
                 agent_positions_viz.append(rc if _in_bounds(*rc) else (_CENTER_ROW, _CENTER_COL))
 
@@ -288,6 +302,16 @@ def run_openclaw_demo(
                 base_frame=overhead_bg,
             )
             map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
+            structured_map_frame: np.ndarray | None = None
+            if views != "baseline":
+                structured_img = viz.render_structured_map(
+                    agent_positions=agent_positions_world,
+                    agent_rotations=[state.rotation for state in agent_states],
+                    reachable_cells=reachable_cells,
+                    covered_cells=list(visited_world),
+                    world_bbox=world_bbox,
+                )
+                structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
 
             active_state = agent_states[current_agent]
             prompt_state: dict[str, Any] = {
@@ -299,11 +323,26 @@ def run_openclaw_demo(
                 "agent_count": agent_count,
                 "position": active_state.position,
                 "rotation": active_state.rotation,
+                "views": views,
                 "available_actions": NAVIGATION_ACTIONS,
             }
 
-            # Numpy frames flow inline — no filesystem / bind-mount hop.
-            prompt_images = [active_state.frame, map_frame]
+            chase_cam_frame: np.ndarray | None = None
+            if views == "map-v2+chase":
+                engine.add_chase_cam(current_agent)
+                engine.update_chase_cam(current_agent)
+                chase_cam_frame = engine.get_chase_cam_frame(current_agent)
+
+            prompt_images = build_prompt_images(
+                variant=views,
+                fpv_frame=active_state.frame,
+                baseline_overhead_frame=map_frame,
+                structured_overhead_frame=structured_map_frame,
+                chase_cam_frame=chase_cam_frame,
+            )
+            replay_overhead = (
+                structured_map_frame if structured_map_frame is not None else map_frame
+            )
 
             response = provider.get_action(images=prompt_images, state=prompt_state)
             action = response.get("action", "MoveAhead")
@@ -325,7 +364,7 @@ def run_openclaw_demo(
                 step=step,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
-                overhead_frame=map_frame,
+                overhead_frame=replay_overhead,
                 game_state={
                     "visited_cells": len(visited_world),
                     "current_agent": current_agent,
@@ -385,6 +424,7 @@ def main() -> None:
     print(f"Agents        : {args.agents}")
     print(f"Steps (max)   : {args.steps}")
     print(f"Stale cutoff  : {resolved_stale if resolved_stale > 0 else 'disabled'}")
+    print(f"Views         : {args.views}")
     print(f"Output dir    : {args.output_dir}")
     print()
 
@@ -399,6 +439,7 @@ def main() -> None:
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
         max_stale_steps=args.max_stale_steps,
+        views=args.views,
     )
 
     print()
