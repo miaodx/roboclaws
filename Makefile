@@ -5,6 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
+        chat chat-reuse chat-tail chat-plugin chat-nvidia \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -31,6 +32,13 @@ help:
 	@echo "  make openclaw-gateway-up       — bootstrap gateway, save token to .openclaw-token"
 	@echo "  make openclaw-gateway-down     — tear down gateway + volume"
 	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
+	@echo ""
+	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
+	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open (Kimi custom)"
+	@echo "  make chat-plugin         — same, Kimi stock plugin (kimi/k2p5, reasoning on, slow)"
+	@echo "  make chat-nvidia         — same, NVIDIA NIM (nemotron vision)"
+	@echo "  make chat-reuse          — attach to an already-running Gateway"
+	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
@@ -180,3 +188,83 @@ openclaw-gateway-down:
 	docker volume rm openclaw-gateway-config || true
 	rm -f .openclaw-token
 	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
+# Interactive chat — you drive the agent from the Gateway Control UI.
+#
+# `make chat` bootstraps a fresh Gateway (tears it down on Ctrl-C) and holds
+# AI2-THOR + the Roboclaws MCP server open. The script prints the Control UI
+# URL + bearer token; open the URL in a browser, paste the token on the
+# Overview tab, switch to the Chat tab, pick agent-0, and talk.
+#
+# `make chat-reuse` attaches to an already-running Gateway (no rebuild, no
+# teardown on exit). Reads the bearer token from OPENCLAW_GATEWAY_TOKEN if
+# set, else pulls it out of the running container's openclaw.json.
+# ---------------------------------------------------------------------------
+#
+# PROVIDER=kimi is pinned (mirroring openclaw-probe-* targets). Without the
+# pin, bootstrap prefers nvidia whenever NV_API_KEY is set — and Kimi is what
+# we actually want here because the Gateway's OpenAI→anthropic-messages
+# adapter preserves tool-result images into the agent's prompt. NIM is fine
+# too, but Kimi's multi-image reasoning is what every other probe target uses,
+# and consistency beats a surprise provider switch.
+# Chat targets deliberately DO NOT use xvfb — unlike the probe/demo targets,
+# the whole point of chat is to watch the robot move in real time, so we
+# want AI2-THOR's Unity window on the operator's actual X display. Every
+# chat-* recipe below inherits $DISPLAY from the caller's shell. If the
+# recipe fails with "Unable to open display" or similar, either $DISPLAY
+# isn't set (SSH without -X / -Y, bare tmux in a headless VM) or xhost
+# is locking the server — fix the shell, don't reach for xvfb-run.
+# OPENCLAW_TOKEN defaults to "demo" on every chat target so the operator
+# pastes it once per browser profile and it sticks across `make openclaw-
+# gateway-down` + reboot cycles. Override with `OPENCLAW_TOKEN=<real>`
+# if you need an unguessable token (never actually required on :127.0.0.1).
+# The Gateway only binds 127.0.0.1 — no LAN risk — but don't use `demo`
+# behind a reverse proxy or with HOST_IP=0.0.0.0.
+chat:
+	@$(SOURCE_ENV); \
+	 PROVIDER=$${PROVIDER:-kimi} OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   python examples/openclaw_interactive.py
+
+chat-reuse:
+	@$(SOURCE_ENV); \
+	 OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   python examples/openclaw_interactive.py \
+	     --skip-bootstrap --keep-gateway
+
+# Pretty-tail whatever the user is typing in the Control UI chat tab.
+# Our host-side trace.jsonl only records the agent's tool-call side; the
+# Gateway keeps the user turn + assistant reply + tool round-trips in a
+# per-session JSONL inside the container. Run this in a second terminal
+# while `make chat` is live. Mirrors to output/openclaw-interactive/latest-chat.log
+# by default so the transcript survives the container being torn down.
+chat-tail:
+	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
+	    --log-file output/openclaw-interactive/latest-chat.log
+
+# Chat A/B variants — same entrypoint, different provider/mode. Use these to
+# diagnose image-upload drops, tool-call latency, or any provider-specific
+# misbehavior. Only one Gateway can exist at a time (container name is fixed),
+# so tear down the previous one before switching:  make openclaw-gateway-down
+#
+# chat-plugin   — stock Gateway Kimi plugin (kimi/k2p5). Reasoning mode ON →
+#                 3000+ CoT tokens/turn, 60-120s per multi-image call, idle
+#                 watchdog risk. Useful A/B target: different image-pipe code
+#                 path (openai-completions, not anthropic-messages) inside the
+#                 Gateway, so user-uploaded images may survive where the
+#                 default anthropic-messages path drops them.
+# chat-nvidia   — NVIDIA NIM nemotron-nano-12b-v2-vl (free tier, multi-image,
+#                 tool-use OK). Fastest of the three. No reasoning tokens.
+chat-plugin:
+	@$(SOURCE_ENV); \
+	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   python examples/openclaw_interactive.py
+
+chat-nvidia:
+	@$(SOURCE_ENV); \
+	 PROVIDER=nvidia OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   python examples/openclaw_interactive.py
