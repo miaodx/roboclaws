@@ -5,6 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
+        chat chat-reuse \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -31,6 +32,10 @@ help:
 	@echo "  make openclaw-gateway-up       — bootstrap gateway, save token to .openclaw-token"
 	@echo "  make openclaw-gateway-down     — tear down gateway + volume"
 	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
+	@echo ""
+	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
+	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open"
+	@echo "  make chat-reuse          — same, but attach to an already-running Gateway"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
@@ -180,3 +185,26 @@ openclaw-gateway-down:
 	docker volume rm openclaw-gateway-config || true
 	rm -f .openclaw-token
 	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
+# Interactive chat — you drive the agent from the Gateway Control UI.
+#
+# `make chat` bootstraps a fresh Gateway (tears it down on Ctrl-C) and holds
+# AI2-THOR + the Roboclaws MCP server open. The script prints the Control UI
+# URL + bearer token; open the URL in a browser, paste the token on the
+# Overview tab, switch to the Chat tab, pick agent-0, and talk.
+#
+# `make chat-reuse` attaches to an already-running Gateway (no rebuild, no
+# teardown on exit). Reads the bearer token from OPENCLAW_GATEWAY_TOKEN if
+# set, else pulls it out of the running container's openclaw.json.
+# ---------------------------------------------------------------------------
+chat:
+	@$(SOURCE_ENV); \
+	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_interactive.py
+
+chat-reuse:
+	@$(SOURCE_ENV); \
+	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_interactive.py \
+	     --skip-bootstrap --keep-gateway
