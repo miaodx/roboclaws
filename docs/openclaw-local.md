@@ -288,7 +288,9 @@ python examples/openclaw_nav_autonomous.py \
 Output lands in `output/openclaw-autonomous/<timestamp>/` with `replay.gif`,
 `report.html`, `trace.jsonl`, and `run_result.json`. The example starts the
 MCP server in-process on port `18788` before the bootstrap subprocess runs, so
-operators don't need to launch anything extra.
+operators don't need to launch anything extra. The current default prompt-image
+bundle is `map-v2+chase`; pass `--views baseline` or `--views map-v2` when you
+want a direct comparison.
 
 ### Reuse one long-lived Gateway for repeated probes
 
@@ -322,6 +324,9 @@ places:
 
 The CLI keeps `--transcript-mode {stream|terminal-body}` as a validation/debug
 override, but omitting the flag uses the shipped default request mode.
+
+Separately, the autonomous example's current default `--views` bundle is
+`map-v2+chase`. That view choice is independent of transcript capture mode.
 
 On the dated local validation rerun for Phase 2.7, the shipped default was:
 

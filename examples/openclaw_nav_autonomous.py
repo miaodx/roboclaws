@@ -38,7 +38,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--views",
         choices=VIEW_VARIANTS,
-        default="baseline",
+        default="map-v2+chase",
         help="Prompt image bundle variant returned by roboclaws__observe.",
     )
     parser.add_argument(
@@ -232,7 +232,7 @@ def run_autonomous_navigation(
     max_moves: int,
     wall_budget: float,
     output_dir: Path,
-    views: str = "baseline",
+    views: str = "map-v2+chase",
     skip_bootstrap: bool = False,
     transcript_mode: str | None = None,
 ) -> dict[str, Any]:
