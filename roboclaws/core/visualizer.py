@@ -156,6 +156,114 @@ class GameVisualizer:
 
         return bg
 
+    def render_world_overhead_map(
+        self,
+        *,
+        agent_positions: list[tuple[int, int]],
+        claimed_cells: dict[int, list[tuple[int, int]]] | None = None,
+        covered_cells: list[tuple[int, int]] | None = None,
+        world_bbox: tuple[int, int, int, int],
+        base_frame: np.ndarray | None = None,
+        camera_pose: dict[str, object] | None = None,
+        grid_size: float = 0.25,
+    ) -> Image.Image:
+        """Render the photographic overhead view on the same world grid as map-v2."""
+        min_ix, min_iz, max_ix, max_iz = world_bbox
+        cols = max_ix - min_ix + 1
+        rows = max_iz - min_iz + 1
+        projected = (
+            base_frame is not None
+            and camera_pose is not None
+            and _supports_projected_overhead(camera_pose)
+        )
+        if projected:
+            bg = Image.fromarray(base_frame).convert("RGB")
+        else:
+            bg = self._make_world_background(
+                cols=cols,
+                rows=rows,
+                base_frame=base_frame,
+                background_colour=_BACKGROUND_COLOUR,
+            )
+
+        overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
+        odraw = ImageDraw.Draw(overlay)
+
+        if covered_cells:
+            tint = (*_COVERED_COLOUR, _CELL_TINT_ALPHA)
+            for ix, iz in covered_cells:
+                if projected:
+                    self._fill_projected_world_cell(
+                        odraw,
+                        ix=ix,
+                        iz=iz,
+                        camera_pose=camera_pose,
+                        image_size=bg.size,
+                        grid_size=grid_size,
+                        colour=tint,
+                    )
+                else:
+                    self._fill_world_cell(odraw, ix, iz, min_ix, min_iz, tint)
+
+        if claimed_cells:
+            for agent_id, cells in claimed_cells.items():
+                base_colour = self._agent_colour(agent_id)
+                tint = (*_lighten(base_colour, 60), _CELL_TINT_ALPHA)
+                for ix, iz in cells:
+                    if projected:
+                        self._fill_projected_world_cell(
+                            odraw,
+                            ix=ix,
+                            iz=iz,
+                            camera_pose=camera_pose,
+                            image_size=bg.size,
+                            grid_size=grid_size,
+                            colour=tint,
+                        )
+                    else:
+                        self._fill_world_cell(odraw, ix, iz, min_ix, min_iz, tint)
+
+        bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
+        draw = ImageDraw.Draw(bg)
+        if projected:
+            self._draw_projected_world_grid(
+                draw,
+                world_bbox=world_bbox,
+                camera_pose=camera_pose,
+                image_size=bg.size,
+                grid_size=grid_size,
+            )
+        else:
+            self._draw_structured_grid(draw, cols=cols, rows=rows)
+
+        for idx, (ix, iz) in enumerate(agent_positions):
+            colour = self._agent_colour(idx)
+            soul_label = self.agent_labels[idx] if idx < len(self.agent_labels) else ""
+            badge = soul_label[0].upper() if soul_label else str(idx)
+            if projected:
+                self._draw_projected_world_agent_marker(
+                    draw,
+                    ix=ix,
+                    iz=iz,
+                    camera_pose=camera_pose,
+                    image_size=bg.size,
+                    grid_size=grid_size,
+                    colour=colour,
+                    label=badge,
+                )
+            else:
+                self._draw_world_agent_marker(
+                    draw,
+                    ix=ix,
+                    iz=iz,
+                    min_ix=min_ix,
+                    min_iz=min_iz,
+                    colour=colour,
+                    label=badge,
+                )
+
+        return bg
+
     def render_structured_map(
         self,
         *,
@@ -173,8 +281,7 @@ class GameVisualizer:
         min_ix, min_iz, max_ix, max_iz = world_bbox
         cols = max_ix - min_ix + 1
         rows = max_iz - min_iz + 1
-        width = cols * self.cell_px + _STRUCTURED_MARGIN_PX * 2
-        height = rows * self.cell_px + _STRUCTURED_MARGIN_PX * 2
+        width, height = self._world_canvas_size(cols=cols, rows=rows)
         img = Image.new("RGB", (width, height), _STRUCTURED_UNREACHABLE_COLOUR)
         draw = ImageDraw.Draw(img)
 
@@ -243,11 +350,54 @@ class GameVisualizer:
         iz: int,
         min_ix: int,
         min_iz: int,
-        colour: tuple[int, int, int],
+        colour: tuple[int, ...],
     ) -> None:
         x0 = _STRUCTURED_MARGIN_PX + (ix - min_ix) * self.cell_px
         y0 = _STRUCTURED_MARGIN_PX + (iz - min_iz) * self.cell_px
         draw.rectangle([x0, y0, x0 + self.cell_px - 1, y0 + self.cell_px - 1], fill=colour)
+
+    def _world_canvas_size(self, *, cols: int, rows: int) -> tuple[int, int]:
+        return (
+            cols * self.cell_px + _STRUCTURED_MARGIN_PX * 2,
+            rows * self.cell_px + _STRUCTURED_MARGIN_PX * 2,
+        )
+
+    def _make_world_background(
+        self,
+        *,
+        cols: int,
+        rows: int,
+        base_frame: np.ndarray | None,
+        background_colour: tuple[int, int, int],
+    ) -> Image.Image:
+        width, height = self._world_canvas_size(cols=cols, rows=rows)
+        if base_frame is None:
+            return Image.new("RGB", (width, height), background_colour)
+        bg = Image.fromarray(base_frame).convert("RGB")
+        bg = _trim_uniform_border(bg)
+        return bg.resize((width, height), _RESAMPLE)
+
+    def _fill_projected_world_cell(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        ix: int,
+        iz: int,
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float,
+        colour: tuple[int, ...],
+    ) -> None:
+        points = [
+            self._project_overhead_world_point(
+                x=(ix + dx) * grid_size,
+                z=(iz + dz) * grid_size,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            for dx, dz in [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
+        ]
+        draw.polygon(points, fill=colour)
 
     def _draw_grid(self, draw: ImageDraw.ImageDraw) -> None:
         for col in range(self.grid_cols + 1):
@@ -305,8 +455,7 @@ class GameVisualizer:
         colour: tuple[int, int, int],
         label: str,
     ) -> None:
-        cx = _STRUCTURED_MARGIN_PX + (ix - min_ix) * self.cell_px + self.cell_px / 2.0
-        cy = _STRUCTURED_MARGIN_PX + (iz - min_iz) * self.cell_px + self.cell_px / 2.0
+        cx, cy = self._world_marker_center(ix=ix, iz=iz, min_ix=min_ix, min_iz=min_iz)
         length = max(self.cell_px * 0.7, 6.0)
         half_width = max(self.cell_px * 0.33, 4.0)
 
@@ -328,6 +477,146 @@ class GameVisualizer:
             draw.text((cx - 3, cy - 4), label, fill=(255, 255, 255), font=font)
         except Exception:
             pass
+
+    def _draw_world_agent_marker(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        ix: int,
+        iz: int,
+        min_ix: int,
+        min_iz: int,
+        colour: tuple[int, int, int],
+        label: str,
+    ) -> None:
+        cx, cy = self._world_marker_center(ix=ix, iz=iz, min_ix=min_ix, min_iz=min_iz)
+        r = max(self.cell_px // 2 - 2, 4)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=colour, outline=(0, 0, 0))
+        try:
+            font = ImageFont.load_default()
+            draw.text((cx - r // 2, cy - r // 2), label, fill=(255, 255, 255), font=font)
+        except Exception:
+            pass
+
+    def _draw_projected_world_agent_marker(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        ix: int,
+        iz: int,
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float,
+        colour: tuple[int, int, int],
+        label: str,
+    ) -> None:
+        cx, cy = self._project_overhead_world_point(
+            x=ix * grid_size,
+            z=iz * grid_size,
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        edge_a = self._project_overhead_world_point(
+            x=(ix - 0.5) * grid_size,
+            z=iz * grid_size,
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        edge_b = self._project_overhead_world_point(
+            x=(ix + 0.5) * grid_size,
+            z=iz * grid_size,
+            camera_pose=camera_pose,
+            image_size=image_size,
+        )
+        cell_diameter = max(abs(edge_b[0] - edge_a[0]), abs(edge_b[1] - edge_a[1]), 8.0)
+        r = max(int(cell_diameter * 0.4), 4)
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=colour, outline=(0, 0, 0))
+        try:
+            font = ImageFont.load_default()
+            draw.text((cx - r // 2, cy - r // 2), label, fill=(255, 255, 255), font=font)
+        except Exception:
+            pass
+
+    def _draw_projected_world_grid(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        world_bbox: tuple[int, int, int, int],
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float,
+    ) -> None:
+        min_ix, min_iz, max_ix, max_iz = world_bbox
+        z_top = (min_iz - 0.5) * grid_size
+        z_bottom = (max_iz + 0.5) * grid_size
+        for boundary_ix in range(min_ix, max_ix + 2):
+            x = (boundary_ix - 0.5) * grid_size
+            start = self._project_overhead_world_point(
+                x=x,
+                z=z_top,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            end = self._project_overhead_world_point(
+                x=x,
+                z=z_bottom,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            draw.line([start, end], fill=_GRID_LINE_COLOUR)
+
+        x_left = (min_ix - 0.5) * grid_size
+        x_right = (max_ix + 0.5) * grid_size
+        for boundary_iz in range(min_iz, max_iz + 2):
+            z = (boundary_iz - 0.5) * grid_size
+            start = self._project_overhead_world_point(
+                x=x_left,
+                z=z,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            end = self._project_overhead_world_point(
+                x=x_right,
+                z=z,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            draw.line([start, end], fill=_GRID_LINE_COLOUR)
+
+    def _world_marker_center(
+        self,
+        *,
+        ix: int,
+        iz: int,
+        min_ix: int,
+        min_iz: int,
+    ) -> tuple[float, float]:
+        cx = _STRUCTURED_MARGIN_PX + (ix - min_ix) * self.cell_px + self.cell_px / 2.0
+        cy = _STRUCTURED_MARGIN_PX + (iz - min_iz) * self.cell_px + self.cell_px / 2.0
+        return (cx, cy)
+
+    def _project_overhead_world_point(
+        self,
+        *,
+        x: float,
+        z: float,
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+    ) -> tuple[float, float]:
+        width, height = image_size
+        if width <= 0 or height <= 0:
+            return (0.0, 0.0)
+        position = camera_pose.get("position")
+        if not isinstance(position, dict):
+            return (0.0, 0.0)
+        cam_x = float(position.get("x", 0.0))
+        cam_z = float(position.get("z", 0.0))
+        orthographic_size = float(camera_pose.get("orthographicSize", 1.0))
+        half_height = max(orthographic_size, 1e-6)
+        half_width = half_height * (width / height)
+        px = ((x - cam_x) / half_width + 1.0) * 0.5 * width
+        py = (-(z - cam_z) / half_height + 1.0) * 0.5 * height
+        return (px, py)
 
     # ------------------------------------------------------------------
     # Composite frame
@@ -424,6 +713,54 @@ class GameVisualizer:
 
 def _lighten(colour: tuple[int, int, int], amount: int) -> tuple[int, int, int]:
     return tuple(min(255, c + amount) for c in colour)  # type: ignore[return-value]
+
+
+def _trim_uniform_border(image: Image.Image, tolerance: int = 10, padding: int = 2) -> Image.Image:
+    """Crop away a uniform border when the corner pixels agree closely."""
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    if width < 3 or height < 3:
+        return rgb
+
+    arr = np.asarray(rgb, dtype=np.int16)
+    corners = np.asarray(
+        [arr[0, 0], arr[0, -1], arr[-1, 0], arr[-1, -1]],
+        dtype=np.int16,
+    )
+    if np.abs(corners - corners[0]).max() > tolerance:
+        return rgb
+
+    background = corners.mean(axis=0)
+    mask = np.abs(arr - background).max(axis=2) > tolerance
+    if not mask.any():
+        return rgb
+
+    ys, xs = np.where(mask)
+    top = max(0, int(ys.min()) - padding)
+    bottom = min(height, int(ys.max()) + padding + 1)
+    left = max(0, int(xs.min()) - padding)
+    right = min(width, int(xs.max()) + padding + 1)
+    if top == 0 and left == 0 and bottom == height and right == width:
+        return rgb
+    return rgb.crop((left, top, right, bottom))
+
+
+def _supports_projected_overhead(
+    camera_pose: dict[str, object],
+    tolerance_deg: float = 1.0,
+) -> bool:
+    """Return ``True`` when the pose matches AI2-THOR's axis-aligned top-down camera."""
+    rotation = camera_pose.get("rotation")
+    if not isinstance(rotation, dict):
+        return False
+    rot_x = float(rotation.get("x", 0.0))
+    rot_y = float(rotation.get("y", 0.0))
+    rot_z = float(rotation.get("z", 0.0))
+    return (
+        abs(rot_x - 90.0) <= tolerance_deg
+        and abs(rot_y) <= tolerance_deg
+        and abs(rot_z) <= tolerance_deg
+    )
 
 
 def _make_label_bar(width: int, text: str, bg_colour: tuple[int, int, int]) -> Image.Image:
