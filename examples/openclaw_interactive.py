@@ -142,6 +142,9 @@ def _print_banner(*, url: str, agent_name: str, token: str, output_dir: Path) ->
     print("      watch the robot move there as you chat.")
     print("    - Paste the bearer token on the Overview tab to connect.")
     print("    - Switch to the Chat tab, pick the agent above, and talk.")
+    print("    - Ask the agent to 'show me what you see' to trigger the")
+    print("      roboclaws__snapshot tool — it writes PNGs to the workspace")
+    print("      and replies with MEDIA: lines that render inline.")
     print("    - Typing in this terminal queues a human_message that the")
     print("      agent's next observe/move call will see (bounded deque, 10).")
     print(f"    - Trace: {output_dir / 'trace.jsonl'}")
@@ -203,6 +206,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         engine = MultiAgentEngine(scene=args.scene, agent_count=args.agent_id + 1)
 
+        # Snapshots dir: host-side path the `snapshot` MCP tool writes PNGs to.
+        # Bootstrap bind-mounts the same absolute path at
+        # `/home/node/.openclaw/workspaces/<agent>/snapshots` inside the
+        # container, so the agent can reference `./snapshots/<file>.png` in a
+        # MEDIA: directive. Exporting the env here lets _bootstrap_gateway
+        # pass it through to the openclaw-bootstrap.sh subprocess.
+        snapshots_dir = Path(
+            os.environ.get("ROBOCLAWS_SNAPSHOTS_DIR", str(output_dir / "snapshots"))
+        ).resolve()
+        snapshots_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["ROBOCLAWS_SNAPSHOTS_DIR"] = str(snapshots_dir)
+
         # Linux Docker-bridge reality: 0.0.0.0 is what Phase 2.6 landed on for
         # host.docker.internal routing. See openclaw_nav_autonomous.py for the
         # full rationale (threat model + retro).
@@ -213,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             host="0.0.0.0",
             port=18788,
             view_variant=args.views,
+            snapshots_dir=snapshots_dir,
         )
         mcp_server.run_in_thread()
         mcp_server.write_runtime_event(

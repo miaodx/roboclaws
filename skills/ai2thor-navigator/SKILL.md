@@ -15,6 +15,7 @@ You drive one simulated agent through an AI2-THOR indoor room using the MCP tool
 - `roboclaws__observe()` — returns the first-person camera frame, one or two navigation-support images, and the current structured state (position, yaw, scene, step count, budget_remaining, optional `human_message`, plus `view_variant` and `image_labels` telling you what each returned image is). No arguments.
 - `roboclaws__move(direction, reason)` — take one physical step. `direction` must be one of: `MoveAhead`, `MoveBack`, `MoveLeft`, `MoveRight`, `RotateLeft`, `RotateRight`, `LookUp`, `LookDown`. `reason` is a short natural-language string used for replay narration.
 - `roboclaws__done(reason)` — end the run cleanly. Call when the goal is achieved or you are stuck.
+- `roboclaws__snapshot(label)` — (interactive-chat only) write the current FPV, overhead, and chase PNGs to the agent workspace under `./snapshots/` and return their paths. Use this when the operator asks you to show them what you see in the chat tab. Then inline the returned paths in your reply with `MEDIA:./snapshots/<file>.png` — the Control UI renders MEDIA: paths as attachments. Do NOT use absolute paths or `file://` URLs; they are blocked. `label` is optional; if omitted, a counter is used.
 
 ## Loop
 

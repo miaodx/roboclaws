@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import re
 import socket
 import threading
 import time
@@ -168,6 +169,7 @@ class RoboclawsMCPServer:
         host: str = "127.0.0.1",
         port: int = 18788,
         view_variant: str = "baseline",
+        snapshots_dir: Path | None = None,
     ) -> None:
         self.engine = engine
         self.agent_id = agent_id
@@ -177,6 +179,17 @@ class RoboclawsMCPServer:
         self.host = host
         self.port = int(port)
         self.view_variant = validate_view_variant(view_variant)
+        # Directory the host writes snapshot PNGs to. Bootstrap bind-mounts
+        # this same directory at `/home/node/.openclaw/workspaces/<agent>/snapshots`
+        # inside the Gateway container so the agent can reference
+        # `./snapshots/<label>.png` in a MEDIA: directive — the workspace dir
+        # is in the Gateway's agent-scoped allowed-roots list (see
+        # `/app/dist/local-roots-*.js:getAgentScopedMediaLocalRoots`). If None,
+        # the `snapshot` tool returns an error result; the rest of the server
+        # keeps working.
+        self.snapshots_dir: Path | None = Path(snapshots_dir) if snapshots_dir is not None else None
+        if self.snapshots_dir is not None:
+            self.snapshots_dir.mkdir(parents=True, exist_ok=True)
 
         # State / metrics
         self.done_event = threading.Event()
@@ -184,6 +197,7 @@ class RoboclawsMCPServer:
         self._observed_once = False
         self._moves_since_observe = 0
         self._total_moves = 0
+        self._snapshot_counter = 0
         self._started = time.monotonic()
 
         # Locks
@@ -245,6 +259,22 @@ class RoboclawsMCPServer:
             Sets the server's done_event so the host loop can shut down.
             """
             return server._do_done(reason)
+
+        @self._mcp.tool()
+        def snapshot(label: str = "") -> dict:
+            """Write the current FPV + overhead frames to the agent's workspace.
+
+            Returns a dict with `fpv_path` / `overhead_path` — relative paths
+            under the agent's workspace, suitable for inlining in chat with
+            a `MEDIA:./snapshots/<label>.fpv.png` directive (the Gateway
+            Control UI renders MEDIA: paths as attachments when they resolve
+            to an allowed root, and the workspace dir is one). Use this when
+            the operator asks you to show what you see in the chat tab.
+
+            `label` defaults to a monotonic counter. Sanitized to
+            [A-Za-z0-9._-]; everything else becomes `_`.
+            """
+            return server._do_snapshot(label)
 
     # ------------------------------------------------------------------
     # Tool implementations (tests call these directly)
@@ -388,6 +418,73 @@ class RoboclawsMCPServer:
             "elapsed_s": round(time.monotonic() - self._started, 3),
         }
         self._write_trace(tool="done", event="response", response=response)
+        return response
+
+    def _sanitize_label(self, label: str) -> str:
+        cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", (label or "").strip())
+        # Prevent ``..`` escaping and empty/dotfile corner cases.
+        cleaned = cleaned.strip("._") or ""
+        return cleaned
+
+    def _do_snapshot(self, label: str) -> dict[str, Any]:
+        self._write_trace(tool="snapshot", event="request", request={"label": label})
+        if self.snapshots_dir is None:
+            err = (
+                "snapshots_dir is not configured on this MCP server — "
+                "pass snapshots_dir= when constructing, or set "
+                "ROBOCLAWS_SNAPSHOTS_DIR before `make chat`."
+            )
+            response = {"error": err}
+            self._write_trace(tool="snapshot", event="response", response=response)
+            return response
+
+        self._snapshot_counter += 1
+        clean = self._sanitize_label(label)
+        if not clean:
+            clean = f"snap-{self._snapshot_counter:03d}"
+        # Disambiguate duplicate labels with the running counter so a
+        # forgetful agent can't overwrite its own earlier attachments.
+        clean = f"{clean}-{self._snapshot_counter:03d}"
+
+        with self._controller_lock:
+            agent_states = list(self.engine.get_all_agent_states())
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=self.engine,
+                context=self._view_context,
+                agent_states=agent_states,
+                current_agent=self.agent_id,
+                variant="map-v2+chase",
+            )
+
+        # `prompt_bundle.prompt_images` order + labels depend on the variant.
+        # For snapshots we pin `map-v2+chase` so the caller always gets three
+        # images in a stable order: fpv (0), map (1), chase (2). The MEDIA
+        # lines we return match that ordering.
+        labeled: dict[str, bytes] = {}
+        for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
+            labeled[name] = _encode_frame_png(frame, max_dim=640)
+
+        written: dict[str, str] = {}
+        for name, png_bytes in labeled.items():
+            dest = self.snapshots_dir / f"{clean}.{name}.png"
+            dest.write_bytes(png_bytes)
+            # Relative path as the agent would write it: `./snapshots/<file>`.
+            written[name] = f"./snapshots/{dest.name}"
+
+        media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
+        hint = (
+            "Snapshot written. To show the operator what you see, reply in "
+            "chat with the MEDIA lines below (the Control UI will render "
+            "them inline); keep any caption in the text body.\n\n" + media_lines
+        )
+
+        response: dict[str, Any] = {
+            "fpv_path": written.get("fpv"),
+            "map_path": written.get("map"),
+            "chase_path": written.get("chase"),
+            "hint": hint,
+        }
+        self._write_trace(tool="snapshot", event="response", response=response)
         return response
 
     # ------------------------------------------------------------------
@@ -595,11 +692,18 @@ def make_roboclaws_mcp(
     host: str = "127.0.0.1",
     port: int = 18788,
     view_variant: str = "baseline",
+    snapshots_dir: Path | None = None,
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 
     Defaults to `host=127.0.0.1` — see module docstring for threat-model
     rationale. Pass `port=0` in tests to avoid binding a real port.
+
+    `snapshots_dir`, if provided, enables the `snapshot` tool. The host side
+    writes PNGs there; bootstrap bind-mounts the same directory at
+    `/home/node/.openclaw/workspaces/<agent>/snapshots/` inside the Gateway
+    container so the agent can reference them as `./snapshots/...` in a
+    `MEDIA:` directive.
     """
     return RoboclawsMCPServer(
         engine,
@@ -608,4 +712,5 @@ def make_roboclaws_mcp(
         host=host,
         port=port,
         view_variant=view_variant,
+        snapshots_dir=snapshots_dir,
     )
