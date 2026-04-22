@@ -130,6 +130,7 @@ class NavigationViewContext:
     world_bbox: tuple[int, int, int, int]
     origin_world: WorldCell
     overhead_background: np.ndarray | None = None
+    overhead_camera_pose: dict[str, Any] | None = None
     visited_world: set[WorldCell] = field(default_factory=set)
 
 
@@ -169,6 +170,10 @@ def make_navigation_view_context(
         overhead_background: np.ndarray | None = engine.get_overhead_frame()
     except Exception:  # noqa: BLE001 - mock engines may omit the camera
         overhead_background = None
+    try:
+        overhead_camera_pose: dict[str, Any] | None = engine.get_overhead_camera_properties()
+    except Exception:  # noqa: BLE001 - mock engines may omit the camera
+        overhead_camera_pose = None
 
     effective_agent_count = agent_count if agent_count is not None else len(initial_states)
     visualizer = GameVisualizer(
@@ -184,6 +189,7 @@ def make_navigation_view_context(
         world_bbox=world_bbox,
         origin_world=origin_world,
         overhead_background=overhead_background,
+        overhead_camera_pose=overhead_camera_pose,
     )
 
 
@@ -209,58 +215,45 @@ def render_navigation_prompt_bundle(
     """Render the shared navigation prompt-image family for one control turn."""
     validated = validate_view_variant(variant)
     mark_visited_world(context.visited_world, agent_states)
-    origin_ix, origin_iz = context.origin_world
     agent_positions_world = [pos_to_world_idx(state.position) for state in agent_states]
 
-    grid_rows = context.visualizer.grid_rows
-    grid_cols = context.visualizer.grid_cols
-    center_row = grid_rows // 2
-    center_col = grid_cols // 2
-
-    agent_positions_viz: list[tuple[int, int]] = []
-    for world_x, world_z in agent_positions_world:
-        row, col = world_to_viz(
-            world_x,
-            world_z,
-            origin_ix,
-            origin_iz,
-            grid_rows=grid_rows,
-            grid_cols=grid_cols,
-        )
-        if in_bounds(row, col, grid_rows=grid_rows, grid_cols=grid_cols):
-            agent_positions_viz.append((row, col))
-        else:
-            agent_positions_viz.append((center_row, center_col))
-
-    covered_viz: list[tuple[int, int]] = []
-    for world_x, world_z in context.visited_world:
-        row, col = world_to_viz(
-            world_x,
-            world_z,
-            origin_ix,
-            origin_iz,
-            grid_rows=grid_rows,
-            grid_cols=grid_cols,
-        )
-        if in_bounds(row, col, grid_rows=grid_rows, grid_cols=grid_cols):
-            covered_viz.append((row, col))
-
-    baseline_map = context.visualizer.render_overhead_map(
-        agent_positions=agent_positions_viz,
-        covered_cells=covered_viz,
+    baseline_map = context.visualizer.render_world_overhead_map(
+        agent_positions=agent_positions_world,
+        covered_cells=list(context.visited_world),
+        world_bbox=context.world_bbox,
         base_frame=context.overhead_background,
+        camera_pose=context.overhead_camera_pose,
+        grid_size=_GRID_SIZE,
     )
     baseline_overhead_frame = np.asarray(baseline_map.convert("RGB"), dtype=np.uint8)
 
     structured_overhead_frame: np.ndarray | None = None
     if validated != "baseline":
-        structured_map = context.visualizer.render_structured_map(
-            agent_positions=agent_positions_world,
-            agent_rotations=[state.rotation for state in agent_states],
-            reachable_cells=context.reachable_cells,
-            covered_cells=list(context.visited_world),
-            world_bbox=context.world_bbox,
-        )
+        if (
+            context.overhead_camera_pose is not None
+            and context.overhead_background is not None
+        ):
+            structured_map = context.visualizer.render_projected_structured_map(
+                agent_positions=agent_positions_world,
+                agent_rotations=[state.rotation for state in agent_states],
+                reachable_cells=context.reachable_cells,
+                covered_cells=list(context.visited_world),
+                world_bbox=context.world_bbox,
+                camera_pose=context.overhead_camera_pose,
+                image_size=(
+                    int(context.overhead_background.shape[1]),
+                    int(context.overhead_background.shape[0]),
+                ),
+                grid_size=_GRID_SIZE,
+            )
+        else:
+            structured_map = context.visualizer.render_structured_map(
+                agent_positions=agent_positions_world,
+                agent_rotations=[state.rotation for state in agent_states],
+                reachable_cells=context.reachable_cells,
+                covered_cells=list(context.visited_world),
+                world_bbox=context.world_bbox,
+            )
         structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
 
     chase_cam_frame: np.ndarray | None = None

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: blocked
-stopped_at: Phase 02.4 still blocked on 02.4-04 full sweep + decision record via issue #70; a new queued follow-up phase (02.7, autonomous intermediate-message capture) was drafted on 2026-04-22 without changing the active phase
-last_updated: "2026-04-22T07:11:32Z"
+stopped_at: Phase 02.4 still blocked on 02.4-04 full sweep + decision record via issue #70; queued follow-up Phase 02.7 (autonomous intermediate-message capture) was fully planned on 2026-04-22 without changing the active phase
+last_updated: "2026-04-22T07:32:27Z"
 last_activity: 2026-04-22
 progress:
   total_phases: 4
@@ -76,7 +76,7 @@ Recent decisions affecting current work:
 - **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
 - **Phase 02.4 execution checkpoint (2026-04-21):** Plans `02.4-01` through `02.4-03` are complete and the cloud-safe slice of `02.4-04` (`scripts/analyze_view_experiment.py` plus synthetic-data coverage) is implemented. The actual Kimi/NVIDIA sweep and `docs/view-experiment-2026-04.md` remain local-dev only and are tracked in issue #70.
 - **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
-- **Roadmap extension (2026-04-22):** Phase 02.7 was added as the next queued autonomous follow-up: compare real Gateway streaming vs terminal-body capture for intermediate assistant messages, prefer streaming if it is actually supported, and persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
+- **Phase 02.7 planning completion (2026-04-22):** The queued autonomous follow-up now has a full GSD planning bundle under `.planning/phases/02.7-openclaw-intermediate-message-capture/`: four executable plan files plus `02.7-RESEARCH.md` and `02.7-VALIDATION.md`. Scope remains unchanged: compare real Gateway streaming vs terminal-body capture, persist transcript artifacts additively, surface them in `report.html`, and validate the shipped path locally. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
 - **Phase 02.6 plan 01 (2026-04-21)**: MCP server default bind is `127.0.0.1` (localhost-only) per threat model T-02.6-01; Gateway container reaches via `host.docker.internal` → host-gateway → loopback. Bind is NOT env-configurable — only via explicit argument.
 - **Phase 02.6 plan 01 (2026-04-21)**: Trace schema additive-only rule: `tests/fixtures/trace_schema_reference.json` freezes sim_server.py key-sets at phase entry; MCP server emits a SUPERSET. `snapshot_metrics` is the one exception — EQUALITY checked because `run_result_json["sim_server_metrics"]` consumers depend on exact names.
 - **Phase 02.6 plan 01 (2026-04-21)**: `mcp[cli]>=1.27` in `dev` + new `openclaw` extra; NOT in top-level `[project].dependencies` (core library stays installable without the Gateway path, mirroring ai2thor).
@@ -132,7 +132,7 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-04-22T07:11:32Z
-Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, and the queued 02.7 follow-up phase now exists under `.planning/phases/02.7-openclaw-intermediate-message-capture/`
+Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, and queued follow-up Phase 02.7 is now fully planned under `.planning/phases/02.7-openclaw-intermediate-message-capture/`
 Resume file: .planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md
 
 ## Dual-Stack Workflow

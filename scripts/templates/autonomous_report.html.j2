@@ -104,16 +104,18 @@
         display: none;
       }
       .slider-row {
-        display: flex;
+        display: grid;
+        grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem;
         align-items: center;
         gap: 0.5rem;
-        flex-wrap: wrap;
       }
       .slider-row input[type=range] {
-        flex: 1;
-        min-width: 200px;
+        width: 100%;
+        min-width: 0;
       }
       .slider-row button {
+        width: 2.5rem;
+        min-width: 2.5rem;
         padding: 0.2rem 0.7rem;
         cursor: pointer;
         border: 1px solid #bbb;
@@ -122,6 +124,12 @@
       }
       .slider-row button:hover {
         background: #e8edf8;
+      }
+      .slider-meta {
+        margin-top: 0.45rem;
+        color: #39445f;
+        font-size: 0.9rem;
+        font-variant-numeric: tabular-nums;
       }
       .decision-panel {
         margin-top: 1rem;
@@ -346,8 +354,8 @@
             oninput="navReplaySet(parseInt(this.value, 10))"
           >
           <button onclick="navReplayChange(1)">&#9654;</button>
-          <span id="frame-label">Frame —</span>
         </div>
+        <div class="slider-meta"><span id="frame-label">Frame —</span></div>
 
         <div id="frame-lightbox" class="lightbox" onclick="navReplayCloseZoom(event)">
           <div class="lightbox-shell">
