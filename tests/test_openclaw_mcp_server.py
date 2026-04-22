@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -36,37 +37,58 @@ class FakeEngine:
     """Minimal stand-in for MultiAgentEngine used by the MCP server tests."""
 
     def __init__(self) -> None:
+        self.agent_count = 1
         self._fpv = _frame(10)
         self._overhead = _frame(200)
+        self._chase = _frame(90)
         self.calls_step: list[tuple[int, str]] = []
+        self.chase_updates = 0
+        self._position = {"x": 1.0, "y": 0.0, "z": -2.0}
+        self._rotation = {"x": 0.0, "y": 90.0, "z": 0.0}
+        self._last_action_success = True
+        self._last_action_error = ""
 
-    def get_agent_state(self, agent_id: int) -> FakeAgentState:
+    def _state(self, agent_id: int) -> FakeAgentState:
         return FakeAgentState(
             agent_id=agent_id,
             frame=self._fpv,
-            position={"x": 1.0, "y": 0.0, "z": -2.0},
-            rotation={"x": 0.0, "y": 90.0, "z": 0.0},
+            position=dict(self._position),
+            rotation=dict(self._rotation),
             camera_horizon=30.0,
-            last_action_success=True,
-            last_action_error="",
+            last_action_success=self._last_action_success,
+            last_action_error=self._last_action_error,
         )
+
+    def get_agent_state(self, agent_id: int) -> FakeAgentState:
+        return self._state(agent_id)
+
+    def get_all_agent_states(self) -> list[FakeAgentState]:
+        return [self._state(0)]
+
+    def get_reachable_positions(self) -> set[tuple[int, int]]:
+        return {(4, -8), (5, -8), (6, -8), (6, -7)}
 
     def get_overhead_frame(self) -> np.ndarray:
         return self._overhead
+
+    def add_chase_cam(self, agent_id: int) -> int:
+        return agent_id + 1
+
+    def update_chase_cam(self, agent_id: int) -> None:
+        self.chase_updates += 1
+
+    def get_chase_cam_frame(self, agent_id: int) -> np.ndarray:
+        return self._chase
 
     def step(self, agent_id: int, direction: str) -> FakeAgentState:
         self.calls_step.append((agent_id, direction))
         # MoveBack is used in the suite to exercise the "blocked" branch.
         success = direction != "MoveBack"
-        return FakeAgentState(
-            agent_id=agent_id,
-            frame=self._fpv,
-            position={"x": 1.25, "y": 0.0, "z": -2.0},
-            rotation={"x": 0.0, "y": 90.0, "z": 0.0},
-            camera_horizon=30.0,
-            last_action_success=success,
-            last_action_error="" if success else "blocked",
-        )
+        self._last_action_success = success
+        self._last_action_error = "" if success else "blocked"
+        if success and direction == "MoveAhead":
+            self._position["x"] = 1.25
+        return self._state(agent_id)
 
 
 @pytest.fixture
@@ -77,6 +99,21 @@ def engine() -> FakeEngine:
 @pytest.fixture
 def server(engine: FakeEngine, tmp_path: Path) -> RoboclawsMCPServer:
     srv = make_roboclaws_mcp(engine, agent_id=0, run_dir=tmp_path, port=0)
+    try:
+        yield srv
+    finally:
+        srv.close()
+
+
+@pytest.fixture
+def server_map_v2_chase(engine: FakeEngine, tmp_path: Path) -> RoboclawsMCPServer:
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path,
+        port=0,
+        view_variant="map-v2+chase",
+    )
     try:
         yield srv
     finally:
@@ -107,6 +144,8 @@ def test_observe_returns_state_text_plus_two_images(
     for key in ("agent_id", "position", "rotation", "camera_horizon", "last_action_success"):
         assert key in state
     assert "human_message" in state
+    assert state["view_variant"] == "baseline"
+    assert state["image_labels"] == ["fpv", "overhead"]
     assert state["agent_id"] == 0
 
     # Two image blocks — SDK Image objects expose `.data` as bytes
@@ -118,12 +157,38 @@ def test_observe_returns_state_text_plus_two_images(
     assert server.snapshot_metrics()["observed_once"] is True
 
 
+def test_observe_map_v2_chase_returns_three_images(
+    server_map_v2_chase: RoboclawsMCPServer,
+    engine: FakeEngine,
+) -> None:
+    result = server_map_v2_chase._do_observe()
+    assert len(result) == 4
+    state = json.loads(result[0])
+    assert state["view_variant"] == "map-v2+chase"
+    assert state["image_labels"] == ["fpv", "map_v2", "chase"]
+    for block in result[1:]:
+        assert hasattr(block, "data") and isinstance(block.data, bytes) and len(block.data) > 0
+    assert engine.chase_updates == 1
+
+    frame_capture = [
+        line
+        for line in _read_trace(server_map_v2_chase.run_dir)
+        if line.get("event") == "frame_capture"
+    ][0]
+    assert frame_capture["view_variant"] == "map-v2+chase"
+    assert frame_capture["image_labels"] == ["fpv", "map_v2", "chase"]
+    assert "baseline_overhead" in frame_capture
+    assert "chase" in frame_capture
+
+
 def test_move_valid_direction_steps_engine(server: RoboclawsMCPServer, engine: FakeEngine) -> None:
     response = server._do_move("MoveAhead", "clear hallway")
     assert engine.calls_step == [(0, "MoveAhead")]
     assert response["result"] == "ok"
     assert response["state"]["last_action_success"] is True
     assert isinstance(response["step"], int)
+    assert response["view_variant"] == "baseline"
+    assert response["image_labels"] == ["fpv", "overhead"]
 
 
 def test_move_invalid_direction_does_not_step_engine(
@@ -221,8 +286,15 @@ def test_trace_jsonl_contains_tool_events(server: RoboclawsMCPServer) -> None:
     server._do_observe()
     server._do_move("MoveAhead")
     server._do_done("done-reason")
-    tools = {line["tool"] for line in _read_trace(server.run_dir)}
-    assert {"observe", "move", "done"}.issubset(tools)
+    events = {(line["tool"], line["event"]) for line in _read_trace(server.run_dir)}
+    assert {
+        ("observe", "request"),
+        ("observe", "response"),
+        ("move", "request"),
+        ("move", "response"),
+        ("done", "request"),
+        ("done", "response"),
+    }.issubset(events)
 
 
 # ---------------------------------------------------------------------------
@@ -270,3 +342,17 @@ def test_write_trace_after_close_is_safe(tmp_path: Path) -> None:
     srv.enqueue_human_message("post-close message")
     # Calling close() again is idempotent.
     srv.close()
+
+
+def test_run_in_thread_raises_when_server_dies_before_listening(tmp_path: Path) -> None:
+    engine = FakeEngine()
+    srv = make_roboclaws_mcp(engine, agent_id=0, run_dir=tmp_path, port=18788)
+    try:
+        with patch.object(srv._mcp, "run", return_value=None), patch(
+            "roboclaws.openclaw.mcp_server._port_accepting",
+            return_value=False,
+        ):
+            with pytest.raises(RuntimeError, match="failed to start"):
+                srv.run_in_thread()
+    finally:
+        srv.close()

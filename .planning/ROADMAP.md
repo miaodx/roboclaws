@@ -177,7 +177,7 @@ Plans:
 - [x] 02.4-03: `NvidiaProvider` + `examples/view_experiment.py` harness with wallet gates
 - [ ] 02.4-04: Analysis script + local-dev sweep + `docs/view-experiment-2026-04.md` decision record
 
-**Status update (2026-04-21):** Plans `02.4-01` through `02.4-03` are implemented and cloud-safe-tested. The cloud-safe slice of `02.4-04` also landed (`scripts/analyze_view_experiment.py` plus synthetic-data coverage), but the plan remains open until a local workstation runs the Kimi/NVIDIA sweeps, produces `output/view-experiment/results.jsonl`, and writes the decision record. That handoff is tracked in issue #70.
+**Status update (2026-04-22):** Plans `02.4-01` through `02.4-03` are implemented, and the cloud-safe slice of `02.4-04` also landed (`scripts/analyze_view_experiment.py` plus synthetic-data coverage). A local workstation has now completed the requested first-review seam: `examples/openclaw_demo.py --views map-v2+chase` ran for 50 Kimi steps and produced review artifacts under `output/openclaw-demo-kimi-mapv2chase-50/`. The phase is still open until the full Kimi/NVIDIA sweeps produce `output/view-experiment/results.jsonl` and the decision record lands in `docs/view-experiment-2026-04.md` (issue #70).
 **UI hint**: yes
 
 #### ⛔ v1.2 Autonomous OpenClaw Loop — Phase 2.5 SUPERSEDED by Phase 2.6
@@ -216,6 +216,10 @@ Plans:
   5. `scripts/openclaw-bootstrap.sh` seeds `mcp.servers.<name>` and `agents.list[<n>].tools.profile = "minimal"` **before first container start**, so no post-start SIGUSR1 restart is required to enable the tool surface.
   6. Back-to-back runs against a long-lived Gateway show a fresh agent state on the second run (per-run workspace reset works — regression guard for `[fixed-session-prefix-leaks-memory]`).
 **Plans**: 7 plans (drafted 2026-04-21 after spike; renamed to `-PLAN.md` suffix and executed same day).
+
+**Follow-up (2026-04-22):** The Phase 2.4 `baseline` / `map-v2` / `map-v2+chase` view family now also runs through the shipped autonomous MCP path. Local Kimi + AI2-THOR smoke artifacts:
+- `output/openclaw-autonomous-mapv2chase-smoke-rerun/` — real 3-move `done` run with shared view bundle
+- `output/openclaw-autonomous-mapv2chase-summaryfix-smoke/` — post-trace-fix smoke confirming `summary.json` reports `observe/move/done` counts correctly
 
 Plans:
 - [x] 02.6-01: In-process FastMCP server (`roboclaws/openclaw/mcp_server.py`) with observe/move/done over streamable-http

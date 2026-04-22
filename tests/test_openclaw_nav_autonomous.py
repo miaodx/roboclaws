@@ -71,7 +71,13 @@ def test_parse_args_defaults() -> None:
     assert args.max_moves == 200
     assert args.wall_budget == 600.0
     assert args.output_dir is None
+    assert args.views == "baseline"
     assert args.skip_bootstrap is False
+
+
+def test_parse_args_accepts_view_variants() -> None:
+    args = _parse_args(["--views", "map-v2+chase"])
+    assert args.views == "map-v2+chase"
 
 
 def test_kickoff_prompt_is_mcp_era_and_short() -> None:
@@ -112,6 +118,8 @@ def test_kickoff_prompt_is_mcp_era_and_short() -> None:
     assert "50" in prompt, "max_moves budget must be interpolated into prompt"
     # Preserve the human_message ack behavior (D-10, plan must-have).
     assert "human_message" in prompt
+    assert "view_variant" in prompt
+    assert "image_labels" in prompt
     # Delegate to the skill, don't duplicate it.
     assert "SKILL.md" in prompt or "skill" in prompt.lower()
 
@@ -166,6 +174,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
+            views="map-v2+chase",
             skip_bootstrap=False,
         )
 
@@ -174,6 +183,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert (output_dir / "run_result.json").exists()
     assert (output_dir / "start_run_metrics.json").exists()
     run_result_json = json.loads((output_dir / "run_result.json").read_text(encoding="utf-8"))
+    assert run_result_json["view_variant"] == "map-v2+chase"
     assert run_result_json["bridge_metrics"]["prompt_chars"] == 123
     # Key name 'sim_server_metrics' is frozen for report.html compat even
     # though the backing server is now MCP.
@@ -192,6 +202,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "example must override host to 0.0.0.0 on Linux (spike 02.6-06); "
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
+    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     fake_server.run_in_thread.assert_called_once()
     assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
     assert [
@@ -227,7 +238,7 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ),
+        ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -242,11 +253,14 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
+            views="map-v2",
             skip_bootstrap=True,
         )
 
     assert result["terminated_by"] == "done"
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-xyz")
+    _, mcp_kwargs = mcp_factory.call_args
+    assert mcp_kwargs.get("view_variant") == "map-v2"
     assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] not in subprocess_calls
     engine_cls.return_value.close.assert_called_once()

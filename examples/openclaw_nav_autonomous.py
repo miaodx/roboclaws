@@ -17,6 +17,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.views import VIEW_VARIANTS
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 
@@ -34,6 +35,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-moves", type=int, default=200)
     parser.add_argument("--wall-budget", type=float, default=600.0)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--views",
+        choices=VIEW_VARIANTS,
+        default="baseline",
+        help="Prompt image bundle variant returned by roboclaws__observe.",
+    )
     parser.add_argument(
         "--skip-bootstrap",
         action="store_true",
@@ -61,6 +68,8 @@ def _kickoff_prompt(max_moves: int) -> str:
         "roboclaws__observe before any other action.\n"
         f"Budget: up to {max_moves} physical moves plus the wall-clock set by the "
         "caller; pace yourself against both.\n"
+        "Use observe.state.view_variant and observe.state.image_labels to interpret "
+        "the returned image bundle before deciding.\n"
         "Loop observe -> think -> move until you are stuck, the budget is nearly "
         "exhausted, or you have a concrete reason to stop; then call "
         "roboclaws__done with a short reason.\n"
@@ -217,6 +226,7 @@ def run_autonomous_navigation(
     max_moves: int,
     wall_budget: float,
     output_dir: Path,
+    views: str = "baseline",
     skip_bootstrap: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -250,6 +260,7 @@ def run_autonomous_navigation(
             # accepted: single-operator local-dev on a trusted workstation.
             host="0.0.0.0",
             port=18788,
+            view_variant=views,
         )
         mcp_server.run_in_thread()
         # Runtime-event key 'sim_server_metrics' is frozen for schema compat with
@@ -260,6 +271,7 @@ def run_autonomous_navigation(
             scene=scene,
             max_moves=max_moves,
             wall_budget_s=wall_budget,
+            view_variant=views,
             skip_bootstrap=skip_bootstrap,
         )
         log.info(
@@ -360,6 +372,7 @@ def run_autonomous_navigation(
                 "terminated_by": run_result.terminated_by,
                 "wallclock_s": run_result.wallclock_s,
                 "final_message": run_result.final_message,
+                "view_variant": views,
                 "bridge_metrics": bridge_metrics,
                 # Key 'sim_server_metrics' kept verbatim for report.html +
                 # render_autonomous_replay.py schema compat; backing data
@@ -419,6 +432,7 @@ def main() -> None:
         max_moves=args.max_moves,
         wall_budget=args.wall_budget,
         output_dir=output_dir,
+        views=args.views,
         skip_bootstrap=args.skip_bootstrap,
     )
     print(f"terminated_by: {result['terminated_by']}")

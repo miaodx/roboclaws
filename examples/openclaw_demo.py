@@ -45,14 +45,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
-from roboclaws.core.views import VIEW_VARIANTS, build_prompt_images, compute_world_bbox
-from roboclaws.core.visualizer import GameVisualizer
+from roboclaws.core.views import (
+    VIEW_VARIANTS,
+    make_navigation_view_context,
+    render_navigation_prompt_bundle,
+)
+from roboclaws.core.views import (
+    in_bounds as shared_in_bounds,
+)
+from roboclaws.core.views import (
+    pos_to_world_idx as shared_pos_to_world_idx,
+)
+from roboclaws.core.views import (
+    world_to_viz as shared_world_to_viz,
+)
 from roboclaws.core.vlm import format_provider_status, provider_status_snapshot
 from roboclaws.openclaw.bridge import OpenClawProvider, OpenClawUnavailable
 
@@ -74,16 +84,23 @@ _CENTER_COL: int = _GRID_COLS // 2
 
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
-    return (round(pos["x"] / _GRID_SIZE), round(pos["z"] / _GRID_SIZE))
+    return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
 def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int, int]:
     """Map a world grid index to a visualiser (row, col) centred at *origin*."""
-    return (_CENTER_ROW + (iz - origin_iz), _CENTER_COL + (ix - origin_ix))
+    return shared_world_to_viz(
+        ix,
+        iz,
+        origin_ix,
+        origin_iz,
+        grid_rows=_GRID_ROWS,
+        grid_cols=_GRID_COLS,
+    )
 
 
 def _in_bounds(row: int, col: int) -> bool:
-    return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
+    return shared_in_bounds(row, col, grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS)
 
 
 # ---------------------------------------------------------------------------
@@ -233,9 +250,12 @@ def run_openclaw_demo(
         server_timeout=thor_server_timeout,
         server_start_timeout=thor_server_start_timeout,
     )
-    reachable_cells = engine.get_reachable_positions()
-    viz = GameVisualizer(
-        grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
+    view_context = make_navigation_view_context(
+        engine,
+        agent_count=agent_count,
+        grid_rows=_GRID_ROWS,
+        grid_cols=_GRID_COLS,
+        cell_px=15,
     )
     recorder = ReplayRecorder(agent_count=agent_count, game="openclaw-demo")
 
@@ -255,63 +275,23 @@ def run_openclaw_demo(
     stale_steps = 0
 
     try:
-        initial_states = engine.get_all_agent_states()
-        origin_ix, origin_iz = _pos_to_world_idx(initial_states[0].position)
-        world_bbox = compute_world_bbox(
-            reachable_cells,
-            (_pos_to_world_idx(state.position) for state in initial_states),
-        )
-
-        try:
-            overhead_bg: np.ndarray | None = engine.get_overhead_frame()
-        except Exception:  # noqa: BLE001 - mock engines may omit this
-            overhead_bg = None
-
-        visited_world: set[tuple[int, int]] = set()
-
         for step in range(steps):
             current_agent = step % agent_count
             agent_states = engine.get_all_agent_states()
             agent_frames = [s.frame for s in agent_states]
 
-            cells_before = len(visited_world)
-            for s in agent_states:
-                visited_world.add(_pos_to_world_idx(s.position))
-            if len(visited_world) > cells_before:
+            cells_before = len(view_context.visited_world)
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=engine,
+                context=view_context,
+                agent_states=agent_states,
+                current_agent=current_agent,
+                variant=views,
+            )
+            if len(view_context.visited_world) > cells_before:
                 stale_steps = 0
             else:
                 stale_steps += 1
-
-            agent_positions_world = [_pos_to_world_idx(s.position) for s in agent_states]
-
-            # Agent positions in visualiser coordinates
-            agent_positions_viz: list[tuple[int, int]] = []
-            for wx, wz in agent_positions_world:
-                rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
-                agent_positions_viz.append(rc if _in_bounds(*rc) else (_CENTER_ROW, _CENTER_COL))
-
-            covered_viz = [
-                rc
-                for wx, wz in visited_world
-                if _in_bounds(*(rc := _world_to_viz(wx, wz, origin_ix, origin_iz)))
-            ]
-
-            map_img = viz.render_overhead_map(
-                agent_positions=agent_positions_viz,
-                covered_cells=covered_viz,
-                base_frame=overhead_bg,
-            )
-            map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
-            structured_map_frame: np.ndarray | None = None
-            if views != "baseline":
-                structured_img = viz.render_structured_map(
-                    agent_positions=agent_positions_world,
-                    agent_rotations=[state.rotation for state in agent_states],
-                    reachable_cells=reachable_cells,
-                    covered_cells=list(visited_world),
-                    world_bbox=world_bbox,
-                )
-                structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
 
             active_state = agent_states[current_agent]
             prompt_state: dict[str, Any] = {
@@ -327,24 +307,7 @@ def run_openclaw_demo(
                 "available_actions": NAVIGATION_ACTIONS,
             }
 
-            chase_cam_frame: np.ndarray | None = None
-            if views == "map-v2+chase":
-                engine.add_chase_cam(current_agent)
-                engine.update_chase_cam(current_agent)
-                chase_cam_frame = engine.get_chase_cam_frame(current_agent)
-
-            prompt_images = build_prompt_images(
-                variant=views,
-                fpv_frame=active_state.frame,
-                baseline_overhead_frame=map_frame,
-                structured_overhead_frame=structured_map_frame,
-                chase_cam_frame=chase_cam_frame,
-            )
-            replay_overhead = (
-                structured_map_frame if structured_map_frame is not None else map_frame
-            )
-
-            response = provider.get_action(images=prompt_images, state=prompt_state)
+            response = provider.get_action(images=prompt_bundle.prompt_images, state=prompt_state)
             action = response.get("action", "MoveAhead")
             if action not in NAVIGATION_ACTIONS:
                 action = "MoveAhead"
@@ -364,9 +327,9 @@ def run_openclaw_demo(
                 step=step,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
-                overhead_frame=replay_overhead,
+                overhead_frame=prompt_bundle.trace_overhead_frame,
                 game_state={
-                    "visited_cells": len(visited_world),
+                    "visited_cells": len(view_context.visited_world),
                     "current_agent": current_agent,
                 },
                 vlm_prompt_state=prompt_state,
@@ -382,7 +345,7 @@ def run_openclaw_demo(
                 print(
                     f"  step {step:4d}/{steps}  |  "
                     f"auto-converged: {stale_steps} consecutive steps with no new cell "
-                    f"(threshold={stale_threshold}, visited={len(visited_world)})"
+                    f"(threshold={stale_threshold}, visited={len(view_context.visited_world)})"
                 )
                 break
 
