@@ -50,6 +50,7 @@
         font-size: 0.82rem;
       }
       .viewer,
+      .transcript-section,
       .log-section,
       .final-message {
         background: #fff;
@@ -203,6 +204,35 @@
         font-family: ui-monospace, Menlo, monospace;
         font-size: 0.8rem;
       }
+      .transcript-entry {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        gap: 0.6rem;
+        align-items: start;
+        margin-bottom: 0.6rem;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 0.82rem;
+      }
+      .transcript-time {
+        color: #5f6c85;
+        white-space: nowrap;
+      }
+      .transcript-source {
+        display: inline-block;
+        padding: 0.12rem 0.45rem;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #2d3f7a;
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: lowercase;
+        white-space: nowrap;
+      }
+      .transcript-body {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #1a1a2e;
+      }
       .human {
         background: #fff3cd;
         padding: 0 4px;
@@ -279,6 +309,8 @@
         <span class="badge">Moves: <strong>{{ summary.moves }}</strong></span>
         <span class="badge">Unseen frames: <strong>{{ summary.frames_unseen_by_agent }}</strong></span>
         <span class="badge">Observe/move: <strong>{{ "%.2f"|format(summary.observe_to_move_ratio) }}</strong></span>
+        <span class="badge">Transcript msgs: <strong>{{ summary.transcript_message_count }}</strong></span>
+        <span class="badge">Transcript source: <strong>{{ summary.transcript_source }}</strong></span>
         <span class="badge">
           Decision modes:
           <strong>{{ summary.decision_modes.fresh_observe }}</strong> fresh /
@@ -330,6 +362,19 @@
           <div id="frame-detail" class="decision-cards"></div>
         </div>
       </div>
+
+      {% if transcript %}
+      <div class="transcript-section">
+        <h3>Transcript</h3>
+        {% for entry in transcript %}
+        <div class="transcript-entry">
+          <span class="transcript-time">[{{ "%7.2f"|format(entry.ts) }}s]</span>
+          <span class="transcript-source">{{ entry.source }}</span>
+          <span class="transcript-body">{{ entry.content }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
 
       {% if summary.final_message %}
       <div class="final-message">

@@ -309,6 +309,40 @@ by `OPENCLAW_GATEWAY_TOKEN` instead of creating and removing the container on
 every run. AI2-THOR engine state is reset per run via
 `bridge._reset_workspace_state` — `z=1.5` spawn on `FloorPlan201` both times.
 
+### Transcript capture (Phase 2.7)
+
+Autonomous runs now persist assistant transcript data additively in three
+places:
+
+- `trace.jsonl` gets `assistant_transcript` events
+- `run_result.json` exposes `transcript_capture_mode`, `transcript_source`,
+  and `transcript_messages`
+- `report.html` renders a `Transcript` section whenever transcript entries
+  exist
+
+The CLI keeps `--transcript-mode {stream|terminal-body}` as a validation/debug
+override, but omitting the flag uses the shipped default request mode.
+
+On the dated local validation rerun for Phase 2.7, the shipped default was:
+
+- request mode: `terminal-body`
+- actual transcript source on the long-running autonomous timeout path:
+  `session-store`
+
+That means operators should not read `terminal-body` as "the final HTTP body
+always arrived". On long autonomous runs, the non-stream request may still hit
+the wall-clock limit before a terminal body is returned; in that case the
+bridge recovers truthful assistant-visible text from the Gateway's per-session
+JSONL store and records `transcript_source: "session-store"`.
+
+The explicit `stream` override is still useful for comparison runs, but it can
+emit hundreds of tiny chunk rows and may overrun the practical request wall
+clock on long autonomous runs. It is not the shipped default. Use it when you
+explicitly want HTTP chunk-level visibility, not the cleanest operator report.
+
+Live evidence for the winner/loser comparison lives in
+[02.7-LOCAL-PROBE-RESULTS.md](/home/mi/ws/gogo/roboclaws/.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-LOCAL-PROBE-RESULTS.md).
+
 ### Gotchas
 
 **1. MCP server must bind `host="0.0.0.0"`, not `127.0.0.1`, on Linux.**

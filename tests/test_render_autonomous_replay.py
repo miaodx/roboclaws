@@ -84,6 +84,27 @@ def _make_frame_event(
     return event
 
 
+def _make_transcript_event(
+    *,
+    wallclock: float,
+    source: str,
+    content: str,
+    message_index: int = 0,
+    chunk_index: int = 0,
+    is_final: bool = False,
+) -> dict:
+    return {
+        "event": "assistant_transcript",
+        "tool": "assistant",
+        "wallclock_elapsed": wallclock,
+        "source": source,
+        "content": content,
+        "message_index": message_index,
+        "chunk_index": chunk_index,
+        "is_final": is_final,
+    }
+
+
 def _write_trace(run_dir: Path, events: list[dict]) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "trace.jsonl").write_text(
@@ -366,6 +387,8 @@ def test_summary_json_key_integrity(tmp_path: Path) -> None:
         "blind_batch": 1,
     }
     assert summary["terminated_by"] == "done"
+    assert summary["transcript_message_count"] == 0
+    assert summary["transcript_source"] == "none"
 
 
 def test_html_is_well_formed(tmp_path: Path) -> None:
@@ -442,3 +465,104 @@ def test_summary_prefers_run_result_wallclock(tmp_path: Path) -> None:
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     assert summary["wallclock_seconds"] == 660.1
     assert summary["terminated_by"] == "wall_clock"
+
+
+def test_renderer_renders_transcript_events_from_trace(tmp_path: Path) -> None:
+    run_dir = tmp_path / "transcript-trace"
+    events = [
+        _make_tool_event(event_type="request", tool="observe", wallclock=0.0, request={}),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+        _make_transcript_event(
+            wallclock=0.2,
+            source="stream",
+            content="Checking session",
+            message_index=0,
+            chunk_index=0,
+        ),
+        _make_transcript_event(
+            wallclock=0.25,
+            source="stream",
+            content=" status.",
+            message_index=0,
+            chunk_index=1,
+        ),
+    ]
+    _write_trace(run_dir, events)
+
+    _run_renderer(run_dir)
+
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert "Transcript" in report_text
+    assert "Checking session" in report_text
+    assert "stream" in report_text
+    assert summary["transcript_message_count"] == 2
+    assert summary["transcript_source"] == "stream"
+
+
+def test_renderer_falls_back_to_run_result_transcript_messages(tmp_path: Path) -> None:
+    run_dir = tmp_path / "transcript-fallback"
+    events = [
+        _make_tool_event(event_type="request", tool="observe", wallclock=0.0, request={}),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+    ]
+    _write_trace(run_dir, events)
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "terminated_by": "done",
+                "wallclock_s": 12.0,
+                "final_message": "done",
+                "transcript_source": "terminal-body",
+                "transcript_messages": [
+                    {
+                        "wallclock_s": 11.8,
+                        "source": "terminal-body",
+                        "content": "Done after checking the map.",
+                        "message_index": 0,
+                        "chunk_index": 0,
+                        "is_final": True,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _run_renderer(run_dir)
+
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert "Transcript" in report_text
+    assert "terminal-body" in report_text
+    assert "Done after checking the map." in report_text
+    assert summary["transcript_message_count"] == 1
+    assert summary["transcript_source"] == "terminal-body"
+
+
+def test_transcript_free_runs_still_render_cleanly(tmp_path: Path) -> None:
+    run_dir = tmp_path / "transcript-free"
+    events = [
+        _make_tool_event(event_type="request", tool="observe", wallclock=0.0, request={}),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+    ]
+    _write_trace(run_dir, events)
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "terminated_by": "done",
+                "wallclock_s": 1.0,
+                "final_message": "done without transcript",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    _run_renderer(run_dir)
+
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert "Final Message" in report_text
+    assert "done without transcript" in report_text
+    assert summary["transcript_message_count"] == 0
+    assert summary["transcript_source"] == "none"

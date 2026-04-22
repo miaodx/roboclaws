@@ -297,6 +297,29 @@ def test_trace_jsonl_contains_tool_events(server: RoboclawsMCPServer) -> None:
     }.issubset(events)
 
 
+def test_write_trace_event_emits_additive_transcript_payload(server: RoboclawsMCPServer) -> None:
+    server.write_trace_event(
+        tool="assistant",
+        event="assistant_transcript",
+        source="stream",
+        content="checking session",
+        message_index=0,
+        chunk_index=1,
+        is_final=False,
+        wallclock_elapsed=1.25,
+    )
+    lines = _read_trace(server.run_dir)
+    transcript = lines[-1]
+    assert transcript["tool"] == "assistant"
+    assert transcript["event"] == "assistant_transcript"
+    assert transcript["source"] == "stream"
+    assert transcript["content"] == "checking session"
+    assert transcript["message_index"] == 0
+    assert transcript["chunk_index"] == 1
+    assert transcript["is_final"] is False
+    assert transcript["wallclock_elapsed"] == 1.25
+
+
 # ---------------------------------------------------------------------------
 # Factory / binding defaults
 # ---------------------------------------------------------------------------

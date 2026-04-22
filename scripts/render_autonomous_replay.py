@@ -21,6 +21,7 @@ if __package__ in {None, ""}:
 
 GIF_DURATION_MS = 150
 FRAME_EVENT = "frame_capture"
+TRANSCRIPT_EVENT = "assistant_transcript"
 SEEN_BADGE = "👁"
 UNSEEN_BADGE = "🚶"
 
@@ -54,6 +55,63 @@ def load_events(trace_path: Path) -> list[dict[str, Any]]:
 
 def extract_frame_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [event for event in events if event.get("event") == FRAME_EVENT]
+
+
+def extract_transcript_entries(
+    events: list[dict[str, Any]],
+    run_result: dict[str, Any],
+) -> list[dict[str, Any]]:
+    transcript: list[dict[str, Any]] = []
+    for event in events:
+        if event.get("event") != TRANSCRIPT_EVENT:
+            continue
+        content = str(event.get("content", ""))
+        if not content:
+            continue
+        transcript.append(
+            {
+                "ts": float(event.get("wallclock_elapsed", 0.0)),
+                "source": str(event.get("source", "unknown")),
+                "content": content,
+                "is_final": bool(event.get("is_final", False)),
+                "message_index": int(event.get("message_index", 0)),
+                "chunk_index": int(event.get("chunk_index", 0)),
+            }
+        )
+    if transcript:
+        return sorted(
+            transcript,
+            key=lambda entry: (entry["ts"], entry["message_index"], entry["chunk_index"]),
+        )
+
+    run_result_messages = run_result.get("transcript_messages")
+    if not isinstance(run_result_messages, list):
+        return []
+    fallback: list[dict[str, Any]] = []
+    for index, entry in enumerate(run_result_messages):
+        if not isinstance(entry, dict):
+            continue
+        content = str(entry.get("content", ""))
+        if not content:
+            continue
+        fallback.append(
+            {
+                "ts": float(entry.get("wallclock_s", 0.0)),
+                "source": str(
+                    entry.get("source")
+                    or run_result.get("transcript_source")
+                    or "unknown"
+                ),
+                "content": content,
+                "is_final": bool(entry.get("is_final", False)),
+                "message_index": int(entry.get("message_index", 0)),
+                "chunk_index": int(entry.get("chunk_index", index)),
+            }
+        )
+    return sorted(
+        fallback,
+        key=lambda entry: (entry["ts"], entry["message_index"], entry["chunk_index"]),
+    )
 
 
 def _strip_data_url(encoded: str) -> str:
@@ -219,6 +277,7 @@ def _build_summary_from_events(
     frames: list[dict[str, Any]],
     run_result: dict[str, Any],
 ) -> dict[str, Any]:
+    transcript_entries = extract_transcript_entries(events, run_result)
     observe_request_events = [
         event
         for event in events
@@ -272,6 +331,11 @@ def _build_summary_from_events(
         )
 
     latest_frame = frames[-1] if frames else {}
+    transcript_source = "none"
+    if transcript_entries:
+        transcript_source = str(transcript_entries[0].get("source", "none"))
+    elif run_result.get("transcript_source"):
+        transcript_source = str(run_result.get("transcript_source"))
 
     return {
         "total_tool_calls": observe_count + move_count + done_count,
@@ -292,6 +356,8 @@ def _build_summary_from_events(
             run_result.get("terminated_by") or ("done" if done_count else "wall_clock")
         ),
         "human_messages_delivered": human_delivered,
+        "transcript_message_count": len(transcript_entries),
+        "transcript_source": transcript_source,
         "final_message": run_result.get("final_message"),
     }
 
@@ -435,6 +501,7 @@ def render_report(
     *,
     run_dir: Path,
     summary: dict[str, Any],
+    transcript: list[dict[str, Any]],
     panel_labels: list[str],
     frame_data: list[dict[str, Any]],
     tool_log: list[dict[str, Any]],
@@ -459,6 +526,7 @@ def render_report(
     html = template.render(
         run_id=run_dir.name,
         summary=summary,
+        transcript=transcript,
         panel_headers=[_format_panel_label(label) for label in panel_labels],
         panel_count=len(panel_labels),
         frames_json=json.dumps(frame_data),
@@ -487,11 +555,13 @@ def main(argv: list[str] | None = None) -> int:
         run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
     summary = _build_summary_from_events(events, frames, run_result)
     (args.run_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    transcript = extract_transcript_entries(events, run_result)
     panel_labels, frame_data = build_frame_data(frames)
 
     render_report(
         run_dir=args.run_dir,
         summary=summary,
+        transcript=transcript,
         panel_labels=panel_labels,
         frame_data=frame_data,
         tool_log=build_tool_log(events),

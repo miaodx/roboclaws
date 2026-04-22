@@ -432,7 +432,11 @@ class RoboclawsMCPServer:
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
         """Append a `tool=<runtime>` trace line (for example-level telemetry)."""
-        self._write_trace(tool="<runtime>", event=event, **data)
+        self.write_trace_event(tool="<runtime>", event=event, **data)
+
+    def write_trace_event(self, *, tool: str, event: str, **data: Any) -> None:
+        """Append an arbitrary trace line while preserving the frozen top-level keys."""
+        self._write_trace(tool=tool, event=event, **data)
 
     def run_in_thread(self) -> threading.Thread:
         """Start the FastMCP server on a daemon thread; return the thread."""

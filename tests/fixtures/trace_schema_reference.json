@@ -12,6 +12,10 @@
     "optional_keys": ["decision_mode", "human_message", "move_direction", "move_reason"],
     "notes": "written with event='frame_capture' for both observe and move tools; render_autonomous_replay.py consumes seen_by_agent + fpv + overhead + agent_state unconditionally"
   },
+  "assistant_transcript_payload": {
+    "required_keys": ["source", "content", "message_index", "chunk_index", "is_final"],
+    "notes": "additive Phase 02.7 transcript event written with tool='assistant' and event='assistant_transcript'; top-level trace required_keys still apply"
+  },
   "state_payload": {
     "required_keys": [
       "agent_id",
