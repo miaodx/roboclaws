@@ -371,11 +371,148 @@ def test_run_in_thread_raises_when_server_dies_before_listening(tmp_path: Path) 
     engine = FakeEngine()
     srv = make_roboclaws_mcp(engine, agent_id=0, run_dir=tmp_path, port=18788)
     try:
-        with patch.object(srv._mcp, "run", return_value=None), patch(
-            "roboclaws.openclaw.mcp_server._port_accepting",
-            return_value=False,
+        with (
+            patch.object(srv._mcp, "run", return_value=None),
+            patch(
+                "roboclaws.openclaw.mcp_server._port_accepting",
+                return_value=False,
+            ),
         ):
             with pytest.raises(RuntimeError, match="failed to start"):
                 srv.run_in_thread()
     finally:
         srv.close()
+
+
+# ---------------------------------------------------------------------------
+# roboclaws__snapshot
+# ---------------------------------------------------------------------------
+
+
+def test_snapshot_without_snapshots_dir_returns_error(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    """No snapshots_dir configured → tool returns an error, doesn't crash."""
+    response = server._do_snapshot(label="first")
+    assert "error" in response
+    assert "snapshots_dir" in response["error"]
+
+
+def test_snapshot_writes_png_files_and_returns_media_hint(
+    engine: FakeEngine, tmp_path: Path
+) -> None:
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    try:
+        response = srv._do_snapshot(label="corner view")
+
+        # Paths MUST be absolute container-side paths under the agent
+        # workspace. Live probe 2026-04-23 proved relative `./snapshots/…`
+        # silently drop in the Control UI while absolute
+        # `/home/node/.openclaw/workspaces/agent-<id>/snapshots/…` renders.
+        # The Gateway's REPLY_MEDIA_HINT advises the opposite; we're right.
+        workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
+        assert response["fpv_path"] == workspace_prefix + "corner_view-001.fpv.png"
+        assert response["map_path"] == workspace_prefix + "corner_view-001.map.png"
+        assert response["chase_path"] == workspace_prefix + "corner_view-001.chase.png"
+        assert f"MEDIA:{workspace_prefix}corner_view-001.fpv.png" in response["hint"]
+        assert f"MEDIA:{workspace_prefix}corner_view-001.chase.png" in response["hint"]
+        # The hint must also tell the agent to IGNORE the Gateway's
+        # "avoid absolute paths" system-prompt warning — without this,
+        # Kimi obeys the stronger signal and emits a broken relative
+        # path (observed 2026-04-23, first half of the session).
+        assert "IGNORE" in response["hint"] or "ignore" in response["hint"]
+        # Turn-placement rule: only the LAST assistant message of a turn
+        # has its MEDIA extracted by the Control UI — intermediate
+        # messages become plain text (observed 2026-04-23, second half
+        # of the session: rapid1/rapid2 A/B test).
+        assert "FINAL" in response["hint"] or "final assistant message" in response["hint"]
+        # Anti-spiral guardrail: the hint must tell the agent not to retry
+        # with alternate paths if the Control UI rejects the attachment.
+        assert "Attachment unavailable" in response["hint"]
+        assert "STOP" in response["hint"]
+
+        # Files actually exist on disk with non-zero PNG bytes.
+        for key in ("fpv", "map", "chase"):
+            dest = snap_dir / f"corner_view-001.{key}.png"
+            assert dest.exists()
+            assert dest.read_bytes().startswith(b"\x89PNG")
+    finally:
+        srv.close()
+
+
+def test_snapshot_default_label_is_counter_suffix(engine: FakeEngine, tmp_path: Path) -> None:
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    try:
+        r1 = srv._do_snapshot(label="")
+        r2 = srv._do_snapshot(label="")
+        assert r1["fpv_path"].endswith("-001.fpv.png")
+        assert r2["fpv_path"].endswith("-002.fpv.png")
+    finally:
+        srv.close()
+
+
+def test_snapshot_sanitizes_dangerous_labels(engine: FakeEngine, tmp_path: Path) -> None:
+    """Path-traversal / shell-metas get rewritten to `_`."""
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    try:
+        response = srv._do_snapshot(label="../../etc/passwd")
+        # `..` and slashes collapse to a single `_`; stripped leading/trailing
+        # dots/underscores leave `etc_passwd`. Counter suffix still appended.
+        workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
+        assert response["fpv_path"].startswith(workspace_prefix)
+        fname = response["fpv_path"].removeprefix(workspace_prefix)
+        assert ".." not in fname
+        assert "/" not in fname, (
+            f"sanitized label produced a path with a slash: {fname!r} — "
+            "label traversal must collapse, not escape the snapshots dir"
+        )
+        # The real file must land inside the (host) snapshots dir (no escape).
+        assert (snap_dir / fname).exists()
+    finally:
+        srv.close()
+
+
+def test_snapshot_trace_records_request_and_response(engine: FakeEngine, tmp_path: Path) -> None:
+    snap_dir = tmp_path / "snapshots"
+    run_dir = tmp_path / "run"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=run_dir,
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    try:
+        srv._do_snapshot(label="probe")
+    finally:
+        srv.close()
+
+    entries = _read_trace(run_dir)
+    tools = [(e["tool"], e["event"]) for e in entries]
+    assert ("snapshot", "request") in tools
+    assert ("snapshot", "response") in tools

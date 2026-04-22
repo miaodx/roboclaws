@@ -95,6 +95,14 @@ HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT="${PORT:-18789}"
 SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
 
+# Optional: host-side dir for the `roboclaws__snapshot` tool. When set, we
+# bind-mount it into every agent's workspace at ``./snapshots`` so the
+# agent can inline PNGs written there via `MEDIA:./snapshots/<file>.png`.
+# The Gateway's agent-scoped media allow-list rooted at the workspace dir
+# lets relative MEDIA paths resolve (see
+# /app/dist/local-roots-*.js:getAgentScopedMediaLocalRoots).
+ROBOCLAWS_SNAPSHOTS_DIR="${ROBOCLAWS_SNAPSHOTS_DIR:-}"
+
 # ROBOCLAWS_MCP_URL seeds mcp.servers.roboclaws.url in openclaw.json so the
 # Gateway exposes our MCP tool surface (observe/move/done) to the agent.  Must
 # be set BEFORE first container start — mutating mcp.* on a running Gateway
@@ -639,6 +647,23 @@ fi
 for aid in "${agent_ids[@]}"; do
     mount_args+=(-v "${SKILLS_DIR}:/home/node/.openclaw/workspaces/${aid}/skills/${skill_basename}:ro")
 done
+
+# Snapshots bind: one host dir per agent, mounted into that agent's workspace
+# at ``./snapshots``. `roboclaws__snapshot` writes PNGs on the host side;
+# the agent references them from chat as ``MEDIA:./snapshots/<file>.png``.
+if [[ -n "$ROBOCLAWS_SNAPSHOTS_DIR" ]]; then
+    for aid in "${agent_ids[@]}"; do
+        agent_snap_dir="${ROBOCLAWS_SNAPSHOTS_DIR%/}/${aid}"
+        mkdir -p "$agent_snap_dir"
+        # Container runs as uid 1000 in the stock image; a too-tight umask on
+        # the host would break the bind-write. 0777 is blunt but fine for a
+        # single-operator local-dev workstation (same rationale as ``state``
+        # dir pre-seed in step 3 above).
+        chmod 0777 "$agent_snap_dir" 2>/dev/null || true
+        mount_args+=(-v "${agent_snap_dir}:/home/node/.openclaw/workspaces/${aid}/snapshots")
+    done
+    log "snapshots    : ${ROBOCLAWS_SNAPSHOTS_DIR} (bound into each agent workspace)"
+fi
 docker run -d --name "$CONTAINER" "${mount_args[@]}" "$IMAGE" >/dev/null \
     || die "docker run failed" 2
 
