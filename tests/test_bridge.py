@@ -12,6 +12,9 @@ from roboclaws.openclaw.bridge import (
     OpenClawBridge,
     OpenClawProvider,
     OpenClawUnavailable,
+    _extract_text_blocks,
+    _extract_stream_delta_content,
+    _timestamp_to_epoch_seconds,
 )
 
 # ---------------------------------------------------------------------------
@@ -55,6 +58,7 @@ def test_bridge_uses_defaults():
     bridge = OpenClawBridge()
     assert bridge._gateway_url == "http://localhost:18789"
     assert bridge._agent_prefix == "agent-"
+    assert bridge._transcript_mode == "terminal-body"
     bridge.close()
 
 
@@ -237,6 +241,21 @@ def test_bridge_step_raises_on_401():
     bridge.close()
 
 
+def test_extract_text_blocks_joins_text_and_ignores_other_blocks() -> None:
+    content = [
+        {"type": "text", "text": "Checking"},
+        {"type": "toolCall", "name": "roboclaws__observe"},
+        {"type": "text", "text": " session"},
+    ]
+    assert _extract_text_blocks(content) == "Checking session"
+
+
+def test_timestamp_to_epoch_seconds_parses_utc_z_suffix() -> None:
+    parsed = _timestamp_to_epoch_seconds("2026-04-22T08:02:22.466Z")
+    assert parsed is not None
+    assert parsed == pytest.approx(1776844942.466, rel=0.0, abs=0.001)
+
+
 def test_bridge_step_raises_on_5xx():
     bridge = OpenClawBridge()
     resp = MagicMock()
@@ -340,6 +359,12 @@ def test_bridge_handles_content_block_list():
         result = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
     assert result == {"reasoning": "ok", "action": "MoveBack"}
     bridge.close()
+
+
+def test_extract_stream_delta_content_handles_text_lists() -> None:
+    assert _extract_stream_delta_content(
+        {"content": [{"type": "text", "text": "hello"}, {"type": "text", "text": " world"}]}
+    ) == "hello world"
 
 
 # ---------------------------------------------------------------------------

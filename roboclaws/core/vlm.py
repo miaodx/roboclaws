@@ -22,6 +22,9 @@ _COST_PER_M: dict[str, dict[str, float]] = {
     "kimi-for-coding": {"input": 1.00, "output": 3.00},
     "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+    # Official NVIDIA Build pages currently mark these endpoints as free/trial.
+    "meta/llama-4-maverick-17b-128e-instruct": {"input": 0.0, "output": 0.0},
+    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {"input": 0.0, "output": 0.0},
 }
 
 _SYSTEM_PROMPT = (
@@ -374,6 +377,35 @@ class OpenAIProvider:
                 + usage.completion_tokens / 1_000_000 * self._cost_table["output"]
             )
         return {"reasoning": result.reasoning, "action": result.action}
+
+
+class NvidiaProvider(OpenAIProvider):
+    """NVIDIA NIM via the OpenAI-compatible chat-completions surface."""
+
+    def __init__(
+        self,
+        model: str = "meta/llama-4-maverick-17b-128e-instruct",
+        api_key: str | None = None,
+        max_tokens: int = 256,
+    ) -> None:
+        try:
+            import instructor
+            from openai import OpenAI  # type: ignore[import-untyped]
+        except ImportError as exc:
+            raise ImportError(
+                "openai and instructor packages required: pip install openai instructor"
+            ) from exc
+        self._AgentAction = _build_agent_action_model()
+        raw_client = OpenAI(
+            api_key=api_key or os.environ["NVIDIA_API_KEY"],
+            base_url="https://integrate.api.nvidia.com/v1",
+        )
+        self._client = instructor.from_openai(raw_client)
+        self.model = model
+        self._max_tokens = max_tokens
+        self._cost = 0.0
+        self._cost_table = _COST_PER_M.get(model, {"input": 0.0, "output": 0.0})
+        self._status = ProviderStatus(provider_name="nvidia", model=model)
 
 
 # ---------------------------------------------------------------------------
@@ -1064,6 +1096,10 @@ _MODEL_ALIASES: dict[str, str] = {
     "anthropic": "claude-3-5-sonnet-20241022",
     "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022",
     "claude-3-haiku-20240307": "claude-3-haiku-20240307",
+    "nvidia": "meta/llama-4-maverick-17b-128e-instruct",
+    "meta/llama-4-maverick-17b-128e-instruct": "meta/llama-4-maverick-17b-128e-instruct",
+    "nvidia-nano-vl": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
 }
 
 
@@ -1072,7 +1108,7 @@ def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
 
     Args:
         model: One of "mock", "gpt-4o", "gpt-4o-mini", "kimi", "kimi-coding",
-               "anthropic", or a full model name like
+               "anthropic", "nvidia", or a full model name like
                "claude-3-5-sonnet-20241022".
         **kwargs: Forwarded to the provider constructor.
 
@@ -1086,6 +1122,11 @@ def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
         return MockProvider(**kwargs)
     if canonical in ("gpt-4o", "gpt-4o-mini"):
         return OpenAIProvider(model=canonical, **kwargs)
+    if canonical in (
+        "meta/llama-4-maverick-17b-128e-instruct",
+        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+    ):
+        return NvidiaProvider(model=canonical, **kwargs)
     if canonical.startswith("claude"):
         return AnthropicProvider(model=canonical, **kwargs)
     if canonical == "kimi-for-coding":

@@ -2,82 +2,164 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Autonomous nav replay — {{ run_id }}</title>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
-        font-family: ui-sans-serif, system-ui, sans-serif;
-        margin: 24px;
-        color: #222;
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 1rem;
+        background: #f5f6fa;
+        color: #1a1a2e;
       }
-      .header {
-        margin-bottom: 16px;
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.45rem;
       }
-      .header h1 {
-        margin: 0 0 4px 0;
+      h3 {
+        margin: 0.75rem 0 0.4rem;
+        color: #444;
+        font-size: 1rem;
+      }
+      .run-section {
+        margin: 0 auto;
+        max-width: 1440px;
       }
       .run-id {
-        color: #666;
-        margin-bottom: 12px;
+        margin: 0 0 1rem;
+        color: #5f6c85;
+        font-size: 0.92rem;
       }
-      .stats {
+      .summary-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px 24px;
-        font-size: 14px;
-        color: #555;
-      }
-      .timeline {
-        display: flex;
-        align-items: flex-start;
-        overflow-x: auto;
-        gap: 6px;
-        padding: 12px 0;
-        border-top: 1px solid #ddd;
-        border-bottom: 1px solid #ddd;
-      }
-      .frame {
-        min-width: {{ thumbnail_size * 2 + 12 }}px;
-        max-width: {{ thumbnail_size * 2 + 12 }}px;
-        position: relative;
+        gap: 0.4rem;
         background: #fff;
-        border-radius: 6px;
-        padding: 4px;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 1px 4px #0001;
+        margin-bottom: 1rem;
       }
-      .image-strip {
+      .badge {
+        background: #eef2ff;
+        border-radius: 4px;
+        padding: 0.2rem 0.6rem;
+        font-size: 0.82rem;
+      }
+      .viewer,
+      .transcript-section,
+      .log-section,
+      .final-message {
+        background: #fff;
+        border-radius: 8px;
+        padding: 1rem;
+        box-shadow: 0 1px 4px #0001;
+        margin-bottom: 1rem;
+      }
+      .frame-hint {
+        margin: 0 0 0.75rem;
+        color: #5f6c85;
+        font-size: 0.82rem;
+      }
+      .frame-board {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px;
+        gap: 0.9rem;
+        margin-bottom: 0.9rem;
       }
-      .image-panel img {
+      .frame-card {
         width: 100%;
+        border: 1px solid #d8dfeb;
+        border-radius: 10px;
+        background: #f8faff;
+        padding: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        cursor: zoom-in;
+        text-align: left;
+      }
+      .frame-card:hover {
+        border-color: #9db4ff;
+        box-shadow: 0 8px 20px #6b8cff18;
+      }
+      .frame-card-label {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #39445f;
+      }
+      .frame-img {
         display: block;
+        width: 100%;
+        max-height: 340px;
+        background: #edf1f7;
+        border: 1px solid #c9d4e4;
+        border-radius: 8px;
+        object-fit: contain;
       }
-      .image-label {
-        font-size: 11px;
-        color: #666;
-        margin: 2px 0 4px 0;
+      .frame-img[data-empty=true] {
+        display: none;
       }
-      .frame.seen {
-        border: 3px solid #2ca02c;
+      .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
       }
-      .frame.unseen {
-        border: 2px dashed #888888;
+      .slider-row input[type=range] {
+        flex: 1;
+        min-width: 200px;
       }
-      .frame .badge {
-        position: absolute;
-        top: 2px;
-        right: 2px;
-        font-size: 16px;
-        padding: 0 4px;
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 3px;
+      .slider-row button {
+        padding: 0.2rem 0.7rem;
+        cursor: pointer;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+        background: #fff;
+      }
+      .slider-row button:hover {
+        background: #e8edf8;
+      }
+      .decision-panel {
+        margin-top: 1rem;
+      }
+      .decision-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0.75rem;
+      }
+      .decision-card {
+        border: 1px solid #d8dfeb;
+        border-radius: 8px;
+        padding: 0.75rem;
+        background: #f8faff;
+        min-height: 148px;
+      }
+      .decision-card-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        align-items: baseline;
+        margin-bottom: 0.5rem;
+      }
+      .decision-card-head span {
+        color: #5f6c85;
+        font-size: 0.78rem;
+        text-align: right;
+      }
+      .decision-card p {
+        margin: 0.35rem 0;
+        font-size: 0.84rem;
       }
       .decision {
         display: inline-block;
-        margin-top: 6px;
-        padding: 2px 6px;
+        margin-bottom: 0.5rem;
+        padding: 0.2rem 0.55rem;
         border-radius: 999px;
-        font-size: 11px;
+        font-size: 0.74rem;
         font-weight: 600;
       }
       .decision.observe {
@@ -100,97 +182,325 @@
         background: #eeeeee;
         color: #555;
       }
-      .frame .meta {
-        font-size: 12px;
-        color: #555;
-        margin-top: 4px;
+      .state-good {
+        color: #1b5e20;
       }
-      .frame .human-note {
-        margin-top: 6px;
-        background: #fff3cd;
-        color: #6a4f00;
-        padding: 4px 6px;
-        font-size: 12px;
+      .state-muted {
+        color: #5f6c85;
+      }
+      .log-section pre,
+      .final-message pre {
+        background: #f6f8fb;
         border-radius: 4px;
-      }
-      .log {
-        font-family: ui-monospace, Menlo, monospace;
-        font-size: 12px;
-        margin-top: 24px;
-        background: #f6f6f6;
-        padding: 12px;
-        border-radius: 4px;
-      }
-      .log h2 {
-        margin-top: 0;
-        font-family: ui-sans-serif, system-ui, sans-serif;
+        padding: 0.6rem;
+        overflow-x: auto;
+        font-size: 0.78rem;
+        border: 1px solid #e0e4ec;
+        margin: 0;
+        white-space: pre-wrap;
       }
       .log-entry {
-        margin-bottom: 6px;
+        margin-bottom: 0.5rem;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 0.8rem;
+      }
+      .transcript-entry {
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr);
+        gap: 0.6rem;
+        align-items: start;
+        margin-bottom: 0.6rem;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 0.82rem;
+      }
+      .transcript-time {
+        color: #5f6c85;
+        white-space: nowrap;
+      }
+      .transcript-source {
+        display: inline-block;
+        padding: 0.12rem 0.45rem;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #2d3f7a;
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: lowercase;
+        white-space: nowrap;
+      }
+      .transcript-body {
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: #1a1a2e;
       }
       .human {
         background: #fff3cd;
         padding: 0 4px;
       }
+      .lightbox {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.78);
+        padding: 2rem;
+        z-index: 1000;
+      }
+      .lightbox-open {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .lightbox-shell {
+        position: relative;
+        width: min(96vw, 1680px);
+        max-height: 94vh;
+        background: #fff;
+        border-radius: 14px;
+        padding: 1rem;
+        box-shadow: 0 20px 60px #0006;
+      }
+      .lightbox-title {
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin: 0 2.5rem 0.75rem 0;
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 0.65rem;
+        right: 0.75rem;
+        border: none;
+        background: transparent;
+        font-size: 1.7rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #53627f;
+      }
+      .lightbox-img {
+        display: block;
+        width: min(92vw, 1600px);
+        max-width: 100%;
+        max-height: 86vh;
+        margin: 0 auto;
+        border-radius: 10px;
+        background: #edf1f7;
+        object-fit: contain;
+      }
+      body.lightbox-body-open {
+        overflow: hidden;
+      }
+      @media (max-width: 900px) {
+        .frame-board {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
   </head>
   <body>
-    <div class="header">
+    <div class="run-section">
       <h1>Autonomous nav replay</h1>
-      <div class="run-id">run_id: {{ run_id }}</div>
-      <div class="stats">
-        <span>terminated_by: <b>{{ summary.terminated_by }}</b></span>
-        <span>wallclock: <b>{{ "%.1f"|format(summary.wallclock_seconds) }}s</b></span>
-        <span>observes: <b>{{ summary.observes_by_agent }}</b></span>
-        <span>moves: <b>{{ summary.moves }}</b></span>
-        <span>unseen frames: <b>{{ summary.frames_unseen_by_agent }}</b></span>
-        <span>observe/move: <b>{{ "%.2f"|format(summary.observe_to_move_ratio) }}</b></span>
-        <span>
-          decision modes:
-          <b>{{ summary.decision_modes.fresh_observe }}</b> fresh /
-          <b>{{ summary.decision_modes.reasoned_batch }}</b> reasoned /
-          <b>{{ summary.decision_modes.blind_batch }}</b> blind
-        </span>
-        <span>human msgs: <b>{{ summary.human_messages_delivered }}</b></span>
-      </div>
-    </div>
+      <p class="run-id">run_id: {{ run_id }}</p>
 
-    <div class="timeline">
-      {% for item in timeline %}
-      {% if item.kind == "frame" %}
-      <div class="frame {{ 'seen' if item.seen_by_agent else 'unseen' }}" title="{{ item.tooltip }}">
-        <div class="image-strip">
-          <div class="image-panel">
-            <img src="data:image/jpeg;base64,{{ item.fpv }}" alt="fpv">
-            <div class="image-label">FPV</div>
-          </div>
-          <div class="image-panel">
-            <img src="data:image/jpeg;base64,{{ item.overhead }}" alt="overhead">
-            <div class="image-label">Overhead</div>
+      <div class="summary-bar">
+        <span class="badge">View variant: <strong>{{ summary.view_variant }}</strong></span>
+        <span class="badge">Frames: <strong>{{ summary.frame_count }}</strong></span>
+        <span class="badge">Terminated by: <strong>{{ summary.terminated_by }}</strong></span>
+        <span class="badge">Wallclock: <strong>{{ "%.1f"|format(summary.wallclock_seconds) }}s</strong></span>
+        <span class="badge">Observes: <strong>{{ summary.observes_by_agent }}</strong></span>
+        <span class="badge">Moves: <strong>{{ summary.moves }}</strong></span>
+        <span class="badge">Unseen frames: <strong>{{ summary.frames_unseen_by_agent }}</strong></span>
+        <span class="badge">Observe/move: <strong>{{ "%.2f"|format(summary.observe_to_move_ratio) }}</strong></span>
+        <span class="badge">Transcript msgs: <strong>{{ summary.transcript_message_count }}</strong></span>
+        <span class="badge">Transcript source: <strong>{{ summary.transcript_source }}</strong></span>
+        <span class="badge">
+          Decision modes:
+          <strong>{{ summary.decision_modes.fresh_observe }}</strong> fresh /
+          <strong>{{ summary.decision_modes.reasoned_batch }}</strong> reasoned /
+          <strong>{{ summary.decision_modes.blind_batch }}</strong> blind
+        </span>
+        <span class="badge">Human msgs: <strong>{{ summary.human_messages_delivered }}</strong></span>
+      </div>
+
+      <div class="viewer">
+        {% if panel_count > 0 %}
+        <p class="frame-hint">Click any panel to zoom.</p>
+        <div class="frame-board">
+          {% for index in range(panel_count) %}
+          <button type="button" class="frame-card" onclick="navReplayZoom({{ index }})">
+            <span class="frame-card-label">{{ panel_headers[index] }}</span>
+            <img id="frame-panel-{{ index }}" class="frame-img" src="" alt="{{ panel_headers[index] }}">
+          </button>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p>No frame_capture events recorded.</p>
+        {% endif %}
+
+        <div class="slider-row">
+          <button onclick="navReplayChange(-1)">&#9664;</button>
+          <input
+            type="range"
+            id="frame-slider"
+            min="0"
+            max="0"
+            value="0"
+            oninput="navReplaySet(parseInt(this.value, 10))"
+          >
+          <button onclick="navReplayChange(1)">&#9654;</button>
+          <span id="frame-label">Frame —</span>
+        </div>
+
+        <div id="frame-lightbox" class="lightbox" onclick="navReplayCloseZoom(event)">
+          <div class="lightbox-shell">
+            <button type="button" class="lightbox-close" onclick="navReplayCloseZoom(event)">×</button>
+            <div class="lightbox-title" id="frame-lightbox-label"></div>
+            <img id="frame-lightbox-img" class="lightbox-img" src="" alt="Zoomed frame panel">
           </div>
         </div>
-        <span class="badge">{{ item.badge }}</span>
-        <div class="decision {{ item.decision_class }}">{{ item.decision_label }}</div>
-        <div class="meta">{{ "%.1f"|format(item.ts) }}s · {{ item.tool }}{% if item.move_direction %} · {{ item.move_direction }}{% endif %}</div>
-        <div class="meta">{{ item.position }}</div>
-        {% if item.human_message %}
-        <div class="human-note">human_message: {{ item.human_message }}</div>
-        {% endif %}
+
+        <div class="decision-panel">
+          <h3>Current Frame</h3>
+          <div id="frame-detail" class="decision-cards"></div>
+        </div>
+      </div>
+
+      {% if transcript %}
+      <div class="transcript-section">
+        <h3>Transcript</h3>
+        {% for entry in transcript %}
+        <div class="transcript-entry">
+          <span class="transcript-time">[{{ "%7.2f"|format(entry.ts) }}s]</span>
+          <span class="transcript-source">{{ entry.source }}</span>
+          <span class="transcript-body">{{ entry.content }}</span>
+        </div>
+        {% endfor %}
       </div>
       {% endif %}
-      {% endfor %}
+
+      {% if summary.final_message %}
+      <div class="final-message">
+        <h3>Final Message</h3>
+        <pre>{{ summary.final_message }}</pre>
+      </div>
+      {% endif %}
+
+      <div class="log-section">
+        <h3>Tool-call log</h3>
+        {% for entry in tool_log %}
+        <div class="log-entry">
+          [{{ "%7.2f"|format(entry.ts) }}s] {{ entry.tool }}: {{ entry.summary }}
+          {% if entry.human_message %}
+          <span class="human">human_message: {{ entry.human_message }}</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
     </div>
 
-    <div class="log">
-      <h2>Tool-call log</h2>
-      {% for entry in tool_log %}
-      <div class="log-entry">
-        [{{ "%7.2f"|format(entry.ts) }}s] {{ entry.tool }}: {{ entry.summary }}
-        {% if entry.human_message %}
-        <span class="human">human_message: {{ entry.human_message }}</span>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
+    <script>
+      (function () {
+        var FRAMES = {{ frames_json | safe }};
+        var PANEL_LABELS = {{ panel_headers | tojson }};
+        var PANEL_COUNT = {{ panel_count }};
+        var current = 0;
+
+        function esc(value) {
+          return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+        }
+
+        function detailHtml(frame) {
+          var seenText = frame.seen_by_agent ? "Observed by agent" : "Simulator-only capture";
+          var seenClass = frame.seen_by_agent ? "state-good" : "state-muted";
+          var moveLine = frame.move_direction
+            ? "<p><strong>Move direction:</strong> " + esc(frame.move_direction) + "</p>"
+            : "";
+          var humanLine = frame.human_message
+            ? "<p><strong>Human message:</strong> " + esc(frame.human_message) + "</p>"
+            : "<p><strong>Human message:</strong> none</p>";
+          return [
+            '<article class="decision-card">',
+            '  <div class="decision-card-head"><strong>Frame ' + (frame.index + 1) + '</strong><span>' + esc(frame.badge + " " + seenText) + "</span></div>",
+            '  <span class="decision ' + esc(frame.decision_class) + '">' + esc(frame.decision_label) + "</span>",
+            '  <p><strong>Tool:</strong> ' + esc(frame.tool) + "</p>",
+            '  <p><strong>Time:</strong> ' + esc(Number(frame.ts || 0).toFixed(1) + "s") + "</p>",
+            '  <p><strong>Position:</strong> ' + esc(frame.position) + "</p>",
+            moveLine,
+            humanLine,
+            "</article>",
+            '<article class="decision-card">',
+            '  <div class="decision-card-head"><strong>Trace Notes</strong><span class="' + seenClass + '">' + esc(seenText) + "</span></div>",
+            '  <p><strong>Tooltip:</strong></p>',
+            '  <pre>' + esc(frame.tooltip) + "</pre>",
+            "</article>"
+          ].join("");
+        }
+
+        function update(index) {
+          if (!FRAMES.length) {
+            document.getElementById("frame-detail").innerHTML =
+              '<article class="decision-card"><p>No frame_capture events recorded.</p></article>';
+            return;
+          }
+          index = Math.max(0, Math.min(FRAMES.length - 1, index));
+          current = index;
+          var frame = FRAMES[index];
+          for (var panelIndex = 0; panelIndex < PANEL_COUNT; panelIndex += 1) {
+            var panel = document.getElementById("frame-panel-" + panelIndex);
+            if (panel) {
+              panel.src = frame.panel_images[panelIndex] || "";
+              panel.dataset.empty = frame.panel_images[panelIndex] ? "false" : "true";
+            }
+          }
+          document.getElementById("frame-slider").max = Math.max(0, FRAMES.length - 1);
+          document.getElementById("frame-slider").value = index;
+          document.getElementById("frame-label").textContent =
+            "Frame " + (index + 1) + " / " + FRAMES.length + " · " + frame.tool + " · " + Number(frame.ts || 0).toFixed(1) + "s";
+          document.getElementById("frame-detail").innerHTML = detailHtml(frame);
+        }
+
+        function zoom(panelIndex) {
+          if (!FRAMES.length) {
+            return;
+          }
+          var src = FRAMES[current].panel_images[panelIndex] || "";
+          if (!src) {
+            return;
+          }
+          document.getElementById("frame-lightbox-img").src = src;
+          document.getElementById("frame-lightbox-label").textContent = PANEL_LABELS[panelIndex] || "Panel";
+          document.getElementById("frame-lightbox").classList.add("lightbox-open");
+          document.body.classList.add("lightbox-body-open");
+        }
+
+        function closeZoom(event) {
+          var overlay = document.getElementById("frame-lightbox");
+          var closeButton = overlay.querySelector(".lightbox-close");
+          if (event && event.target && event.target !== overlay && event.target !== closeButton) {
+            return;
+          }
+          overlay.classList.remove("lightbox-open");
+          document.body.classList.remove("lightbox-body-open");
+        }
+
+        window.navReplaySet = function (value) {
+          update(value);
+        };
+        window.navReplayChange = function (delta) {
+          update(current + delta);
+        };
+        window.navReplayZoom = function (panelIndex) {
+          zoom(panelIndex);
+        };
+        window.navReplayCloseZoom = function (event) {
+          closeZoom(event);
+        };
+
+        update(0);
+      })();
+    </script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -60,6 +61,8 @@ class MultiAgentEngine:
         self.server_timeout = server_timeout
         self.server_start_timeout = server_start_timeout
         self._reachable_positions: set[tuple[int, int]] | None = None
+        self._overhead_camera_id = 0
+        self._chase_camera_ids: dict[int, int] = {}
         self._controller = Controller(
             scene=scene,
             agentCount=agent_count,
@@ -82,6 +85,7 @@ class MultiAgentEngine:
         pose["orthographic"] = True
         self._controller.step(action="AddThirdPartyCamera", **pose, skyboxColor="white")
         self._last_event = self._controller.last_event
+        self._overhead_camera_id = len(self._last_event.events[0].third_party_camera_frames) - 1
 
     def get_agent_state(self, agent_id: int) -> AgentState:
         """Return the current state for a single agent from the last event."""
@@ -135,7 +139,59 @@ class MultiAgentEngine:
 
     def get_overhead_frame(self) -> np.ndarray:
         """Return the most-recent top-down overhead camera frame as (H, W, 3) uint8."""
-        return self._last_event.events[0].third_party_camera_frames[-1]
+        return self._last_event.events[0].third_party_camera_frames[self._overhead_camera_id]
+
+    def add_chase_cam(self, agent_id: int) -> int:
+        """Register a third-party chase camera for an agent and return its camera id."""
+        if agent_id in self._chase_camera_ids:
+            return self._chase_camera_ids[agent_id]
+
+        pose = self._compute_chase_cam_pose(agent_id)
+        self._controller.step(
+            action="AddThirdPartyCamera",
+            position=pose["position"],
+            rotation=pose["rotation"],
+            fieldOfView=self.field_of_view,
+        )
+        self._last_event = self._controller.last_event
+        camera_id = len(self._last_event.events[0].third_party_camera_frames) - 1
+        self._chase_camera_ids[agent_id] = camera_id
+        return camera_id
+
+    def update_chase_cam(self, agent_id: int) -> None:
+        """Update an existing chase camera to the agent's current pose."""
+        camera_id = self._chase_camera_ids[agent_id]
+        pose = self._compute_chase_cam_pose(agent_id)
+        self._last_event = self._controller.step(
+            action="UpdateThirdPartyCamera",
+            thirdPartyCameraId=camera_id,
+            position=pose["position"],
+            rotation=pose["rotation"],
+            fieldOfView=self.field_of_view,
+        )
+
+    def get_chase_cam_frame(self, agent_id: int) -> np.ndarray:
+        """Return the latest chase-camera frame for an agent."""
+        if agent_id not in self._chase_camera_ids:
+            raise ValueError(f"No chase camera registered for agent {agent_id}")
+        camera_id = self._chase_camera_ids[agent_id]
+        return self._last_event.events[0].third_party_camera_frames[camera_id]
+
+    def _compute_chase_cam_pose(self, agent_id: int) -> dict[str, dict[str, float]]:
+        state = self.get_agent_state(agent_id)
+        yaw_rad = math.radians(float(state.rotation["y"]))
+        return {
+            "position": {
+                "x": float(state.position["x"]) - math.sin(yaw_rad) * 1.0,
+                "y": float(state.position["y"]) + 1.5,
+                "z": float(state.position["z"]) - math.cos(yaw_rad) * 1.0,
+            },
+            "rotation": {
+                "x": 20.0,
+                "y": float(state.rotation["y"]),
+                "z": 0.0,
+            },
+        }
 
     def close(self) -> None:
         """Stop the AI2-THOR Unity process."""

@@ -45,13 +45,24 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
-from roboclaws.core.visualizer import GameVisualizer
+from roboclaws.core.views import (
+    VIEW_VARIANTS,
+    make_navigation_view_context,
+    render_navigation_prompt_bundle,
+)
+from roboclaws.core.views import (
+    in_bounds as shared_in_bounds,
+)
+from roboclaws.core.views import (
+    pos_to_world_idx as shared_pos_to_world_idx,
+)
+from roboclaws.core.views import (
+    world_to_viz as shared_world_to_viz,
+)
 from roboclaws.core.vlm import format_provider_status, provider_status_snapshot
 from roboclaws.openclaw.bridge import OpenClawProvider, OpenClawUnavailable
 
@@ -73,16 +84,23 @@ _CENTER_COL: int = _GRID_COLS // 2
 
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
-    return (round(pos["x"] / _GRID_SIZE), round(pos["z"] / _GRID_SIZE))
+    return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
 def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int, int]:
     """Map a world grid index to a visualiser (row, col) centred at *origin*."""
-    return (_CENTER_ROW + (iz - origin_iz), _CENTER_COL + (ix - origin_ix))
+    return shared_world_to_viz(
+        ix,
+        iz,
+        origin_ix,
+        origin_iz,
+        grid_rows=_GRID_ROWS,
+        grid_cols=_GRID_COLS,
+    )
 
 
 def _in_bounds(row: int, col: int) -> bool:
-    return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
+    return shared_in_bounds(row, col, grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS)
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +177,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=300.0,
         help="AI2-THOR Unity startup timeout in seconds",
     )
+    p.add_argument(
+        "--views",
+        choices=VIEW_VARIANTS,
+        default="baseline",
+        help="Prompt image variant to send to the Gateway agent.",
+    )
     return p.parse_args(argv)
 
 
@@ -178,6 +202,7 @@ def run_openclaw_demo(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_stale_steps: int | None = None,
+    views: str = "baseline",
 ) -> dict[str, Any]:
     """Run a multi-agent navigation demo driven by a local OpenClaw Gateway.
 
@@ -225,8 +250,12 @@ def run_openclaw_demo(
         server_timeout=thor_server_timeout,
         server_start_timeout=thor_server_start_timeout,
     )
-    viz = GameVisualizer(
-        grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=agent_count
+    view_context = make_navigation_view_context(
+        engine,
+        agent_count=agent_count,
+        grid_rows=_GRID_ROWS,
+        grid_cols=_GRID_COLS,
+        cell_px=15,
     )
     recorder = ReplayRecorder(agent_count=agent_count, game="openclaw-demo")
 
@@ -246,48 +275,23 @@ def run_openclaw_demo(
     stale_steps = 0
 
     try:
-        initial_states = engine.get_all_agent_states()
-        origin_ix, origin_iz = _pos_to_world_idx(initial_states[0].position)
-
-        try:
-            overhead_bg: np.ndarray | None = engine.get_overhead_frame()
-        except Exception:  # noqa: BLE001 - mock engines may omit this
-            overhead_bg = None
-
-        visited_world: set[tuple[int, int]] = set()
-
         for step in range(steps):
             current_agent = step % agent_count
             agent_states = engine.get_all_agent_states()
             agent_frames = [s.frame for s in agent_states]
 
-            cells_before = len(visited_world)
-            for s in agent_states:
-                visited_world.add(_pos_to_world_idx(s.position))
-            if len(visited_world) > cells_before:
+            cells_before = len(view_context.visited_world)
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=engine,
+                context=view_context,
+                agent_states=agent_states,
+                current_agent=current_agent,
+                variant=views,
+            )
+            if len(view_context.visited_world) > cells_before:
                 stale_steps = 0
             else:
                 stale_steps += 1
-
-            # Agent positions in visualiser coordinates
-            agent_positions_viz: list[tuple[int, int]] = []
-            for s in agent_states:
-                wx, wz = _pos_to_world_idx(s.position)
-                rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
-                agent_positions_viz.append(rc if _in_bounds(*rc) else (_CENTER_ROW, _CENTER_COL))
-
-            covered_viz = [
-                rc
-                for wx, wz in visited_world
-                if _in_bounds(*(rc := _world_to_viz(wx, wz, origin_ix, origin_iz)))
-            ]
-
-            map_img = viz.render_overhead_map(
-                agent_positions=agent_positions_viz,
-                covered_cells=covered_viz,
-                base_frame=overhead_bg,
-            )
-            map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
 
             active_state = agent_states[current_agent]
             prompt_state: dict[str, Any] = {
@@ -299,13 +303,12 @@ def run_openclaw_demo(
                 "agent_count": agent_count,
                 "position": active_state.position,
                 "rotation": active_state.rotation,
+                "views": views,
+                "image_labels": list(prompt_bundle.image_labels),
                 "available_actions": NAVIGATION_ACTIONS,
             }
 
-            # Numpy frames flow inline — no filesystem / bind-mount hop.
-            prompt_images = [active_state.frame, map_frame]
-
-            response = provider.get_action(images=prompt_images, state=prompt_state)
+            response = provider.get_action(images=prompt_bundle.prompt_images, state=prompt_state)
             action = response.get("action", "MoveAhead")
             if action not in NAVIGATION_ACTIONS:
                 action = "MoveAhead"
@@ -321,13 +324,24 @@ def run_openclaw_demo(
                     f"provider: {format_provider_status(provider_status)}"
                 )
 
+            primary_view_label = (
+                prompt_bundle.image_labels[1] if len(prompt_bundle.image_labels) > 1 else "overhead"
+            )
+            extra_views: list[tuple[str, Any]] = []
+            if prompt_bundle.structured_overhead_frame is not None:
+                extra_views.append(("overhead", prompt_bundle.baseline_overhead_frame))
+            if prompt_bundle.chase_cam_frame is not None:
+                extra_views.append(("chase", prompt_bundle.chase_cam_frame))
+
             recorder.record_step(
                 step=step,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
-                overhead_frame=map_frame,
+                overhead_frame=prompt_bundle.trace_overhead_frame,
+                overhead_label=primary_view_label,
+                extra_views=extra_views,
                 game_state={
-                    "visited_cells": len(visited_world),
+                    "visited_cells": len(view_context.visited_world),
                     "current_agent": current_agent,
                 },
                 vlm_prompt_state=prompt_state,
@@ -343,7 +357,7 @@ def run_openclaw_demo(
                 print(
                     f"  step {step:4d}/{steps}  |  "
                     f"auto-converged: {stale_steps} consecutive steps with no new cell "
-                    f"(threshold={stale_threshold}, visited={len(visited_world)})"
+                    f"(threshold={stale_threshold}, visited={len(view_context.visited_world)})"
                 )
                 break
 
@@ -385,6 +399,7 @@ def main() -> None:
     print(f"Agents        : {args.agents}")
     print(f"Steps (max)   : {args.steps}")
     print(f"Stale cutoff  : {resolved_stale if resolved_stale > 0 else 'disabled'}")
+    print(f"Views         : {args.views}")
     print(f"Output dir    : {args.output_dir}")
     print()
 
@@ -399,6 +414,7 @@ def main() -> None:
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
         max_stale_steps=args.max_stale_steps,
+        views=args.views,
     )
 
     print()

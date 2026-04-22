@@ -16,10 +16,14 @@ from __future__ import annotations
 import argparse
 import base64
 import html as _html
+import io
 import json
 import webbrowser
 from pathlib import Path
 from typing import Any
+
+import numpy as np
+from PIL import Image
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -162,6 +166,7 @@ def _build_run_section(
     # Frame data (base64 images loaded once, stored in a JS array)
     frame_data: list[dict[str, Any]] = []
     latest_decisions: dict[int, dict[str, Any]] = {}
+    scene_panel_labels: list[str] = []
     for rec in steps_data:
         step = rec.get("step", 0)
         acting_agent = int(rec.get("agent_id", 0))
@@ -170,7 +175,22 @@ def _build_run_section(
             _img_to_b64(replay_dir / "agent_frames" / f"{tag}_agent{aid}.png")
             for aid in range(agent_count)
         ]
-        overhead_img = _img_to_b64(replay_dir / "overhead" / f"{tag}_overhead.png")
+        overhead_label = str(rec.get("overhead_label") or "overhead")
+        scene_panel_map = {
+            overhead_label: _img_to_b64(replay_dir / "overhead" / f"{tag}_overhead.png")
+        }
+        if overhead_label not in scene_panel_labels:
+            scene_panel_labels.append(overhead_label)
+
+        for extra_view in rec.get("extra_views", []):
+            label = str(extra_view.get("label") or "view")
+            rel_path = extra_view.get("path")
+            if not rel_path:
+                continue
+            scene_panel_map[label] = _img_to_b64(replay_dir / str(rel_path))
+            if label not in scene_panel_labels:
+                scene_panel_labels.append(label)
+
         vlm_response = rec.get("vlm_response", {})
         provider_status_for_step = rec.get("provider_status", {}) or {}
         latest_decisions[acting_agent] = {
@@ -195,26 +215,49 @@ def _build_run_section(
                 "step": step,
                 "agent_id": acting_agent,
                 "agent_imgs": agent_imgs,
-                "overhead_img": overhead_img,
+                "_scene_panel_map": scene_panel_map,
                 "decisions": decisions,
                 "provider_status": provider_status_for_step,
             }
         )
 
+    if not scene_panel_labels:
+        scene_panel_labels = ["overhead"]
+
+    for frame in frame_data:
+        scene_panel_map = frame.pop("_scene_panel_map")
+        frame["scene_panels"] = [scene_panel_map.get(label, "") for label in scene_panel_labels]
+
+    display_panels = _build_display_panels(agent_count, scene_panel_labels)
+    for frame in frame_data:
+        display_images: list[str] = []
+        for spec in display_panels:
+            if spec["kind"] == "agent":
+                display_images.append(frame["agent_imgs"][spec["index"]])
+            else:
+                scene_panel_map = dict(zip(scene_panel_labels, frame["scene_panels"], strict=False))
+                display_images.append(scene_panel_map.get(spec["key"], ""))
+        frame["display_panels"] = display_images
+
     n_frames = len(frame_data)
     max_idx = max(0, n_frames - 1)
-
-    agent_ths = "".join(f"<th>Agent {i}</th>" for i in range(agent_count))
-    agent_tds = "".join(
-        f'<td><img id="{run_id}-agent-{i}" class="frame-img" src="" alt="Agent {i}"/></td>'
-        for i in range(agent_count)
-    )
-    agent_init_js = "; ".join(
-        f'document.getElementById(rid+"-agent-{i}").src = f.agent_imgs[{i}] || ""'
-        for i in range(agent_count)
-    )
     js_id = run_id.replace("-", "_")
+
+    panel_cards = "".join(
+        f'<button type="button" class="frame-card" onclick="rc_{js_id}_zoom({index})">'
+        f'<span class="frame-card-label">{_html.escape(spec["label"])}</span>'
+        f'<img id="{run_id}-panel-{index}" class="frame-img" src="" '
+        f'alt="{_html.escape(spec["label"])}"/></button>'
+        for index, spec in enumerate(display_panels)
+    )
+    panel_init_js = "; ".join(
+        f'var panel{index}=document.getElementById(rid+"-panel-{index}");'
+        f'panel{index}.src=f.display_panels[{index}]||"";'
+        f'panel{index}.dataset.empty=f.display_panels[{index}]?"false":"true"'
+        for index in range(len(display_panels))
+    )
     frames_json = json.dumps(frame_data)
+    panel_labels_json = json.dumps([spec["label"] for spec in display_panels])
     initial_decisions = (
         frame_data[0]["decisions"]
         if frame_data
@@ -224,13 +267,8 @@ def _build_run_section(
 
     viewer_html = (
         f'<div class="viewer">'
-        f'<table class="frame-table">'
-        f"<thead><tr>{agent_ths}<th>Overhead</th></tr></thead>"
-        f"<tbody><tr>"
-        f"{agent_tds}"
-        f'<td><img id="{run_id}-overhead" class="frame-img" src="" alt="Overhead"/></td>'
-        f"</tr></tbody>"
-        f"</table>"
+        f'<p class="frame-hint">Click any panel to zoom.</p>'
+        f'<div class="frame-board">{panel_cards}</div>'
         f'<div class="slider-row">'
         f'<button onclick="rc_{js_id}_change(-1)">&#9664;</button>'
         f'<input type="range" id="{run_id}-slider" min="0" max="{max_idx}" value="0"'
@@ -238,6 +276,14 @@ def _build_run_section(
         f'<button onclick="rc_{js_id}_change(1)">&#9654;</button>'
         f'<span id="{run_id}-step-label">Step — / {max_idx}</span>'
         f"</div>"
+        f'<div id="{run_id}-lightbox" class="lightbox" '
+        f'onclick="rc_{js_id}_close_zoom(event)">'
+        f'<div class="lightbox-shell">'
+        f'<button type="button" class="lightbox-close" '
+        f'onclick="rc_{js_id}_close_zoom(event)">×</button>'
+        f'<div class="lightbox-title" id="{run_id}-lightbox-label"></div>'
+        f'<img id="{run_id}-lightbox-img" class="lightbox-img" src="" alt="Zoomed frame panel"/>'
+        f"</div></div>"
         f'<div class="decision-panel">'
         f"<h3>Latest Agent Decisions</h3>"
         f'<div id="{run_id}-decision-cards" class="decision-cards">{decision_cards_html}</div>'
@@ -246,6 +292,7 @@ def _build_run_section(
         f"<script>"
         f"(function(){{"
         f"var FRAMES={frames_json};"
+        f"var PANEL_LABELS={panel_labels_json};"
         f'var rid="{_html.escape(run_id, quote=True)}";'
         f"var cur=0;"
         f"function esc(s){{return String(s||'').replace(/&/g,'&amp;')"
@@ -276,15 +323,31 @@ def _build_run_section(
         f"idx=Math.max(0,Math.min(FRAMES.length-1,idx));"
         f"cur=idx;"
         f"var f=FRAMES[idx];"
-        f"{agent_init_js};"
-        f'document.getElementById(rid+"-overhead").src=f.overhead_img||"";'
+        f"{panel_init_js};"
         f'document.getElementById(rid+"-slider").value=idx;'
         f'document.getElementById(rid+"-step-label").textContent='
         f'"Step "+f.step+" / {max_idx}";'
         f'document.getElementById(rid+"-decision-cards").innerHTML=(f.decisions||[]).map(decisionCardHtml).join("");'
         f"}}"
+        f"function zoom(panelIdx){{"
+        f"if(!FRAMES.length)return;"
+        f"var src=FRAMES[cur].display_panels[panelIdx]||'';"
+        f"if(!src)return;"
+        f'document.getElementById(rid+"-lightbox-img").src=src;'
+        f'document.getElementById(rid+"-lightbox-label").textContent=PANEL_LABELS[panelIdx]||"Panel";'
+        f'document.getElementById(rid+"-lightbox").classList.add("lightbox-open");'
+        f'document.body.classList.add("lightbox-body-open");'
+        f"}}"
+        f"function closeZoom(ev){{"
+        f'if(ev&&ev.target&&ev.target!==document.getElementById(rid+"-lightbox")&&'
+        f'ev.target!==document.getElementById(rid+"-lightbox").querySelector(".lightbox-close"))return;'
+        f'document.getElementById(rid+"-lightbox").classList.remove("lightbox-open");'
+        f'document.body.classList.remove("lightbox-body-open");'
+        f"}}"
         f"window.rc_{js_id}_set=function(v){{upd(v);}};  "
         f"window.rc_{js_id}_change=function(d){{upd(cur+d);}};  "
+        f"window.rc_{js_id}_zoom=function(i){{zoom(i);}};  "
+        f"window.rc_{js_id}_close_zoom=function(ev){{closeZoom(ev);}};  "
         f"if(FRAMES.length)upd(0);"
         f"}})();"
         f"</script>"
@@ -368,6 +431,57 @@ def _render_decision_card(decision: dict[str, Any]) -> str:
     )
 
 
+def _format_panel_label(label: str) -> str:
+    """Convert storage labels like ``map_v2`` into readable report headings."""
+    normalized = str(label).replace("-", "_").strip("_ ")
+    if not normalized:
+        return "View"
+    parts = [part for part in normalized.split("_") if part]
+    pretty: list[str] = []
+    for part in parts:
+        upper = part.upper()
+        if upper in {"FPV", "VLM"}:
+            pretty.append(upper)
+        elif part.isdigit():
+            pretty.append(part)
+        else:
+            pretty.append(part.capitalize())
+    return " ".join(pretty)
+
+
+def _normalize_panel_key(label: str) -> str:
+    """Return a stable normalized key for viewer layout and trim rules."""
+    return str(label).replace("-", "_").strip("_ ").lower()
+
+
+def _build_display_panels(
+    agent_count: int,
+    scene_panel_labels: list[str],
+) -> list[dict[str, Any]]:
+    """Return ordered viewer panels with labels matched to the saved assets."""
+    panels: list[dict[str, Any]] = []
+    if agent_count == 1:
+        panels.append({"kind": "agent", "index": 0, "label": "FPV", "key": "fpv"})
+    else:
+        for agent_index in range(agent_count):
+            panels.append(
+                {
+                    "kind": "agent",
+                    "index": agent_index,
+                    "label": f"Agent {agent_index}",
+                    "key": f"agent_{agent_index}",
+                }
+            )
+
+    preferred_scene_order = {"chase": 0, "map_v2": 1, "overhead": 2}
+    for label in sorted(
+        scene_panel_labels,
+        key=lambda value: (preferred_scene_order.get(_normalize_panel_key(value), 50), str(value)),
+    ):
+        panels.append({"kind": "scene", "key": label, "label": _format_panel_label(label)})
+    return panels
+
+
 def _render_provider_health(provider_status: dict[str, Any]) -> str:
     """Render the final provider-health snapshot for the run summary."""
     if not provider_status:
@@ -404,12 +518,18 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         ".badge { background: #eef2ff; border-radius: 4px;"
         "  padding: 0.2rem 0.6rem; font-size: 0.82rem; }"
         ".viewer { background: #fff; border-radius: 8px; padding: 1rem;"
-        "  box-shadow: 0 1px 4px #0001; margin-bottom: 1rem; overflow-x: auto; }"
-        ".frame-table { border-collapse: collapse; margin-bottom: 0.75rem; }"
-        ".frame-table th { background: #e8edf8; padding: 4px 10px; font-size: 0.78rem; }"
-        ".frame-table td { padding: 4px; }"
-        ".frame-img { display: block; max-width: 200px; max-height: 160px; background: #ddd;"
-        "  border: 1px solid #bbb; border-radius: 3px; }"
+        "  box-shadow: 0 1px 4px #0001; margin-bottom: 1rem; }"
+        ".frame-hint { margin: 0 0 0.75rem; color: #5f6c85; font-size: 0.82rem; }"
+        ".frame-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));"
+        "  gap: 0.9rem; margin-bottom: 0.9rem; }"
+        ".frame-card { width: 100%; border: 1px solid #d8dfeb; border-radius: 10px;"
+        "  background: #f8faff; padding: 0.75rem; display: flex; flex-direction: column;"
+        "  gap: 0.5rem; cursor: zoom-in; text-align: left; }"
+        ".frame-card:hover { border-color: #9db4ff; box-shadow: 0 8px 20px #6b8cff18; }"
+        ".frame-card-label { font-size: 0.82rem; font-weight: 700; color: #39445f; }"
+        ".frame-img { display: block; width: 100%; max-height: 340px; background: #edf1f7;"
+        "  border: 1px solid #c9d4e4; border-radius: 8px; object-fit: contain; }"
+        ".frame-img[data-empty=true] { display: none; }"
         ".slider-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }"
         ".slider-row input[type=range] { flex: 1; min-width: 200px; }"
         ".slider-row button { padding: 0.2rem 0.7rem; cursor: pointer;"
@@ -445,9 +565,24 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         ".vlm-entry pre { background: #f6f8fb; border-radius: 4px; padding: 0.6rem;"
         "  overflow-x: auto; font-size: 0.78rem; max-height: 180px;"
         "  border: 1px solid #e0e4ec; }"
+        ".lightbox { display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.78);"
+        "  padding: 2rem; z-index: 1000; }"
+        ".lightbox-open { display: flex; align-items: center; justify-content: center; }"
+        ".lightbox-shell { position: relative; width: min(96vw, 1680px);"
+        "  max-height: 94vh; background: #fff; border-radius: 14px; padding: 1rem;"
+        "  box-shadow: 0 20px 60px #0006; }"
+        ".lightbox-title { font-size: 0.95rem; font-weight: 700; margin: 0 2.5rem 0.75rem 0; }"
+        ".lightbox-close { position: absolute; top: 0.65rem; right: 0.75rem; border: none;"
+        "  background: transparent; font-size: 1.7rem; line-height: 1;"
+        "  cursor: pointer; color: #53627f; }"
+        ".lightbox-img { display: block; width: min(92vw, 1600px); max-width: 100%;"
+        "  max-height: 86vh; margin: 0 auto; border-radius: 10px;"
+        "  background: #edf1f7; object-fit: contain; }"
+        ".lightbox-body-open { overflow: hidden; }"
         ".compare-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }"
         ".compare-col { min-width: 0; }"
-        "@media (max-width: 900px) { .compare-layout { grid-template-columns: 1fr; } }"
+        "@media (max-width: 900px) { .compare-layout { grid-template-columns: 1fr; }"
+        "  .frame-board { grid-template-columns: 1fr; } }"
     )
     return (
         f"<!DOCTYPE html>\n"
@@ -604,7 +739,47 @@ def _img_to_b64(path: Path) -> str:
     """Return a base64 PNG data URI for *path*, or empty string if missing."""
     if not path.exists():
         return ""
-    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+    image = Image.open(path).convert("RGB")
+    if _should_trim_panel_border(path):
+        image = _trim_uniform_border(image)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _should_trim_panel_border(path: Path) -> bool:
+    """Return ``True`` for panels whose empty margins should be cropped in reports."""
+    return "_overhead" in path.stem
+
+
+def _trim_uniform_border(image: Image.Image, tolerance: int = 10, padding: int = 2) -> Image.Image:
+    """Crop away a uniform border when the corner pixels agree closely."""
+    rgb = image.convert("RGB")
+    width, height = rgb.size
+    if width < 3 or height < 3:
+        return rgb
+
+    arr = np.asarray(rgb, dtype=np.int16)
+    corners = np.asarray(
+        [arr[0, 0], arr[0, -1], arr[-1, 0], arr[-1, -1]],
+        dtype=np.int16,
+    )
+    if np.abs(corners - corners[0]).max() > tolerance:
+        return rgb
+
+    background = corners.mean(axis=0)
+    mask = np.abs(arr - background).max(axis=2) > tolerance
+    if not mask.any():
+        return rgb
+
+    ys, xs = np.where(mask)
+    top = max(0, int(ys.min()) - padding)
+    bottom = min(height, int(ys.max()) + padding + 1)
+    left = max(0, int(xs.min()) - padding)
+    right = min(width, int(xs.max()) + padding + 1)
+    if top == 0 and left == 0 and bottom == height and right == width:
+        return rgb
+    return rgb.crop((left, top, right, bottom))
 
 
 # ---------------------------------------------------------------------------
