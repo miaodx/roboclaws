@@ -762,3 +762,36 @@ def test_mcp_seed_is_idempotent(tmp_path: Path) -> None:
         "pre-seed is not idempotent — re-running produced a different "
         "openclaw.json. Diff the two contents to find the drift."
     )
+
+
+def test_preseed_bakes_openclaw_token_when_set(tmp_path: Path) -> None:
+    """OPENCLAW_TOKEN=<value> lands inside gateway.auth.token.
+
+    This is how the chat-* Makefile targets pin a stable `demo` bearer so
+    operators don't have to paste a fresh random token every `make chat`.
+    """
+    cfg_path = _run_preseed(tmp_path, {"OPENCLAW_TOKEN": "demo"})
+    config = json.loads(cfg_path.read_text(encoding="utf-8"))
+    auth = config["gateway"]["auth"]
+    assert auth["mode"] == "token"
+    assert auth["token"] == "demo", (
+        "OPENCLAW_TOKEN=demo must be pre-seeded into openclaw.json; the "
+        "Gateway will leave pre-seeded tokens alone and only generate a "
+        "random one when the field is missing."
+    )
+
+
+def test_preseed_omits_token_field_when_env_unset(tmp_path: Path) -> None:
+    """When OPENCLAW_TOKEN is unset, gateway.auth has no token field.
+
+    The Gateway's first-boot logic generates and writes a random token into
+    this slot; bootstrap's readyz loop reads whatever value ends up live.
+    If we pre-seed an empty string the Gateway may treat that as "already
+    set" and skip generation — so the field must be omitted, not empty.
+    """
+    cfg_path = _run_preseed(tmp_path, {"OPENCLAW_TOKEN": ""})
+    config = json.loads(cfg_path.read_text(encoding="utf-8"))
+    auth = config["gateway"]["auth"]
+    assert auth == {"mode": "token"}, (
+        f"expected auth to be exactly {{'mode': 'token'}} when no token is configured; got {auth!r}"
+    )
