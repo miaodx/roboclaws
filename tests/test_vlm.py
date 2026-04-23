@@ -313,7 +313,7 @@ def test_kimi_retries_transient_overload(kimi_provider):
         (_mock_action_result("retry ok", "MoveRight"), mock_response),
     ]
 
-    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+    with patch("roboclaws.core.providers.anthropic.time.sleep") as sleep:
         result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
 
     assert result == {"reasoning": "retry ok", "action": "MoveRight"}
@@ -335,7 +335,7 @@ def test_kimi_status_tracks_retries(kimi_provider):
         (_mock_action_result("retry ok", "MoveRight"), mock_response),
     ]
 
-    with patch("roboclaws.core.vlm.time.sleep"):
+    with patch("roboclaws.core.providers.anthropic.time.sleep"):
         provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
 
     status = provider.get_status()
@@ -360,7 +360,7 @@ def test_kimi_stops_after_transient_error_budget(kimi_provider):
         (_mock_action_result("too late", "MoveAhead"), MagicMock()),
     ]
 
-    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+    with patch("roboclaws.core.providers.anthropic.time.sleep") as sleep:
         with pytest.raises(ProviderHealthError, match="transient_error_budget_exceeded"):
             provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
 
@@ -375,7 +375,7 @@ def test_kimi_does_not_retry_non_transient_error(kimi_provider):
     provider, mock_client = kimi_provider
     mock_client.messages.create_with_completion.side_effect = ValueError("bad request")
 
-    with patch("roboclaws.core.vlm.time.sleep") as sleep:
+    with patch("roboclaws.core.providers.anthropic.time.sleep") as sleep:
         with pytest.raises(ValueError, match="bad request"):
             provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
 
