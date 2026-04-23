@@ -50,12 +50,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.views import (
-    VIEW_VARIANTS,
-    make_navigation_view_context,
-    render_navigation_prompt_bundle,
+    in_bounds as shared_in_bounds,
 )
 from roboclaws.core.views import (
-    in_bounds as shared_in_bounds,
+    make_navigation_view_context,
+    render_navigation_prompt_bundle,
 )
 from roboclaws.core.views import (
     pos_to_world_idx as shared_pos_to_world_idx,
@@ -177,12 +176,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=300.0,
         help="AI2-THOR Unity startup timeout in seconds",
     )
-    p.add_argument(
-        "--views",
-        choices=VIEW_VARIANTS,
-        default="map-v2+chase",
-        help="Prompt image variant to send to the Gateway agent.",
-    )
     return p.parse_args(argv)
 
 
@@ -202,7 +195,6 @@ def run_openclaw_demo(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_stale_steps: int | None = None,
-    views: str = "map-v2+chase",
 ) -> dict[str, Any]:
     """Run a multi-agent navigation demo driven by a local OpenClaw Gateway.
 
@@ -302,7 +294,7 @@ def run_openclaw_demo(
                 "agent_count": agent_count,
                 "position": active_state.position,
                 "rotation": active_state.rotation,
-                "views": views,
+                "views": "map-v2+chase",
                 "image_labels": list(prompt_bundle.image_labels),
                 "available_actions": NAVIGATION_ACTIONS,
             }
@@ -397,7 +389,6 @@ def main() -> None:
     print(f"Agents        : {args.agents}")
     print(f"Steps (max)   : {args.steps}")
     print(f"Stale cutoff  : {resolved_stale if resolved_stale > 0 else 'disabled'}")
-    print(f"Views         : {args.views}")
     print(f"Output dir    : {args.output_dir}")
     print()
 
@@ -412,7 +403,6 @@ def main() -> None:
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
         max_stale_steps=args.max_stale_steps,
-        views=args.views,
     )
 
     print()

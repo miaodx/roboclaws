@@ -49,7 +49,6 @@ import tyro
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.core.views import ViewVariant
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
@@ -65,9 +64,6 @@ class Args:
     # Engine
     scene: str = "FloorPlan201"
     """AI2-THOR floor plan scene."""
-
-    views: ViewVariant = "map-v2+chase"
-    """Prompt image bundle variant returned by roboclaws__observe."""
 
     agent_id: int = 0
     """AI2-THOR agent index bound to MCP tools (matches Gateway agent-<id>)."""
@@ -307,7 +303,6 @@ def main(argv: list[str] | None = None) -> int:
             run_dir=output_dir,
             host="0.0.0.0",
             port=18788,
-            view_variant=args.views,
             snapshots_dir=agent_snapshots_dir,
             model_name=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
@@ -319,7 +314,6 @@ def main(argv: list[str] | None = None) -> int:
             "interactive_started",
             scene=args.scene,
             agent_id=args.agent_id,
-            view_variant=args.views,
             skip_bootstrap=args.skip_bootstrap,
             model=runtime_config["model_name"],
             image_model=runtime_config["image_model"],

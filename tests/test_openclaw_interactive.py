@@ -62,7 +62,6 @@ def _make_fake_mcp_server(*, pre_done: bool = True) -> MagicMock:
 def test_parse_args_defaults() -> None:
     args = _parse_args([])
     assert args.scene == "FloorPlan201"
-    assert args.views == "map-v2+chase"
     assert args.agent_id == 0
     assert args.output_dir is None
     assert args.skip_bootstrap is False
@@ -82,11 +81,6 @@ def test_parse_args_accepts_skip_and_keep_flags() -> None:
     assert args.skip_bootstrap is True
     assert args.keep_gateway is True
     assert args.agent_id == 2
-
-
-def test_parse_args_rejects_invalid_view() -> None:
-    with pytest.raises(SystemExit):
-        _parse_args(["--views", "not-a-variant"])
 
 
 def test_parse_args_provider_and_model_flags() -> None:

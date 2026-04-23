@@ -77,13 +77,7 @@ def test_parse_args_defaults() -> None:
     assert args.max_moves == 200
     assert args.wall_budget == 600.0
     assert args.output_dir is None
-    assert args.views == "map-v2+chase"
     assert args.skip_bootstrap is False
-
-
-def test_parse_args_accepts_view_variants() -> None:
-    args = _parse_args(["--views", "map-v2+chase"])
-    assert args.views == "map-v2+chase"
 
 
 def test_kickoff_prompt_is_mcp_era_and_short() -> None:
@@ -208,7 +202,6 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
-            views="map-v2+chase",
             skip_bootstrap=False,
         )
 
@@ -245,7 +238,6 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "example must override host to 0.0.0.0 on Linux (spike 02.6-06); "
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
-    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5-pro"
     assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2-omni"
     assert mcp_kwargs.get("observe_mode") == "text-bridge"
@@ -290,7 +282,7 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ) as mcp_factory,
+        ),
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -305,14 +297,11 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
             max_moves=50,
             wall_budget=300.0,
             output_dir=output_dir,
-            views="map-v2",
             skip_bootstrap=True,
         )
 
     assert result["terminated_by"] == "done"
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-xyz")
-    _, mcp_kwargs = mcp_factory.call_args
-    assert mcp_kwargs.get("view_variant") == "map-v2"
     assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] not in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
@@ -340,7 +329,7 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ) as mcp_factory,
+        ),
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -365,8 +354,6 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
     assert (diagnostics_dir / "gateway.docker.log").exists()
     assert (diagnostics_dir / "gateway.inner.log").exists()
     assert (diagnostics_dir / "gateway.workspace-state.txt").exists()
-    _, mcp_kwargs = mcp_factory.call_args
-    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
     fake_server.close.assert_called_once()
@@ -403,7 +390,7 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
         patch(
             "openclaw_nav_autonomous.make_roboclaws_mcp",
             return_value=fake_server,
-        ) as mcp_factory,
+        ),
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
@@ -426,8 +413,6 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
 
     # Operator-supplied value was preserved (setdefault, not assignment).
     assert captured_env.get("ROBOCLAWS_MCP_URL") == override_url
-    _, mcp_kwargs = mcp_factory.call_args
-    assert mcp_kwargs.get("view_variant") == "map-v2+chase"
     # The example no longer sets SIM_SERVER_URL itself. A pre-existing value
     # in os.environ (inherited) is acceptable, but the example is not the
     # source of the legacy URL anymore.
