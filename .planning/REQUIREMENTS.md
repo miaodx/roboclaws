@@ -146,6 +146,15 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       as vision intermediary, recorded and confirmed working.
       Planned in GSD Phase 2.8 under `.planning/phases/02.8-split-model-vision/`.
 
+- [ ] **A-08** (REQ-refactor-regression-safety): Add refactor-safety harnesses
+      that freeze the critical direct-VLM / territory / coverage / OpenClaw
+      contracts with tiny fixtures and tests, capture append-only
+      `results.jsonl` rows plus replay artifacts from the existing runners,
+      and compare baseline vs candidate runs by stable coordinates with
+      threshold-based gates instead of exact reasoning-text equality.
+      Planned in GSD Phase 4 under
+      `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/`.
+
 ## v2 Requirements
 
 Deferred to Phase 3 (Isaac Lab).
@@ -199,10 +208,12 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-04 | Phase 2.4 | Pending |
 | A-05 | (deferred — formerly Phase 2.5 "ship winning view"; awaits a new phase) | Deferred |
 | A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Complete (shipped 2026-04-21) |
+| A-07 | Phase 2.8 | Planned |
+| A-08 | Phase 4 | Planned |
 
 **Coverage:**
-- v1 requirements: 17 total (A-06 added 2026-04-20)
-- Mapped to phases: 16 active + 1 deferred
+- v1 requirements: 18 total (A-08 added 2026-04-23)
+- Mapped to phases: 17 active + 1 deferred
 - Unmapped: 0 ✓
 
 ---

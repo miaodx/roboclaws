@@ -1,0 +1,18 @@
+{
+  "metadata": [
+    "game",
+    "agent_count",
+    "total_steps",
+    "duration_seconds",
+    "vlm_cost_usd"
+  ],
+  "summary": [
+    "final_scores",
+    "total_steps",
+    "vlm_cost_usd",
+    "step_count",
+    "game_duration_seconds",
+    "termination_reason",
+    "provider_status"
+  ]
+}
