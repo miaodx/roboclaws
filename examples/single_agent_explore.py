@@ -17,18 +17,25 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import base64
-import io
 import sys
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
+from roboclaws.core.turn_metrics import encode_frame_to_b64_jpeg
+from roboclaws.core.views import (
+    in_bounds as shared_in_bounds,
+)
+from roboclaws.core.views import (
+    pos_to_world_idx as shared_pos_to_world_idx,
+)
+from roboclaws.core.views import (
+    world_to_viz as shared_world_to_viz,
+)
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import (
     ProviderHealthError,
@@ -55,23 +62,18 @@ _CENTER_COL: int = _GRID_COLS // 2
 
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
-    return (round(pos["x"] / _GRID_SIZE), round(pos["z"] / _GRID_SIZE))
+    return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
 def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int, int]:
     """Map a world grid index to a visualiser (row, col) centred at *origin*."""
-    return (_CENTER_ROW + (iz - origin_iz), _CENTER_COL + (ix - origin_ix))
+    return shared_world_to_viz(
+        ix, iz, origin_ix, origin_iz, grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS
+    )
 
 
 def _in_bounds(row: int, col: int) -> bool:
-    return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
-
-
-def _frame_to_b64(frame: np.ndarray) -> str:
-    """Encode a (H, W, 3) uint8 numpy array as a base64 JPEG string."""
-    buf = io.BytesIO()
-    Image.fromarray(frame, mode="RGB").save(buf, format="JPEG", quality=80)
-    return base64.b64encode(buf.getvalue()).decode("ascii")
+    return shared_in_bounds(row, col, grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS)
 
 
 # ---------------------------------------------------------------------------
@@ -172,8 +174,8 @@ def run_exploration(
             }
 
             # Query VLM with agent FPV + overhead trail map
-            agent_b64 = _frame_to_b64(state.frame)
-            map_b64 = _frame_to_b64(map_frame)
+            agent_b64 = encode_frame_to_b64_jpeg(state.frame)[0]
+            map_b64 = encode_frame_to_b64_jpeg(map_frame)[0]
             try:
                 response = provider.get_action(images=[agent_b64, map_b64], state=vlm_state)
             except ProviderHealthError as exc:

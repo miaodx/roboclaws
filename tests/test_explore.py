@@ -17,13 +17,20 @@ from single_agent_explore import (  # noqa: E402
     _CENTER_ROW,
     _GRID_COLS,
     _GRID_ROWS,
-    _frame_to_b64,
     _in_bounds,
     _parse_args,
     _pos_to_world_idx,
     _world_to_viz,
     run_exploration,
 )
+
+from roboclaws.core.turn_metrics import encode_frame_to_b64_jpeg  # noqa: E402
+
+
+def _frame_to_b64(frame: np.ndarray) -> str:
+    """Thin test-local shim: returns just the b64 string from encode_frame_to_b64_jpeg."""
+    return encode_frame_to_b64_jpeg(frame)[0]
+
 
 # ---------------------------------------------------------------------------
 # Helpers shared by multiple tests
