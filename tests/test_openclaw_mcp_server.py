@@ -427,8 +427,13 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
         # The hint must also tell the agent to IGNORE the Gateway's
         # "avoid absolute paths" system-prompt warning — without this,
         # Kimi obeys the stronger signal and emits a broken relative
-        # path (observed 2026-04-23).
+        # path (observed 2026-04-23, first half of the session).
         assert "IGNORE" in response["hint"] or "ignore" in response["hint"]
+        # Turn-placement rule: only the LAST assistant message of a turn
+        # has its MEDIA extracted by the Control UI — intermediate
+        # messages become plain text (observed 2026-04-23, second half
+        # of the session: rapid1/rapid2 A/B test).
+        assert "FINAL" in response["hint"] or "final assistant message" in response["hint"]
         # Anti-spiral guardrail: the hint must tell the agent not to retry
         # with alternate paths if the Control UI rejects the attachment.
         assert "Attachment unavailable" in response["hint"]
