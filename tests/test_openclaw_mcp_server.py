@@ -413,17 +413,24 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
     try:
         response = srv._do_snapshot(label="corner view")
 
-        # Returned paths are relative to the agent workspace and grouped by
-        # kind. Counter-suffix is appended so duplicate labels don't collide.
-        assert response["fpv_path"] == "./snapshots/corner_view-001.fpv.png"
-        assert response["map_path"] == "./snapshots/corner_view-001.map.png"
-        assert response["chase_path"] == "./snapshots/corner_view-001.chase.png"
-        assert "MEDIA:./snapshots/corner_view-001.fpv.png" in response["hint"]
-        assert "MEDIA:./snapshots/corner_view-001.chase.png" in response["hint"]
+        # Paths MUST be absolute container-side paths under the agent
+        # workspace. Live probe 2026-04-23 proved relative `./snapshots/…`
+        # silently drop in the Control UI while absolute
+        # `/home/node/.openclaw/workspaces/agent-<id>/snapshots/…` renders.
+        # The Gateway's REPLY_MEDIA_HINT advises the opposite; we're right.
+        workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
+        assert response["fpv_path"] == workspace_prefix + "corner_view-001.fpv.png"
+        assert response["map_path"] == workspace_prefix + "corner_view-001.map.png"
+        assert response["chase_path"] == workspace_prefix + "corner_view-001.chase.png"
+        assert f"MEDIA:{workspace_prefix}corner_view-001.fpv.png" in response["hint"]
+        assert f"MEDIA:{workspace_prefix}corner_view-001.chase.png" in response["hint"]
+        # The hint must also tell the agent to IGNORE the Gateway's
+        # "avoid absolute paths" system-prompt warning — without this,
+        # Kimi obeys the stronger signal and emits a broken relative
+        # path (observed 2026-04-23).
+        assert "IGNORE" in response["hint"] or "ignore" in response["hint"]
         # Anti-spiral guardrail: the hint must tell the agent not to retry
         # with alternate paths if the Control UI rejects the attachment.
-        # Without this, a bind-mount or config problem causes the agent
-        # to burn tokens guessing /tmp, /data, /home/node/... etc.
         assert "Attachment unavailable" in response["hint"]
         assert "STOP" in response["hint"]
 
@@ -470,11 +477,15 @@ def test_snapshot_sanitizes_dangerous_labels(engine: FakeEngine, tmp_path: Path)
         response = srv._do_snapshot(label="../../etc/passwd")
         # `..` and slashes collapse to a single `_`; stripped leading/trailing
         # dots/underscores leave `etc_passwd`. Counter suffix still appended.
-        assert response["fpv_path"].startswith("./snapshots/")
-        assert ".." not in response["fpv_path"]
-        assert "/" not in response["fpv_path"].removeprefix("./snapshots/")
-        # The real file must land inside the snapshots dir (no escape).
-        fname = response["fpv_path"].removeprefix("./snapshots/")
+        workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
+        assert response["fpv_path"].startswith(workspace_prefix)
+        fname = response["fpv_path"].removeprefix(workspace_prefix)
+        assert ".." not in fname
+        assert "/" not in fname, (
+            f"sanitized label produced a path with a slash: {fname!r} — "
+            "label traversal must collapse, not escape the snapshots dir"
+        )
+        # The real file must land inside the (host) snapshots dir (no escape).
         assert (snap_dir / fname).exists()
     finally:
         srv.close()

@@ -464,26 +464,45 @@ class RoboclawsMCPServer:
         for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
             labeled[name] = _encode_frame_png(frame, max_dim=640)
 
+        # Container-side workspace path — the Gateway's agent-scoped allowed-
+        # roots list contains exactly this directory. Bootstrap bind-mounts
+        # our host snapshots_dir there, so ``/home/node/.openclaw/workspaces/
+        # agent-<id>/snapshots/`` is both reachable and allowed.
+        #
+        # Absolute path, not relative: live-tested 2026-04-23 the agent's
+        # `MEDIA:./snapshots/<file>.png` never rendered (Control UI silently
+        # dropped it), while `MEDIA:/home/node/.openclaw/workspaces/agent-0
+        # /snapshots/<file>.png` worked first try. The Gateway's resolver
+        # appears to normalize relative paths against its own CWD rather than
+        # the agent workspace — so despite the `REPLY_MEDIA_HINT` system
+        # prompt warning to "avoid absolute paths", they're the ONLY shape
+        # that reliably resolves under getAgentScopedMediaLocalRoots.
+        container_snapshots_dir = f"/home/node/.openclaw/workspaces/agent-{self.agent_id}/snapshots"
+
         written: dict[str, str] = {}
         for name, png_bytes in labeled.items():
             dest = self.snapshots_dir / f"{clean}.{name}.png"
             dest.write_bytes(png_bytes)
-            # Relative path as the agent would write it: `./snapshots/<file>`.
-            written[name] = f"./snapshots/{dest.name}"
+            written[name] = f"{container_snapshots_dir}/{dest.name}"
 
         media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
         hint = (
-            "Snapshot written. To show the operator what you see, reply in "
-            "chat with the MEDIA lines below (the Control UI will render "
-            "them inline); keep any caption in the text body. Paste the "
-            "lines EXACTLY as shown — do not modify the paths.\n\n"
-            + media_lines
-            + "\n\nIf the Control UI replies 'Attachment unavailable' or "
+            "Snapshot written. To show the operator what you see, reply "
+            "in chat with the MEDIA lines below (the Control UI will "
+            "render them inline); keep any caption in the text body.\n\n"
+            "IMPORTANT: paste each line EXACTLY as shown — absolute path, "
+            "no relative `./`, no trimming, no brackets. The Gateway's "
+            "`REPLY_MEDIA_HINT` system prompt tells you to avoid absolute "
+            "paths; IGNORE that guidance here. Live testing shows "
+            "absolute paths under the agent workspace are the ONLY "
+            "shape that renders — relative paths like `./snapshots/foo.png` "
+            "silently drop.\n\n" + media_lines + "\n\n"
+            "If the Control UI returns 'Attachment unavailable' or "
             "'Outside allowed folders', STOP. The snapshot files DO exist "
-            "at these paths; retrying with different paths (absolute, /tmp, "
-            "/data, etc.) will NOT help. Report the error to the operator "
-            "and wait for guidance — the bind mount or Gateway config is "
-            "the problem, not the path."
+            "at the paths above. Retrying with alternate shapes "
+            "(relative, /tmp, /data, bare filename) will NOT help — "
+            "those were all tested. Report the error and wait for the "
+            "operator to diagnose the bind mount."
         )
 
         response: dict[str, Any] = {
