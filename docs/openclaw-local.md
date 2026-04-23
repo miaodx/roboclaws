@@ -69,10 +69,19 @@ models verified end-to-end with the demo (FPV + overhead = 2 images per
 turn, so the model must be free, multi-image-capable, and cooperate with
 the Gateway's tool-bearing agent framework):
 
-| Provider | Default model                           | Upstream                                      | Free | Vision | Multi-image |
-|----------|-----------------------------------------|-----------------------------------------------|------|--------|-------------|
-| `nvidia` | `nvidia/nvidia/nemotron-nano-12b-v2-vl` | `https://integrate.api.nvidia.com/v1`         | yes  | yes    | yes         |
-| `kimi`   | `anthropic_kimi/k2.6`                   | `https://api.kimi.com/coding/` (→ Kimi 2.6)   | yes  | yes    | yes         |
+| Provider | Default model                           | Upstream                                             | Free | Vision | Multi-image | Status          |
+|----------|-----------------------------------------|------------------------------------------------------|------|--------|-------------|-----------------|
+| `nvidia` | `nvidia/nvidia/nemotron-nano-12b-v2-vl` | `https://integrate.api.nvidia.com/v1`                | yes  | yes    | yes         | verified        |
+| `kimi`   | `anthropic_kimi/k2.6`                   | `https://api.kimi.com/coding/` (→ Kimi 2.6)          | yes  | yes    | yes         | verified        |
+| `mimo`   | `mimo_openai/mimo-v2-omni`              | `https://token-plan-cn.xiaomimimo.com/v1`            | ?    | yes    | yes         | vision+tools ✓  |
+| `mimo`   | `mimo_openai/mimo-v2.5-pro`             | `https://token-plan-cn.xiaomimimo.com/v1`            | ?    | no     | no          | text+tools ✓    |
+| `mimo` (anthropic) | `mimo_anthropic/mimo-v2-omni`  | `https://token-plan-cn.xiaomimimo.com/anthropic`    | ?    | ?      | ?           | untested        |
+
+> ℹ️ **MiMo model matrix** (probed 2026-04-23):
+> - `mimo-v2-omni`: vision (base64 inline images) ✓ + tool calls ✓ — use for navigation.
+> - `mimo-v2.5-pro` / `mimo-v2.5`: text + tool calls only; inline images silently ignored.
+> - `make chat` and `make chat-mimo-pro` default to `mimo-v2-omni`.
+> - Key env var: `MIMO_TP_KEY`. Mode: `MIMO_PROVIDER_MODE=openai` (default) or `anthropic`.
 
 > ℹ️ By default the repo does **not** use the stock `kimi/k2p5` plugin path.
 > It registers a custom provider override (`anthropic_kimi/k2.6`)

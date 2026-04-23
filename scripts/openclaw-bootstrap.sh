@@ -30,7 +30,7 @@
 #   PORT         Gateway port                        (default: 18789)
 #   SIM_SERVER_URL URL for host-side sim tools       (default: http://host.docker.internal:18788)
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
-#                                                     nvidia | kimi)
+#                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
 #   IMAGE_MODEL  Vision model used by the Gateway's  (default: same as MODEL;
 #                generic `image` tool path            set this explicitly when
@@ -52,6 +52,11 @@
 # Provider-specific vars (only the one matching PROVIDER is required):
 #   KIMI_API_KEY   (PROVIDER=kimi)   Moonshot/Kimi API key
 #   NV_API_KEY     (PROVIDER=nvidia) NVIDIA NIM API key (NVIDIA_API_KEY also accepted)
+#   MIMO_TP_KEY    (PROVIDER=mimo)   MiMo token-plan key
+#
+# Provider-specific mode overrides:
+#   KIMI_PROVIDER_MODE  (PROVIDER=kimi)  custom (default) | plugin
+#   MIMO_PROVIDER_MODE  (PROVIDER=mimo)  openai (default) | anthropic
 #
 # Supported providers + default model (curated to just the one verified-
 # working vision model per provider):
@@ -62,9 +67,11 @@
 #                                                    upstream which is currently
 #                                                    Kimi 2.6 — see
 #                                                    /app/dist/provider-catalog-BCrO6TZn.js)
+#   mimo   → mimo_openai/mimo-v2-omni                 (token-plan; vision+tool-calls
+#                                                    confirmed 2026-04-23; v2-omni only)
 #
-# Auto-detection order when PROVIDER is unset: nvidia → kimi (prefers the
-# verified-working provider; first provider with an API key in env wins).
+# Auto-detection order when PROVIDER is unset: nvidia → mimo → kimi (prefers
+# the verified-working provider; first provider with an API key in env wins).
 #
 # Why these two and not more: the demo sends FPV + overhead per turn
 # (2 images) so the model must support multi-image input. NVIDIA NIM's
@@ -151,6 +158,8 @@ TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
 if [[ -z "${PROVIDER:-}" ]]; then
     if [[ -n "${NV_API_KEY:-}${NVIDIA_API_KEY:-}" ]]; then
         PROVIDER="nvidia"
+    elif [[ -n "${MIMO_TP_KEY:-}" ]]; then
+        PROVIDER="mimo"
     else
         PROVIDER="kimi"
     fi
@@ -286,8 +295,73 @@ JSON
         [[ -n "$PROVIDER_API_KEY" ]] || \
             die "NV_API_KEY (or NVIDIA_API_KEY) env var is required for PROVIDER=nvidia" 1
         ;;
+    mimo)
+        PROVIDER_API_KEY="${MIMO_TP_KEY:-}"
+        PROVIDER_ENV_VAR="MIMO_TP_KEY"
+        [[ -n "$PROVIDER_API_KEY" ]] || \
+            die "MIMO_TP_KEY env var is required for PROVIDER=mimo" 1
+
+        MIMO_PROVIDER_MODE="${MIMO_PROVIDER_MODE:-openai}"
+        case "$MIMO_PROVIDER_MODE" in
+            openai)
+                # OpenAI-compatible endpoint. Two image-processing modes:
+                #   direct vision  — main model is mimo-v2-omni (vision+tools); IMAGE_MODEL=same.
+                #   IMAGE_MODEL    — main model is text-only (mimo-v2.5-pro or mimo-v2.5);
+                #                    IMAGE_MODEL auto-set to mimo_openai/mimo-v2-omni so the
+                #                    Gateway's image tool has a vision-capable model.
+                MODEL="${MODEL:-mimo_openai/mimo-v2-omni}"
+                # When the caller picked a text-only MiMo model, auto-delegate images to omni.
+                case "$MODEL" in
+                    *mimo-v2.5-pro*|*mimo-v2.5)
+                        IMAGE_MODEL="${IMAGE_MODEL:-mimo_openai/mimo-v2-omni}"
+                        ;;
+                esac
+                PROVIDER_ID_OVERRIDE="mimo_openai"
+                PROVIDER_BASE_URL=""
+                EXTRA_MODELS_JSON="[]"
+                PROVIDER_ENTRY_JSON=$(cat <<JSON
+{
+  "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
+  "apiKey": "${PROVIDER_API_KEY}",
+  "auth": "api-key",
+  "api": "openai-completions",
+  "models": [
+    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096}
+  ]
+}
+JSON
+)
+                ;;
+            anthropic)
+                # Anthropic-compatible endpoint — text + tool-calls; no vision.
+                MODEL="${MODEL:-mimo_anthropic/mimo-v2.5-pro}"
+                PROVIDER_ID_OVERRIDE="mimo_anthropic"
+                PROVIDER_BASE_URL=""
+                EXTRA_MODELS_JSON="[]"
+                PROVIDER_ENTRY_JSON=$(cat <<JSON
+{
+  "baseUrl": "https://token-plan-cn.xiaomimimo.com/anthropic",
+  "apiKey": "${PROVIDER_API_KEY}",
+  "auth": "api-key",
+  "api": "anthropic-messages",
+  "headers": {"anthropic-version": "2023-06-01"},
+  "models": [
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096}
+  ]
+}
+JSON
+)
+                ;;
+            *)
+                die "Unsupported MIMO_PROVIDER_MODE: '$MIMO_PROVIDER_MODE' (supported: openai, anthropic)" 1
+                ;;
+        esac
+        ;;
     *)
-        die "Unsupported PROVIDER: '$PROVIDER' (supported: kimi, nvidia)" 1
+        die "Unsupported PROVIDER: '$PROVIDER' (supported: kimi, nvidia, mimo)" 1
         ;;
 esac
 
@@ -309,6 +383,7 @@ log "tool profile : $ROBOCLAWS_TOOL_PROFILE"
 log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGENT_PREFIX}$((AGENTS-1)))"
 log "provider     : $PROVIDER"
 [[ "$PROVIDER" == "kimi" ]] && log "provider mode: $KIMI_PROVIDER_MODE"
+[[ "$PROVIDER" == "mimo" ]] && log "provider mode: $MIMO_PROVIDER_MODE"
 log "model        : $MODEL"
 log "image model  : ${IMAGE_MODEL:-<auto>}"
 log "skill        : $SKILLS_DIR"

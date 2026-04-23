@@ -133,6 +133,19 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       Live-probe gate: container → host MCP streamable-http probe + agent
       verifies `observe` returns multimodal images (spike baseline 2026-04-21).
 
+- [ ] **A-07** (REQ-split-model-navigation): Enable text-only reasoning models
+      (mimo-v2.5-pro, mimo-v2.5) to drive autonomous OpenClaw navigation by
+      intercepting image-bearing `roboclaws__observe` tool results at the MCP
+      server layer, converting them to text descriptions via a vision model
+      (mimo-v2-omni as IMAGE_MODEL), and returning only text to the main model.
+      The agent's tool surface (`observe`/`move`/`done`) is unchanged; the
+      intercept is transparent. Bonus: probe whether OpenClaw's `messaging`
+      profile or an `alsoAllow` mechanism can expose the generic `image` tool
+      alongside `roboclaws__*` without the exec/curl drift risk. Live-probe
+      gate: a complete navigation run with mimo-v2.5-pro as main model + omni
+      as vision intermediary, recorded and confirmed working.
+      Planned in GSD Phase 2.8 under `.planning/phases/02.8-split-model-vision/`.
+
 ## v2 Requirements
 
 Deferred to Phase 3 (Isaac Lab).
