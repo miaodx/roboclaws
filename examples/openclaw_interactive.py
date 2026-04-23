@@ -206,17 +206,28 @@ def main(argv: list[str] | None = None) -> int:
         )
         engine = MultiAgentEngine(scene=args.scene, agent_count=args.agent_id + 1)
 
-        # Snapshots dir: host-side path the `snapshot` MCP tool writes PNGs to.
-        # Bootstrap bind-mounts the same absolute path at
-        # `/home/node/.openclaw/workspaces/<agent>/snapshots` inside the
-        # container, so the agent can reference `./snapshots/<file>.png` in a
-        # MEDIA: directive. Exporting the env here lets _bootstrap_gateway
-        # pass it through to the openclaw-bootstrap.sh subprocess.
-        snapshots_dir = Path(
+        # Snapshots dir — host/container path agreement.
+        #
+        # `ROBOCLAWS_SNAPSHOTS_DIR` is the **root**; bootstrap bind-mounts
+        # `${root}/<agent>/` at `/home/node/.openclaw/workspaces/<agent>/snapshots`
+        # inside the container (per-agent subdir so multi-agent runs don't
+        # share an attachment pile). The MCP tool must write into the same
+        # per-agent subdir, otherwise PNGs land at the root and the container
+        # sees an empty bind mount.
+        #
+        # Bug history: the first cut passed snapshots_root as-is to the MCP
+        # factory; tool wrote `./snapshots/foo.png` flat at the root while
+        # the container's bind was `${root}/agent-0/`. Files existed on host
+        # but `MEDIA:./snapshots/foo.png` came back "Attachment unavailable"
+        # inside the chat because the container couldn't see them. Fix: the
+        # MCP tool's snapshots_dir is the per-agent subdir.
+        snapshots_root = Path(
             os.environ.get("ROBOCLAWS_SNAPSHOTS_DIR", str(output_dir / "snapshots"))
         ).resolve()
-        snapshots_dir.mkdir(parents=True, exist_ok=True)
-        os.environ["ROBOCLAWS_SNAPSHOTS_DIR"] = str(snapshots_dir)
+        snapshots_root.mkdir(parents=True, exist_ok=True)
+        os.environ["ROBOCLAWS_SNAPSHOTS_DIR"] = str(snapshots_root)
+        agent_snapshots_dir = snapshots_root / f"agent-{args.agent_id}"
+        agent_snapshots_dir.mkdir(parents=True, exist_ok=True)
 
         # Linux Docker-bridge reality: 0.0.0.0 is what Phase 2.6 landed on for
         # host.docker.internal routing. See openclaw_nav_autonomous.py for the
@@ -228,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             host="0.0.0.0",
             port=18788,
             view_variant=args.views,
-            snapshots_dir=snapshots_dir,
+            snapshots_dir=agent_snapshots_dir,
         )
         mcp_server.run_in_thread()
         mcp_server.write_runtime_event(
