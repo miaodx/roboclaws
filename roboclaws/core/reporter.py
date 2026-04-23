@@ -116,15 +116,44 @@ def _build_run_section(
     summary = manifest.get("summary", {})
     steps_data: list[dict[str, Any]] = manifest.get("steps", [])
 
+    agent_count = int(metadata.get("agent_count", 1))
+    provider_status: dict[str, Any] = summary.get("provider_status", {}) or {}
+
+    summary_bar = _build_summary_bar(metadata, summary, provider_status)
+    provider_health_html = _render_provider_health(provider_status)
+
+    frame_data, display_panels = _collect_frame_data(replay_dir, steps_data, agent_count)
+    viewer_html = _build_viewer_html(run_id, agent_count, frame_data, display_panels)
+
+    metrics = _extract_metrics(steps_data, agent_count)
+    svg_chart = _build_svg_chart(metrics)
+    vlm_log_html = _build_vlm_log_html(steps_data)
+
+    return (
+        f'<div class="run-section" id="{_html.escape(run_id)}">'
+        f"{summary_bar}"
+        f"{provider_health_html}"
+        f"{viewer_html}"
+        f'<div class="chart-section"><h3>Metrics Timeline</h3>{svg_chart}</div>'
+        f'<div class="vlm-log-section"><h3>VLM Reasoning Log</h3>{vlm_log_html}</div>'
+        f"</div>"
+    )
+
+
+def _build_summary_bar(
+    metadata: dict[str, Any],
+    summary: dict[str, Any],
+    provider_status: dict[str, Any],
+) -> str:
+    """Return the ``<div class="summary-bar">`` HTML fragment."""
     game = metadata.get("game", "unknown")
     agent_count = int(metadata.get("agent_count", 1))
-    total_steps = metadata.get("total_steps", len(steps_data))
+    total_steps = metadata.get("total_steps", 0)
     duration = metadata.get("duration_seconds", 0.0)
     vlm_cost = metadata.get("vlm_cost_usd", 0.0)
     scene = metadata.get("scene", "\u2014")
     termination = summary.get("termination_reason", "unknown")
     final_scores: dict[str, Any] = summary.get("final_scores", {})
-    provider_status: dict[str, Any] = summary.get("provider_status", {}) or {}
 
     if final_scores:
         scores_str = ", ".join(
@@ -135,8 +164,8 @@ def _build_run_section(
 
     provider_badges = ""
     if provider_status:
-        provider_name = _html.escape(str(provider_status.get("provider_name") or "—"))
-        provider_model = _html.escape(str(provider_status.get("model") or "—"))
+        provider_name = _html.escape(str(provider_status.get("provider_name") or "\u2014"))
+        provider_model = _html.escape(str(provider_status.get("model") or "\u2014"))
         retry_events = int(provider_status.get("retry_events") or 0)
         transient_errors = int(provider_status.get("transient_errors") or 0)
         failed_calls = int(provider_status.get("failed_calls") or 0)
@@ -148,7 +177,7 @@ def _build_run_section(
             f'<span class="badge">Failed calls: <strong>{failed_calls}</strong></span>'
         )
 
-    summary_bar = (
+    return (
         f'<div class="summary-bar">'
         f'<span class="badge">Game: <strong>{_html.escape(str(game))}</strong></span>'
         f'<span class="badge">Scene: <strong>{_html.escape(str(scene))}</strong></span>'
@@ -161,9 +190,17 @@ def _build_run_section(
         f"{provider_badges}"
         f"</div>"
     )
-    provider_health_html = _render_provider_health(provider_status)
 
-    # Frame data (base64 images loaded once, stored in a JS array)
+
+def _collect_frame_data(
+    replay_dir: Path,
+    steps_data: list[dict[str, Any]],
+    agent_count: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load per-step images and build the frame_data list + display_panels spec.
+
+    Returns ``(frame_data, display_panels)`` ready for :func:`_build_viewer_html`.
+    """
     frame_data: list[dict[str, Any]] = []
     latest_decisions: dict[int, dict[str, Any]] = {}
     scene_panel_labels: list[str] = []
@@ -239,6 +276,16 @@ def _build_run_section(
                 display_images.append(scene_panel_map.get(spec["key"], ""))
         frame["display_panels"] = display_images
 
+    return frame_data, display_panels
+
+
+def _build_viewer_html(
+    run_id: str,
+    agent_count: int,
+    frame_data: list[dict[str, Any]],
+    display_panels: list[dict[str, Any]],
+) -> str:
+    """Return the ``<div class="viewer">`` + ``<script>`` HTML fragment."""
     n_frames = len(frame_data)
     max_idx = max(0, n_frames - 1)
     js_id = run_id.replace("-", "_")
@@ -265,7 +312,7 @@ def _build_run_section(
     )
     decision_cards_html = "".join(_render_decision_card(decision) for decision in initial_decisions)
 
-    viewer_html = (
+    return (
         f'<div class="viewer">'
         f'<p class="frame-hint">Click any panel to zoom.</p>'
         f'<div class="frame-board">{panel_cards}</div>'
@@ -295,13 +342,13 @@ def _build_run_section(
         f"var PANEL_LABELS={panel_labels_json};"
         f'var rid="{_html.escape(run_id, quote=True)}";'
         f"var cur=0;"
-        f"function esc(s){{return String(s||'').replace(/&/g,'&amp;')"
+        f"function esc(s){{return String(s||'').replace(/&/g,'&amp;') "
         f".replace(/</g,'&lt;').replace(/>/g,'&gt;')"
         f".replace(/\"/g,'&quot;').replace(/'/g,'&#39;');}}"
         f"function decisionCardHtml(d){{"
         f"var agentId = Number(d.agent_id || 0);"
         f"var stepLabel = d.step === undefined ? 'No decision recorded yet.'"
-        f" : (d.is_current ? 'Acting this step (step ' + d.step + ').'"
+        f" : (d.is_current ? 'Acting this step (step ' + d.step + '.'"
         f" : 'Latest decision from step ' + d.step + '.');"
         f"var chosenAction = d.executed_action || d.action || '—';"
         f"var rawLine = (d.raw_action && d.raw_action !== chosenAction)"
@@ -353,9 +400,9 @@ def _build_run_section(
         f"</script>"
     )
 
-    metrics = _extract_metrics(steps_data, agent_count)
-    svg_chart = _build_svg_chart(metrics)
 
+def _build_vlm_log_html(steps_data: list[dict[str, Any]]) -> str:
+    """Return the VLM reasoning log HTML fragment (``<details>`` items or placeholder)."""
     vlm_items: list[str] = []
     for rec in steps_data:
         step = rec.get("step", "?")
@@ -380,17 +427,7 @@ def _build_run_section(
             f"{provider_html}"
             f"</div></details>"
         )
-    vlm_log_html = "\n".join(vlm_items) if vlm_items else "<p>No VLM data recorded.</p>"
-
-    return (
-        f'<div class="run-section" id="{_html.escape(run_id)}">'
-        f"{summary_bar}"
-        f"{provider_health_html}"
-        f"{viewer_html}"
-        f'<div class="chart-section"><h3>Metrics Timeline</h3>{svg_chart}</div>'
-        f'<div class="vlm-log-section"><h3>VLM Reasoning Log</h3>{vlm_log_html}</div>'
-        f"</div>"
-    )
+    return "\n".join(vlm_items) if vlm_items else "<p>No VLM data recorded.</p>"
 
 
 def _render_decision_card(decision: dict[str, Any]) -> str:
