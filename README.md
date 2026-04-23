@@ -50,8 +50,11 @@ Routes the same three demos through a long-running local Gateway with per-agent 
 (aggressive / defensive / cooperative SOULs from `skills/ai2thor-navigator/souls/`).
 Layer 3 GIFs include SOUL badges + colored trails — aggressive=red, defensive=blue, cooperative=green.
 
-**First local run takes ~15 min** (Docker pull + Unity download). See `docs/openclaw-local.md`.
-Already set up? `make openclaw-territory`
+**First local run takes ~15 min** (Docker pull + Unity download).
+
+Quickest local path:
+- [OpenClaw demo guide](docs/openclaw-demo.md) — shortest route to `examples/openclaw_demo.py`
+- [OpenClaw local guide](docs/openclaw-local.md) — full local matrix (games, interactive chat, autonomous MCP, provider/model notes)
 
 | Demo | GIF | Report |
 |------|-----|--------|
