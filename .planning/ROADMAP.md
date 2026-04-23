@@ -28,10 +28,10 @@ tool profile (see
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`).
 Phase 2.7 is now planned as the additive observability follow-up: compare
 Gateway streaming vs terminal-body capture, then persist mid-run assistant
-messages into the autonomous replay artifacts. Phase 4 is planned as a
-refactor-safety tooling follow-up: freeze critical behavior contracts and
-add thin capture/analyze harnesses for the direct-VLM, territory/coverage,
-and OpenClaw paths. Phase 3 remains deferred indefinitely.
+messages into the autonomous replay artifacts. Phase 4 is now complete as a
+refactor-safety tooling follow-up: critical behavior contracts are frozen and
+thin capture/analyze harnesses now exist for the direct-VLM,
+territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 
 ## Milestones
 
@@ -42,7 +42,7 @@ and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
 - 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
-- 📋 **v1.5 Refactor Regression Safety** - Phase 4 (planned 2026-04-23; deterministic fixtures + capture/analyze harnesses for large refactors)
+- ✅ **v1.5 Refactor Regression Safety** - Phase 4 (completed 2026-04-23; deterministic fixtures + capture/analyze harnesses + first local probe evidence in `04-LOCAL-PROBE-RESULTS.md`)
 - 📋 **v1.6 Iterative Codebase Simplification** - Phase 5 (planned 2026-04-23; /simplify passes over major source files to reduce complexity and improve readability)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
@@ -63,7 +63,7 @@ and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
-- [ ] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths.
+- [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [ ] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Each file pass committed atomically with tests staying green.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
@@ -334,7 +334,7 @@ Plans:
 - [ ] 03-04: Integrate object-interaction action set (P3-05)
 - [ ] 03-05: Publish Phase-3 tile in the live demo matrix
 
-#### 📋 v1.5 Refactor Regression Safety (Phase 4) — Planned
+#### ✅ v1.5 Refactor Regression Safety (Phase 4) — Complete
 
 ### Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw
 **Goal**: Make large refactors safer by adding behavior-regression harnesses at three layers: deterministic contract fixtures, capture-style run harnesses, and threshold-based analyzers for the direct VLM path, the territory/coverage games, and the shipped OpenClaw paths.
@@ -349,10 +349,11 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: Contract fixtures + suite scaffold
-- [ ] 04-02: Direct-VLM and game capture suites
-- [ ] 04-03: OpenClaw capture suites
-- [ ] 04-04: Compare/analyze thresholds + operator workflow
+- [x] 04-01: Contract fixtures + suite scaffold
+- [x] 04-02: Direct-VLM and game capture suites
+- [x] 04-03: OpenClaw capture suites
+- [x] 04-04: Compare/analyze thresholds + operator workflow
+**Status update (2026-04-23):** `roboclaws/regression.py`, `scripts/capture_refactor_regression.py`, `scripts/analyze_refactor_regression.py`, `docs/refactor-regression.md`, and the Phase 4 contract/analyzer tests are implemented. Real local captures now exist for `explore-vlm`, `openclaw-demo`, and `openclaw-autonomous`; the first probe cycle and threshold/harness adjustments are recorded in `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md`.
 **UI hint**: no
 
 ## Progress
@@ -374,6 +375,6 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
 | 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
-| 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 0/4 | Planned | - |
+| 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 4/4 | Complete | 2026-04-23 |
 | 5. Iterative codebase simplification | v1.6 | 0/TBD | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
