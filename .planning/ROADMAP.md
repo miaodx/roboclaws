@@ -28,8 +28,10 @@ tool profile (see
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`).
 Phase 2.7 is now planned as the additive observability follow-up: compare
 Gateway streaming vs terminal-body capture, then persist mid-run assistant
-messages into the autonomous replay artifacts. Phase 3 remains deferred
-indefinitely.
+messages into the autonomous replay artifacts. Phase 4 is planned as a
+refactor-safety tooling follow-up: freeze critical behavior contracts and
+add thin capture/analyze harnesses for the direct-VLM, territory/coverage,
+and OpenClaw paths. Phase 3 remains deferred indefinitely.
 
 ## Milestones
 
@@ -40,13 +42,15 @@ indefinitely.
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
 - 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
+- 📋 **v1.5 Refactor Regression Safety** - Phase 4 (planned 2026-04-23; deterministic fixtures + capture/analyze harnesses for large refactors)
+- 📋 **v1.6 Iterative Codebase Simplification** - Phase 5 (planned 2026-04-23; /simplify passes over major source files to reduce complexity and improve readability)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
 
 **Phase Numbering:**
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7): Sub-phases within Milestone 2 (OpenClaw integration track)
+- Integer phases (1, 2, 3, 4): Planned milestone work
+- Decimal phases (2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8): Sub-phases within Milestone 2 (OpenClaw integration track)
 
 - [x] **Phase 1: Core simulation + games** - Direct-VLM multi-agent territory + coverage on AI2-THOR (shipped)
 - [x] **Phase 1.5: CI + dev topology** - Three-layer demo matrix + cloud/local workflow (shipped)
@@ -59,6 +63,8 @@ indefinitely.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
+- [ ] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths.
+- [ ] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Each file pass committed atomically with tests staying green.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -284,6 +290,31 @@ Plans:
 - [ ] 02.8-04: Local-dev validation + doc update
 **UI hint**: no
 
+#### 📋 v1.6 Iterative Codebase Simplification (Phase 5) — Planned
+
+### Phase 5: Iterative codebase simplification
+**Goal**: Run `/simplify` iteratively over the major source files to reduce complexity, remove dead code, and make the codebase more intuitive. Each file pass is reviewed and committed atomically; tests must stay green after every commit.
+**Depends on**: Phase 4 (regression harnesses provide the safety net for structural changes)
+**Requirements**: None (quality/maintainability work)
+**Success Criteria** (what must be TRUE):
+  1. All targeted files pass `/simplify` review with no high-severity findings remaining.
+  2. Every per-file commit is atomic and `pytest` stays green throughout.
+  3. No behavioral regressions — existing example runners and CI jobs continue to pass.
+  4. Net line count across targeted files is reduced or held flat (no new abstractions added beyond what simplification requires).
+**Plans**: 9 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — Simplify roboclaws/core/visualizer.py
+- [ ] 05-02-PLAN.md — Simplify roboclaws/openclaw/mcp_server.py
+- [ ] 05-03-PLAN.md — Simplify roboclaws/core/reporter.py
+- [ ] 05-04-PLAN.md — Simplify roboclaws/openclaw/transport.py (already-leaner pass)
+- [ ] 05-05-PLAN.md — Simplify roboclaws/games/coverage.py and territory.py
+- [ ] 05-06-PLAN.md — Simplify roboclaws/core/vlm.py, providers/kimi.py, and providers/openai.py
+- [ ] 05-07-PLAN.md — Simplify bridge.py, vision_bridge.py, views.py, and replay.py
+- [ ] 05-08-PLAN.md — Simplify examples/openclaw_demo.py, openclaw_interactive.py, and openclaw_nav_autonomous.py
+- [ ] 05-09-PLAN.md — Simplify examples/coverage_game.py and territory_game.py
+**UI hint**: no
+
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
 
 ### Phase 3: Isaac Lab migration
@@ -303,11 +334,32 @@ Plans:
 - [ ] 03-04: Integrate object-interaction action set (P3-05)
 - [ ] 03-05: Publish Phase-3 tile in the live demo matrix
 
+#### 📋 v1.5 Refactor Regression Safety (Phase 4) — Planned
+
+### Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw
+**Goal**: Make large refactors safer by adding behavior-regression harnesses at three layers: deterministic contract fixtures, capture-style run harnesses, and threshold-based analyzers for the direct VLM path, the territory/coverage games, and the shipped OpenClaw paths.
+**Depends on**: Phase 2.4 (current root `PLAN.md` remains the source draft for harness patterns and validation expectations) and Phase 2.6 (shipped MCP/trace/report contracts). Phase 3 is unrelated and remains deferred.
+**Requirements**: A-08
+**Source**: `PLAN.md`, `.planning/STATE.md`, `examples/view_experiment.py`, `scripts/analyze_view_experiment.py`, `scripts/generate_demo_report.py`, `tests/fixtures/trace_schema_reference.json`
+**Success Criteria** (what must be TRUE):
+  1. Cloud-safe deterministic regression coverage freezes the critical contracts: game termination semantics, prompt image counts/order, replay summary shape, OpenClaw trace/schema key-sets, and transport/runtime invariants.
+  2. A thin capture harness writes append-only `results.jsonl` rows plus full replay dirs for named suites covering direct-VLM territory/coverage and OpenClaw demo/game paths, reusing existing example runners rather than reimplementing loops.
+  3. A separate compare/analyze harness can diff a baseline run set against a candidate refactor run set, pairing on stable coordinates (`suite`, `scene`, `seed`, `game`, `backend`) and failing on threshold breaches instead of exact step-by-step equality.
+  4. The harness surface follows the repo's current best practices: small CLI runners, separate analyzers, monkeypatchable suite registries for tests, and tiny committed reference fixtures only.
+**Plans**: 4 plans
+
+Plans:
+- [ ] 04-01: Contract fixtures + suite scaffold
+- [ ] 04-02: Direct-VLM and game capture suites
+- [ ] 04-03: OpenClaw capture suites
+- [ ] 04-04: Compare/analyze thresholds + operator workflow
+**UI hint**: no
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 3
-(Phase 2.5 superseded 2026-04-21 — skipped in execution order; see Phase Details)
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5
+(Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -322,4 +374,6 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
 | 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
+| 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 0/4 | Planned | - |
+| 5. Iterative codebase simplification | v1.6 | 0/TBD | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
