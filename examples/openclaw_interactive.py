@@ -16,18 +16,22 @@ Typical flow::
     #   MCP server this script holds open.
     # → Ctrl-C to shut everything down.
 
-Env overrides mirror ``examples/openclaw_nav_autonomous.py``:
+CLI flags (all optional)::
 
-* ``OPENCLAW_GATEWAY_TOKEN`` + ``--skip-bootstrap`` — reuse an existing
-  Gateway instead of bootstrapping one (bootstrap force-recreates the
-  container).
-* ``OPENCLAW_GATEWAY_CONTAINER`` — override the container name used for
-  teardown.
+    --provider {mimo,kimi,nvidia}   Gateway provider          (default: mimo)
+    --model TEXT                    Model ID                  (default: provider default)
+    --image-model TEXT              Bridge model for text-only mains
+    --observe-mode TEXT             'text-bridge' for split-model setups
+    --plugin                        Anthropic/plugin API path
+    --clean                         Wipe Gateway config volume first
+    --skip-bootstrap                Reuse an already-running Gateway
+    --keep-gateway                  Don't tear down on Ctrl-C
+
+    python examples/openclaw_interactive.py --help   # full flag list
 """
 
 from __future__ import annotations
 
-import argparse
 import datetime as dt
 import logging
 import os
@@ -36,12 +40,16 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+import tyro
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.core.views import VIEW_VARIANTS
+from roboclaws.core.views import ViewVariant
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
@@ -50,38 +58,56 @@ _DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"
 _DEFAULT_GATEWAY_URL = "http://127.0.0.1:18789"
 
 
-def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Boot AI2-THOR + Roboclaws MCP + Gateway, then hold "
-        "everything open so you can chat with the agent via the OpenClaw "
-        "Control UI.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument("--scene", default="FloorPlan201")
-    parser.add_argument(
-        "--views",
-        choices=VIEW_VARIANTS,
-        default="map-v2+chase",
-        help="Prompt image bundle variant returned by roboclaws__observe.",
-    )
-    parser.add_argument(
-        "--agent-id",
-        type=int,
-        default=0,
-        help="AI2-THOR agent index bound to the MCP tools (matches Gateway agent name agent-<id>).",
-    )
-    parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument(
-        "--skip-bootstrap",
-        action="store_true",
-        help="Reuse an already-running Gateway. Requires OPENCLAW_GATEWAY_TOKEN.",
-    )
-    parser.add_argument(
-        "--keep-gateway",
-        action="store_true",
-        help="Don't tear down the Gateway on Ctrl-C (useful for iterating).",
-    )
-    return parser.parse_args(argv)
+@dataclass
+class Args:
+    """Boot AI2-THOR + Roboclaws MCP + Gateway, then hold everything open for chat."""
+
+    # Engine
+    scene: str = "FloorPlan201"
+    """AI2-THOR floor plan scene."""
+
+    views: ViewVariant = "map-v2+chase"
+    """Prompt image bundle variant returned by roboclaws__observe."""
+
+    agent_id: int = 0
+    """AI2-THOR agent index bound to MCP tools (matches Gateway agent-<id>)."""
+
+    output_dir: Path | None = None
+    """Output directory for trace.jsonl and snapshots. Defaults to output/openclaw-interactive/<stamp>."""  # noqa: E501
+
+    # Provider / model
+    provider: Literal["mimo", "kimi", "nvidia"] = "mimo"
+    """Gateway provider."""
+
+    model: str | None = None
+    """Gateway model ID (e.g. mimo_openai/mimo-v2-omni). Uses provider default if omitted."""
+
+    image_model: str | None = None
+    """Bridge model for text-only main models (e.g. mimo_openai/mimo-v2-omni)."""
+
+    observe_mode: str | None = None
+    """Observe delivery mode. Use 'text-bridge' for split-model setups."""
+
+    plugin: bool = False
+    """Use Anthropic/plugin API path (sets KIMI_PROVIDER_MODE=plugin, MIMO_PROVIDER_MODE=anthropic)."""  # noqa: E501
+
+    # Session management
+    clean: bool = False
+    """Wipe Gateway config volume before bootstrapping (clears chat session history)."""
+
+    volume: str = "openclaw-gateway-config"
+    """Docker volume name for Gateway config (used with --clean)."""
+
+    # Gateway lifecycle
+    skip_bootstrap: bool = False
+    """Reuse an already-running Gateway. Requires OPENCLAW_GATEWAY_TOKEN env var."""
+
+    keep_gateway: bool = False
+    """Don't tear down the Gateway container on Ctrl-C."""
+
+
+def _parse_args(argv: list[str] | None = None) -> Args:
+    return tyro.cli(Args, args=argv)
 
 
 def _default_output_dir() -> Path:
@@ -89,8 +115,15 @@ def _default_output_dir() -> Path:
     return Path(f"output/openclaw-interactive/{stamp}")
 
 
-def _bootstrap_gateway(agent_id: int) -> str:
+def _wipe_volume(volume: str) -> None:
+    log.info("wiping Gateway config volume '%s' (--clean)", volume)
+    subprocess.run(["docker", "volume", "rm", volume], check=False, capture_output=True)
+
+
+def _bootstrap_gateway(agent_id: int, extra_env: dict[str, str] | None = None) -> str:
     env = dict(os.environ)
+    if extra_env:
+        env.update(extra_env)
     env.setdefault("AGENTS", str(max(1, agent_id + 1)))
     env.setdefault("ROBOCLAWS_MCP_URL", "http://host.docker.internal:18788/mcp")
     env.setdefault("TIMEOUT_SECONDS", "600")
@@ -209,10 +242,23 @@ def main(argv: list[str] | None = None) -> int:
     gateway_started_by_us = False
     gateway_container = os.environ.get("OPENCLAW_GATEWAY_CONTAINER", _DEFAULT_GATEWAY_CONTAINER)
     shutdown_event = threading.Event()
+
+    # Build bootstrap env from CLI args; CLI wins over inherited os.environ.
+    bootstrap_env: dict[str, str] = {"PROVIDER": args.provider}
+    if args.model:
+        bootstrap_env["MODEL"] = args.model
+    if args.image_model:
+        bootstrap_env["IMAGE_MODEL"] = args.image_model
+    if args.observe_mode:
+        bootstrap_env["ROBOCLAWS_OBSERVE_MODE"] = args.observe_mode
+    if args.plugin:
+        bootstrap_env["KIMI_PROVIDER_MODE"] = "plugin"
+        bootstrap_env["MIMO_PROVIDER_MODE"] = "anthropic"
+
     runtime_config = observe_runtime_config(
-        model_name=os.environ.get("MODEL"),
-        image_model=os.environ.get("IMAGE_MODEL"),
-        observe_mode=os.environ.get("ROBOCLAWS_OBSERVE_MODE"),
+        model_name=args.model or os.environ.get("MODEL"),
+        image_model=args.image_model or os.environ.get("IMAGE_MODEL"),
+        observe_mode=args.observe_mode or os.environ.get("ROBOCLAWS_OBSERVE_MODE"),
         vision_bridge_model=os.environ.get("ROBOCLAWS_VISION_BRIDGE_MODEL"),
     )
 
@@ -261,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             run_dir=output_dir,
             host="0.0.0.0",
             port=18788,
+            view_variant=args.views,
             snapshots_dir=agent_snapshots_dir,
             model_name=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
@@ -299,7 +346,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
             log.info("reusing existing Gateway '%s'", gateway_container)
         else:
-            token = _bootstrap_gateway(args.agent_id)
+            if args.clean:
+                _wipe_volume(args.volume)
+            token = _bootstrap_gateway(args.agent_id, extra_env=bootstrap_env)
             gateway_started_by_us = True
             log.info("Gateway bootstrapped, bearer token captured")
 
