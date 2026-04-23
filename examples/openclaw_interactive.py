@@ -85,7 +85,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _default_output_dir() -> Path:
-    stamp = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y%m%d%H%M")
     return Path(f"output/openclaw-interactive/{stamp}")
 
 

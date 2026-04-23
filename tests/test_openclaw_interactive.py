@@ -91,8 +91,8 @@ def test_default_output_dir_is_timestamped_under_output_tree() -> None:
     parts = path.parts
     assert parts[0] == "output"
     assert parts[1] == "openclaw-interactive"
-    # Timestamp segment looks like YYYYMMDDTHHMMSSZ (16 chars).
-    assert len(parts[2]) == 16 and parts[2].endswith("Z")
+    # Timestamp segment looks like YYYYMMDDHHMM (12 chars).
+    assert len(parts[2]) == 12 and parts[2].isdigit()
 
 
 # ---------------------------------------------------------------------------
