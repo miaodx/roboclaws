@@ -475,7 +475,15 @@ class RoboclawsMCPServer:
         hint = (
             "Snapshot written. To show the operator what you see, reply in "
             "chat with the MEDIA lines below (the Control UI will render "
-            "them inline); keep any caption in the text body.\n\n" + media_lines
+            "them inline); keep any caption in the text body. Paste the "
+            "lines EXACTLY as shown — do not modify the paths.\n\n"
+            + media_lines
+            + "\n\nIf the Control UI replies 'Attachment unavailable' or "
+            "'Outside allowed folders', STOP. The snapshot files DO exist "
+            "at these paths; retrying with different paths (absolute, /tmp, "
+            "/data, etc.) will NOT help. Report the error to the operator "
+            "and wait for guidance — the bind mount or Gateway config is "
+            "the problem, not the path."
         )
 
         response: dict[str, Any] = {

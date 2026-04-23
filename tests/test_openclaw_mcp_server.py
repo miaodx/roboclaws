@@ -420,6 +420,12 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
         assert response["chase_path"] == "./snapshots/corner_view-001.chase.png"
         assert "MEDIA:./snapshots/corner_view-001.fpv.png" in response["hint"]
         assert "MEDIA:./snapshots/corner_view-001.chase.png" in response["hint"]
+        # Anti-spiral guardrail: the hint must tell the agent not to retry
+        # with alternate paths if the Control UI rejects the attachment.
+        # Without this, a bind-mount or config problem causes the agent
+        # to burn tokens guessing /tmp, /data, /home/node/... etc.
+        assert "Attachment unavailable" in response["hint"]
+        assert "STOP" in response["hint"]
 
         # Files actually exist on disk with non-zero PNG bytes.
         for key in ("fpv", "map", "chase"):
