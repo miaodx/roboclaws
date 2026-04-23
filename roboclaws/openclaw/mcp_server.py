@@ -484,6 +484,15 @@ class RoboclawsMCPServer:
             dest = self.snapshots_dir / f"{clean}.{name}.png"
             dest.write_bytes(png_bytes)
             written[name] = f"{container_snapshots_dir}/{dest.name}"
+            # Also refresh a stable "latest.<kind>.png" in the same dir so
+            # an external live viewer (see scripts/view-snapshots.py) can
+            # point at one filename and see every new frame without
+            # guessing counters. Atomic replace via temp+rename so a
+            # viewer polling mid-write never reads a torn PNG.
+            latest = self.snapshots_dir / f"latest.{name}.png"
+            tmp = self.snapshots_dir / f".latest.{name}.png.tmp"
+            tmp.write_bytes(png_bytes)
+            tmp.replace(latest)
 
         media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
         hint = (

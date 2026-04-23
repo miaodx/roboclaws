@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse chat-tail chat-plugin chat-nvidia \
+        chat chat-reuse chat-tail chat-view chat-plugin chat-nvidia \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -39,6 +39,7 @@ help:
 	@echo "  make chat-nvidia         — same, NVIDIA NIM (nemotron vision)"
 	@echo "  make chat-reuse          — attach to an already-running Gateway"
 	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
+	@echo "  make chat-view           — live snapshot viewer at http://127.0.0.1:8787 (run in 3rd terminal)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
@@ -243,6 +244,17 @@ chat-reuse:
 chat-tail:
 	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
 	    --log-file output/openclaw-interactive/latest-chat.log
+
+# Live snapshot viewer. The Control UI only renders MEDIA: attachments
+# from the FINAL assistant message of a turn — so on multi-step chat
+# sequences (walk N steps, snapshot at each), the intermediate images
+# never appear in chat. They ARE written to disk by roboclaws__snapshot
+# though, and the tool updates latest.{fpv,map,chase}.png atomically on
+# every call. This viewer polls those three files from a tiny local
+# HTTP page at :8787 — open it in a second browser tab and watch the
+# robot move frame-by-frame while the chat scrolls.
+chat-view:
+	@$(STRIP_ROS_ENV) python scripts/view-snapshots.py
 
 # Chat A/B variants — same entrypoint, different provider/mode. Use these to
 # diagnose image-upload drops, tool-call latency, or any provider-specific

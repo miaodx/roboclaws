@@ -444,6 +444,14 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
             dest = snap_dir / f"corner_view-001.{key}.png"
             assert dest.exists()
             assert dest.read_bytes().startswith(b"\x89PNG")
+            # Stable `latest.<kind>.png` sibling for the live viewer.
+            latest = snap_dir / f"latest.{key}.png"
+            assert latest.exists(), (
+                f"latest.{key}.png must be (re)written atomically every "
+                "snapshot so scripts/view-snapshots.py can poll one "
+                "stable filename instead of guessing counter suffixes"
+            )
+            assert latest.read_bytes() == dest.read_bytes()
     finally:
         srv.close()
 
