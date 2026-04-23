@@ -132,6 +132,9 @@ class NavigationViewContext:
     overhead_background: np.ndarray | None = None
     overhead_camera_pose: dict[str, Any] | None = None
     visited_world: set[WorldCell] = field(default_factory=set)
+    # Ordered path history per agent: path_history[i] is the sequence of
+    # world cells agent i has visited, in order. Used to draw a trail on the map.
+    path_history: list[list[WorldCell]] = field(default_factory=list)
 
 
 @dataclass
@@ -196,11 +199,22 @@ def make_navigation_view_context(
 def mark_visited_world(
     visited_world: set[WorldCell],
     agent_states: Sequence[Any],
+    path_history: list[list[WorldCell]] | None = None,
 ) -> bool:
-    """Merge the agents' current cells into ``visited_world`` and report growth."""
+    """Merge the agents' current cells into ``visited_world`` and report growth.
+
+    If ``path_history`` is provided, each agent's ordered path is extended with
+    the current cell (duplicates at the tail are suppressed).
+    """
     before = len(visited_world)
-    for state in agent_states:
-        visited_world.add(pos_to_world_idx(state.position))
+    for i, state in enumerate(agent_states):
+        cell = pos_to_world_idx(state.position)
+        visited_world.add(cell)
+        if path_history is not None:
+            while len(path_history) <= i:
+                path_history.append([])
+            if not path_history[i] or path_history[i][-1] != cell:
+                path_history[i].append(cell)
     return len(visited_world) > before
 
 
@@ -214,7 +228,7 @@ def render_navigation_prompt_bundle(
 ) -> NavigationPromptBundle:
     """Render the shared navigation prompt-image family for one control turn."""
     validated = validate_view_variant(variant)
-    mark_visited_world(context.visited_world, agent_states)
+    mark_visited_world(context.visited_world, agent_states, context.path_history)
     agent_positions_world = [pos_to_world_idx(state.position) for state in agent_states]
 
     baseline_map = context.visualizer.render_world_overhead_map(
@@ -229,10 +243,7 @@ def render_navigation_prompt_bundle(
 
     structured_overhead_frame: np.ndarray | None = None
     if validated != "baseline":
-        if (
-            context.overhead_camera_pose is not None
-            and context.overhead_background is not None
-        ):
+        if context.overhead_camera_pose is not None and context.overhead_background is not None:
             structured_map = context.visualizer.render_projected_structured_map(
                 agent_positions=agent_positions_world,
                 agent_rotations=[state.rotation for state in agent_states],
@@ -245,6 +256,7 @@ def render_navigation_prompt_bundle(
                     int(context.overhead_background.shape[0]),
                 ),
                 grid_size=_GRID_SIZE,
+                path_history=context.path_history or None,
             )
         else:
             structured_map = context.visualizer.render_structured_map(
@@ -253,6 +265,7 @@ def render_navigation_prompt_bundle(
                 reachable_cells=context.reachable_cells,
                 covered_cells=list(context.visited_world),
                 world_bbox=context.world_bbox,
+                path_history=context.path_history or None,
             )
         structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
 
