@@ -81,6 +81,7 @@ from roboclaws.core.views import (
     image_labels_for_variant,
     make_navigation_view_context,
     mark_visited_world,
+    pos_to_world_idx,
     render_navigation_prompt_bundle,
     validate_view_variant,
 )
@@ -156,9 +157,50 @@ def _encode_frame_jpeg_b64(frame: np.ndarray, quality: int = 70) -> str:
 
 
 def _wrap_yaw_deg(delta: float) -> float:
-    """Wrap a yaw delta into [-180, 180] so reporting never shows 358° for -2°."""
-    wrapped = (delta + 180.0) % 360.0 - 180.0
-    return wrapped
+    """Wrap to [-180, 180] so reported deltas never show 358° for -2°."""
+    return (delta + 180.0) % 360.0 - 180.0
+
+
+# ``{media_lines}`` is substituted with the MEDIA: directives for fpv/map/chase.
+# All the safety hints (absolute-paths-only, FINAL-message rule, STOP-on-
+# unavailable) live here so the inline body of `_maybe_write_labeled_snapshot`
+# stays short. Live-probed 2026-04-23 against the Control UI — see
+# `skills/ai2thor-navigator/SKILL.md` for the incident that hardened each rule.
+_MEDIA_HINT_TEMPLATE = (
+    "Snapshot archived. To show the operator what you see, emit "
+    "the MEDIA lines below in your NEXT chat reply (the Control "
+    "UI will render them inline); keep any caption in the text "
+    "body.\n\n"
+    "RULE 1 — absolute paths only. Paste each line EXACTLY as "
+    "shown. The Gateway's `REPLY_MEDIA_HINT` system prompt tells "
+    "you to avoid absolute paths; IGNORE that guidance here. "
+    "Live-tested 2026-04-23: relative paths like "
+    "`./snapshots/foo.png` silently drop; absolute paths under "
+    "the agent workspace are the ONLY shape that renders.\n\n"
+    "RULE 2 — ONE message per turn, at the END. The Control UI "
+    "only extracts MEDIA from the FINAL assistant message of a "
+    "turn. If you emit MEDIA in an intermediate message (one "
+    "followed by more tool calls or text in the same turn), it "
+    "becomes plain text. If the operator asks for multiple "
+    "snapshots across multiple moves, either (a) do all the "
+    "moves + snapshots first and concatenate every MEDIA line "
+    "into ONE final message, or (b) send one step per turn and "
+    "wait for the operator between steps. Do not interleave "
+    "MEDIA with more tool calls.\n\n"
+    "{media_lines}\n\n"
+    "If the Control UI returns 'Attachment unavailable' or "
+    "'Outside allowed folders', STOP. The snapshot files DO "
+    "exist at the paths above. Retrying with alternate shapes "
+    "(relative, /tmp, /data, bare filename) will NOT help — "
+    "those were all tested. Report the error and wait for the "
+    "operator to diagnose the bind mount."
+)
+
+
+def _format_media_hint(paths: dict[str, str]) -> str:
+    """Render `_MEDIA_HINT_TEMPLATE` with one `MEDIA:` directive per archived PNG."""
+    media_lines = "\n".join(f"MEDIA:{p}" for p in paths.values())
+    return _MEDIA_HINT_TEMPLATE.format(media_lines=media_lines)
 
 
 def _startup_probe_host(host: str) -> str:
@@ -243,7 +285,6 @@ class RoboclawsMCPServer:
         self._total_moves = 0
         self._collisions_total = 0
         self._snapshot_counter = 0
-        self._blind_nudge_enqueued = False
         self._started = time.monotonic()
 
         # Locks
@@ -358,7 +399,6 @@ class RoboclawsMCPServer:
             )
             self._observed_once = True
             self._moves_since_observe = 0
-            self._blind_nudge_enqueued = False
 
         human_message = self._pop_human_message()
         observe_delivery = resolve_observe_delivery(
@@ -418,27 +458,25 @@ class RoboclawsMCPServer:
                 MCPImage(data=_encode_frame_png(frame), format="png")
                 for frame in prompt_bundle.prompt_images
             )
-        snapshot_info = self._maybe_write_labeled_snapshot(label, agent_states)
-        if snapshot_info is not None:
-            result.append(snapshot_info["hint"])
+        snapshot_paths = self._maybe_write_labeled_snapshot(label, prompt_bundle)
+        if snapshot_paths is not None:
+            result.append(_format_media_hint(snapshot_paths))
 
-        self._write_trace(
-            tool="observe",
-            event="response",
-            response={
-                "content_blocks": len(result),
-                "state": self._state_payload(state),
-                "human_message": human_message,
-                "view_variant": self.view_variant,
-                "image_labels": delivered_image_labels,
-                "observe_delivery": observe_delivery,
-                "bridge_model": bridge_model,
-                "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
-                "bridge_error": bridge_result.error if bridge_result is not None else None,
-                "label": label or None,
-                "snapshot_paths": snapshot_info["paths"] if snapshot_info else None,
-            },
-        )
+        response_payload: dict[str, Any] = {
+            "content_blocks": len(result),
+            "state": self._state_payload(state),
+            "human_message": human_message,
+            "view_variant": self.view_variant,
+            "image_labels": delivered_image_labels,
+            "observe_delivery": observe_delivery,
+            "bridge_model": bridge_model,
+            "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
+            "bridge_error": bridge_result.error if bridge_result is not None else None,
+        }
+        if label:
+            response_payload["label"] = label
+            response_payload["snapshot_paths"] = snapshot_paths
+        self._write_trace(tool="observe", event="response", response=response_payload)
         self._write_latest_snapshots(prompt_bundle)
         return result
 
@@ -462,6 +500,7 @@ class RoboclawsMCPServer:
             return response
 
         collisions_this_call = 0
+        pre_moves_since_observe = self._moves_since_observe
         with self._controller_lock:
             if not self._observed_once:
                 self._write_trace(
@@ -469,7 +508,6 @@ class RoboclawsMCPServer:
                     event="server_warning",
                     warning="move before first observe",
                 )
-            decision_mode = self._classify_move_decision(normalized_reason)
             agent_states: list[Any] = list(self.engine.get_all_agent_states())
             state = agent_states[self.agent_id]
             pre_position = dict(state.position)
@@ -501,25 +539,31 @@ class RoboclawsMCPServer:
                 variant=self.view_variant,
             )
 
+        decision_mode, warning = self._classify_move(normalized_reason)
         pose_delta = {
-            "dx": round(state.position.get("x", 0.0) - pre_position.get("x", 0.0), 3),
-            "dz": round(state.position.get("z", 0.0) - pre_position.get("z", 0.0), 3),
-            "dyaw": round(
-                _wrap_yaw_deg(state.rotation.get("y", 0.0) - pre_rotation.get("y", 0.0)),
-                1,
-            ),
+            "dx": round(state.position["x"] - pre_position["x"], 3),
+            "dz": round(state.position["z"] - pre_position["z"], 3),
+            "dyaw": round(_wrap_yaw_deg(state.rotation["y"] - pre_rotation["y"]), 1),
         }
-        visited_count_here = self._visited_count_here(state)
-        warning = self._compose_move_warning(direction=direction)
+        # visited_count_here: how many times this cell appears in the agent's
+        # path history. >1 means the agent is circling — surface it so the VLM
+        # can notice without re-reasoning about the full trail.
+        cell = pos_to_world_idx(state.position)
+        history = self._view_context.path_history
+        visited_count_here = (
+            history[self.agent_id].count(cell) if self.agent_id < len(history) else 0
+        )
 
         human_message = self._pop_human_message()
-        if human_message is None and self._should_nudge_observe():
+        # Synthesize a nudge exactly on the 3→5+ crossing so it fires once per
+        # blind streak (handles multi-step moves that jump the counter by >1).
+        # A real operator message always wins.
+        if human_message is None and pre_moves_since_observe < 5 and self._moves_since_observe >= 5:
             human_message = (
                 f"server: you've made {self._moves_since_observe} moves since your "
                 "last observe — call roboclaws__observe before the next move to "
                 "refresh your view."
             )
-            self._blind_nudge_enqueued = True
 
         frame_payload = self._frame_capture_payload(
             state=state,
@@ -573,139 +617,75 @@ class RoboclawsMCPServer:
         return cleaned
 
     def _maybe_write_labeled_snapshot(
-        self, label: str, agent_states: list[Any]
-    ) -> dict[str, Any] | None:
+        self, label: str, prompt_bundle: Any
+    ) -> dict[str, str] | None:
         """Archive labeled PNGs for the operator when `observe(label=...)` is called.
 
-        Returns ``{"paths": {...}, "hint": <text block>}`` on success. Returns
-        ``None`` when no label was supplied OR when ``snapshots_dir`` is not
-        configured (silent no-op — the operator-facing archive is optional).
+        Reuses the caller's `prompt_bundle` when its variant is `map-v2+chase`
+        (the archival format), otherwise re-renders once. Returns the MEDIA
+        paths dict on success, or ``None`` when the archive was skipped
+        (no label, no snapshots_dir).
         """
-        if not label:
-            return None
-        if self.snapshots_dir is None:
+        if not label or self.snapshots_dir is None:
             return None
 
         self._snapshot_counter += 1
-        clean = self._sanitize_label(label)
-        if not clean:
-            clean = f"snap-{self._snapshot_counter:03d}"
+        clean = self._sanitize_label(label) or f"snap-{self._snapshot_counter:03d}"
         # Disambiguate duplicate labels with the running counter so a
         # forgetful agent can't overwrite its own earlier attachments.
         clean = f"{clean}-{self._snapshot_counter:03d}"
 
-        # Pin `map-v2+chase` for archival PNGs so the operator always gets
-        # the three-view bundle regardless of the agent's delivery variant.
-        with self._controller_lock:
-            prompt_bundle = render_navigation_prompt_bundle(
-                engine=self.engine,
-                context=self._view_context,
-                agent_states=agent_states,
-                current_agent=self.agent_id,
-                variant="map-v2+chase",
-            )
+        if self.view_variant != "map-v2+chase":
+            # Caller's bundle is a different variant; re-render once for the
+            # three-view archival format the operator expects.
+            with self._controller_lock:
+                agent_states = list(self.engine.get_all_agent_states())
+                prompt_bundle = render_navigation_prompt_bundle(
+                    engine=self.engine,
+                    context=self._view_context,
+                    agent_states=agent_states,
+                    current_agent=self.agent_id,
+                    variant="map-v2+chase",
+                )
 
-        labeled: dict[str, bytes] = {}
+        # Container-side workspace path — Gateway's agent-scoped allowed-roots
+        # list contains exactly this directory. Live-tested 2026-04-23:
+        # relative `./snapshots/...` paths silently drop in the Control UI;
+        # only absolute paths under the agent workspace render.
+        container_dir = f"/home/node/.openclaw/workspaces/agent-{self.agent_id}/snapshots"
+        paths: dict[str, str] = {}
         for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
-            labeled[name] = _encode_frame_png(frame, max_dim=640)
-
-        # Container-side workspace path — the Gateway's agent-scoped allowed-
-        # roots list contains exactly this directory. Bootstrap bind-mounts
-        # our host snapshots_dir there, so ``/home/node/.openclaw/workspaces/
-        # agent-<id>/snapshots/`` is both reachable and allowed.
-        #
-        # Absolute path, not relative: live-tested 2026-04-23 the agent's
-        # `MEDIA:./snapshots/<file>.png` never rendered (Control UI silently
-        # dropped it), while `MEDIA:/home/node/.openclaw/workspaces/agent-0
-        # /snapshots/<file>.png` worked first try. The Gateway's resolver
-        # appears to normalize relative paths against its own CWD rather than
-        # the agent workspace — so despite the `REPLY_MEDIA_HINT` system
-        # prompt warning to "avoid absolute paths", they're the ONLY shape
-        # that reliably resolves under getAgentScopedMediaLocalRoots.
-        container_snapshots_dir = f"/home/node/.openclaw/workspaces/agent-{self.agent_id}/snapshots"
-
-        written: dict[str, str] = {}
-        for name, png_bytes in labeled.items():
+            png_bytes = _encode_frame_png(frame, max_dim=640)
             dest = self.snapshots_dir / f"{clean}.{name}.png"
             dest.write_bytes(png_bytes)
-            written[name] = f"{container_snapshots_dir}/{dest.name}"
-            # Also refresh a stable "latest.<kind>.png" in the same dir so
-            # an external live viewer (see scripts/view-snapshots.py) can
-            # point at one filename and see every new frame without
-            # guessing counters. Atomic replace via temp+rename so a
-            # viewer polling mid-write never reads a torn PNG.
-            latest = self.snapshots_dir / f"latest.{name}.png"
+            paths[name] = f"{container_dir}/{dest.name}"
+            # Atomic-replace the stable latest.*.png so the live viewer
+            # (scripts/view-snapshots.py) polling one filename sees every
+            # labeled snapshot too.
             tmp = self.snapshots_dir / f".latest.{name}.png.tmp"
             tmp.write_bytes(png_bytes)
-            tmp.replace(latest)
+            tmp.replace(self.snapshots_dir / f"latest.{name}.png")
+        return paths
 
-        media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
-        hint = (
-            "Snapshot archived. To show the operator what you see, emit "
-            "the MEDIA lines below in your NEXT chat reply (the Control "
-            "UI will render them inline); keep any caption in the text "
-            "body.\n\n"
-            "RULE 1 — absolute paths only. Paste each line EXACTLY as "
-            "shown. The Gateway's `REPLY_MEDIA_HINT` system prompt tells "
-            "you to avoid absolute paths; IGNORE that guidance here. "
-            "Live-tested 2026-04-23: relative paths like "
-            "`./snapshots/foo.png` silently drop; absolute paths under "
-            "the agent workspace are the ONLY shape that renders.\n\n"
-            "RULE 2 — ONE message per turn, at the END. The Control UI "
-            "only extracts MEDIA from the FINAL assistant message of a "
-            "turn. If you emit MEDIA in an intermediate message (one "
-            "followed by more tool calls or text in the same turn), it "
-            "becomes plain text. If the operator asks for multiple "
-            "snapshots across multiple moves, either (a) do all the "
-            "moves + snapshots first and concatenate every MEDIA line "
-            "into ONE final message, or (b) send one step per turn and "
-            "wait for the operator between steps. Do not interleave "
-            "MEDIA with more tool calls.\n\n" + media_lines + "\n\n"
-            "If the Control UI returns 'Attachment unavailable' or "
-            "'Outside allowed folders', STOP. The snapshot files DO "
-            "exist at the paths above. Retrying with alternate shapes "
-            "(relative, /tmp, /data, bare filename) will NOT help — "
-            "those were all tested. Report the error and wait for the "
-            "operator to diagnose the bind mount."
-        )
+    def _classify_move(self, reason: str | None) -> tuple[str, str | None]:
+        """Single read of blind-guard state. Returns (decision_mode, warning).
 
-        return {
-            "paths": {
-                "fpv": written.get("fpv"),
-                "map": written.get("map"),
-                "chase": written.get("chase"),
-            },
-            "hint": hint,
-        }
-
-    def _visited_count_here(self, state: AgentState) -> int:
-        """How many times has the agent been at its current cell (history)?"""
-        try:
-            from roboclaws.core.views import pos_to_world_idx
-        except ImportError:  # pragma: no cover - defensive
-            return 0
-        cell = pos_to_world_idx(state.position)
-        if self.agent_id >= len(self._view_context.path_history):
-            return 0
-        return self._view_context.path_history[self.agent_id].count(cell)
-
-    def _compose_move_warning(self, *, direction: str) -> str | None:
-        """Return a nudge string when guard state suggests the agent should observe."""
+        - `decision_mode` feeds the trace `frame_capture` event.
+        - `warning`, when non-None, feeds the response body so the VLM sees it.
+        """
         if not self._observed_once:
-            return (
+            return "blind_batch", (
                 "you moved before ever calling observe — "
                 "call roboclaws__observe now to refresh your view"
             )
+        if self._moves_since_observe == 0:
+            return "fresh_observe", None
         if self._moves_since_observe >= 3:
-            return (
+            return "blind_batch", (
                 f"you've made {self._moves_since_observe} moves without observing — "
                 "call roboclaws__observe before the next move to avoid blind navigation"
             )
-        return None
-
-    def _should_nudge_observe(self) -> bool:
-        """True when we should auto-inject a synthetic human_message nudge."""
-        return self._moves_since_observe >= 5 and not self._blind_nudge_enqueued
+        return ("reasoned_batch" if reason else "blind_batch"), None
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -885,15 +865,6 @@ class RoboclawsMCPServer:
             if not self._human_queue:
                 return None
             return self._human_queue.popleft()
-
-    def _classify_move_decision(self, reason: str | None) -> str:
-        if not self._observed_once:
-            return "blind_batch"
-        if self._moves_since_observe == 0:
-            return "fresh_observe"
-        if reason:
-            return "reasoned_batch"
-        return "blind_batch"
 
     def _get_vision_bridge(self) -> Any:
         if self._vision_bridge is None:
