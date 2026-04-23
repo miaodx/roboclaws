@@ -72,6 +72,7 @@ from roboclaws.core.engine import NAVIGATION_ACTIONS, AgentState, MultiAgentEngi
 from roboclaws.core.views import (
     image_labels_for_variant,
     make_navigation_view_context,
+    mark_visited_world,
     render_navigation_prompt_bundle,
     validate_view_variant,
 )
@@ -271,14 +272,15 @@ class RoboclawsMCPServer:
             return server._do_observe()
 
         @self._mcp.tool()
-        def move(direction: str, reason: str = "") -> dict:
-            """Step the agent one grid cell / rotation in `direction`.
+        def move(direction: str, reason: str = "", steps: int = 1) -> dict:
+            """Step the agent one or more grid cells / rotations in `direction`.
 
             `direction` must be one of the canonical NAVIGATION_ACTIONS
-            (e.g. MoveAhead, RotateLeft). Returns `{"result": "ok"|"blocked"|
-            "error", "state": {...}, ...}`.
+            (e.g. MoveAhead, RotateLeft). `steps` repeats the same action up
+            to 5 times in sequence, stopping early on a collision. Returns
+            `{"result": "ok"|"blocked"|"error", "state": {...}, ...}`.
             """
-            return server._do_move(direction, reason)
+            return server._do_move(direction, reason, steps=steps)
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
@@ -419,11 +421,12 @@ class RoboclawsMCPServer:
         self._write_latest_snapshots(prompt_bundle)
         return result
 
-    def _do_move(self, direction: str, reason: str = "") -> dict[str, Any]:
+    def _do_move(self, direction: str, reason: str = "", steps: int = 1) -> dict[str, Any]:
+        steps = max(1, min(steps, 5))
         normalized_reason: str | None = reason.strip() if reason else None
         if not normalized_reason:
             normalized_reason = None
-        request_payload: dict[str, Any] = {"direction": direction}
+        request_payload: dict[str, Any] = {"direction": direction, "steps": steps}
         if normalized_reason is not None:
             request_payload["reason"] = normalized_reason
         self._write_trace(tool="move", event="request", request=request_payload)
@@ -444,9 +447,26 @@ class RoboclawsMCPServer:
                     event="server_warning",
                     warning="move before first observe",
                 )
-            self.engine.step(self.agent_id, direction)
-            agent_states = list(self.engine.get_all_agent_states())
+            decision_mode = self._classify_move_decision(normalized_reason)
+            agent_states: list[Any] = list(self.engine.get_all_agent_states())
             state = agent_states[self.agent_id]
+            steps_taken = 0
+            for _ in range(steps):
+                self.engine.step(self.agent_id, direction)
+                agent_states = list(self.engine.get_all_agent_states())
+                state = agent_states[self.agent_id]
+                # Record intermediate position in path_history so the trail
+                # shows every cell traversed, not just the final landing spot.
+                mark_visited_world(
+                    self._view_context.visited_world,
+                    agent_states,
+                    self._view_context.path_history,
+                )
+                self._moves_since_observe += 1
+                self._total_moves += 1
+                steps_taken += 1
+                if not state.last_action_success:
+                    break
             prompt_bundle = render_navigation_prompt_bundle(
                 engine=self.engine,
                 context=self._view_context,
@@ -454,9 +474,6 @@ class RoboclawsMCPServer:
                 current_agent=self.agent_id,
                 variant=self.view_variant,
             )
-            decision_mode = self._classify_move_decision(normalized_reason)
-            self._moves_since_observe += 1
-            self._total_moves += 1
 
         human_message = self._pop_human_message()
 
@@ -474,6 +491,7 @@ class RoboclawsMCPServer:
         result = "ok" if state.last_action_success else "blocked"
         response: dict[str, Any] = {
             "result": result,
+            "steps_taken": steps_taken,
             "state": self._state_payload(state),
             "human_message": human_message,
             "step": self._total_moves,

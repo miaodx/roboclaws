@@ -273,6 +273,7 @@ class GameVisualizer:
         claimed_cells: dict[int, list[tuple[int, int]]] | None = None,
         covered_cells: list[tuple[int, int]] | None = None,
         world_bbox: tuple[int, int, int, int],
+        path_history: list[list[tuple[int, int]]] | None = None,
     ) -> Image.Image:
         """Render a pure grid map from world-grid coordinates.
 
@@ -305,6 +306,17 @@ class GameVisualizer:
 
         self._draw_structured_grid(draw, cols=cols, rows=rows)
 
+        if path_history:
+            for agent_idx, path in enumerate(path_history):
+                if len(path) >= 2:
+                    self._draw_path_trail_world(
+                        draw,
+                        path=path,
+                        min_ix=min_ix,
+                        min_iz=min_iz,
+                        colour=self._agent_colour(agent_idx),
+                    )
+
         for idx, (ix, iz) in enumerate(agent_positions):
             rotation = agent_rotations[idx] if idx < len(agent_rotations) else {"y": 0.0}
             self._draw_heading_marker(
@@ -332,6 +344,7 @@ class GameVisualizer:
         camera_pose: dict[str, object],
         image_size: tuple[int, int],
         grid_size: float = 0.25,
+        path_history: list[list[tuple[int, int]]] | None = None,
     ) -> Image.Image:
         """Render map-v2 into the same projected camera frame as the overhead view."""
         img = Image.new("RGB", image_size, _BACKGROUND_COLOUR)
@@ -371,6 +384,18 @@ class GameVisualizer:
             image_size=image_size,
             grid_size=grid_size,
         )
+
+        if path_history:
+            for agent_idx, path in enumerate(path_history):
+                if len(path) >= 2:
+                    self._draw_projected_path_trail(
+                        draw,
+                        path=path,
+                        camera_pose=camera_pose,
+                        image_size=image_size,
+                        grid_size=grid_size,
+                        colour=self._agent_colour(agent_idx),
+                    )
 
         for idx, (ix, iz) in enumerate(agent_positions):
             rotation = agent_rotations[idx] if idx < len(agent_rotations) else {"y": 0.0}
@@ -718,6 +743,43 @@ class GameVisualizer:
                 image_size=image_size,
             )
             draw.line([start, end], fill=_GRID_LINE_COLOUR)
+
+    def _draw_path_trail_world(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        path: list[tuple[int, int]],
+        min_ix: int,
+        min_iz: int,
+        colour: tuple[int, int, int],
+    ) -> None:
+        points = [
+            self._world_marker_center(ix=ix, iz=iz, min_ix=min_ix, min_iz=min_iz) for ix, iz in path
+        ]
+        for a, b in zip(points, points[1:]):
+            draw.line([a, b], fill=colour, width=2)
+
+    def _draw_projected_path_trail(
+        self,
+        draw: ImageDraw.ImageDraw,
+        *,
+        path: list[tuple[int, int]],
+        camera_pose: dict[str, object],
+        image_size: tuple[int, int],
+        grid_size: float,
+        colour: tuple[int, int, int],
+    ) -> None:
+        points = [
+            self._project_overhead_world_point(
+                x=ix * grid_size,
+                z=iz * grid_size,
+                camera_pose=camera_pose,
+                image_size=image_size,
+            )
+            for ix, iz in path
+        ]
+        for a, b in zip(points, points[1:]):
+            draw.line([a, b], fill=colour, width=2)
 
     def _world_marker_center(
         self,
