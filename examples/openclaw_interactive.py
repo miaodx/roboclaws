@@ -261,7 +261,6 @@ def main(argv: list[str] | None = None) -> int:
             run_dir=output_dir,
             host="0.0.0.0",
             port=18788,
-            view_variant=args.views,
             snapshots_dir=agent_snapshots_dir,
             model_name=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
