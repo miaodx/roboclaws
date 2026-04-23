@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import re
 import socket
 import threading
@@ -73,6 +74,12 @@ from roboclaws.core.views import (
     make_navigation_view_context,
     render_navigation_prompt_bundle,
     validate_view_variant,
+)
+from roboclaws.openclaw.vision_bridge import (
+    VisionBridge,
+    normalize_observe_mode,
+    resolve_bridge_model,
+    resolve_observe_delivery,
 )
 
 __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
@@ -178,6 +185,11 @@ class RoboclawsMCPServer:
         port: int = 18788,
         view_variant: str = "baseline",
         snapshots_dir: Path | None = None,
+        model_name: str | None = None,
+        image_model: str | None = None,
+        observe_mode: str | None = None,
+        vision_bridge_model: str | None = None,
+        vision_bridge: Any | None = None,
     ) -> None:
         self.engine = engine
         self.agent_id = agent_id
@@ -187,6 +199,14 @@ class RoboclawsMCPServer:
         self.host = host
         self.port = int(port)
         self.view_variant = validate_view_variant(view_variant)
+        self.model_name = model_name or os.environ.get("MODEL")
+        self.image_model = image_model or os.environ.get("IMAGE_MODEL")
+        self.observe_mode = normalize_observe_mode(observe_mode)
+        self.vision_bridge_model = resolve_bridge_model(
+            bridge_model=vision_bridge_model,
+            image_model=self.image_model,
+        )
+        self._vision_bridge = vision_bridge
         # Directory the host writes snapshot PNGs to. Bootstrap bind-mounts
         # this same directory at `/home/node/.openclaw/workspaces/<agent>/snapshots`
         # inside the Gateway container so the agent can reference
@@ -262,7 +282,27 @@ class RoboclawsMCPServer:
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
-            """Declare the episode complete and stop the loop.
+            """End the navigation episode and shut the host loop down.
+
+            Call this ONLY when the navigation task itself is finished —
+            e.g. the operator said "stop", the goal is reached, or the
+            agent has decided it cannot make further progress. Calling
+            `done` tears down the AI2-THOR engine and the Gateway
+            container, so it is a one-shot, unrecoverable action.
+
+            Do NOT call `done` in response to:
+
+            * A Gateway `memory-core` "Pre-compaction memory flush" turn.
+              That prompt means "save long-term notes to disk if you
+              have any". The correct response is to either write to
+              `memory/YYYY-MM-DD.md` via an ordinary filesystem tool, or
+              reply with the literal text `NO_REPLY` if there is nothing
+              worth saving. The word "done" in "flush done" does not map
+              to this tool.
+            * A heartbeat or ping ("Reply with only PONG"). Just reply
+              with the requested text.
+            * "I am done thinking about this step". Plan silently; use
+              `move` / `observe` / `snapshot` for the action itself.
 
             Sets the server's done_event so the host loop can shut down.
             """
@@ -304,6 +344,36 @@ class RoboclawsMCPServer:
             self._moves_since_observe = 0
 
         human_message = self._pop_human_message()
+        observe_delivery = resolve_observe_delivery(
+            self.model_name,
+            observe_mode=self.observe_mode,
+        )
+        source_image_labels = list(prompt_bundle.image_labels)
+
+        base_state_payload: dict[str, Any] = {
+            "agent_id": state.agent_id,
+            "position": state.position,
+            "rotation": state.rotation,
+            "camera_horizon": state.camera_horizon,
+            "last_action_success": state.last_action_success,
+            "scene": getattr(self.engine, "scene_name", None),
+            "step": self._total_moves,
+            "budget_remaining": None,
+            "human_message": human_message,
+            "view_variant": self.view_variant,
+            "image_labels": source_image_labels,
+        }
+        bridge_result = None
+        delivered_image_labels = source_image_labels
+        if observe_delivery == "text-bridge":
+            bridge_result = self._get_vision_bridge().describe(
+                images=prompt_bundle.prompt_images,
+                image_labels=source_image_labels,
+                state=base_state_payload,
+                view_variant=self.view_variant,
+            )
+            delivered_image_labels = ["vision_bridge"]
+        bridge_model = bridge_result.bridge_model if bridge_result is not None else None
 
         # Trace: keep JPEG-b64 frame fields identical to sim_server.py so the
         # existing renderer keeps working. This is the additive-only rule in
@@ -313,30 +383,24 @@ class RoboclawsMCPServer:
             prompt_bundle=prompt_bundle,
             seen_by_agent=True,
             human_message=human_message,
+            observe_delivery=observe_delivery,
+            bridge_model=bridge_model,
         )
         self._write_trace(tool="observe", event="frame_capture", **frame_payload)
 
-        # MCP result: state-as-text + N images matching the chosen variant.
-        state_text = json.dumps(
-            {
-                "agent_id": state.agent_id,
-                "position": state.position,
-                "rotation": state.rotation,
-                "camera_horizon": state.camera_horizon,
-                "last_action_success": state.last_action_success,
-                "scene": getattr(self.engine, "scene_name", None),
-                "step": self._total_moves,
-                "budget_remaining": None,
-                "human_message": human_message,
-                "view_variant": self.view_variant,
-                "image_labels": list(prompt_bundle.image_labels),
-            }
-        )
+        state_payload = dict(base_state_payload)
+        state_payload["observe_delivery"] = observe_delivery
+        state_payload["bridge_model"] = bridge_model
+        state_payload["image_labels"] = delivered_image_labels
+        state_text = json.dumps(state_payload)
         result: list[Any] = [state_text]
-        result.extend(
-            MCPImage(data=_encode_frame_png(frame), format="png")
-            for frame in prompt_bundle.prompt_images
-        )
+        if bridge_result is not None:
+            result.append(bridge_result.description)
+        else:
+            result.extend(
+                MCPImage(data=_encode_frame_png(frame), format="png")
+                for frame in prompt_bundle.prompt_images
+            )
         self._write_trace(
             tool="observe",
             event="response",
@@ -345,7 +409,11 @@ class RoboclawsMCPServer:
                 "state": self._state_payload(state),
                 "human_message": human_message,
                 "view_variant": self.view_variant,
-                "image_labels": list(prompt_bundle.image_labels),
+                "image_labels": delivered_image_labels,
+                "observe_delivery": observe_delivery,
+                "bridge_model": bridge_model,
+                "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
+                "bridge_error": bridge_result.error if bridge_result is not None else None,
             },
         )
         self._write_latest_snapshots(prompt_bundle)
@@ -660,6 +728,8 @@ class RoboclawsMCPServer:
         human_message: str | None = None,
         move_direction: str | None = None,
         move_reason: str | None = None,
+        observe_delivery: str | None = None,
+        bridge_model: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "seen_by_agent": seen_by_agent,
@@ -683,6 +753,10 @@ class RoboclawsMCPServer:
             payload["move_direction"] = move_direction
         if move_reason is not None:
             payload["move_reason"] = move_reason
+        if observe_delivery is not None:
+            payload["observe_delivery"] = observe_delivery
+        if bridge_model is not None:
+            payload["bridge_model"] = bridge_model
         return payload
 
     def _state_payload(self, state: AgentState) -> dict[str, Any]:
@@ -724,6 +798,14 @@ class RoboclawsMCPServer:
             return "reasoned_batch"
         return "blind_batch"
 
+    def _get_vision_bridge(self) -> Any:
+        if self._vision_bridge is None:
+            self._vision_bridge = VisionBridge(
+                bridge_model=self.vision_bridge_model,
+                image_model=self.image_model,
+            )
+        return self._vision_bridge
+
     def _write_trace(self, *, tool: str, event: str, **data: Any) -> None:
         # WR-01 fix: gate writes against close(). The watchdog + stdin
         # threads in examples/openclaw_nav_autonomous.py join with a 0.2s
@@ -762,6 +844,11 @@ def make_roboclaws_mcp(
     port: int = 18788,
     view_variant: str = "baseline",
     snapshots_dir: Path | None = None,
+    model_name: str | None = None,
+    image_model: str | None = None,
+    observe_mode: str | None = None,
+    vision_bridge_model: str | None = None,
+    vision_bridge: Any | None = None,
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 
@@ -782,4 +869,9 @@ def make_roboclaws_mcp(
         port=port,
         view_variant=view_variant,
         snapshots_dir=snapshots_dir,
+        model_name=model_name,
+        image_model=image_model,
+        observe_mode=observe_mode,
+        vision_bridge_model=vision_bridge_model,
+        vision_bridge=vision_bridge,
     )

@@ -413,15 +413,20 @@ def test_bootstrap_pins_image_model_to_current_model_by_default() -> None:
     )
 
 
-def test_only_two_providers_supported() -> None:
+def test_only_curated_providers_supported() -> None:
     """The bootstrap's ``case "$PROVIDER"`` statement should list exactly
-    the two curated providers: kimi and nvidia. If this test fails because
-    a third provider was added, make sure you've also:
+    the curated provider set: kimi, nvidia, mimo. If this test fails
+    because a new provider was added, make sure you've also:
 
-      1. Added EXTRA_MODELS_JSON entries verified live
+      1. Added a catalog entry (EXTRA_MODELS_JSON or PROVIDER_ENTRY_JSON)
+         with values verified live — every declared ``contextWindow``
+         must clear the Gateway memory-flush headroom (see
+         ``test_advertised_context_windows_clear_flush_headroom``).
       2. Added a PROVIDER_BASE_URL matching the Gateway plugin catalog
+         (or an explicit PROVIDER_ENTRY_JSON.baseUrl for custom hosts).
       3. Added a parametrize row in test_provider_env_var_matches_plugin_manifest
-      4. Updated docs/openclaw-local.md
+         if the upstream uses an auth env recognised by a Gateway plugin.
+      4. Updated docs/model-matrix.md and docs/openclaw-local.md.
     """
     text = _read_bootstrap()
     case_labels = re.findall(r"^    ([a-z][a-z0-9]*)\)\s*$", text, flags=re.MULTILINE)
@@ -431,14 +436,15 @@ def test_only_two_providers_supported() -> None:
     assert m, "could not find the PROVIDER case block"
     block = m.group(1)
     provider_labels = re.findall(r"^    ([a-z][a-z0-9]*)\)\s*$", block, flags=re.MULTILINE)
-    assert set(provider_labels) == {"kimi", "nvidia"}, (
+    assert set(provider_labels) == {"kimi", "nvidia", "mimo"}, (
         f"bootstrap.sh PROVIDER case declares {sorted(set(provider_labels))!r}; "
-        "expected exactly {'kimi', 'nvidia'} per curated contract."
+        "expected exactly {'kimi', 'nvidia', 'mimo'} per curated contract."
     )
     # Quieten the unused variable from earlier refactor.
     del case_labels
 
 
+@pytest.mark.integration
 def test_provider_base_urls_match_image_catalog() -> None:
     """The ``PROVIDER_BASE_URL`` values hard-coded in the bootstrap must
     match the base URL the Gateway's built-in provider plugin catalog
@@ -464,6 +470,7 @@ def test_provider_base_urls_match_image_catalog() -> None:
     )
 
 
+@pytest.mark.integration
 def test_nvidia_extra_models_cost_free_in_image_catalog() -> None:
     """Any NVIDIA model id that also exists in the pinned image's built-in
     catalog must carry ``cost.input = 0`` / ``cost.output = 0`` (the NIM
@@ -506,6 +513,56 @@ def test_nvidia_extra_models_cost_free_in_image_catalog() -> None:
     )
 
 
+def test_advertised_context_windows_clear_flush_headroom() -> None:
+    """Every model the bootstrap advertises must declare enough context
+    headroom for the Gateway's pre-compaction memory-flush gate.
+
+    The Gateway's ``memory-core`` extension fires a flush turn once a
+    session reaches ``contextWindow - reserveTokensFloor(20000) -
+    softThresholdTokens(4000)`` tokens. With the defaults that's
+    ``contextWindow - 24000``. A declared ``contextWindow`` below ~30k
+    leaves almost no headroom and causes the flush to fire on the first
+    observe turn (FPV + overhead + bootstrap context already consume
+    7-10k tokens). MiMo-class models respond to the flush by calling
+    ``roboclaws__done`` — collapsing the chat session. See the
+    2026-04-23 retro and ``docs/model-matrix.md`` for the full
+    incident.
+
+    131 072 is the current floor (NVIDIA Nemotron Nano 12B V2 VL); any
+    new model entry must meet or exceed that.
+    """
+    text = _read_bootstrap()
+    MIN_CTX = 131_072
+    violations: list[str] = []
+    # Pull every ``{"id":"…", …, "contextWindow":N, …}`` record the script
+    # emits, regardless of whether it sits in EXTRA_MODELS_JSON or a
+    # PROVIDER_ENTRY_JSON.models heredoc. A regex over raw text is
+    # deliberate: new provider branches will show up here without needing
+    # to teach ``_extract_provider_entry_for`` another shape.
+    pattern = re.compile(
+        r'"id"\s*:\s*"(?P<id>[^"]+)"'
+        r'(?:(?!"id"\s*:\s*").)*?'
+        r'"contextWindow"\s*:\s*(?P<ctx>\d+)',
+        flags=re.DOTALL,
+    )
+    matches = list(pattern.finditer(text))
+    assert matches, (
+        "bootstrap has no contextWindow declarations — the regex needs "
+        "updating or every provider entry lost its catalog shape."
+    )
+    for m in matches:
+        model_id = m.group("id")
+        ctx = int(m.group("ctx"))
+        if ctx < MIN_CTX:
+            violations.append(f"{model_id}: contextWindow={ctx}")
+    assert not violations, (
+        "bootstrap advertises models below the Gateway memory-flush "
+        f"headroom ({MIN_CTX}); flush will trip on turn 1-2 and the "
+        "chat session will tear down when the model picks "
+        f"roboclaws__done: {violations}"
+    )
+
+
 def test_reasoning_entries_have_enough_token_budget() -> None:
     """Any bootstrap entry marked ``reasoning: true`` triggers a hidden
     chain-of-thought pass. Without a generous ``max_tokens`` budget the
@@ -535,6 +592,7 @@ def test_reasoning_entries_have_enough_token_budget() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "provider_id, expected_auth_env",
     [

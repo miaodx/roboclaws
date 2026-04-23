@@ -45,3 +45,6 @@ select = ["E", "F", "I", "W"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short -q"
+markers = [
+    "integration: requires Docker (pinned Gateway image) or real model-provider API calls. The pre-commit hook excludes these; run them post-merge via `make test-integration` or plain `pytest` to run everything.",
+]
