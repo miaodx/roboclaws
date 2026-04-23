@@ -43,6 +43,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.core.views import VIEW_VARIANTS
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
 log = logging.getLogger("openclaw-interactive")
 _DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"
@@ -127,7 +128,14 @@ def _existing_gateway_token(container: str) -> str | None:
     return token or None
 
 
-def _print_banner(*, url: str, agent_name: str, token: str, output_dir: Path) -> None:
+def _print_banner(
+    *,
+    url: str,
+    agent_name: str,
+    token: str,
+    output_dir: Path,
+    runtime_config: dict[str, str | None],
+) -> None:
     bar = "=" * 72
     print()
     print(bar)
@@ -136,6 +144,11 @@ def _print_banner(*, url: str, agent_name: str, token: str, output_dir: Path) ->
     print(f"    URL   : {url}")
     print(f"    Token : {token}")
     print(f"    Agent : {agent_name}")
+    print(f"    Model : {runtime_config['model_name'] or '<gateway default>'}")
+    print(f"    Image : {runtime_config['image_model'] or '<main-model>'}")
+    print(f"    Observe: {runtime_config['observe_mode']} -> {runtime_config['observe_delivery']}")
+    if runtime_config["vision_bridge_model"]:
+        print(f"    Bridge: {runtime_config['vision_bridge_model']}")
     print()
     print("  Tips:")
     print("    - An AI2-THOR Unity window should be open on your desktop —")
@@ -195,6 +208,12 @@ def main(argv: list[str] | None = None) -> int:
     gateway_started_by_us = False
     gateway_container = os.environ.get("OPENCLAW_GATEWAY_CONTAINER", _DEFAULT_GATEWAY_CONTAINER)
     shutdown_event = threading.Event()
+    runtime_config = observe_runtime_config(
+        model_name=os.environ.get("MODEL"),
+        image_model=os.environ.get("IMAGE_MODEL"),
+        observe_mode=os.environ.get("ROBOCLAWS_OBSERVE_MODE"),
+        vision_bridge_model=os.environ.get("ROBOCLAWS_VISION_BRIDGE_MODEL"),
+    )
 
     def _handle_signal(signum: int, _frame: object) -> None:
         log.info("received signal %s; shutting down", signum)
@@ -243,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
             port=18788,
             view_variant=args.views,
             snapshots_dir=agent_snapshots_dir,
+            model_name=runtime_config["model_name"],
+            image_model=runtime_config["image_model"],
+            observe_mode=runtime_config["observe_mode"],
+            vision_bridge_model=runtime_config["vision_bridge_model"],
         )
         mcp_server.run_in_thread()
         mcp_server.write_runtime_event(
@@ -251,6 +274,11 @@ def main(argv: list[str] | None = None) -> int:
             agent_id=args.agent_id,
             view_variant=args.views,
             skip_bootstrap=args.skip_bootstrap,
+            model=runtime_config["model_name"],
+            image_model=runtime_config["image_model"],
+            observe_mode=runtime_config["observe_mode"],
+            observe_delivery=runtime_config["observe_delivery"],
+            vision_bridge_model=runtime_config["vision_bridge_model"],
         )
         log.info(
             "MCP server listening on %s:%s → Gateway reaches it via "
@@ -281,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_name=f"agent-{args.agent_id}",
             token=token,
             output_dir=output_dir,
+            runtime_config=runtime_config,
         )
 
         # Block until Ctrl-C / SIGTERM, OR the agent flips done via the

@@ -59,7 +59,34 @@ def test_fmt_content_tool_result_preserves_inner_kinds() -> None:
         }
     ]
     lines = _fmt_content(parts)
-    assert lines == ["← toolResult roboclaws__observe parts=['image', 'image', 'text']"]
+    assert lines == [
+        "← toolResult roboclaws__observe delivery=images parts=['image', 'image', 'text']"
+    ]
+
+
+def test_fmt_content_observe_tool_result_surfaces_text_bridge_delivery() -> None:
+    parts = [
+        {
+            "type": "toolResult",
+            "toolCallId": "call-1",
+            "toolName": "roboclaws__observe",
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "observe_delivery": "text-bridge",
+                            "view_variant": "map-v2+chase",
+                            "image_labels": ["vision_bridge"],
+                        }
+                    ),
+                },
+                {"type": "text", "text": "Immediate view: clear hall."},
+            ],
+        }
+    ]
+    lines = _fmt_content(parts)
+    assert lines == ["← toolResult roboclaws__observe delivery=text-bridge parts=['text', 'text']"]
 
 
 def test_fmt_content_image_block_rendered() -> None:
