@@ -17,7 +17,6 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.core.views import VIEW_VARIANTS
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.openclaw.vision_bridge import observe_runtime_config
@@ -36,12 +35,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-moves", type=int, default=200)
     parser.add_argument("--wall-budget", type=float, default=600.0)
     parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument(
-        "--views",
-        choices=VIEW_VARIANTS,
-        default="map-v2+chase",
-        help="Prompt image bundle variant returned by roboclaws__observe.",
-    )
     parser.add_argument(
         "--skip-bootstrap",
         action="store_true",
@@ -229,7 +222,6 @@ def run_autonomous_navigation(
     max_moves: int,
     wall_budget: float,
     output_dir: Path,
-    views: str = "map-v2+chase",
     skip_bootstrap: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -269,7 +261,6 @@ def run_autonomous_navigation(
             # accepted: single-operator local-dev on a trusted workstation.
             host="0.0.0.0",
             port=18788,
-            view_variant=views,
             model_name=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
             observe_mode=runtime_config["observe_mode"],
@@ -284,7 +275,6 @@ def run_autonomous_navigation(
             scene=scene,
             max_moves=max_moves,
             wall_budget_s=wall_budget,
-            view_variant=views,
             skip_bootstrap=skip_bootstrap,
             model=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
@@ -397,7 +387,7 @@ def run_autonomous_navigation(
                 "terminated_by": run_result.terminated_by,
                 "wallclock_s": run_result.wallclock_s,
                 "final_message": run_result.final_message,
-                "view_variant": views,
+                "view_variant": "map-v2+chase",
                 "model": runtime_config["model_name"],
                 "image_model": runtime_config["image_model"],
                 "observe_mode": runtime_config["observe_mode"],
@@ -466,7 +456,6 @@ def main() -> None:
         max_moves=args.max_moves,
         wall_budget=args.wall_budget,
         output_dir=output_dir,
-        views=args.views,
         skip_bootstrap=args.skip_bootstrap,
     )
     print(f"terminated_by: {result['terminated_by']}")

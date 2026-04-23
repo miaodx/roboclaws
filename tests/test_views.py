@@ -1,19 +1,10 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
-
-from coverage_game import _parse_args as parse_coverage_args  # noqa: E402
-from openclaw_demo import _parse_args as parse_openclaw_args  # noqa: E402
-from territory_game import _parse_args as parse_territory_args  # noqa: E402
-
-from roboclaws.core.views import (  # noqa: E402
+from roboclaws.core.views import (
     VIEW_VARIANTS,
     build_prompt_images,
     compute_world_bbox,
@@ -119,16 +110,3 @@ def test_render_navigation_prompt_bundle_reuses_shared_surface() -> None:
     assert bundle.chase_cam_frame is not None
     assert context.visited_world == {(1, 0)}
     assert engine.chase_updates == 1
-
-
-@pytest.mark.parametrize(
-    ("parser", "name"),
-    [
-        (parse_openclaw_args, "openclaw_demo"),
-        (parse_territory_args, "territory_game"),
-        (parse_coverage_args, "coverage_game"),
-    ],
-)
-def test_examples_accept_views_flag(parser, name: str) -> None:
-    args = parser(["--views", "map-v2+chase"])
-    assert args.views == "map-v2+chase", name

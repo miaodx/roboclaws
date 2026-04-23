@@ -42,7 +42,6 @@ from roboclaws.core.turn_metrics import (
     summarize_payload_metrics,
 )
 from roboclaws.core.views import (
-    VIEW_VARIANTS,
     build_prompt_images,
     compute_world_bbox,
     encode_prompt_images,
@@ -150,12 +149,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="gateway_url",
         help="OpenClaw Gateway base URL (debug override; default: http://localhost:18789)",
     )
-    p.add_argument(
-        "--views",
-        choices=VIEW_VARIANTS,
-        default="map-v2+chase",
-        help="Prompt image variant to use for each agent decision.",
-    )
     return p.parse_args(argv)
 
 
@@ -176,7 +169,6 @@ def run_territory_game(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
-    views: str = "map-v2+chase",
 ) -> dict[str, object]:
     """Run a multi-agent territory control episode and save results to *output_dir*.
 
@@ -295,7 +287,7 @@ def run_territory_game(
             current_agent = game.current_agent_id
             prompt_state_started = time.perf_counter()
             prompt_state = game.get_prompt_state(current_agent)
-            prompt_state["views"] = views
+            prompt_state["views"] = "map-v2+chase"
             turn_metrics["timings"]["prompt_state_seconds"] = round_seconds(
                 time.perf_counter() - prompt_state_started
             )
@@ -319,7 +311,9 @@ def run_territory_game(
                 payload_metrics = summarize_payload_metrics(
                     transport="openclaw_ndarray",
                     prompt_state_chars=prompt_state_metrics["chars"],
-                    image_metrics=[{"label": label} for label in image_labels_for_variant(views)],
+                    image_metrics=[
+                        {"label": label} for label in image_labels_for_variant("map-v2+chase")
+                    ],
                 )
                 turn_metrics["timings"]["image_encode_seconds"] = 0.0
             else:
@@ -483,7 +477,6 @@ def main() -> None:
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
     wall_budget = args.max_wall_seconds if args.max_wall_seconds > 0 else None
     print(f"Wallclock budget   : {wall_budget if wall_budget else 'disabled'}")
-    print(f"Views             : {args.views}")
     print(f"Output dir : {args.output_dir}")
     print()
 
@@ -498,7 +491,6 @@ def main() -> None:
         thor_server_timeout=args.thor_server_timeout,
         thor_server_start_timeout=args.thor_server_start_timeout,
         max_wall_seconds=wall_budget,
-        views=args.views,
     )
 
     print()
