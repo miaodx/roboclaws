@@ -74,8 +74,6 @@ _DEFAULT_SOULS_DIR = os.path.join(
 _GRID_SIZE: float = 0.25  # metres
 _GRID_ROWS: int = 40
 _GRID_COLS: int = 40
-_CENTER_ROW: int = _GRID_ROWS // 2
-_CENTER_COL: int = _GRID_COLS // 2
 
 
 # ---------------------------------------------------------------------------
@@ -86,15 +84,6 @@ _CENTER_COL: int = _GRID_COLS // 2
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
     return (round(pos["x"] / _GRID_SIZE), round(pos["z"] / _GRID_SIZE))
-
-
-def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int, int]:
-    """Map a world grid index to a visualiser (row, col) centred at origin."""
-    return (_CENTER_ROW + (iz - origin_iz), _CENTER_COL + (ix - origin_ix))
-
-
-def _in_bounds(row: int, col: int) -> bool:
-    return 0 <= row < _GRID_ROWS and 0 <= col < _GRID_COLS
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +152,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--views",
         choices=VIEW_VARIANTS,
-        default="baseline",
+        default="map-v2+chase",
         help="Prompt image variant to use for each agent decision.",
     )
     return p.parse_args(argv)
@@ -232,7 +221,7 @@ def run_coverage_game(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
-    views: str = "baseline",
+    views: str = "map-v2+chase",
 ) -> dict[str, Any]:
     """Run a multi-agent cooperative coverage episode and save results to output_dir.
 
@@ -304,25 +293,13 @@ def run_coverage_game(
     )
 
     step_num = 0
-    origin_ix: int = 0
-    origin_iz: int = 0
     cells_history: list[int] = []
-    # AI2-THOR's third-party overhead camera is static, so capture the frame
-    # once and reuse it as the map background for every step.
-    overhead_bg: np.ndarray | None = None
     termination_reason_override: str | None = None
     final_provider_status: dict[str, Any] = provider_status_snapshot(provider)
     final_agent_positions_world: list[tuple[int, int]] = []
     final_agent_rotations: list[dict[str, float]] = []
 
     try:
-        initial_states = engine.get_all_agent_states()
-        origin_ix, origin_iz = _pos_to_world_idx(initial_states[0].position)
-        try:
-            overhead_bg = engine.get_overhead_frame()
-        except Exception:  # noqa: BLE001 - mock engines may omit this
-            overhead_bg = None
-
         while not game.is_over():
             step_started = time.perf_counter()
             turn_metrics: dict[str, Any] = {"timings": {}, "payload": {}}
@@ -339,38 +316,15 @@ def run_coverage_game(
                 time.perf_counter() - state_capture_started
             )
 
-            # Build per-agent covered-cell dicts in visualiser coordinates
             map_render_started = time.perf_counter()
-            covered_cells_viz: dict[int, list[tuple[int, int]]] = {
-                i: [] for i in range(agent_count)
-            }
-            for (wx, wz), agent_id in game._covered.items():
-                rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
-                if _in_bounds(*rc):
-                    covered_cells_viz[agent_id].append(rc)
-
-            # Agent positions in visualiser coordinates
-            agent_positions_viz: list[tuple[int, int]] = []
-            for wx, wz in agent_positions_world:
-                rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
-                agent_positions_viz.append(rc if _in_bounds(*rc) else (_CENTER_ROW, _CENTER_COL))
-
-            map_img = viz.render_overhead_map(
-                agent_positions=agent_positions_viz,
-                claimed_cells=covered_cells_viz,
-                base_frame=overhead_bg,
+            structured_img = viz.render_structured_map(
+                agent_positions=agent_positions_world,
+                agent_rotations=final_agent_rotations,
+                reachable_cells=reachable_cells,
+                covered_cells=list(game._covered.keys()),
+                world_bbox=world_bbox,
             )
-            map_frame = np.asarray(map_img.convert("RGB"), dtype=np.uint8)
-            structured_map_frame: np.ndarray | None = None
-            if views != "baseline":
-                structured_img = viz.render_structured_map(
-                    agent_positions=agent_positions_world,
-                    agent_rotations=final_agent_rotations,
-                    reachable_cells=reachable_cells,
-                    covered_cells=list(game._covered.keys()),
-                    world_bbox=world_bbox,
-                )
-                structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
+            structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
             turn_metrics["timings"]["map_render_seconds"] = round_seconds(
                 time.perf_counter() - map_render_started
             )
@@ -389,22 +343,16 @@ def run_coverage_game(
                 "serialize_seconds"
             ]
 
-            chase_cam_frame: np.ndarray | None = None
-            if views == "map-v2+chase":
-                engine.add_chase_cam(current_agent)
-                engine.update_chase_cam(current_agent)
-                chase_cam_frame = engine.get_chase_cam_frame(current_agent)
+            engine.add_chase_cam(current_agent)
+            engine.update_chase_cam(current_agent)
+            chase_cam_frame = engine.get_chase_cam_frame(current_agent)
 
             prompt_image_frames = build_prompt_images(
-                variant=views,
                 fpv_frame=agent_states[current_agent].frame,
-                baseline_overhead_frame=map_frame,
                 structured_overhead_frame=structured_map_frame,
                 chase_cam_frame=chase_cam_frame,
             )
-            replay_overhead = (
-                structured_map_frame if structured_map_frame is not None else map_frame
-            )
+            replay_overhead = structured_map_frame
             payload_metrics: dict[str, Any]
             if effective_backend == "openclaw":
                 prompt_images: list[Any] = list(prompt_image_frames)
@@ -416,7 +364,6 @@ def run_coverage_game(
                 turn_metrics["timings"]["image_encode_seconds"] = 0.0
             else:
                 prompt_images, image_metrics, encode_seconds = encode_prompt_images(
-                    variant=views,
                     image_frames=prompt_image_frames,
                     encoder=encode_frame_to_b64_jpeg,
                 )
@@ -538,26 +485,13 @@ def run_coverage_game(
     )
 
     # Save final coverage map
-    if views == "baseline":
-        final_covered_viz: dict[int, list[tuple[int, int]]] = {i: [] for i in range(agent_count)}
-        for (wx, wz), agent_id in game._covered.items():
-            rc = _world_to_viz(wx, wz, origin_ix, origin_iz)
-            if _in_bounds(*rc):
-                final_covered_viz[agent_id].append(rc)
-
-        final_map = viz.render_overhead_map(
-            agent_positions=[(_CENTER_ROW, _CENTER_COL)] * agent_count,
-            claimed_cells=final_covered_viz,
-            base_frame=overhead_bg,
-        )
-    else:
-        final_map = viz.render_structured_map(
-            agent_positions=final_agent_positions_world or [(0, 0)] * agent_count,
-            agent_rotations=final_agent_rotations or [{"y": 0.0}] * agent_count,
-            reachable_cells=reachable_cells,
-            covered_cells=list(game._covered.keys()),
-            world_bbox=world_bbox,
-        )
+    final_map = viz.render_structured_map(
+        agent_positions=final_agent_positions_world or [(0, 0)] * agent_count,
+        agent_rotations=final_agent_rotations or [{"y": 0.0}] * agent_count,
+        reachable_cells=reachable_cells,
+        covered_cells=list(game._covered.keys()),
+        world_bbox=world_bbox,
+    )
     GameVisualizer.save_png(final_map, out_path / "coverage_final.png")
 
     # Save coverage progression chart

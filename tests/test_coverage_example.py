@@ -15,15 +15,9 @@ from roboclaws.core.vlm import ProviderHealthError
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 
 from coverage_game import (  # noqa: E402
-    _CENTER_COL,
-    _CENTER_ROW,
-    _GRID_COLS,
-    _GRID_ROWS,
     _draw_progression_chart,
-    _in_bounds,
     _parse_args,
     _pos_to_world_idx,
-    _world_to_viz,
     run_coverage_game,
 )
 
@@ -128,40 +122,6 @@ def test_pos_to_world_idx_negative() -> None:
     assert _pos_to_world_idx({"x": -0.25, "y": 0.9, "z": -0.50}) == (-1, -2)
 
 
-def test_world_to_viz_at_origin() -> None:
-    row, col = _world_to_viz(0, 0, 0, 0)
-    assert row == _CENTER_ROW
-    assert col == _CENTER_COL
-
-
-def test_world_to_viz_offset() -> None:
-    row, col = _world_to_viz(5, 3, 0, 0)
-    assert col == _CENTER_COL + 5
-    assert row == _CENTER_ROW + 3
-
-
-def test_world_to_viz_with_origin_offset() -> None:
-    row, col = _world_to_viz(10, 8, 10, 8)
-    assert row == _CENTER_ROW
-    assert col == _CENTER_COL
-
-
-def test_in_bounds_centre() -> None:
-    assert _in_bounds(_CENTER_ROW, _CENTER_COL) is True
-
-
-def test_in_bounds_corners() -> None:
-    assert _in_bounds(0, 0) is True
-    assert _in_bounds(_GRID_ROWS - 1, _GRID_COLS - 1) is True
-
-
-def test_in_bounds_out_of_range() -> None:
-    assert _in_bounds(-1, 0) is False
-    assert _in_bounds(0, -1) is False
-    assert _in_bounds(_GRID_ROWS, 0) is False
-    assert _in_bounds(0, _GRID_COLS) is False
-
-
 # ---------------------------------------------------------------------------
 # Unit: _draw_progression_chart
 # ---------------------------------------------------------------------------
@@ -205,6 +165,9 @@ def mock_engine_cls():
         inst.get_overhead_frame.return_value = _make_frame(80)
         inst.get_agent_state.side_effect = lambda aid: [a0, a1][aid]
         inst.step.side_effect = lambda agent_id, action, **kw: [a0, a1][agent_id]
+        inst.add_chase_cam.return_value = 0
+        inst.update_chase_cam.return_value = None
+        inst.get_chase_cam_frame.return_value = _make_frame(60)
         # Large reachable set so 2 covered cells don't immediately hit 95% target
         inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
@@ -386,7 +349,7 @@ def test_run_passes_timeout_settings_to_engine(mock_engine_cls, tmp_path: Path) 
     assert kwargs["server_start_timeout"] == 420.0
 
 
-def test_run_passes_two_images_to_provider(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_passes_three_images_to_provider(mock_engine_cls, tmp_path: Path) -> None:
     class SpyProvider:
         cumulative_cost = 0.0
 
@@ -408,7 +371,7 @@ def test_run_passes_two_images_to_provider(mock_engine_cls, tmp_path: Path) -> N
         )
     assert len(spy.calls) == 1
     images, state = spy.calls[0]
-    assert len(images) == 2
+    assert len(images) == 3
     assert all(images)
     assert state["my_agent_id"] == 0
 
@@ -448,7 +411,7 @@ def test_run_replay_records_turn_metrics(mock_engine_cls, tmp_path: Path) -> Non
     metrics = replay["steps"][0]["turn_metrics"]
     assert metrics["timings"]["provider_call_seconds"] >= 0.0
     assert metrics["timings"]["step_loop_seconds"] >= 0.0
-    assert metrics["payload"]["image_count"] == 2
+    assert metrics["payload"]["image_count"] == 3
     assert metrics["payload"]["state_json_chars"] > 0
 
 
@@ -494,6 +457,9 @@ def test_run_three_agents(tmp_path: Path) -> None:
         inst.get_overhead_frame.return_value = _make_frame(80)
         inst.get_agent_state.side_effect = lambda aid: agents[aid]
         inst.step.side_effect = lambda agent_id, action, **kw: agents[agent_id]
+        inst.add_chase_cam.return_value = 0
+        inst.update_chase_cam.return_value = None
+        inst.get_chase_cam_frame.return_value = _make_frame(60)
         inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
 
         result = run_coverage_game(
@@ -579,7 +545,7 @@ def test_backend_openclaw_replay_records_provider_turn_metrics(
         def get_last_turn_metrics(self):
             return {
                 "timings": {"openclaw_gateway_request_seconds": 42.0},
-                "payload": {"image_count": 2, "transport": "openclaw_data_url"},
+                "payload": {"image_count": 3, "transport": "openclaw_data_url"},
                 "provider": {"attempts": 1},
             }
 

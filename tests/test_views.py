@@ -30,44 +30,21 @@ def _frame(value: int) -> np.ndarray:
     return np.full((8, 8, 3), value, dtype=np.uint8)
 
 
-def test_build_prompt_images_baseline_returns_two_images() -> None:
+def test_build_prompt_images_returns_three_images() -> None:
     images = build_prompt_images(
-        variant="baseline",
         fpv_frame=_frame(10),
-        baseline_overhead_frame=_frame(20),
-    )
-    assert len(images) == 2
-    assert int(images[1][0, 0, 0]) == 20
-
-
-def test_build_prompt_images_map_v2_returns_structured_map() -> None:
-    images = build_prompt_images(
-        variant="map-v2",
-        fpv_frame=_frame(10),
-        baseline_overhead_frame=_frame(20),
-        structured_overhead_frame=_frame(30),
-    )
-    assert len(images) == 2
-    assert int(images[1][0, 0, 0]) == 30
-
-
-def test_build_prompt_images_map_v2_chase_returns_three_images() -> None:
-    images = build_prompt_images(
-        variant="map-v2+chase",
-        fpv_frame=_frame(10),
-        baseline_overhead_frame=_frame(20),
         structured_overhead_frame=_frame(30),
         chase_cam_frame=_frame(40),
     )
     assert len(images) == 3
+    assert int(images[1][0, 0, 0]) == 30
     assert int(images[2][0, 0, 0]) == 40
 
 
 def test_image_labels_match_variant_sizes() -> None:
     for variant in VIEW_VARIANTS:
         labels = image_labels_for_variant(variant)
-        expected = 3 if variant == "map-v2+chase" else 2
-        assert len(labels) == expected
+        assert len(labels) == 3
 
 
 def test_compute_world_bbox_spans_all_cells() -> None:
@@ -123,7 +100,7 @@ class _FakeNavigationEngine:
         return self._chase
 
 
-def test_render_navigation_prompt_bundle_map_v2_chase_reuses_shared_surface() -> None:
+def test_render_navigation_prompt_bundle_reuses_shared_surface() -> None:
     engine = _FakeNavigationEngine()
     context = make_navigation_view_context(engine, agent_count=1)
     bundle = render_navigation_prompt_bundle(
@@ -131,14 +108,13 @@ def test_render_navigation_prompt_bundle_map_v2_chase_reuses_shared_surface() ->
         context=context,
         agent_states=engine.get_all_agent_states(),
         current_agent=0,
-        variant="map-v2+chase",
     )
 
     assert bundle.image_labels == ("fpv", "map_v2", "chase")
     assert len(bundle.prompt_images) == 3
     assert bundle.structured_overhead_frame is not None
     assert bundle.trace_overhead_frame is bundle.structured_overhead_frame
-    assert bundle.baseline_overhead_frame.shape == engine.get_overhead_frame().shape
+    assert bundle.raw_overhead_frame.shape == engine.get_overhead_frame().shape
     assert bundle.structured_overhead_frame.shape == engine.get_overhead_frame().shape
     assert bundle.chase_cam_frame is not None
     assert context.visited_world == {(1, 0)}

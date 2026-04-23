@@ -83,7 +83,6 @@ from roboclaws.core.views import (
     mark_visited_world,
     pos_to_world_idx,
     render_navigation_prompt_bundle,
-    validate_view_variant,
 )
 from roboclaws.openclaw.vision_bridge import (
     VisionBridge,
@@ -240,7 +239,6 @@ class RoboclawsMCPServer:
         *,
         host: str = "127.0.0.1",
         port: int = 18788,
-        view_variant: str = "baseline",
         snapshots_dir: Path | None = None,
         model_name: str | None = None,
         image_model: str | None = None,
@@ -255,7 +253,6 @@ class RoboclawsMCPServer:
         self.trace_path = self.run_dir / "trace.jsonl"
         self.host = host
         self.port = int(port)
-        self.view_variant = validate_view_variant(view_variant)
         self.model_name = model_name or os.environ.get("MODEL")
         self.image_model = image_model or os.environ.get("IMAGE_MODEL")
         self.observe_mode = normalize_observe_mode(observe_mode)
@@ -395,7 +392,6 @@ class RoboclawsMCPServer:
                 context=self._view_context,
                 agent_states=agent_states,
                 current_agent=self.agent_id,
-                variant=self.view_variant,
             )
             self._observed_once = True
             self._moves_since_observe = 0
@@ -417,7 +413,7 @@ class RoboclawsMCPServer:
             "step": self._total_moves,
             "budget_remaining": None,
             "human_message": human_message,
-            "view_variant": self.view_variant,
+            "view_variant": "map-v2+chase",
             "image_labels": source_image_labels,
         }
         bridge_result = None
@@ -427,7 +423,7 @@ class RoboclawsMCPServer:
                 images=prompt_bundle.prompt_images,
                 image_labels=source_image_labels,
                 state=base_state_payload,
-                view_variant=self.view_variant,
+                view_variant="map-v2+chase",
             )
             delivered_image_labels = ["vision_bridge"]
         bridge_model = bridge_result.bridge_model if bridge_result is not None else None
@@ -466,7 +462,7 @@ class RoboclawsMCPServer:
             "content_blocks": len(result),
             "state": self._state_payload(state),
             "human_message": human_message,
-            "view_variant": self.view_variant,
+            "view_variant": "map-v2+chase",
             "image_labels": delivered_image_labels,
             "observe_delivery": observe_delivery,
             "bridge_model": bridge_model,
@@ -539,7 +535,6 @@ class RoboclawsMCPServer:
                 context=self._view_context,
                 agent_states=agent_states,
                 current_agent=self.agent_id,
-                variant=self.view_variant,
             )
 
         decision_mode, warning = self._classify_move(normalized_reason)
@@ -586,8 +581,8 @@ class RoboclawsMCPServer:
             "state": self._state_payload(state),
             "human_message": human_message,
             "step": self._total_moves,
-            "view_variant": self.view_variant,
-            "image_labels": list(image_labels_for_variant(self.view_variant)),
+            "view_variant": "map-v2+chase",
+            "image_labels": list(image_labels_for_variant("map-v2+chase")),
             "pose_delta": pose_delta,
             "visited_count_here": visited_count_here,
             "collisions": collisions_this_call,
@@ -624,10 +619,8 @@ class RoboclawsMCPServer:
     ) -> dict[str, str] | None:
         """Archive labeled PNGs for the operator when `observe(label=...)` is called.
 
-        Reuses the caller's `prompt_bundle` when its variant is `map-v2+chase`
-        (the archival format), otherwise re-renders once. Returns the MEDIA
-        paths dict on success, or ``None`` when the archive was skipped
-        (no label, no snapshots_dir).
+        Returns the MEDIA paths dict on success, or ``None`` when the archive
+        was skipped (no label, no snapshots_dir).
         """
         if not label or self.snapshots_dir is None:
             return None
@@ -637,19 +630,6 @@ class RoboclawsMCPServer:
         # Disambiguate duplicate labels with the running counter so a
         # forgetful agent can't overwrite its own earlier attachments.
         clean = f"{clean}-{self._snapshot_counter:03d}"
-
-        if self.view_variant != "map-v2+chase":
-            # Caller's bundle is a different variant; re-render once for the
-            # three-view archival format the operator expects.
-            with self._controller_lock:
-                agent_states = list(self.engine.get_all_agent_states())
-                prompt_bundle = render_navigation_prompt_bundle(
-                    engine=self.engine,
-                    context=self._view_context,
-                    agent_states=agent_states,
-                    current_agent=self.agent_id,
-                    variant="map-v2+chase",
-                )
 
         # Container-side workspace path — Gateway's agent-scoped allowed-roots
         # list contains exactly this directory. Live-tested 2026-04-23:
@@ -814,15 +794,11 @@ class RoboclawsMCPServer:
             "fpv": _encode_frame_jpeg_b64(state.frame),
             "overhead": _encode_frame_jpeg_b64(prompt_bundle.trace_overhead_frame),
             "agent_state": self._state_payload(state),
-            "view_variant": self.view_variant,
+            "view_variant": "map-v2+chase",
             "image_labels": list(prompt_bundle.image_labels),
         }
-        if prompt_bundle.structured_overhead_frame is not None:
-            payload["baseline_overhead"] = _encode_frame_jpeg_b64(
-                prompt_bundle.baseline_overhead_frame
-            )
-        if prompt_bundle.chase_cam_frame is not None:
-            payload["chase"] = _encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame)
+        payload["baseline_overhead"] = _encode_frame_jpeg_b64(prompt_bundle.raw_overhead_frame)
+        payload["chase"] = _encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame)
         if decision_mode is not None:
             payload["decision_mode"] = decision_mode
         if human_message is not None:
@@ -915,7 +891,6 @@ def make_roboclaws_mcp(
     *,
     host: str = "127.0.0.1",
     port: int = 18788,
-    view_variant: str = "baseline",
     snapshots_dir: Path | None = None,
     model_name: str | None = None,
     image_model: str | None = None,
@@ -943,7 +918,6 @@ def make_roboclaws_mcp(
         run_dir,
         host=host,
         port=port,
-        view_variant=view_variant,
         snapshots_dir=snapshots_dir,
         model_name=model_name,
         image_model=image_model,
