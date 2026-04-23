@@ -2,14 +2,14 @@
 """Serve a small auto-refreshing HTML page showing the agent's latest view.
 
 Chat MEDIA can only render one set of images per turn (Control UI quirk —
-see roboclaws/openclaw/mcp_server.py:_do_snapshot hint). For long-running
-sessions where you want to watch the robot move frame-by-frame without
-asking it to pause between steps, open this viewer in a separate browser
-tab instead.
+see the ``_maybe_write_labeled_snapshot`` hint in
+``roboclaws/openclaw/mcp_server.py``). For long-running sessions where you
+want to watch the robot move frame-by-frame without asking it to pause
+between steps, open this viewer in a separate browser tab instead.
 
 The viewer polls three stable filenames in the latest run's snapshots
-dir — ``latest.fpv.png``, ``latest.map.png``, ``latest.chase.png`` — which
-the ``roboclaws__snapshot`` MCP tool rewrites atomically every call.
+dir — ``latest.fpv.png``, ``latest.map.png``, ``latest.chase.png`` —
+which every ``roboclaws__observe`` call rewrites atomically (labeled or not).
 
 Usage:
 
@@ -186,7 +186,9 @@ def _make_handler(run_dir: Path, agent_id: int):
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Live viewer for roboclaws__snapshot output.")
+    parser = argparse.ArgumentParser(
+        description="Live viewer for roboclaws__observe latest.*.png output."
+    )
     parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument("--agent-id", type=int, default=0)
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)

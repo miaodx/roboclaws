@@ -11,13 +11,21 @@ What this module delivers:
 * `make_roboclaws_mcp(engine, agent_id, run_dir, ...)` — factory returning a
   `RoboclawsMCPServer` bound to the given AI2-THOR engine + agent.
 * Three MCP tools, matching `02.6-CONTEXT.md` D-01:
-    - `observe()`              → FPV PNG + overhead PNG (as MCP Image content)
-                                 plus a JSON-serialized state text block.
-    - `move(direction, reason)`→ validates direction vs
-                                 `roboclaws.core.engine.NAVIGATION_ACTIONS`
-                                 before stepping the engine.
-    - `done(reason)`           → flips the server's `done_event` and records
-                                 the total_moves + elapsed_s.
+    - `observe(label="")`       → FPV PNG + overhead PNG (as MCP Image content)
+                                  plus a JSON-serialized state text block. When
+                                  `label` is non-empty AND `snapshots_dir` is
+                                  configured, also archives labeled PNGs to the
+                                  agent workspace and appends a MEDIA: hint
+                                  block so the chat UI can render them inline.
+                                  (Replaces the old separate `snapshot` tool.)
+    - `move(direction, reason)` → validates direction vs
+                                  `roboclaws.core.engine.NAVIGATION_ACTIONS`
+                                  before stepping the engine. Response includes
+                                  `pose_delta`, `visited_count_here`,
+                                  `collisions`, and a `warning` field when the
+                                  agent has moved without observing.
+    - `done(reason)`            → flips the server's `done_event` and records
+                                  the total_moves + elapsed_s.
 * A per-tool-call JSONL trace at `run_dir/trace.jsonl`. Keyset is a **superset**
   of the frozen `tests/fixtures/trace_schema_reference.json` so
   `scripts/render_autonomous_replay.py` keeps working without edits; the JPEG
@@ -147,6 +155,12 @@ def _encode_frame_jpeg_b64(frame: np.ndarray, quality: int = 70) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
+def _wrap_yaw_deg(delta: float) -> float:
+    """Wrap a yaw delta into [-180, 180] so reporting never shows 358° for -2°."""
+    wrapped = (delta + 180.0) % 360.0 - 180.0
+    return wrapped
+
+
 def _startup_probe_host(host: str) -> str:
     """Map wildcard binds to a concrete loopback address for readiness probes."""
     if host in {"0.0.0.0", "::"}:
@@ -214,8 +228,9 @@ class RoboclawsMCPServer:
         # `./snapshots/<label>.png` in a MEDIA: directive — the workspace dir
         # is in the Gateway's agent-scoped allowed-roots list (see
         # `/app/dist/local-roots-*.js:getAgentScopedMediaLocalRoots`). If None,
-        # the `snapshot` tool returns an error result; the rest of the server
-        # keeps working.
+        # `observe(label=...)` silently skips the archive step (the MEDIA hint
+        # block is omitted from the response); the rest of the server keeps
+        # working.
         self.snapshots_dir: Path | None = Path(snapshots_dir) if snapshots_dir is not None else None
         if self.snapshots_dir is not None:
             self.snapshots_dir.mkdir(parents=True, exist_ok=True)
@@ -226,7 +241,9 @@ class RoboclawsMCPServer:
         self._observed_once = False
         self._moves_since_observe = 0
         self._total_moves = 0
+        self._collisions_total = 0
         self._snapshot_counter = 0
+        self._blind_nudge_enqueued = False
         self._started = time.monotonic()
 
         # Locks
@@ -262,14 +279,21 @@ class RoboclawsMCPServer:
         server = self
 
         @self._mcp.tool()
-        def observe() -> list:
+        def observe(label: str = "") -> list:
             """Capture the current prompt-image bundle and structured agent state.
 
             Returns a text block (JSON-serialized state, with any pending
             human_message folded in) plus the PNG images for the configured
             view variant.
+
+            If `label` is non-empty AND the server has a `snapshots_dir`
+            configured, ALSO archives labeled PNGs (fpv/map/chase) to the
+            agent workspace and appends a final text block containing
+            `MEDIA:` paths so the Control UI renders them inline. Use a
+            label when the operator asks you to "show me what you see" in
+            the chat tab; omit it when you are only looking for yourself.
             """
-            return server._do_observe()
+            return server._do_observe(label=label)
 
         @self._mcp.tool()
         def move(direction: str, reason: str = "", steps: int = 1) -> dict:
@@ -278,7 +302,10 @@ class RoboclawsMCPServer:
             `direction` must be one of the canonical NAVIGATION_ACTIONS
             (e.g. MoveAhead, RotateLeft). `steps` repeats the same action up
             to 5 times in sequence, stopping early on a collision. Returns
-            `{"result": "ok"|"blocked"|"error", "state": {...}, ...}`.
+            `{"result": "ok"|"blocked"|"error", "state": {...}, "pose_delta":
+            {...}, "visited_count_here": N, "collisions": N, ...}`. When the
+            agent has moved without observing, a `warning` field nudges it
+            to call `observe` before the next move.
             """
             return server._do_move(direction, reason, steps=steps)
 
@@ -304,34 +331,21 @@ class RoboclawsMCPServer:
             * A heartbeat or ping ("Reply with only PONG"). Just reply
               with the requested text.
             * "I am done thinking about this step". Plan silently; use
-              `move` / `observe` / `snapshot` for the action itself.
+              `move` / `observe` for the action itself.
 
             Sets the server's done_event so the host loop can shut down.
             """
             return server._do_done(reason)
 
-        @self._mcp.tool()
-        def snapshot(label: str = "") -> dict:
-            """Write the current FPV + overhead frames to the agent's workspace.
-
-            Returns a dict with `fpv_path` / `overhead_path` — relative paths
-            under the agent's workspace, suitable for inlining in chat with
-            a `MEDIA:./snapshots/<label>.fpv.png` directive (the Gateway
-            Control UI renders MEDIA: paths as attachments when they resolve
-            to an allowed root, and the workspace dir is one). Use this when
-            the operator asks you to show what you see in the chat tab.
-
-            `label` defaults to a monotonic counter. Sanitized to
-            [A-Za-z0-9._-]; everything else becomes `_`.
-            """
-            return server._do_snapshot(label)
-
     # ------------------------------------------------------------------
     # Tool implementations (tests call these directly)
     # ------------------------------------------------------------------
 
-    def _do_observe(self) -> list:
-        self._write_trace(tool="observe", event="request", request={})
+    def _do_observe(self, label: str = "") -> list:
+        request_payload: dict[str, Any] = {}
+        if label:
+            request_payload["label"] = label
+        self._write_trace(tool="observe", event="request", request=request_payload)
         with self._controller_lock:
             agent_states = list(self.engine.get_all_agent_states())
             state = agent_states[self.agent_id]
@@ -344,6 +358,7 @@ class RoboclawsMCPServer:
             )
             self._observed_once = True
             self._moves_since_observe = 0
+            self._blind_nudge_enqueued = False
 
         human_message = self._pop_human_message()
         observe_delivery = resolve_observe_delivery(
@@ -403,6 +418,10 @@ class RoboclawsMCPServer:
                 MCPImage(data=_encode_frame_png(frame), format="png")
                 for frame in prompt_bundle.prompt_images
             )
+        snapshot_info = self._maybe_write_labeled_snapshot(label, agent_states)
+        if snapshot_info is not None:
+            result.append(snapshot_info["hint"])
+
         self._write_trace(
             tool="observe",
             event="response",
@@ -416,6 +435,8 @@ class RoboclawsMCPServer:
                 "bridge_model": bridge_model,
                 "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
                 "bridge_error": bridge_result.error if bridge_result is not None else None,
+                "label": label or None,
+                "snapshot_paths": snapshot_info["paths"] if snapshot_info else None,
             },
         )
         self._write_latest_snapshots(prompt_bundle)
@@ -440,6 +461,7 @@ class RoboclawsMCPServer:
             self._write_trace(tool="move", event="response", response=response)
             return response
 
+        collisions_this_call = 0
         with self._controller_lock:
             if not self._observed_once:
                 self._write_trace(
@@ -450,6 +472,8 @@ class RoboclawsMCPServer:
             decision_mode = self._classify_move_decision(normalized_reason)
             agent_states: list[Any] = list(self.engine.get_all_agent_states())
             state = agent_states[self.agent_id]
+            pre_position = dict(state.position)
+            pre_rotation = dict(state.rotation)
             steps_taken = 0
             for _ in range(steps):
                 self.engine.step(self.agent_id, direction)
@@ -466,6 +490,8 @@ class RoboclawsMCPServer:
                 self._total_moves += 1
                 steps_taken += 1
                 if not state.last_action_success:
+                    collisions_this_call += 1
+                    self._collisions_total += 1
                     break
             prompt_bundle = render_navigation_prompt_bundle(
                 engine=self.engine,
@@ -475,7 +501,25 @@ class RoboclawsMCPServer:
                 variant=self.view_variant,
             )
 
+        pose_delta = {
+            "dx": round(state.position.get("x", 0.0) - pre_position.get("x", 0.0), 3),
+            "dz": round(state.position.get("z", 0.0) - pre_position.get("z", 0.0), 3),
+            "dyaw": round(
+                _wrap_yaw_deg(state.rotation.get("y", 0.0) - pre_rotation.get("y", 0.0)),
+                1,
+            ),
+        }
+        visited_count_here = self._visited_count_here(state)
+        warning = self._compose_move_warning(direction=direction)
+
         human_message = self._pop_human_message()
+        if human_message is None and self._should_nudge_observe():
+            human_message = (
+                f"server: you've made {self._moves_since_observe} moves since your "
+                "last observe — call roboclaws__observe before the next move to "
+                "refresh your view."
+            )
+            self._blind_nudge_enqueued = True
 
         frame_payload = self._frame_capture_payload(
             state=state,
@@ -497,7 +541,14 @@ class RoboclawsMCPServer:
             "step": self._total_moves,
             "view_variant": self.view_variant,
             "image_labels": list(image_labels_for_variant(self.view_variant)),
+            "pose_delta": pose_delta,
+            "visited_count_here": visited_count_here,
+            "collisions": collisions_this_call,
+            "collisions_total": self._collisions_total,
+            "moves_since_observe": self._moves_since_observe,
         }
+        if warning is not None:
+            response["warning"] = warning
         self._write_trace(tool="move", event="response", response=response)
         return response
 
@@ -521,17 +572,19 @@ class RoboclawsMCPServer:
         cleaned = cleaned.strip("._") or ""
         return cleaned
 
-    def _do_snapshot(self, label: str) -> dict[str, Any]:
-        self._write_trace(tool="snapshot", event="request", request={"label": label})
+    def _maybe_write_labeled_snapshot(
+        self, label: str, agent_states: list[Any]
+    ) -> dict[str, Any] | None:
+        """Archive labeled PNGs for the operator when `observe(label=...)` is called.
+
+        Returns ``{"paths": {...}, "hint": <text block>}`` on success. Returns
+        ``None`` when no label was supplied OR when ``snapshots_dir`` is not
+        configured (silent no-op — the operator-facing archive is optional).
+        """
+        if not label:
+            return None
         if self.snapshots_dir is None:
-            err = (
-                "snapshots_dir is not configured on this MCP server — "
-                "pass snapshots_dir= when constructing, or set "
-                "ROBOCLAWS_SNAPSHOTS_DIR before `make chat`."
-            )
-            response = {"error": err}
-            self._write_trace(tool="snapshot", event="response", response=response)
-            return response
+            return None
 
         self._snapshot_counter += 1
         clean = self._sanitize_label(label)
@@ -541,8 +594,9 @@ class RoboclawsMCPServer:
         # forgetful agent can't overwrite its own earlier attachments.
         clean = f"{clean}-{self._snapshot_counter:03d}"
 
+        # Pin `map-v2+chase` for archival PNGs so the operator always gets
+        # the three-view bundle regardless of the agent's delivery variant.
         with self._controller_lock:
-            agent_states = list(self.engine.get_all_agent_states())
             prompt_bundle = render_navigation_prompt_bundle(
                 engine=self.engine,
                 context=self._view_context,
@@ -551,10 +605,6 @@ class RoboclawsMCPServer:
                 variant="map-v2+chase",
             )
 
-        # `prompt_bundle.prompt_images` order + labels depend on the variant.
-        # For snapshots we pin `map-v2+chase` so the caller always gets three
-        # images in a stable order: fpv (0), map (1), chase (2). The MEDIA
-        # lines we return match that ordering.
         labeled: dict[str, bytes] = {}
         for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
             labeled[name] = _encode_frame_png(frame, max_dim=640)
@@ -591,7 +641,7 @@ class RoboclawsMCPServer:
 
         media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
         hint = (
-            "Snapshot written. To show the operator what you see, emit "
+            "Snapshot archived. To show the operator what you see, emit "
             "the MEDIA lines below in your NEXT chat reply (the Control "
             "UI will render them inline); keep any caption in the text "
             "body.\n\n"
@@ -619,14 +669,43 @@ class RoboclawsMCPServer:
             "operator to diagnose the bind mount."
         )
 
-        response: dict[str, Any] = {
-            "fpv_path": written.get("fpv"),
-            "map_path": written.get("map"),
-            "chase_path": written.get("chase"),
+        return {
+            "paths": {
+                "fpv": written.get("fpv"),
+                "map": written.get("map"),
+                "chase": written.get("chase"),
+            },
             "hint": hint,
         }
-        self._write_trace(tool="snapshot", event="response", response=response)
-        return response
+
+    def _visited_count_here(self, state: AgentState) -> int:
+        """How many times has the agent been at its current cell (history)?"""
+        try:
+            from roboclaws.core.views import pos_to_world_idx
+        except ImportError:  # pragma: no cover - defensive
+            return 0
+        cell = pos_to_world_idx(state.position)
+        if self.agent_id >= len(self._view_context.path_history):
+            return 0
+        return self._view_context.path_history[self.agent_id].count(cell)
+
+    def _compose_move_warning(self, *, direction: str) -> str | None:
+        """Return a nudge string when guard state suggests the agent should observe."""
+        if not self._observed_once:
+            return (
+                "you moved before ever calling observe — "
+                "call roboclaws__observe now to refresh your view"
+            )
+        if self._moves_since_observe >= 3:
+            return (
+                f"you've made {self._moves_since_observe} moves without observing — "
+                "call roboclaws__observe before the next move to avoid blind navigation"
+            )
+        return None
+
+    def _should_nudge_observe(self) -> bool:
+        """True when we should auto-inject a synthetic human_message nudge."""
+        return self._moves_since_observe >= 5 and not self._blind_nudge_enqueued
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -873,11 +952,14 @@ def make_roboclaws_mcp(
     Defaults to `host=127.0.0.1` — see module docstring for threat-model
     rationale. Pass `port=0` in tests to avoid binding a real port.
 
-    `snapshots_dir`, if provided, enables the `snapshot` tool. The host side
-    writes PNGs there; bootstrap bind-mounts the same directory at
+    `snapshots_dir`, if provided, enables the labeled-archive branch of
+    `observe(label=...)`. The host side writes PNGs there; bootstrap bind-
+    mounts the same directory at
     `/home/node/.openclaw/workspaces/<agent>/snapshots/` inside the Gateway
-    container so the agent can reference them as `./snapshots/...` in a
-    `MEDIA:` directive.
+    container so the agent can reference them as absolute paths in a
+    `MEDIA:` directive. When unset, the tool still refreshes the live viewer's
+    `latest.*.png` via the normal observe path; only the labeled archive +
+    MEDIA hint block are suppressed.
     """
     return RoboclawsMCPServer(
         engine,

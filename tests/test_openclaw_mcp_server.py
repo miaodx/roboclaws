@@ -513,20 +513,29 @@ def test_run_in_thread_raises_when_server_dies_before_listening(tmp_path: Path) 
 
 
 # ---------------------------------------------------------------------------
-# roboclaws__snapshot
+# observe(label=...) — labeled-archive branch (was: roboclaws__snapshot)
 # ---------------------------------------------------------------------------
 
 
-def test_snapshot_without_snapshots_dir_returns_error(
-    server: RoboclawsMCPServer, engine: FakeEngine
+def _extract_media_hint(result: list[Any]) -> str | None:
+    """Pull the trailing MEDIA hint text block out of `_do_observe`'s list result."""
+    for block in reversed(result):
+        if isinstance(block, str) and "MEDIA:" in block:
+            return block
+    return None
+
+
+def test_observe_labeled_without_snapshots_dir_skips_archive(
+    server: RoboclawsMCPServer,
 ) -> None:
-    """No snapshots_dir configured → tool returns an error, doesn't crash."""
-    response = server._do_snapshot(label="first")
-    assert "error" in response
-    assert "snapshots_dir" in response["error"]
+    """No snapshots_dir → labeled observe still returns state+images, just no MEDIA block."""
+    result = server._do_observe(label="first")
+    # State block + the configured variant's images; no MEDIA hint appended.
+    assert len(result) >= 2
+    assert _extract_media_hint(result) is None
 
 
-def test_snapshot_writes_png_files_and_returns_media_hint(
+def test_observe_labeled_writes_png_files_and_returns_media_hint(
     engine: FakeEngine, tmp_path: Path
 ) -> None:
     snap_dir = tmp_path / "snapshots"
@@ -539,7 +548,9 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
         snapshots_dir=snap_dir,
     )
     try:
-        response = srv._do_snapshot(label="corner view")
+        result = srv._do_observe(label="corner view")
+        hint = _extract_media_hint(result)
+        assert hint is not None, "labeled observe must append a MEDIA hint text block"
 
         # Paths MUST be absolute container-side paths under the agent
         # workspace. Live probe 2026-04-23 proved relative `./snapshots/…`
@@ -547,25 +558,23 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
         # `/home/node/.openclaw/workspaces/agent-<id>/snapshots/…` renders.
         # The Gateway's REPLY_MEDIA_HINT advises the opposite; we're right.
         workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
-        assert response["fpv_path"] == workspace_prefix + "corner_view-001.fpv.png"
-        assert response["map_path"] == workspace_prefix + "corner_view-001.map.png"
-        assert response["chase_path"] == workspace_prefix + "corner_view-001.chase.png"
-        assert f"MEDIA:{workspace_prefix}corner_view-001.fpv.png" in response["hint"]
-        assert f"MEDIA:{workspace_prefix}corner_view-001.chase.png" in response["hint"]
+        assert f"MEDIA:{workspace_prefix}corner_view-001.fpv.png" in hint
+        assert f"MEDIA:{workspace_prefix}corner_view-001.map.png" in hint
+        assert f"MEDIA:{workspace_prefix}corner_view-001.chase.png" in hint
         # The hint must also tell the agent to IGNORE the Gateway's
         # "avoid absolute paths" system-prompt warning — without this,
         # Kimi obeys the stronger signal and emits a broken relative
         # path (observed 2026-04-23, first half of the session).
-        assert "IGNORE" in response["hint"] or "ignore" in response["hint"]
+        assert "IGNORE" in hint or "ignore" in hint
         # Turn-placement rule: only the LAST assistant message of a turn
         # has its MEDIA extracted by the Control UI — intermediate
         # messages become plain text (observed 2026-04-23, second half
         # of the session: rapid1/rapid2 A/B test).
-        assert "FINAL" in response["hint"] or "final assistant message" in response["hint"]
+        assert "FINAL" in hint or "final assistant message" in hint
         # Anti-spiral guardrail: the hint must tell the agent not to retry
         # with alternate paths if the Control UI rejects the attachment.
-        assert "Attachment unavailable" in response["hint"]
-        assert "STOP" in response["hint"]
+        assert "Attachment unavailable" in hint
+        assert "STOP" in hint
 
         # Files actually exist on disk with non-zero PNG bytes.
         for key in ("fpv", "map", "chase"):
@@ -576,7 +585,7 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
             latest = snap_dir / f"latest.{key}.png"
             assert latest.exists(), (
                 f"latest.{key}.png must be (re)written atomically every "
-                "snapshot so scripts/view-snapshots.py can poll one "
+                "labeled observe so scripts/view-snapshots.py can poll one "
                 "stable filename instead of guessing counter suffixes"
             )
             assert latest.read_bytes() == dest.read_bytes()
@@ -584,7 +593,8 @@ def test_snapshot_writes_png_files_and_returns_media_hint(
         srv.close()
 
 
-def test_snapshot_default_label_is_counter_suffix(engine: FakeEngine, tmp_path: Path) -> None:
+def test_observe_unlabeled_does_not_archive(engine: FakeEngine, tmp_path: Path) -> None:
+    """Unlabeled observe must NOT write labeled archive files — keeps disk tidy."""
     snap_dir = tmp_path / "snapshots"
     srv = make_roboclaws_mcp(
         engine,
@@ -595,15 +605,35 @@ def test_snapshot_default_label_is_counter_suffix(engine: FakeEngine, tmp_path: 
         snapshots_dir=snap_dir,
     )
     try:
-        r1 = srv._do_snapshot(label="")
-        r2 = srv._do_snapshot(label="")
-        assert r1["fpv_path"].endswith("-001.fpv.png")
-        assert r2["fpv_path"].endswith("-002.fpv.png")
+        result = srv._do_observe()  # no label
+        assert _extract_media_hint(result) is None
+        # Only the latest.* viewer files should exist — no labeled archive.
+        archived = [p.name for p in snap_dir.iterdir() if not p.name.startswith("latest.")]
+        assert archived == [], f"unlabeled observe archived: {archived}"
     finally:
         srv.close()
 
 
-def test_snapshot_sanitizes_dangerous_labels(engine: FakeEngine, tmp_path: Path) -> None:
+def test_observe_label_counter_increments_across_calls(engine: FakeEngine, tmp_path: Path) -> None:
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    try:
+        hint1 = _extract_media_hint(srv._do_observe(label="probe"))
+        hint2 = _extract_media_hint(srv._do_observe(label="probe"))
+        assert hint1 is not None and "probe-001.fpv.png" in hint1
+        assert hint2 is not None and "probe-002.fpv.png" in hint2
+    finally:
+        srv.close()
+
+
+def test_observe_label_sanitizes_dangerous_input(engine: FakeEngine, tmp_path: Path) -> None:
     """Path-traversal / shell-metas get rewritten to `_`."""
     snap_dir = tmp_path / "snapshots"
     srv = make_roboclaws_mcp(
@@ -615,24 +645,26 @@ def test_snapshot_sanitizes_dangerous_labels(engine: FakeEngine, tmp_path: Path)
         snapshots_dir=snap_dir,
     )
     try:
-        response = srv._do_snapshot(label="../../etc/passwd")
-        # `..` and slashes collapse to a single `_`; stripped leading/trailing
-        # dots/underscores leave `etc_passwd`. Counter suffix still appended.
+        hint = _extract_media_hint(srv._do_observe(label="../../etc/passwd"))
         workspace_prefix = "/home/node/.openclaw/workspaces/agent-0/snapshots/"
-        assert response["fpv_path"].startswith(workspace_prefix)
-        fname = response["fpv_path"].removeprefix(workspace_prefix)
+        assert hint is not None and workspace_prefix in hint
+        # Extract first MEDIA path and check sanitization.
+        import re as _re
+
+        m = _re.search(rf"MEDIA:({_re.escape(workspace_prefix)}[^\s]+\.fpv\.png)", hint)
+        assert m, f"no absolute MEDIA fpv path in hint: {hint!r}"
+        fname = m.group(1).removeprefix(workspace_prefix)
         assert ".." not in fname
         assert "/" not in fname, (
             f"sanitized label produced a path with a slash: {fname!r} — "
             "label traversal must collapse, not escape the snapshots dir"
         )
-        # The real file must land inside the (host) snapshots dir (no escape).
         assert (snap_dir / fname).exists()
     finally:
         srv.close()
 
 
-def test_snapshot_trace_records_request_and_response(engine: FakeEngine, tmp_path: Path) -> None:
+def test_observe_labeled_trace_records_label_and_paths(engine: FakeEngine, tmp_path: Path) -> None:
     snap_dir = tmp_path / "snapshots"
     run_dir = tmp_path / "run"
     srv = make_roboclaws_mcp(
@@ -644,11 +676,108 @@ def test_snapshot_trace_records_request_and_response(engine: FakeEngine, tmp_pat
         snapshots_dir=snap_dir,
     )
     try:
-        srv._do_snapshot(label="probe")
+        srv._do_observe(label="probe")
     finally:
         srv.close()
 
     entries = _read_trace(run_dir)
-    tools = [(e["tool"], e["event"]) for e in entries]
-    assert ("snapshot", "request") in tools
-    assert ("snapshot", "response") in tools
+    req = next(e for e in entries if e["tool"] == "observe" and e["event"] == "request")
+    resp = next(e for e in entries if e["tool"] == "observe" and e["event"] == "response")
+    assert req["request"].get("label") == "probe"
+    assert resp["response"].get("label") == "probe"
+    paths = resp["response"].get("snapshot_paths")
+    assert isinstance(paths, dict) and paths["fpv"].endswith(".fpv.png")
+
+
+def test_snapshot_tool_is_not_registered(server: RoboclawsMCPServer) -> None:
+    """KISS invariant: there is no separate `snapshot` tool — it was folded into observe."""
+    assert not hasattr(server, "_do_snapshot")
+
+
+# ---------------------------------------------------------------------------
+# move response enrichment: pose_delta, visited_count, warning, blind-nudge
+# ---------------------------------------------------------------------------
+
+
+def test_move_response_includes_pose_delta_and_visited_count(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    server._do_observe()
+    response = server._do_move("MoveAhead", "clear hallway")
+    assert "pose_delta" in response
+    # FakeEngine pumps x 1.0 -> 1.25 on MoveAhead.
+    assert response["pose_delta"]["dx"] == pytest.approx(0.25, abs=0.001)
+    assert response["pose_delta"]["dz"] == pytest.approx(0.0, abs=0.001)
+    assert response["pose_delta"]["dyaw"] == pytest.approx(0.0, abs=0.1)
+    assert response["visited_count_here"] >= 1
+    assert response["collisions"] == 0
+    assert response["collisions_total"] == 0
+    assert response["moves_since_observe"] == 1
+
+
+def test_move_without_prior_observe_emits_warning(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    """Guard A: never-observed → response warning field fires (not just trace)."""
+    response = server._do_move("MoveAhead", "probe")
+    assert "warning" in response
+    assert "observe" in response["warning"].lower()
+
+
+def test_move_warning_after_three_blind_moves(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    server._do_observe()
+    r1 = server._do_move("RotateRight")
+    r2 = server._do_move("RotateRight")
+    r3 = server._do_move("RotateRight")
+    assert "warning" not in r1
+    assert "warning" not in r2
+    assert "warning" in r3
+    assert "without observing" in r3["warning"]
+
+
+def test_move_blocked_increments_collision_counter(engine: FakeEngine, tmp_path: Path) -> None:
+    srv = make_roboclaws_mcp(engine, agent_id=0, run_dir=tmp_path, port=0)
+    try:
+        srv._do_observe()
+        r = srv._do_move("MoveBack", "reverse (blocked in FakeEngine)")
+        assert r["result"] == "blocked"
+        assert r["collisions"] == 1
+        assert r["collisions_total"] == 1
+    finally:
+        srv.close()
+
+
+def test_blind_move_nudge_injects_synthetic_human_message(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    """After 5 blind moves with no real human_message queued, server nudges via human_message."""
+    server._do_observe()
+    for _ in range(4):
+        r = server._do_move("RotateRight")
+        assert r["human_message"] is None
+    r5 = server._do_move("RotateRight")
+    assert r5["human_message"] is not None
+    assert "observe" in r5["human_message"].lower()
+    # Next move should NOT re-nudge (flag suppresses until observe clears it).
+    r6 = server._do_move("RotateRight")
+    assert r6["human_message"] is None
+    # A fresh observe clears the flag → nudge can fire again after 5 more blind moves.
+    server._do_observe()
+    for _ in range(4):
+        server._do_move("RotateRight")
+    r_next_nudge = server._do_move("RotateRight")
+    assert r_next_nudge["human_message"] is not None
+
+
+def test_blind_move_nudge_does_not_overwrite_real_human_message(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    """When the operator types something, the real message wins over the synthetic nudge."""
+    server._do_observe()
+    for _ in range(4):
+        server._do_move("RotateRight")
+    server.enqueue_human_message("hey look left")
+    r = server._do_move("RotateRight")
+    assert r["human_message"] == "hey look left"
