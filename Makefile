@@ -5,7 +5,11 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse chat-tail chat-view chat-plugin chat-nvidia \
+        mimo-pro mimo kimi \
+        chat chat-reuse chat-tail chat-view \
+        chat-plugin chat-nvidia \
+        chat-mimo-pro chat-mimo chat-kimi \
+        chat-plugin-kimi chat-plugin-mimo-pro \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -34,9 +38,18 @@ help:
 	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
-	@echo "  make chat                — bootstrap Gateway + hold AI2-THOR/MCP open (Kimi custom)"
-	@echo "  make chat-plugin         — same, Kimi stock plugin (kimi/k2p5, reasoning on, slow)"
-	@echo "  make chat-nvidia         — same, NVIDIA NIM (nemotron vision)"
+	@echo "  Two image-processing modes:"
+	@echo "    direct vision  — main model handles images itself:"
+	@echo "      make chat              — MiMo V2 Omni (default; vision+tools)"
+	@echo "      make chat-kimi         — Kimi custom (anthropic-messages; vision)"
+	@echo "      make chat-nvidia       — NVIDIA NIM (nemotron; vision)"
+	@echo "    IMAGE_MODEL delegation  — text-only main model + omni as image model:"
+	@echo "      make chat-mimo-pro     — MiMo V2.5 Pro (text) + V2 Omni (image)"
+	@echo "      make chat-mimo         — MiMo V2.5 (text) + V2 Omni (image)"
+	@echo "  Anthropic-path variants (chat-plugin):"
+	@echo "      make chat-plugin-kimi      — Kimi stock plugin"
+	@echo "      make chat-plugin-mimo-pro  — MiMo V2.5 Pro (anthropic) + omni image"
+	@echo "  Utility:"
 	@echo "  make chat-reuse          — attach to an already-running Gateway"
 	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
 	@echo "  make chat-view           — live snapshot viewer at http://127.0.0.1:8787 (run in 3rd terminal)"
@@ -45,7 +58,7 @@ help:
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
 	@echo "  make kimi-coverage       — coverage game   (2 agents, 60 steps, cooperative)"
 	@echo ""
-	@echo "KIMI_API_KEY must be set (or present in .env for auto-sourced openclaw-* targets)."
+	@echo "KIMI_API_KEY / MIMO_TP_KEY / NV_API_KEY must be set (or present in .env)."
 
 # ---------------------------------------------------------------------------
 # Navigation demo — proves the Phase 2.1 transport end-to-end.
@@ -203,28 +216,67 @@ openclaw-gateway-down:
 # set, else pulls it out of the running container's openclaw.json.
 # ---------------------------------------------------------------------------
 #
-# PROVIDER=kimi is pinned (mirroring openclaw-probe-* targets). Without the
-# pin, bootstrap prefers nvidia whenever NV_API_KEY is set — and Kimi is what
-# we actually want here because the Gateway's OpenAI→anthropic-messages
-# adapter preserves tool-result images into the agent's prompt. NIM is fine
-# too, but Kimi's multi-image reasoning is what every other probe target uses,
-# and consistency beats a surprise provider switch.
-# Chat targets deliberately DO NOT use xvfb — unlike the probe/demo targets,
-# the whole point of chat is to watch the robot move in real time, so we
-# want AI2-THOR's Unity window on the operator's actual X display. Every
-# chat-* recipe below inherits $DISPLAY from the caller's shell. If the
-# recipe fails with "Unable to open display" or similar, either $DISPLAY
-# isn't set (SSH without -X / -Y, bare tmux in a headless VM) or xhost
-# is locking the server — fix the shell, don't reach for xvfb-run.
-# OPENCLAW_TOKEN defaults to "demo" on every chat target so the operator
-# pastes it once per browser profile and it sticks across `make openclaw-
-# gateway-down` + reboot cycles. Override with `OPENCLAW_TOKEN=<real>`
-# if you need an unguessable token (never actually required on :127.0.0.1).
-# The Gateway only binds 127.0.0.1 — no LAN risk — but don't use `demo`
-# behind a reverse proxy or with HOST_IP=0.0.0.0.
+# Provider selector targets (set Make vars, no side effects):
+#
+#   Image mode A — direct vision (main model handles images):
+#     (default)   → mimo-v2-omni   vision+tools          (probed 2026-04-23)
+#     kimi        → Kimi custom    vision via anthropic-messages
+#     nvidia      → nemotron-nano  vision via openai-completions
+#
+#   Image mode B — IMAGE_MODEL delegation (text main + omni for images):
+#     mimo-pro    → mimo-v2.5-pro as main + mimo-v2-omni as IMAGE_MODEL
+#     mimo        → mimo-v2.5     as main + mimo-v2-omni as IMAGE_MODEL
+#
+# Usage: put the selector BEFORE the verb target so the eval fires first.
+#   make chat               # default: mimo-omni (direct vision)
+#   make mimo-pro chat      # IMAGE_MODEL mode: v2.5-pro + omni image
+#   make mimo chat          # IMAGE_MODEL mode: v2.5 + omni image
+#   make kimi chat          # Kimi custom (direct vision)
+#   make kimi chat-plugin   # Kimi stock plugin
+#   make mimo-pro chat-plugin  # mimo-v2-omni (Anthropic path)
+#
+# Hyphenated aliases exist for tab-completion:
+#   chat-mimo-pro / chat-mimo / chat-kimi / chat-plugin-kimi / chat-plugin-mimo-pro
+#
+# Chat targets deliberately DO NOT use xvfb — the whole point is to watch the
+# robot move in real time on the operator's actual X display. If the recipe
+# fails with "Unable to open display", fix $DISPLAY — don't reach for xvfb-run.
+# OPENCLAW_TOKEN defaults to "demo" (safe on 127.0.0.1-only Gateway).
+
+# Provider/model defaults — overridden by selector targets via $(eval).
+# Image-processing modes for OpenClaw (two distinct approaches):
+#   direct vision  — main model handles images itself (mimo-omni, nvidia, kimi)
+#   IMAGE_MODEL    — main model is text-only; Gateway image tool uses a separate
+#                    vision model (mimo-pro: v2.5-pro + omni; mimo: v2.5 + omni)
+_PROVIDER        ?= mimo
+_MIMO_VARIANT    ?= mimo-v2-omni
+_MIMO_IMAGE_MODEL ?=
+
+# Selector targets: run BEFORE the verb target (e.g. make mimo-pro chat).
+mimo-pro:
+	$(eval _PROVIDER=mimo)
+	$(eval _MIMO_VARIANT=mimo-v2.5-pro)
+	$(eval _MIMO_IMAGE_MODEL=mimo_openai/mimo-v2-omni)
+
+mimo:
+	$(eval _PROVIDER=mimo)
+	$(eval _MIMO_VARIANT=mimo-v2.5)
+	$(eval _MIMO_IMAGE_MODEL=mimo_openai/mimo-v2-omni)
+
+kimi:
+	$(eval _PROVIDER=kimi)
+
+# Helpers: compose the full Gateway model ID depending on API path.
+# When _PROVIDER != mimo these expand to nothing; bootstrap picks its own default.
+_MIMO_OPENAI_MODEL    = $(if $(filter mimo,$(_PROVIDER)),MODEL=mimo_openai/$(_MIMO_VARIANT),)
+_MIMO_ANTHROPIC_MODEL = $(if $(filter mimo,$(_PROVIDER)),MODEL=mimo_anthropic/$(_MIMO_VARIANT),)
+# Pass IMAGE_MODEL only when a selector set it (text-only main model needs delegation).
+_MIMO_IMAGE_VAR       = $(if $(_MIMO_IMAGE_MODEL),IMAGE_MODEL=$(_MIMO_IMAGE_MODEL),)
+
 chat:
 	@$(SOURCE_ENV); \
-	 PROVIDER=$${PROVIDER:-kimi} OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	 PROVIDER=$(_PROVIDER) $(_MIMO_OPENAI_MODEL) $(_MIMO_IMAGE_VAR) \
+	   OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
 	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
 
@@ -243,44 +295,36 @@ chat-reuse:
 #
 # Default output: output/openclaw-interactive/<latest-run>/chat.log
 # Plus symlink : output/openclaw-interactive/latest-chat.log → above
-# Per-run chat.log lives next to trace.jsonl + snapshots/ for review;
-# the symlink gives the operator one stable filename across runs.
 chat-tail:
 	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py
 
-# Live snapshot viewer. The Control UI only renders MEDIA: attachments
-# from the FINAL assistant message of a turn — so on multi-step chat
-# sequences (walk N steps, snapshot at each), the intermediate images
-# never appear in chat. They ARE written to disk by roboclaws__snapshot
-# though, and the tool updates latest.{fpv,map,chase}.png atomically on
-# every call. This viewer polls those three files from a tiny local
-# HTTP page at :8787 — open it in a second browser tab and watch the
-# robot move frame-by-frame while the chat scrolls.
+# Live snapshot viewer — polls latest.{fpv,map,chase}.png at :8787.
+# Open in a second browser tab while `make chat` is live.
 chat-view:
 	@-fuser -k 8787/tcp 2>/dev/null; true
 	@$(STRIP_ROS_ENV) python scripts/view-snapshots.py
 
-# Chat A/B variants — same entrypoint, different provider/mode. Use these to
-# diagnose image-upload drops, tool-call latency, or any provider-specific
-# misbehavior. Only one Gateway can exist at a time (container name is fixed),
-# so tear down the previous one before switching:  make openclaw-gateway-down
-#
-# chat-plugin   — stock Gateway Kimi plugin (kimi/k2p5). Reasoning mode ON →
-#                 3000+ CoT tokens/turn, 60-120s per multi-image call, idle
-#                 watchdog risk. Useful A/B target: different image-pipe code
-#                 path (openai-completions, not anthropic-messages) inside the
-#                 Gateway, so user-uploaded images may survive where the
-#                 default anthropic-messages path drops them.
-# chat-nvidia   — NVIDIA NIM nemotron-nano-12b-v2-vl (free tier, multi-image,
-#                 tool-use OK). Fastest of the three. No reasoning tokens.
+# chat-plugin: Anthropic-compatible path for MiMo; stock Kimi plugin path for kimi.
+# Both KIMI_PROVIDER_MODE and MIMO_PROVIDER_MODE are passed; bootstrap ignores
+# the one that doesn't match PROVIDER.
 chat-plugin:
 	@$(SOURCE_ENV); \
-	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	 PROVIDER=$(_PROVIDER) $(_MIMO_ANTHROPIC_MODEL) $(_MIMO_IMAGE_VAR) \
+	   KIMI_PROVIDER_MODE=plugin MIMO_PROVIDER_MODE=anthropic \
+	   OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
 	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
 
+# NVIDIA NIM — free tier, fastest, no reasoning tokens.
 chat-nvidia:
 	@$(SOURCE_ENV); \
 	 PROVIDER=nvidia OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
 	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
+
+# Hyphenated aliases (tab-completion / discoverability).
+chat-mimo-pro: mimo-pro chat
+chat-mimo: mimo chat
+chat-kimi: kimi chat
+chat-plugin-kimi: kimi chat-plugin
+chat-plugin-mimo-pro: mimo-pro chat-plugin

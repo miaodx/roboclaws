@@ -39,6 +39,7 @@ indefinitely.
 - ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
+- 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -57,6 +58,7 @@ indefinitely.
 - [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
+- [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -261,6 +263,27 @@ Plans:
 - [ ] 02.7-04: Local-dev validation + write-up — confirm live behavior and document the chosen path
 **UI hint**: yes
 
+#### 📋 v1.4 Split-model navigation (Phase 2.8) — Planned
+
+### Phase 2.8: Split-model navigation
+**Goal**: Enable text-only reasoning models (e.g. mimo-v2.5-pro, mimo-v2.5) to navigate autonomously in OpenClaw by intercepting image-bearing `roboclaws__observe` tool results at the MCP server layer, converting them to text descriptions via a vision model (mimo-v2-omni), and forwarding only text to the text-only main model. Bonus path: probe whether OpenClaw's tool-profile system can expose the generic `image` tool alongside `roboclaws__*` without the exec/curl drift risk seen in Phase 2.5.
+**Depends on**: Phase 2.6 (shipped MCP tool loop + `profile: minimal`). Phase 2.8 is additive; it does not reopen the push-model or exec/curl contracts.
+**Requirements**: A-07
+**Success Criteria** (what must be TRUE):
+  1. An autonomous navigation run completes successfully with a text-only main model (mimo-v2.5-pro or mimo-v2.5) as `MODEL` and mimo-v2-omni as the vision intermediary — the agent calls `roboclaws__observe`, receives a text description of the scene, and uses it to choose `roboclaws__move` actions without ever receiving raw image bytes.
+  2. The MCP server (or a thin wrapper) performs the vision→text conversion transparently: the agent's tool surface is unchanged (`observe`/`move`/`done`), but observe now returns text when the caller is a text-only model.
+  3. `make mimo-pro chat` and `make mimo chat` produce working interactive sessions where navigation is demonstrably driven by the text description path.
+  4. `docs/openclaw-local.md` is updated to document the split-model configuration with a verified-on probe entry.
+  5. (Stretch) Probe whether `profile: coding` with a constrained prompt or a custom `alsoAllow` profile can expose `image` without exec/curl drift — write-up included regardless of outcome.
+**Plans**: TBD
+
+Plans:
+- [ ] 02.8-01: Capability spike — profile probe (`messaging` / `alsoAllow`) + MCP intercept design decision
+- [ ] 02.8-02: MCP vision-bridge — implement image→text intercept in `roboclaws__observe`
+- [ ] 02.8-03: Makefile + bootstrap wiring — `make mimo-pro chat` / `make mimo chat` end-to-end
+- [ ] 02.8-04: Local-dev validation + doc update
+**UI hint**: no
+
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
 
 ### Phase 3: Isaac Lab migration
@@ -283,7 +306,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 3
+Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 3
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; see Phase Details)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -298,4 +321,5 @@ Phases execute in numeric order: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
+| 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
