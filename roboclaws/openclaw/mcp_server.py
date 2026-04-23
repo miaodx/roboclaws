@@ -477,7 +477,10 @@ class RoboclawsMCPServer:
             response_payload["label"] = label
             response_payload["snapshot_paths"] = snapshot_paths
         self._write_trace(tool="observe", event="response", response=response_payload)
-        self._write_latest_snapshots(prompt_bundle)
+        # The labeled branch already refreshed latest.*.png using its (reused)
+        # encoded bytes — skip the redundant re-encode + re-write here.
+        if snapshot_paths is None:
+            self._write_latest_snapshots(prompt_bundle)
         return result
 
     def _do_move(self, direction: str, reason: str = "", steps: int = 1) -> dict[str, Any]:
@@ -654,17 +657,15 @@ class RoboclawsMCPServer:
         # only absolute paths under the agent workspace render.
         container_dir = f"/home/node/.openclaw/workspaces/agent-{self.agent_id}/snapshots"
         paths: dict[str, str] = {}
+        # One encode per frame, shared between the archive write and the live
+        # viewer's latest.*.png refresh. `_do_observe` skips its own
+        # `_write_latest_snapshots` call when this branch runs.
         for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
             png_bytes = _encode_frame_png(frame, max_dim=640)
             dest = self.snapshots_dir / f"{clean}.{name}.png"
             dest.write_bytes(png_bytes)
             paths[name] = f"{container_dir}/{dest.name}"
-            # Atomic-replace the stable latest.*.png so the live viewer
-            # (scripts/view-snapshots.py) polling one filename sees every
-            # labeled snapshot too.
-            tmp = self.snapshots_dir / f".latest.{name}.png.tmp"
-            tmp.write_bytes(png_bytes)
-            tmp.replace(self.snapshots_dir / f"latest.{name}.png")
+            self._atomic_write_latest(name, png_bytes)
         return paths
 
     def _classify_move(self, reason: str | None) -> tuple[str, str | None]:
@@ -854,11 +855,15 @@ class RoboclawsMCPServer:
             viewer_name = _LABEL_TO_VIEWER_NAME.get(label)
             if viewer_name is None:
                 continue
-            png_bytes = _encode_frame_png(frame, max_dim=640)
-            latest = self.snapshots_dir / f"latest.{viewer_name}.png"
-            tmp = self.snapshots_dir / f".latest.{viewer_name}.png.tmp"
-            tmp.write_bytes(png_bytes)
-            tmp.replace(latest)
+            self._atomic_write_latest(viewer_name, _encode_frame_png(frame, max_dim=640))
+
+    def _atomic_write_latest(self, viewer_name: str, png_bytes: bytes) -> None:
+        """Tmp+rename `latest.<viewer_name>.png` so viewers never read a torn PNG."""
+        if self.snapshots_dir is None:
+            return
+        tmp = self.snapshots_dir / f".latest.{viewer_name}.png.tmp"
+        tmp.write_bytes(png_bytes)
+        tmp.replace(self.snapshots_dir / f"latest.{viewer_name}.png")
 
     def _pop_human_message(self) -> str | None:
         with self._queue_lock:

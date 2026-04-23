@@ -694,6 +694,45 @@ def test_snapshot_tool_is_not_registered(server: RoboclawsMCPServer) -> None:
     assert not hasattr(server, "_do_snapshot")
 
 
+def test_labeled_observe_encodes_each_frame_once(engine: FakeEngine, tmp_path: Path) -> None:
+    """A labeled observe archives AND refreshes latest.*.png from a SINGLE encode.
+
+    Regression guard: the first cut of this refactor re-encoded every frame
+    twice (once for the archive, once for `_write_latest_snapshots`). The
+    shared `_atomic_write_latest` helper in _maybe_write_labeled_snapshot now
+    reuses the encoded bytes — this test pins that invariant so a future edit
+    can't silently reintroduce the double-encode.
+    """
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        view_variant="map-v2+chase",
+        snapshots_dir=snap_dir,
+    )
+    # Baseline: three 640px encodes for the archive + three 640px for latest
+    # would be 6. Three 320px encodes for the MCP image blocks are a separate
+    # code path (different max_dim) so we filter on max_dim=640.
+    with patch(
+        "roboclaws.openclaw.mcp_server._encode_frame_png",
+        wraps=__import__(
+            "roboclaws.openclaw.mcp_server", fromlist=["_encode_frame_png"]
+        )._encode_frame_png,
+    ) as enc:
+        try:
+            srv._do_observe(label="perf")
+        finally:
+            srv.close()
+    large_encodes = [c for c in enc.call_args_list if c.kwargs.get("max_dim") == 640]
+    assert len(large_encodes) == 3, (
+        f"labeled observe did {len(large_encodes)} 640px encodes; expected 3. "
+        "The archive write and latest.*.png refresh must share encoded bytes — "
+        "don't revert to re-encoding."
+    )
+
+
 # ---------------------------------------------------------------------------
 # move response enrichment: pose_delta, visited_count, warning, blind-nudge
 # ---------------------------------------------------------------------------
