@@ -50,7 +50,7 @@ _HTML = """<!doctype html>
               background: #222; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
   .panel img { width: 100%; height: auto; display: block; background: #000; }
   .fpv  { grid-row: span 2; }
-  .stale { filter: grayscale(1) brightness(0.6); }
+  .stale { opacity: 0.85; }
 </style>
 </head>
 <body>
