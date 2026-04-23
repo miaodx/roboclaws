@@ -129,8 +129,10 @@ def test_kickoff_prompt_is_mcp_era_and_short() -> None:
     assert "50" in prompt, "max_moves budget must be interpolated into prompt"
     # Preserve the human_message ack behavior (D-10, plan must-have).
     assert "human_message" in prompt
+    assert "observe_delivery" in prompt
     assert "view_variant" in prompt
     assert "image_labels" in prompt
+    assert "bridge_model" in prompt
     # Delegate to the skill, don't duplicate it.
     assert "SKILL.md" in prompt or "skill" in prompt.lower()
 
@@ -190,6 +192,15 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
         patch("openclaw_nav_autonomous.subprocess.run", side_effect=_subprocess_run),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
+        patch.dict(
+            "os.environ",
+            {
+                "MODEL": "mimo_openai/mimo-v2.5-pro",
+                "IMAGE_MODEL": "mimo_openai/mimo-v2-omni",
+                "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
+            },
+            clear=False,
+        ),
     ):
         bridge = bridge_cls.return_value
         bridge.start_run.return_value = bridge_result
@@ -242,6 +253,9 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
     assert mcp_kwargs.get("view_variant") == "map-v2+chase"
+    assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5-pro"
+    assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2-omni"
+    assert mcp_kwargs.get("observe_mode") == "text-bridge"
     fake_server.run_in_thread.assert_called_once()
     assert fake_server.write_trace_event.call_count == 2
     first_trace = fake_server.write_trace_event.call_args_list[0].kwargs
@@ -331,7 +345,10 @@ def test_run_autonomous_navigation_passes_transcript_override(tmp_path: Path) ->
             return_value=fake_server,
         ) as mcp_factory,
         patch("openclaw_nav_autonomous.OpenClawBridge") as bridge_cls,
-        patch("openclaw_nav_autonomous.subprocess.run", return_value=SimpleNamespace(stdout="", returncode=0)),
+        patch(
+            "openclaw_nav_autonomous.subprocess.run",
+            return_value=SimpleNamespace(stdout="", returncode=0),
+        ),
         patch("openclaw_nav_autonomous.sys.stdin.isatty", return_value=False),
         patch.dict("openclaw_nav_autonomous.os.environ", {"OPENCLAW_GATEWAY_TOKEN": "token-xyz"}),
     ):

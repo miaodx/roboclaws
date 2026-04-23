@@ -11,6 +11,7 @@ import pytest
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.openclaw.vision_bridge import VisionBridgeResult
 
 REFERENCE = json.loads(
     (Path(__file__).parent / "fixtures" / "trace_schema_reference.json").read_text(encoding="utf-8")
@@ -146,6 +147,8 @@ def test_observe_returns_state_text_plus_two_images(
     assert "human_message" in state
     assert state["view_variant"] == "baseline"
     assert state["image_labels"] == ["fpv", "overhead"]
+    assert state["observe_delivery"] == "images"
+    assert state["bridge_model"] is None
     assert state["agent_id"] == 0
 
     # Two image blocks — SDK Image objects expose `.data` as bytes
@@ -166,6 +169,7 @@ def test_observe_map_v2_chase_returns_three_images(
     state = json.loads(result[0])
     assert state["view_variant"] == "map-v2+chase"
     assert state["image_labels"] == ["fpv", "map_v2", "chase"]
+    assert state["observe_delivery"] == "images"
     for block in result[1:]:
         assert hasattr(block, "data") and isinstance(block.data, bytes) and len(block.data) > 0
     assert engine.chase_updates == 1
@@ -179,6 +183,130 @@ def test_observe_map_v2_chase_returns_three_images(
     assert frame_capture["image_labels"] == ["fpv", "map_v2", "chase"]
     assert "baseline_overhead" in frame_capture
     assert "chase" in frame_capture
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    ["anthropic_kimi/k2p5", "mimo_openai/mimo-v2-omni"],
+)
+def test_observe_auto_keeps_images_for_image_capable_models(
+    engine: FakeEngine,
+    tmp_path: Path,
+    model_name: str,
+) -> None:
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path,
+        port=0,
+        model_name=model_name,
+        observe_mode="auto",
+    )
+    try:
+        result = srv._do_observe()
+    finally:
+        srv.close()
+
+    assert len(result) == 3
+    state = json.loads(result[0])
+    assert state["observe_delivery"] == "images"
+    assert state["bridge_model"] is None
+
+
+class _FakeVisionBridge:
+    def __init__(self, result: VisionBridgeResult) -> None:
+        self.result = result
+        self.calls: list[dict[str, Any]] = []
+
+    def describe(self, **kwargs: Any) -> VisionBridgeResult:
+        self.calls.append(kwargs)
+        return self.result
+
+
+def test_observe_text_bridge_returns_two_text_blocks(
+    engine: FakeEngine,
+    tmp_path: Path,
+) -> None:
+    bridge = _FakeVisionBridge(
+        VisionBridgeResult(
+            delivery="text-bridge",
+            description="Immediate view: table ahead. Navigation cues: rotate right.",
+            bridge_model="mimo_openai/mimo-v2-omni",
+            latency_s=0.42,
+        )
+    )
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path,
+        port=0,
+        view_variant="map-v2+chase",
+        model_name="mimo_openai/mimo-v2.5-pro",
+        image_model="mimo_openai/mimo-v2-omni",
+        observe_mode="auto",
+        vision_bridge=bridge,
+    )
+    try:
+        result = srv._do_observe()
+    finally:
+        srv.close()
+
+    assert result == [
+        result[0],
+        "Immediate view: table ahead. Navigation cues: rotate right.",
+    ]
+    state = json.loads(result[0])
+    assert state["observe_delivery"] == "text-bridge"
+    assert state["bridge_model"] == "mimo_openai/mimo-v2-omni"
+    assert state["image_labels"] == ["vision_bridge"]
+    assert len(bridge.calls) == 1
+    assert bridge.calls[0]["image_labels"] == ["fpv", "map_v2", "chase"]
+
+    response = [
+        line
+        for line in _read_trace(tmp_path)
+        if line.get("tool") == "observe" and line.get("event") == "response"
+    ][0]["response"]
+    assert response["observe_delivery"] == "text-bridge"
+    assert response["bridge_model"] == "mimo_openai/mimo-v2-omni"
+    assert response["bridge_latency_s"] == 0.42
+    assert response["bridge_error"] is None
+
+
+def test_observe_text_bridge_failure_returns_safe_text_shape(
+    engine: FakeEngine,
+    tmp_path: Path,
+) -> None:
+    bridge = _FakeVisionBridge(
+        VisionBridgeResult(
+            delivery="text-bridge",
+            description="Vision bridge unavailable; use structured state only.",
+            bridge_model="mimo_openai/mimo-v2-omni",
+            latency_s=0.1,
+            error="upstream unavailable",
+        )
+    )
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path,
+        port=0,
+        model_name="mimo_openai/mimo-v2.5",
+        image_model="mimo_openai/mimo-v2-omni",
+        observe_mode="auto",
+        vision_bridge=bridge,
+    )
+    try:
+        result = srv._do_observe()
+    finally:
+        srv.close()
+
+    assert len(result) == 2
+    assert all(isinstance(block, str) for block in result)
+    state = json.loads(result[0])
+    assert state["observe_delivery"] == "text-bridge"
+    assert state["image_labels"] == ["vision_bridge"]
+    assert "Vision bridge unavailable" in result[1]
 
 
 def test_move_valid_direction_steps_engine(server: RoboclawsMCPServer, engine: FakeEngine) -> None:
