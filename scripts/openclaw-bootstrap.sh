@@ -421,6 +421,7 @@ docker run --rm --user root \
     -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
     -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
     -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
+    -e OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}" \
     "$IMAGE" sh -lc '
 set -eu
 python3 - <<'"'"'PY'"'"'
@@ -496,9 +497,18 @@ agent_entries = [
 ]
 timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "600")
 image_model = os.environ.get("IMAGE_MODEL") or model
+# Pre-seed the bearer token when OPENCLAW_TOKEN is supplied (default in
+# the chat* Makefile targets so operators paste "demo" once per browser
+# profile and move on). When unset, the Gateway generates a random token
+# on first boot — the readyz loop below reads back whatever the live
+# value is, so this branch is safe either way.
+auth_cfg = {"mode": "token"}
+_fixed_token = (os.environ.get("OPENCLAW_TOKEN") or "").strip()
+if _fixed_token:
+    auth_cfg["token"] = _fixed_token
 config = {
     "gateway": {
-        "auth": {"mode": "token"},
+        "auth": auth_cfg,
         "http": {"endpoints": {"chatCompletions": {"enabled": True}}},
     },
     "agents": {

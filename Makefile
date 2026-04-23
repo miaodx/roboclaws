@@ -215,14 +215,22 @@ openclaw-gateway-down:
 # recipe fails with "Unable to open display" or similar, either $DISPLAY
 # isn't set (SSH without -X / -Y, bare tmux in a headless VM) or xhost
 # is locking the server — fix the shell, don't reach for xvfb-run.
+# OPENCLAW_TOKEN defaults to "demo" on every chat target so the operator
+# pastes it once per browser profile and it sticks across `make openclaw-
+# gateway-down` + reboot cycles. Override with `OPENCLAW_TOKEN=<real>`
+# if you need an unguessable token (never actually required on :127.0.0.1).
+# The Gateway only binds 127.0.0.1 — no LAN risk — but don't use `demo`
+# behind a reverse proxy or with HOST_IP=0.0.0.0.
 chat:
 	@$(SOURCE_ENV); \
-	 PROVIDER=$${PROVIDER:-kimi} $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	 PROVIDER=$${PROVIDER:-kimi} OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
 
 chat-reuse:
 	@$(SOURCE_ENV); \
-	 $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	 OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py \
 	     --skip-bootstrap --keep-gateway
 
@@ -251,10 +259,12 @@ chat-tail:
 #                 tool-use OK). Fastest of the three. No reasoning tokens.
 chat-plugin:
 	@$(SOURCE_ENV); \
-	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	 PROVIDER=kimi KIMI_PROVIDER_MODE=plugin OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
 
 chat-nvidia:
 	@$(SOURCE_ENV); \
-	 PROVIDER=nvidia $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
+	 PROVIDER=nvidia OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} \
+	   $(STRIP_ROS_ENV) PYTHONUNBUFFERED=1 \
 	   python examples/openclaw_interactive.py
