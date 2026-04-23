@@ -326,9 +326,9 @@ JSON
   "auth": "api-key",
   "api": "openai-completions",
   "models": [
-    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096}
+    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096}
   ]
 }
 JSON
@@ -348,8 +348,8 @@ JSON
   "api": "anthropic-messages",
   "headers": {"anthropic-version": "2023-06-01"},
   "models": [
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":32768,"maxTokens":4096}
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096}
   ]
 }
 JSON
