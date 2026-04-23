@@ -48,6 +48,9 @@ from roboclaws.core.views import (
     encode_prompt_images,
     image_labels_for_variant,
 )
+from roboclaws.core.views import (
+    pos_to_world_idx as shared_pos_to_world_idx,
+)
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import (
     ProviderHealthError,
@@ -81,7 +84,7 @@ _GRID_COLS: int = 40
 
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
-    return (round(pos["x"] / _GRID_SIZE), round(pos["z"] / _GRID_SIZE))
+    return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
 # ---------------------------------------------------------------------------
