@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 Phase: 02.4 (view-experiment-ab) — ACTIVE / BLOCKED ON LOCAL-DEV
 Plan: 3 of 4 — `02.4-01` through `02.4-03` are complete; `02.4-04` remains open for the live sweep and decision record.
 Status: Shared view primitives, chase-cam support, example rollout, `NvidiaProvider`, `examples/view_experiment.py`, and `scripts/analyze_view_experiment.py` are implemented. On 2026-04-22 a local workstation also completed a 50-step Kimi `openclaw_demo.py --views map-v2+chase` review run and a shipped-path follow-up proving the same view family works in Phase 02.6's autonomous MCP loop. The remaining gate is still the explicit full `02.4-04` sweep + write-up tracked in issue #70.
-Last activity: 2026-04-22
+Last activity: 2026-04-23 - Completed quick task 260423-q71: codebase simplification (5 refactor commits)
 
 Progress: [########--] 75%
 (Phase 02.4 now has its implementation-heavy plans complete. The final phase gate is intentionally the local-dev validation + decision-record step, not more cloud-side coding. Phase 02.6 shipped on 2026-04-21 and remains the latest fully completed phase.)
@@ -99,6 +99,12 @@ Recent decisions affecting current work:
 [From .planning/todos/pending/ — none yet. Root `TODOS.md` is also empty by design as of 2026-04-20; all future TODOs originate from this roadmap.]
 
 None yet.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260423-q71 | codebase simplification: extract game helpers, dedup example utilities, split vlm.py providers, split bridge.py transport, refactor reporter build_run_section | 2026-04-23 | 9e1fe35 | [260423-q71-codebase-simplification-extract-game-hel](./quick/260423-q71-codebase-simplification-extract-game-hel/) |
 
 ### Blockers/Concerns
 
