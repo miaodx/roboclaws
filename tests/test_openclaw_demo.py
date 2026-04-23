@@ -91,7 +91,11 @@ def mock_engine_and_provider():
 
         engine = EngineCls.return_value
         engine.get_overhead_frame.return_value = _make_frame(40)
+        engine.get_overhead_camera_properties.side_effect = Exception("not available")
         engine.agent_count = 2
+        engine.add_chase_cam.return_value = 0
+        engine.update_chase_cam.return_value = None
+        engine.get_chase_cam_frame.return_value = _make_frame(60)
 
         # Default: agents stand still (same position every call) so the
         # visited_world never grows after the first step → stale fires fast.

@@ -106,21 +106,6 @@ def server(engine: FakeEngine, tmp_path: Path) -> RoboclawsMCPServer:
         srv.close()
 
 
-@pytest.fixture
-def server_map_v2_chase(engine: FakeEngine, tmp_path: Path) -> RoboclawsMCPServer:
-    srv = make_roboclaws_mcp(
-        engine,
-        agent_id=0,
-        run_dir=tmp_path,
-        port=0,
-        view_variant="map-v2+chase",
-    )
-    try:
-        yield srv
-    finally:
-        srv.close()
-
-
 def _read_trace(run_dir: Path) -> list[dict[str, Any]]:
     path = run_dir / "trace.jsonl"
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
@@ -131,12 +116,12 @@ def _read_trace(run_dir: Path) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 
-def test_observe_returns_state_text_plus_two_images(
+def test_observe_returns_state_text_plus_three_images(
     server: RoboclawsMCPServer, engine: FakeEngine
 ) -> None:
     result = server._do_observe()
     assert isinstance(result, list)
-    assert len(result) == 3
+    assert len(result) == 4
 
     # Text block first — JSON-serialized state
     state_text = result[0]
@@ -145,44 +130,28 @@ def test_observe_returns_state_text_plus_two_images(
     for key in ("agent_id", "position", "rotation", "camera_horizon", "last_action_success"):
         assert key in state
     assert "human_message" in state
-    assert state["view_variant"] == "baseline"
-    assert state["image_labels"] == ["fpv", "overhead"]
+    assert state["view_variant"] == "map-v2+chase"
+    assert state["image_labels"] == ["fpv", "map_v2", "chase"]
     assert state["observe_delivery"] == "images"
     assert state["bridge_model"] is None
     assert state["agent_id"] == 0
 
-    # Two image blocks — SDK Image objects expose `.data` as bytes
-    fpv, overhead = result[1], result[2]
-    assert hasattr(fpv, "data") and isinstance(fpv.data, bytes) and len(fpv.data) > 0
-    assert hasattr(overhead, "data") and isinstance(overhead.data, bytes) and len(overhead.data) > 0
-
-    # Ledger marks the observe as seen
-    assert server.snapshot_metrics()["observed_once"] is True
-
-
-def test_observe_map_v2_chase_returns_three_images(
-    server_map_v2_chase: RoboclawsMCPServer,
-    engine: FakeEngine,
-) -> None:
-    result = server_map_v2_chase._do_observe()
-    assert len(result) == 4
-    state = json.loads(result[0])
-    assert state["view_variant"] == "map-v2+chase"
-    assert state["image_labels"] == ["fpv", "map_v2", "chase"]
-    assert state["observe_delivery"] == "images"
+    # Three image blocks — SDK Image objects expose `.data` as bytes
     for block in result[1:]:
         assert hasattr(block, "data") and isinstance(block.data, bytes) and len(block.data) > 0
     assert engine.chase_updates == 1
 
+    # Trace carries raw overhead + chase for replay renderer
     frame_capture = [
-        line
-        for line in _read_trace(server_map_v2_chase.run_dir)
-        if line.get("event") == "frame_capture"
+        line for line in _read_trace(server.run_dir) if line.get("event") == "frame_capture"
     ][0]
     assert frame_capture["view_variant"] == "map-v2+chase"
     assert frame_capture["image_labels"] == ["fpv", "map_v2", "chase"]
     assert "baseline_overhead" in frame_capture
     assert "chase" in frame_capture
+
+    # Ledger marks the observe as seen
+    assert server.snapshot_metrics()["observed_once"] is True
 
 
 @pytest.mark.parametrize(
@@ -207,7 +176,7 @@ def test_observe_auto_keeps_images_for_image_capable_models(
     finally:
         srv.close()
 
-    assert len(result) == 3
+    assert len(result) == 4
     state = json.loads(result[0])
     assert state["observe_delivery"] == "images"
     assert state["bridge_model"] is None
@@ -240,7 +209,6 @@ def test_observe_text_bridge_returns_two_text_blocks(
         agent_id=0,
         run_dir=tmp_path,
         port=0,
-        view_variant="map-v2+chase",
         model_name="mimo_openai/mimo-v2.5-pro",
         image_model="mimo_openai/mimo-v2-omni",
         observe_mode="auto",
@@ -315,8 +283,8 @@ def test_move_valid_direction_steps_engine(server: RoboclawsMCPServer, engine: F
     assert response["result"] == "ok"
     assert response["state"]["last_action_success"] is True
     assert isinstance(response["step"], int)
-    assert response["view_variant"] == "baseline"
-    assert response["image_labels"] == ["fpv", "overhead"]
+    assert response["view_variant"] == "map-v2+chase"
+    assert response["image_labels"] == ["fpv", "map_v2", "chase"]
 
 
 def test_move_invalid_direction_does_not_step_engine(
@@ -544,7 +512,6 @@ def test_observe_labeled_writes_png_files_and_returns_media_hint(
         agent_id=0,
         run_dir=tmp_path / "run",
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     try:
@@ -601,7 +568,6 @@ def test_observe_unlabeled_does_not_archive(engine: FakeEngine, tmp_path: Path) 
         agent_id=0,
         run_dir=tmp_path / "run",
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     try:
@@ -621,7 +587,6 @@ def test_observe_label_counter_increments_across_calls(engine: FakeEngine, tmp_p
         agent_id=0,
         run_dir=tmp_path / "run",
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     try:
@@ -641,7 +606,6 @@ def test_observe_label_sanitizes_dangerous_input(engine: FakeEngine, tmp_path: P
         agent_id=0,
         run_dir=tmp_path / "run",
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     try:
@@ -672,7 +636,6 @@ def test_observe_labeled_trace_records_label_and_paths(engine: FakeEngine, tmp_p
         agent_id=0,
         run_dir=run_dir,
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     try:
@@ -709,7 +672,6 @@ def test_labeled_observe_encodes_each_frame_once(engine: FakeEngine, tmp_path: P
         agent_id=0,
         run_dir=tmp_path / "run",
         port=0,
-        view_variant="map-v2+chase",
         snapshots_dir=snap_dir,
     )
     # Baseline: three 640px encodes for the archive + three 640px for latest

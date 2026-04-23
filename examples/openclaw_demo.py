@@ -180,7 +180,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--views",
         choices=VIEW_VARIANTS,
-        default="baseline",
+        default="map-v2+chase",
         help="Prompt image variant to send to the Gateway agent.",
     )
     return p.parse_args(argv)
@@ -202,7 +202,7 @@ def run_openclaw_demo(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_stale_steps: int | None = None,
-    views: str = "baseline",
+    views: str = "map-v2+chase",
 ) -> dict[str, Any]:
     """Run a multi-agent navigation demo driven by a local OpenClaw Gateway.
 
@@ -286,7 +286,6 @@ def run_openclaw_demo(
                 context=view_context,
                 agent_states=agent_states,
                 current_agent=current_agent,
-                variant=views,
             )
             if len(view_context.visited_world) > cells_before:
                 stale_steps = 0
@@ -327,11 +326,10 @@ def run_openclaw_demo(
             primary_view_label = (
                 prompt_bundle.image_labels[1] if len(prompt_bundle.image_labels) > 1 else "overhead"
             )
-            extra_views: list[tuple[str, Any]] = []
-            if prompt_bundle.structured_overhead_frame is not None:
-                extra_views.append(("overhead", prompt_bundle.baseline_overhead_frame))
-            if prompt_bundle.chase_cam_frame is not None:
-                extra_views.append(("chase", prompt_bundle.chase_cam_frame))
+            extra_views = [
+                ("overhead", prompt_bundle.raw_overhead_frame),
+                ("chase", prompt_bundle.chase_cam_frame),
+            ]
 
             recorder.record_step(
                 step=step,

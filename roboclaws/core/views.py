@@ -8,17 +8,15 @@ import numpy as np
 
 from roboclaws.core.visualizer import GameVisualizer
 
-ViewVariant = Literal["baseline", "map-v2", "map-v2+chase"]
+ViewVariant = Literal["map-v2+chase"]
 WorldCell = tuple[int, int]
 
 _GRID_SIZE: float = 0.25
 _DEFAULT_GRID_ROWS: int = 40
 _DEFAULT_GRID_COLS: int = 40
 
-VIEW_VARIANTS: tuple[ViewVariant, ...] = ("baseline", "map-v2", "map-v2+chase")
+VIEW_VARIANTS: tuple[ViewVariant, ...] = ("map-v2+chase",)
 _IMAGE_LABELS: dict[ViewVariant, tuple[str, ...]] = {
-    "baseline": ("fpv", "overhead"),
-    "map-v2": ("fpv", "map_v2"),
     "map-v2+chase": ("fpv", "map_v2", "chase"),
 }
 
@@ -37,38 +35,23 @@ def image_labels_for_variant(variant: str) -> tuple[str, ...]:
 
 def build_prompt_images(
     *,
-    variant: str,
     fpv_frame: np.ndarray,
-    baseline_overhead_frame: np.ndarray,
-    structured_overhead_frame: np.ndarray | None = None,
-    chase_cam_frame: np.ndarray | None = None,
+    structured_overhead_frame: np.ndarray,
+    chase_cam_frame: np.ndarray,
 ) -> list[np.ndarray]:
-    """Assemble prompt images for the requested variant."""
-    validated = validate_view_variant(variant)
-    if validated == "baseline":
-        return [fpv_frame, baseline_overhead_frame]
-
-    if structured_overhead_frame is None:
-        raise ValueError(f"{validated} requires structured_overhead_frame")
-
-    images = [fpv_frame, structured_overhead_frame]
-    if validated == "map-v2+chase":
-        if chase_cam_frame is None:
-            raise ValueError("map-v2+chase requires chase_cam_frame")
-        images.append(chase_cam_frame)
-    return images
+    """Assemble the three prompt images: FPV, structured overhead, chase cam."""
+    return [fpv_frame, structured_overhead_frame, chase_cam_frame]
 
 
 def encode_prompt_images(
     *,
-    variant: str,
     image_frames: Sequence[np.ndarray],
     encoder: Callable[[np.ndarray], tuple[str, dict[str, Any]]],
 ) -> tuple[list[str], list[dict[str, Any]], float]:
-    """Encode N prompt images while preserving per-image metric labels."""
-    labels = image_labels_for_variant(variant)
+    """Encode three prompt images while preserving per-image metric labels."""
+    labels = _IMAGE_LABELS["map-v2+chase"]
     if len(image_frames) != len(labels):
-        raise ValueError(f"{variant} expects {len(labels)} images, got {len(image_frames)}.")
+        raise ValueError(f"map-v2+chase expects {len(labels)} images, got {len(image_frames)}.")
     encoded: list[str] = []
     metrics: list[dict[str, Any]] = []
     total_encode_seconds = 0.0
@@ -142,7 +125,7 @@ class NavigationPromptBundle:
     """Rendered prompt images plus trace-friendly metadata for one turn."""
 
     prompt_images: list[np.ndarray]
-    baseline_overhead_frame: np.ndarray
+    raw_overhead_frame: np.ndarray
     trace_overhead_frame: np.ndarray
     image_labels: tuple[str, ...]
     agent_positions_world: list[WorldCell]
@@ -224,14 +207,12 @@ def render_navigation_prompt_bundle(
     context: NavigationViewContext,
     agent_states: Sequence[Any],
     current_agent: int,
-    variant: str,
 ) -> NavigationPromptBundle:
-    """Render the shared navigation prompt-image family for one control turn."""
-    validated = validate_view_variant(variant)
+    """Render the three-view navigation prompt-image bundle for one control turn."""
     mark_visited_world(context.visited_world, agent_states, context.path_history)
     agent_positions_world = [pos_to_world_idx(state.position) for state in agent_states]
 
-    baseline_map = context.visualizer.render_world_overhead_map(
+    raw_map = context.visualizer.render_world_overhead_map(
         agent_positions=agent_positions_world,
         covered_cells=list(context.visited_world),
         world_bbox=context.world_bbox,
@@ -239,60 +220,49 @@ def render_navigation_prompt_bundle(
         camera_pose=context.overhead_camera_pose,
         grid_size=_GRID_SIZE,
     )
-    baseline_overhead_frame = np.asarray(baseline_map.convert("RGB"), dtype=np.uint8)
+    raw_overhead_frame = np.asarray(raw_map.convert("RGB"), dtype=np.uint8)
 
-    structured_overhead_frame: np.ndarray | None = None
-    if validated != "baseline":
-        if context.overhead_camera_pose is not None and context.overhead_background is not None:
-            structured_map = context.visualizer.render_projected_structured_map(
-                agent_positions=agent_positions_world,
-                agent_rotations=[state.rotation for state in agent_states],
-                reachable_cells=context.reachable_cells,
-                covered_cells=list(context.visited_world),
-                world_bbox=context.world_bbox,
-                camera_pose=context.overhead_camera_pose,
-                image_size=(
-                    int(context.overhead_background.shape[1]),
-                    int(context.overhead_background.shape[0]),
-                ),
-                grid_size=_GRID_SIZE,
-                path_history=context.path_history or None,
-            )
-        else:
-            structured_map = context.visualizer.render_structured_map(
-                agent_positions=agent_positions_world,
-                agent_rotations=[state.rotation for state in agent_states],
-                reachable_cells=context.reachable_cells,
-                covered_cells=list(context.visited_world),
-                world_bbox=context.world_bbox,
-                path_history=context.path_history or None,
-            )
-        structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
+    if context.overhead_camera_pose is not None and context.overhead_background is not None:
+        structured_map = context.visualizer.render_projected_structured_map(
+            agent_positions=agent_positions_world,
+            agent_rotations=[state.rotation for state in agent_states],
+            reachable_cells=context.reachable_cells,
+            covered_cells=list(context.visited_world),
+            world_bbox=context.world_bbox,
+            camera_pose=context.overhead_camera_pose,
+            image_size=(
+                int(context.overhead_background.shape[1]),
+                int(context.overhead_background.shape[0]),
+            ),
+            grid_size=_GRID_SIZE,
+            path_history=context.path_history or None,
+        )
+    else:
+        structured_map = context.visualizer.render_structured_map(
+            agent_positions=agent_positions_world,
+            agent_rotations=[state.rotation for state in agent_states],
+            reachable_cells=context.reachable_cells,
+            covered_cells=list(context.visited_world),
+            world_bbox=context.world_bbox,
+            path_history=context.path_history or None,
+        )
+    structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
 
-    chase_cam_frame: np.ndarray | None = None
-    if validated == "map-v2+chase":
-        engine.add_chase_cam(current_agent)
-        engine.update_chase_cam(current_agent)
-        chase_cam_frame = engine.get_chase_cam_frame(current_agent)
+    engine.add_chase_cam(current_agent)
+    engine.update_chase_cam(current_agent)
+    chase_cam_frame = engine.get_chase_cam_frame(current_agent)
 
     prompt_images = build_prompt_images(
-        variant=validated,
         fpv_frame=agent_states[current_agent].frame,
-        baseline_overhead_frame=baseline_overhead_frame,
         structured_overhead_frame=structured_overhead_frame,
         chase_cam_frame=chase_cam_frame,
-    )
-    trace_overhead_frame = (
-        structured_overhead_frame
-        if structured_overhead_frame is not None
-        else baseline_overhead_frame
     )
     return NavigationPromptBundle(
         prompt_images=prompt_images,
-        baseline_overhead_frame=baseline_overhead_frame,
-        trace_overhead_frame=trace_overhead_frame,
+        raw_overhead_frame=raw_overhead_frame,
+        trace_overhead_frame=structured_overhead_frame,
         structured_overhead_frame=structured_overhead_frame,
         chase_cam_frame=chase_cam_frame,
-        image_labels=image_labels_for_variant(validated),
+        image_labels=_IMAGE_LABELS["map-v2+chase"],
         agent_positions_world=agent_positions_world,
     )
