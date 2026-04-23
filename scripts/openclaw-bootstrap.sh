@@ -581,6 +581,21 @@ auth_cfg = {"mode": "token"}
 _fixed_token = (os.environ.get("OPENCLAW_TOKEN") or "").strip()
 if _fixed_token:
     auth_cfg["token"] = _fixed_token
+defaults_cfg = {
+    "model": {"primary": model},
+    # Pin the generic `image` tool path to the same model by default
+    # so OpenClaw does not auto-pair to the first image-capable
+    # catalog entry for the provider (which made the custom Kimi path
+    # silently route image analysis through `anthropic_kimi/k2p5`).
+    "imageModel": {"primary": image_model},
+    "timeoutSeconds": timeout_seconds,
+}
+if tool_profile == "minimal":
+    # Minimal-profile agents only expose navigation/chat tools, not a
+    # constrained append-only memory write path. Disable Gateway-side
+    # pre-compaction memory flush so it does not inject an impossible
+    # "write memory now" turn that the model misroutes into roboclaws__done.
+    defaults_cfg["compaction"] = {"memoryFlush": {"enabled": False}}
 config = {
     "gateway": {
         "auth": auth_cfg,
@@ -593,15 +608,7 @@ config = {
         # surfaces these as a Request-timed-out error that the demo then
         # falls back to parse.  600s absorbs every slow turn observed so
         # far and still prevents a hung call from stalling the whole run.
-        "defaults": {
-            "model": {"primary": model},
-            # Pin the generic `image` tool path to the same model by default
-            # so OpenClaw does not auto-pair to the first image-capable
-            # catalog entry for the provider (which made the custom Kimi path
-            # silently route image analysis through `anthropic_kimi/k2p5`).
-            "imageModel": {"primary": image_model},
-            "timeoutSeconds": timeout_seconds,
-        },
+        "defaults": defaults_cfg,
         "list": agent_entries,
     },
 }

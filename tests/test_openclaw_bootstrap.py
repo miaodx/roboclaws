@@ -699,6 +699,10 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
     """
     cfg_path = _run_preseed(tmp_path, {"AGENT_IDS_CSV": "agent-0,agent-1"})
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert cfg["agents"]["defaults"]["compaction"]["memoryFlush"]["enabled"] is False, (
+        "minimal tool profile must disable Gateway pre-compaction memory flush; "
+        f"defaults={cfg['agents']['defaults']!r}"
+    )
     agent_ids = {entry["id"] for entry in cfg["agents"]["list"]}
     assert agent_ids == {"agent-0", "agent-1"}, (
         f"agents.list does not match AGENT_IDS_CSV; got ids={agent_ids!r}"
@@ -737,6 +741,10 @@ def test_tool_profile_env_override_honored(tmp_path: Path) -> None:
         },
     )
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert "compaction" not in cfg["agents"]["defaults"], (
+        "coding profile should not inherit the minimal-profile memoryFlush disable; "
+        f"defaults={cfg['agents']['defaults']!r}"
+    )
     for entry in cfg["agents"]["list"]:
         assert entry["tools"]["profile"] == "coding", (
             f"agent {entry['id']!r} tools.profile did not honor "
