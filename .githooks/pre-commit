@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Pre-commit hook: ruff (lint + format) + fast unit tests.
+#
+# Install once per clone:
+#
+#     make install-hooks         # or: git config core.hooksPath .githooks
+#
+# Bypass in emergencies:
+#
+#     git commit --no-verify     # skips this hook entirely
+#     SKIP_TESTS=1 git commit    # skips tests but keeps the ruff gate
+#
+# Design notes:
+#   - Tests marked `@pytest.mark.integration` (Docker-dependent OR real
+#     model-provider API calls) are excluded via `-m "not integration"`.
+#     Run them post-merge with `make test-integration`, and CI still
+#     runs the full suite.
+#   - We strip ROS env vars so the run matches the sanitised shape the
+#     rest of this machine uses (see AGENTS.md § 1). If `/opt/ros/*/`
+#     leaks into PYTHONPATH, `lark` import fails.
+#   - No network calls. The Docker-gated integration tests auto-skip
+#     without Docker anyway, but the `integration` marker keeps the
+#     hook fast even when Docker IS installed (saves ~80s).
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# --- Ruff: lint + format check -------------------------------------------
+if command -v ruff >/dev/null 2>&1; then
+    RUFF=ruff
+elif [[ -x .venv/bin/ruff ]]; then
+    RUFF=.venv/bin/ruff
+else
+    echo "pre-commit: ruff not found on PATH or in .venv — install with 'pip install -e .[dev]'" >&2
+    exit 1
+fi
+
+# Lint only the Python files actually staged for this commit. The repo
+# has older accumulated lint debt in unrelated files; whole-tree `ruff
+# check .` would block every commit regardless of scope. CI keeps the
+# whole-tree gate (`ruff check .` on push/PR).
+STAGED_PY="$(git diff --cached --name-only --diff-filter=ACMR -- '*.py' || true)"
+
+if [[ -n "$STAGED_PY" ]]; then
+    echo "pre-commit: ruff check (staged .py files)"
+    # shellcheck disable=SC2086
+    "$RUFF" check $STAGED_PY
+    echo "pre-commit: ruff format --check (staged .py files)"
+    # shellcheck disable=SC2086
+    "$RUFF" format --check $STAGED_PY
+else
+    echo "pre-commit: no staged .py files — skipping ruff"
+fi
+
+# --- Pytest: fast subset --------------------------------------------------
+if [[ "${SKIP_TESTS:-0}" == "1" ]]; then
+    echo "pre-commit: SKIP_TESTS=1 set — skipping pytest"
+    exit 0
+fi
+
+if [[ -x .venv/bin/pytest ]]; then
+    PYTEST=.venv/bin/pytest
+elif command -v pytest >/dev/null 2>&1; then
+    PYTEST=pytest
+else
+    echo "pre-commit: pytest not found — install with 'pip install -e .[dev]'" >&2
+    exit 1
+fi
+
+# Strip ROS env to avoid /opt/ros/*/ hijacking sys.path (lark import fails).
+# Preserves API keys from .env when present (they're optional for tests).
+echo "pre-commit: pytest -m 'not integration' (fast subset)"
+env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH \
+    -u ROS_DISTRO -u ROS_VERSION \
+    "$PYTEST" -m "not integration" -q --durations=5

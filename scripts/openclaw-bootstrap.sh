@@ -33,10 +33,10 @@
 #                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
 #   IMAGE_MODEL  Vision model used by the Gateway's  (default: same as MODEL;
-#                generic `image` tool path            set this explicitly when
-#                                                     the main model is text-only
+#                generic `image` tool path and the    set this explicitly when
+#                roboclaws Phase-2.8 observe bridge)  the main model is text-only
 #                                                     or you want deterministic
-#                                                     image-tool routing)
+#                                                     image/bridge routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
 #   TIMEOUT_SECONDS  Upstream timeout               (default: 600 = 10 min;
@@ -326,9 +326,9 @@ JSON
   "auth": "api-key",
   "api": "openai-completions",
   "models": [
-    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096}
+    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":262144,"maxTokens":32768},
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }
 JSON
@@ -348,8 +348,8 @@ JSON
   "api": "anthropic-messages",
   "headers": {"anthropic-version": "2023-06-01"},
   "models": [
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":262144,"maxTokens":4096}
+    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }
 JSON

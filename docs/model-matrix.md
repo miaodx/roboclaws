@@ -40,20 +40,26 @@ cosmetic one**.
 
 ## Active matrix
 
-| Model id (upstream)               | Gateway namespace      | Declared ctx | Declared out cap | Vendor ctx (source)                     | Flush threshold | Status                                              |
-|-----------------------------------|------------------------|--------------|------------------|-----------------------------------------|-----------------|-----------------------------------------------------|
-| `kimi/k2p5`                       | `anthropic_kimi/k2p5`  | 262 144      | 32 768           | 256K — Moonshot K2.5 release            | 238 144         | OK — live-probed end-to-end                         |
-| `kimi/k2.6`                       | `anthropic_kimi/k2.6`  | 262 144      | 32 768           | 256K — Moonshot K2.6 release            | 238 144         | OK — live-probed end-to-end                         |
-| `nvidia/nemotron-nano-12b-v2-vl`  | `nvidia/…`             | 131 072      | 4 096            | 128K — NVIDIA NIM model card            | 107 072         | OK — CI-verified                                    |
-| `mimo-v2-omni` *(openai)*         | `mimo_openai/…`        | 262 144      | 4 096            | 256K — MiMo 2026-03-18 release note     | 238 144         | OK — aligned 2026-04-23; re-probe `make chat`       |
-| `mimo-v2.5-pro` *(openai)*        | `mimo_openai/…`        | 262 144      | 4 096            | needs vendor confirm (likely 256K)      | 238 144         | Aligned with v2-omni pending vendor confirm of V2.5 |
-| `mimo-v2.5` *(openai)*            | `mimo_openai/…`        | 262 144      | 4 096            | needs vendor confirm (likely 256K)      | 238 144         | Aligned with v2-omni pending vendor confirm of V2.5 |
-| `mimo-v2.5-pro` *(anthropic)*     | `mimo_anthropic/…`     | 262 144      | 4 096            | needs vendor confirm                    | 238 144         | Aligned pending vendor confirm                      |
-| `mimo-v2.5` *(anthropic)*         | `mimo_anthropic/…`     | 262 144      | 4 096            | needs vendor confirm                    | 238 144         | Aligned pending vendor confirm                      |
+| Model id (upstream)               | Gateway namespace      | Declared ctx | Declared out cap | Vendor ctx (source)                              | Flush threshold | Status                                           |
+|-----------------------------------|------------------------|--------------|------------------|--------------------------------------------------|-----------------|--------------------------------------------------|
+| `kimi/k2p5`                       | `anthropic_kimi/k2p5`  | 262 144      | 32 768           | 256K — Moonshot K2.5 release                     | 238 144         | OK — live-probed end-to-end                      |
+| `kimi/k2.6`                       | `anthropic_kimi/k2.6`  | 262 144      | 32 768           | 256K — Moonshot K2.6 release                     | 238 144         | OK — live-probed end-to-end                      |
+| `nvidia/nemotron-nano-12b-v2-vl`  | `nvidia/…`             | 131 072      | 4 096            | 128K — NVIDIA NIM model card                     | 107 072         | OK — CI-verified                                 |
+| `mimo-v2-omni` *(openai)*         | `mimo_openai/…`        | 262 144      | 32 768           | 256K — MiMo 2026-03-18 release note              | 238 144         | OK — aligned 2026-04-23; `maxTokens` probed live |
+| `mimo-v2.5-pro` *(openai)*        | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
+| `mimo-v2.5` *(openai)*            | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
+| `mimo-v2.5-pro` *(anthropic)*     | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
+| `mimo-v2.5` *(anthropic)*         | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 
 > A flush threshold below ~20 k is effectively "trip on the first `observe`
 > turn" because the two prompt images + bootstrap context + SOUL/AGENTS
 > files already consume 7–10 k tokens.
+>
+> `maxTokens` is an output-cap hint, not a context budget. It was 4 096 on
+> every MiMo entry (placeholder); live-probed at 2026-04-23 that all three
+> MiMo variants accept `max_tokens=32768` (one even accepts 65 536) without
+> error. Set to 32 768 to match Kimi — a single tool-call round-trip with a
+> long rationale fits comfortably.
 
 ## Provider endpoints (for live probing)
 
@@ -109,27 +115,35 @@ context-length.
 
 ## Fix queue
 
-1. ~~**Bootstrap**: update all MiMo models to `contextWindow: 262144`.~~
-   Done 2026-04-23 (all 5 MiMo entries in `scripts/openclaw-bootstrap.sh`
-   bumped from 32 768 → 262 144). `maxTokens: 4096` on all MiMo entries
-   still looks placeholder — confirm against vendor output cap before
-   trusting long-form tool-call plans.
-2. **Vendor confirm V2.5**: `mimo-v2.5-pro` and `mimo-v2.5` are aligned
-   at 262 144 pending vendor spec confirmation. If the vendor doc shows a
-   lower number for the V2.5 line, revert those four rows (both openai
-   and anthropic blocks).
-3. **Tests**: `tests/test_openclaw_bootstrap.py` should assert
-   `contextWindow >= 131072` for any advertised model so a copy-paste 32k
-   slips through CI next time.
-4. **Pre-merge probe** (per the user-memory rule "live-probe before
+1. ~~**Bootstrap**: align all MiMo models with vendor context-window spec.~~
+   Done 2026-04-23. `mimo-v2-omni` → 262 144 (256K, vendor release note);
+   `mimo-v2.5` and `mimo-v2.5-pro` (both openai and anthropic blocks) →
+   1 048 576 (1M, per the V2.5 long-context line on the MiMo updates
+   page). `maxTokens` bumped 4 096 → 32 768 across all MiMo entries after
+   a live probe confirmed the upstream accepts it (see above).
+2. ~~**Tests**: assert `contextWindow >= 131072` for every advertised model.~~
+   Done 2026-04-23: `tests/test_openclaw_bootstrap.py::`
+   `test_advertised_context_windows_clear_flush_headroom`. A regex over
+   the raw bootstrap pulls every `"contextWindow":N` literal, so new
+   provider branches are covered without teaching
+   `_extract_provider_entry_for` another shape.
+3. **Pre-merge probe** (per the user-memory rule "live-probe before
    merge"): run `make chat` + ask for a `snapshot` + let the session run
    to ~15 k tokens without crashing. If the Gateway still injects a
    flush, the declared context is still wrong.
-5. **Tool-name hardening** (defense in depth): rename `roboclaws__done`
-   to something the model can't confuse with a generic "flush complete"
-   signal, or narrow its docstring so MiMo-class models won't pick it in
-   response to a memory-flush prompt. Tracked separately; not required if
-   the threshold fix holds.
+4. ~~**Tool-name hardening** (defense in depth): narrow the
+   `roboclaws__done` docstring so models can't confuse it with a generic
+   "flush complete" signal.~~ Done 2026-04-23 — docstring calls out that
+   `done` means **navigation episode ended**, not "memory flush finished"
+   or "I have nothing to store", and instructs the model to reply with
+   `NO_REPLY` instead when the user turn is a `memory-core` flush.
+   Renaming the tool would break examples/tests across the repo — left
+   as future work if the narrowed docstring isn't enough.
+5. **`maxTokens` high-end probe** (follow-up): v2.5 probe accepted
+   `max_tokens=65536` without error. Bumping to 65 536 might unlock
+   longer single-turn tool plans, but 32 768 matches Kimi and was the
+   conservative choice; revisit if we ever need bigger single-turn
+   outputs.
 
 ## How to re-audit
 
