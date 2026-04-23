@@ -92,6 +92,14 @@ _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
 _STARTUP_TIMEOUT_S = 2.0
 
+# Maps per-variant image labels to the stable filenames the live viewer polls.
+_LABEL_TO_VIEWER_NAME: dict[str, str] = {
+    "fpv": "fpv",
+    "overhead": "map",
+    "map_v2": "map",
+    "chase": "chase",
+}
+
 
 # ---------------------------------------------------------------------------
 # Frame encoders
@@ -340,6 +348,7 @@ class RoboclawsMCPServer:
                 "image_labels": list(prompt_bundle.image_labels),
             },
         )
+        self._write_latest_snapshots(prompt_bundle)
         return result
 
     def _do_move(self, direction: str, reason: str = "") -> dict[str, Any]:
@@ -484,6 +493,15 @@ class RoboclawsMCPServer:
             dest = self.snapshots_dir / f"{clean}.{name}.png"
             dest.write_bytes(png_bytes)
             written[name] = f"{container_snapshots_dir}/{dest.name}"
+            # Also refresh a stable "latest.<kind>.png" in the same dir so
+            # an external live viewer (see scripts/view-snapshots.py) can
+            # point at one filename and see every new frame without
+            # guessing counters. Atomic replace via temp+rename so a
+            # viewer polling mid-write never reads a torn PNG.
+            latest = self.snapshots_dir / f"latest.{name}.png"
+            tmp = self.snapshots_dir / f".latest.{name}.png.tmp"
+            tmp.write_bytes(png_bytes)
+            tmp.replace(latest)
 
         media_lines = "\n".join(f"MEDIA:{p}" for p in written.values())
         hint = (
@@ -676,6 +694,20 @@ class RoboclawsMCPServer:
             "last_action_success": state.last_action_success,
             "last_action_error": state.last_action_error,
         }
+
+    def _write_latest_snapshots(self, prompt_bundle: Any) -> None:
+        """Atomically refresh latest.{fpv,map,chase}.png so the live viewer updates."""
+        if self.snapshots_dir is None:
+            return
+        for label, frame in zip(prompt_bundle.image_labels, prompt_bundle.prompt_images):
+            viewer_name = _LABEL_TO_VIEWER_NAME.get(label)
+            if viewer_name is None:
+                continue
+            png_bytes = _encode_frame_png(frame, max_dim=640)
+            latest = self.snapshots_dir / f"latest.{viewer_name}.png"
+            tmp = self.snapshots_dir / f".latest.{viewer_name}.png.tmp"
+            tmp.write_bytes(png_bytes)
+            tmp.replace(latest)
 
     def _pop_human_message(self) -> str | None:
         with self._queue_lock:

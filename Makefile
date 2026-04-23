@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse chat-tail chat-plugin chat-nvidia \
+        chat chat-reuse chat-tail chat-view chat-plugin chat-nvidia \
         kimi-territory kimi-coverage help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -39,6 +39,7 @@ help:
 	@echo "  make chat-nvidia         — same, NVIDIA NIM (nemotron vision)"
 	@echo "  make chat-reuse          — attach to an already-running Gateway"
 	@echo "  make chat-tail           — pretty-tail the Gateway session JSONL (run in 2nd terminal)"
+	@echo "  make chat-view           — live snapshot viewer at http://127.0.0.1:8787 (run in 3rd terminal)"
 	@echo ""
 	@echo "Direct Kimi targets (no Gateway — talks to Kimi anthropic endpoint):"
 	@echo "  make kimi-territory      — territory game  (2 agents, 60 steps, aggressive/defensive)"
@@ -238,11 +239,26 @@ chat-reuse:
 # Our host-side trace.jsonl only records the agent's tool-call side; the
 # Gateway keeps the user turn + assistant reply + tool round-trips in a
 # per-session JSONL inside the container. Run this in a second terminal
-# while `make chat` is live. Mirrors to output/openclaw-interactive/latest-chat.log
-# by default so the transcript survives the container being torn down.
+# while `make chat` is live.
+#
+# Default output: output/openclaw-interactive/<latest-run>/chat.log
+# Plus symlink : output/openclaw-interactive/latest-chat.log → above
+# Per-run chat.log lives next to trace.jsonl + snapshots/ for review;
+# the symlink gives the operator one stable filename across runs.
 chat-tail:
-	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
-	    --log-file output/openclaw-interactive/latest-chat.log
+	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py
+
+# Live snapshot viewer. The Control UI only renders MEDIA: attachments
+# from the FINAL assistant message of a turn — so on multi-step chat
+# sequences (walk N steps, snapshot at each), the intermediate images
+# never appear in chat. They ARE written to disk by roboclaws__snapshot
+# though, and the tool updates latest.{fpv,map,chase}.png atomically on
+# every call. This viewer polls those three files from a tiny local
+# HTTP page at :8787 — open it in a second browser tab and watch the
+# robot move frame-by-frame while the chat scrolls.
+chat-view:
+	@-fuser -k 8787/tcp 2>/dev/null; true
+	@$(STRIP_ROS_ENV) python scripts/view-snapshots.py
 
 # Chat A/B variants — same entrypoint, different provider/mode. Use these to
 # diagnose image-upload drops, tool-call latency, or any provider-specific
