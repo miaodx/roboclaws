@@ -239,11 +239,14 @@ chat-reuse:
 # Our host-side trace.jsonl only records the agent's tool-call side; the
 # Gateway keeps the user turn + assistant reply + tool round-trips in a
 # per-session JSONL inside the container. Run this in a second terminal
-# while `make chat` is live. Mirrors to output/openclaw-interactive/latest-chat.log
-# by default so the transcript survives the container being torn down.
+# while `make chat` is live.
+#
+# Default output: output/openclaw-interactive/<latest-run>/chat.log
+# Plus symlink : output/openclaw-interactive/latest-chat.log → above
+# Per-run chat.log lives next to trace.jsonl + snapshots/ for review;
+# the symlink gives the operator one stable filename across runs.
 chat-tail:
-	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py \
-	    --log-file output/openclaw-interactive/latest-chat.log
+	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py
 
 # Live snapshot viewer. The Control UI only renders MEDIA: attachments
 # from the FINAL assistant message of a turn — so on multi-step chat

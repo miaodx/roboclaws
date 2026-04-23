@@ -101,3 +101,69 @@ def test_render_line_non_message_events_are_terse() -> None:
 def test_render_line_invalid_json_is_flagged() -> None:
     lines = _render_line("{not json")
     assert lines == ["?? invalid json: {not json"]
+
+
+# ---------------------------------------------------------------------------
+# Default log path + symlink maintenance
+# ---------------------------------------------------------------------------
+
+
+def test_latest_run_dir_picks_newest_mtime(tmp_path: Path, monkeypatch) -> None:
+    """_latest_run_dir returns the run subdir with the most recent mtime."""
+    import os
+
+    runs_dir = tmp_path / "output" / "openclaw-interactive"
+    older = runs_dir / "20260422T100000Z"
+    newer = runs_dir / "20260423T100000Z"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+    os.utime(older, (1000, 1000))
+    os.utime(newer, (2000, 2000))
+
+    monkeypatch.setattr(_mod, "_DEFAULT_RUNS_DIR", runs_dir)
+    assert _mod._latest_run_dir() == newer
+
+
+def test_latest_run_dir_returns_none_when_no_runs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(_mod, "_DEFAULT_RUNS_DIR", tmp_path / "missing")
+    assert _mod._latest_run_dir() is None
+
+
+def test_refresh_latest_symlink_creates_relative_link(tmp_path: Path, monkeypatch) -> None:
+    """Symlink at output/openclaw-interactive/latest-chat.log points at
+    the run's chat.log via a relative path so the tree stays portable."""
+    runs_dir = tmp_path / "output" / "openclaw-interactive"
+    run = runs_dir / "20260423T100000Z"
+    run.mkdir(parents=True)
+    target = run / "chat.log"
+    target.write_text("one line\n", encoding="utf-8")
+
+    link = runs_dir / "latest-chat.log"
+    monkeypatch.setattr(_mod, "_LATEST_SYMLINK", link)
+    _mod._refresh_latest_symlink(target)
+
+    assert link.is_symlink()
+    # Relative link: readlink yields `20260423T100000Z/chat.log` (not abs).
+    readlink = link.readlink()
+    assert not readlink.is_absolute(), (
+        f"symlink should be relative so the tree stays portable; got {readlink!r}"
+    )
+    assert link.resolve() == target.resolve()
+
+
+def test_refresh_latest_symlink_replaces_existing_link(tmp_path: Path, monkeypatch) -> None:
+    """Re-running against a new run dir replaces the symlink, not errors."""
+    runs_dir = tmp_path / "output" / "openclaw-interactive"
+    run_a = runs_dir / "runA"
+    run_b = runs_dir / "runB"
+    for r in (run_a, run_b):
+        r.mkdir(parents=True)
+        (r / "chat.log").write_text("x", encoding="utf-8")
+
+    link = runs_dir / "latest-chat.log"
+    monkeypatch.setattr(_mod, "_LATEST_SYMLINK", link)
+
+    _mod._refresh_latest_symlink(run_a / "chat.log")
+    _mod._refresh_latest_symlink(run_b / "chat.log")
+
+    assert link.resolve() == (run_b / "chat.log").resolve()

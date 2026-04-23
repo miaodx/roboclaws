@@ -34,6 +34,9 @@ from typing import IO, Any
 
 _DEFAULT_CONTAINER = "openclaw-gateway"
 _DEFAULT_AGENT = "agent-0"
+_ROOT = Path(__file__).resolve().parent.parent
+_DEFAULT_RUNS_DIR = _ROOT / "output" / "openclaw-interactive"
+_LATEST_SYMLINK = _DEFAULT_RUNS_DIR / "latest-chat.log"
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -47,8 +50,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--log-file",
         type=Path,
         default=None,
-        help="Mirror the pretty-printed transcript to this host-side file "
-        "(parent dirs are auto-created).",
+        help="Mirror the pretty-printed transcript to this host-side file. "
+        "When omitted, defaults to `<latest-run>/chat.log` inside "
+        "output/openclaw-interactive/ and keeps a `latest-chat.log` symlink "
+        "at the parent pointing to it — per-run transcripts survive for "
+        "later review, operator always has one stable filename.",
     )
     parser.add_argument(
         "--session",
@@ -56,6 +62,40 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Explicit session UUID (default: pick the most recently modified).",
     )
     return parser.parse_args(argv)
+
+
+def _latest_run_dir() -> Path | None:
+    """Return the most-recently-modified run dir under output/openclaw-interactive/."""
+    if not _DEFAULT_RUNS_DIR.exists():
+        return None
+    runs = [p for p in _DEFAULT_RUNS_DIR.iterdir() if p.is_dir()]
+    if not runs:
+        return None
+    return max(runs, key=lambda p: p.stat().st_mtime)
+
+
+def _refresh_latest_symlink(target: Path) -> None:
+    """Point `output/openclaw-interactive/latest-chat.log` at `target`.
+
+    Uses a relative symlink so moving the `output/` tree doesn't break
+    it. Replaces any existing symlink (or file) atomically. Silently
+    skips if symlink creation isn't supported (e.g. Windows without
+    dev-mode) — the log still gets written to the per-run path.
+    """
+    link = _LATEST_SYMLINK
+    link.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        rel = Path(target).resolve().relative_to(link.parent.resolve())
+    except ValueError:
+        rel = Path(target).resolve()
+    tmp = link.with_suffix(link.suffix + ".tmp")
+    try:
+        if tmp.is_symlink() or tmp.exists():
+            tmp.unlink()
+        tmp.symlink_to(rel)
+        tmp.replace(link)
+    except OSError:
+        pass
 
 
 def _latest_session(container: str, agent: str) -> str:
@@ -157,14 +197,25 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
+    # Default: write under the newest run dir so each interactive session
+    # keeps its own chat transcript next to trace.jsonl + snapshots/ for
+    # later review. Also maintain `latest-chat.log` as a symlink at the
+    # parent so the operator has one stable filename across runs.
+    log_file: Path | None = args.log_file
+    if log_file is None:
+        latest_run = _latest_run_dir()
+        if latest_run is not None:
+            log_file = latest_run / "chat.log"
+
     log_fp: IO[str] | None = None
-    if args.log_file:
-        args.log_file.parent.mkdir(parents=True, exist_ok=True)
-        log_fp = args.log_file.open("a", encoding="utf-8", buffering=1)
+    if log_file is not None:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        log_fp = log_file.open("a", encoding="utf-8", buffering=1)
+        _refresh_latest_symlink(log_file)
     sinks: list[IO[str]] = [sys.stdout] + ([log_fp] if log_fp else [])
 
     banner = f"# tail {args.container}:{session_path}" + (
-        f" → {args.log_file}" if args.log_file else ""
+        f" → {log_file}  (symlink: {_LATEST_SYMLINK})" if log_file else ""
     )
     _emit([banner, "-" * len(banner)], sinks)
 
