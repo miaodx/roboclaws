@@ -146,7 +146,11 @@ def _fmt_content(content: Any) -> list[str]:
             name = part.get("toolName") or part.get("name") or "?"
             inner = part.get("content") or []
             inner_kinds = [c.get("type", "?") for c in inner if isinstance(c, dict)]
-            lines.append(f"← toolResult {name} parts={inner_kinds}")
+            delivery = _extract_observe_delivery(name, inner, inner_kinds)
+            if delivery:
+                lines.append(f"← toolResult {name} delivery={delivery} parts={inner_kinds}")
+            else:
+                lines.append(f"← toolResult {name} parts={inner_kinds}")
         elif ptype in ("image", "image_url"):
             src = part.get("source") or part.get("image_url") or "?"
             if isinstance(src, dict):
@@ -155,6 +159,27 @@ def _fmt_content(content: Any) -> list[str]:
         else:
             lines.append(f"[{ptype}]")
     return lines
+
+
+def _extract_observe_delivery(name: str, inner: list[Any], inner_kinds: list[str]) -> str | None:
+    if name != "roboclaws__observe":
+        return None
+    for part in inner:
+        if not isinstance(part, dict) or part.get("type") != "text":
+            continue
+        text = (part.get("text") or "").strip()
+        if not text or not text.startswith("{"):
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        delivery = payload.get("observe_delivery")
+        if isinstance(delivery, str) and delivery:
+            return delivery
+    if "image" in inner_kinds:
+        return "images"
+    return None
 
 
 def _render_line(raw: str) -> list[str]:

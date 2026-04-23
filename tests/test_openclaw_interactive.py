@@ -215,7 +215,18 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
             return SimpleNamespace(stdout="tok-fresh\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
-    with patch("openclaw_interactive.subprocess.run", side_effect=_fake_run):
+    with (
+        patch("openclaw_interactive.subprocess.run", side_effect=_fake_run),
+        patch.dict(
+            "os.environ",
+            {
+                "MODEL": "mimo_openai/mimo-v2.5-pro",
+                "IMAGE_MODEL": "mimo_openai/mimo-v2-omni",
+                "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
+            },
+            clear=False,
+        ),
+    ):
         rc = main(["--output-dir", str(ctx.tmp_path / "run")])
 
     assert rc == 0
@@ -238,6 +249,9 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     assert "http://127.0.0.1:18789" in out
     assert "tok-fresh" in out
     assert "agent-0" in out
+    assert "mimo-v2.5-pro" in out
+    assert "mimo-v2-omni" in out
+    assert "text-bridge" in out
 
 
 def test_main_skip_bootstrap_uses_env_token(_patched_main_deps) -> None:
