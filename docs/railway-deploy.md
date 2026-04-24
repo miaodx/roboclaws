@@ -6,7 +6,7 @@ HTML viewer, Xvfb, and nginx in one Railway service.
 
 Public routes:
 
-- `/` - OpenClaw Control UI / webchat, behind basic auth
+- `/` - OpenClaw Control UI / webchat
 - `/views/` - Roboclaws FPV + map-v2 + chase-cam viewer
 - `/health` - unauthenticated Railway healthcheck
 
@@ -76,15 +76,20 @@ Unity build if `make chat` already downloaded it.
    Required:
 
    ```bash
-   DEMO_PASSWORD=<shared-basic-auth-password>
    MIMO_TP_KEY=<mimo-provider-key>
+   ```
+
+   Also set one token variable:
+
+   ```bash
+   DEMO_PASSWORD=<openclaw-bearer-token>
+   # or
+   OPENCLAW_TOKEN=<openclaw-bearer-token>
    ```
 
    Optional:
 
    ```bash
-   DEMO_USERNAME=demo
-   OPENCLAW_TOKEN=<separate-openclaw-bearer-token>
    PROVIDER=mimo
    MODEL=mimo_openai/mimo-v2-omni
    IMAGE_MODEL=mimo_openai/mimo-v2-omni
@@ -108,38 +113,27 @@ Unity build if `make chat` already downloaded it.
    https://<railway-domain>/views/
    ```
 
-## Login And Tokens
+## OpenClaw Token
 
-Basic auth username:
-
-```text
-demo
-```
-
-Override it with `DEMO_USERNAME` if needed.
+There is no nginx/browser basic auth prompt. Open the service URL directly,
+then paste the OpenClaw bearer token on the OpenClaw Overview tab.
 
 Credential behavior:
 
 - `DEMO_PASSWORD` only:
-  - basic auth username = `DEMO_USERNAME` or `demo`
-  - basic auth password = `DEMO_PASSWORD`
   - OpenClaw bearer token = `DEMO_PASSWORD`
 
 - `OPENCLAW_TOKEN` only:
-  - basic auth username = `DEMO_USERNAME` or `demo`
-  - basic auth password = `OPENCLAW_TOKEN`
   - OpenClaw bearer token = `OPENCLAW_TOKEN`
 
 - both:
-  - basic auth username = `DEMO_USERNAME` or `demo`
-  - basic auth password = `DEMO_PASSWORD`
   - OpenClaw bearer token = `OPENCLAW_TOKEN`
 
 - neither:
   - container exits immediately with `ERROR: set DEMO_PASSWORD or OPENCLAW_TOKEN`
 
-In the OpenClaw UI, paste the bearer token on the Overview tab, then open the
-Chat tab and select `agent-0`.
+Local `make appliance-run-local` defaults `DEMO_PASSWORD` to `demo`, so the
+local bearer token is `demo` unless overridden.
 
 ## Expected First Boot Behavior
 
@@ -175,6 +169,16 @@ Railway variables unless intentionally debugging. The repo config uses:
 ```toml
 healthcheckPath = "/health"
 healthcheckTimeout = 300
+```
+
+### Browser Still Shows A Username/Password Dialog
+
+You are running an older image that still had nginx Basic Auth enabled. Rebuild
+and restart:
+
+```bash
+make appliance-build
+DEMO_PASSWORD=demo make appliance-run-local
 ```
 
 ### AI2-THOR Redownloads Every Deploy

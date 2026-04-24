@@ -9,15 +9,18 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     entrypoint = (ROOT / "deploy" / "railway" / "entrypoint.sh").read_text(encoding="utf-8")
     supervisord = (ROOT / "deploy" / "railway" / "supervisord.conf").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile.railway").read_text(encoding="utf-8")
+    nginx = (ROOT / "deploy" / "railway" / "nginx.conf.template").read_text(encoding="utf-8")
     run_wrapper = (ROOT / "scripts" / "appliance-run-interactive.sh").read_text(encoding="utf-8")
 
     assert 'ROBOCLAWS_HOME="${ROBOCLAWS_HOME:-${DATA_DIR}}"' in entrypoint
     assert 'export HOME="$ROBOCLAWS_HOME"' in entrypoint
     assert '"$ROBOCLAWS_AI2THOR_DIR"' in entrypoint
-    assert 'export DEMO_USERNAME="${DEMO_USERNAME:-demo}"' in entrypoint
-    assert 'htpasswd -bc /etc/nginx/.htpasswd "$DEMO_USERNAME" "$DEMO_PASSWORD"' in entrypoint
+    assert "DEMO_USERNAME" not in entrypoint
+    assert "htpasswd" not in entrypoint
+    assert "auth_basic" not in nginx
     assert 'HOME="%(ENV_ROBOCLAWS_HOME)s"' in supervisord
     assert "ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor" in dockerfile
+    assert "apache2-utils" not in dockerfile
     assert "RAILWAY_PUBLIC_DOMAIN" in entrypoint
     assert 'ROBOCLAWS_PUBLIC_URL="http://127.0.0.1:${PORT}"' in entrypoint
     assert (
