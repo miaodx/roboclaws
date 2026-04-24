@@ -39,10 +39,14 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
 def test_local_appliance_run_reuses_host_ai2thor_cache() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "appliance-build appliance-run-local appliance-run-railway appliance-tail" in makefile
+    assert (
+        "appliance-build appliance-run-local appliance-run-railway appliance-smoke appliance-tail"
+        in makefile
+    )
     assert "appliance-run:" not in makefile
     assert "APPLIANCE_CONTAINER ?= roboclaws-appliance" in makefile
     assert "APPLIANCE_LOCAL_DATA_VOLUME ?= roboclaws-appliance-data" in makefile
+    assert "APPLIANCE_SMOKE_URL ?= http://127.0.0.1:8080" in makefile
     assert '--name "$(APPLIANCE_CONTAINER)"' in makefile
     assert 'mkdir -p "$$HOME/.ai2thor"' in makefile
     assert '-v "$(APPLIANCE_LOCAL_DATA_VOLUME):/data"' in makefile
@@ -66,3 +70,12 @@ def test_appliance_tail_targets_named_container() -> None:
 
     assert "appliance-tail:" in makefile
     assert 'python scripts/tail-openclaw-chat.py --container "$(APPLIANCE_CONTAINER)"' in makefile
+
+
+def test_appliance_smoke_target_checks_control_ui_websocket() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "appliance-smoke:" in makefile
+    assert "scripts/appliance_control_ui_smoke.py" in makefile
+    assert '--url "$(APPLIANCE_SMOKE_URL)"' in makefile
+    assert '--token "$${OPENCLAW_TOKEN:-$${DEMO_PASSWORD:-demo}}"' in makefile

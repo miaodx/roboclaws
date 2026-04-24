@@ -46,6 +46,7 @@ class RuntimeConfig:
     timeout_seconds: int
     allowed_origins: list[str]
     trusted_proxies: list[str]
+    control_ui_disable_device_auth: bool
 
 
 def _env_int(env: dict[str, str], name: str, default: int) -> int:
@@ -55,6 +56,18 @@ def _env_int(env: dict[str, str], name: str, default: int) -> int:
     except ValueError as exc:
         raise SystemExit(f"{name} must be an integer, got {raw!r}") from exc
     return value
+
+
+def _env_bool(env: dict[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise SystemExit(f"{name} must be a boolean, got {raw!r}")
 
 
 def _agent_ids(env: dict[str, str]) -> list[str]:
@@ -261,11 +274,15 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
     if runtime.tool_profile == "minimal":
         defaults_cfg["compaction"] = {"memoryFlush": {"enabled": False}}
 
+    control_ui_cfg: dict[str, Any] = {"allowedOrigins": runtime.allowed_origins}
+    if runtime.control_ui_disable_device_auth:
+        control_ui_cfg["dangerouslyDisableDeviceAuth"] = True
+
     config: dict[str, Any] = {
         "gateway": {
             "auth": {"mode": "token", "token": runtime.token},
             "http": {"endpoints": {"chatCompletions": {"enabled": True}}},
-            "controlUi": {"allowedOrigins": runtime.allowed_origins},
+            "controlUi": control_ui_cfg,
             "trustedProxies": runtime.trusted_proxies,
         },
         "agents": {
@@ -394,6 +411,11 @@ def seed(env: dict[str, str] | None = None) -> RuntimeConfig:
         timeout_seconds=_env_int(env, "TIMEOUT_SECONDS", 600),
         allowed_origins=_allowed_origins(env),
         trusted_proxies=_trusted_proxies(env),
+        control_ui_disable_device_auth=_env_bool(
+            env,
+            "OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH",
+            True,
+        ),
     )
 
     skill_src = Path(env.get("SKILLS_DIR", "/opt/roboclaws/skills/ai2thor-navigator"))

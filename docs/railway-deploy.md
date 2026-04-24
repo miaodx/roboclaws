@@ -31,6 +31,19 @@ For local appliance chat logs:
 make appliance-tail
 ```
 
+For the appliance Control UI proxy/auth smoke test:
+
+```bash
+make appliance-smoke
+```
+
+For a non-default local port or Railway URL:
+
+```bash
+DEMO_PASSWORD=<token> make appliance-smoke \
+  APPLIANCE_SMOKE_URL=https://<railway-domain>
+```
+
 `make appliance-run-local` reuses the host `$HOME/.ai2thor` cache by mounting
 it into container `/data/.ai2thor`, so it should not redownload the AI2-THOR
 Unity build if `make chat` already downloaded it.
@@ -96,6 +109,7 @@ Unity build if `make chat` already downloaded it.
    ROBOCLAWS_OBSERVE_MODE=auto
    ROBOCLAWS_PUBLIC_URL=https://<railway-domain>
    OPENCLAW_ALLOWED_ORIGINS=https://<extra-domain>
+   OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=true
    ```
 
    Do not set `PORT` unless debugging Railway networking. Railway provides
@@ -119,6 +133,13 @@ Unity build if `make chat` already downloaded it.
 
 There is no nginx/browser basic auth prompt. Open the service URL directly,
 then paste the OpenClaw bearer token on the OpenClaw Overview tab.
+
+You can also open a tokenized URL to prefill the Control UI token:
+
+```text
+http://127.0.0.1:8080/#token=demo
+https://<railway-domain>/#token=<DEMO_PASSWORD-or-OPENCLAW_TOKEN>
+```
 
 Credential behavior:
 
@@ -197,6 +218,27 @@ OPENCLAW_ALLOWED_ORIGINS=https://<another-domain-if-needed>
 The appliance also seeds `gateway.trustedProxies` for the same-container nginx
 proxy. If you add another reverse proxy in front of the service, append its IP
 or CIDR with `OPENCLAW_TRUSTED_PROXIES`.
+
+### OpenClaw Says `pairing required`
+
+The appliance is intended to use the bearer token as the only demo gate, not
+OpenClaw device pairing. Rebuild/redeploy so the seeded config includes:
+
+```json
+"gateway": {
+  "controlUi": {
+    "dangerouslyDisableDeviceAuth": true
+  }
+}
+```
+
+This does not remove the OpenClaw bearer token. It only disables the separate
+browser device-pairing requirement for the Control UI. To opt back into strict
+OpenClaw device pairing, set:
+
+```bash
+OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH=false
+```
 
 ### AI2-THOR Redownloads Every Deploy
 

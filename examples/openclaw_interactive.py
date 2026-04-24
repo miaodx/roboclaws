@@ -43,6 +43,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 import tyro
 
@@ -178,6 +179,9 @@ def _print_banner(
     print(f"    URL   : {url}")
     if public_url and public_url != url:
         print(f"    Appliance: {public_url}")
+        if token:
+            tokenized_url = f"{public_url.rstrip('/')}/#token={quote(token, safe='')}"
+            print(f"    Appliance auth URL: {tokenized_url}")
     print(f"    Token : {token}")
     print(f"    Agent : {agent_name}")
     print(f"    Model : {runtime_config['model_name'] or '<gateway default>'}")
