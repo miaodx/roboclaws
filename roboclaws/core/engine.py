@@ -54,6 +54,7 @@ class MultiAgentEngine:
         height: int = 480,
         server_timeout: float = 100.0,
         server_start_timeout: float = 300.0,
+        platform: Any | None = None,
     ) -> None:
         self.agent_count = agent_count
         self._grid_size = grid_size
@@ -64,6 +65,9 @@ class MultiAgentEngine:
         self._overhead_camera_pose: dict[str, Any] | None = None
         self._overhead_camera_id = 0
         self._chase_camera_ids: dict[int, int] = {}
+        controller_kwargs: dict[str, Any] = {}
+        if platform is not None:
+            controller_kwargs["platform"] = platform
         self._controller = Controller(
             scene=scene,
             agentCount=agent_count,
@@ -75,6 +79,7 @@ class MultiAgentEngine:
             height=height,
             server_timeout=server_timeout,
             server_start_timeout=server_start_timeout,
+            **controller_kwargs,
         )
         self._last_event = self._controller.last_event
         self._setup_overhead_camera()
