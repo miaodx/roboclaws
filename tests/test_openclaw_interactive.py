@@ -339,7 +339,8 @@ def test_main_banner_uses_appliance_public_hints(_patched_main_deps, capsys) -> 
 
     assert rc == 0
     out = capsys.readouterr().out
-    assert "URL   : http://127.0.0.1:8080" in out
+    assert "URL   : http://127.0.0.1:18789" in out
+    assert "Appliance: http://127.0.0.1:8080" in out
     assert "appliance-token" in out
     assert "make appliance-tail" in out
     assert "http://127.0.0.1:8080/views/" in out

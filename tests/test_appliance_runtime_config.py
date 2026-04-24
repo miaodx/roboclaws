@@ -9,6 +9,7 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     entrypoint = (ROOT / "deploy" / "railway" / "entrypoint.sh").read_text(encoding="utf-8")
     supervisord = (ROOT / "deploy" / "railway" / "supervisord.conf").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile.railway").read_text(encoding="utf-8")
+    run_wrapper = (ROOT / "scripts" / "appliance-run-interactive.sh").read_text(encoding="utf-8")
 
     assert 'ROBOCLAWS_HOME="${ROBOCLAWS_HOME:-${DATA_DIR}}"' in entrypoint
     assert 'export HOME="$ROBOCLAWS_HOME"' in entrypoint
@@ -20,6 +21,12 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     assert (
         'ROBOCLAWS_VIEWER_HINT="${ROBOCLAWS_VIEWER_HINT:-${ROBOCLAWS_PUBLIC_URL%/}/views/}"'
         in entrypoint
+    )
+    assert 'ROBOCLAWS_PUBLIC_URL="http://127.0.0.1:${PORT}"' in run_wrapper
+    assert 'ROBOCLAWS_TAIL_HINT="${ROBOCLAWS_TAIL_HINT:-make appliance-tail}"' in run_wrapper
+    assert (
+        'OPENCLAW_GATEWAY_CONTAINER="${OPENCLAW_GATEWAY_CONTAINER:-roboclaws-appliance}"'
+        in run_wrapper
     )
 
 

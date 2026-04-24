@@ -168,6 +168,7 @@ def _print_banner(
     runtime_config: dict[str, str | None],
     tail_hint: str = _DEFAULT_TAIL_HINT,
     viewer_hint: str = _DEFAULT_VIEWER_HINT,
+    public_url: str | None = None,
 ) -> None:
     bar = "=" * 72
     print()
@@ -175,6 +176,8 @@ def _print_banner(
     print("  OpenClaw interactive — ready. Open the Control UI in a browser:")
     print()
     print(f"    URL   : {url}")
+    if public_url and public_url != url:
+        print(f"    Appliance: {public_url}")
     print(f"    Token : {token}")
     print(f"    Agent : {agent_name}")
     print(f"    Model : {runtime_config['model_name'] or '<gateway default>'}")
@@ -357,13 +360,14 @@ def main(argv: list[str] | None = None) -> int:
 
         _start_stdin_thread(mcp_server, stdin_stop)
         _print_banner(
-            url=_env_hint("ROBOCLAWS_PUBLIC_URL", _DEFAULT_GATEWAY_URL),
+            url=_DEFAULT_GATEWAY_URL,
             agent_name=f"agent-{args.agent_id}",
             token=token,
             output_dir=output_dir,
             runtime_config=runtime_config,
             tail_hint=_env_hint("ROBOCLAWS_TAIL_HINT", _DEFAULT_TAIL_HINT),
             viewer_hint=_env_hint("ROBOCLAWS_VIEWER_HINT", _DEFAULT_VIEWER_HINT),
+            public_url=_env_hint("ROBOCLAWS_PUBLIC_URL", ""),
         )
 
         # Block until Ctrl-C / SIGTERM, OR the agent flips done via the
