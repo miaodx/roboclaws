@@ -69,6 +69,9 @@ Defaults:
 - `MODEL=mimo_openai/mimo-v2-omni`
 - `ROBOCLAWS_TOOL_PROFILE=minimal`
 - `ROBOCLAWS_MCP_URL=http://127.0.0.1:18788/mcp`
+- `ROBOCLAWS_HOME=/data`
+- `HOME=/data` for the supervised Roboclaws process, which makes AI2-THOR
+  store Unity releases under `/data/.ai2thor`
 - `ROBOCLAWS_RUN_DIR=/data/runs/current`
 - `ROBOCLAWS_SNAPSHOTS_DIR=/data/runs/current/snapshots`
 
@@ -85,6 +88,10 @@ Local parity smoke:
 make appliance-build
 DEMO_PASSWORD=demo make appliance-run
 ```
+
+The local parity target runs with `HOME=/data/home` and
+`ROBOCLAWS_HOME=/data/home`, so its AI2-THOR cache resolves to
+`/data/home/.ai2thor` inside the persistent Docker volume.
 
 Then verify:
 
@@ -105,8 +112,8 @@ Automated checks:
 ## Assumptions
 
 - Railway runs one replica for this demo.
-- A Railway volume is mounted at `/data` so AI2-THOR cache and run artifacts can
-  survive restarts.
+- A Railway volume is mounted at `/data` so `/data/.ai2thor` and run artifacts
+  can survive restarts.
 - CPU Xvfb + Mesa llvmpipe is acceptable for low-concurrency debugging. If the
   live UX is too slow after real model latency is included, move the simulator
   worker to a GPU host and keep the public UI thin.

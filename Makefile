@@ -227,6 +227,8 @@ appliance-run:
 	 [ -f .env ] && ENV_FILE_ARG="--env-file .env"; \
 	 docker run --rm $$ENV_FILE_ARG \
 	   -e PORT=8080 \
+	   -e HOME=/data/home \
+	   -e ROBOCLAWS_HOME=/data/home \
 	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
 	   -p 8080:8080 \
 	   -v roboclaws-appliance-data:/data \

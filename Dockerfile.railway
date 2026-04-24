@@ -29,14 +29,17 @@ RUN UV_PROJECT_ENVIRONMENT=/opt/roboclaws/.venv UV_LINK_MODE=copy \
   && chmod +x /opt/roboclaws/deploy/railway/entrypoint.sh \
     /opt/roboclaws/scripts/appliance-run-interactive.sh \
     /opt/roboclaws/scripts/appliance_seed_openclaw.py \
-  && mkdir -p /data /run/nginx /var/log/nginx \
+  && mkdir -p /data/.ai2thor /data/home /run/nginx /var/log/nginx \
   && chown -R node:node /home/node /data /opt/roboclaws
 
 ENV APP_ROOT=/opt/roboclaws \
     DATA_DIR=/data \
+    ROBOCLAWS_HOME=/data \
+    HOME=/data \
     PROVIDER=mimo \
     ROBOCLAWS_TOOL_PROFILE=minimal \
     ROBOCLAWS_MCP_URL=http://127.0.0.1:18788/mcp \
+    ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor \
     ROBOCLAWS_RUN_DIR=/data/runs/current \
     ROBOCLAWS_SNAPSHOTS_DIR=/data/runs/current/snapshots \
     DISPLAY=:99 \
