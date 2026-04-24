@@ -102,6 +102,51 @@ class OpenClawProvider:
     def get_last_turn_metrics(self) -> dict[str, Any]:
         return dict(self._last_turn_metrics)
 
+    def _record_call_outcome(
+        self,
+        *,
+        started: float,
+        retry_delay_seconds: float,
+        attempt: int,
+        error: Exception | None = None,
+        bridge_metrics: dict[str, Any] | None = None,
+    ) -> None:
+        duration = time.monotonic() - started
+        self._status.total_calls += 1
+        self._status.last_call_duration_seconds = duration
+        self._status.total_call_duration_seconds += duration
+
+        timings: dict[str, Any] = {
+            "openclaw_provider_call_seconds": round_seconds(duration),
+            "openclaw_retry_delay_seconds": round_seconds(retry_delay_seconds),
+        }
+        provider_metrics: dict[str, Any] = {
+            "attempts": attempt + 1,
+            "retries_this_call": attempt,
+        }
+        metrics: dict[str, Any] = {"timings": timings, "provider": provider_metrics}
+
+        if error is None:
+            self._status.successful_calls += 1
+            self._status.consecutive_failures = 0
+            payload: dict[str, Any] = {}
+            if isinstance(bridge_metrics, dict):
+                bridge_timings = bridge_metrics.get("timings", {})
+                if isinstance(bridge_timings, dict):
+                    timings.update(bridge_timings)
+                bridge_payload = bridge_metrics.get("payload", {})
+                if isinstance(bridge_payload, dict):
+                    payload = bridge_payload
+            metrics["payload"] = payload
+        else:
+            self._status.failed_calls += 1
+            self._status.consecutive_failures += 1
+            self._status.last_error = str(error)
+            self._status.last_error_kind = error.__class__.__name__
+            provider_metrics["error_kind"] = error.__class__.__name__
+
+        self._last_turn_metrics = metrics
+
     def get_action(
         self,
         images: list[np.ndarray],
@@ -127,7 +172,6 @@ class OpenClawProvider:
         overhead = images[1] if len(images) > 1 else _placeholder_frame()
 
         started = time.monotonic()
-        last_exc: Exception | None = None
         retry_delay_seconds_this_call = 0.0
         for attempt in range(_RETRY_ATTEMPTS):
             try:
@@ -139,7 +183,6 @@ class OpenClawProvider:
                     step_idx=step_idx,
                 )
             except OpenClawUnavailable as exc:
-                last_exc = exc
                 self._status.last_error = str(exc)
                 self._status.last_error_kind = exc.__class__.__name__
                 is_timeout = "read timeout" in str(exc).lower()
@@ -151,24 +194,12 @@ class OpenClawProvider:
                     retry_delay_seconds_this_call += delay
                     time.sleep(delay)
                     continue
-                self._status.total_calls += 1
-                self._status.failed_calls += 1
-                self._status.consecutive_failures += 1
-                self._status.last_call_duration_seconds = time.monotonic() - started
-                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
-                self._last_turn_metrics = {
-                    "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
-                        "openclaw_retry_delay_seconds": round_seconds(
-                            retry_delay_seconds_this_call
-                        ),
-                    },
-                    "provider": {
-                        "attempts": attempt + 1,
-                        "retries_this_call": attempt,
-                        "error_kind": exc.__class__.__name__,
-                    },
-                }
+                self._record_call_outcome(
+                    started=started,
+                    retry_delay_seconds=retry_delay_seconds_this_call,
+                    attempt=attempt,
+                    error=exc,
+                )
                 if is_timeout:
                     raise OpenClawUnavailable(
                         f"Model unavailable: openclaw/{self._bridge._agent_prefix}{agent_id} "
@@ -176,59 +207,23 @@ class OpenClawProvider:
                     ) from exc
                 raise
             except Exception as exc:
-                self._status.total_calls += 1
-                self._status.failed_calls += 1
-                self._status.consecutive_failures += 1
-                self._status.last_error = str(exc)
-                self._status.last_error_kind = exc.__class__.__name__
-                self._status.last_call_duration_seconds = time.monotonic() - started
-                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
-                self._last_turn_metrics = {
-                    "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
-                        "openclaw_retry_delay_seconds": round_seconds(
-                            retry_delay_seconds_this_call
-                        ),
-                    },
-                    "provider": {
-                        "attempts": attempt + 1,
-                        "retries_this_call": attempt,
-                        "error_kind": exc.__class__.__name__,
-                    },
-                }
+                self._record_call_outcome(
+                    started=started,
+                    retry_delay_seconds=retry_delay_seconds_this_call,
+                    attempt=attempt,
+                    error=exc,
+                )
                 raise
             else:
-                self._status.total_calls += 1
-                self._status.successful_calls += 1
-                self._status.consecutive_failures = 0
-                self._status.last_call_duration_seconds = time.monotonic() - started
-                self._status.total_call_duration_seconds += self._status.last_call_duration_seconds
-                bridge_metrics = self._bridge.get_last_step_metrics()
-                bridge_timings = (
-                    bridge_metrics.get("timings", {}) if isinstance(bridge_metrics, dict) else {}
+                self._record_call_outcome(
+                    started=started,
+                    retry_delay_seconds=retry_delay_seconds_this_call,
+                    attempt=attempt,
+                    bridge_metrics=self._bridge.get_last_step_metrics(),
                 )
-                bridge_payload = (
-                    bridge_metrics.get("payload", {}) if isinstance(bridge_metrics, dict) else {}
-                )
-                self._last_turn_metrics = {
-                    "timings": {
-                        "openclaw_provider_call_seconds": round_seconds(time.monotonic() - started),
-                        "openclaw_retry_delay_seconds": round_seconds(
-                            retry_delay_seconds_this_call
-                        ),
-                        **bridge_timings,
-                    },
-                    "payload": bridge_payload,
-                    "provider": {
-                        "attempts": attempt + 1,
-                        "retries_this_call": attempt,
-                    },
-                }
                 self._step += 1
                 return result
-        # Defensive: loop should always return or raise above.
-        assert last_exc is not None
-        raise last_exc
+        raise AssertionError("OpenClawProvider retry loop exhausted unexpectedly")
 
     # -- Convenience --------------------------------------------------
 

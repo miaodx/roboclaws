@@ -192,28 +192,22 @@ class ReplayRecorder:
         """
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        (out / "frames").mkdir(exist_ok=True)
-        (out / "agent_frames").mkdir(exist_ok=True)
-        (out / "overhead").mkdir(exist_ok=True)
-        (out / "scene_views").mkdir(exist_ok=True)
+        for directory in ("frames", "agent_frames", "overhead", "scene_views"):
+            (out / directory).mkdir(exist_ok=True)
 
         composite_frames: list[np.ndarray] = []
         steps_data: list[dict[str, Any]] = []
 
         for rec in self._steps:
             tag = f"{rec.step:04d}"
-
-            # Per-agent first-person frames
             for aid, frame in enumerate(rec.agent_frames):
-                Image.fromarray(frame).save(str(out / "agent_frames" / f"{tag}_agent{aid}.png"))
-
-            # Overhead frame
-            Image.fromarray(rec.overhead_frame).save(str(out / "overhead" / f"{tag}_overhead.png"))
+                _save_rgb_png(frame, out / "agent_frames" / f"{tag}_agent{aid}.png")
+            _save_rgb_png(rec.overhead_frame, out / "overhead" / f"{tag}_overhead.png")
 
             extra_views_data: list[dict[str, Any]] = []
             for extra_index, (label, frame) in enumerate(rec.extra_views):
                 filename = f"{tag}_view{extra_index}_{_panel_slug(label)}.png"
-                Image.fromarray(frame).save(str(out / "scene_views" / filename))
+                _save_rgb_png(frame, out / "scene_views" / filename)
                 extra_views_data.append(
                     {
                         "label": label,
@@ -221,14 +215,13 @@ class ReplayRecorder:
                     }
                 )
 
-            # Composite frame (agent frames + scene views side-by-side)
             composite_img = _make_composite(
                 rec.agent_frames,
                 rec.overhead_frame,
                 extra_frames=[frame for _, frame in rec.extra_views],
             )
             composite_img.save(str(out / "frames" / f"{tag}_composite.png"))
-            composite_frames.append(np.asarray(composite_img.convert("RGB"), dtype=np.uint8))
+            composite_frames.append(_rgb_array(composite_img))
 
             steps_data.append(
                 {
@@ -299,12 +292,7 @@ class ReplayRecorder:
         """
         if not _HAS_IMAGEIO:
             raise ImportError("imageio is required for GIF output: pip install imageio")
-        arrays: list[np.ndarray] = []
-        for f in frames:
-            if isinstance(f, np.ndarray):
-                arrays.append(f)
-            else:
-                arrays.append(np.asarray(f.convert("RGB"), dtype=np.uint8))
+        arrays = [_rgb_array(frame) for frame in frames]
         duration_ms = int(1000 / fps)
         imageio.mimsave(str(path), arrays, duration=duration_ms)
 
@@ -333,7 +321,9 @@ class ReplayRecorder:
         frame_paths = sorted(frames_dir.glob("*_composite.png"))
         if not frame_paths:
             raise FileNotFoundError(f"No composite frames found in {frames_dir}")
-        frames = [np.asarray(Image.open(p).convert("RGB"), dtype=np.uint8) for p in frame_paths]
+        frames = [
+            np.asarray(Image.open(path).convert("RGB"), dtype=np.uint8) for path in frame_paths
+        ]
         gif_path = Path(output_path) if output_path else replay_dir / "replay.gif"
         ReplayRecorder.generate_gif(frames, gif_path, fps=fps)
         return gif_path
@@ -385,18 +375,10 @@ def _make_composite(
     target_height: int = 240,
 ) -> Image.Image:
     """Create a side-by-side composite of agent frames and overhead map."""
-    panels: list[Image.Image] = []
-    for frame in agent_frames:
-        img = Image.fromarray(frame).convert("RGB")
-        aspect = img.width / img.height if img.height > 0 else 1.0
-        new_w = max(1, int(target_height * aspect))
-        panels.append(img.resize((new_w, target_height), Image.Resampling.BILINEAR))
-
-    for frame in [overhead_frame, *(extra_frames or [])]:
-        panel_img = Image.fromarray(frame).convert("RGB")
-        panel_aspect = panel_img.width / panel_img.height if panel_img.height > 0 else 1.0
-        panel_w = max(1, int(target_height * panel_aspect))
-        panels.append(panel_img.resize((panel_w, target_height), Image.Resampling.BILINEAR))
+    panels = [
+        _resized_panel(frame, target_height=target_height)
+        for frame in [*agent_frames, overhead_frame, *(extra_frames or [])]
+    ]
 
     total_w = sum(p.width for p in panels)
     h = max(p.height for p in panels)
@@ -406,6 +388,23 @@ def _make_composite(
         out.paste(panel, (x, 0))
         x += panel.width
     return out
+
+
+def _resized_panel(frame: np.ndarray, *, target_height: int) -> Image.Image:
+    image = Image.fromarray(frame).convert("RGB")
+    aspect = image.width / image.height if image.height > 0 else 1.0
+    width = max(1, int(target_height * aspect))
+    return image.resize((width, target_height), Image.Resampling.BILINEAR)
+
+
+def _save_rgb_png(frame: np.ndarray, path: Path) -> None:
+    Image.fromarray(frame).save(str(path))
+
+
+def _rgb_array(frame: np.ndarray | Image.Image) -> np.ndarray:
+    if isinstance(frame, np.ndarray):
+        return frame
+    return np.asarray(frame.convert("RGB"), dtype=np.uint8)
 
 
 def _jsonify(obj: Any) -> Any:

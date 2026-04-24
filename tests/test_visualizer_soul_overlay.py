@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 from PIL import Image
 
-from roboclaws.core.visualizer import GameVisualizer, _SOUL_COLOURS
+from roboclaws.core.visualizer import _SOUL_COLOURS, GameVisualizer
 
 GRID_ROWS = 10
 GRID_COLS = 10
@@ -56,6 +55,7 @@ def test_agent_colour_falls_back_to_grey_for_unknown_label() -> None:
 
 def test_agent_colour_falls_back_to_palette_when_no_labels() -> None:
     from roboclaws.core.visualizer import _AGENT_COLOURS
+
     viz = _make_viz()
     assert viz._agent_colour(0) == _AGENT_COLOURS[0]
     assert viz._agent_colour(1) == _AGENT_COLOURS[1]
@@ -63,6 +63,7 @@ def test_agent_colour_falls_back_to_palette_when_no_labels() -> None:
 
 def test_agent_colour_palette_fallback_for_out_of_range_index() -> None:
     from roboclaws.core.visualizer import _AGENT_COLOURS
+
     viz = _make_viz(["aggressive"])
     # Agent 1 has no label → palette
     assert viz._agent_colour(1) == _AGENT_COLOURS[1]
@@ -97,12 +98,8 @@ def test_soul_trail_tinting_differs_from_default() -> None:
     positions = [(0, 0), (9, 9)]
     cells = {0: [(2, 2), (2, 3), (3, 2)], 1: [(6, 6), (6, 7), (7, 6)]}
 
-    img_default = viz_default.render_overhead_map(
-        agent_positions=positions, claimed_cells=cells
-    )
-    img_soul = viz_soul.render_overhead_map(
-        agent_positions=positions, claimed_cells=cells
-    )
+    img_default = viz_default.render_overhead_map(agent_positions=positions, claimed_cells=cells)
+    img_soul = viz_soul.render_overhead_map(agent_positions=positions, claimed_cells=cells)
 
     arr_default = np.asarray(img_default)
     arr_soul = np.asarray(img_soul)

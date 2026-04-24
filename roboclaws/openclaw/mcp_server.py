@@ -98,15 +98,15 @@ __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 # while LAN peers on the same subnet cannot reach the AI2-THOR engine.
 # Not configurable via env — only via explicit argument.
 #
-# NOTE: On Linux with Docker 29.x default bridge, `host.docker.internal`
-# cannot reach host loopback; callers on that topology must override to
-# host="0.0.0.0". See module docstring + examples/openclaw_nav_autonomous.py
-# for the rationale. `test_example_binds_to_all_interfaces_on_linux` in
-# tests/test_openclaw_nav_autonomous.py guards that override from being
-# "fixed" back to the default.
+# NOTE: On Linux with Docker 29.x default bridge, `host.docker.internal` cannot
+# reach host loopback; callers on that topology must override to `host="0.0.0.0"`.
+# See module docstring + examples/openclaw_nav_autonomous.py for the rationale.
+# `test_example_binds_to_all_interfaces_on_linux` guards that override.
 _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
 _STARTUP_TIMEOUT_S = 2.0
+_VIEW_VARIANT = "map-v2+chase"
+_VIEW_IMAGE_LABELS = tuple(image_labels_for_variant(_VIEW_VARIANT))
 
 # Maps per-variant image labels to the stable filenames the live viewer polls.
 _LABEL_TO_VIEWER_NAME: dict[str, str] = {
@@ -237,8 +237,8 @@ class RoboclawsMCPServer:
         agent_id: int,
         run_dir: Path,
         *,
-        host: str = "127.0.0.1",
-        port: int = 18788,
+        host: str = _DEFAULT_HOST,
+        port: int = _DEFAULT_PORT,
         snapshots_dir: Path | None = None,
         model_name: str | None = None,
         image_model: str | None = None,
@@ -380,10 +380,8 @@ class RoboclawsMCPServer:
     # ------------------------------------------------------------------
 
     def _do_observe(self, label: str = "") -> list:
-        request_payload: dict[str, Any] = {}
-        if label:
-            request_payload["label"] = label
-        self._write_trace(tool="observe", event="request", request=request_payload)
+        request_payload = {"label": label} if label else {}
+        self._write_tool_request("observe", request_payload)
         with self._controller_lock:
             agent_states = list(self.engine.get_all_agent_states())
             state = agent_states[self.agent_id]
@@ -413,8 +411,7 @@ class RoboclawsMCPServer:
             "step": self._total_moves,
             "budget_remaining": None,
             "human_message": human_message,
-            "view_variant": "map-v2+chase",
-            "image_labels": source_image_labels,
+            **self._view_metadata(source_image_labels),
         }
         bridge_result = None
         delivered_image_labels = source_image_labels
@@ -423,14 +420,13 @@ class RoboclawsMCPServer:
                 images=prompt_bundle.prompt_images,
                 image_labels=source_image_labels,
                 state=base_state_payload,
-                view_variant="map-v2+chase",
+                view_variant=_VIEW_VARIANT,
             )
             delivered_image_labels = ["vision_bridge"]
         bridge_model = bridge_result.bridge_model if bridge_result is not None else None
 
-        # Trace: keep JPEG-b64 frame fields identical to sim_server.py so the
-        # existing renderer keeps working. This is the additive-only rule in
-        # action — we carry the frozen key-set forward.
+        # Keep JPEG-b64 frame fields identical to sim_server.py so the existing
+        # renderer keeps working; this carries the frozen key-set forward.
         frame_payload = self._frame_capture_payload(
             state=state,
             prompt_bundle=prompt_bundle,
@@ -462,8 +458,7 @@ class RoboclawsMCPServer:
             "content_blocks": len(result),
             "state": self._state_payload(state),
             "human_message": human_message,
-            "view_variant": "map-v2+chase",
-            "image_labels": delivered_image_labels,
+            **self._view_metadata(delivered_image_labels),
             "observe_delivery": observe_delivery,
             "bridge_model": bridge_model,
             "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
@@ -472,9 +467,8 @@ class RoboclawsMCPServer:
         if label:
             response_payload["label"] = label
             response_payload["snapshot_paths"] = snapshot_paths
-        self._write_trace(tool="observe", event="response", response=response_payload)
-        # The labeled branch already refreshed latest.*.png using its (reused)
-        # encoded bytes — skip the redundant re-encode + re-write here.
+        self._write_tool_response("observe", response_payload)
+        # The labeled branch already refreshed latest.*.png; skip the redundant re-encode here.
         if snapshot_paths is None:
             self._write_latest_snapshots(prompt_bundle)
         return result
@@ -487,7 +481,7 @@ class RoboclawsMCPServer:
         request_payload: dict[str, Any] = {"direction": direction, "steps": steps}
         if normalized_reason is not None:
             request_payload["reason"] = normalized_reason
-        self._write_trace(tool="move", event="request", request=request_payload)
+        self._write_tool_request("move", request_payload)
 
         if direction not in NAVIGATION_ACTIONS:
             response = {
@@ -495,7 +489,7 @@ class RoboclawsMCPServer:
                 "error": "invalid direction",
                 "valid": list(NAVIGATION_ACTIONS),
             }
-            self._write_trace(tool="move", event="response", response=response)
+            self._write_tool_response("move", response)
             return response
 
         collisions_this_call = 0
@@ -553,9 +547,8 @@ class RoboclawsMCPServer:
         )
 
         human_message = self._pop_human_message()
-        # Synthesize a nudge exactly on the 3→5+ crossing so it fires once per
-        # blind streak (handles multi-step moves that jump the counter by >1).
-        # A real operator message always wins.
+        # Fire the synthetic nudge once per blind streak; a real operator
+        # message always wins.
         if human_message is None and pre_moves_since_observe < 5 and self._moves_since_observe >= 5:
             human_message = (
                 f"server: you've made {self._moves_since_observe} moves since your "
@@ -581,8 +574,7 @@ class RoboclawsMCPServer:
             "state": self._state_payload(state),
             "human_message": human_message,
             "step": self._total_moves,
-            "view_variant": "map-v2+chase",
-            "image_labels": list(image_labels_for_variant("map-v2+chase")),
+            **self._view_metadata(_VIEW_IMAGE_LABELS),
             "pose_delta": pose_delta,
             "visited_count_here": visited_count_here,
             "collisions": collisions_this_call,
@@ -591,11 +583,11 @@ class RoboclawsMCPServer:
         }
         if warning is not None:
             response["warning"] = warning
-        self._write_trace(tool="move", event="response", response=response)
+        self._write_tool_response("move", response)
         return response
 
     def _do_done(self, reason: str) -> dict[str, Any]:
-        self._write_trace(tool="done", event="request", request={"reason": reason})
+        self._write_tool_request("done", {"reason": reason})
         if self._done_reason is None:
             self._done_reason = reason
         self.done_event.set()
@@ -605,7 +597,7 @@ class RoboclawsMCPServer:
             "total_moves": self._total_moves,
             "elapsed_s": round(time.monotonic() - self._started, 3),
         }
-        self._write_trace(tool="done", event="response", response=response)
+        self._write_tool_response("done", response)
         return response
 
     def _sanitize_label(self, label: str) -> str:
@@ -667,6 +659,9 @@ class RoboclawsMCPServer:
                 "call roboclaws__observe before the next move to avoid blind navigation"
             )
         return ("reasoned_batch" if reason else "blind_batch"), None
+
+    def _view_metadata(self, image_labels: list[str] | tuple[str, ...]) -> dict[str, Any]:
+        return {"view_variant": _VIEW_VARIANT, "image_labels": list(image_labels)}
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -794,8 +789,7 @@ class RoboclawsMCPServer:
             "fpv": _encode_frame_jpeg_b64(state.frame),
             "overhead": _encode_frame_jpeg_b64(prompt_bundle.trace_overhead_frame),
             "agent_state": self._state_payload(state),
-            "view_variant": "map-v2+chase",
-            "image_labels": list(prompt_bundle.image_labels),
+            **self._view_metadata(prompt_bundle.image_labels),
         }
         payload["baseline_overhead"] = _encode_frame_jpeg_b64(prompt_bundle.raw_overhead_frame)
         payload["chase"] = _encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame)
@@ -855,6 +849,12 @@ class RoboclawsMCPServer:
             )
         return self._vision_bridge
 
+    def _write_tool_request(self, tool: str, request: dict[str, Any] | None = None) -> None:
+        self._write_trace(tool=tool, event="request", request=request or {})
+
+    def _write_tool_response(self, tool: str, response: dict[str, Any]) -> None:
+        self._write_trace(tool=tool, event="response", response=response)
+
     def _write_trace(self, *, tool: str, event: str, **data: Any) -> None:
         # WR-01 fix: gate writes against close(). The watchdog + stdin
         # threads in examples/openclaw_nav_autonomous.py join with a 0.2s
@@ -889,8 +889,8 @@ def make_roboclaws_mcp(
     agent_id: int,
     run_dir: Path,
     *,
-    host: str = "127.0.0.1",
-    port: int = 18788,
+    host: str = _DEFAULT_HOST,
+    port: int = _DEFAULT_PORT,
     snapshots_dir: Path | None = None,
     model_name: str | None = None,
     image_model: str | None = None,
@@ -900,8 +900,8 @@ def make_roboclaws_mcp(
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 
-    Defaults to `host=127.0.0.1` — see module docstring for threat-model
-    rationale. Pass `port=0` in tests to avoid binding a real port.
+    Defaults to `host=127.0.0.1` — see module docstring for threat-model rationale.
+    Pass `port=0` in tests to avoid binding a real port.
 
     `snapshots_dir`, if provided, enables the labeled-archive branch of
     `observe(label=...)`. The host side writes PNGs there; bootstrap bind-

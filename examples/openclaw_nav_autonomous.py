@@ -164,39 +164,38 @@ def _capture_gateway_diagnostics(
     diagnostics_dir = output_dir / "diagnostics"
     diagnostics_dir.mkdir(parents=True, exist_ok=True)
     files: dict[str, str] = {}
+    docker_exec = ["docker", "exec", container_name, "sh", "-lc"]
 
-    inspect_path = diagnostics_dir / "gateway.inspect.json"
-    if _write_capture(inspect_path, ["docker", "inspect", container_name]):
-        files["gateway_inspect"] = inspect_path.name
-
-    outer_log_path = diagnostics_dir / "gateway.docker.log"
-    if _write_capture(outer_log_path, ["docker", "logs", "--tail", "200", container_name]):
-        files["gateway_docker_log"] = outer_log_path.name
-
-    inner_log_path = diagnostics_dir / "gateway.inner.log"
-    inner_log_cmd = [
-        "docker",
-        "exec",
-        container_name,
-        "sh",
-        "-lc",
-        "LATEST=$(ls -1 /tmp/openclaw/openclaw-*.log 2>/dev/null | tail -n 1); "
-        'if [ -n "$LATEST" ]; then tail -n 200 "$LATEST"; else echo "<no inner log>"; fi',
+    capture_specs = [
+        ("gateway_inspect", "gateway.inspect.json", ["docker", "inspect", container_name], True),
+        (
+            "gateway_docker_log",
+            "gateway.docker.log",
+            ["docker", "logs", "--tail", "200", container_name],
+            True,
+        ),
+        (
+            "gateway_inner_log",
+            "gateway.inner.log",
+            docker_exec
+            + [
+                "LATEST=$(ls -1 /tmp/openclaw/openclaw-*.log 2>/dev/null | tail -n 1); "
+                'if [ -n "$LATEST" ]; then tail -n 200 "$LATEST"; else echo "<no inner log>"; fi'
+            ],
+            True,
+        ),
+        (
+            "gateway_workspace_state",
+            "gateway.workspace-state.txt",
+            docker_exec
+            + [f"ls -R /home/node/.openclaw/workspaces/agent-{agent_id}/state 2>&1 || true"],
+            False,
+        ),
     ]
-    if _write_capture(inner_log_path, inner_log_cmd):
-        files["gateway_inner_log"] = inner_log_path.name
-
-    workspace_state_path = diagnostics_dir / "gateway.workspace-state.txt"
-    workspace_state_cmd = [
-        "docker",
-        "exec",
-        container_name,
-        "sh",
-        "-lc",
-        f"ls -R /home/node/.openclaw/workspaces/agent-{agent_id}/state 2>&1 || true",
-    ]
-    _write_capture(workspace_state_path, workspace_state_cmd)
-    files["gateway_workspace_state"] = workspace_state_path.name
+    for key, filename, cmd, require_success in capture_specs:
+        path = diagnostics_dir / filename
+        if _write_capture(path, cmd) or not require_success:
+            files[key] = path.name
 
     return files
 
@@ -267,9 +266,7 @@ def run_autonomous_navigation(
             vision_bridge_model=runtime_config["vision_bridge_model"],
         )
         mcp_server.run_in_thread()
-        # Runtime-event key 'sim_server_metrics' is frozen for schema compat with
-        # tests/test_openclaw_nav_autonomous.py and scripts/render_autonomous_replay.py.
-        # The underlying server is now MCP, not HTTP.
+        # 'sim_server_metrics' stays frozen for report/tests schema compat.
         mcp_server.write_runtime_event(
             "run_started",
             scene=scene,
@@ -359,12 +356,13 @@ def run_autonomous_navigation(
                 wallclock_elapsed=entry.wallclock_s,
             )
         bridge_metrics = _metrics_dict(bridge.get_last_run_metrics())
+        sim_server_metrics = mcp_server.snapshot_metrics()
         mcp_server.write_runtime_event(
             "start_run_end",
             terminated_by=run_result.terminated_by,
             wallclock_s=run_result.wallclock_s,
             bridge_metrics=bridge_metrics,
-            sim_server_metrics=mcp_server.snapshot_metrics(),
+            sim_server_metrics=sim_server_metrics,
         )
         log.info(
             "start_run returned: terminated_by=%s wallclock=%.1fs",
@@ -394,10 +392,8 @@ def run_autonomous_navigation(
                 "observe_delivery": runtime_config["observe_delivery"],
                 "vision_bridge_model": runtime_config["vision_bridge_model"],
                 "bridge_metrics": bridge_metrics,
-                # Key 'sim_server_metrics' kept verbatim for report.html +
-                # render_autonomous_replay.py schema compat; backing data
-                # comes from mcp_server.snapshot_metrics() (same 8-key contract).
-                "sim_server_metrics": mcp_server.snapshot_metrics(),
+                # Key kept verbatim for report/schema compat; backing data is MCP metrics.
+                "sim_server_metrics": sim_server_metrics,
                 "transcript_source": run_result.transcript_source,
                 "transcript_messages": [
                     entry.to_dict() for entry in run_result.transcript_messages

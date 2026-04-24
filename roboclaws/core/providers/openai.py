@@ -15,31 +15,70 @@ from roboclaws.core.vlm import (
     _record_call_success,
 )
 
+_IMPORT_ERROR = "openai and instructor packages required: pip install openai instructor"
 
-class OpenAIProvider:
-    """GPT-4o / GPT-4o-mini via the OpenAI SDK with instructor structured output."""
 
-    def __init__(
-        self,
-        model: str = "gpt-4o-mini",
-        api_key: str | None = None,
-        max_tokens: int = 256,
-    ) -> None:
+def _parse_mimo_message(message: Any) -> dict[str, str]:
+    tool_calls = getattr(message, "tool_calls", None) or []
+    if tool_calls:
+        args = json.loads(tool_calls[0].function.arguments)
+        reasoning = args.get("reasoning", getattr(message, "reasoning_content", "") or "")
+        action = args.get("action", "MoveAhead")
+    else:
+        content = message.content or ""
         try:
-            import instructor
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            reasoning = content[:200]
+            action = "MoveAhead"
+        else:
+            reasoning = parsed.get("reasoning", "")
+            action = parsed.get("action", "MoveAhead")
+
+    action_text = str(action)
+    if action_text not in NAVIGATION_ACTIONS:
+        action_text = "MoveAhead"
+    return {"reasoning": str(reasoning), "action": action_text}
+
+
+class _OpenAIBase:
+    def _init_provider(
+        self,
+        *,
+        provider_name: str,
+        model: str,
+        api_key_env: str,
+        api_key: str | None,
+        max_tokens: int,
+        base_url: str | None = None,
+        use_instructor: bool = True,
+    ) -> Any:
+        try:
             from openai import OpenAI  # type: ignore[import-untyped]
         except ImportError as exc:
-            raise ImportError(
-                "openai and instructor packages required: pip install openai instructor"
-            ) from exc
+            raise ImportError(_IMPORT_ERROR) from exc
+
+        client_kwargs = {"api_key": api_key or os.environ[api_key_env]}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        raw_client = OpenAI(**client_kwargs)
+
         self._AgentAction = _build_agent_action_model()
-        raw_client = OpenAI(api_key=api_key or os.environ["OPENAI_API_KEY"])
-        self._client = instructor.from_openai(raw_client)
+        if use_instructor:
+            try:
+                import instructor
+            except ImportError as exc:
+                raise ImportError(_IMPORT_ERROR) from exc
+            self._client = instructor.from_openai(raw_client)
+        else:
+            self._client = raw_client
+
         self.model = model
         self._max_tokens = max_tokens
         self._cost = 0.0
         self._cost_table = _COST_PER_M.get(model, {"input": 0.0, "output": 0.0})
-        self._status = ProviderStatus(provider_name="openai", model=model)
+        self._status = ProviderStatus(provider_name=provider_name, model=model)
+        return raw_client
 
     @property
     def cumulative_cost(self) -> float:
@@ -52,31 +91,57 @@ class OpenAIProvider:
         return self._status.to_dict()
 
     def _build_messages(self, images: list[str], state: dict[str, Any]) -> list[dict[str, Any]]:
-        content: list[dict[str, Any]] = []
-        for img_b64 in images:
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{img_b64}",
-                        "detail": "low",
-                    },
-                }
-            )
+        content = [
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}", "detail": "low"},
+            }
+            for img_b64 in images
+        ]
         content.append({"type": "text", "text": json.dumps(state, indent=2)})
         return [{"role": "user", "content": content}]
+
+    def _messages_with_system(
+        self, images: list[str], state: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return [{"role": "system", "content": _SYSTEM_PROMPT}, *self._build_messages(images, state)]
+
+    def _record_usage(self, usage: Any) -> None:
+        if not usage:
+            return
+        self._cost += (
+            int(getattr(usage, "prompt_tokens", 0) or 0) / 1_000_000 * self._cost_table["input"]
+            + int(getattr(usage, "completion_tokens", 0) or 0)
+            / 1_000_000
+            * self._cost_table["output"]
+        )
+
+
+class OpenAIProvider(_OpenAIBase):
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+        api_key: str | None = None,
+        max_tokens: int = 256,
+    ) -> None:
+        self._init_provider(
+            provider_name="openai",
+            model=model,
+            api_key_env="OPENAI_API_KEY",
+            api_key=api_key,
+            max_tokens=max_tokens,
+        )
 
     def get_action(
         self,
         images: list[str],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        messages = self._build_messages(images, state)
         started = time.monotonic()
         try:
             result, response = self._client.chat.completions.create_with_completion(
                 model=self.model,
-                messages=[{"role": "system", "content": _SYSTEM_PROMPT}] + messages,  # type: ignore[arg-type]
+                messages=self._messages_with_system(images, state),  # type: ignore[arg-type]
                 max_tokens=self._max_tokens,
                 response_model=self._AgentAction,
             )
@@ -87,100 +152,59 @@ class OpenAIProvider:
                 error=exc,
             )
             raise
-        _record_call_success(
-            self._status,
-            duration_seconds=time.monotonic() - started,
-        )
-        usage = response.usage
-        if usage:
-            self._cost += (
-                usage.prompt_tokens / 1_000_000 * self._cost_table["input"]
-                + usage.completion_tokens / 1_000_000 * self._cost_table["output"]
-            )
+
+        _record_call_success(self._status, duration_seconds=time.monotonic() - started)
+        self._record_usage(response.usage)
         return {"reasoning": result.reasoning, "action": result.action}
 
 
 class NvidiaProvider(OpenAIProvider):
-    """NVIDIA NIM via the OpenAI-compatible chat-completions surface."""
-
     def __init__(
         self,
         model: str = "meta/llama-4-maverick-17b-128e-instruct",
         api_key: str | None = None,
         max_tokens: int = 256,
     ) -> None:
-        try:
-            import instructor
-            from openai import OpenAI  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise ImportError(
-                "openai and instructor packages required: pip install openai instructor"
-            ) from exc
-        self._AgentAction = _build_agent_action_model()
-        raw_client = OpenAI(
-            api_key=api_key or os.environ["NVIDIA_API_KEY"],
+        self._init_provider(
+            provider_name="nvidia",
+            model=model,
+            api_key_env="NVIDIA_API_KEY",
+            api_key=api_key,
+            max_tokens=max_tokens,
             base_url="https://integrate.api.nvidia.com/v1",
         )
-        self._client = instructor.from_openai(raw_client)
-        self.model = model
-        self._max_tokens = max_tokens
-        self._cost = 0.0
-        self._cost_table = _COST_PER_M.get(model, {"input": 0.0, "output": 0.0})
-        self._status = ProviderStatus(provider_name="nvidia", model=model)
 
 
 class MimoProvider(NvidiaProvider):
-    """MiMo via the OpenAI-compatible chat-completions surface (token-plan).
-
-    Uses forced tool_choice instead of instructor so the model emits proper
-    tool_calls JSON rather than its native <tool_call> XML format.
-    max_tokens defaults to 2048 to accommodate the model's reasoning chain.
-    """
-
     def __init__(
         self,
         model: str = "mimo-v2-omni",
         api_key: str | None = None,
         max_tokens: int = 2048,
     ) -> None:
-        try:
-            import instructor
-            from openai import OpenAI  # type: ignore[import-untyped]
-        except ImportError as exc:
-            raise ImportError(
-                "openai and instructor packages required: pip install openai instructor"
-            ) from exc
-        self._AgentAction = _build_agent_action_model()
-        raw_client = OpenAI(
-            api_key=api_key or os.environ["MIMO_TP_KEY"],
+        self._raw_client = self._init_provider(
+            provider_name="mimo",
+            model=model,
+            api_key_env="MIMO_TP_KEY",
+            api_key=api_key,
+            max_tokens=max_tokens,
             base_url="https://token-plan-cn.xiaomimimo.com/v1",
+            use_instructor=False,
         )
-        self._raw_client = raw_client
-        self._client = instructor.from_openai(raw_client)
-        self.model = model
-        self._max_tokens = max_tokens
-        self._cost = 0.0
-        self._cost_table = _COST_PER_M.get(model, {"input": 0.0, "output": 0.0})
-        self._status = ProviderStatus(provider_name="mimo", model=model)
 
     def get_action(
         self,
         images: list[str],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        messages = self._build_messages(images, state)
-        tool_schema = {
-            "type": "function",
-            "function": {
-                "name": "AgentAction",
-                "parameters": self._AgentAction.model_json_schema(),
-            },
-        }
+        parameters = self._AgentAction.model_json_schema()
+        function_schema = {"name": "AgentAction", "parameters": parameters}
+        tool_schema = {"type": "function", "function": function_schema}
         started = time.monotonic()
         try:
             response = self._raw_client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "system", "content": _SYSTEM_PROMPT}] + messages,  # type: ignore[arg-type]
+                messages=self._messages_with_system(images, state),  # type: ignore[arg-type]
                 max_tokens=self._max_tokens,
                 tools=[tool_schema],
                 tool_choice={"type": "function", "function": {"name": "AgentAction"}},
@@ -192,31 +216,7 @@ class MimoProvider(NvidiaProvider):
                 error=exc,
             )
             raise
+
         _record_call_success(self._status, duration_seconds=time.monotonic() - started)
-
-        msg = response.choices[0].message
-        tool_calls = msg.tool_calls or []
-        if tool_calls:
-            args = json.loads(tool_calls[0].function.arguments)
-            action = args.get("action", "MoveAhead")
-            reasoning = args.get("reasoning", getattr(msg, "reasoning_content", "") or "")
-        else:
-            content = msg.content or ""
-            try:
-                parsed = json.loads(content)
-                action = parsed.get("action", "MoveAhead")
-                reasoning = parsed.get("reasoning", "")
-            except json.JSONDecodeError:
-                action = "MoveAhead"
-                reasoning = content[:200]
-
-        if action not in NAVIGATION_ACTIONS:
-            action = "MoveAhead"
-
-        usage = response.usage
-        if usage:
-            self._cost += (
-                usage.prompt_tokens / 1_000_000 * self._cost_table["input"]
-                + usage.completion_tokens / 1_000_000 * self._cost_table["output"]
-            )
-        return {"reasoning": reasoning, "action": action}
+        self._record_usage(response.usage)
+        return _parse_mimo_message(response.choices[0].message)

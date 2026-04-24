@@ -169,18 +169,22 @@ class _SessionStoreReader:
             transcript_messages=transcript_messages,
         )
 
-    def _read_index(self, agent_name: str) -> list[dict[str, Any]]:
-        path = f"/home/node/.openclaw/agents/{agent_name}/sessions/sessions.json"
+    def _read_container_text(self, path: str) -> str:
         result = subprocess.run(
             ["docker", "exec", _GATEWAY_CONTAINER, "cat", path],
             check=False,
             capture_output=True,
             text=True,
         )
-        if result.returncode != 0 or not result.stdout.strip():
+        return result.stdout if result.returncode == 0 and result.stdout.strip() else ""
+
+    def _read_index(self, agent_name: str) -> list[dict[str, Any]]:
+        path = f"/home/node/.openclaw/agents/{agent_name}/sessions/sessions.json"
+        stdout = self._read_container_text(path)
+        if not stdout:
             return []
         try:
-            payload = json.loads(result.stdout)
+            payload = json.loads(stdout)
         except json.JSONDecodeError:
             return []
         if not isinstance(payload, dict):
@@ -202,17 +206,12 @@ class _SessionStoreReader:
         session_file: str,
         started_wallclock: float,
     ) -> list[TranscriptMessage]:
-        result = subprocess.run(
-            ["docker", "exec", _GATEWAY_CONTAINER, "cat", session_file],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
+        stdout = self._read_container_text(session_file)
+        if not stdout:
             return []
 
         transcript_messages: list[TranscriptMessage] = []
-        for line in result.stdout.splitlines():
+        for line in stdout.splitlines():
             try:
                 entry = json.loads(line)
             except json.JSONDecodeError:
@@ -799,15 +798,16 @@ def _parse_action(content: str) -> dict[str, Any]:
         if start != -1 and end != -1 and end > start:
             stripped = stripped[start : end + 1]
 
+    fallback = {"reasoning": content.strip()[:500], "action": "MoveAhead"}
     try:
         parsed = json.loads(stripped)
     except json.JSONDecodeError:
         _warn_malformed(content)
-        return {"reasoning": content.strip()[:500], "action": "MoveAhead"}
+        return fallback
 
     if not isinstance(parsed, dict):
         _warn_malformed(content)
-        return {"reasoning": content.strip()[:500], "action": "MoveAhead"}
+        return fallback
 
     action = str(parsed.get("action", "MoveAhead"))
     reasoning = str(parsed.get("reasoning", ""))

@@ -146,6 +146,11 @@ def _build_summary_bar(
     provider_status: dict[str, Any],
 ) -> str:
     """Return the ``<div class="summary-bar">`` HTML fragment."""
+
+    def badge(label: str, value: Any) -> str:
+        safe_value = _html.escape(str(value))
+        return f'<span class="badge">{_html.escape(label)}: <strong>{safe_value}</strong></span>'
+
     game = metadata.get("game", "unknown")
     agent_count = int(metadata.get("agent_count", 1))
     total_steps = metadata.get("total_steps", 0)
@@ -162,34 +167,33 @@ def _build_summary_bar(
     else:
         scores_str = "\u2014"
 
-    provider_badges = ""
+    badges = [
+        badge("Game", game),
+        badge("Scene", scene),
+        badge("Agents", agent_count),
+        badge("Steps", total_steps),
+        badge("Duration", f"{duration:.1f}s"),
+        badge("VLM cost", f"${vlm_cost:.6f}"),
+        badge("End", termination),
+        badge("Scores", scores_str),
+    ]
     if provider_status:
-        provider_name = _html.escape(str(provider_status.get("provider_name") or "\u2014"))
-        provider_model = _html.escape(str(provider_status.get("model") or "\u2014"))
+        provider_name = provider_status.get("provider_name") or "\u2014"
+        provider_model = provider_status.get("model") or "\u2014"
         retry_events = int(provider_status.get("retry_events") or 0)
         transient_errors = int(provider_status.get("transient_errors") or 0)
         failed_calls = int(provider_status.get("failed_calls") or 0)
-        provider_badges = (
-            f'<span class="badge">Provider: <strong>{provider_name}</strong></span>'
-            f'<span class="badge">Model: <strong>{provider_model}</strong></span>'
-            f'<span class="badge">Retries: <strong>{retry_events}</strong></span>'
-            f'<span class="badge">Transient errors: <strong>{transient_errors}</strong></span>'
-            f'<span class="badge">Failed calls: <strong>{failed_calls}</strong></span>'
+        badges.extend(
+            [
+                badge("Provider", provider_name),
+                badge("Model", provider_model),
+                badge("Retries", retry_events),
+                badge("Transient errors", transient_errors),
+                badge("Failed calls", failed_calls),
+            ]
         )
 
-    return (
-        f'<div class="summary-bar">'
-        f'<span class="badge">Game: <strong>{_html.escape(str(game))}</strong></span>'
-        f'<span class="badge">Scene: <strong>{_html.escape(str(scene))}</strong></span>'
-        f'<span class="badge">Agents: <strong>{agent_count}</strong></span>'
-        f'<span class="badge">Steps: <strong>{total_steps}</strong></span>'
-        f'<span class="badge">Duration: <strong>{duration:.1f}s</strong></span>'
-        f'<span class="badge">VLM cost: <strong>${vlm_cost:.6f}</strong></span>'
-        f'<span class="badge">End: <strong>{_html.escape(str(termination))}</strong></span>'
-        f'<span class="badge">Scores: <strong>{_html.escape(scores_str)}</strong></span>'
-        f"{provider_badges}"
-        f"</div>"
-    )
+    return f'<div class="summary-bar">{"".join(badges)}</div>'
 
 
 def _collect_frame_data(
@@ -204,6 +208,11 @@ def _collect_frame_data(
     frame_data: list[dict[str, Any]] = []
     latest_decisions: dict[int, dict[str, Any]] = {}
     scene_panel_labels: list[str] = []
+
+    def remember_scene_label(label: str) -> None:
+        if label not in scene_panel_labels:
+            scene_panel_labels.append(label)
+
     for rec in steps_data:
         step = rec.get("step", 0)
         acting_agent = int(rec.get("agent_id", 0))
@@ -216,8 +225,7 @@ def _collect_frame_data(
         scene_panel_map = {
             overhead_label: _img_to_b64(replay_dir / "overhead" / f"{tag}_overhead.png")
         }
-        if overhead_label not in scene_panel_labels:
-            scene_panel_labels.append(overhead_label)
+        remember_scene_label(overhead_label)
 
         for extra_view in rec.get("extra_views", []):
             label = str(extra_view.get("label") or "view")
@@ -225,8 +233,7 @@ def _collect_frame_data(
             if not rel_path:
                 continue
             scene_panel_map[label] = _img_to_b64(replay_dir / str(rel_path))
-            if label not in scene_panel_labels:
-                scene_panel_labels.append(label)
+            remember_scene_label(label)
 
         vlm_response = rec.get("vlm_response", {})
         provider_status_for_step = rec.get("provider_status", {}) or {}
@@ -258,23 +265,17 @@ def _collect_frame_data(
             }
         )
 
-    if not scene_panel_labels:
-        scene_panel_labels = ["overhead"]
-
-    for frame in frame_data:
-        scene_panel_map = frame.pop("_scene_panel_map")
-        frame["scene_panels"] = [scene_panel_map.get(label, "") for label in scene_panel_labels]
+    scene_panel_labels = scene_panel_labels or ["overhead"]
 
     display_panels = _build_display_panels(agent_count, scene_panel_labels)
     for frame in frame_data:
-        display_images: list[str] = []
-        for spec in display_panels:
-            if spec["kind"] == "agent":
-                display_images.append(frame["agent_imgs"][spec["index"]])
-            else:
-                scene_panel_map = dict(zip(scene_panel_labels, frame["scene_panels"], strict=False))
-                display_images.append(scene_panel_map.get(spec["key"], ""))
-        frame["display_panels"] = display_images
+        scene_panel_map = frame.pop("_scene_panel_map")
+        frame["display_panels"] = [
+            frame["agent_imgs"][spec["index"]]
+            if spec["kind"] == "agent"
+            else scene_panel_map.get(spec["key"], "")
+            for spec in display_panels
+        ]
 
     return frame_data, display_panels
 
@@ -403,6 +404,10 @@ def _build_viewer_html(
 
 def _build_vlm_log_html(steps_data: list[dict[str, Any]]) -> str:
     """Return the VLM reasoning log HTML fragment (``<details>`` items or placeholder)."""
+
+    def details_block(title: str, body: str) -> str:
+        return f"<details><summary>{_html.escape(title)}</summary>{body}</details>"
+
     vlm_items: list[str] = []
     for rec in steps_data:
         step = rec.get("step", "?")
@@ -412,19 +417,15 @@ def _build_vlm_log_html(steps_data: list[dict[str, Any]]) -> str:
         reasoning = _html.escape(str(vlm_resp.get("reasoning", "")))
         prompt_json = _html.escape(json.dumps(rec.get("vlm_prompt_state", {}), indent=2))
         provider_json = _html.escape(json.dumps(rec.get("provider_status", {}), indent=2))
-        provider_html = ""
+        details_html = [details_block("Prompt state", f"<pre>{prompt_json}</pre>")]
         if rec.get("provider_status"):
-            provider_html = (
-                f"<details><summary>Provider status</summary><pre>{provider_json}</pre></details>"
-            )
+            details_html.append(details_block("Provider status", f"<pre>{provider_json}</pre>"))
         vlm_items.append(
             f"<details>"
             f"<summary>Step {step} — agent {agent_id} — {action}</summary>"
             f'<div class="vlm-entry">'
             f"<p><strong>Reasoning:</strong> {reasoning}</p>"
-            f"<details><summary>Prompt state</summary>"
-            f"<pre>{prompt_json}</pre></details>"
-            f"{provider_html}"
+            f"{''.join(details_html)}"
             f"</div></details>"
         )
     return "\n".join(vlm_items) if vlm_items else "<p>No VLM data recorded.</p>"
@@ -486,11 +487,6 @@ def _format_panel_label(label: str) -> str:
     return " ".join(pretty)
 
 
-def _normalize_panel_key(label: str) -> str:
-    """Return a stable normalized key for viewer layout and trim rules."""
-    return str(label).replace("-", "_").strip("_ ").lower()
-
-
 def _build_display_panels(
     agent_count: int,
     scene_panel_labels: list[str],
@@ -513,7 +509,10 @@ def _build_display_panels(
     preferred_scene_order = {"chase": 0, "map_v2": 1, "overhead": 2}
     for label in sorted(
         scene_panel_labels,
-        key=lambda value: (preferred_scene_order.get(_normalize_panel_key(value), 50), str(value)),
+        key=lambda value: (
+            preferred_scene_order.get(str(value).replace("-", "_").strip("_ ").lower(), 50),
+            str(value),
+        ),
     ):
         panels.append({"kind": "scene", "key": label, "label": _format_panel_label(label)})
     return panels
@@ -776,7 +775,8 @@ def _img_to_b64(path: Path) -> str:
     """Return a base64 PNG data URI for *path*, or empty string if missing."""
     if not path.exists():
         return ""
-    image = Image.open(path).convert("RGB")
+    with Image.open(path) as opened:
+        image = opened.convert("RGB")
     if _should_trim_panel_border(path):
         image = _trim_uniform_border(image)
     buffer = io.BytesIO()

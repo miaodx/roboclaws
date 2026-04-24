@@ -217,23 +217,30 @@ class TerritoryGame:
                     "target_status": target_status,
                     "would_claim_new_cell": target_status == "unclaimed",
                 }
-                continue
-
-            facing_after = _rotation_after_turn(current_state.rotation, action)
-            front_cell = _move_target_cell(current_cell, facing_after, "MoveAhead")
-            front_status = self._cell_status(
-                cell=front_cell,
-                agent_id=agent_id,
-                occupied_cells=occupied_cells,
-            )
-            action_hints[action] = {
-                "kind": "rotate",
-                "facing_after_degrees": int(round(float(facing_after.get("y", 0.0)))) % 360,
-                "front_cell_after_turn": list(front_cell),
-                "front_cell_status": front_status,
-            }
+            else:
+                facing_after = _rotation_after_turn(current_state.rotation, action)
+                front_cell = _move_target_cell(current_cell, facing_after, "MoveAhead")
+                front_status = self._cell_status(
+                    cell=front_cell,
+                    agent_id=agent_id,
+                    occupied_cells=occupied_cells,
+                )
+                action_hints[action] = {
+                    "kind": "rotate",
+                    "facing_after_degrees": int(round(float(facing_after.get("y", 0.0)))) % 360,
+                    "front_cell_after_turn": list(front_cell),
+                    "front_cell_status": front_status,
+                }
 
         return action_hints
+
+    def _all_reachable_cells_claimed(self) -> bool:
+        return self._reachable_cells is not None and len(self._claimed) >= len(
+            self._reachable_cells
+        )
+
+    def _all_seen_cells_claimed(self) -> bool:
+        return bool(self._all_seen) and len(self._claimed) >= len(self._all_seen)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -320,14 +327,10 @@ class TerritoryGame:
             self._blocking_events += 1
 
         # Claim new position on success; track stale progress
-        newly_claimed = False
-        if new_state.last_action_success:
-            newly_claimed = self._try_claim(agent_id, new_state.position)
-
-        if newly_claimed:
-            self._stale_steps = 0
-        else:
-            self._stale_steps += 1
+        newly_claimed = new_state.last_action_success and self._try_claim(
+            agent_id, new_state.position
+        )
+        self._stale_steps = 0 if newly_claimed else self._stale_steps + 1
 
         self._step_count += 1
         self._current_agent = (self._current_agent + 1) % self.engine.agent_count
@@ -351,18 +354,14 @@ class TerritoryGame:
             return True
         if self._reachable_cells is not None:
             # Ground-truth available: terminate when every reachable cell is claimed
-            if self._reachable_cells and len(self._claimed) >= len(self._reachable_cells):
+            if self._reachable_cells and self._all_reachable_cells_claimed():
                 return True
             # Also terminate if agents are stuck for 2 full rounds
             if self._stale_steps >= 2 * self.engine.agent_count:
                 return True
         else:
             # Fallback: terminate when all seen cells claimed and stale for one round
-            if (
-                self._all_seen
-                and len(self._claimed) >= len(self._all_seen)
-                and self._stale_steps >= self.engine.agent_count
-            ):
+            if self._all_seen_cells_claimed() and self._stale_steps >= self.engine.agent_count:
                 return True
         return False
 
@@ -386,13 +385,9 @@ class TerritoryGame:
             reason = "time_limit"
         elif self._step_count >= self.max_steps:
             reason = "max_steps"
-        elif self._reachable_cells is not None and len(self._claimed) >= len(self._reachable_cells):
+        elif self._all_reachable_cells_claimed():
             reason = "all_cells_claimed"
-        elif (
-            self._reachable_cells is None
-            and self._all_seen
-            and len(self._claimed) >= len(self._all_seen)
-        ):
+        elif self._reachable_cells is None and self._all_seen_cells_claimed():
             reason = "all_cells_claimed"
         else:
             reason = "stale"

@@ -98,9 +98,7 @@ def extract_transcript_entries(
             {
                 "ts": float(entry.get("wallclock_s", 0.0)),
                 "source": str(
-                    entry.get("source")
-                    or run_result.get("transcript_source")
-                    or "unknown"
+                    entry.get("source") or run_result.get("transcript_source") or "unknown"
                 ),
                 "content": content,
                 "is_final": bool(entry.get("is_final", False)),

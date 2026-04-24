@@ -116,9 +116,10 @@ def run_stream_probe(
 
     with client.stream("POST", url, json=payload, timeout=timeout) as response:
         response.raise_for_status()
-        with raw_path.open("w", encoding="utf-8") as raw_fp, parsed_path.open(
-            "w", encoding="utf-8"
-        ) as parsed_fp:
+        with (
+            raw_path.open("w", encoding="utf-8") as raw_fp,
+            parsed_path.open("w", encoding="utf-8") as parsed_fp,
+        ):
             for line in response.iter_lines():
                 raw_fp.write(line + "\n")
                 if not line.startswith("data:"):

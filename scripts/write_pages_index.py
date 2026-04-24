@@ -162,7 +162,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument(
         "--include-openclaw",
         action="store_true",
-        help="Include OpenClaw tiles (auto-detected from site_dir/openclaw/{demo,territory,coverage}/)",
+        help=(
+            "Include OpenClaw tiles (auto-detected from "
+            "site_dir/openclaw/{demo,territory,coverage}/)"
+        ),
     )
     args = p.parse_args(argv)
     args.site_dir.mkdir(parents=True, exist_ok=True)

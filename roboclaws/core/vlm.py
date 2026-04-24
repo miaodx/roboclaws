@@ -310,12 +310,7 @@ def load_agent_souls(
     if not souls_env:
         return [], {}
 
-    if ":" in souls_env:
-        raw_map = dict(e.split(":", 1) for e in souls_env.split(",") if ":" in e)
-        labels = [raw_map.get(f"agent-{i}", "default") for i in range(agent_count)]
-    else:
-        entries = souls_env.split(",")
-        labels = [entries[i] if i < len(entries) else "default" for i in range(agent_count)]
+    labels = _parse_soul_labels(souls_env, agent_count)
 
     contents: dict[int, str] = {}
     for agent_id, soul_name in enumerate(labels):
@@ -326,9 +321,14 @@ def load_agent_souls(
     return labels, contents
 
 
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
+def _parse_soul_labels(souls_env: str, agent_count: int) -> list[str]:
+    if ":" in souls_env:
+        raw_map = dict(entry.split(":", 1) for entry in souls_env.split(",") if ":" in entry)
+        return [raw_map.get(f"agent-{idx}", "default") for idx in range(agent_count)]
+
+    entries = souls_env.split(",")
+    return [entries[idx] if idx < len(entries) else "default" for idx in range(agent_count)]
+
 
 _MODEL_ALIASES: dict[str, str] = {
     "mock": "mock",
@@ -354,36 +354,27 @@ _MODEL_ALIASES: dict[str, str] = {
     "mimo-v2.5": "mimo-v2.5",
 }
 
+_PROVIDER_CLASSES: dict[str, type[Any]] = {
+    "mock": MockProvider,
+    "gpt-4o": OpenAIProvider,
+    "gpt-4o-mini": OpenAIProvider,
+    "kimi-k2-5": KimiProvider,
+    "kimi-k2.6": KimiProvider,
+    "kimi-for-coding": KimiCodingProvider,
+    "claude-3-5-sonnet-20241022": AnthropicProvider,
+    "claude-3-haiku-20240307": AnthropicProvider,
+    "meta/llama-4-maverick-17b-128e-instruct": NvidiaProvider,
+    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": NvidiaProvider,
+    "mimo-v2-omni": MimoProvider,
+    "mimo-v2.5-pro": MimoProvider,
+    "mimo-v2.5": MimoProvider,
+}
+
 
 def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
-    """Map a --model CLI flag to a provider instance.
-
-    Args:
-        model: One of "mock", "gpt-4o", "gpt-4o-mini", "kimi", "kimi-coding",
-               "anthropic", "nvidia", or a full model name like
-               "claude-3-5-sonnet-20241022".
-        **kwargs: Forwarded to the provider constructor.
-
-    Returns:
-        A VLMProvider instance.
-    """
+    """Map a ``--model`` CLI flag to a provider instance."""
     canonical = _MODEL_ALIASES.get(model)
     if canonical is None:
         raise ValueError(f"Unknown model: {model!r}. Choose from {list(_MODEL_ALIASES)}")
-    if canonical == "mock":
-        return MockProvider(**kwargs)
-    if canonical in ("gpt-4o", "gpt-4o-mini"):
-        return OpenAIProvider(model=canonical, **kwargs)
-    if canonical in (
-        "meta/llama-4-maverick-17b-128e-instruct",
-        "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
-    ):
-        return NvidiaProvider(model=canonical, **kwargs)
-    if canonical in ("mimo-v2-omni", "mimo-v2.5-pro", "mimo-v2.5"):
-        return MimoProvider(model=canonical, **kwargs)
-    if canonical.startswith("claude"):
-        return AnthropicProvider(model=canonical, **kwargs)
-    if canonical == "kimi-for-coding":
-        return KimiCodingProvider(model=canonical, **kwargs)
-    # kimi-k2-5 or kimi-k2.6 (anthropic-messages path)
-    return KimiProvider(model=canonical, **kwargs)
+    provider_class = _PROVIDER_CLASSES[canonical]
+    return provider_class(**({} if canonical == "mock" else {"model": canonical}), **kwargs)
