@@ -88,9 +88,7 @@ def world_to_viz(
     grid_cols: int = _DEFAULT_GRID_COLS,
 ) -> tuple[int, int]:
     """Map a world-grid cell to a centred visualizer ``(row, col)`` cell."""
-    center_row = grid_rows // 2
-    center_col = grid_cols // 2
-    return (center_row + (iz - origin_iz), center_col + (ix - origin_ix))
+    return (grid_rows // 2 + (iz - origin_iz), grid_cols // 2 + (ix - origin_ix))
 
 
 def in_bounds(
@@ -115,8 +113,7 @@ class NavigationViewContext:
     overhead_background: np.ndarray | None = None
     overhead_camera_pose: dict[str, Any] | None = None
     visited_world: set[WorldCell] = field(default_factory=set)
-    # Ordered path history per agent: path_history[i] is the sequence of
-    # world cells agent i has visited, in order. Used to draw a trail on the map.
+    # Ordered path history per agent used to draw trails on the map.
     path_history: list[list[WorldCell]] = field(default_factory=list)
 
 
@@ -131,6 +128,13 @@ class NavigationPromptBundle:
     agent_positions_world: list[WorldCell]
     structured_overhead_frame: np.ndarray | None = None
     chase_cam_frame: np.ndarray | None = None
+
+
+def _optional_engine_value(engine: Any, getter_name: str) -> Any | None:
+    try:
+        return getattr(engine, getter_name)()
+    except Exception:  # noqa: BLE001 - mock engines may omit the camera
+        return None
 
 
 def make_navigation_view_context(
@@ -152,14 +156,8 @@ def make_navigation_view_context(
         reachable_cells,
         (pos_to_world_idx(state.position) for state in initial_states),
     )
-    try:
-        overhead_background: np.ndarray | None = engine.get_overhead_frame()
-    except Exception:  # noqa: BLE001 - mock engines may omit the camera
-        overhead_background = None
-    try:
-        overhead_camera_pose: dict[str, Any] | None = engine.get_overhead_camera_properties()
-    except Exception:  # noqa: BLE001 - mock engines may omit the camera
-        overhead_camera_pose = None
+    overhead_background = _optional_engine_value(engine, "get_overhead_frame")
+    overhead_camera_pose = _optional_engine_value(engine, "get_overhead_camera_properties")
 
     effective_agent_count = agent_count if agent_count is not None else len(initial_states)
     visualizer = GameVisualizer(
@@ -211,10 +209,13 @@ def render_navigation_prompt_bundle(
     """Render the three-view navigation prompt-image bundle for one control turn."""
     mark_visited_world(context.visited_world, agent_states, context.path_history)
     agent_positions_world = [pos_to_world_idx(state.position) for state in agent_states]
+    covered_cells = list(context.visited_world)
+    agent_rotations = [state.rotation for state in agent_states]
+    path_history = context.path_history or None
 
     raw_map = context.visualizer.render_world_overhead_map(
         agent_positions=agent_positions_world,
-        covered_cells=list(context.visited_world),
+        covered_cells=covered_cells,
         world_bbox=context.world_bbox,
         base_frame=context.overhead_background,
         camera_pose=context.overhead_camera_pose,
@@ -225,9 +226,9 @@ def render_navigation_prompt_bundle(
     if context.overhead_camera_pose is not None and context.overhead_background is not None:
         structured_map = context.visualizer.render_projected_structured_map(
             agent_positions=agent_positions_world,
-            agent_rotations=[state.rotation for state in agent_states],
+            agent_rotations=agent_rotations,
             reachable_cells=context.reachable_cells,
-            covered_cells=list(context.visited_world),
+            covered_cells=covered_cells,
             world_bbox=context.world_bbox,
             camera_pose=context.overhead_camera_pose,
             image_size=(
@@ -235,16 +236,16 @@ def render_navigation_prompt_bundle(
                 int(context.overhead_background.shape[0]),
             ),
             grid_size=_GRID_SIZE,
-            path_history=context.path_history or None,
+            path_history=path_history,
         )
     else:
         structured_map = context.visualizer.render_structured_map(
             agent_positions=agent_positions_world,
-            agent_rotations=[state.rotation for state in agent_states],
+            agent_rotations=agent_rotations,
             reachable_cells=context.reachable_cells,
-            covered_cells=list(context.visited_world),
+            covered_cells=covered_cells,
             world_bbox=context.world_bbox,
-            path_history=context.path_history or None,
+            path_history=path_history,
         )
     structured_overhead_frame = np.asarray(structured_map.convert("RGB"), dtype=np.uint8)
 

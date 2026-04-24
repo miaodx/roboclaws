@@ -1,22 +1,4 @@
-"""Multi-agent cooperative coverage game example.
-
-Two or three VLM-controlled agents cooperate in an AI2-THOR living-room scene
-to cover as much floor area as possible.  Each new cell visited by any agent
-adds to the shared coverage count.  Agents take turns in round-robin order.
-
-Outputs a replay GIF, coverage progression chart, final coverage map, and a
-work-balance report.
-
-Usage::
-
-    python examples/coverage_game.py
-    python examples/coverage_game.py --agents 3 --scene FloorPlan201 --steps 200
-    python examples/coverage_game.py --model gpt-4o-mini --output-dir out/coverage
-    python examples/coverage_game.py --model mock --steps 20 --output-dir /tmp/coverage
-
-    # OpenClaw backend (requires a running Gateway; set OPENCLAW_GATEWAY_TOKEN):
-    python examples/coverage_game.py --backend openclaw --agents 2 --steps 60
-"""
+"""Run a multi-agent cooperative coverage game in AI2-THOR."""
 
 from __future__ import annotations
 
@@ -69,18 +51,10 @@ _DEFAULT_SOULS_DIR = os.path.join(
     "souls",
 )
 
-# ---------------------------------------------------------------------------
-# Grid constants — must match MultiAgentEngine grid_size
-# ---------------------------------------------------------------------------
-
 _GRID_SIZE: float = 0.25  # metres
 _GRID_ROWS: int = 40
 _GRID_COLS: int = 40
-
-
-# ---------------------------------------------------------------------------
-# Coordinate helpers
-# ---------------------------------------------------------------------------
+_VIEW_VARIANT = "map-v2+chase"
 
 
 def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
@@ -88,9 +62,77 @@ def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def _normalize_backend(backend: str) -> str:
+    return "vlm" if backend == "direct" else backend
+
+
+def _resolve_wall_budget(max_wall_seconds: float) -> float | None:
+    return max_wall_seconds if max_wall_seconds > 0 else None
+
+
+def _install_sigterm_handler() -> None:
+    """Convert SIGTERM into KeyboardInterrupt for partial-save handling."""
+
+    def _sigterm(signum: int, _frame: Any) -> None:
+        raise KeyboardInterrupt(f"Stopped by signal {signum}")
+
+    signal.signal(signal.SIGTERM, _sigterm)
+
+
+def _create_game_provider(
+    *,
+    backend: str,
+    gateway_url: str | None,
+    agent_count: int,
+    model: str,
+    agent_soul_content: dict[int, str],
+):
+    from roboclaws.openclaw.bridge import build_openclaw_provider_or_die
+
+    if backend == "openclaw":
+        return build_openclaw_provider_or_die(gateway_url=gateway_url, agent_count=agent_count)
+
+    kwargs = {"agent_souls": agent_soul_content} if agent_soul_content else {}
+    try:
+        return create_provider(model, **kwargs)
+    except TypeError:
+        return create_provider(model)
+
+
+def _prepare_prompt_payload(
+    *,
+    backend: str,
+    prompt_image_frames: list[np.ndarray],
+    prompt_state_text: str,
+    prompt_state_metrics: dict[str, Any],
+) -> tuple[list[Any], dict[str, Any], float]:
+    if backend == "openclaw":
+        return (
+            list(prompt_image_frames),
+            summarize_payload_metrics(
+                transport="openclaw_ndarray",
+                prompt_state_chars=prompt_state_metrics["chars"],
+                image_metrics=[
+                    {"label": label} for label in image_labels_for_variant(_VIEW_VARIANT)
+                ],
+            ),
+            0.0,
+        )
+
+    prompt_images, image_metrics, encode_seconds = encode_prompt_images(
+        image_frames=prompt_image_frames,
+        encoder=encode_frame_to_b64_jpeg,
+    )
+    return (
+        prompt_images,
+        summarize_payload_metrics(
+            transport="vlm_base64_jpeg",
+            prompt_state_chars=prompt_state_metrics["chars"],
+            image_metrics=image_metrics,
+            extra={"prompt_state_preview": prompt_state_text[:120]},
+        ),
+        round_seconds(encode_seconds),
+    )
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -154,11 +196,6 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-# ---------------------------------------------------------------------------
-# Chart
-# ---------------------------------------------------------------------------
-
-
 def _draw_progression_chart(cells_history: list[int], out_path: Path) -> None:
     """Save a coverage progression PNG (cells covered vs step) using Pillow."""
     W, H = 600, 300
@@ -200,11 +237,6 @@ def _draw_progression_chart(cells_history: list[int], out_path: Path) -> None:
     img.save(out_path)
 
 
-# ---------------------------------------------------------------------------
-# Core loop
-# ---------------------------------------------------------------------------
-
-
 def run_coverage_game(
     *,
     scene: str,
@@ -218,49 +250,23 @@ def run_coverage_game(
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
 ) -> dict[str, Any]:
-    """Run a multi-agent cooperative coverage episode and save results to output_dir.
+    """Run a coverage episode and save replay/artifacts to ``output_dir``."""
+    from roboclaws.openclaw.bridge import OpenClawUnavailable
 
-    Args:
-        scene: AI2-THOR scene name.
-        agent_count: Number of cooperating agents (2 or 3).
-        steps: Maximum number of game steps.
-        model: VLM model alias (used when ``backend="vlm"``).
-        output_dir: Directory for replay files, GIF, and coverage outputs.
-        backend: Transport backend — ``"vlm"`` (direct cloud API) or
-                 ``"openclaw"`` (local Gateway via :mod:`roboclaws.openclaw.bridge`).
-                 ``"direct"`` is a deprecated alias for ``"vlm"``.
-        gateway_url: Override the Gateway base URL (debug only).
-        thor_server_timeout: AI2-THOR backend action timeout for slow local runs.
-        thor_server_start_timeout: AI2-THOR Unity startup timeout.
-
-    Returns:
-        Summary dict with keys ``cells_covered``, ``contribution``,
-        ``work_balance``, ``termination_reason``, ``vlm_cost_usd``, and ``output_dir``.
-    """
-    from roboclaws.openclaw.bridge import OpenClawUnavailable, build_openclaw_provider_or_die
-
-    # SIGTERM → raise KeyboardInterrupt so the try/finally below flushes a
-    # partial replay (including any report.html) before exit.  Matches how
-    # the run already handles Ctrl-C.
-    def _sigterm(signum: int, _frame: Any) -> None:
-        raise KeyboardInterrupt(f"Stopped by signal {signum}")
-
-    signal.signal(signal.SIGTERM, _sigterm)
-
-    effective_backend = "vlm" if backend == "direct" else backend
+    _install_sigterm_handler()
+    effective_backend = _normalize_backend(backend)
 
     souls_env = os.environ.get("AGENT_SOULS", "")
     souls_dir = os.environ.get("SOULS_DIR", _DEFAULT_SOULS_DIR)
     agent_labels, agent_soul_content = load_agent_souls(souls_env, agent_count, souls_dir)
 
-    if effective_backend == "openclaw":
-        provider = build_openclaw_provider_or_die(gateway_url=gateway_url, agent_count=agent_count)
-    else:
-        kwargs = {"agent_souls": agent_soul_content} if agent_soul_content else {}
-        try:
-            provider = create_provider(model, **kwargs)
-        except TypeError:
-            provider = create_provider(model)
+    provider = _create_game_provider(
+        backend=effective_backend,
+        gateway_url=gateway_url,
+        agent_count=agent_count,
+        model=model,
+        agent_soul_content=agent_soul_content,
+    )
     engine = MultiAgentEngine(
         scene=scene,
         agent_count=agent_count,
@@ -289,18 +295,26 @@ def run_coverage_game(
 
     step_num = 0
     cells_history: list[int] = []
+    overhead_bg: np.ndarray | None = None
+    overhead_camera_pose: dict[str, Any] | None = None
     termination_reason_override: str | None = None
     final_provider_status: dict[str, Any] = provider_status_snapshot(provider)
     final_agent_positions_world: list[tuple[int, int]] = []
     final_agent_rotations: list[dict[str, float]] = []
 
     try:
+        try:
+            overhead_bg = engine.get_overhead_frame()
+        except Exception:  # noqa: BLE001 - mock engines may omit this
+            overhead_bg = None
+        try:
+            overhead_camera_pose = engine.get_overhead_camera_properties()
+        except Exception:  # noqa: BLE001 - mock engines may omit this
+            overhead_camera_pose = None
+
         while not game.is_over():
             step_started = time.perf_counter()
             turn_metrics: dict[str, Any] = {"timings": {}, "payload": {}}
-            # ----------------------------------------------------------------
-            # Capture state BEFORE this step for recording and visualisation
-            # ----------------------------------------------------------------
             state_capture_started = time.perf_counter()
             agent_states = engine.get_all_agent_states()
             agent_frames = [s.frame for s in agent_states]
@@ -312,13 +326,26 @@ def run_coverage_game(
             )
 
             map_render_started = time.perf_counter()
-            structured_img = viz.render_structured_map(
-                agent_positions=agent_positions_world,
-                agent_rotations=final_agent_rotations,
-                reachable_cells=reachable_cells,
-                covered_cells=list(game._covered.keys()),
-                world_bbox=world_bbox,
-            )
+            covered_cells = list(game._covered.keys())
+            if overhead_camera_pose is not None and overhead_bg is not None:
+                structured_img = viz.render_projected_structured_map(
+                    agent_positions=agent_positions_world,
+                    agent_rotations=final_agent_rotations,
+                    reachable_cells=reachable_cells,
+                    covered_cells=covered_cells,
+                    world_bbox=world_bbox,
+                    camera_pose=overhead_camera_pose,
+                    image_size=(int(overhead_bg.shape[1]), int(overhead_bg.shape[0])),
+                    grid_size=_GRID_SIZE,
+                )
+            else:
+                structured_img = viz.render_structured_map(
+                    agent_positions=agent_positions_world,
+                    agent_rotations=final_agent_rotations,
+                    reachable_cells=reachable_cells,
+                    covered_cells=covered_cells,
+                    world_bbox=world_bbox,
+                )
             structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
             turn_metrics["timings"]["map_render_seconds"] = round_seconds(
                 time.perf_counter() - map_render_started
@@ -328,7 +355,7 @@ def run_coverage_game(
             current_agent = game.current_agent_id
             prompt_state_started = time.perf_counter()
             prompt_state = game.get_prompt_state(current_agent)
-            prompt_state["views"] = "map-v2+chase"
+            prompt_state["views"] = _VIEW_VARIANT
             turn_metrics["timings"]["prompt_state_seconds"] = round_seconds(
                 time.perf_counter() - prompt_state_started
             )
@@ -337,7 +364,6 @@ def run_coverage_game(
             turn_metrics["timings"]["prompt_state_json_seconds"] = prompt_state_metrics[
                 "serialize_seconds"
             ]
-
             engine.add_chase_cam(current_agent)
             engine.update_chase_cam(current_agent)
             chase_cam_frame = engine.get_chase_cam_frame(current_agent)
@@ -347,38 +373,19 @@ def run_coverage_game(
                 structured_overhead_frame=structured_map_frame,
                 chase_cam_frame=chase_cam_frame,
             )
-            replay_overhead = structured_map_frame
-            payload_metrics: dict[str, Any]
-            if effective_backend == "openclaw":
-                prompt_images: list[Any] = list(prompt_image_frames)
-                payload_metrics = summarize_payload_metrics(
-                    transport="openclaw_ndarray",
-                    prompt_state_chars=prompt_state_metrics["chars"],
-                    image_metrics=[
-                        {"label": label} for label in image_labels_for_variant("map-v2+chase")
-                    ],
-                )
-                turn_metrics["timings"]["image_encode_seconds"] = 0.0
-            else:
-                prompt_images, image_metrics, encode_seconds = encode_prompt_images(
-                    image_frames=prompt_image_frames,
-                    encoder=encode_frame_to_b64_jpeg,
-                )
-                payload_metrics = summarize_payload_metrics(
-                    transport="vlm_base64_jpeg",
-                    prompt_state_chars=prompt_state_metrics["chars"],
-                    image_metrics=image_metrics,
-                    extra={"prompt_state_preview": prompt_state_text[:120]},
-                )
-                turn_metrics["timings"]["image_encode_seconds"] = round_seconds(encode_seconds)
-            turn_metrics["payload"] = payload_metrics
+            (
+                prompt_images,
+                turn_metrics["payload"],
+                turn_metrics["timings"]["image_encode_seconds"],
+            ) = _prepare_prompt_payload(
+                backend=effective_backend,
+                prompt_image_frames=prompt_image_frames,
+                prompt_state_text=prompt_state_text,
+                prompt_state_metrics=prompt_state_metrics,
+            )
 
-            # Track coverage progression (cells covered before this step)
             cells_history.append(game.cells_covered())
 
-            # ----------------------------------------------------------------
-            # Execute one game step (VLM decision + engine action internally)
-            # ----------------------------------------------------------------
             provider_started = time.perf_counter()
             try:
                 response = game.decide(images=prompt_images, prompt_state=prompt_state)
@@ -395,10 +402,6 @@ def run_coverage_game(
                 )
                 break
             except Exception as exc:  # noqa: BLE001 - ensure partial-save on any provider error
-                # Kimi quota exhaustion, instructor retry wrappers, HTTP 4xx/5xx
-                # from upstream: none of these are transient (so the circuit
-                # breaker doesn't fire) but we still want a usable report for
-                # the steps completed so far.
                 termination_reason_override = "provider_error"
                 final_provider_status = provider_status_snapshot(provider)
                 exc_kind = exc.__class__.__name__
@@ -441,7 +444,7 @@ def run_coverage_game(
                 step=step_num,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
-                overhead_frame=replay_overhead,
+                overhead_frame=structured_map_frame,
                 game_state=game_state,
                 vlm_prompt_state=prompt_state,
                 vlm_response=response,
@@ -451,7 +454,6 @@ def run_coverage_game(
             turn_metrics["timings"]["record_step_seconds"] = round_seconds(
                 time.perf_counter() - record_started
             )
-            recorder._steps[-1].turn_metrics = dict(turn_metrics)
             turn_metrics["timings"]["step_loop_seconds"] = round_seconds(
                 time.perf_counter() - step_started
             )
@@ -466,11 +468,8 @@ def run_coverage_game(
 
     result = game.get_result()
     termination_reason = termination_reason_override or result.termination_reason
-    final_provider_status = (
-        provider_status_snapshot(provider) if not final_provider_status else final_provider_status
-    )
+    final_provider_status = final_provider_status or provider_status_snapshot(provider)
 
-    # Save replay (GIF + JSON + self-contained HTML report)
     out_path = recorder.save(
         output_dir,
         vlm_cost_usd=provider.cumulative_cost,
@@ -481,7 +480,6 @@ def run_coverage_game(
         provider_status=final_provider_status,
     )
 
-    # Save final coverage map
     final_map = viz.render_structured_map(
         agent_positions=final_agent_positions_world or [(0, 0)] * agent_count,
         agent_rotations=final_agent_rotations or [{"y": 0.0}] * agent_count,
@@ -491,10 +489,8 @@ def run_coverage_game(
     )
     GameVisualizer.save_png(final_map, out_path / "coverage_final.png")
 
-    # Save coverage progression chart
     _draw_progression_chart(cells_history, out_path / "coverage_progression.png")
 
-    # Save work balance report
     work_balance_data: dict[str, Any] = {
         "cells_covered": result.cells_covered,
         "coverage_pct": result.coverage_pct,
@@ -520,15 +516,10 @@ def run_coverage_game(
     }
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-
 def main() -> None:
     args = _parse_args()
 
-    effective_backend = "vlm" if args.backend == "direct" else args.backend
+    effective_backend = _normalize_backend(args.backend)
     if args.backend == "direct":
         print("Warning: --backend direct is deprecated; use --backend vlm")
 
@@ -539,8 +530,9 @@ def main() -> None:
     print(f"Backend    : {effective_backend}")
     print(f"THOR step timeout  : {args.thor_server_timeout}")
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
-    wall_budget = args.max_wall_seconds if args.max_wall_seconds > 0 else None
+    wall_budget = _resolve_wall_budget(args.max_wall_seconds)
     print(f"Wallclock budget   : {wall_budget if wall_budget else 'disabled'}")
+    print(f"Views      : {_VIEW_VARIANT}")
     print(f"Output dir : {args.output_dir}")
     print()
 

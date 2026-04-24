@@ -25,7 +25,6 @@ def test_run_view_experiment_smoke(monkeypatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr("view_experiment.GAME_RUNNERS", {"territory": stub_runner})
     result = run_view_experiment(
-        variants=["baseline"],
         seeds=[1],
         scenes=["FloorPlan201"],
         games=["territory"],
@@ -41,7 +40,7 @@ def test_run_view_experiment_smoke(monkeypatch, tmp_path: Path) -> None:
     assert len(rows) == 1
     row = rows[0]
     assert row["status"] == "ok"
-    assert row["variant"] == "baseline"
+    assert row["variant"] == "map-v2+chase"
     assert row["game"] == "territory"
     assert row["cells_claimed_total"] == 7
     assert row["total_steps"] == 7
@@ -69,8 +68,7 @@ def test_run_view_experiment_logs_error_and_continues(monkeypatch, tmp_path: Pat
 
     monkeypatch.setattr("view_experiment.GAME_RUNNERS", {"coverage": flaky_runner})
     result = run_view_experiment(
-        variants=["baseline", "map-v2"],
-        seeds=[1],
+        seeds=[1, 2],
         scenes=["FloorPlan201"],
         games=["coverage"],
         model="mock",
