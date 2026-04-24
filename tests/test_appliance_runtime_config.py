@@ -18,6 +18,7 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     assert "DEMO_USERNAME" not in entrypoint
     assert "htpasswd" not in entrypoint
     assert "auth_basic" not in nginx
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
     assert 'HOME="%(ENV_ROBOCLAWS_HOME)s"' in supervisord
     assert "ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor" in dockerfile
     assert "apache2-utils" not in dockerfile

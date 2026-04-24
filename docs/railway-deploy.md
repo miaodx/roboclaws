@@ -94,6 +94,8 @@ Unity build if `make chat` already downloaded it.
    MODEL=mimo_openai/mimo-v2-omni
    IMAGE_MODEL=mimo_openai/mimo-v2-omni
    ROBOCLAWS_OBSERVE_MODE=auto
+   ROBOCLAWS_PUBLIC_URL=https://<railway-domain>
+   OPENCLAW_ALLOWED_ORIGINS=https://<extra-domain>
    ```
 
    Do not set `PORT` unless debugging Railway networking. Railway provides
@@ -180,6 +182,21 @@ and restart:
 make appliance-build
 DEMO_PASSWORD=demo make appliance-run-local
 ```
+
+### OpenClaw Says `origin not allowed`
+
+You are running an older image or a custom domain that is not in the seeded
+OpenClaw Control UI origin allowlist. Rebuild/redeploy first. For a custom
+domain, set:
+
+```bash
+ROBOCLAWS_PUBLIC_URL=https://<custom-domain>
+OPENCLAW_ALLOWED_ORIGINS=https://<another-domain-if-needed>
+```
+
+The appliance also seeds `gateway.trustedProxies` for the same-container nginx
+proxy. If you add another reverse proxy in front of the service, append its IP
+or CIDR with `OPENCLAW_TRUSTED_PROXIES`.
 
 ### AI2-THOR Redownloads Every Deploy
 
