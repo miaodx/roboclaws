@@ -49,7 +49,6 @@ cd "$APP_ROOT"
 # shellcheck disable=SC1090
 . "$APPLIANCE_ENV_FILE"
 
-htpasswd -bc /etc/nginx/.htpasswd roboclaws "$DEMO_PASSWORD" >/dev/null
 sed "s/__PORT__/${PORT}/g" \
   "$APP_ROOT/deploy/railway/nginx.conf.template" \
   > /etc/nginx/conf.d/default.conf

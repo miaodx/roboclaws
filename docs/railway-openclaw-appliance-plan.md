@@ -10,7 +10,7 @@ path, not a replacement for the current local workflow.
 
 The public Railway service exposes:
 
-- `/` - OpenClaw Control UI / webchat, protected by shared basic auth
+- `/` - OpenClaw Control UI / webchat
 - `/views/` - live Roboclaws FPV + map-v2 + chase-cam viewer
 - `/health` - unauthenticated Railway healthcheck
 
@@ -34,19 +34,19 @@ Why this shape:
 
 - Gateway, MCP, viewer, and Xvfb are separate long-running processes; FastAPI
   would become a custom supervisor if it tried to own them.
-- nginx is enough for the v1 public front door: route traffic, enforce a shared
-  password, proxy WebSockets/SSE, and serve `/health`.
+- nginx is enough for the v1 public front door: route traffic, proxy
+  WebSockets/SSE, and serve `/health`.
 - A custom Python API can be added later if we need reset buttons, per-user
   locks, or richer session state.
 
 ## Implementation Changes
 
 - Add `Dockerfile.railway` based on `ghcr.io/openclaw/openclaw:2026.4.14`.
-  It installs Python, Xvfb/Mesa software rendering, nginx, supervisor, Apache
-  htpasswd tooling, and uses `uv sync --frozen --no-dev --extra openclaw` from
-  the checked-in `uv.lock` for Roboclaws dependencies.
+  It installs Python, Xvfb/Mesa software rendering, nginx, supervisor, and uses
+  `uv sync --frozen --no-dev --extra openclaw` from the checked-in `uv.lock`
+  for Roboclaws dependencies.
 - Add `deploy/railway/entrypoint.sh` to prepare runtime directories, seed
-  OpenClaw config, generate nginx basic auth, and launch supervisord.
+  OpenClaw config, and launch supervisord.
 - Add `scripts/appliance_seed_openclaw.py` to seed `/home/node/.openclaw`
   directly. It replaces local-dev `scripts/openclaw-bootstrap.sh` for this
   appliance path because nested Docker is not available on Railway.
@@ -65,9 +65,8 @@ Why this shape:
 
 Required env vars:
 
-- `DEMO_PASSWORD` - shared basic-auth password; also becomes the OpenClaw UI
-  bearer token unless `OPENCLAW_TOKEN` is explicitly set
 - `MIMO_TP_KEY` - default MiMo provider key
+- one OpenClaw UI bearer token: `DEMO_PASSWORD` or `OPENCLAW_TOKEN`
 
 Defaults:
 
@@ -116,7 +115,7 @@ needed.
 Then verify:
 
 - `http://localhost:8080/health` returns `ok`
-- `http://localhost:8080/` shows OpenClaw Control UI after basic auth
+- `http://localhost:8080/` shows OpenClaw Control UI
 - the Control UI accepts bearer token `demo` when `OPENCLAW_TOKEN` is unset
 - `http://localhost:8080/views/` shows the three-panel viewer
 - after `agent-0` calls `roboclaws__observe`, FPV/map/chase images refresh
