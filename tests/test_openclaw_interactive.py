@@ -159,7 +159,7 @@ def test_bootstrap_gateway_invokes_script_with_expected_env() -> None:
     # agent_id=1 → at least 2 agents (0 and 1).
     assert env["AGENTS"] == "2"
     assert env["ROBOCLAWS_MCP_URL"] == "http://host.docker.internal:18788/mcp"
-    assert env["TIMEOUT_SECONDS"] == "600"
+    assert env["TIMEOUT_SECONDS"] == "7200"
 
 
 def test_bootstrap_gateway_preserves_caller_overrides() -> None:
