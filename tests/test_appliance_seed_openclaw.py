@@ -34,12 +34,20 @@ def test_seed_writes_mimo_openclaw_config_and_snapshot_symlink(tmp_path: Path) -
         "SKILLS_DIR": str(skill),
         "DEMO_PASSWORD": "demo-pass",
         "MIMO_TP_KEY": "mimo-key",
+        "PORT": "8080",
+        "ROBOCLAWS_PUBLIC_URL": "http://127.0.0.1:8080",
     }
 
     runtime = module.seed(env)
 
     config = json.loads((runtime.base_dir / "openclaw.json").read_text(encoding="utf-8"))
     assert config["gateway"]["auth"] == {"mode": "token", "token": "demo-pass"}
+    assert config["gateway"]["controlUi"]["allowedOrigins"] == [
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+    ]
+    assert config["gateway"]["controlUi"]["dangerouslyDisableDeviceAuth"] is True
+    assert config["gateway"]["trustedProxies"] == ["127.0.0.1", "::1"]
     assert config["mcp"]["servers"]["roboclaws"]["url"] == "http://127.0.0.1:18788/mcp"
     assert config["agents"]["list"][0]["id"] == "agent-0"
     assert config["agents"]["list"][0]["tools"]["profile"] == "minimal"
@@ -70,6 +78,53 @@ def test_seed_uses_openclaw_token_when_password_is_absent(tmp_path: Path) -> Non
     assert config["gateway"]["auth"]["token"] == "fixed-token"
     runtime_env = runtime.env_file.read_text(encoding="utf-8")
     assert "export OPENCLAW_GATEWAY_TOKEN=fixed-token" in runtime_env
+
+
+def test_seed_allows_custom_public_origins_and_trusted_proxies(tmp_path: Path) -> None:
+    module = _load_seed_module()
+    skill = _make_skill(tmp_path)
+    env = {
+        "OPENCLAW_HOME": str(tmp_path / "openclaw"),
+        "DATA_DIR": str(tmp_path / "data"),
+        "SKILLS_DIR": str(skill),
+        "OPENCLAW_TOKEN": "fixed-token",
+        "MIMO_TP_KEY": "mimo-key",
+        "PORT": "9999",
+        "ROBOCLAWS_PUBLIC_URL": "https://demo.example.com/",
+        "RAILWAY_PUBLIC_DOMAIN": "railway.example.com",
+        "OPENCLAW_ALLOWED_ORIGINS": "https://custom.example.com, https://demo.example.com",
+        "OPENCLAW_TRUSTED_PROXIES": "10.0.0.10,127.0.0.1",
+    }
+
+    runtime = module.seed(env)
+
+    config = json.loads((runtime.base_dir / "openclaw.json").read_text(encoding="utf-8"))
+    assert config["gateway"]["controlUi"]["allowedOrigins"] == [
+        "https://demo.example.com",
+        "https://railway.example.com",
+        "http://127.0.0.1:9999",
+        "http://localhost:9999",
+        "https://custom.example.com",
+    ]
+    assert config["gateway"]["trustedProxies"] == ["127.0.0.1", "::1", "10.0.0.10"]
+
+
+def test_seed_can_keep_control_ui_device_auth_enabled(tmp_path: Path) -> None:
+    module = _load_seed_module()
+    skill = _make_skill(tmp_path)
+    env = {
+        "OPENCLAW_HOME": str(tmp_path / "openclaw"),
+        "DATA_DIR": str(tmp_path / "data"),
+        "SKILLS_DIR": str(skill),
+        "OPENCLAW_TOKEN": "fixed-token",
+        "MIMO_TP_KEY": "mimo-key",
+        "OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH": "false",
+    }
+
+    runtime = module.seed(env)
+
+    config = json.loads((runtime.base_dir / "openclaw.json").read_text(encoding="utf-8"))
+    assert "dangerouslyDisableDeviceAuth" not in config["gateway"]["controlUi"]
 
 
 def test_seed_rejects_missing_provider_key(tmp_path: Path) -> None:
