@@ -610,15 +610,15 @@ config = {
     },
     "agents": {
         # timeoutSeconds is a per-turn WALL-CLOCK cap, not an idle watchdog.
-        # Gateway's scheduleAbortTimer is set once at run start and is NEVER
+        # Gateway scheduleAbortTimer is set once at run start and is NEVER
         # reset on tool-call activity (verified 2026-04-24 in
         # pi-embedded-runner; despite older docs calling it an "idle
         # watchdog").  7200 = 2h, sized as a backstop; the intended stop path
-        # is the agent's own end_turn / roboclaws__done or the UI Stop button
+        # is the agent own end_turn / roboclaws__done or the UI Stop button
         # on an active stream.  Earlier 600s defaulting bit hard on
         # open-ended exploration prompts: the turn aborted mid-tool-call
         # and Gateway surfaced a timeout error without a terminal frame,
-        # wedging the Control UI's Stop/send controls.  Per-call HTTP stalls
+        # wedging the Control UI Stop/send controls.  Per-call HTTP stalls
         # (undici headers/bodyTimeout, smithy socket-idle) still fail fast
         # at a shorter horizon — this knob only caps the aggregate tool-call
         # loop inside a single user turn.
