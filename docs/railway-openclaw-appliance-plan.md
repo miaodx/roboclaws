@@ -1,5 +1,7 @@
 # Railway OpenClaw Appliance Plan
 
+Operator runbook: [`railway-deploy.md`](railway-deploy.md).
+
 ## Summary
 
 Ship a single-instance Railway demo that runs the existing OpenClaw webchat and
