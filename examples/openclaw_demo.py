@@ -50,17 +50,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from roboclaws.core.engine import NAVIGATION_ACTIONS, MultiAgentEngine
 from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.views import (
-    in_bounds as shared_in_bounds,
-)
-from roboclaws.core.views import (
     make_navigation_view_context,
     render_navigation_prompt_bundle,
-)
-from roboclaws.core.views import (
-    pos_to_world_idx as shared_pos_to_world_idx,
-)
-from roboclaws.core.views import (
-    world_to_viz as shared_world_to_viz,
 )
 from roboclaws.core.vlm import format_provider_status, provider_status_snapshot
 from roboclaws.openclaw.bridge import OpenClawProvider, OpenClawUnavailable
@@ -72,34 +63,7 @@ from roboclaws.openclaw.bridge import OpenClawProvider, OpenClawUnavailable
 _GRID_SIZE: float = 0.25  # metres
 _GRID_ROWS: int = 40
 _GRID_COLS: int = 40
-_CENTER_ROW: int = _GRID_ROWS // 2
-_CENTER_COL: int = _GRID_COLS // 2
-
-
-# ---------------------------------------------------------------------------
-# Coordinate helpers
-# ---------------------------------------------------------------------------
-
-
-def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
-    """Convert a continuous AI2-THOR (x, z) position to a discrete world index."""
-    return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
-
-
-def _world_to_viz(ix: int, iz: int, origin_ix: int, origin_iz: int) -> tuple[int, int]:
-    """Map a world grid index to a visualiser (row, col) centred at *origin*."""
-    return shared_world_to_viz(
-        ix,
-        iz,
-        origin_ix,
-        origin_iz,
-        grid_rows=_GRID_ROWS,
-        grid_cols=_GRID_COLS,
-    )
-
-
-def _in_bounds(row: int, col: int) -> bool:
-    return shared_in_bounds(row, col, grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS)
+_VIEW_VARIANT = "map-v2+chase"
 
 
 # ---------------------------------------------------------------------------
@@ -260,10 +224,7 @@ def run_openclaw_demo(
     # heuristic (2*agent_count) but a bit looser (3 rounds) because pure
     # navigation tends to burn turns on collision-induced rotations before
     # breaking out to new area.  Pass 0 to disable.
-    if max_stale_steps is None:
-        stale_threshold = 3 * agent_count
-    else:
-        stale_threshold = max(0, max_stale_steps)
+    stale_threshold = 3 * agent_count if max_stale_steps is None else max(0, max_stale_steps)
     stale_steps = 0
 
     try:
@@ -294,7 +255,7 @@ def run_openclaw_demo(
                 "agent_count": agent_count,
                 "position": active_state.position,
                 "rotation": active_state.rotation,
-                "views": "map-v2+chase",
+                "views": _VIEW_VARIANT,
                 "image_labels": list(prompt_bundle.image_labels),
                 "available_actions": NAVIGATION_ACTIONS,
             }
@@ -318,10 +279,11 @@ def run_openclaw_demo(
             primary_view_label = (
                 prompt_bundle.image_labels[1] if len(prompt_bundle.image_labels) > 1 else "overhead"
             )
-            extra_views = [
-                ("overhead", prompt_bundle.raw_overhead_frame),
-                ("chase", prompt_bundle.chase_cam_frame),
-            ]
+            extra_views: list[tuple[str, Any]] = []
+            if prompt_bundle.structured_overhead_frame is not None:
+                extra_views.append(("overhead", prompt_bundle.raw_overhead_frame))
+            if prompt_bundle.chase_cam_frame is not None:
+                extra_views.append(("chase", prompt_bundle.chase_cam_frame))
 
             recorder.record_step(
                 step=step,
@@ -389,6 +351,7 @@ def main() -> None:
     print(f"Agents        : {args.agents}")
     print(f"Steps (max)   : {args.steps}")
     print(f"Stale cutoff  : {resolved_stale if resolved_stale > 0 else 'disabled'}")
+    print(f"Views         : {_VIEW_VARIANT}")
     print(f"Output dir    : {args.output_dir}")
     print()
 

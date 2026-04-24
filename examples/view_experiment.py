@@ -1,4 +1,4 @@
-"""Experiment harness for Phase 2.4 view-variant sweeps."""
+"""Experiment harness for the supported map-v2+chase sweep."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ GAME_RUNNERS: dict[str, Callable[..., dict[str, Any]]] = {
     "territory": run_territory_game,
     "coverage": run_coverage_game,
 }
+_VIEW_VARIANT = "map-v2+chase"
 
 
 def _parse_csv(value: str) -> list[str]:
@@ -35,10 +36,9 @@ def _parse_int_csv(value: str) -> list[int]:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Sweep view variants across scenes, seeds, and games.",
+        description="Sweep the supported map-v2+chase view across scenes, seeds, and games.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--variants", default="baseline,map-v2,map-v2+chase")
     parser.add_argument("--seeds", default="1,2,3,4,5")
     parser.add_argument("--scenes", default="FloorPlan201,FloorPlan205,FloorPlan210")
     parser.add_argument("--games", default="territory,coverage")
@@ -89,7 +89,6 @@ def _coverage_metrics(result: dict[str, Any]) -> dict[str, Any]:
 
 def run_view_experiment(
     *,
-    variants: list[str],
     seeds: list[int],
     scenes: list[str],
     games: list[str],
@@ -103,12 +102,12 @@ def run_view_experiment(
     root.mkdir(parents=True, exist_ok=True)
     results_path = root / "results.jsonl"
     spent_usd = 0.0
-    total_runs = len(variants) * len(seeds) * len(scenes) * len(games)
+    total_runs = len(seeds) * len(scenes) * len(games)
     completed_runs = 0
     aborted_for_budget = False
 
-    for run_index, (variant, seed, scene, game) in enumerate(
-        itertools.product(variants, seeds, scenes, games),
+    for run_index, (seed, scene, game) in enumerate(
+        itertools.product(seeds, scenes, games),
         start=1,
     ):
         if game not in GAME_RUNNERS:
@@ -121,12 +120,12 @@ def run_view_experiment(
 
         random.seed(seed)
         np.random.seed(seed)
-        run_dir = root / variant / game / f"{scene}-seed{seed}"
+        run_dir = root / _VIEW_VARIANT / game / f"{scene}-seed{seed}"
         run_dir.parent.mkdir(parents=True, exist_ok=True)
         runner = GAME_RUNNERS[game]
         started = time.perf_counter()
         row: dict[str, Any] = {
-            "variant": variant,
+            "variant": _VIEW_VARIANT,
             "seed": seed,
             "scene": scene,
             "game": game,
@@ -144,7 +143,6 @@ def run_view_experiment(
                 steps=steps,
                 model=model,
                 output_dir=str(run_dir),
-                views=variant,
             )
             summary = _load_replay_summary(run_dir)
             row.update(
@@ -193,7 +191,6 @@ def run_view_experiment(
 def main() -> None:
     args = _parse_args()
     result = run_view_experiment(
-        variants=_parse_csv(args.variants),
         seeds=_parse_int_csv(args.seeds),
         scenes=_parse_csv(args.scenes),
         games=_parse_csv(args.games),
