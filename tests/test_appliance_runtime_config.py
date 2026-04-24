@@ -14,6 +14,8 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     assert 'ROBOCLAWS_HOME="${ROBOCLAWS_HOME:-${DATA_DIR}}"' in entrypoint
     assert 'export HOME="$ROBOCLAWS_HOME"' in entrypoint
     assert '"$ROBOCLAWS_AI2THOR_DIR"' in entrypoint
+    assert 'export DEMO_USERNAME="${DEMO_USERNAME:-demo}"' in entrypoint
+    assert 'htpasswd -bc /etc/nginx/.htpasswd "$DEMO_USERNAME" "$DEMO_PASSWORD"' in entrypoint
     assert 'HOME="%(ENV_ROBOCLAWS_HOME)s"' in supervisord
     assert "ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor" in dockerfile
     assert "RAILWAY_PUBLIC_DOMAIN" in entrypoint

@@ -17,6 +17,7 @@ export HOME="$ROBOCLAWS_HOME"
 export ROBOCLAWS_AI2THOR_DIR="${ROBOCLAWS_AI2THOR_DIR:-${HOME}/.ai2thor}"
 export OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-${DEMO_PASSWORD}}"
 export DEMO_PASSWORD="${DEMO_PASSWORD:-${OPENCLAW_TOKEN}}"
+export DEMO_USERNAME="${DEMO_USERNAME:-demo}"
 export PROVIDER="${PROVIDER:-mimo}"
 export ROBOCLAWS_RUN_DIR="${ROBOCLAWS_RUN_DIR:-${DATA_DIR}/runs/current}"
 export ROBOCLAWS_SNAPSHOTS_DIR="${ROBOCLAWS_SNAPSHOTS_DIR:-${ROBOCLAWS_RUN_DIR}/snapshots}"
@@ -49,7 +50,7 @@ cd "$APP_ROOT"
 # shellcheck disable=SC1090
 . "$APPLIANCE_ENV_FILE"
 
-htpasswd -bc /etc/nginx/.htpasswd roboclaws "$DEMO_PASSWORD" >/dev/null
+htpasswd -bc /etc/nginx/.htpasswd "$DEMO_USERNAME" "$DEMO_PASSWORD" >/dev/null
 sed "s/__PORT__/${PORT}/g" \
   "$APP_ROOT/deploy/railway/nginx.conf.template" \
   > /etc/nginx/conf.d/default.conf

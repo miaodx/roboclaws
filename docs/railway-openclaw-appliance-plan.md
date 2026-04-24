@@ -71,6 +71,7 @@ Required env vars:
 
 Defaults:
 
+- `DEMO_USERNAME=demo`
 - `PROVIDER=mimo`
 - `MODEL=mimo_openai/mimo-v2-omni`
 - `ROBOCLAWS_TOOL_PROFILE=minimal`

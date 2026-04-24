@@ -83,6 +83,7 @@ Unity build if `make chat` already downloaded it.
    Optional:
 
    ```bash
+   DEMO_USERNAME=demo
    OPENCLAW_TOKEN=<separate-openclaw-bearer-token>
    PROVIDER=mimo
    MODEL=mimo_openai/mimo-v2-omni
@@ -112,20 +113,25 @@ Unity build if `make chat` already downloaded it.
 Basic auth username:
 
 ```text
-roboclaws
+demo
 ```
+
+Override it with `DEMO_USERNAME` if needed.
 
 Credential behavior:
 
 - `DEMO_PASSWORD` only:
+  - basic auth username = `DEMO_USERNAME` or `demo`
   - basic auth password = `DEMO_PASSWORD`
   - OpenClaw bearer token = `DEMO_PASSWORD`
 
 - `OPENCLAW_TOKEN` only:
+  - basic auth username = `DEMO_USERNAME` or `demo`
   - basic auth password = `OPENCLAW_TOKEN`
   - OpenClaw bearer token = `OPENCLAW_TOKEN`
 
 - both:
+  - basic auth username = `DEMO_USERNAME` or `demo`
   - basic auth password = `DEMO_PASSWORD`
   - OpenClaw bearer token = `OPENCLAW_TOKEN`
 
