@@ -86,20 +86,27 @@ Local parity smoke:
 
 ```bash
 make appliance-build
-DEMO_PASSWORD=demo make appliance-run
+DEMO_PASSWORD=demo make appliance-run-local
 ```
 
-The local parity target bind-mounts host `/data` into container `/data` by
-default and runs with `HOME=/data`, matching Railway's runtime shape. Its
-AI2-THOR cache resolves to `/data/.ai2thor`. Override the host path with
-`make appliance-run APPLIANCE_DATA_DIR=/path/to/data` if needed.
+The default local appliance target is `make appliance-run-local` (also aliased
+as `make appliance-run`). It bind-mounts the host `$HOME/.ai2thor` cache into
+container `/data/.ai2thor`, so it reuses the same AI2-THOR Unity build as the
+normal host-side `make chat` workflow without requiring a host `/data`
+directory.
 
-To reuse the AI2-THOR cache from the normal host-side `make chat` workflow:
+Railway-shape smoke:
 
 ```bash
-mkdir -p /data/.ai2thor
-cp -a "$HOME/.ai2thor/." /data/.ai2thor/
+make appliance-build
+DEMO_PASSWORD=demo make appliance-run-railway
 ```
+
+`make appliance-run-railway` bind-mounts host `/data` into container `/data`
+and runs with `HOME=/data`, matching Railway's runtime shape. Its AI2-THOR
+cache resolves to `/data/.ai2thor`. Override the host path with
+`make appliance-run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data` if
+needed.
 
 Then verify:
 

@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        appliance-build appliance-run \
+        appliance-build appliance-run appliance-run-local appliance-run-railway \
         chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
         chat-mimo-pro chat-mimo chat-kimi \
@@ -22,7 +22,8 @@
 #   - PYTHONUNBUFFERED so progress prints stream live through `| tee`
 SOURCE_ENV := set -a; [ -f .env ] && . ./.env; set +a
 STRIP_ROS_ENV := env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u ROS_DISTRO -u ROS_VERSION
-APPLIANCE_DATA_DIR ?= /data
+APPLIANCE_LOCAL_DATA_VOLUME ?= roboclaws-appliance-data
+APPLIANCE_RAILWAY_DATA_DIR ?= /data
 
 help:
 	@echo "OpenClaw ephemeral targets (bootstrap + run + teardown in one shot):"
@@ -42,7 +43,9 @@ help:
 	@echo ""
 	@echo "Railway appliance parity:"
 	@echo "  make appliance-build           — build the all-in-one Railway image"
-	@echo "  make appliance-run             — run it locally at http://localhost:8080 using host /data"
+	@echo "  make appliance-run-local       — run locally, reusing host ~/.ai2thor"
+	@echo "  make appliance-run-railway     — run locally with host /data mounted as Railway parity"
+	@echo "  make appliance-run             — alias for appliance-run-local"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
 	@echo "  Direct-vision (main model handles images):"
@@ -222,9 +225,26 @@ openclaw-gateway-down:
 appliance-build:
 	docker build -f Dockerfile.railway -t roboclaws-appliance .
 
-appliance-run:
+appliance-run: appliance-run-local
+
+appliance-run-local:
 	@$(SOURCE_ENV); \
-	 DATA_DIR="$(APPLIANCE_DATA_DIR)"; \
+	 mkdir -p "$$HOME/.ai2thor"; \
+	 ENV_FILE_ARG=""; \
+	 [ -f .env ] && ENV_FILE_ARG="--env-file .env"; \
+	 docker run --rm $$ENV_FILE_ARG \
+	   -e PORT=8080 \
+	   -e HOME=/data \
+	   -e ROBOCLAWS_HOME=/data \
+	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
+	   -p 8080:8080 \
+	   -v "$(APPLIANCE_LOCAL_DATA_VOLUME):/data" \
+	   -v "$$HOME/.ai2thor:/data/.ai2thor" \
+	   roboclaws-appliance
+
+appliance-run-railway:
+	@$(SOURCE_ENV); \
+	 DATA_DIR="$(APPLIANCE_RAILWAY_DATA_DIR)"; \
 	 mkdir -p "$$DATA_DIR/.ai2thor" "$$DATA_DIR/runs"; \
 	 ENV_FILE_ARG=""; \
 	 [ -f .env ] && ENV_FILE_ARG="--env-file .env"; \
