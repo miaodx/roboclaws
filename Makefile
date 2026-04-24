@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        chat chat-reuse chat-tail chat-view chat-clean \
+        chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
         chat-mimo-pro chat-mimo chat-kimi \
         chat-plugin-kimi chat-plugin-mimo-pro \
@@ -53,6 +53,7 @@ help:
 	@echo "  Session control:"
 	@echo "      make chat-clean        — wipe Gateway session history, then start"
 	@echo "      make chat-reuse        — attach to an already-running Gateway"
+	@echo "      make chat-xvfb         — remote/headless chat using Xvfb"
 	@echo "  Monitoring (run in separate terminals while chat is live):"
 	@echo "      make chat-tail         — pretty-tail Gateway session JSONL"
 	@echo "      make chat-view         — live snapshot viewer at http://127.0.0.1:8787"
@@ -242,18 +243,27 @@ openclaw-gateway-down:
 # Hyphenated aliases exist for tab-completion:
 #   chat-mimo-pro / chat-mimo / chat-kimi / chat-plugin-kimi / chat-plugin-mimo-pro
 #
-# Chat targets deliberately DO NOT use xvfb — the whole point is to watch the
-# robot move in real time on the operator's actual X display. If the recipe
-# fails with "Unable to open display", fix $DISPLAY — don't reach for xvfb-run.
+# Chat targets deliberately DO NOT use xvfb by default — the whole point is to
+# watch the robot move in real time on the operator's actual X display. If the
+# local recipe fails with "Unable to open display", fix $DISPLAY — don't reach
+# for xvfb-run. `make chat-xvfb` is the explicit remote/headless exception for
+# first-pass tests on machines without a physical/display-forwarded X server.
 # OPENCLAW_TOKEN defaults to "demo" (safe on 127.0.0.1-only Gateway).
 #
 # All provider/model selection is now handled by openclaw_interactive.py flags.
 # Run  python examples/openclaw_interactive.py --help  to see all options.
 
 _CHAT = $(SOURCE_ENV); $(STRIP_ROS_ENV) OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} PYTHONUNBUFFERED=1 python examples/openclaw_interactive.py
+CHAT_XVFB_PYTHON ?= .venv/bin/python
+CHAT_XVFB_SCREEN ?= 1280x1024x24
+CHAT_XVFB_ARGS ?=
+_CHAT_XVFB = $(SOURCE_ENV); $(STRIP_ROS_ENV) OPENCLAW_TOKEN=$${OPENCLAW_TOKEN:-demo} PYTHONUNBUFFERED=1 xvfb-run -a -s "-screen 0 $(CHAT_XVFB_SCREEN) -nolisten tcp" $(CHAT_XVFB_PYTHON) examples/openclaw_interactive.py
 
 chat:
 	@$(_CHAT)
+
+chat-xvfb:
+	@$(_CHAT_XVFB) $(CHAT_XVFB_ARGS)
 
 chat-kimi:
 	@$(_CHAT) --provider kimi
