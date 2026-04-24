@@ -4,6 +4,18 @@ set -euo pipefail
 APP_ROOT="${APP_ROOT:-/opt/roboclaws}"
 RUN_DIR="${ROBOCLAWS_RUN_DIR:-/data/runs/current}"
 AGENT_ID="${ROBOCLAWS_AGENT_ID:-0}"
+PORT="${PORT:-8080}"
+
+if [[ -z "${ROBOCLAWS_PUBLIC_URL:-}" ]]; then
+  if [[ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]]; then
+    export ROBOCLAWS_PUBLIC_URL="https://${RAILWAY_PUBLIC_DOMAIN}"
+  else
+    export ROBOCLAWS_PUBLIC_URL="http://127.0.0.1:${PORT}"
+  fi
+fi
+export ROBOCLAWS_VIEWER_HINT="${ROBOCLAWS_VIEWER_HINT:-${ROBOCLAWS_PUBLIC_URL%/}/views/}"
+export ROBOCLAWS_TAIL_HINT="${ROBOCLAWS_TAIL_HINT:-make appliance-tail}"
+export OPENCLAW_GATEWAY_CONTAINER="${OPENCLAW_GATEWAY_CONTAINER:-roboclaws-appliance}"
 
 cd "$APP_ROOT"
 

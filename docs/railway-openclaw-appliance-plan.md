@@ -53,7 +53,11 @@ Why this shape:
   process wrapper.
 - Add `railway.toml` and `.dockerignore`.
 - Add Make targets for local parity:
-  `make appliance-build` and `make appliance-run`.
+  `make appliance-build`, `make appliance-run-local`, and
+  `make appliance-run-railway`.
+- Add `make appliance-tail` as the appliance equivalent of `make chat-tail`.
+  `make chat-tail` remains scoped to the standalone `make chat` Gateway
+  container named `openclaw-gateway`.
 
 ## Runtime Configuration
 
@@ -86,20 +90,26 @@ Local parity smoke:
 
 ```bash
 make appliance-build
-DEMO_PASSWORD=demo make appliance-run
+DEMO_PASSWORD=demo make appliance-run-local
 ```
 
-The local parity target bind-mounts host `/data` into container `/data` by
-default and runs with `HOME=/data`, matching Railway's runtime shape. Its
-AI2-THOR cache resolves to `/data/.ai2thor`. Override the host path with
-`make appliance-run APPLIANCE_DATA_DIR=/path/to/data` if needed.
+The local appliance target bind-mounts the host `$HOME/.ai2thor` cache into
+container `/data/.ai2thor`, so it reuses the same AI2-THOR Unity build as the
+normal host-side `make chat` workflow without requiring a host `/data`
+directory.
 
-To reuse the AI2-THOR cache from the normal host-side `make chat` workflow:
+Railway-shape smoke:
 
 ```bash
-mkdir -p /data/.ai2thor
-cp -a "$HOME/.ai2thor/." /data/.ai2thor/
+make appliance-build
+DEMO_PASSWORD=demo make appliance-run-railway
 ```
+
+`make appliance-run-railway` bind-mounts host `/data` into container `/data`
+and runs with `HOME=/data`, matching Railway's runtime shape. Its AI2-THOR
+cache resolves to `/data/.ai2thor`. Override the host path with
+`make appliance-run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data` if
+needed.
 
 Then verify:
 
@@ -108,6 +118,8 @@ Then verify:
 - the Control UI accepts bearer token `demo` when `OPENCLAW_TOKEN` is unset
 - `http://localhost:8080/views/` shows the three-panel viewer
 - after `agent-0` calls `roboclaws__observe`, FPV/map/chase images refresh
+- `make appliance-tail` tails the Gateway session JSONL from the appliance
+  container
 
 Automated checks:
 
