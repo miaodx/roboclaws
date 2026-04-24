@@ -76,10 +76,9 @@ def test_probe_openclaw_turn_returns_transport_metrics() -> None:
     result = probe_openclaw_turn(bridge, turn)
     assert result["probe"] == "openclaw_turn"
     assert result["response"]["action"] == "MoveAhead"
-    assert (
-        result["transport_metrics"]["timings"]["openclaw_gateway_request_seconds"]
-        == pytest.approx(9.9)
-    )
+    assert result["transport_metrics"]["timings"][
+        "openclaw_gateway_request_seconds"
+    ] == pytest.approx(9.9)
 
 
 def test_probe_direct_provider_reports_payload_metrics() -> None:

@@ -122,10 +122,7 @@ def _default_api_key(model_name: str | None) -> str | None:
 
 
 def _default_base_url(model_name: str | None) -> str | None:
-    model = (model_name or "").lower()
-    if "mimo" in model:
-        return _MIMO_BASE_URL
-    return None
+    return _MIMO_BASE_URL if "mimo" in (model_name or "").lower() else None
 
 
 def _encode_frame_data_url(frame: np.ndarray, *, max_dim: int = 640, quality: int = 75) -> str:
@@ -144,26 +141,32 @@ def _encode_frame_data_url(frame: np.ndarray, *, max_dim: int = 640, quality: in
 
 
 def _extract_response_text(response: Any) -> str:
-    choices = getattr(response, "choices", None) or []
-    if not choices:
+    if not (choices := getattr(response, "choices", None) or []):
         return ""
-    message = getattr(choices[0], "message", None)
-    if message is None:
+    if (message := getattr(choices[0], "message", None)) is None:
         return ""
     content = getattr(message, "content", "")
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, list):
-        chunks: list[str] = []
-        for part in content:
-            if isinstance(part, dict):
-                text = part.get("text")
-            else:
-                text = getattr(part, "text", None)
-            if text:
-                chunks.append(str(text).strip())
+        chunks = [
+            str(part.get("text") if isinstance(part, dict) else getattr(part, "text", "")).strip()
+            for part in content
+        ]
         return "\n".join(chunk for chunk in chunks if chunk)
     return str(content).strip()
+
+
+def _fallback_result(
+    *, bridge_model: str | None, error: str, started: float | None = None
+) -> VisionBridgeResult:
+    return VisionBridgeResult(
+        delivery="text-bridge",
+        description=_DEFAULT_BRIDGE_FALLBACK,
+        bridge_model=bridge_model,
+        latency_s=0.0 if started is None else round(time.monotonic() - started, 3),
+        error=error,
+    )
 
 
 class VisionBridge:
@@ -218,21 +221,19 @@ class VisionBridge:
     ) -> VisionBridgeResult:
         started = time.monotonic()
         if not self.bridge_model:
-            return VisionBridgeResult(
-                delivery="text-bridge",
-                description=_DEFAULT_BRIDGE_FALLBACK,
+            return _fallback_result(
                 bridge_model=None,
-                latency_s=0.0,
                 error="vision bridge model is not configured",
             )
 
+        state_data = state or {}
         state_summary = {
             "view_variant": view_variant,
             "image_labels": list(image_labels),
-            "position": (state or {}).get("position"),
-            "rotation": (state or {}).get("rotation"),
-            "camera_horizon": (state or {}).get("camera_horizon"),
-            "human_message": (state or {}).get("human_message"),
+            "position": state_data.get("position"),
+            "rotation": state_data.get("rotation"),
+            "camera_horizon": state_data.get("camera_horizon"),
+            "human_message": state_data.get("human_message"),
         }
         content: list[dict[str, Any]] = [
             {
@@ -243,12 +244,12 @@ class VisionBridge:
                     "Navigation cues.\n"
                     f"State: {json.dumps(state_summary, separators=(',', ':'))}"
                 ),
-            }
+            },
+            *(
+                {"type": "image_url", "image_url": {"url": _encode_frame_data_url(frame)}}
+                for frame in images
+            ),
         ]
-        content.extend(
-            {"type": "image_url", "image_url": {"url": _encode_frame_data_url(frame)}}
-            for frame in images
-        )
 
         try:
             response = self._client_handle().chat.completions.create(
@@ -269,10 +270,8 @@ class VisionBridge:
                 latency_s=round(time.monotonic() - started, 3),
             )
         except Exception as exc:
-            return VisionBridgeResult(
-                delivery="text-bridge",
-                description=_DEFAULT_BRIDGE_FALLBACK,
+            return _fallback_result(
                 bridge_model=self.bridge_model,
-                latency_s=round(time.monotonic() - started, 3),
                 error=str(exc),
+                started=started,
             )

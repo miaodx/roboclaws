@@ -18,6 +18,77 @@ from roboclaws.core.vlm import (
     _record_call_success,
 )
 
+_KIMI_HTTP_TIMEOUT_ENV = "KIMI_HTTP_TIMEOUT"
+_KIMI_DEFAULT_COST = {"input": 1.00, "output": 3.00}
+_KIMI_SYSTEM_BASE = (
+    "You are a robot agent navigating an indoor environment. "
+    "You may be competing or cooperating with other agents. "
+    "Based on what you see and the map information, choose your next action."
+)
+
+
+def _kimi_timeout(default: float) -> float:
+    env_timeout = os.environ.get(_KIMI_HTTP_TIMEOUT_ENV)
+    return float(env_timeout) if env_timeout else default
+
+
+def _provider_status(
+    provider_name: str,
+    model: str,
+    *,
+    max_transient_errors: int | None,
+    max_calls_with_retries: int | None,
+    max_consecutive_failures: int | None,
+) -> ProviderStatus:
+    return ProviderStatus(
+        provider_name=provider_name,
+        model=model,
+        max_transient_errors=max_transient_errors,
+        max_calls_with_retries=max_calls_with_retries,
+        max_consecutive_failures=max_consecutive_failures,
+    )
+
+
+def _build_content(images: list[str], state: dict[str, Any]) -> list[dict[str, Any]]:
+    content = [
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
+        }
+        for img_b64 in images
+    ]
+    content.append({"type": "text", "text": json.dumps(state, indent=2)})
+    return content
+
+
+def _kimi_system_prompt(state: dict[str, Any], agent_souls: dict[int, str] | None) -> str:
+    if not agent_souls:
+        return _KIMI_SYSTEM_BASE
+
+    agent_id = state.get("my_agent_id", state.get("current_agent"))
+    if isinstance(agent_id, int) and agent_id in agent_souls:
+        return _KIMI_SYSTEM_BASE + "\n\n" + agent_souls[agent_id]
+    return _KIMI_SYSTEM_BASE
+
+
+def _kimi_response_format() -> dict[str, Any]:
+    action_enum = [action for action in NAVIGATION_ACTIONS if action not in ("Teleport", "Done")]
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "agent_action",
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {"type": "string"},
+                    "action": {"type": "string", "enum": action_enum},
+                },
+                "required": ["reasoning", "action"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
 
 def _extract_action_json(candidates: list[str]) -> dict[str, Any] | None:
     """Find the first parseable ``{"action": ...}`` object across candidate strings.
@@ -71,12 +142,7 @@ def _extract_action_json(candidates: list[str]) -> dict[str, Any] | None:
 
 
 class KimiProvider(_AnthropicBase):
-    """Kimi (Moonshot) via the Anthropic SDK with a custom base_url and instructor.
-
-    Accepts an optional ``agent_souls`` map so one provider instance can drive
-    N agents with N distinct SOULs, matching the Phase 2.2 OpenClaw-backend
-    behavior without needing the Gateway.
-    """
+    """Kimi (Moonshot) via the Anthropic SDK with optional per-agent SOUL prompts."""
 
     def __init__(
         self,
@@ -98,15 +164,8 @@ class KimiProvider(_AnthropicBase):
                 "anthropic and instructor packages required: pip install anthropic instructor"
             ) from exc
         self._AgentAction = _build_agent_action_model()
-        # Cap per-call latency — Anthropic SDK's default is 600s which, combined
-        # with retry_attempts=4, lets one hung upstream eat 40 min before any
-        # retry happens.  Observed Kimi coding-tier tail-latency reliably
-        # exceeds the fast-case (~3s) — 60s is generous for the success path
-        # and turns tail stalls into clean transient errors that the retry
-        # machinery can act on.  Override via KIMI_HTTP_TIMEOUT env or kwarg.
         if http_timeout is None:
-            env_t = os.environ.get("KIMI_HTTP_TIMEOUT")
-            http_timeout = float(env_t) if env_t else 60.0
+            http_timeout = _kimi_timeout(60.0)
         raw_client = anthropic.Anthropic(
             api_key=api_key or os.environ["KIMI_API_KEY"],
             base_url="https://api.kimi.com/coding",
@@ -122,84 +181,35 @@ class KimiProvider(_AnthropicBase):
         self._max_tokens = max_tokens
         self._retry_attempts = retry_attempts
         self._cost = 0.0
-        self._cost_table = _COST_PER_M.get(model, {"input": 1.00, "output": 3.00})
+        self._cost_table = _COST_PER_M.get(model, _KIMI_DEFAULT_COST)
         self._provider_name = "kimi"
         self._agent_souls = agent_souls
-        self._status = ProviderStatus(
-            provider_name=self._provider_name,
-            model=model,
+        self._status = _provider_status(
+            self._provider_name,
+            model,
             max_transient_errors=max_transient_errors,
             max_calls_with_retries=max_calls_with_retries,
             max_consecutive_failures=max_consecutive_failures,
         )
 
 
-# ---------------------------------------------------------------------------
-# KimiCodingProvider — direct OpenAI-format to api.kimi.com/coding/v1
-# ---------------------------------------------------------------------------
-#
-# The existing KimiProvider uses the Anthropic SDK → Kimi's anthropic-messages
-# surface at api.kimi.com/coding.  That surface is periodically overloaded
-# (observed 2/3 calls returning 429 rate_limit_error "engine currently
-# overloaded" on 2026-04-17) even when the same account's OpenAI surface at
-# /coding/v1/chat/completions answers cleanly in ~7s.
-#
-# Kimi For Coding gates non-agent clients with a 403 access_terminated_error
-# unless the request carries a recognised coding-agent User-Agent.
-# ``claude-code/1.0.0`` passes the gate (probed empirically on 2026-04-17).
-#
-# Keep the two providers side-by-side rather than swap — the Anthropic path
-# is still the right one once upstream stabilises and for Claude itself.
-
-
 class KimiCodingProvider:
-    """Direct httpx client for ``api.kimi.com/coding/v1/chat/completions``.
-
-    Unlike :class:`KimiProvider`, this provider:
-
-    * Uses the OpenAI-compatible endpoint (not anthropic-messages)
-    * Sets ``User-Agent: claude-code/1.0.0`` to pass the Kimi-For-Coding gate
-    * Parses the assistant response content as JSON directly (no instructor,
-      no pydantic schema enforcement); invalid JSON triggers a retry
-    """
+    """Direct httpx client for ``api.kimi.com/coding/v1/chat/completions``."""
 
     def __init__(
         self,
         model: str = "kimi-for-coding",
         api_key: str | None = None,
-        # Kimi emits chain-of-thought via ``reasoning_content`` which counts
-        # against ``max_tokens``.  Solid-red probes used ~1000 reasoning
-        # tokens; real AI2-THOR frames with SOUL + state push reasoning to
-        # 2000-3000 tokens, then final JSON ``content`` adds ~500 more.
-        # Budget 8192 — observed 4096 still truncated at reasoning=17k
-        # chars (2633 completion tokens seen on real frames, 2026-04-17).
         max_tokens: int = 8192,
-        # retry_attempts=2 caps single-call wait at ~2 × 120s + 5s backoff
-        # ≈ 4 min.  Previously 3 × 120s + (5+10+20s) ≈ 7 min per failed
-        # call was too aggressive — observed 5/11 calls in one run falling
-        # back, eating ~35 min before the wallclock could fire.
         retry_attempts: int = 2,
-        # Kimi Coding's RPM limiter can surface 429s in bursts (observed
-        # 3-call bursts hitting 4/4 429s even after backoff).  Budget scales
-        # so a 429-heavy patch doesn't trip the circuit breaker before
-        # transient behaviour settles.
         max_transient_errors: int | None = 20,
         max_calls_with_retries: int | None = 20,
-        # Back-to-back failures with no success between them — this fires
-        # when Kimi has actually gone dark rather than just a slow call.
         max_consecutive_failures: int | None = 5,
         agent_souls: dict[int, str] | None = None,
         http_timeout: float | None = None,
         user_agent: str = "claude-code/1.0.0",
         retry_backoff_base: float = 5.0,
         retry_backoff_cap: float = 30.0,
-        # Kimi exposes chain-of-thought via ``reasoning_content``; with
-        # reasoning_effort=medium (default) it can consume 3000+ tokens
-        # before producing the final ``content`` — easy to starve the
-        # budget and land with content="".  ``low`` cuts reasoning to
-        # ~1000 tokens and reliably fills ``content`` with the JSON answer
-        # in ~9s (probed 2026-04-17).  ``minimal`` is even faster but
-        # gives up quality.  Valid: minimal | low | medium | high.
         reasoning_effort: str = "low",
     ) -> None:
         try:
@@ -208,21 +218,19 @@ class KimiCodingProvider:
             raise ImportError("httpx is required for KimiCodingProvider") from exc
 
         if http_timeout is None:
-            env_t = os.environ.get("KIMI_HTTP_TIMEOUT")
             # Real AI2-THOR frames + SOUL + json_schema push Kimi to 40-60s
             # with reasoning_effort=low.  Solid-red probe at 60s was fine;
             # in-game frames occasionally exceed it.  120s gives 2× headroom
             # and the circuit-breaker still fires within retry budget.
-            http_timeout = float(env_t) if env_t else 120.0
+            http_timeout = _kimi_timeout(120.0)
 
         self._model = model
         self._max_tokens = max_tokens
         self._retry_attempts = retry_attempts
         self._cost = 0.0
-        self._cost_table = _COST_PER_M.get(model, {"input": 1.00, "output": 3.00})
+        self._cost_table = _COST_PER_M.get(model, _KIMI_DEFAULT_COST)
         self._provider_name = "kimi-coding"
         self._agent_souls = agent_souls
-        self._timeout = http_timeout
         self._client = httpx.Client(
             base_url="https://api.kimi.com/coding",
             headers={
@@ -236,9 +244,9 @@ class KimiCodingProvider:
         self._retry_backoff_cap = retry_backoff_cap
         self._reasoning_effort = reasoning_effort
         self.model = model
-        self._status = ProviderStatus(
-            provider_name=self._provider_name,
-            model=model,
+        self._status = _provider_status(
+            self._provider_name,
+            model,
             max_transient_errors=max_transient_errors,
             max_calls_with_retries=max_calls_with_retries,
             max_consecutive_failures=max_consecutive_failures,
@@ -257,6 +265,55 @@ class KimiCodingProvider:
     def close(self) -> None:
         self._client.close()
 
+    def _build_payload(self, images: list[str], state: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            # Kimi For Coding returns 400 "invalid temperature: only 0.6
+            # is allowed" when temperature is omitted (observed on the
+            # 2nd turn of a real game after step 0 succeeded).  Pin to 0.6.
+            "temperature": 0.6,
+            "reasoning_effort": self._reasoning_effort,
+            "response_format": _kimi_response_format(),
+            "messages": [
+                {"role": "system", "content": _kimi_system_prompt(state, self._agent_souls)},
+                {"role": "user", "content": _build_content(images, state)},
+            ],
+        }
+
+    def _parse_response(self, body: dict[str, Any]) -> dict[str, str]:
+        choice = body["choices"][0]
+        msg = choice.get("message") or {}
+        # Kimi sometimes returns the final answer in ``content`` and its
+        # chain-of-thought in ``reasoning_content``; with longer system
+        # prompts the split flips. Scan both before falling back.
+        candidates = [msg.get("content") or "", msg.get("reasoning_content") or ""]
+        parsed = _extract_action_json(candidates)
+        if parsed is None:
+            raise ValueError(
+                f"Kimi returned no parseable JSON action "
+                f"(content={candidates[0][:80]!r} reasoning={candidates[1][:80]!r})"
+            )
+
+        action = str(parsed.get("action", "")).strip()
+        if action not in NAVIGATION_ACTIONS:
+            raise ValueError(f"invalid action from Kimi: {action!r}")
+        return {"reasoning": str(parsed.get("reasoning", "")), "action": action}
+
+    def _record_usage(self, usage: dict[str, Any]) -> None:
+        self._cost += (
+            int(usage.get("prompt_tokens", 0)) / 1_000_000 * self._cost_table["input"]
+            + int(usage.get("completion_tokens", 0)) / 1_000_000 * self._cost_table["output"]
+        )
+
+    def _fallback_action(self, error: Exception) -> dict[str, str]:
+        return {
+            "reasoning": (
+                f"Retries exhausted on {error.__class__.__name__}; falling back to RotateRight."
+            ),
+            "action": "RotateRight",
+        }
+
     def get_action(
         self,
         images: list[str],
@@ -268,66 +325,7 @@ class KimiCodingProvider:
                 status=self.get_status(),
             )
 
-        # Compose system prompt: base spec + per-agent SOUL.  Skip the shared
-        # _SYSTEM_PROMPT entirely — its trailing ``{"reasoning": "...",
-        # "action": "..."}`` example confuses Kimi into emitting empty
-        # content when combined with json_schema enforcement (probed
-        # 2026-04-17).  json_schema below already pins the reply shape.
-        _KIMI_SYSTEM_BASE = (
-            "You are a robot agent navigating an indoor environment. "
-            "You may be competing or cooperating with other agents. "
-            "Based on what you see and the map information, choose your next action."
-        )
-        system_prompt = _KIMI_SYSTEM_BASE
-        if self._agent_souls:
-            agent_id = state.get("my_agent_id", state.get("current_agent"))
-            if isinstance(agent_id, int) and agent_id in self._agent_souls:
-                system_prompt = _KIMI_SYSTEM_BASE + "\n\n" + self._agent_souls[agent_id]
-
-        # OpenAI-format content blocks: images first, then the state JSON.
-        content: list[dict[str, Any]] = []
-        for img_b64 in images:
-            content.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"},
-                }
-            )
-        content.append({"type": "text", "text": json.dumps(state, indent=2)})
-
-        # Strict JSON-schema with an enum for ``action`` — prevents Kimi from
-        # echoing our example placeholders ("...") or returning free-form
-        # English.  Kimi Coding honours json_schema (probed 2026-04-17).
-        action_enum = [a for a in NAVIGATION_ACTIONS if a not in ("Teleport", "Done")]
-        payload: dict[str, Any] = {
-            "model": self._model,
-            "max_tokens": self._max_tokens,
-            # Kimi For Coding returns 400 "invalid temperature: only 0.6
-            # is allowed" when temperature is omitted (observed on the
-            # 2nd turn of a real game after step 0 succeeded).  Pin to 0.6.
-            "temperature": 0.6,
-            "reasoning_effort": self._reasoning_effort,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "agent_action",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "reasoning": {"type": "string"},
-                            "action": {"type": "string", "enum": action_enum},
-                        },
-                        "required": ["reasoning", "action"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": content},
-            ],
-        }
-
+        payload = self._build_payload(images, state)
         started = time.monotonic()
         last_exc: Exception | None = None
         retries_this_call = 0
@@ -336,31 +334,8 @@ class KimiCodingProvider:
                 resp = self._client.post("/v1/chat/completions", json=payload)
                 resp.raise_for_status()
                 body = resp.json()
-                choice = body["choices"][0]
-                msg = choice.get("message") or {}
-                # Kimi sometimes returns the final answer in ``content`` and
-                # its chain-of-thought in ``reasoning_content``; with longer
-                # system prompts the split flips — content is empty and the
-                # JSON reply lives inside reasoning_content.  Scan both.
-                candidates = [msg.get("content") or "", msg.get("reasoning_content") or ""]
-                parsed = _extract_action_json(candidates)
-                if parsed is None:
-                    raise ValueError(
-                        f"Kimi returned no parseable JSON action "
-                        f"(content={candidates[0][:80]!r} reasoning={candidates[1][:80]!r})"
-                    )
-                action = str(parsed.get("action", "")).strip()
-                if action not in NAVIGATION_ACTIONS:
-                    raise ValueError(f"invalid action from Kimi: {action!r}")
-                result = {"reasoning": str(parsed.get("reasoning", "")), "action": action}
-
-                usage = body.get("usage") or {}
-                in_tok = int(usage.get("prompt_tokens", 0))
-                out_tok = int(usage.get("completion_tokens", 0))
-                self._cost += (
-                    in_tok / 1_000_000 * self._cost_table["input"]
-                    + out_tok / 1_000_000 * self._cost_table["output"]
-                )
+                result = self._parse_response(body)
+                self._record_usage(body.get("usage") or {})
                 _record_call_success(
                     self._status,
                     duration_seconds=time.monotonic() - started,
@@ -429,13 +404,7 @@ class KimiCodingProvider:
                         # of aborting on a single slow minute.  Budget
                         # accounting still trips the circuit after enough
                         # consecutive failures.
-                        return {
-                            "reasoning": (
-                                f"Retries exhausted on {exc.__class__.__name__}; "
-                                "falling back to RotateRight."
-                            ),
-                            "action": "RotateRight",
-                        }
+                        return self._fallback_action(exc)
                     raise
 
                 retries_this_call += 1

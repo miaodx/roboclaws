@@ -204,9 +204,9 @@ def _print_banner(
 def _start_stdin_thread(
     mcp_server: RoboclawsMCPServer,
     stop_event: threading.Event,
-) -> threading.Thread | None:
+) -> None:
     if not sys.stdin.isatty():
-        return None
+        return
 
     def _pump() -> None:
         while not stop_event.is_set():
@@ -218,17 +218,12 @@ def _start_stdin_thread(
                 mcp_server.enqueue_human_message(message)
                 log.info("queued human message (%d chars)", len(message))
 
-    thread = threading.Thread(target=_pump, daemon=True, name="stdin-pump")
-    thread.start()
-    return thread
+    threading.Thread(target=_pump, daemon=True, name="stdin-pump").start()
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(name)s %(levelname)s %(message)s",
-    )
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     output_dir = args.output_dir or _default_output_dir()
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -241,12 +236,17 @@ def main(argv: list[str] | None = None) -> int:
 
     # Build bootstrap env from CLI args; CLI wins over inherited os.environ.
     bootstrap_env: dict[str, str] = {"PROVIDER": args.provider}
-    if args.model:
-        bootstrap_env["MODEL"] = args.model
-    if args.image_model:
-        bootstrap_env["IMAGE_MODEL"] = args.image_model
-    if args.observe_mode:
-        bootstrap_env["ROBOCLAWS_OBSERVE_MODE"] = args.observe_mode
+    bootstrap_env.update(
+        {
+            key: value
+            for key, value in {
+                "MODEL": args.model,
+                "IMAGE_MODEL": args.image_model,
+                "ROBOCLAWS_OBSERVE_MODE": args.observe_mode,
+            }.items()
+            if value
+        }
+    )
     if args.plugin:
         bootstrap_env["KIMI_PROVIDER_MODE"] = "plugin"
         bootstrap_env["MIMO_PROVIDER_MODE"] = "anthropic"
@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
         # inside the chat because the container couldn't see them. Fix: the
         # MCP tool's snapshots_dir is the per-agent subdir.
         snapshots_root = Path(
-            os.environ.get("ROBOCLAWS_SNAPSHOTS_DIR", str(output_dir / "snapshots"))
+            os.environ.get("ROBOCLAWS_SNAPSHOTS_DIR") or output_dir / "snapshots"
         ).resolve()
         snapshots_root.mkdir(parents=True, exist_ok=True)
         os.environ["ROBOCLAWS_SNAPSHOTS_DIR"] = str(snapshots_root)
@@ -330,9 +330,9 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         if args.skip_bootstrap:
-            token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
-            if not token:
-                token = _existing_gateway_token(gateway_container) or ""
+            token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip() or (
+                _existing_gateway_token(gateway_container) or ""
+            )
             if not token:
                 raise RuntimeError(
                     "--skip-bootstrap but no token: set OPENCLAW_GATEWAY_TOKEN "

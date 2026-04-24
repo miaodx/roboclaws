@@ -9,10 +9,15 @@ from roboclaws.openclaw.diagnostics import run_latency_probe
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Replay one saved turn through OpenClaw and a direct provider to compare latency.",
+        description=(
+            "Replay one saved turn through OpenClaw and a direct provider to compare latency."
+        ),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("replay_dir", help="Replay directory containing replay.json + saved PNG frames")
+    parser.add_argument(
+        "replay_dir",
+        help="Replay directory containing replay.json + saved PNG frames",
+    )
     parser.add_argument("--step", type=int, default=0, help="Replay step number to probe")
     parser.add_argument("--model", default="kimi-coding", help="Direct provider model alias")
     parser.add_argument(

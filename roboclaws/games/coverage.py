@@ -187,18 +187,12 @@ class CoverageGame:
             return 0.0
         return len(self._covered) / self._total_cells
 
-    def _uncovered_reachable_cells(self) -> set[tuple[int, int]]:
-        """Return ground-truth reachable cells that are still uncovered."""
-        if not self._reachable_cells:
-            return set()
-        return self._reachable_cells - set(self._covered)
-
     def _nearest_uncovered_distance(self, start_cell: tuple[int, int]) -> int | None:
         """Return shortest grid distance to an uncovered reachable cell."""
         if not self._reachable_cells or start_cell not in self._reachable_cells:
             return None
 
-        uncovered = self._uncovered_reachable_cells()
+        uncovered = self._reachable_cells.difference(self._covered)
         if not uncovered:
             return None
         if start_cell in uncovered:
@@ -245,19 +239,6 @@ class CoverageGame:
             if len(names) >= 12:
                 break
         return names
-
-    def _target_position(
-        self,
-        *,
-        cell: tuple[int, int],
-        y: float,
-    ) -> dict[str, float]:
-        """Convert a grid cell back to a world position for view estimation."""
-        return {
-            "x": cell[0] * self.grid_size,
-            "y": y,
-            "z": cell[1] * self.grid_size,
-        }
 
     def _cell_status(
         self,
@@ -319,10 +300,11 @@ class CoverageGame:
                     and target_status != "blocked_unreachable"
                 ):
                     estimated_new_cells = self._estimate_new_cells(
-                        position=self._target_position(
-                            cell=target_cell,
-                            y=float(current_state.position.get("y", 0.0)),
-                        ),
+                        position={
+                            "x": target_cell[0] * self.grid_size,
+                            "y": float(current_state.position.get("y", 0.0)),
+                            "z": target_cell[1] * self.grid_size,
+                        },
                         rotation=current_state.rotation,
                     )
                     frontier_distance = self._nearest_uncovered_distance(target_cell)
@@ -365,7 +347,6 @@ class CoverageGame:
     def _stall_recovery(
         self,
         *,
-        agent_id: int,
         current_state: Any,
         action_hints: dict[str, dict[str, Any]],
     ) -> dict[str, Any] | None:
@@ -461,6 +442,9 @@ class CoverageGame:
         """Return coverage percentage (0–100). Requires total_cells to be set."""
         return self._coverage_fraction() * 100.0
 
+    def _coverage_reached(self) -> bool:
+        return self._total_cells is not None and self._coverage_fraction() >= self.COVERAGE_TARGET
+
     def get_state(self) -> dict[str, Any]:
         """Return a structured state dict suitable for VLM prompts.
 
@@ -508,7 +492,6 @@ class CoverageGame:
             current_state=current_state,
         )
         stall_recovery = self._stall_recovery(
-            agent_id=agent_id,
             current_state=current_state,
             action_hints=state["action_hints"],
         )
@@ -554,14 +537,12 @@ class CoverageGame:
         new_state = self.engine.step(agent_id=agent_id, action=action_name)
         self._last_action_by_agent[agent_id] = action_name
 
-        new_cells = 0
-        if new_state.last_action_success:
-            new_cells = self._mark_covered(agent_id, new_state.position, new_state.rotation)
-
-        if new_cells > 0:
-            self._no_progress_steps = 0
-        else:
-            self._no_progress_steps += 1
+        new_cells = (
+            self._mark_covered(agent_id, new_state.position, new_state.rotation)
+            if new_state.last_action_success
+            else 0
+        )
+        self._no_progress_steps = 0 if new_cells > 0 else self._no_progress_steps + 1
 
         self._step_count += 1
         self._current_agent = (self._current_agent + 1) % self.engine.agent_count
@@ -579,7 +560,7 @@ class CoverageGame:
             return True
         if self._wall_exceeded():
             return True
-        if self._total_cells is not None and self._coverage_fraction() >= self.COVERAGE_TARGET:
+        if self._coverage_reached():
             return True
         return False
 
@@ -613,10 +594,7 @@ class CoverageGame:
         else:
             work_balance = min(contributions) / max(contributions)
 
-        coverage_reached = (
-            self._total_cells is not None and self._coverage_fraction() >= self.COVERAGE_TARGET
-        )
-        if coverage_reached:
+        if self._coverage_reached():
             termination_reason = "coverage_reached"
         elif self._wall_exceeded() and self._step_count < self.max_steps:
             termination_reason = "time_limit"
