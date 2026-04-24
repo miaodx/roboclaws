@@ -16,6 +16,12 @@ This file holds the **current phase** only. Shipped phases live under
 > execution order lives in the GSD phase files, with `02.4-01` explicitly
 > landing the single-agent `examples/openclaw_demo.py` path first before
 > territory/coverage and the experiment harness.
+>
+> **Update (2026-04-24):** The original multi-variant A/B/C study is now
+> historical context only. Product/runtime direction is locked to
+> `map-v2+chase`; the main examples no longer support `baseline` or `map-v2`
+> as live runtime modes. See
+> [`docs/view-experiment-2026-04.md`](docs/view-experiment-2026-04.md).
 
 # Phase 2.4 — Map representation & view composition A/B (Source Draft)
 
@@ -435,4 +441,3 @@ capped at $20 hard via `--max-usd` wallet gates.
 
 Sequential. T30-T32 all touch `roboclaws/core/`; T33 depends on T32;
 T34 depends on T33's JSONL shape. No fan-out wins here. Keep on `main`.
-

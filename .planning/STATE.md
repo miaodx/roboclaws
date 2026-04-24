@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
-status: blocked
-stopped_at: Phase 02.4 still blocked on 02.4-04 full sweep + decision record via issue #70; queued follow-up Phase 4 is now executed with local probe evidence, while Phases 02.7 and 05 remain planned
-last_updated: "2026-04-23T13:48:56Z"
-last_activity: 2026-04-23
+status: active
+stopped_at: Phase 02.4 is no longer blocked; on 2026-04-24 the legacy multi-variant experiment was superseded and runtime support standardized on map-v2+chase only. Phase 02.7 is the next queued milestone work.
+last_updated: "2026-04-24T02:36:14Z"
+last_activity: 2026-04-24
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 02.4 — view-experiment-ab
+**Current focus:** Phase 02.7 — openclaw-intermediate-message-capture (next queued phase)
 
 ## Current Position
 
-Phase: 02.4 (view-experiment-ab) — ACTIVE / BLOCKED ON LOCAL-DEV
-Plan: 3 of 4 — `02.4-01` through `02.4-03` are complete; `02.4-04` remains open for the live sweep and decision record.
-Status: Shared view primitives, chase-cam support, example rollout, `NvidiaProvider`, `examples/view_experiment.py`, and `scripts/analyze_view_experiment.py` are implemented. On 2026-04-22 a local workstation also completed a 50-step Kimi `openclaw_demo.py --views map-v2+chase` review run and a shipped-path follow-up proving the same view family works in Phase 02.6's autonomous MCP loop. The remaining gate is still the explicit full `02.4-04` sweep + write-up tracked in issue #70.
-Last activity: 2026-04-23 - Completed Phase 4 refactor-regression harness execution and local probe evidence
+Phase: 02.4 (view-experiment-ab) — CLOSED / SUPERSEDED
+Plan: 4 of 4 closed — `02.4-01` through `02.4-03` shipped the shared view system; `02.4-04` was superseded on 2026-04-24 when product direction was locked to `map-v2+chase` only.
+Status: Shared view primitives, chase-cam support, example rollout, `NvidiaProvider`, `examples/view_experiment.py`, and `scripts/analyze_view_experiment.py` remain in the repo. The product/runtime surface no longer supports `baseline` or `map-v2`; the main examples now use only `map-v2+chase`, matching the shipped Phase 02.6 autonomous path. `docs/view-experiment-2026-04.md` records the superseding decision.
+Last activity: 2026-04-24 - Collapsed runtime support back to `map-v2+chase` only and synced roadmap/state docs
 
-Progress: [########--] 75%
-(Phase 02.4 now has its implementation-heavy plans complete. The final phase gate is intentionally the local-dev validation + decision-record step, not more cloud-side coding. Phase 02.6 shipped on 2026-04-21 and remains the latest fully completed phase.)
+Progress: [##########] 100%
+(Phase 02.4 is no longer waiting on a local overnight sweep. The historical multi-variant study was superseded by product direction, so the next queued milestone work is Phase 02.7.)
 
 ## Performance Metrics
 
@@ -56,7 +56,7 @@ Progress: [########--] 75%
 **Recent Trend:**
 
 - Last 3 shipped phases: 2.2, 2.3 (declined), 2.6
-- Trend: Stable; Phase 02.4 is 3/4 complete and intentionally paused at the full local-dev sweep/write-up gate (issue #70) after a successful local review demo and 02.6 bridge follow-up on 2026-04-22
+- Trend: Stable; Phase 02.4 is now closed by decision, with the runtime standardized on `map-v2+chase` and the next queued work moved to Phase 02.7
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -76,6 +76,8 @@ Recent decisions affecting current work:
 - **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
 - **Phase 02.4 execution checkpoint (2026-04-21):** Plans `02.4-01` through `02.4-03` are complete and the cloud-safe slice of `02.4-04` (`scripts/analyze_view_experiment.py` plus synthetic-data coverage) is implemented. The actual Kimi/NVIDIA sweep and `docs/view-experiment-2026-04.md` remain local-dev only and are tracked in issue #70.
 - **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
+- **Phase 02.4 decision lock (2026-04-24):** The old `baseline` / `map-v2` / `map-v2+chase` A/B study is now historical only. Runtime support was standardized on `map-v2+chase`, user-facing `--views` flags were removed from the main examples, and `02.4-04` was superseded rather than executed.
+- **Phase 5 completion (2026-04-23):** The codebase-simplification phase closed all 9 plans in a single verified worktree batch. Eighteen target files finished at or below their original line caps (`9,378` → `9,175`, net `-203`), targeted example/API guards stayed green, and the final repo-wide `pytest`, `ruff check`, and `ruff format --check` gates passed after a small pre-existing lint cleanup in unrelated scripts/tests.
 - **Phase 02.7 planning completion (2026-04-22):** The queued autonomous follow-up now has a full GSD planning bundle under `.planning/phases/02.7-openclaw-intermediate-message-capture/`: four executable plan files plus `02.7-RESEARCH.md` and `02.7-VALIDATION.md`. Scope remains unchanged: compare real Gateway streaming vs terminal-body capture, persist transcript artifacts additively, surface them in `report.html`, and validate the shipped path locally. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
 - **Phase 5 planning completion (2026-04-23):** Iterative codebase simplification phase now has a full GSD planning bundle under `.planning/phases/05-iterative-codebase-simplification/`: nine executable plan files covering all major source files (visualizer.py, mcp_server.py, reporter.py, transport.py, game modules, provider modules, supporting modules, and example scripts). All plans wave 1, independent, atomic commits, pytest + ruff gate per commit. Verification passed. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
 - **Phase 4 planning completion (2026-04-23):** The queued refactor-safety follow-up now has a full GSD planning bundle under `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/`: four executable plan files plus `04-RESEARCH.md` and `04-VALIDATION.md`. Scope is locked to tiny contract fixtures, a thin capture harness, a separate baseline-vs-candidate analyzer, and a local baseline-refresh workflow. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
@@ -99,7 +101,8 @@ Recent decisions affecting current work:
 
 ### Roadmap Evolution
 
-- Phase 5 added (2026-04-23): **Iterative codebase simplification** — /simplify passes over transport.py, mcp_server.py, bridge.py, reporter.py, and other files; atomic per-file commits; tests stay green throughout.
+- Phase 2.4 closed (2026-04-24): **Better Views** now has a locked product decision. The repo keeps only the `map-v2+chase` runtime path; the old multi-variant experiment is retained as historical context plus analysis tooling, not as an active gate.
+- Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
 ### Pending Todos
@@ -116,7 +119,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- **Phase 02.4 local-dev gate (issue #70):** Shared implementation and local seam review are complete, but the phase still cannot be closed without a workstation running the full Kimi/NVIDIA sweep, generating `output/view-experiment/results.jsonl`, and writing `docs/view-experiment-2026-04.md`.
+- No active blocker at the moment. Phase 02.4 is closed by decision; Phase 02.7 is the next queued milestone work.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** `uv run` had `ai2thor` available in the repo environment, but this session did not have an exported VLM key. No claims about real provider behavior or experiment outcome were made from cloud.
 
@@ -146,7 +149,7 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-04-22T07:11:32Z
-Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, while queued follow-up Phase 4 is now executed and Phases 02.7/05 remain planned under `.planning/phases/`
+Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, Phase 5 is now complete under `.planning/phases/05-iterative-codebase-simplification/`, and Phase 02.7 remains planned under `.planning/phases/`
 Resume file: .planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md
 
 ## Dual-Stack Workflow
