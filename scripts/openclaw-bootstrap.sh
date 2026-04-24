@@ -39,15 +39,22 @@
 #                                                     image/bridge routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
-#   TIMEOUT_SECONDS  Upstream timeout               (default: 600 = 10 min;
+#   TIMEOUT_SECONDS  Per-turn wall-clock cap         (default: 7200 = 2h;
 #                                                     written to agents.defaults.
-#                                                     timeoutSeconds.  Bump if
-#                                                     Kimi's verbose reasoning on
-#                                                     multi-image prompts exceeds
-#                                                     the Gateway's idle watchdog,
-#                                                     or set to wall_budget + 60
-#                                                     for long-running autonomous
-#                                                     loop kickoff calls.)
+#                                                     timeoutSeconds.  NOT an
+#                                                     idle watchdog — Gateway's
+#                                                     scheduleAbortTimer is set
+#                                                     once at run start and is
+#                                                     never reset on activity
+#                                                     (verified 2026-04-24 in
+#                                                     pi-embedded-runner).  Sized
+#                                                     as a backstop; the real
+#                                                     stop path is the agent's
+#                                                     own end_turn / roboclaws__
+#                                                     done, or the UI Stop button
+#                                                     on an active stream.  The
+#                                                     autonomous loop overrides
+#                                                     with wall_budget + 60.)
 #
 # Provider-specific vars (only the one matching PROVIDER is required):
 #   KIMI_API_KEY   (PROVIDER=kimi)   Moonshot/Kimi API key
@@ -148,7 +155,7 @@ SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
 PERSONALITY_PROBE="${PERSONALITY_PROBE:-1}"
 READY_TIMEOUT="${READY_TIMEOUT:-60}"
-TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-600}"
+TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-7200}"
 
 # Auto-detect PROVIDER when unset:
 #   1) nvidia — if NV_API_KEY / NVIDIA_API_KEY is set (verified-working,
@@ -570,7 +577,7 @@ agent_entries = [
     }
     for aid in agent_ids
 ]
-timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "600")
+timeout_seconds = int(os.environ.get("TIMEOUT_SECONDS") or "7200")
 image_model = os.environ.get("IMAGE_MODEL") or model
 # Pre-seed the bearer token when OPENCLAW_TOKEN is supplied (default in
 # the chat* Makefile targets so operators paste "demo" once per browser
@@ -602,12 +609,19 @@ config = {
         "http": {"endpoints": {"chatCompletions": {"enabled": True}}},
     },
     "agents": {
-        # timeoutSeconds bumps the per-turn idle watchdog above the 180s
-        # default.  Kimi occasionally takes 2-3 minutes on multi-image
-        # prompts with verbose reasoning (observed 2026-04-20); the Gateway
-        # surfaces these as a Request-timed-out error that the demo then
-        # falls back to parse.  600s absorbs every slow turn observed so
-        # far and still prevents a hung call from stalling the whole run.
+        # timeoutSeconds is a per-turn WALL-CLOCK cap, not an idle watchdog.
+        # Gateway's scheduleAbortTimer is set once at run start and is NEVER
+        # reset on tool-call activity (verified 2026-04-24 in
+        # pi-embedded-runner; despite older docs calling it an "idle
+        # watchdog").  7200 = 2h, sized as a backstop; the intended stop path
+        # is the agent's own end_turn / roboclaws__done or the UI Stop button
+        # on an active stream.  Earlier 600s defaulting bit hard on
+        # open-ended exploration prompts: the turn aborted mid-tool-call
+        # and Gateway surfaced a timeout error without a terminal frame,
+        # wedging the Control UI's Stop/send controls.  Per-call HTTP stalls
+        # (undici headers/bodyTimeout, smithy socket-idle) still fail fast
+        # at a shorter horizon — this knob only caps the aggregate tool-call
+        # loop inside a single user turn.
         "defaults": defaults_cfg,
         "list": agent_entries,
     },
