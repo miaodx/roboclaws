@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        appliance-build appliance-run appliance-run-local appliance-run-railway \
+        appliance-build appliance-run-local appliance-run-railway \
         chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
         chat-mimo-pro chat-mimo chat-kimi \
@@ -45,7 +45,6 @@ help:
 	@echo "  make appliance-build           — build the all-in-one Railway image"
 	@echo "  make appliance-run-local       — run locally, reusing host ~/.ai2thor"
 	@echo "  make appliance-run-railway     — run locally with host /data mounted as Railway parity"
-	@echo "  make appliance-run             — alias for appliance-run-local"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
 	@echo "  Direct-vision (main model handles images):"
@@ -224,8 +223,6 @@ openclaw-gateway-down:
 # ---------------------------------------------------------------------------
 appliance-build:
 	docker build -f Dockerfile.railway -t roboclaws-appliance .
-
-appliance-run: appliance-run-local
 
 appliance-run-local:
 	@$(SOURCE_ENV); \

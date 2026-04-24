@@ -20,7 +20,8 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
 def test_local_appliance_run_reuses_host_ai2thor_cache() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "appliance-run: appliance-run-local" in makefile
+    assert "appliance-build appliance-run-local appliance-run-railway" in makefile
+    assert "appliance-run:" not in makefile
     assert "APPLIANCE_LOCAL_DATA_VOLUME ?= roboclaws-appliance-data" in makefile
     assert 'mkdir -p "$$HOME/.ai2thor"' in makefile
     assert '-v "$(APPLIANCE_LOCAL_DATA_VOLUME):/data"' in makefile

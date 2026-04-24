@@ -53,7 +53,8 @@ Why this shape:
   process wrapper.
 - Add `railway.toml` and `.dockerignore`.
 - Add Make targets for local parity:
-  `make appliance-build` and `make appliance-run`.
+  `make appliance-build`, `make appliance-run-local`, and
+  `make appliance-run-railway`.
 
 ## Runtime Configuration
 
@@ -89,8 +90,7 @@ make appliance-build
 DEMO_PASSWORD=demo make appliance-run-local
 ```
 
-The default local appliance target is `make appliance-run-local` (also aliased
-as `make appliance-run`). It bind-mounts the host `$HOME/.ai2thor` cache into
+The local appliance target bind-mounts the host `$HOME/.ai2thor` cache into
 container `/data/.ai2thor`, so it reuses the same AI2-THOR Unity build as the
 normal host-side `make chat` workflow without requiring a host `/data`
 directory.
