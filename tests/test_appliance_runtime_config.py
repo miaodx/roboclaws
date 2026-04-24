@@ -15,14 +15,22 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     assert '"$ROBOCLAWS_AI2THOR_DIR"' in entrypoint
     assert 'HOME="%(ENV_ROBOCLAWS_HOME)s"' in supervisord
     assert "ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor" in dockerfile
+    assert "RAILWAY_PUBLIC_DOMAIN" in entrypoint
+    assert 'ROBOCLAWS_PUBLIC_URL="http://127.0.0.1:${PORT}"' in entrypoint
+    assert (
+        'ROBOCLAWS_VIEWER_HINT="${ROBOCLAWS_VIEWER_HINT:-${ROBOCLAWS_PUBLIC_URL%/}/views/}"'
+        in entrypoint
+    )
 
 
 def test_local_appliance_run_reuses_host_ai2thor_cache() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "appliance-build appliance-run-local appliance-run-railway" in makefile
+    assert "appliance-build appliance-run-local appliance-run-railway appliance-tail" in makefile
     assert "appliance-run:" not in makefile
+    assert "APPLIANCE_CONTAINER ?= roboclaws-appliance" in makefile
     assert "APPLIANCE_LOCAL_DATA_VOLUME ?= roboclaws-appliance-data" in makefile
+    assert '--name "$(APPLIANCE_CONTAINER)"' in makefile
     assert 'mkdir -p "$$HOME/.ai2thor"' in makefile
     assert '-v "$(APPLIANCE_LOCAL_DATA_VOLUME):/data"' in makefile
     assert '-v "$$HOME/.ai2thor:/data/.ai2thor"' in makefile
@@ -38,3 +46,10 @@ def test_railway_parity_appliance_run_uses_host_data_dir() -> None:
     assert "-e HOME=/data" in makefile
     assert "-e ROBOCLAWS_HOME=/data" in makefile
     assert '-v "$$DATA_DIR:/data"' in makefile
+
+
+def test_appliance_tail_targets_named_container() -> None:
+    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+    assert "appliance-tail:" in makefile
+    assert 'python scripts/tail-openclaw-chat.py --container "$(APPLIANCE_CONTAINER)"' in makefile

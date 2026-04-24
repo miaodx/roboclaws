@@ -305,6 +305,44 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     assert "mimo-v2.5-pro" in out
     assert "mimo-v2-omni" in out
     assert "text-bridge" in out
+    assert "make chat-tail" in out
+    assert "make chat-view" in out
+
+
+def test_main_banner_uses_appliance_public_hints(_patched_main_deps, capsys) -> None:
+    ctx = _patched_main_deps
+
+    def _fake_run(*args, **kwargs):
+        return SimpleNamespace(stdout="", returncode=0)
+
+    with (
+        patch("openclaw_interactive.subprocess.run", side_effect=_fake_run),
+        patch.dict(
+            "os.environ",
+            {
+                "OPENCLAW_GATEWAY_TOKEN": "appliance-token",
+                "ROBOCLAWS_PUBLIC_URL": "http://127.0.0.1:8080",
+                "ROBOCLAWS_TAIL_HINT": "make appliance-tail",
+                "ROBOCLAWS_VIEWER_HINT": "http://127.0.0.1:8080/views/",
+            },
+            clear=False,
+        ),
+    ):
+        rc = main(
+            [
+                "--skip-bootstrap",
+                "--keep-gateway",
+                "--output-dir",
+                str(ctx.tmp_path / "appliance"),
+            ]
+        )
+
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "URL   : http://127.0.0.1:8080" in out
+    assert "appliance-token" in out
+    assert "make appliance-tail" in out
+    assert "http://127.0.0.1:8080/views/" in out
 
 
 def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> None:

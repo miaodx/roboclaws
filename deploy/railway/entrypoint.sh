@@ -24,6 +24,22 @@ export ROBOCLAWS_MCP_URL="${ROBOCLAWS_MCP_URL:-http://127.0.0.1:18788/mcp}"
 export ROBOCLAWS_TOOL_PROFILE="${ROBOCLAWS_TOOL_PROFILE:-minimal}"
 export DISPLAY="${DISPLAY:-:99}"
 
+if [[ -z "${ROBOCLAWS_PUBLIC_URL:-}" ]]; then
+  if [[ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]]; then
+    export ROBOCLAWS_PUBLIC_URL="https://${RAILWAY_PUBLIC_DOMAIN}"
+  else
+    export ROBOCLAWS_PUBLIC_URL="http://127.0.0.1:${PORT}"
+  fi
+fi
+export ROBOCLAWS_VIEWER_HINT="${ROBOCLAWS_VIEWER_HINT:-${ROBOCLAWS_PUBLIC_URL%/}/views/}"
+if [[ -z "${ROBOCLAWS_TAIL_HINT:-}" ]]; then
+  if [[ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]]; then
+    export ROBOCLAWS_TAIL_HINT="Railway deployment logs"
+  else
+    export ROBOCLAWS_TAIL_HINT="make appliance-tail"
+  fi
+fi
+
 mkdir -p "$DATA_DIR" "$ROBOCLAWS_HOME" "$ROBOCLAWS_AI2THOR_DIR" \
   "$ROBOCLAWS_RUN_DIR" "$ROBOCLAWS_SNAPSHOTS_DIR" \
   "$DATA_DIR/appliance" /run/nginx /var/log/nginx

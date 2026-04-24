@@ -55,6 +55,9 @@ Why this shape:
 - Add Make targets for local parity:
   `make appliance-build`, `make appliance-run-local`, and
   `make appliance-run-railway`.
+- Add `make appliance-tail` as the appliance equivalent of `make chat-tail`.
+  `make chat-tail` remains scoped to the standalone `make chat` Gateway
+  container named `openclaw-gateway`.
 
 ## Runtime Configuration
 
@@ -115,6 +118,8 @@ Then verify:
 - the Control UI accepts bearer token `demo` when `OPENCLAW_TOKEN` is unset
 - `http://localhost:8080/views/` shows the three-panel viewer
 - after `agent-0` calls `roboclaws__observe`, FPV/map/chase images refresh
+- `make appliance-tail` tails the Gateway session JSONL from the appliance
+  container
 
 Automated checks:
 

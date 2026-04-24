@@ -55,6 +55,8 @@ from roboclaws.openclaw.vision_bridge import observe_runtime_config
 log = logging.getLogger("openclaw-interactive")
 _DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"
 _DEFAULT_GATEWAY_URL = "http://127.0.0.1:18789"
+_DEFAULT_TAIL_HINT = "make chat-tail"
+_DEFAULT_VIEWER_HINT = "make chat-view     → http://127.0.0.1:8787"
 
 
 @dataclass
@@ -164,6 +166,8 @@ def _print_banner(
     token: str,
     output_dir: Path,
     runtime_config: dict[str, str | None],
+    tail_hint: str = _DEFAULT_TAIL_HINT,
+    viewer_hint: str = _DEFAULT_VIEWER_HINT,
 ) -> None:
     bar = "=" * 72
     print()
@@ -192,13 +196,18 @@ def _print_banner(
     print("      agent's next observe/move call will see (bounded deque, 10).")
     print(f"    - Trace: {output_dir / 'trace.jsonl'}")
     print("    - For a live mirror of the chat-tab transcript, run in another")
-    print("      terminal:    make chat-tail")
+    print(f"      terminal:    {tail_hint}")
     print("    - For live frame-by-frame snapshots (every step visible,")
     print("      bypassing the chat MEDIA final-message-only limit),")
-    print("      run:         make chat-view     → http://127.0.0.1:8787")
+    print(f"      open/run:    {viewer_hint}")
     print("    - Ctrl-C to shut down AI2-THOR + the MCP server.")
     print(bar)
     print(flush=True)
+
+
+def _env_hint(name: str, default: str) -> str:
+    value = os.environ.get(name, "").strip()
+    return value or default
 
 
 def _start_stdin_thread(
@@ -348,11 +357,13 @@ def main(argv: list[str] | None = None) -> int:
 
         _start_stdin_thread(mcp_server, stdin_stop)
         _print_banner(
-            url=_DEFAULT_GATEWAY_URL,
+            url=_env_hint("ROBOCLAWS_PUBLIC_URL", _DEFAULT_GATEWAY_URL),
             agent_name=f"agent-{args.agent_id}",
             token=token,
             output_dir=output_dir,
             runtime_config=runtime_config,
+            tail_hint=_env_hint("ROBOCLAWS_TAIL_HINT", _DEFAULT_TAIL_HINT),
+            viewer_hint=_env_hint("ROBOCLAWS_VIEWER_HINT", _DEFAULT_VIEWER_HINT),
         )
 
         # Block until Ctrl-C / SIGTERM, OR the agent flips done via the
