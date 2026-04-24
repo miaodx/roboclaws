@@ -17,8 +17,11 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     assert "ROBOCLAWS_AI2THOR_DIR=/data/.ai2thor" in dockerfile
 
 
-def test_local_appliance_run_uses_data_home() -> None:
+def test_local_appliance_run_uses_host_data_dir() -> None:
     makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
 
-    assert "-e HOME=/data/home" in makefile
-    assert "-e ROBOCLAWS_HOME=/data/home" in makefile
+    assert "APPLIANCE_DATA_DIR ?= /data" in makefile
+    assert 'mkdir -p "$$DATA_DIR/.ai2thor" "$$DATA_DIR/runs"' in makefile
+    assert "-e HOME=/data" in makefile
+    assert "-e ROBOCLAWS_HOME=/data" in makefile
+    assert '-v "$$DATA_DIR:/data"' in makefile

@@ -22,6 +22,7 @@
 #   - PYTHONUNBUFFERED so progress prints stream live through `| tee`
 SOURCE_ENV := set -a; [ -f .env ] && . ./.env; set +a
 STRIP_ROS_ENV := env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u ROS_DISTRO -u ROS_VERSION
+APPLIANCE_DATA_DIR ?= /data
 
 help:
 	@echo "OpenClaw ephemeral targets (bootstrap + run + teardown in one shot):"
@@ -41,7 +42,7 @@ help:
 	@echo ""
 	@echo "Railway appliance parity:"
 	@echo "  make appliance-build           — build the all-in-one Railway image"
-	@echo "  make appliance-run             — run it locally at http://localhost:8080"
+	@echo "  make appliance-run             — run it locally at http://localhost:8080 using host /data"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
 	@echo "  Direct-vision (main model handles images):"
@@ -223,15 +224,17 @@ appliance-build:
 
 appliance-run:
 	@$(SOURCE_ENV); \
+	 DATA_DIR="$(APPLIANCE_DATA_DIR)"; \
+	 mkdir -p "$$DATA_DIR/.ai2thor" "$$DATA_DIR/runs"; \
 	 ENV_FILE_ARG=""; \
 	 [ -f .env ] && ENV_FILE_ARG="--env-file .env"; \
 	 docker run --rm $$ENV_FILE_ARG \
 	   -e PORT=8080 \
-	   -e HOME=/data/home \
-	   -e ROBOCLAWS_HOME=/data/home \
+	   -e HOME=/data \
+	   -e ROBOCLAWS_HOME=/data \
 	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
 	   -p 8080:8080 \
-	   -v roboclaws-appliance-data:/data \
+	   -v "$$DATA_DIR:/data" \
 	   roboclaws-appliance
 
 # ---------------------------------------------------------------------------

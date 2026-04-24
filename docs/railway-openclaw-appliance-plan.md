@@ -89,9 +89,17 @@ make appliance-build
 DEMO_PASSWORD=demo make appliance-run
 ```
 
-The local parity target runs with `HOME=/data/home` and
-`ROBOCLAWS_HOME=/data/home`, so its AI2-THOR cache resolves to
-`/data/home/.ai2thor` inside the persistent Docker volume.
+The local parity target bind-mounts host `/data` into container `/data` by
+default and runs with `HOME=/data`, matching Railway's runtime shape. Its
+AI2-THOR cache resolves to `/data/.ai2thor`. Override the host path with
+`make appliance-run APPLIANCE_DATA_DIR=/path/to/data` if needed.
+
+To reuse the AI2-THOR cache from the normal host-side `make chat` workflow:
+
+```bash
+mkdir -p /data/.ai2thor
+cp -a "$HOME/.ai2thor/." /data/.ai2thor/
+```
 
 Then verify:
 
