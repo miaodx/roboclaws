@@ -5,6 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
+        appliance-build appliance-run \
         chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
         chat-mimo-pro chat-mimo chat-kimi \
@@ -37,6 +38,10 @@ help:
 	@echo "  make openclaw-gateway-up       — bootstrap gateway, save token to .openclaw-token"
 	@echo "  make openclaw-gateway-down     — tear down gateway + volume"
 	@echo "  (then:  export OPENCLAW_GATEWAY_TOKEN=\$$(cat .openclaw-token)  &&  run demos)"
+	@echo ""
+	@echo "Railway appliance parity:"
+	@echo "  make appliance-build           — build the all-in-one Railway image"
+	@echo "  make appliance-run             — run it locally at http://localhost:8080"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
 	@echo "  Direct-vision (main model handles images):"
@@ -207,6 +212,25 @@ openclaw-gateway-down:
 	docker volume rm openclaw-gateway-config || true
 	rm -f .openclaw-token
 	@echo "==> Done."
+
+# ---------------------------------------------------------------------------
+# Railway appliance parity — one container with Gateway + Xvfb + Roboclaws MCP
+# + three-view viewer + nginx. This mirrors the hosted Railway shape and does
+# not replace the faster local `make chat` workflow.
+# ---------------------------------------------------------------------------
+appliance-build:
+	docker build -f Dockerfile.railway -t roboclaws-appliance .
+
+appliance-run:
+	@$(SOURCE_ENV); \
+	 ENV_FILE_ARG=""; \
+	 [ -f .env ] && ENV_FILE_ARG="--env-file .env"; \
+	 docker run --rm $$ENV_FILE_ARG \
+	   -e PORT=8080 \
+	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
+	   -p 8080:8080 \
+	   -v roboclaws-appliance-data:/data \
+	   roboclaws-appliance
 
 # ---------------------------------------------------------------------------
 # Interactive chat — you drive the agent from the Gateway Control UI.
