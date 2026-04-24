@@ -88,6 +88,32 @@ setup is machine-specific and can conflict with the user's active desktop Xorg
 or DRM master state. Instead, start the headless Xorg outside the script, then
 benchmark that `DISPLAY` as `--display-backend current`.
 
+Do not treat this as a routine local-dev experiment on the current workstation.
+The machine already has an active desktop Xorg using the Intel iGPU. Starting a
+second GPU-backed Xorg with the wrong device/config can fail harmlessly, but it
+can also steal DRM master, flicker or black out the desktop, or force a display
+manager restart. It should not permanently damage the machine, but it can
+disrupt the current graphical session.
+
+Use this experiment only when the recovery path is clear:
+
+- Run it on an isolated VM, throwaway cloud GPU instance, or a machine reachable
+  by SSH after display failure.
+- Do not bind to the active desktop display (`:0` / `:1` on this workstation).
+- Prefer a temporary Xorg config and avoid persistent `/etc/X11` edits.
+- Verify the result by Unity renderer, not by "Xorg started successfully".
+
+Platform value:
+
+- CPU-only platforms such as Railway, Render, and most GitHub Actions runners:
+  usually no value. Without GPU/DRM passthrough, headless Xorg still lands on
+  llvmpipe and behaves like the slower Xvfb class.
+- GPU VMs on GCP/AWS/Azure/RunPod: useful fallback when the default Linux64/X11
+  AI2-THOR build must be used and a Vulkan/CloudRendering path is unavailable.
+- This repo's preferred GPU path: use `CloudRendering` first. It already ran
+  locally without X11, selected NVIDIA Vulkan, and beat both local X11 and Xvfb.
+  GPU-backed headless Xorg is a fallback, not the primary hosted-demo path.
+
 Once a headless GPU-backed display exists, for example `DISPLAY=:121`, run:
 
 ```bash
