@@ -119,6 +119,7 @@ class _FakeEngine:
         self._rotations: list[dict[str, float]] = [
             {"x": 0.0, "y": 0.0, "z": 0.0} for _ in range(agent_count)
         ]
+        self._chase_cam_ids: dict[int, int] = {}
 
     def _build_state(
         self,
@@ -160,6 +161,19 @@ class _FakeEngine:
         # Match the ±4 m box agents move within in ``step()``.
         span = int(round(4.0 / self.grid_size))
         return {(ix, iz) for ix in range(-span, span + 1) for iz in range(-span, span + 1)}
+
+    def add_chase_cam(self, agent_id: int) -> int:
+        if agent_id not in self._chase_cam_ids:
+            self._chase_cam_ids[agent_id] = len(self._chase_cam_ids)
+        return self._chase_cam_ids[agent_id]
+
+    def update_chase_cam(self, agent_id: int) -> None:
+        self.add_chase_cam(agent_id)
+
+    def get_chase_cam_frame(self, agent_id: int) -> np.ndarray:
+        # Offset the synthetic frame by one step so chase-cam panels are visually
+        # distinct from first-person panels in generated HTML reports.
+        return _synth_frame(agent_id, self._step_counter + 1)
 
     def close(self) -> None:  # pragma: no cover - nothing to release
         pass
