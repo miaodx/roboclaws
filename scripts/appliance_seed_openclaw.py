@@ -44,6 +44,9 @@ class RuntimeConfig:
     mcp_url: str
     tool_profile: str
     timeout_seconds: int
+    allowed_origins: list[str]
+    trusted_proxies: list[str]
+    control_ui_disable_device_auth: bool
 
 
 def _env_int(env: dict[str, str], name: str, default: int) -> int:
@@ -55,12 +58,64 @@ def _env_int(env: dict[str, str], name: str, default: int) -> int:
     return value
 
 
+def _env_bool(env: dict[str, str], name: str, default: bool) -> bool:
+    raw = env.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    normalized = raw.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise SystemExit(f"{name} must be a boolean, got {raw!r}")
+
+
 def _agent_ids(env: dict[str, str]) -> list[str]:
     count = _env_int(env, "AGENTS", 1)
     if count < 1 or count > 8:
         raise SystemExit(f"AGENTS must be 1..8, got {count}")
     prefix = env.get("AGENT_PREFIX", "agent-")
     return [f"{prefix}{i}" for i in range(count)]
+
+
+def _csv_values(env: dict[str, str], name: str) -> list[str]:
+    return [value.strip() for value in env.get(name, "").split(",") if value.strip()]
+
+
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
+
+
+def _allowed_origins(env: dict[str, str]) -> list[str]:
+    port = env.get("PORT", "8080").strip() or "8080"
+    public_url = env.get("ROBOCLAWS_PUBLIC_URL", "").strip().rstrip("/")
+    railway_domain = env.get("RAILWAY_PUBLIC_DOMAIN", "").strip()
+
+    values: list[str] = []
+    if public_url:
+        values.append(public_url)
+    if railway_domain:
+        values.append(f"https://{railway_domain}")
+    values.extend(
+        [
+            f"http://127.0.0.1:{port}",
+            f"http://localhost:{port}",
+        ]
+    )
+    values.extend(_csv_values(env, "OPENCLAW_ALLOWED_ORIGINS"))
+    return _unique(values)
+
+
+def _trusted_proxies(env: dict[str, str]) -> list[str]:
+    values = ["127.0.0.1", "::1"]
+    values.extend(_csv_values(env, "OPENCLAW_TRUSTED_PROXIES"))
+    return _unique(values)
 
 
 def _provider_config(env: dict[str, str]) -> ProviderConfig:
@@ -219,10 +274,16 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
     if runtime.tool_profile == "minimal":
         defaults_cfg["compaction"] = {"memoryFlush": {"enabled": False}}
 
+    control_ui_cfg: dict[str, Any] = {"allowedOrigins": runtime.allowed_origins}
+    if runtime.control_ui_disable_device_auth:
+        control_ui_cfg["dangerouslyDisableDeviceAuth"] = True
+
     config: dict[str, Any] = {
         "gateway": {
             "auth": {"mode": "token", "token": runtime.token},
             "http": {"endpoints": {"chatCompletions": {"enabled": True}}},
+            "controlUi": control_ui_cfg,
+            "trustedProxies": runtime.trusted_proxies,
         },
         "agents": {
             "defaults": defaults_cfg,
@@ -348,6 +409,13 @@ def seed(env: dict[str, str] | None = None) -> RuntimeConfig:
         mcp_url=env.get("ROBOCLAWS_MCP_URL", "http://127.0.0.1:18788/mcp"),
         tool_profile=tool_profile,
         timeout_seconds=_env_int(env, "TIMEOUT_SECONDS", 600),
+        allowed_origins=_allowed_origins(env),
+        trusted_proxies=_trusted_proxies(env),
+        control_ui_disable_device_auth=_env_bool(
+            env,
+            "OPENCLAW_CONTROL_UI_DISABLE_DEVICE_AUTH",
+            True,
+        ),
     )
 
     skill_src = Path(env.get("SKILLS_DIR", "/opt/roboclaws/skills/ai2thor-navigator"))

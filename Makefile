@@ -5,7 +5,7 @@
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
         openclaw-gateway-up openclaw-gateway-down \
-        appliance-build appliance-run-local appliance-run-railway appliance-tail \
+        appliance-build appliance-run-local appliance-run-railway appliance-smoke appliance-tail \
         chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
         chat-mimo-pro chat-mimo chat-kimi \
@@ -25,6 +25,7 @@ STRIP_ROS_ENV := env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u
 APPLIANCE_CONTAINER ?= roboclaws-appliance
 APPLIANCE_LOCAL_DATA_VOLUME ?= roboclaws-appliance-data
 APPLIANCE_RAILWAY_DATA_DIR ?= /data
+APPLIANCE_SMOKE_URL ?= http://127.0.0.1:8080
 
 help:
 	@echo "OpenClaw ephemeral targets (bootstrap + run + teardown in one shot):"
@@ -46,6 +47,7 @@ help:
 	@echo "  make appliance-build           — build the all-in-one Railway image"
 	@echo "  make appliance-run-local       — run locally, reusing host ~/.ai2thor"
 	@echo "  make appliance-run-railway     — run locally with host /data mounted as Railway parity"
+	@echo "  make appliance-smoke           — verify Control UI proxy + Gateway token websocket"
 	@echo "  make appliance-tail            — pretty-tail appliance Gateway session JSONL"
 	@echo ""
 	@echo "Interactive chat (you drive the agent from the Control UI in a browser):"
@@ -259,6 +261,12 @@ appliance-run-railway:
 	   -p 8080:8080 \
 	   -v "$$DATA_DIR:/data" \
 	   roboclaws-appliance
+
+appliance-smoke:
+	@$(SOURCE_ENV); \
+	 $(STRIP_ROS_ENV) .venv/bin/python scripts/appliance_control_ui_smoke.py \
+	   --url "$(APPLIANCE_SMOKE_URL)" \
+	   --token "$${OPENCLAW_TOKEN:-$${DEMO_PASSWORD:-demo}}"
 
 appliance-tail:
 	@$(STRIP_ROS_ENV) python scripts/tail-openclaw-chat.py --container "$(APPLIANCE_CONTAINER)"
