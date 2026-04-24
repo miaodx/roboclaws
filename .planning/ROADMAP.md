@@ -37,13 +37,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 
 - ✅ **v1.0 Core + OpenClaw** - Phases 1, 1.5, 2, 2.1, 2.2 (shipped 2026-04-16)
 - ⛔ **Phase 2.3 (Digest pin)** - DECLINED 2026-04-20 (LOCKED ADR)
-- 🚧 **v1.1 Better Views** - Phase 2.4 (3/4 plans complete; local-dev sweep + decision record pending via issue #70)
+- ✅ **v1.1 Better Views** - Phase 2.4 (decision locked 2026-04-24; runtime standardized on `map-v2+chase` only, legacy A/B sweep superseded)
 - ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
 - 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
 - ✅ **v1.5 Refactor Regression Safety** - Phase 4 (completed 2026-04-23; deterministic fixtures + capture/analyze harnesses + first local probe evidence in `04-LOCAL-PROBE-RESULTS.md`)
-- 📋 **v1.6 Iterative Codebase Simplification** - Phase 5 (planned 2026-04-23; /simplify passes over major source files to reduce complexity and improve readability)
+- ✅ **v1.6 Iterative Codebase Simplification** - Phase 5 (completed 2026-04-23; 18 target files simplified, global pytest+ruff green, net -203 lines across targets)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -58,13 +58,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 2.1: Transport correction** - `/v1/chat/completions` + named-agent routing + inline base64 (shipped)
 - [x] **Phase 2.2: Long-running OpenClaw games** - Per-agent SOULs + SOUL overlay + territory/coverage through Gateway (shipped)
 - [⛔] **Phase 2.3: Gateway digest pin** - DECLINED; keep date-shaped `:2026.4.14` tag (LOCKED)
-- [ ] **Phase 2.4: View-experiment A/B** - Map-v2 + chase-cam variants measured against baseline (3/4 complete; local-dev validation tracked in issue #70)
+- [x] **Phase 2.4: Better Views** - Runtime standardized on `map-v2+chase` only; legacy `baseline` / `map-v2` experiment superseded on 2026-04-24
 - [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
-- [ ] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Each file pass committed atomically with tests staying green.
+- [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -169,30 +169,31 @@ Plans:
 
 </details>
 
-#### 🚧 v1.1 Better Views (Phase 2.4) — Active
+#### ✅ v1.1 Better Views (Phase 2.4) — Closed by Decision
 
 **Milestone Goal:** Decide whether a richer per-step view (structured
 grid-overhead, optionally plus chase-cam) produces measurably better VLM
 play across territory / coverage / navigation, with defensible statistics
 and ≤$20 spend.
 
-### Phase 2.4: View-experiment A/B
-**Goal**: Measure whether map-v2 (structured overhead) and map-v2+chase-cam help VLM agents outperform the baseline (FPV + photo overhead) across territory, coverage, and navigation games, then produce a decision record on which variant(s) graduate to the default.
+### Phase 2.4: Better Views
+**Goal**: Standardize the runtime on `map-v2+chase` and treat the earlier `baseline` / `map-v2` / `map-v2+chase` A/B study as historical planning context rather than an active execution requirement.
 **Depends on**: Phase 2.2. Issue #52 prereqs (image-payload contract + coverage semantics) were shipped pre-ingest in commit `ddfb523` (2026-04-15); both initial ingest WARNINGs verified stale and resolved 2026-04-20 — see `.planning/INGEST-CONFLICTS.md` "UPDATE 2026-04-20" header.
 **Requirements**: A-03, A-04 (A-01 and A-02 shipped pre-ingest, marked Complete in REQUIREMENTS.md traceability)
+**Update (2026-04-24):** The multi-variant experiment plan is now historical only. Product/runtime direction is locked to `map-v2+chase`; `baseline` and `map-v2` are no longer supported runtime modes on the main examples.
 **Success Criteria** (what must be TRUE):
-  1. A contributor can run `examples/openclaw_demo.py --views {baseline,map-v2,map-v2+chase}` (and the same flag on `territory_game.py` / `coverage_game.py`) and observe distinct overhead rendering + optional chase-cam frame in the resulting artifacts.
-  2. After the overnight Kimi sweep + NVIDIA confirm, `output/view-experiment/results.jsonl` contains runs across variants × seeds × scenes × games within the `$20` hard cap; total spend is logged per `--max-usd` gate (Kimi `$15`, NVIDIA `$5`).
-  3. `docs/view-experiment-2026-04.md` ships a decision record: one-line verdict per question (map-v2 helps / doesn't, chase-cam helps / doesn't), bootstrap 95% CIs per `(variant, game)` for the primary metric, paired Wilcoxon p-values + effect sizes for {B vs A, C vs A, C vs B}, and sample GIFs per variant on a matching seed/scene.
-**Plans**: 4 plans. Phase 2.4 was ingested into GSD on 2026-04-21. Execution order intentionally starts with the single-agent push-model OpenClaw demo (`examples/openclaw_demo.py`) before the territory/coverage rollout.
+  1. The main example drivers (`openclaw_demo.py`, `territory_game.py`, `coverage_game.py`) use a fixed FPV + structured-overhead + chase-cam prompt contract with no user-facing `--views` selection.
+  2. Shared view helpers and the shipped Phase 2.6 autonomous path continue to use the same `map-v2+chase` family.
+  3. `docs/view-experiment-2026-04.md` records that the old A/B/C sweep was superseded and that the supported runtime variant is now `map-v2+chase`.
+**Plans**: 4 plans. Phase 2.4 was ingested into GSD on 2026-04-21. Plans `02.4-01` through `02.4-03` landed the shared view system; `02.4-04` is now historical because the product decision was made directly.
 
 Plans:
 - [x] 02.4-01: Shared view primitives + `examples/openclaw_demo.py --views ...` rollout (single-agent OpenClaw first)
 - [x] 02.4-02: Territory + coverage rollout onto the shared view builder
 - [x] 02.4-03: `NvidiaProvider` + `examples/view_experiment.py` harness with wallet gates
-- [ ] 02.4-04: Analysis script + local-dev sweep + `docs/view-experiment-2026-04.md` decision record
+- [⛔] 02.4-04: Analysis script + local-dev sweep + `docs/view-experiment-2026-04.md` decision record — superseded 2026-04-24 when runtime direction was locked to `map-v2+chase` only
 
-**Status update (2026-04-22):** Plans `02.4-01` through `02.4-03` are implemented, and the cloud-safe slice of `02.4-04` also landed (`scripts/analyze_view_experiment.py` plus synthetic-data coverage). A local workstation has now completed the requested first-review seam: `examples/openclaw_demo.py --views map-v2+chase` ran for 50 Kimi steps and produced review artifacts under `output/openclaw-demo-kimi-mapv2chase-50/`. The phase is still open until the full Kimi/NVIDIA sweeps produce `output/view-experiment/results.jsonl` and the decision record lands in `docs/view-experiment-2026-04.md` (issue #70).
+**Status update (2026-04-24):** The repo had already drifted toward `map-v2+chase` as the only real runtime path, including the shipped Phase 2.6 autonomous flow. Rather than keep reviving `baseline` / `map-v2` just to satisfy the old study, the product direction is now explicit: the supported prompt family is `map-v2+chase` only. The analysis tooling remains in-tree for historical data, but the old multi-variant sweep is no longer an active phase gate.
 **UI hint**: yes
 
 #### ⛔ v1.2 Autonomous OpenClaw Loop — Phase 2.5 SUPERSEDED by Phase 2.6
@@ -290,7 +291,7 @@ Plans:
 - [ ] 02.8-04: Local-dev validation + doc update
 **UI hint**: no
 
-#### 📋 v1.6 Iterative Codebase Simplification (Phase 5) — Planned
+#### ✅ v1.6 Iterative Codebase Simplification (Phase 5) — Completed
 
 ### Phase 5: Iterative codebase simplification
 **Goal**: Run `/simplify` iteratively over the major source files to reduce complexity, remove dead code, and make the codebase more intuitive. Each file pass is reviewed and committed atomically; tests must stay green after every commit.
@@ -304,15 +305,15 @@ Plans:
 **Plans**: 9 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Simplify roboclaws/core/visualizer.py
-- [ ] 05-02-PLAN.md — Simplify roboclaws/openclaw/mcp_server.py
-- [ ] 05-03-PLAN.md — Simplify roboclaws/core/reporter.py
-- [ ] 05-04-PLAN.md — Simplify roboclaws/openclaw/transport.py (already-leaner pass)
-- [ ] 05-05-PLAN.md — Simplify roboclaws/games/coverage.py and territory.py
-- [ ] 05-06-PLAN.md — Simplify roboclaws/core/vlm.py, providers/kimi.py, and providers/openai.py
-- [ ] 05-07-PLAN.md — Simplify bridge.py, vision_bridge.py, views.py, and replay.py
-- [ ] 05-08-PLAN.md — Simplify examples/openclaw_demo.py, openclaw_interactive.py, and openclaw_nav_autonomous.py
-- [ ] 05-09-PLAN.md — Simplify examples/coverage_game.py and territory_game.py
+- [x] 05-01-PLAN.md — Simplify roboclaws/core/visualizer.py
+- [x] 05-02-PLAN.md — Simplify roboclaws/openclaw/mcp_server.py
+- [x] 05-03-PLAN.md — Simplify roboclaws/core/reporter.py
+- [x] 05-04-PLAN.md — Simplify roboclaws/openclaw/transport.py (already-leaner pass)
+- [x] 05-05-PLAN.md — Simplify roboclaws/games/coverage.py and territory.py
+- [x] 05-06-PLAN.md — Simplify roboclaws/core/vlm.py, providers/kimi.py, and providers/openai.py
+- [x] 05-07-PLAN.md — Simplify bridge.py, vision_bridge.py, views.py, and replay.py
+- [x] 05-08-PLAN.md — Simplify examples/openclaw_demo.py, openclaw_interactive.py, and openclaw_nav_autonomous.py
+- [x] 05-09-PLAN.md — Simplify examples/coverage_game.py and territory_game.py
 **UI hint**: no
 
 #### 📋 v2.0 Isaac Lab (Phase 3) — Deferred indefinitely
@@ -376,5 +377,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
 | 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
 | 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 4/4 | Complete | 2026-04-23 |
-| 5. Iterative codebase simplification | v1.6 | 0/TBD | Planned | - |
+| 5. Iterative codebase simplification | v1.6 | 9/9 | Complete | 2026-04-23 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
