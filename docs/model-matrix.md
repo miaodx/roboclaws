@@ -128,7 +128,7 @@ context-length.
    provider branches are covered without teaching
    `_extract_provider_entry_for` another shape.
 3. **Pre-merge probe** (per the user-memory rule "live-probe before
-   merge"): run `just chat` + ask for a `snapshot` + let the session run
+   merge"): run `just chat::run` + ask for a `snapshot` + let the session run
    to ~15 k tokens without crashing. If the Gateway still injects a
    flush, the declared context is still wrong.
 4. ~~**Tool-name hardening** (defense in depth): narrow the

@@ -39,28 +39,27 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
 def test_local_appliance_run_reuses_host_ai2thor_cache() -> None:
     appliance = (ROOT / "just" / "appliance.just").read_text(encoding="utf-8")
 
-    # Recipe names exist (build / run-local / run-railway / smoke / tail).
+    # `run` is the canonical appliance entrypoint.
     assert "\nbuild:\n" in appliance
-    assert "\nrun-local:\n" in appliance
-    assert "\nrun-railway:\n" in appliance
+    assert "\nrun mode=" in appliance
     assert "\nsmoke:\n" in appliance
     assert "\ntail:\n" in appliance
     # Env-overridable defaults match the historical Makefile vars.
     assert (
-        'container := env_var_or_default("APPLIANCE_CONTAINER", "roboclaws-appliance")' in appliance
+        'default_container := env_var_or_default("APPLIANCE_CONTAINER", "roboclaws-appliance")'
+        in appliance
     )
     assert (
-        "local_data_volume := env_var_or_default("
+        "default_local_data_volume := env_var_or_default("
         '"APPLIANCE_LOCAL_DATA_VOLUME", "roboclaws-appliance-data")' in appliance
     )
     assert (
         'smoke_url := env_var_or_default("APPLIANCE_SMOKE_URL", "http://127.0.0.1:8080")'
         in appliance
     )
-    # run-local shape: container name, host ai2thor cache reuse, /data volume.
-    assert '--name "{{container}}"' in appliance
+    assert '--name "$container"' in appliance
     assert 'mkdir -p "$HOME/.ai2thor"' in appliance
-    assert '-v "{{local_data_volume}}:/data"' in appliance
+    assert '-v "$local_data_volume:/data"' in appliance
     assert '-v "$HOME/.ai2thor:/data/.ai2thor"' in appliance
     assert "-e HOME=/data" in appliance
     assert "-e ROBOCLAWS_HOME=/data" in appliance
@@ -70,7 +69,8 @@ def test_railway_parity_appliance_run_uses_host_data_dir() -> None:
     appliance = (ROOT / "just" / "appliance.just").read_text(encoding="utf-8")
 
     assert (
-        'railway_data_dir := env_var_or_default("APPLIANCE_RAILWAY_DATA_DIR", "/data")' in appliance
+        'default_railway_data_dir := env_var_or_default("APPLIANCE_RAILWAY_DATA_DIR", "/data")'
+        in appliance
     )
     assert 'mkdir -p "$DATA_DIR/.ai2thor" "$DATA_DIR/runs"' in appliance
     assert "-e HOME=/data" in appliance
@@ -82,7 +82,7 @@ def test_appliance_tail_targets_named_container() -> None:
     appliance = (ROOT / "just" / "appliance.just").read_text(encoding="utf-8")
 
     assert "\ntail:\n" in appliance
-    assert 'python scripts/tail-openclaw-chat.py --container "{{container}}"' in appliance
+    assert 'python scripts/tail-openclaw-chat.py --container "{{default_container}}"' in appliance
 
 
 def test_appliance_smoke_target_checks_control_ui_websocket() -> None:

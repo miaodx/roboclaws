@@ -25,10 +25,10 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Mode | Use it for | Entry point |
 |------|------------|-------------|
 | Direct VLM games | Fast local experiments without OpenClaw | `examples/territory_game.py`, `examples/coverage_game.py` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just openclaw::nav`, `just chat` |
+| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just openclaw::run nav`, `just chat::run` |
 | Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `examples/coding_agent_nav_server.py` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::photo` |
-| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run-local` |
+| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::run photo` |
+| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
@@ -66,11 +66,11 @@ python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ### Run OpenClaw
 
 ```bash
-just openclaw::nav
-just chat
+just openclaw::run nav
+just chat::run
 ```
-
-`just chat` opens the local browser-control workflow. Useful companion
+`just openclaw::run nav` is the canonical entrypoint.
+`just chat::run` opens the local browser-control workflow. Useful companion
 terminals:
 
 ```bash
@@ -152,7 +152,7 @@ FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 ![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
 ```bash
-just openclaw::photo
+just openclaw::run photo
 python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 

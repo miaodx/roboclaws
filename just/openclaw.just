@@ -1,12 +1,9 @@
-# OpenClaw Gateway recipes — bootstrap → run → teardown.
+# OpenClaw Gateway recipes — canonical dispatchers.
 #
-# Smoke recipes (nav, territory, coverage) cap at 60 steps and are the
-# CI-parity confidence check. Probe recipes (probe-*) cap at 200 steps with
-# a 60-min wall budget — used to gather real review artifacts.
-#
-# `gateway-up` / `gateway-down` are the lifecycle escape hatch when you want
-# to drive several runs against one long-lived gateway and skip the ~30s
-# bootstrap each time.
+# Canonical entrypoints:
+# - `run`: one-shot smoke command set (nav/territory/coverage/photo)
+# - `probe`: long-running artifact command set (200-step default)
+# - `gateway`: lifecycle helper for long-lived gateway reuse (`action=up|down`)
 
 set working-directory := '..'
 
@@ -44,154 +41,198 @@ pull-image:
     fi
 
 # ---------------------------------------------------------------------------
-# Smoke runs (60 steps, fresh gateway each time)
+# Canonical smoke command
 # ---------------------------------------------------------------------------
 
-# Navigation demo (2 agents, 10 steps, CI-parity smoke).
-[group('smoke')]
-nav:
+# OpenClaw run dispatcher.
+#
+# game: nav | territory | coverage | photo
+#
+# Defaults preserve existing run shapes:
+# - nav: 10 steps, output/openclaw/nav
+# - territory/coverage: 60 steps (callers should override output-dir if needed)
+# - photo: single-agent photo-task smoke
+run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw/{{game}}" agent_souls="" max_wall_seconds="0" personality_probe="" photo_output_dir="output/openclaw-photo-task" photo_max_moves="200" photo_wall_budget="900" photo_scene="FloorPlan201":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Bootstrapping Gateway for nav demo …"
-    TOKEN=$(./scripts/openclaw-bootstrap.sh)
-    echo "==> Running navigation demo …"
-    OPENCLAW_GATEWAY_TOKEN=$TOKEN xvfb-run -a python examples/openclaw_demo.py \
-      --agents 2 --steps 10 --output-dir output/openclaw/demo
-    echo "==> Stopping Gateway …"
-    docker rm -f openclaw-gateway || true
-    echo "==> Done. Report: output/openclaw/demo/report.html"
 
-# Territory game (2 agents, 60 steps, aggressive vs defensive).
-[group('smoke')]
-territory:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Bootstrapping Gateway for territory game (aggressive vs defensive) …"
-    TOKEN=$(AGENTS=2 AGENT_SOULS=aggressive,defensive ./scripts/openclaw-bootstrap.sh)
-    echo "==> Running territory game …"
-    OPENCLAW_GATEWAY_TOKEN=$TOKEN AGENT_SOULS=aggressive,defensive \
-      xvfb-run -a python examples/territory_game.py \
-      --backend openclaw --agents 2 --steps 60 \
-      --output-dir output/openclaw/territory
-    echo "==> Stopping Gateway …"
-    docker rm -f openclaw-gateway || true
-    echo "==> Done. Report: output/openclaw/territory/report.html"
+    bootstrap_cmd=(env PROVIDER="{{provider}}" AGENTS="{{agents}}")
+    if [[ -n "{{agent_souls}}" ]]; then
+      bootstrap_cmd+=(AGENT_SOULS="{{agent_souls}}")
+    fi
+    if [[ -n "{{personality_probe}}" ]]; then
+      bootstrap_cmd+=(PERSONALITY_PROBE="{{personality_probe}}")
+    fi
 
-# Coverage game (2 cooperative agents, 60 steps).
-[group('smoke')]
-coverage:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Bootstrapping Gateway for coverage game (cooperative) …"
-    TOKEN=$(AGENTS=2 AGENT_SOULS=cooperative,cooperative PERSONALITY_PROBE=0 ./scripts/openclaw-bootstrap.sh)
-    echo "==> Running coverage game …"
-    OPENCLAW_GATEWAY_TOKEN=$TOKEN AGENT_SOULS=cooperative,cooperative \
-      xvfb-run -a python examples/coverage_game.py \
-      --backend openclaw --agents 2 --steps 60 \
-      --output-dir output/openclaw/coverage
-    echo "==> Stopping Gateway …"
-    docker rm -f openclaw-gateway || true
-    echo "==> Done. Report: output/openclaw/coverage/report.html"
-
-# ---------------------------------------------------------------------------
-# Probes (200 steps, 60-min wall, real review artifacts)
-# ---------------------------------------------------------------------------
-
-# Long-running navigation probe (200 steps, auto-convergence).
-[group('probe')]
-probe-nav:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Bootstrapping Gateway for 200-step nav probe …"
-    TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+    TOKEN=$("${bootstrap_cmd[@]}" ./scripts/openclaw-bootstrap.sh)
     [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
-    echo "==> Running navigation demo (200 steps, auto-convergence) …"
-    {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN=$TOKEN PYTHONUNBUFFERED=1 \
-      xvfb-run -a python examples/openclaw_demo.py \
-      --agents 2 --steps 200 \
-      --output-dir output/openclaw-probe/nav
-    echo "==> Stopping Gateway …"
+
+    wall_args=()
+    if [[ "{{max_wall_seconds}}" != "0" ]]; then
+      wall_args=(--max-wall-seconds "{{max_wall_seconds}}")
+    fi
+
+    case "{{game}}" in
+      nav)
+        echo "==> Running navigation demo …"
+        OPENCLAW_GATEWAY_TOKEN="$TOKEN" xvfb-run -a python examples/openclaw_demo.py \
+          --agents "{{agents}}" \
+          --steps "{{steps}}" \
+          --output-dir "{{output_dir}}"
+        ;;
+
+      territory)
+        echo "==> Running territory game …"
+        if [[ -n "{{agent_souls}}" ]]; then
+          AGENT_SOULS="{{agent_souls}}" \
+          {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
+            xvfb-run -a python examples/territory_game.py \
+            --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
+            "${wall_args[@]}" --output-dir "{{output_dir}}"
+        else
+          {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
+            xvfb-run -a python examples/territory_game.py \
+            --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
+            "${wall_args[@]}" --output-dir "{{output_dir}}"
+        fi
+        ;;
+
+      coverage)
+        echo "==> Running coverage game …"
+        if [[ -n "{{agent_souls}}" ]]; then
+          AGENT_SOULS="{{agent_souls}}" \
+          {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
+            xvfb-run -a python examples/coverage_game.py \
+            --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
+            "${wall_args[@]}" --output-dir "{{output_dir}}"
+        else
+          {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
+            xvfb-run -a python examples/coverage_game.py \
+            --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
+            "${wall_args[@]}" --output-dir "{{output_dir}}"
+        fi
+        ;;
+
+      photo)
+        echo "==> Photo-task smoke (single agent, {{photo_scene}}, wall budget {{photo_wall_budget}}s)"
+        {{strip_ros_env}} PROVIDER="{{provider}}" PYTHONUNBUFFERED=1 \
+          xvfb-run -a python examples/openclaw_photo_task.py \
+          --output-dir "{{photo_output_dir}}" \
+          --max-moves "{{photo_max_moves}}" --wall-budget "{{photo_wall_budget}}"
+        ;;
+
+      *)
+        echo "error: unsupported openclaw game '{{game}}' (expected nav|territory|coverage|photo)" >&2
+        exit 1
+        ;;
+    esac
+
+    echo "==> stopping Gateway …"
+    docker rm -f openclaw-gateway || true
+    if [[ "{{game}}" == "coverage" ]]; then
+      docker volume rm openclaw-gateway-config || true
+    fi
+
+# Probe command set (longer artifacts): defaults: 200 steps, 1h wall budget.
+probe game="territory" agents="2" steps="200" provider="kimi" output_dir="output/openclaw-probe/{{game}}" agent_souls="" max_wall_seconds="3600" personality_probe="" photo_output_dir="output/openclaw-photo-task" photo_max_moves="200" photo_wall_budget="900" photo_scene="FloorPlan201":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    case "{{game}}" in
+      nav)
+        just openclaw::run \
+          game="nav" \
+          agents="{{agents}}" steps="{{steps}}" \
+          provider="{{provider}}" output_dir="{{output_dir}}" \
+          agent_souls="{{agent_souls}}" max_wall_seconds="{{max_wall_seconds}}" \
+          personality_probe="{{personality_probe}}" \
+          photo_output_dir="{{photo_output_dir}}" \
+          photo_max_moves="{{photo_max_moves}}" \
+          photo_wall_budget="{{photo_wall_budget}}" \
+          photo_scene="{{photo_scene}}"
+        ;;
+
+      territory)
+        souls="{{agent_souls}}"
+        if [[ -z "$souls" ]]; then
+          souls=aggressive,defensive
+        fi
+        just openclaw::run \
+          game="territory" \
+          agents="{{agents}}" steps="{{steps}}" \
+          provider="{{provider}}" output_dir="{{output_dir}}" \
+          agent_souls="$souls" max_wall_seconds="{{max_wall_seconds}}" \
+          personality_probe="" \
+          photo_output_dir="{{photo_output_dir}}" \
+          photo_max_moves="{{photo_max_moves}}" \
+          photo_wall_budget="{{photo_wall_budget}}" \
+          photo_scene="{{photo_scene}}"
+        ;;
+
+      coverage)
+        souls="{{agent_souls}}"
+        if [[ -z "$souls" ]]; then
+          souls=cooperative,cooperative
+        fi
+        probe_personality="{{personality_probe}}"
+        if [[ -z "$probe_personality" ]]; then
+          probe_personality=0
+        fi
+        just openclaw::run \
+          game="coverage" \
+          agents="{{agents}}" steps="{{steps}}" \
+          provider="{{provider}}" output_dir="{{output_dir}}" \
+          agent_souls="$souls" max_wall_seconds="{{max_wall_seconds}}" \
+          personality_probe="$probe_personality" \
+          photo_output_dir="{{photo_output_dir}}" \
+          photo_max_moves="{{photo_max_moves}}" \
+          photo_wall_budget="{{photo_wall_budget}}" \
+          photo_scene="{{photo_scene}}"
+        ;;
+
+      *)
+        echo "error: unsupported probe game '{{game}}' (expected nav|territory|coverage)" >&2
+        exit 1
+        ;;
+    esac
+
+    echo "==> probe complete, stopping runtime …"
     docker rm -f openclaw-gateway || true
     docker volume rm openclaw-gateway-config || true
-    echo "==> Done. Report: output/openclaw-probe/nav/report.html"
 
-# Long-running territory probe (200 steps, 60-min wall).
-[group('probe')]
-probe-territory:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Bootstrapping Gateway for 200-step territory probe …"
-    TOKEN=$(PROVIDER=kimi AGENTS=2 AGENT_SOULS=aggressive,defensive ./scripts/openclaw-bootstrap.sh)
-    [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
-    echo "==> Running territory game (200 steps, 60-min wall) …"
-    {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN=$TOKEN AGENT_SOULS=aggressive,defensive PYTHONUNBUFFERED=1 \
-      xvfb-run -a python examples/territory_game.py \
-      --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \
-      --output-dir output/openclaw-probe/territory
-    echo "==> Stopping Gateway …"
-    docker rm -f openclaw-gateway || true
-    docker volume rm openclaw-gateway-config || true
-    echo "==> Done. Report: output/openclaw-probe/territory/report.html"
-
-# Long-running coverage probe (200 steps, 60-min wall).
-[group('probe')]
-probe-coverage:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Bootstrapping Gateway for 200-step coverage probe …"
-    TOKEN=$(PROVIDER=kimi AGENTS=2 AGENT_SOULS=cooperative,cooperative PERSONALITY_PROBE=0 ./scripts/openclaw-bootstrap.sh)
-    [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
-    echo "==> Running coverage game (200 steps, 60-min wall) …"
-    {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN=$TOKEN AGENT_SOULS=cooperative,cooperative PYTHONUNBUFFERED=1 \
-      xvfb-run -a python examples/coverage_game.py \
-      --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \
-      --output-dir output/openclaw-probe/coverage
-    echo "==> Stopping Gateway …"
-    docker rm -f openclaw-gateway || true
-    docker volume rm openclaw-gateway-config || true
-    echo "==> Done. Report: output/openclaw-probe/coverage/report.html"
-
-# Self-bootstraps the Gateway via examples/openclaw_photo_task.py — no
-# `gateway-up` needed beforehand.
-# Photograph-each-chair task (single agent, FloorPlan201, ~15 min wall budget).
-[group('probe')]
-photo:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    RUN_DIR="output/openclaw-photo-task/$(date +%Y%m%d%H%M)"
-    echo "==> Photo-task smoke (single agent, FloorPlan201, ~15 min wall budget)"
-    {{strip_ros_env}} PROVIDER=kimi PYTHONUNBUFFERED=1 \
-      xvfb-run -a python examples/openclaw_photo_task.py \
-      --output-dir "$RUN_DIR" \
-      --max-moves 200 --wall-budget 900
-    echo "==> Scoring with check_photo_task.py …"
-    {{strip_ros_env}} python scripts/check_photo_task.py --run-dir "$RUN_DIR"
 
 # ---------------------------------------------------------------------------
-# Gateway lifecycle (use to run several probes against one long-lived gateway)
+# Gateway lifecycle (use to run several runs against one long-lived gateway)
 # ---------------------------------------------------------------------------
 
-# Bootstrap a gateway and write the token to .openclaw-token.
+# Bootstrap a gateway and write the token to a file.
 [group('gateway')]
-gateway-up:
+gateway action="up" token_file=".openclaw-token" provider="kimi" agents="2":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Bootstrapping gateway (2 agents, Kimi, TIMEOUT_SECONDS=600) …"
-    PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh > .openclaw-token
-    echo "==> Token saved to .openclaw-token"
-    echo ""
-    echo "Next steps:"
-    echo "  export OPENCLAW_GATEWAY_TOKEN=\$(cat .openclaw-token)"
-    echo "  source .venv/bin/activate"
-    echo "  {{strip_ros_env}} PYTHONUNBUFFERED=1 python examples/territory_game.py \\"
-    echo "    --backend openclaw --agents 2 --steps 200 --max-wall-seconds 3600 \\"
-    echo "    --output-dir output/territory-probe"
 
-# Tear down the gateway + volume + token file.
-[group('gateway')]
-gateway-down:
-    @echo "==> Tearing down gateway …"
-    -docker rm -f openclaw-gateway
-    -docker volume rm openclaw-gateway-config
-    -rm -f .openclaw-token
-    @echo "==> Done."
+    case "{{action}}" in
+      up)
+        TOKEN=$(
+          env \
+            PROVIDER="{{provider}}" \
+            AGENTS="{{agents}}" \
+            ./scripts/openclaw-bootstrap.sh
+        )
+        [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
+        printf '%s\n' "$TOKEN" > "{{token_file}}"
+        echo "==> gateway-up done. Token saved to {{token_file}}"
+        ;;
+
+      down)
+        docker rm -f openclaw-gateway
+        docker volume rm openclaw-gateway-config
+        rm -f "{{token_file}}"
+        echo "==> gateway-down done"
+        ;;
+
+      *)
+        echo "error: unknown openclaw gateway action '{{action}}' (expected up|down)" >&2
+        exit 1
+        ;;
+    esac

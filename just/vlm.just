@@ -13,26 +13,38 @@ set working-directory := '..'
 default:
     @just --list vlm
 
-# Territory game (direct Kimi, aggressive vs defensive, 20 steps).
-[group('kimi')]
-territory:
+run game="territory" model="kimi-coding" agents="2" steps="20" souls="" output_dir="output/kimi/{{game}}":
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Running territory game (direct Kimi, aggressive vs defensive) …"
-    AGENT_SOULS=aggressive,defensive PYTHONUNBUFFERED=1 \
-      xvfb-run -a python -u examples/territory_game.py \
-      --backend vlm --model kimi-coding --agents 2 --steps 20 \
-      --output-dir output/kimi/territory
-    echo "==> Done. Report: output/kimi/territory/report.html"
 
-# Coverage game (direct Kimi, cooperative, 20 steps).
-[group('kimi')]
-coverage:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Running coverage game (direct Kimi, cooperative) …"
-    AGENT_SOULS=cooperative,cooperative PYTHONUNBUFFERED=1 \
-      xvfb-run -a python -u examples/coverage_game.py \
-      --backend vlm --model kimi-coding --agents 2 --steps 20 \
-      --output-dir output/kimi/coverage
-    echo "==> Done. Report: output/kimi/coverage/report.html"
+    souls="{{souls}}"
+    case "{{game}}" in
+      territory)
+        if [[ -z "$souls" ]]; then
+          souls=aggressive,defensive
+        fi
+        echo "==> Running territory game (model {{model}}, direct VLM, aggressive vs defensive) …"
+        AGENT_SOULS="$souls" PYTHONUNBUFFERED=1 \
+          xvfb-run -a python -u examples/territory_game.py \
+          --backend vlm --model "{{model}}" --agents "{{agents}}" --steps "{{steps}}" \
+          --output-dir "{{output_dir}}"
+        ;;
+
+      coverage)
+        if [[ -z "$souls" ]]; then
+          souls=cooperative,cooperative
+        fi
+        echo "==> Running coverage game (model {{model}}, direct VLM, cooperative) …"
+        AGENT_SOULS="$souls" PYTHONUNBUFFERED=1 \
+          xvfb-run -a python -u examples/coverage_game.py \
+          --backend vlm --model "{{model}}" --agents "{{agents}}" --steps "{{steps}}" \
+          --output-dir "{{output_dir}}"
+        ;;
+
+      *)
+        echo "error: unsupported direct-VLM game '{{game}}' (expected territory|coverage)" >&2
+        exit 1
+        ;;
+    esac
+
+    echo "==> done. report: {{output_dir}}/report.html"
