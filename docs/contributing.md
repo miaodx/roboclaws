@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | fast pip/venv replacement | `uv pip install -e ".[dev,openclaw]"` is ~10× faster than pip |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw::nav`, `just chat::kimi`) |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw::run nav`, `just chat::run provider=kimi`) |
 
 ### Install
 
@@ -58,10 +58,10 @@ just openclaw              # equivalent — runs the module's `default` recipe (
 Invoke recipes with the `module::recipe` form:
 
 ```bash
-just openclaw::nav
-just chat::kimi
-just appliance::run-local
-just dev::selfcheck
+just openclaw::run nav
+just chat::run provider=kimi
+just appliance::run local
+just dev::test all
 ```
 
 `just <module> <recipe>` (space-separated) also works, but `module::recipe`

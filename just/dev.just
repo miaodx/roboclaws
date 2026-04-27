@@ -16,7 +16,6 @@ standalone_pytest := "./scripts/run_pytest_standalone.sh"
 default:
     @just --list dev
 
-# Point core.hooksPath at .githooks/.
 install-hooks:
     @git config core.hooksPath .githooks
     @echo "==> git hooks installed (core.hooksPath = .githooks)"
@@ -24,40 +23,44 @@ install-hooks:
     @echo "    post-merge : integration tests, backgrounded, log in .git/integration-last.log"
     @echo "    bypass     : git commit --no-verify   or   SKIP_TESTS=1 git commit"
 
-# Reset core.hooksPath.
 uninstall-hooks:
     -@git config --unset core.hooksPath
     @echo "==> git hooks uninstalled (core.hooksPath reset)"
 
-# Fast tests: what pre-commit runs (no Docker, no real provider API calls).
-test-fast:
-    @{{standalone_pytest}} -m "not integration" -q --durations=5
-
-# Integration tests: Docker-gated + real provider, what post-merge runs.
-test-integration:
-    @{{standalone_pytest}} -m integration -q --durations=10
-
-# Pulls the pinned Gateway image (so live catalog tests don't silently skip),
-# then runs the full pytest suite. ~2-3 min; if anything fails, the repo's
-# contract with the new image is broken and CI/Railway will too.
-# Self-check — one command that proves the repo still works end-to-end.
-selfcheck:
+test kind="all":
     #!/usr/bin/env bash
     set -euo pipefail
-    OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '\"')"
-    if [[ -z "${OPENCLAW_DEFAULT_IMAGE}" ]]; then
-      echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
-      exit 1
-    fi
-    OPENCLAW_IMG="${OPENCLAW_IMG:-${OPENCLAW_IMAGE:-$OPENCLAW_DEFAULT_IMAGE}}"
-    if ! command -v docker >/dev/null 2>&1; then
-      echo "warning: docker not on PATH — live OpenClaw tests will skip"
-    elif ! docker image inspect "$OPENCLAW_IMG" >/dev/null 2>&1; then
-      echo "==> pulling $OPENCLAW_IMG (one-time, ~700MB)"
-      docker pull "$OPENCLAW_IMG" >/dev/null \
-        || echo "warning: docker pull failed — live OpenClaw tests will skip"
-    else
-      echo "==> $OPENCLAW_IMG already cached"
-    fi
-    echo "==> running full pytest (mocks + live image probes)"
-    {{standalone_pytest}} -q --durations=5
+    case "{{kind}}" in
+      fast)
+        {{standalone_pytest}} -m "not integration" -q --durations=5
+        ;;
+
+      integration)
+        {{standalone_pytest}} -m integration -q --durations=10
+        ;;
+
+      all)
+        OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '\"')"
+        if [[ -z "${OPENCLAW_DEFAULT_IMAGE}" ]]; then
+          echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
+          exit 1
+        fi
+        OPENCLAW_IMG="${OPENCLAW_IMG:-${OPENCLAW_IMAGE:-$OPENCLAW_DEFAULT_IMAGE}}"
+        if ! command -v docker >/dev/null 2>&1; then
+          echo "warning: docker not on PATH — live OpenClaw tests will skip"
+        elif ! docker image inspect "$OPENCLAW_IMG" >/dev/null 2>&1; then
+          echo "==> pulling $OPENCLAW_IMG (one-time, ~700MB)"
+          docker pull "$OPENCLAW_IMG" >/dev/null \
+            || echo "warning: docker pull failed — live OpenClaw tests will skip"
+        else
+          echo "==> $OPENCLAW_IMG already cached"
+        fi
+        {{standalone_pytest}} -m "not integration" -q --durations=5
+        {{standalone_pytest}} -m integration -q --durations=10
+        ;;
+
+      *)
+        echo "error: unknown test kind '{{kind}}' (expected fast|integration|all)" >&2
+        exit 1
+        ;;
+    esac

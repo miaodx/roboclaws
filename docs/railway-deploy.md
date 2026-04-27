@@ -16,7 +16,7 @@ From a local checkout, validate the image once:
 
 ```bash
 just appliance::build
-DEMO_PASSWORD=demo just appliance::run-local
+DEMO_PASSWORD=demo just appliance::run local
 ```
 
 Then open:
@@ -44,9 +44,9 @@ DEMO_PASSWORD=<token> just appliance::smoke \
   APPLIANCE_SMOKE_URL=https://<railway-domain>
 ```
 
-`just appliance::run-local` reuses the host `$HOME/.ai2thor` cache by mounting
+`just appliance::run local` reuses the host `$HOME/.ai2thor` cache by mounting
 it into container `/data/.ai2thor`, so it should not redownload the AI2-THOR
-Unity build if `just chat` already downloaded it.
+Unity build if `just chat::run` already downloaded it.
 
 ## Railway Setup
 
@@ -155,7 +155,7 @@ Credential behavior:
 - neither:
   - container exits immediately with `ERROR: set DEMO_PASSWORD or OPENCLAW_TOKEN`
 
-Local `just appliance::run-local` defaults `DEMO_PASSWORD` to `demo`, so the
+Local `just appliance::run local` defaults `DEMO_PASSWORD` to `demo`, so the
 local bearer token is `demo` unless overridden.
 
 ## Expected First Boot Behavior
@@ -201,7 +201,7 @@ and restart:
 
 ```bash
 just appliance::build
-DEMO_PASSWORD=demo just appliance::run-local
+DEMO_PASSWORD=demo just appliance::run local
 ```
 
 ### OpenClaw Says `origin not allowed`
@@ -260,7 +260,7 @@ snapshot directory.
 
 ### `just chat::tail` Fails Locally
 
-`just chat::tail` is for the standalone `just chat` Gateway container named
+`just chat::tail` is for the standalone `just chat::run` Gateway container named
 `openclaw-gateway`.
 
 For the appliance container, use:
@@ -277,21 +277,21 @@ Use these when validating before pushing:
 
 ```bash
 just appliance::build
-DEMO_PASSWORD=demo just appliance::run-local
+DEMO_PASSWORD=demo just appliance::run local
 just appliance::tail
 ```
 
 Use this only when you explicitly want local `/data` parity with Railway:
 
 ```bash
-DEMO_PASSWORD=demo just appliance::run-railway
+DEMO_PASSWORD=demo just appliance::run railway
 ```
 
-`just appliance::run-railway` bind-mounts host `/data` into container `/data`.
+`just appliance::run railway` bind-mounts host `/data` into container `/data`.
 If that path is inconvenient, override it:
 
 ```bash
-DEMO_PASSWORD=demo just appliance::run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data
+DEMO_PASSWORD=demo just appliance::run railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data
 ```
 
 ## References

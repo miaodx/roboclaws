@@ -34,8 +34,9 @@ the run ends. The justfile auto-loads repo-local `.env` if present.
 
 ```bash
 cd /home/mi/ws/gogo/roboclaws
-just openclaw::nav
+just openclaw::run nav
 ```
+`just openclaw::run nav` is the canonical command.
 
 Artifacts:
 
@@ -131,6 +132,6 @@ First run is slow:
 
 ## Next Steps
 
-- Longer OpenClaw game demos: `just openclaw::territory`, `just openclaw::coverage`
+- Longer OpenClaw game demos: `just openclaw::run territory`, `just openclaw::run coverage`
 - Full local guide: [`docs/openclaw-local.md`](./openclaw-local.md)
 - Autonomous MCP loop and split-model MiMo: `python examples/openclaw_nav_autonomous.py ...`

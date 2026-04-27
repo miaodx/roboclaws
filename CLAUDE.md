@@ -36,10 +36,10 @@ python examples/coverage_game.py --agents 3
 Common `just` recipes (run `just --list` for the full grouped list):
 
 ```bash
-just dev::selfcheck                              # full repo confidence (lint + tests)
-just openclaw::photo                             # autonomous chair/sofa photo smoke
-just chat                                       # OpenClaw Gateway + browser Control UI
-DEMO_PASSWORD=demo just appliance::run-local     # hosted Railway-style appliance
+just dev::test all                              # full repo confidence (lint + tests)
+just openclaw::run photo                         # autonomous chair/sofa photo smoke
+just chat::run                                   # OpenClaw Gateway + browser Control UI
+DEMO_PASSWORD=demo just appliance::run local      # hosted Railway-style appliance
 ```
 
 See [`docs/contributing.md`](docs/contributing.md#dev-tooling-uv-and-just)
