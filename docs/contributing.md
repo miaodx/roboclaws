@@ -16,6 +16,70 @@ ruff format --check .
 pytest
 ```
 
+## Dev tooling: `uv` and `just`
+
+Two helper binaries make the day-to-day workflows tolerable. Both are single
+binaries with no system-package dependencies — install once, forget.
+
+| Tool | What it does | Why we use it |
+|------|--------------|---------------|
+| [`uv`](https://docs.astral.sh/uv/) | fast pip/venv replacement | `uv pip install -e ".[dev,openclaw]"` is ~10× faster than pip |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw nav`, `just chat kimi`) |
+
+### Install
+
+```bash
+# uv — single binary, into ~/.local/bin
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# just — single binary, into ~/.local/bin (Ubuntu apt is stuck at 1.21,
+# which predates module support; use the official script)
+curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+  | bash -s -- --to ~/.local/bin
+
+# Verify (just modules need ≥ 1.31 — current is 1.50+)
+uv --version
+just --version
+```
+
+If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
+(`export PATH="$HOME/.local/bin:$PATH"` in your shell rc).
+
+### Discover recipes
+
+```bash
+just                       # default: prints the grouped recipe list
+just --list                # same
+just openclaw --list       # only the openclaw module
+just chat --list           # only the chat module
+```
+
+The recipes mirror what the `Makefile` does today (the `Makefile` still works
+during the migration window). New recipes should land in `just/<module>.just`
+rather than the `Makefile`.
+
+### Tab completion (one-time per machine)
+
+`just`'s install script does **not** wire up shell completions. Run this
+once to make `just <TAB>`, `just openclaw <TAB>`, `just chat pl<TAB>`, etc.
+work in any directory that has a `justfile`:
+
+```bash
+echo 'source <(just --completions bash)' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Zsh / fish equivalents:
+
+```bash
+just --completions zsh  > ~/.zfunc/_just                            # zsh (ensure ~/.zfunc is in fpath)
+just --completions fish > ~/.config/fish/completions/just.fish      # fish
+```
+
+This is per-machine, not per-repo — the completion script reads whichever
+`justfile` is in the current directory, so it works for every `just` project
+you ever clone.
+
 ## Development topology: cloud + local
 
 Day-to-day work on this repo is split between two kinds of sessions, sized
