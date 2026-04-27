@@ -37,14 +37,8 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 
 ![Roboclaws architecture](docs/architecture.svg)
 
-The shared center is intentionally small:
-
-- `MultiAgentEngine` wraps AI2-THOR and keeps the simulation local.
-- The view system renders first-person, `map-v2`, and chase-cam images.
-- The MCP server exposes only `observe(label="")`, `move(...)`, and
-  `done(...)`.
-- OpenClaw, Codex, Claude Code, and direct VLM game loops all reuse that same
-  simulation and artifact path.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map, the four
+operating modes, and the shared MCP contract.
 
 ## Quick Start
 
@@ -158,38 +152,10 @@ make photo-task
 python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 
-## Project Layout
-
-```text
-roboclaws/
-|-- roboclaws/core/          # AI2-THOR engine, views, providers, replay
-|-- roboclaws/games/         # territory and coverage game rules
-|-- roboclaws/openclaw/      # Gateway bridge, MCP server, reset server
-|-- examples/                # runnable demos and local drivers
-|-- scripts/                 # bootstrap, scoring, rendering, deployment helpers
-|-- skills/ai2thor-navigator # OpenClaw/Codex/Claude robot operating instructions
-|-- docs/                    # guides, architecture, deployment notes
-`-- tests/                   # mock-heavy CI coverage plus integration guards
-```
-
-## Useful Commands
-
-```bash
-# Format / lint / tests
-ruff check .
-ruff format --check .
-pytest -q
-
-# This host may need ROS env stripped before pytest
-env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" \
-  .venv/bin/pytest -q
-
-# Full repo confidence target
-make selfcheck
-```
-
 ## Documentation Map
 
+- [Architecture](ARCHITECTURE.md) — code map, four operating modes, MCP contract
+- [Architecture Decision Records](docs/adr/) — atomic decisions (platform choice, deferred integrations)
 - [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md)
 - [OpenClaw demo guide](docs/openclaw-demo.md)
 - [OpenClaw local guide](docs/openclaw-local.md)

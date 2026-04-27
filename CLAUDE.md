@@ -5,11 +5,13 @@ Multiple VLM/OpenClaw agents controlling simulated robots in competition and coo
 ## Required reading
 
 Before writing any code, read in order:
-1. `CLAUDE.md` (this file)
-2. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
-3. `docs/technical-design.md` (full technical spec: API details, game rules, architecture)
-4. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
-5. `TODOS.md` (self-contained queued work)
+1. `README.md` (project orientation, what you can run, mode discovery)
+2. `ARCHITECTURE.md` (code map, four operating modes, MCP contract)
+3. `CLAUDE.md` (this file)
+4. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
+5. `docs/technical-design.md` (design rationale, scenario specs)
+6. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
+7. `TODOS.md` (self-contained queued work)
 
 Shipped-phase history lives under `docs/retrospectives/` — not required reading,
 but the best source for "why was this decided?" context on prior phases.
@@ -23,14 +25,21 @@ ruff format --check .
 pytest
 ```
 
-Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB):
-```bash
-# Requires a VLM API key
-export ANTHROPIC_API_KEY=sk-...
+Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB; see `AGENTS.md` §1.3 for VLM key setup):
 
+```bash
 python examples/single_agent_explore.py
 python examples/territory_game.py --agents 3
 python examples/coverage_game.py --agents 3
+```
+
+Common `make` targets (run `make help` for the full list):
+
+```bash
+make selfcheck                                # full repo confidence (lint + tests)
+make photo-task                               # autonomous chair/sofa photo smoke
+make chat                                     # OpenClaw Gateway + browser Control UI
+DEMO_PASSWORD=demo make appliance-run-local   # hosted Railway-style appliance
 ```
 
 ## Code style
@@ -42,14 +51,8 @@ python examples/coverage_game.py --agents 3
 
 ## Architecture
 
-- `roboclaws/core/engine.py` — AI2-THOR controller wrapper, multi-agent management
-- `roboclaws/core/vlm.py` — Unified VLM API interface (Claude Sonnet, GPT-4o, GPT-4o-mini)
-- `roboclaws/core/visualizer.py` — Overhead map generation, frame compositing, GIF output
-- `roboclaws/core/replay.py` — Game replay recording (frames + state JSON)
-- `roboclaws/games/territory.py` — Territory control game logic
-- `roboclaws/games/coverage.py` — Cooperative coverage game logic
-- `roboclaws/openclaw/` — OpenClaw Skill + Gateway bridge (Phase 2)
-- `examples/` — Directly runnable demo scripts
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map. Non-obvious
+AI2-THOR quirks and the VLM call pattern are below.
 
 ### AI2-THOR key APIs
 
@@ -102,26 +105,11 @@ Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavio
 
 **If the session IS local** (you have `docker`, a real `KIMI_API_KEY` / `ANTHROPIC_API_KEY`, a running Gateway, and AI2-THOR installed): the cloud → local handoff protocol does not apply. Run the real thing yourself, iterate, and report what you observed. No need to file a `local-dev` issue or split bounded changes away from real-hardware probes — a local session owns both. The cloud/local split exists to stop *cloud* sessions from papering over missing validation; it does not constrain a local session from carrying a full phase end-to-end.
 
-### Local preflight ritual (quick reference)
+### Local preflight ritual
 
-Full checklist in `AGENTS.md § 1`. Short form before any real-hardware run:
-
-```bash
-# 1. Load repo-local keys (gitignored; never commit .env)
-set -a && source .env && set +a          # exports KIMI_API_KEY, NV_API_KEY, etc.
-
-# 2. Install / refresh deps with uv if anything pyproject-side changed
-uv pip install -e ".[dev,openclaw]"      # omit [openclaw] if not touching the MCP path
-
-# 3. Docker hygiene — free ports 18788/18789 before bootstrapping a Gateway
-docker ps -a --format '{{.Names}}\t{{.Status}}' | grep openclaw-gateway && docker rm -f openclaw-gateway
-# (also scan `docker ps` for unrelated containers you no longer need)
-
-# 4. Pytest on this host needs ROS env stripped (lark import fails otherwise):
-env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" .venv/bin/pytest -x -q
-```
-
-For the OpenClaw Gateway path specifically, the exact local setup (Docker one-liner, required bind mount, troubleshooting) lives in `docs/openclaw-local.md`. Follow that before running `examples/openclaw_demo.py` or `examples/openclaw_nav_autonomous.py` locally.
+Local preflight steps (key loading, Docker hygiene, ROS env stripping for
+pytest) live in `AGENTS.md` §1. For the OpenClaw Gateway path specifically,
+see `docs/openclaw-local.md`.
 
 ## Design principles
 
@@ -130,14 +118,12 @@ For the OpenClaw Gateway path specifically, the exact local setup (Docker one-li
 | **Thin & focused** | Not a heavy framework; give a good model enough context and it runs |
 | **Make it work first** | Day 1-2: simplest pipeline to validate core hypothesis. Day 3+: add OpenClaw |
 | **Visualization first** | Every feature must produce visible output (screenshots/GIFs/video) |
-| **Cost-aware** | Default to GPT-4o-mini for dev; switch to Claude/GPT-4o for final demos |
 
 ## Gotchas
 
 - AI2-THOR downloads a Unity build (~1GB) on first run
 - AI2-THOR on Linux requires X server or headless rendering (`ai2thor[headless]`)
 - macOS may need additional AI2-THOR rendering configuration
-- VLM API cost: 3 agents × 200 steps ≈ $0.02 (GPT-4o-mini) to $0.36 (Claude Sonnet)
 - `controller.step()` is synchronous, one agent per call — game engine uses turn-based stepping
 
 ## Workflow: gstack for pre-plan, GSD for execution
@@ -162,10 +148,10 @@ This repo uses two complementary skill families:
 - Debug loops → `/gsd-debug`
 - Shipping → `/ship` (gstack) if no phase is under GSD, else `/gsd-ship`
 
-Phases 2.0–2.3 live in the top-level `PLAN.md` (pre-GSD). Phase 2.4+ may
-migrate to `.planning/phases/` once GSD is bootstrapped via
-`/gsd-ingest-docs` (to ingest the existing `PLAN.md` content) or
-`/gsd-plan-phase` (for a fresh phase start).
+Active phase work lives in `.planning/STATE.md` (GSD-managed) and the active
+phase directory under `.planning/phases/`. Top-level `PLAN.md` holds the
+current active phase only; shipped-phase history (Phase 2.0–2.4) is archived
+under `docs/retrospectives/`.
 
 ## Skill routing (gstack)
 
