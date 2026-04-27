@@ -1,7 +1,7 @@
 """HTTP /reset endpoint for the appliance.
 
 When the appliance container is fronted by nginx (Railway parity or
-``make appliance-run-local``), nginx routes ``/reset`` to this loopback
+``just appliance::run-local``), nginx routes ``/reset`` to this loopback
 listener. Hitting it atomically:
 
   1. Reloads the AI2-THOR scene back to its starting layout

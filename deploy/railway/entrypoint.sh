@@ -36,7 +36,7 @@ if [[ -z "${ROBOCLAWS_TAIL_HINT:-}" ]]; then
   if [[ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]]; then
     export ROBOCLAWS_TAIL_HINT="Railway deployment logs"
   else
-    export ROBOCLAWS_TAIL_HINT="make appliance-tail"
+    export ROBOCLAWS_TAIL_HINT="just appliance::tail"
   fi
 fi
 

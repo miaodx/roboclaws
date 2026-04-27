@@ -81,7 +81,7 @@ the Gateway's tool-bearing agent framework):
 > ℹ️ **MiMo model matrix** (probed 2026-04-23):
 > - `mimo-v2-omni`: vision (base64 inline images) ✓ + tool calls ✓ — use for navigation.
 > - `mimo-v2.5-pro` / `mimo-v2.5`: text + tool calls only; inline images silently ignored.
-> - `make chat` and `make chat-mimo-pro` default to `mimo-v2-omni`.
+> - `just chat` and `just chat::mimo-pro` default to `mimo-v2-omni`.
 > - Key env var: `MIMO_TP_KEY`. Mode: `MIMO_PROVIDER_MODE=openai` (default) or `anthropic`.
 
 > ℹ️ By default the repo does **not** use the stock `kimi/k2p5` plugin path.
@@ -176,7 +176,7 @@ docker rm -f openclaw-gateway
 Open `output/openclaw/territory/report.html` — aggressive agent's trail is
 red, defensive is blue (SOUL badges visible on agent sprites).
 
-Or use the Makefile shortcut: `make openclaw-territory`
+Or use the justfile shortcut: `just openclaw::territory`
 
 ### Coverage game (cooperative — both agents cooperate)
 
@@ -198,7 +198,7 @@ AGENT_SOULS=cooperative,cooperative \
 docker rm -f openclaw-gateway
 ```
 
-Or use the Makefile shortcut: `make openclaw-coverage`
+Or use the justfile shortcut: `just openclaw::coverage`
 
 ## 2. Run the navigation demo
 
@@ -457,7 +457,7 @@ If the trace shows `interactive_stopped` before the Gateway log says
 `ready`, the host-side Roboclaws MCP server has already shut down. The
 Gateway may still serve the Control UI, but it cannot attach
 `roboclaws__observe`, `roboclaws__move`, or `roboclaws__done`, so the
-minimal profile exposes only `session_status`. Re-run `make chat`; current
+minimal profile exposes only `session_status`. Re-run `just chat`; current
 bootstrap waits 180s for cold starts and removes the container on startup
 failure to avoid this orphan state.
 

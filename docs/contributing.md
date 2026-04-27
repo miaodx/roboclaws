@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | fast pip/venv replacement | `uv pip install -e ".[dev,openclaw]"` is ~10× faster than pip |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw nav`, `just chat kimi`) |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw::nav`, `just chat::kimi`) |
 
 ### Install
 
@@ -50,18 +50,27 @@ If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
 ```bash
 just                       # default: prints the grouped recipe list
 just --list                # same
-just openclaw --list       # only the openclaw module
-just chat --list           # only the chat module
+just --list openclaw       # only the openclaw module
+just --list chat           # only the chat module
+just openclaw              # equivalent — runs the module's `default` recipe (a list)
 ```
 
-The recipes mirror what the `Makefile` does today (the `Makefile` still works
-during the migration window). New recipes should land in `just/<module>.just`
-rather than the `Makefile`.
+Invoke recipes with the `module::recipe` form:
+
+```bash
+just openclaw::nav
+just chat::kimi
+just appliance::run-local
+just dev::selfcheck
+```
+
+`just <module> <recipe>` (space-separated) also works, but `module::recipe`
+keeps the namespace visible at a glance.
 
 ### Tab completion (one-time per machine)
 
 `just`'s install script does **not** wire up shell completions. Run this
-once to make `just <TAB>`, `just openclaw <TAB>`, `just chat pl<TAB>`, etc.
+once to make `just <TAB>`, `just openclaw::<TAB>`, `just chat::pl<TAB>`, etc.
 work in any directory that has a `justfile`:
 
 ```bash

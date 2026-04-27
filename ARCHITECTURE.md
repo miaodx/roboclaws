@@ -70,7 +70,7 @@ to `output/<game>/<timestamp>/` via `ReplayRecorder`.
 
 ### 2. OpenClaw Gateway
 
-`make chat`, `make openclaw-nav`. Routes through a Gateway docker
+`just chat`, `just openclaw::nav`. Routes through a Gateway docker
 container (default `:18789`) that handles auth, sessions, and model
 routing. The roboclaws side:
 
@@ -163,7 +163,7 @@ Two artifact pipelines coexist, one per drive style:
 
 The `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks
 under `snapshots/agent-<id>/` are written on every observe (labeled or
-not) and power the `make chat-view` live viewer.
+not) and power the `just chat::view` live viewer.
 
 ## Pointers
 

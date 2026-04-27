@@ -3,7 +3,7 @@
 #
 # Install once per clone:
 #
-#     make install-hooks         # or: git config core.hooksPath .githooks
+#     just dev::install-hooks    # or: git config core.hooksPath .githooks
 #
 # Bypass in emergencies:
 #
@@ -16,12 +16,12 @@
 #     staged (doc-only commits don't pay the ~30-60s test cost).
 #     Override the auto-skip with FORCE_TESTS=1 if your change
 #     affects test results in a non-obvious way (e.g., editing a JSON
-#     fixture or a Makefile target that tests depend on).
+#     fixture or a justfile recipe that tests depend on).
 #
 # Design notes:
 #   - Tests marked `@pytest.mark.integration` (Docker-dependent OR real
 #     model-provider API calls) are excluded via `-m "not integration"`.
-#     Run them post-merge with `make test-integration`, and CI still
+#     Run them post-merge with `just dev::test-integration`, and CI still
 #     runs the full suite.
 #   - We strip ROS env vars so the run matches the sanitised shape the
 #     rest of this machine uses (see AGENTS.md § 1). If `/opt/ros/*/`

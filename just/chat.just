@@ -1,6 +1,6 @@
 # Interactive chat — operator drives the agent from the Gateway Control UI.
 #
-# `just chat default` (or just `just chat`) bootstraps a fresh Gateway, holds
+# `just chat::default` (or just `just chat`) bootstraps a fresh Gateway, holds
 # AI2-THOR + the Roboclaws MCP server open, prints the Control UI URL +
 # bearer token, and tears down on Ctrl-C.
 #
@@ -13,8 +13,8 @@
 #     plugin | plugin-kimi | plugin-mimo-pro
 #
 # Companion observers (run in a second terminal while chat is live):
-#   `just chat tail`  — pretty-tail Gateway session JSONL
-#   `just chat view`  — live snapshot viewer at http://127.0.0.1:8787
+#   `just chat::tail`  — pretty-tail Gateway session JSONL
+#   `just chat::view`  — live snapshot viewer at http://127.0.0.1:8787
 #
 # Custom flags: `python examples/openclaw_interactive.py --help`.
 #

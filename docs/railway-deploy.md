@@ -15,8 +15,8 @@ Public routes:
 From a local checkout, validate the image once:
 
 ```bash
-make appliance-build
-DEMO_PASSWORD=demo make appliance-run-local
+just appliance::build
+DEMO_PASSWORD=demo just appliance::run-local
 ```
 
 Then open:
@@ -28,25 +28,25 @@ Then open:
 For local appliance chat logs:
 
 ```bash
-make appliance-tail
+just appliance::tail
 ```
 
 For the appliance Control UI proxy/auth smoke test:
 
 ```bash
-make appliance-smoke
+just appliance::smoke
 ```
 
 For a non-default local port or Railway URL:
 
 ```bash
-DEMO_PASSWORD=<token> make appliance-smoke \
+DEMO_PASSWORD=<token> just appliance::smoke \
   APPLIANCE_SMOKE_URL=https://<railway-domain>
 ```
 
-`make appliance-run-local` reuses the host `$HOME/.ai2thor` cache by mounting
+`just appliance::run-local` reuses the host `$HOME/.ai2thor` cache by mounting
 it into container `/data/.ai2thor`, so it should not redownload the AI2-THOR
-Unity build if `make chat` already downloaded it.
+Unity build if `just chat` already downloaded it.
 
 ## Railway Setup
 
@@ -155,7 +155,7 @@ Credential behavior:
 - neither:
   - container exits immediately with `ERROR: set DEMO_PASSWORD or OPENCLAW_TOKEN`
 
-Local `make appliance-run-local` defaults `DEMO_PASSWORD` to `demo`, so the
+Local `just appliance::run-local` defaults `DEMO_PASSWORD` to `demo`, so the
 local bearer token is `demo` unless overridden.
 
 ## Expected First Boot Behavior
@@ -200,8 +200,8 @@ You are running an older image that still had nginx Basic Auth enabled. Rebuild
 and restart:
 
 ```bash
-make appliance-build
-DEMO_PASSWORD=demo make appliance-run-local
+just appliance::build
+DEMO_PASSWORD=demo just appliance::run-local
 ```
 
 ### OpenClaw Says `origin not allowed`
@@ -258,15 +258,15 @@ The viewer updates after `roboclaws__observe` writes
 `latest.fpv.png`, `latest.map.png`, and `latest.chase.png` under the run
 snapshot directory.
 
-### `make chat-tail` Fails Locally
+### `just chat::tail` Fails Locally
 
-`make chat-tail` is for the standalone `make chat` Gateway container named
+`just chat::tail` is for the standalone `just chat` Gateway container named
 `openclaw-gateway`.
 
 For the appliance container, use:
 
 ```bash
-make appliance-tail
+just appliance::tail
 ```
 
 On Railway, inspect the service deployment logs instead.
@@ -276,22 +276,22 @@ On Railway, inspect the service deployment logs instead.
 Use these when validating before pushing:
 
 ```bash
-make appliance-build
-DEMO_PASSWORD=demo make appliance-run-local
-make appliance-tail
+just appliance::build
+DEMO_PASSWORD=demo just appliance::run-local
+just appliance::tail
 ```
 
 Use this only when you explicitly want local `/data` parity with Railway:
 
 ```bash
-DEMO_PASSWORD=demo make appliance-run-railway
+DEMO_PASSWORD=demo just appliance::run-railway
 ```
 
-`make appliance-run-railway` bind-mounts host `/data` into container `/data`.
+`just appliance::run-railway` bind-mounts host `/data` into container `/data`.
 If that path is inconvenient, override it:
 
 ```bash
-DEMO_PASSWORD=demo make appliance-run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data
+DEMO_PASSWORD=demo just appliance::run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data
 ```
 
 ## References

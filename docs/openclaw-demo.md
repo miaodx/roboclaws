@@ -30,11 +30,11 @@ uv pip install -e ".[dev,openclaw]"
 
 This is the shortest route. It bootstraps the Gateway, runs the CI-parity
 navigation smoke (`2` agents, `10` steps), and tears the Gateway down when
-the run ends. The Makefile auto-sources repo-local `.env` if present.
+the run ends. The justfile auto-loads repo-local `.env` if present.
 
 ```bash
 cd /home/mi/ws/gogo/roboclaws
-make openclaw-nav
+just openclaw::nav
 ```
 
 Artifacts:
@@ -131,6 +131,6 @@ First run is slow:
 
 ## Next Steps
 
-- Longer OpenClaw game demos: `make openclaw-territory`, `make openclaw-coverage`
+- Longer OpenClaw game demos: `just openclaw::territory`, `just openclaw::coverage`
 - Full local guide: [`docs/openclaw-local.md`](./openclaw-local.md)
 - Autonomous MCP loop and split-model MiMo: `python examples/openclaw_nav_autonomous.py ...`

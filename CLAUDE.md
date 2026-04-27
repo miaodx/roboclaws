@@ -33,14 +33,18 @@ python examples/territory_game.py --agents 3
 python examples/coverage_game.py --agents 3
 ```
 
-Common `make` targets (run `make help` for the full list):
+Common `just` recipes (run `just --list` for the full grouped list):
 
 ```bash
-make selfcheck                                # full repo confidence (lint + tests)
-make photo-task                               # autonomous chair/sofa photo smoke
-make chat                                     # OpenClaw Gateway + browser Control UI
-DEMO_PASSWORD=demo make appliance-run-local   # hosted Railway-style appliance
+just dev::selfcheck                              # full repo confidence (lint + tests)
+just openclaw::photo                             # autonomous chair/sofa photo smoke
+just chat                                       # OpenClaw Gateway + browser Control UI
+DEMO_PASSWORD=demo just appliance::run-local     # hosted Railway-style appliance
 ```
+
+See [`docs/contributing.md`](docs/contributing.md#dev-tooling-uv-and-just)
+for the one-line `just` install + tab completion. Modules:
+`openclaw`, `vlm`, `chat`, `appliance`, `dev` — each lives in `just/<module>.just`.
 
 ## Code style
 

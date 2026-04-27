@@ -879,8 +879,8 @@ def test_mcp_seed_is_idempotent(tmp_path: Path) -> None:
 def test_preseed_bakes_openclaw_token_when_set(tmp_path: Path) -> None:
     """OPENCLAW_TOKEN=<value> lands inside gateway.auth.token.
 
-    This is how the chat-* Makefile targets pin a stable `demo` bearer so
-    operators don't have to paste a fresh random token every `make chat`.
+    This is how the `just chat::*` recipes pin a stable `demo` bearer so
+    operators don't have to paste a fresh random token every `just chat`.
     """
     cfg_path = _run_preseed(tmp_path, {"OPENCLAW_TOKEN": "demo"})
     config = json.loads(cfg_path.read_text(encoding="utf-8"))

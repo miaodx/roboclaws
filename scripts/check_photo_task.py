@@ -32,7 +32,7 @@ from pathlib import Path
 
 _LABELED_PNG_RE = re.compile(r"^(?P<label>.+?)-\d+\.(?:fpv|map|chase)\.png$")
 # These are the unlabeled "live viewer" PNGs every observe writes — stable
-# names so the make chat-view tab can poll them. They must NOT count
+# names so the `just chat::view` tab can poll them. They must NOT count
 # toward the labeled-snapshot tally.
 _UNLABELED_NAMES = {"latest.fpv.png", "latest.map.png", "latest.chase.png"}
 
