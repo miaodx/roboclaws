@@ -13,6 +13,11 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  # Override in repo settings to roll the Gateway without code edits.
+  # Empty means bootstrap.sh uses OPENCLAW_DEFAULTS.
+  OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
+
 jobs:
   # ---------------------------------------------------------------------------
   # Job 1: Lint + mock tests (every push and PR)
@@ -188,9 +193,6 @@ jobs:
     continue-on-error: true
 
     env:
-      # Pinned digest-traceable tag — no :latest drift. Override via repository
-      # variable (or fork) if you need to pin to a different digest.
-      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.25-beta.11' }}
       OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
 
     steps:
@@ -232,7 +234,6 @@ jobs:
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          IMAGE: ${{ env.OPENCLAW_IMAGE }}
           AGENTS: "2"
           HOST_IP: "127.0.0.1"
           PORT: "18789"
@@ -295,7 +296,6 @@ jobs:
       cancel-in-progress: false
 
     env:
-      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.25-beta.11' }}
       OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
 
     steps:
@@ -332,7 +332,6 @@ jobs:
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          IMAGE: ${{ env.OPENCLAW_IMAGE }}
           AGENTS: "2"
           AGENT_SOULS: "aggressive,defensive"
           HOST_IP: "127.0.0.1"
@@ -388,7 +387,6 @@ jobs:
       cancel-in-progress: false
 
     env:
-      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.25-beta.11' }}
       OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
 
     steps:
@@ -425,7 +423,6 @@ jobs:
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          IMAGE: ${{ env.OPENCLAW_IMAGE }}
           AGENTS: "2"
           AGENT_SOULS: "cooperative,cooperative"
           PERSONALITY_PROBE: "0"
@@ -493,7 +490,6 @@ jobs:
       cancel-in-progress: false
 
     env:
-      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE || 'ghcr.io/openclaw/openclaw:2026.4.25-beta.11' }}
       OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
 
     steps:
@@ -528,7 +524,6 @@ jobs:
       - name: Run photo task (autonomous, self-bootstraps Gateway)
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          IMAGE: ${{ env.OPENCLAW_IMAGE }}
           PROVIDER: kimi
         run: |
           xvfb-run -a python examples/openclaw_photo_task.py \

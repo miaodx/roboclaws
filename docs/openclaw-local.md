@@ -56,7 +56,7 @@ Useful overrides:
 | `AGENT_SOULS`       | `` (empty)                                | Csv of soul names per agent, e.g. `aggressive,defensive`. Supports dict form `agent-0:aggressive,agent-2:cooperative`. |
 | `SOULS_DIR`         | `$PWD/skills/ai2thor-navigator/souls`     | Directory containing `<name>.md` SOUL files.                    |
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
-| `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.25-beta.11` | Pinned tag under test (override with a known-good release if needed). |
+| `IMAGE`             | Same as `scripts/openclaw-defaults.env` (`OPENCLAW_IMAGE_DEFAULT`) | Pinned tag under test (override with a known-good release if needed). |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
 | `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
 | `READY_TIMEOUT`     | `180`                                     | Seconds to wait for `/readyz`; newer image builds can spend more than 60s on cold start while provider/runtime deps settle. |
