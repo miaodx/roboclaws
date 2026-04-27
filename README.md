@@ -55,6 +55,7 @@ Layer 3 GIFs include SOUL badges + colored trails — aggressive=red, defensive=
 Quickest local path:
 - [OpenClaw demo guide](docs/openclaw-demo.md) — shortest route to `examples/openclaw_demo.py`
 - [OpenClaw local guide](docs/openclaw-local.md) — full local matrix (games, interactive chat, autonomous MCP, provider/model notes)
+- [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md) — no Gateway; expose `observe` / `move` / `done` directly to a coding agent
 
 | Demo | GIF | Report |
 |------|-----|--------|
@@ -79,6 +80,16 @@ python examples/territory_game.py --agents 3 --scene FloorPlan201
 
 # Cooperative coverage (3 agents)
 python examples/coverage_game.py --agents 3 --scene FloorPlan201
+```
+
+Direct Codex / Claude Code robot driver:
+
+```bash
+python examples/coding_agent_nav_server.py --scene FloorPlan201
+# then in another terminal:
+codex mcp add roboclaws --url http://127.0.0.1:18788/mcp
+# or:
+claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
 ```
 
 Set a VLM API key:

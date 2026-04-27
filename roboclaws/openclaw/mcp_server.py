@@ -413,6 +413,9 @@ class RoboclawsMCPServer:
             "human_message": human_message,
             **self._view_metadata(source_image_labels),
         }
+        visible_objects = self._visible_object_summaries(state)
+        if visible_objects:
+            base_state_payload["visible_objects"] = visible_objects
         bridge_result = None
         delivered_image_labels = source_image_labels
         if observe_delivery == "text-bridge":
@@ -842,6 +845,23 @@ class RoboclawsMCPServer:
             "last_action_success": state.last_action_success,
             "last_action_error": state.last_action_error,
         }
+
+    def _visible_object_summaries(self, state: AgentState) -> list[dict[str, str]]:
+        """Return visible AI2-THOR object names/types without adding oracle data."""
+        summaries: list[dict[str, str]] = []
+        for obj in getattr(state, "visible_objects", []) or []:
+            if not isinstance(obj, dict):
+                continue
+            summary: dict[str, str] = {}
+            name = obj.get("name")
+            object_type = obj.get("objectType")
+            if name is not None:
+                summary["name"] = str(name)
+            if object_type is not None:
+                summary["object_type"] = str(object_type)
+            if summary:
+                summaries.append(summary)
+        return summaries
 
     def _write_latest_snapshots(self, prompt_bundle: Any) -> None:
         """Atomically refresh latest.{fpv,map,chase}.png so the live viewer updates."""
