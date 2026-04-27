@@ -5,6 +5,12 @@ This is the concrete recipe for running the Phase 2 demo
 the same contract in `.github/workflows/ci.yml` under the `openclaw-smoke`
 job.
 
+If you want a warm cache before running multiple demos, pre-pull the image first:
+
+```bash
+just openclaw::pull-image
+```
+
 ## Prerequisites
 
 - Docker (Linux: rootless or regular; macOS: Docker Desktop).
