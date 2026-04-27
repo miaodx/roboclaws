@@ -44,7 +44,12 @@ test-integration:
 selfcheck:
     #!/usr/bin/env bash
     set -euo pipefail
-    OPENCLAW_IMG="${OPENCLAW_IMG:-ghcr.io/openclaw/openclaw:2026.4.25-beta.11}"
+    OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '\"')"
+    if [[ -z "${OPENCLAW_DEFAULT_IMAGE}" ]]; then
+      echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
+      exit 1
+    fi
+    OPENCLAW_IMG="${OPENCLAW_IMG:-${OPENCLAW_IMAGE:-$OPENCLAW_DEFAULT_IMAGE}}"
     if ! command -v docker >/dev/null 2>&1; then
       echo "warning: docker not on PATH — live OpenClaw tests will skip"
     elif ! docker image inspect "$OPENCLAW_IMG" >/dev/null 2>&1; then

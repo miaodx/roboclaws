@@ -32,7 +32,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = ROOT / "scripts" / "openclaw-bootstrap.sh"
-IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.25-beta.11"
+DEFAULTS_ENV = ROOT / "scripts" / "openclaw-defaults.env"
+
+
+def _default_gateway_image() -> str:
+    """Read OPENCLAW_IMAGE_DEFAULT from ``scripts/openclaw-defaults.env``."""
+    raw = DEFAULTS_ENV.read_text(encoding="utf-8")
+    for line in raw.splitlines():
+        if line.startswith("OPENCLAW_IMAGE_DEFAULT="):
+            value = line.split("=", 1)[1].strip().strip('"')
+            if value:
+                return value
+    raise AssertionError(f"OPENCLAW_IMAGE_DEFAULT missing in {DEFAULTS_ENV}")
+
+
+IMAGE_DEFAULT = _default_gateway_image()
 
 
 # ---------------------------------------------------------------------------

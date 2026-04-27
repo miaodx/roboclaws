@@ -24,7 +24,8 @@
 #   AGENTS       Number of named agents to create    (default: 2; must be 1..8)
 #   AGENT_PREFIX Name prefix for agents              (default: agent-)
 #   CONTAINER    Container name                      (default: openclaw-gateway)
-#   IMAGE        Gateway image                       (default: ghcr.io/openclaw/openclaw:2026.4.25-beta.11)
+#   IMAGE        Gateway image                       (default:
+#                             openclaw-defaults.env:OPENCLAW_IMAGE_DEFAULT)
 #   VOLUME       Named volume for /home/node/.openclaw (default: openclaw-gateway-config)
 #   HOST_IP      Bind address on the host            (default: 127.0.0.1)
 #   PORT         Gateway port                        (default: 18789)
@@ -100,10 +101,18 @@
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULTS_FILE="${SCRIPT_DIR}/openclaw-defaults.env"
+if [[ -f "$DEFAULTS_FILE" ]]; then
+    # shellcheck source=/dev/null
+    . "$DEFAULTS_FILE"
+fi
+: "${OPENCLAW_IMAGE_DEFAULT:=ghcr.io/openclaw/openclaw:2026.4.25-beta.11}"
+
 AGENTS="${AGENTS:-2}"
 AGENT_PREFIX="${AGENT_PREFIX:-agent-}"
 CONTAINER="${CONTAINER:-openclaw-gateway}"
-IMAGE="${IMAGE:-ghcr.io/openclaw/openclaw:2026.4.25-beta.11}"
+IMAGE="${IMAGE:-${OPENCLAW_IMAGE:-$OPENCLAW_IMAGE_DEFAULT}}"
 VOLUME="${VOLUME:-openclaw-gateway-config}"
 HOST_IP="${HOST_IP:-127.0.0.1}"
 PORT="${PORT:-18789}"
