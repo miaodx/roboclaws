@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.9.27 AS uv
 
-FROM ghcr.io/openclaw/openclaw:2026.4.24
+FROM ghcr.io/openclaw/openclaw:2026.4.25-beta.11
 
 USER root
 

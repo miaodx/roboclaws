@@ -44,7 +44,7 @@ test-integration:
 selfcheck:
     #!/usr/bin/env bash
     set -euo pipefail
-    OPENCLAW_IMG="ghcr.io/openclaw/openclaw:2026.4.24"
+    OPENCLAW_IMG="${OPENCLAW_IMG:-ghcr.io/openclaw/openclaw:2026.4.25-beta.11}"
     if ! command -v docker >/dev/null 2>&1; then
       echo "warning: docker not on PATH — live OpenClaw tests will skip"
     elif ! docker image inspect "$OPENCLAW_IMG" >/dev/null 2>&1; then

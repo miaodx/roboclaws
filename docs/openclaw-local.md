@@ -56,10 +56,10 @@ Useful overrides:
 | `AGENT_SOULS`       | `` (empty)                                | Csv of soul names per agent, e.g. `aggressive,defensive`. Supports dict form `agent-0:aggressive,agent-2:cooperative`. |
 | `SOULS_DIR`         | `$PWD/skills/ai2thor-navigator/souls`     | Directory containing `<name>.md` SOUL files.                    |
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
-| `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.24`     | Pinned digest-traceable tag.                                    |
+| `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.25-beta.11` | Pinned tag under test (override with a known-good release if needed). |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
 | `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
-| `READY_TIMEOUT`     | `180`                                     | Seconds to wait for `/readyz`; the 2026.4.24 image can spend more than 60s installing bundled runtime deps on cold start. |
+| `READY_TIMEOUT`     | `180`                                     | Seconds to wait for `/readyz`; newer image builds can spend more than 60s on cold start while provider/runtime deps settle. |
 | `HOST_IP`           | `127.0.0.1`                               | Gateway port is localhost-only by default.                      |
 | `PORT`              | `18789`                                   | Gateway HTTP port.                                              |
 | `CONTAINER`         | `openclaw-gateway`                        | Docker container name.                                          |
