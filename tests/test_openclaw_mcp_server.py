@@ -48,6 +48,7 @@ class FakeEngine:
         self._rotation = {"x": 0.0, "y": 90.0, "z": 0.0}
         self._last_action_success = True
         self._last_action_error = ""
+        self.visible_objects: list[dict[str, Any]] = []
 
     def _state(self, agent_id: int) -> FakeAgentState:
         return FakeAgentState(
@@ -58,6 +59,7 @@ class FakeEngine:
             camera_horizon=30.0,
             last_action_success=self._last_action_success,
             last_action_error=self._last_action_error,
+            visible_objects=list(self.visible_objects),
         )
 
     def get_agent_state(self, agent_id: int) -> FakeAgentState:
@@ -135,6 +137,7 @@ def test_observe_returns_state_text_plus_three_images(
     assert state["observe_delivery"] == "images"
     assert state["bridge_model"] is None
     assert state["agent_id"] == 0
+    assert "visible_objects" not in state
 
     # Three image blocks — SDK Image objects expose `.data` as bytes
     for block in result[1:]:
@@ -152,6 +155,31 @@ def test_observe_returns_state_text_plus_three_images(
 
     # Ledger marks the observe as seen
     assert server.snapshot_metrics()["observed_once"] is True
+
+
+def test_observe_includes_visible_object_name_type_summaries(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    engine.visible_objects = [
+        {
+            "name": "DiningChair_1",
+            "objectType": "Chair",
+            "visible": True,
+            "position": {"x": 99},
+        },
+        {"objectType": "Sofa", "visible": True, "distance": 1.2},
+        {"name": "UnknownVisible", "visible": True},
+    ]
+
+    state = json.loads(server._do_observe()[0])
+
+    assert state["visible_objects"] == [
+        {"name": "DiningChair_1", "object_type": "Chair"},
+        {"object_type": "Sofa"},
+        {"name": "UnknownVisible"},
+    ]
+    assert "position" not in state["visible_objects"][0]
+    assert "distance" not in state["visible_objects"][1]
 
 
 @pytest.mark.parametrize(

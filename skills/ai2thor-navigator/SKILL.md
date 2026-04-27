@@ -34,6 +34,10 @@ If the operator explicitly says "don't wait between steps" or "just walk and sho
 
 For true live frame-by-frame viewing, the operator can run `make chat-view` in a second terminal which serves `http://127.0.0.1:8787/` — that viewer polls the stable `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks (written by every `observe` call, labeled or not) and refreshes automatically, so every intermediate step is visible there regardless of what the chat tab renders.
 
+### Direct coding-agent mode
+
+When Codex or Claude Code is connected directly to `python examples/coding_agent_nav_server.py`, follow the same tools without OpenClaw Gateway assumptions: call `roboclaws__observe` first, use `roboclaws__observe(label="chair-1")` / `label="sofa-1"` as the photo action, then after all requested photos are taken summarize the labels and call `roboclaws__done`. If the operator sends new instructions in the terminal while you are working, treat the latest terminal instruction as higher-priority direction, call a fresh `roboclaws__observe`, then choose the next `roboclaws__move` or labeled `roboclaws__observe`.
+
 ## Loop
 
 Default pattern: `observe → think → move`. The `observe` tool is how you see the world — call it first, and again whenever you need fresh frames. Check `observe.state.observe_delivery` before interpreting the second block: `images` means raw FPV/map frames follow, `text-bridge` means the second block is already a navigation summary. `move` returns structured state only (no images), so re-observe after each meaningful step. The server tracks `moves_since_observe` and will attach a `warning` (and after 5 blind moves, a synthetic `human_message`) to nudge you back to `observe`. You may take a short burst of moves without re-observing if you have a concrete local reason (clear hallway, safe backtrack, following a human directive); include that justification in `move.reason`.
