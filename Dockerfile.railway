@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1.6
 FROM ghcr.io/astral-sh/uv:0.9.27 AS uv
 
 FROM ghcr.io/openclaw/openclaw:2026.4.24
@@ -42,19 +41,14 @@ RUN UV_HTTP_TIMEOUT=600 \
     UV_LINK_MODE=copy \
     uv sync --frozen --no-install-project --no-dev --extra openclaw
 
-# Project source — invalidates on any code change. Everything below this
-# line re-runs on every iteration, but is fast (~1s) because the heavy
-# deps are already in the cached venv layer above.
-COPY . /opt/roboclaws
+# Project source — invalidates on any code change. Runtime entrypoints execute
+# from /opt/roboclaws with PYTHONPATH pointed at the source tree, so rebuilds
+# do not need to package/install the local project again.
+COPY --chown=node:node . /opt/roboclaws
 
-RUN UV_HTTP_TIMEOUT=600 \
-    UV_PROJECT_ENVIRONMENT=/opt/roboclaws/.venv \
-    UV_LINK_MODE=copy \
-    uv sync --frozen --no-dev --extra openclaw \
-  && chmod +x /opt/roboclaws/deploy/railway/entrypoint.sh \
+RUN chmod +x /opt/roboclaws/deploy/railway/entrypoint.sh \
     /opt/roboclaws/scripts/appliance-run-interactive.sh \
-    /opt/roboclaws/scripts/appliance_seed_openclaw.py \
-  && chown -R node:node /opt/roboclaws
+    /opt/roboclaws/scripts/appliance_seed_openclaw.py
 
 ENV APP_ROOT=/opt/roboclaws \
     DATA_DIR=/data \
@@ -67,6 +61,7 @@ ENV APP_ROOT=/opt/roboclaws \
     ROBOCLAWS_RUN_DIR=/data/runs/current \
     ROBOCLAWS_SNAPSHOTS_DIR=/data/runs/current/snapshots \
     DISPLAY=:99 \
+    PYTHONPATH=/opt/roboclaws \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8080
