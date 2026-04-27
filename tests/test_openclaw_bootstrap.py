@@ -32,7 +32,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = ROOT / "scripts" / "openclaw-bootstrap.sh"
-IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.24"
+IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.25-beta.11"
 
 
 # ---------------------------------------------------------------------------
@@ -746,7 +746,7 @@ def test_bootstrap_personality_probe_is_skippable() -> None:
 
 
 def test_bootstrap_ready_timeout_allows_current_gateway_cold_start() -> None:
-    """The 2026.4.24 image can spend >60s installing bundled runtime deps.
+    """Current gateway image builds can spend >60s on first run when caching/deps warm.
 
     A too-short ready timeout leaves the Gateway running after the host-side
     MCP server exits, which makes the agent see only ``session_status``.
