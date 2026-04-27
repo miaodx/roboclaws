@@ -16,6 +16,33 @@ strip_ros_env := "env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -
 default:
     @just --list openclaw
 
+# Ensure the configured OpenClaw Gateway image is present in local Docker cache.
+# Useful if you want a fast first bootstrap in a tight loop.
+[group('gateway')]
+pull-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '"')"
+    if [[ -z "$OPENCLAW_DEFAULT_IMAGE" ]]; then
+      echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
+      exit 1
+    fi
+
+    OPENCLAW_IMG="${OPENCLAW_IMG:-${IMAGE:-${OPENCLAW_IMAGE:-$OPENCLAW_DEFAULT_IMAGE}}}"
+
+    if ! command -v docker >/dev/null 2>&1; then
+      echo "error: docker not found in PATH" >&2
+      exit 1
+    fi
+
+    if ! docker image inspect "$OPENCLAW_IMG" >/dev/null 2>&1; then
+      echo "==> pulling $OPENCLAW_IMG"
+      docker pull "$OPENCLAW_IMG"
+    else
+      echo "==> already cached: $OPENCLAW_IMG"
+    fi
+
 # ---------------------------------------------------------------------------
 # Smoke runs (60 steps, fresh gateway each time)
 # ---------------------------------------------------------------------------
