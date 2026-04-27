@@ -89,6 +89,15 @@ This is per-machine, not per-repo — the completion script reads whichever
 `justfile` is in the current directory, so it works for every `just` project
 you ever clone.
 
+If you prefer tab suggestions to only show recipes (no files/directories), use
+this Bash variant instead:
+
+```bash
+source <(just --completions bash)
+complete -r just
+complete -o nosort -o nospace -F _clap_complete_just just
+```
+
 ## Development topology: cloud + local
 
 Day-to-day work on this repo is split between two kinds of sessions, sized
