@@ -11,7 +11,7 @@
         chat-mimo-pro chat-mimo chat-kimi \
         chat-plugin-kimi chat-plugin-mimo-pro \
         kimi-territory kimi-coverage \
-        install-hooks uninstall-hooks test-fast test-integration \
+        install-hooks uninstall-hooks test-fast test-integration selfcheck \
         help
 
 # Shell-side hygiene shared by every openclaw-* recipe:
@@ -76,6 +76,9 @@ help:
 	@echo "  make kimi-coverage       — coverage game   (2 agents, 60 steps, cooperative)"
 	@echo ""
 	@echo "KIMI_API_KEY / MIMO_TP_KEY / NV_API_KEY must be set (or present in .env)."
+	@echo ""
+	@echo "Self-check (single command to prove the repo still works):"
+	@echo "  make selfcheck                — pulls pinned Gateway image, runs full pytest"
 
 # ---------------------------------------------------------------------------
 # Navigation demo — proves the Phase 2.1 transport end-to-end.
@@ -404,3 +407,22 @@ test-fast:
 
 test-integration:
 	@$(STRIP_ROS_ENV) .venv/bin/pytest -m integration -q --durations=10
+
+# selfcheck — single command that proves the repo still works end-to-end:
+# pulls the pinned Gateway image so the live catalog tests don't silently
+# skip, then runs the full pytest suite (mocks + live probes). Completes in
+# ~2-3 min; if any test fails, the repo's contract with the new image is
+# broken and CI/Railway will too.
+selfcheck:
+	@OPENCLAW_IMG="ghcr.io/openclaw/openclaw:2026.4.24"; \
+	 if ! command -v docker >/dev/null 2>&1; then \
+	   echo "warning: docker not on PATH — live OpenClaw tests will skip"; \
+	 elif ! docker image inspect "$$OPENCLAW_IMG" >/dev/null 2>&1; then \
+	   echo "==> pulling $$OPENCLAW_IMG (one-time, ~700MB)"; \
+	   docker pull "$$OPENCLAW_IMG" >/dev/null || \
+	     echo "warning: docker pull failed — live OpenClaw tests will skip"; \
+	 else \
+	   echo "==> $$OPENCLAW_IMG already cached"; \
+	 fi
+	@echo "==> running full pytest (mocks + live image probes)"
+	@$(STRIP_ROS_ENV) .venv/bin/pytest -q --durations=5
