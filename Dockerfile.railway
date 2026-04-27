@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 FROM ghcr.io/astral-sh/uv:0.9.27 AS uv
 
 FROM ghcr.io/openclaw/openclaw:2026.4.14
@@ -21,15 +22,45 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=uv /uv /uvx /usr/local/bin/
 
 WORKDIR /opt/roboclaws
+
+# Filesystem prep — independent of project source. Cached aggressively;
+# only invalidates if the line itself changes.
+RUN mkdir -p /data/.ai2thor /run/nginx /var/log/nginx \
+  && chown -R node:node /home/node /data
+
+# Python dependencies — invalidate only when pyproject.toml or uv.lock
+# change. ``--no-install-project`` keeps the workspace project itself out
+# of this layer so editing source files (which is what changes most often)
+# doesn't bust the slow dep-resolve cache.
+#
+# Two robustness knobs for slow / flaky networks:
+#   * ``--mount=type=cache,target=/root/.cache/uv`` keeps uv's download
+#     cache between builds — a partial-then-failed download is reused on
+#     retry instead of starting from scratch.
+#   * ``UV_HTTP_TIMEOUT=600`` raises uv's per-file HTTP timeout from the
+#     30s default. botocore / opencv / numpy add up to ~100MB and the
+#     default times out on slow links (observed during early builds).
+COPY pyproject.toml uv.lock /opt/roboclaws/
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_HTTP_TIMEOUT=600 \
+    UV_PROJECT_ENVIRONMENT=/opt/roboclaws/.venv \
+    UV_LINK_MODE=copy \
+    uv sync --frozen --no-install-project --no-dev --extra openclaw
+
+# Project source — invalidates on any code change. Everything below this
+# line re-runs on every iteration, but is fast (~1s) because the heavy
+# deps are already in the cached venv layer above.
 COPY . /opt/roboclaws
 
-RUN UV_PROJECT_ENVIRONMENT=/opt/roboclaws/.venv UV_LINK_MODE=copy \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    UV_HTTP_TIMEOUT=600 \
+    UV_PROJECT_ENVIRONMENT=/opt/roboclaws/.venv \
+    UV_LINK_MODE=copy \
     uv sync --frozen --no-dev --extra openclaw \
   && chmod +x /opt/roboclaws/deploy/railway/entrypoint.sh \
     /opt/roboclaws/scripts/appliance-run-interactive.sh \
     /opt/roboclaws/scripts/appliance_seed_openclaw.py \
-  && mkdir -p /data/.ai2thor /run/nginx /var/log/nginx \
-  && chown -R node:node /home/node /data /opt/roboclaws
+  && chown -R node:node /opt/roboclaws
 
 ENV APP_ROOT=/opt/roboclaws \
     DATA_DIR=/data \
