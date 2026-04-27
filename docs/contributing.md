@@ -94,25 +94,9 @@ this Bash variant instead:
 
 ```bash
 source <(just --completions bash)
-complete -r just 2>/dev/null || true
+complete -r just
 complete -o nosort -o nospace -F _clap_complete_just just
 ```
-
-If you still see files after reloading your shell, run:
-
-```bash
-complete -p just
-```
-
-The output should contain exactly one line like:
-
-```text
-complete -o nosort -o nospace -F _clap_complete_just just
-```
-
-If your shell loads completion plugins later (for example in `~/.bashrc` vs.
-`~/.bash_profile`), put the three lines above at the *end* of your startup
-chain so they win last.
 
 ## Development topology: cloud + local
 
