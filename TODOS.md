@@ -8,26 +8,8 @@ One entry = one self-contained item. If you start it, check it out first:
 kicked it off. Start points are written so that a fresh session — no prior
 context, no hidden notes — can resume directly.
 
----
-
-## Shipped
-
-- **Phase 2.2** (2026-04-16) — Per-agent SOUL preset distribution + two
-  long-running Gateway game demos (territory + coverage). Shipped as a
-  single run; see `PLAN.md § Phase 2.2 retrospective`. Original items 1
-  + 2.
-
-## Declined
-
-- **Phase 2.3 — Pin OpenClaw Gateway image by digest** (decided
-  2026-04-20). Evaluated and rejected in favour of the existing
-  `:2026.4.14` tag. Rationale: the date-shaped tag reads as its release
-  date at a glance, which is more useful for humans skimming CI logs /
-  PRs / `docker pull` output than an opaque `sha256:7ea0...`. The
-  immutability gain from digest pinning is real but modest — upstream
-  re-tagging is a theoretical risk we haven't hit, and the `OPENCLAW_IMAGE`
-  repo-variable override already covers the escape hatch if we ever need
-  to pin to a specific digest. Revisit only if upstream actually re-tags.
+Shipped phases are tracked under `docs/retrospectives/` (see `CLAUDE.md`),
+not here.
 
 ---
 
@@ -62,5 +44,36 @@ context, no hidden notes — can resume directly.
   files surfaced during the phase-wide gate. Scoped out of 2.6 to keep
   the sim_server deletion commit focused. Resolve as a standalone
   `chore: ruff cleanup` PR.
+
+- **Benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding` tool profile**
+  (flagged 2026-04-27 while fixing the OpenClaw 2026.4.25-beta.11 MCP
+  regression — see `docs/openclaw-tool-profiles.md` for the full diff and
+  why we picked the splice over the profile switch). The new image gave
+  us a fork in the road: keep `minimal` and splice in `bundle-mcp` via
+  `alsoAllow` (current choice — preserves the locked-down core surface),
+  or switch the default to `coding` (gets MCP for free but broadens the
+  core tool surface to include bash, file I/O, etc.). We picked the
+  conservative path without comparing them head-to-head. If `coding`
+  doesn't actually hurt agent behavior on our scenarios, we can simplify
+  the bootstrap by dropping the `alsoAllow` workaround and the
+  `if tool_profile == "minimal": ... memoryFlush.enabled=False` branch
+  in `scripts/openclaw-bootstrap.sh`.
+  Start point:
+    1. Enumerate what `coding` actually grants us beyond `minimal`:
+       `docker exec openclaw-gateway sh -lc 'grep -A50 "CORE_TOOL_DEFINITIONS" /app/dist/tool-policy-*.js | grep -B1 -A4 "profiles:"'`
+       — note which tools have `coding` but not `minimal` in their
+       `profiles` array.
+    2. Pick probes with the most behavioral signal:
+       `just openclaw::probe game=photo` and `just openclaw::probe game=territory`.
+    3. Run each twice (3+ trials each for variance):
+       once with current bootstrap (`minimal` + `alsoAllow`),
+       once with `ROBOCLAWS_TOOL_PROFILE=coding just openclaw::probe ...`
+       (and temporarily drop the `alsoAllow` splice for the `coding` run
+       so we're testing the profile alone, not profile + splice).
+    4. Compare: success rate, action diversity, any tool-misuse errors
+       (model trying to call a `coding`-only tool inappropriately).
+    5. Decide whether to flip the default at
+       `scripts/openclaw-bootstrap.sh:153`. Update
+       `docs/openclaw-tool-profiles.md` with the verdict either way.
 
 _If this list empties, next work should come from a new plan or issue._
