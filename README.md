@@ -8,6 +8,8 @@
 
 **AI coding agents and VLM/OpenClaw agents driving simulated robots in AI2-THOR.**
 
+![Roboclaws robot navigation banner](docs/assets/readme-hero.png)
+
 Roboclaws is a robotics demo repo with one practical goal: make agent behavior
 visible. It can run multi-agent territory and coverage games, OpenClaw Gateway
 chat demos, a hosted Railway appliance, and a direct Codex/Claude Code MCP path
@@ -28,6 +30,8 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `make photo-task` |
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo make appliance-run-local` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
+
+![Roboclaws control paths](docs/assets/readme-control-paths.png)
 
 ## Architecture
 
@@ -146,6 +150,8 @@ The single-agent navigation loop is the smallest surface for debugging model
 behavior. The photo-task smoke builds on it: the agent must move around
 FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 `done`.
+
+![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
 ```bash
 make photo-task
