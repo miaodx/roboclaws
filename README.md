@@ -25,10 +25,10 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Mode | Use it for | Entry point |
 |------|------------|-------------|
 | Direct VLM games | Fast local experiments without OpenClaw | `examples/territory_game.py`, `examples/coverage_game.py` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `make openclaw-nav`, `make chat` |
+| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just openclaw::nav`, `just chat` |
 | Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `examples/coding_agent_nav_server.py` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `make photo-task` |
-| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo make appliance-run-local` |
+| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::photo` |
+| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run-local` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
@@ -66,17 +66,21 @@ python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ### Run OpenClaw
 
 ```bash
-make openclaw-nav
-make chat
+just openclaw::nav
+just chat
 ```
 
-`make chat` opens the local browser-control workflow. Useful companion
+`just chat` opens the local browser-control workflow. Useful companion
 terminals:
 
 ```bash
-make chat-tail
-make chat-view
+just chat::tail
+just chat::view
 ```
+
+> Recipes are run via [`just`](https://just.systems/) — see
+> [`docs/contributing.md`](docs/contributing.md) for the one-line install +
+> tab-completion setup. `just --list` shows everything grouped by module.
 
 ### Let Codex or Claude Drive the Robot
 
@@ -148,7 +152,7 @@ FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 ![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
 ```bash
-make photo-task
+just openclaw::photo
 python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 

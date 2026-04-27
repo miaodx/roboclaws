@@ -113,14 +113,18 @@ python examples/single_agent_explore.py --steps 20 --model gpt-4o-mini
 python examples/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
 ```
 
-Or use Makefile shortcuts (`make help` for the full list):
+Or use `just` recipes (`just --list` for the full grouped list):
 
 ```bash
-make selfcheck                                # full repo confidence (lint + tests)
-make photo-task                               # autonomous chair/sofa photo smoke
-make chat                                     # OpenClaw Gateway + browser Control UI
-DEMO_PASSWORD=demo make appliance-run-local   # Railway-style hosted appliance
+just dev::selfcheck                              # full repo confidence (lint + tests)
+just openclaw::photo                             # autonomous chair/sofa photo smoke
+just chat                                       # OpenClaw Gateway + browser Control UI
+DEMO_PASSWORD=demo just appliance::run-local     # Railway-style hosted appliance
 ```
+
+See [`docs/contributing.md`](docs/contributing.md#dev-tooling-uv-and-just)
+for the one-line install + tab-completion setup. Modules:
+`openclaw`, `vlm`, `chat`, `appliance`, `dev` — each maps to a file in `just/`.
 
 ---
 

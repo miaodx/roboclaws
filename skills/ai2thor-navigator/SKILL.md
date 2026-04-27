@@ -32,7 +32,7 @@ If the operator explicitly says "don't wait between steps" or "just walk and sho
   ...
 ```
 
-For true live frame-by-frame viewing, the operator can run `make chat-view` in a second terminal which serves `http://127.0.0.1:8787/` — that viewer polls the stable `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks (written by every `observe` call, labeled or not) and refreshes automatically, so every intermediate step is visible there regardless of what the chat tab renders.
+For true live frame-by-frame viewing, the operator can run `just chat::view` in a second terminal which serves `http://127.0.0.1:8787/` — that viewer polls the stable `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks (written by every `observe` call, labeled or not) and refreshes automatically, so every intermediate step is visible there regardless of what the chat tab renders.
 
 ### Direct coding-agent mode
 

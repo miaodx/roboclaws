@@ -1,7 +1,7 @@
 """Tests for the appliance ``/reset`` endpoint and its plumbing.
 
 Engine-level ``MultiAgentEngine.reset`` is exercised by the live AI2-THOR
-smoke (``make appliance-smoke`` against a running container) — those calls
+smoke (``just appliance::smoke`` against a running container) — those calls
 require the Unity build and X server, which aren't available in the cloud
 sandbox. Here we cover everything that lives upstream of AI2-THOR:
 

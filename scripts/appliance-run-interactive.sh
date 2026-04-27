@@ -14,7 +14,7 @@ if [[ -z "${ROBOCLAWS_PUBLIC_URL:-}" ]]; then
   fi
 fi
 export ROBOCLAWS_VIEWER_HINT="${ROBOCLAWS_VIEWER_HINT:-${ROBOCLAWS_PUBLIC_URL%/}/views/}"
-export ROBOCLAWS_TAIL_HINT="${ROBOCLAWS_TAIL_HINT:-make appliance-tail}"
+export ROBOCLAWS_TAIL_HINT="${ROBOCLAWS_TAIL_HINT:-just appliance::tail}"
 export OPENCLAW_GATEWAY_CONTAINER="${OPENCLAW_GATEWAY_CONTAINER:-roboclaws-appliance}"
 
 cd "$APP_ROOT"

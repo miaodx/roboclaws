@@ -57,8 +57,8 @@ from roboclaws.openclaw.vision_bridge import observe_runtime_config
 log = logging.getLogger("openclaw-interactive")
 _DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"
 _DEFAULT_GATEWAY_URL = "http://127.0.0.1:18789"
-_DEFAULT_TAIL_HINT = "make chat-tail"
-_DEFAULT_VIEWER_HINT = "make chat-view     → http://127.0.0.1:8787"
+_DEFAULT_TAIL_HINT = "just chat::tail"
+_DEFAULT_VIEWER_HINT = "just chat::view     → http://127.0.0.1:8787"
 
 
 @dataclass
