@@ -7,11 +7,13 @@ Its scope is the entire repo tree rooted at this directory.
 
 Before running any command, read in this order:
 
-1. `AGENTS.md` (this file)
-2. `CLAUDE.md`
-3. `docs/technical-design.md` (complete technical spec, game rules, API details)
-4. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
-5. `TODOS.md` (self-contained queued work)
+1. `README.md` (project orientation, what you can run, mode discovery)
+2. `ARCHITECTURE.md` (code map, four operating modes, MCP contract)
+3. `AGENTS.md` (this file)
+4. `CLAUDE.md`
+5. `docs/technical-design.md` (design rationale, scenario specs)
+6. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
+7. `TODOS.md` (self-contained queued work)
 
 Shipped-phase history lives under `docs/retrospectives/` — not required reading,
 but the best source for "why was this decided?" context on prior phases.
@@ -50,7 +52,8 @@ the current shell before running anything that calls a real VLM:
 set -a && source .env && set +a
 # Expected keys after source:
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
-#   NV_API_KEY           — Nvidia inference endpoints (optional, for Phase 2.4)
+#   NV_API_KEY           — Nvidia inference endpoints (optional)
+#   MIMO_TP_KEY          — MiMo, default for the interactive chat path
 #   ANTHROPIC_API_KEY or OPENAI_API_KEY — direct VLM path (optional)
 ```
 
@@ -110,6 +113,15 @@ python examples/single_agent_explore.py --steps 20 --model gpt-4o-mini
 python examples/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
 ```
 
+Or use Makefile shortcuts (`make help` for the full list):
+
+```bash
+make selfcheck                                # full repo confidence (lint + tests)
+make photo-task                               # autonomous chair/sofa photo smoke
+make chat                                     # OpenClaw Gateway + browser Control UI
+DEMO_PASSWORD=demo make appliance-run-local   # Railway-style hosted appliance
+```
+
 ---
 
 ## 3) Lint/type checks
@@ -127,7 +139,7 @@ ruff format --check .
 2. **Use iTHOR scenes only**: ProcTHOR has multi-agent bugs (GitHub Issues #1169, #1265). Stick to FloorPlan1-430.
 3. **VLM output parsing must be robust**: VLMs sometimes return malformed JSON. Always wrap parsing in try/except with fallback to a safe action (e.g., `RotateRight`).
 4. **Image encoding**: Use JPEG quality 60-80 for VLM input to balance cost and quality. Resize to 320×240 or 640×480.
-5. **Cost guard**: Default to GPT-4o-mini for development. Add a `--model` flag to all example scripts. Log cumulative API cost per game.
+5. **Cost guard**: Default to a cheap provider for development (Kimi/MiMo); switch to Claude/GPT-4o for final demos. See `docs/model-matrix.md` for current verified models. Example scripts should expose a `--model` flag and log cumulative API cost per game.
 
 ---
 
@@ -243,22 +255,17 @@ Typical flow for a new phase:
 See CLAUDE.md § "Workflow: gstack for pre-plan, GSD for execution" for the
 command mapping.
 
-### 8.3 Current state (pre-GSD)
+### 8.3 Current state
 
-The existing top-level `PLAN.md` is a pre-GSD convention: one file that
-accumulates phase plans and retrospectives linearly. Phases 2.0–2.3 live
-there.
+GSD is bootstrapped. Active phase work lives under `.planning/phases/` with
+state tracked in `.planning/STATE.md`. Top-level `PLAN.md` holds the current
+active phase only; shipped-phase history (Phase 2.0–2.4) is archived under
+`docs/retrospectives/`.
 
-Phase 2.4 and later **may** migrate to `.planning/` once GSD is
-bootstrapped. Two paths:
-
-- `/gsd-ingest-docs` — ingest the existing `PLAN.md` into `.planning/`,
-  preserving the per-phase structure.
-- `/gsd-plan-phase` — start a fresh `.planning/phases/NN-name/PLAN.md` for
-  the new phase, leaving the old `PLAN.md` as the archived history of
-  phases 2.0–2.3.
-
-Either is fine; the decision is the user's, not a default.
+For a new phase, use `/gsd-plan-phase` (fresh planning) or `/gsd-ingest-docs`
+(if you already have a draft plan in markdown). Don't accumulate new phase
+plans in the top-level `PLAN.md` — that file is a sliding window of the
+active phase, not a history log.
 
 ### 8.4 Don't mix mid-phase
 
