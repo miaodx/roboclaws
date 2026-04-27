@@ -240,6 +240,8 @@ appliance-run-local:
 	   -e HOME=/data \
 	   -e ROBOCLAWS_HOME=/data \
 	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
+	   -e PROVIDER -e MODEL -e IMAGE_MODEL \
+	   -e KIMI_PROVIDER_MODE -e MIMO_PROVIDER_MODE \
 	   -p 8080:8080 \
 	   -v "$(APPLIANCE_LOCAL_DATA_VOLUME):/data" \
 	   -v "$$HOME/.ai2thor:/data/.ai2thor" \
@@ -258,6 +260,8 @@ appliance-run-railway:
 	   -e HOME=/data \
 	   -e ROBOCLAWS_HOME=/data \
 	   -e DEMO_PASSWORD="$${DEMO_PASSWORD:-demo}" \
+	   -e PROVIDER -e MODEL -e IMAGE_MODEL \
+	   -e KIMI_PROVIDER_MODE -e MIMO_PROVIDER_MODE \
 	   -p 8080:8080 \
 	   -v "$$DATA_DIR:/data" \
 	   roboclaws-appliance
