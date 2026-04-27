@@ -22,12 +22,8 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
-if [[ -x .venv/bin/pytest ]]; then
-    PYTEST=.venv/bin/pytest
-elif command -v pytest >/dev/null 2>&1; then
-    PYTEST=pytest
-else
-    echo "post-merge: pytest not found — skipping integration run" >&2
+if [[ ! -x scripts/run_pytest_standalone.sh ]]; then
+    echo "post-merge: scripts/run_pytest_standalone.sh missing or not executable — skipping integration run" >&2
     exit 0
 fi
 
@@ -35,9 +31,7 @@ LOGFILE=.git/integration-last.log
 {
     echo "=== integration run started $(date -Is) ==="
     echo "=== HEAD: $(git rev-parse --short HEAD) ($(git log -1 --format=%s)) ==="
-    env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH \
-        -u ROS_DISTRO -u ROS_VERSION \
-        "$PYTEST" -m integration -q --durations=10
+    ./scripts/run_pytest_standalone.sh -m integration -q --durations=10
     echo "=== integration run finished $(date -Is) rc=$? ==="
 } >"$LOGFILE" 2>&1 &
 
