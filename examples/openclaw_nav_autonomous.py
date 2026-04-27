@@ -11,6 +11,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -222,7 +223,16 @@ def run_autonomous_navigation(
     wall_budget: float,
     output_dir: Path,
     skip_bootstrap: bool = False,
+    kickoff_prompt_builder: Callable[[int], str] | None = None,
 ) -> dict[str, Any]:
+    """Run the autonomous loop end-to-end.
+
+    ``kickoff_prompt_builder`` defaults to :func:`_kickoff_prompt` (generic
+    nav). Pass an alternate ``Callable[[int], str]`` (max_moves -> prompt)
+    to swap in a task-specific kickoff (e.g. photo-task) without forking
+    this module's bootstrap / engine / MCP / bridge wiring.
+    """
+    builder: Callable[[int], str] = kickoff_prompt_builder or _kickoff_prompt
     output_dir.mkdir(parents=True, exist_ok=True)
 
     engine: MultiAgentEngine | None = None
@@ -324,7 +334,7 @@ def run_autonomous_navigation(
         stdin_thread = _start_stdin_thread(mcp_server, stdin_stop)
 
         bridge = OpenClawBridge(gateway_url="http://127.0.0.1:18789", token=token)
-        kickoff_prompt = _kickoff_prompt(max_moves)
+        kickoff_prompt = builder(max_moves)
         mcp_server.write_runtime_event(
             "start_run_begin",
             prompt_chars=len(kickoff_prompt),

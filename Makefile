@@ -4,7 +4,7 @@
 
 .PHONY: openclaw-nav openclaw-territory openclaw-coverage \
         openclaw-probe-nav openclaw-probe-territory openclaw-probe-coverage \
-        openclaw-gateway-up openclaw-gateway-down \
+        openclaw-gateway-up openclaw-gateway-down photo-task \
         appliance-build appliance-run-local appliance-run-railway appliance-smoke appliance-tail \
         chat chat-xvfb chat-reuse chat-tail chat-view chat-clean \
         chat-plugin chat-nvidia \
@@ -37,6 +37,7 @@ help:
 	@echo "  make openclaw-probe-nav        — openclaw_demo 200-step run"
 	@echo "  make openclaw-probe-territory  — territory 200-step run"
 	@echo "  make openclaw-probe-coverage   — coverage 200-step run"
+	@echo "  make photo-task                — photograph-each-chair task + filesystem scoring"
 	@echo ""
 	@echo "OpenClaw gateway lifecycle (use to run multiple probes against one gateway):"
 	@echo "  make openclaw-gateway-up       — bootstrap gateway, save token to .openclaw-token"
@@ -196,6 +197,22 @@ openclaw-probe-coverage:
 	 docker rm -f openclaw-gateway || true; \
 	 docker volume rm openclaw-gateway-config || true; \
 	 echo "==> Done. Report: output/openclaw-probe/coverage/report.html"
+
+# Photo-task autonomous smoke — the "walk-the-room and photograph each
+# chair/sofa" hand-test, scriptable. Bootstrap → autonomous run → score.
+# Self-bootstraps the Gateway via examples/openclaw_photo_task.py (which
+# delegates to the nav_autonomous loop), so no separate openclaw-bootstrap
+# call is needed here.
+photo-task:
+	@$(SOURCE_ENV); \
+	 RUN_DIR="output/openclaw-photo-task/$$(date +%Y%m%d%H%M)"; \
+	 echo "==> Photo-task smoke (single agent, FloorPlan201, ~15 min wall budget)"; \
+	 $(STRIP_ROS_ENV) PROVIDER=kimi PYTHONUNBUFFERED=1 \
+	   xvfb-run -a python examples/openclaw_photo_task.py \
+	   --output-dir "$$RUN_DIR" \
+	   --max-moves 200 --wall-budget 900; \
+	 echo "==> Scoring with check_photo_task.py …"; \
+	 $(STRIP_ROS_ENV) python scripts/check_photo_task.py --run-dir "$$RUN_DIR"
 
 # ---------------------------------------------------------------------------
 # Gateway lifecycle — use when you want to run several probes back-to-back
