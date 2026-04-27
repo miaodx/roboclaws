@@ -87,11 +87,10 @@ tear it down explicitly: `docker rm -f openclaw-gateway`. Do NOT leave it on
 
 On systems with ROS jazzy installed (this host, for example), `pytest` picks up
 `/opt/ros/jazzy/lib/python3.12/site-packages/launch_testing` and fails on a missing
-`lark` import. Strip the parent env before running pytest:
+`lark` import. Use the repo wrapper to run tests in a minimal environment:
 
 ```bash
-env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" \
-  .venv/bin/pytest -x -q
+./scripts/run_pytest_standalone.sh -x -q
 ```
 
 This is a machine-local quirk, not a repo issue.

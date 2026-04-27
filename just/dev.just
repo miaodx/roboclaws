@@ -10,7 +10,7 @@
 
 set working-directory := '..'
 
-strip_ros_env := "env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH -u ROS_DISTRO -u ROS_VERSION"
+standalone_pytest := "./scripts/run_pytest_standalone.sh"
 
 # Default: list module recipes (avoids accidentally rewiring git hooks).
 default:
@@ -31,11 +31,11 @@ uninstall-hooks:
 
 # Fast tests: what pre-commit runs (no Docker, no real provider API calls).
 test-fast:
-    @{{strip_ros_env}} .venv/bin/pytest -m "not integration" -q --durations=5
+    @{{standalone_pytest}} -m "not integration" -q --durations=5
 
 # Integration tests: Docker-gated + real provider, what post-merge runs.
 test-integration:
-    @{{strip_ros_env}} .venv/bin/pytest -m integration -q --durations=10
+    @{{standalone_pytest}} -m integration -q --durations=10
 
 # Pulls the pinned Gateway image (so live catalog tests don't silently skip),
 # then runs the full pytest suite. ~2-3 min; if anything fails, the repo's
@@ -55,4 +55,4 @@ selfcheck:
       echo "==> $OPENCLAW_IMG already cached"
     fi
     echo "==> running full pytest (mocks + live image probes)"
-    {{strip_ros_env}} .venv/bin/pytest -q --durations=5
+    {{standalone_pytest}} -q --durations=5

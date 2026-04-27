@@ -23,9 +23,8 @@
 #     model-provider API calls) are excluded via `-m "not integration"`.
 #     Run them post-merge with `just dev::test-integration`, and CI still
 #     runs the full suite.
-#   - We strip ROS env vars so the run matches the sanitised shape the
-#     rest of this machine uses (see AGENTS.md § 1). If `/opt/ros/*/`
-#     leaks into PYTHONPATH, `lark` import fails.
+#   - We run tests through the standalone wrapper to avoid host-wide ROS
+#     contamination leaking into PYTHONPATH (and breaking `lark` import).
 #   - No network calls. The Docker-gated integration tests auto-skip
 #     without Docker anyway, but the `integration` marker keeps the
 #     hook fast even when Docker IS installed (saves ~80s).
@@ -79,18 +78,11 @@ if [[ -z "$STAGED_CODE" && "${FORCE_TESTS:-0}" != "1" ]]; then
     exit 0
 fi
 
-if [[ -x .venv/bin/pytest ]]; then
-    PYTEST=.venv/bin/pytest
-elif command -v pytest >/dev/null 2>&1; then
-    PYTEST=pytest
-else
-    echo "pre-commit: pytest not found — install with 'pip install -e .[dev]'" >&2
+# Require wrapper script so pytest always runs in the sanitized environment.
+if [[ ! -x scripts/run_pytest_standalone.sh ]]; then
+    echo "pre-commit: scripts/run_pytest_standalone.sh missing or not executable" >&2
     exit 1
 fi
 
-# Strip ROS env to avoid /opt/ros/*/ hijacking sys.path (lark import fails).
-# Preserves API keys from .env when present (they're optional for tests).
 echo "pre-commit: pytest -m 'not integration' (fast subset)"
-env -u PYTHONPATH -u AMENT_PREFIX_PATH -u COLCON_PREFIX_PATH \
-    -u ROS_DISTRO -u ROS_VERSION \
-    "$PYTEST" -m "not integration" -q --durations=5
+./scripts/run_pytest_standalone.sh -m "not integration" -q --durations=5
