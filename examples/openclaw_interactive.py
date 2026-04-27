@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.openclaw.reset_server import ResetServer
 from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
 log = logging.getLogger("openclaw-interactive")
@@ -245,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
 
     engine: MultiAgentEngine | None = None
     mcp_server: RoboclawsMCPServer | None = None
+    reset_server: ResetServer | None = None
     stdin_stop = threading.Event()
     gateway_started_by_us = False
     gateway_container = os.environ.get("OPENCLAW_GATEWAY_CONTAINER", _DEFAULT_GATEWAY_CONTAINER)
@@ -326,6 +328,18 @@ def main(argv: list[str] | None = None) -> int:
             vision_bridge_model=runtime_config["vision_bridge_model"],
         )
         mcp_server.run_in_thread()
+        # Loopback HTTP /reset endpoint — the appliance's nginx routes
+        # /reset here so a browser tab can wipe scene + snapshots without
+        # restarting the supervisord container. Best-effort: if the port is
+        # busy (e.g. another runner already bound it), log and skip — the
+        # interactive session itself doesn't need this to function.
+        try:
+            rs = ResetServer(mcp_server)
+            rs.run_in_thread()
+            log.info("reset endpoint listening on %s:%s", rs.host, rs.port)
+            reset_server = rs
+        except OSError as exc:
+            log.warning("reset endpoint disabled (%s)", exc)
         mcp_server.write_runtime_event(
             "interactive_started",
             scene=args.scene,
@@ -388,6 +402,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     finally:
         stdin_stop.set()
+        if reset_server is not None:
+            try:
+                reset_server.shutdown()
+            except Exception:
+                log.exception("reset_server.shutdown() failed")
         if mcp_server is not None:
             try:
                 mcp_server.write_runtime_event("interactive_stopped")

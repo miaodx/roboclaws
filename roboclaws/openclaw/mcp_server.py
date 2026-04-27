@@ -685,6 +685,32 @@ class RoboclawsMCPServer:
                 retained_message=message[:80],
             )
 
+    def reset_world(self) -> dict[str, Any]:
+        """Reload the AI2-THOR scene and wipe this agent's snapshot dir.
+
+        Holds ``_controller_lock`` so any in-flight observe/move finishes first.
+        Snapshot wipe runs after the engine reset succeeds — if AI2-THOR
+        throws, the on-disk snapshots are left intact so the operator can
+        still see the last frame from the crashed run. Returns a small
+        summary suitable for the HTTP /reset response.
+        """
+        started = time.monotonic()
+        with self._controller_lock:
+            self.engine.reset()
+            files_removed = 0
+            if self.snapshots_dir is not None and self.snapshots_dir.exists():
+                for entry in self.snapshots_dir.iterdir():
+                    if entry.is_file():
+                        entry.unlink()
+                        files_removed += 1
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        self.write_runtime_event(
+            "world_reset",
+            elapsed_ms=elapsed_ms,
+            snapshots_removed=files_removed,
+        )
+        return {"elapsed_ms": elapsed_ms, "snapshots_removed": files_removed}
+
     def snapshot_metrics(self) -> dict[str, Any]:
         """Return the 8-key snapshot_metrics contract (EXACT keyset)."""
         with self._trace_lock:
