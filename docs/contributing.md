@@ -114,6 +114,24 @@ If your shell loads completion plugins later (for example in `~/.bashrc` vs.
 `~/.bash_profile`), put the three lines above at the *end* of your startup
 chain so they win last.
 
+If you want a completion function that ignores completion state entirely and
+only offers recipe names, use this fallback:
+
+```bash
+_just_complete_recipes_only() {
+  local cur
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  COMPREPLY=( $(compgen -W "$(just --summary)" -- "$cur") )
+}
+
+complete -r just 2>/dev/null || true
+complete -o nosort -o nospace -F _just_complete_recipes_only just
+```
+
+This one is intentionally simple (it will always suggest recipe names from
+`just --summary`, then append arguments you type), but it guarantees no file
+path entries appear in completion menus.
+
 ## Development topology: cloud + local
 
 Day-to-day work on this repo is split between two kinds of sessions, sized
