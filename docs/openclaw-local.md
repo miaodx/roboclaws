@@ -56,9 +56,10 @@ Useful overrides:
 | `AGENT_SOULS`       | `` (empty)                                | Csv of soul names per agent, e.g. `aggressive,defensive`. Supports dict form `agent-0:aggressive,agent-2:cooperative`. |
 | `SOULS_DIR`         | `$PWD/skills/ai2thor-navigator/souls`     | Directory containing `<name>.md` SOUL files.                    |
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
-| `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.14`     | Pinned digest-traceable tag.                                    |
+| `IMAGE`             | `ghcr.io/openclaw/openclaw:2026.4.24`     | Pinned digest-traceable tag.                                    |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
 | `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
+| `READY_TIMEOUT`     | `180`                                     | Seconds to wait for `/readyz`; the 2026.4.24 image can spend more than 60s installing bundled runtime deps on cold start. |
 | `HOST_IP`           | `127.0.0.1`                               | Gateway port is localhost-only by default.                      |
 | `PORT`              | `18789`                                   | Gateway HTTP port.                                              |
 | `CONTAINER`         | `openclaw-gateway`                        | Docker container name.                                          |
@@ -442,6 +443,23 @@ Extract the live one and re-export `OPENCLAW_GATEWAY_TOKEN`:
 docker exec openclaw-gateway sh -lc 'cat /home/node/.openclaw/openclaw.json' \
   | python -c 'import json,sys; print(json.load(sys.stdin)["gateway"]["auth"]["token"])'
 ```
+
+### Chat agent says it only has `session_status`
+
+Check the latest host trace first:
+
+```bash
+tail -5 output/openclaw-interactive/*/trace.jsonl
+docker logs --tail 80 openclaw-gateway
+```
+
+If the trace shows `interactive_stopped` before the Gateway log says
+`ready`, the host-side Roboclaws MCP server has already shut down. The
+Gateway may still serve the Control UI, but it cannot attach
+`roboclaws__observe`, `roboclaws__move`, or `roboclaws__done`, so the
+minimal profile exposes only `session_status`. Re-run `make chat`; current
+bootstrap waits 180s for cold starts and removes the container on startup
+failure to avoid this orphan state.
 
 Or just re-run `bootstrap.sh` and re-capture `TOKEN`.
 

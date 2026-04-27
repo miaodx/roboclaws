@@ -160,6 +160,7 @@ def test_bootstrap_gateway_invokes_script_with_expected_env() -> None:
     assert env["AGENTS"] == "2"
     assert env["ROBOCLAWS_MCP_URL"] == "http://host.docker.internal:18788/mcp"
     assert env["TIMEOUT_SECONDS"] == "7200"
+    assert env["READY_TIMEOUT"] == "180"
 
 
 def test_bootstrap_gateway_preserves_caller_overrides() -> None:
@@ -172,7 +173,7 @@ def test_bootstrap_gateway_preserves_caller_overrides() -> None:
         patch("openclaw_interactive.subprocess.run", side_effect=_fake_run) as run_mock,
         patch.dict(
             "os.environ",
-            {"AGENTS": "4", "TIMEOUT_SECONDS": "900"},
+            {"AGENTS": "4", "TIMEOUT_SECONDS": "900", "READY_TIMEOUT": "240"},
             clear=False,
         ),
     ):
@@ -180,6 +181,7 @@ def test_bootstrap_gateway_preserves_caller_overrides() -> None:
         env = run_mock.call_args.kwargs["env"]
         assert env["AGENTS"] == "4"
         assert env["TIMEOUT_SECONDS"] == "900"
+        assert env["READY_TIMEOUT"] == "240"
 
 
 def test_bootstrap_gateway_extra_env_overrides_os_environ() -> None:

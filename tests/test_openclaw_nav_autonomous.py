@@ -159,6 +159,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         if cmd == ["./scripts/openclaw-bootstrap.sh"]:
             env = kwargs["env"]
             assert env["TIMEOUT_SECONDS"] == "360"
+            assert env["READY_TIMEOUT"] == "180"
             # Example must pass ROBOCLAWS_MCP_URL; SIM_SERVER_URL stays out
             # of the example entirely in phase 02.6-04 (bootstrap still
             # accepts it from operators one more wave).

@@ -745,6 +745,29 @@ def test_bootstrap_personality_probe_is_skippable() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_bootstrap_ready_timeout_allows_current_gateway_cold_start() -> None:
+    """The 2026.4.24 image can spend >60s installing bundled runtime deps.
+
+    A too-short ready timeout leaves the Gateway running after the host-side
+    MCP server exits, which makes the agent see only ``session_status``.
+    """
+    text = _read_bootstrap()
+    assert 'READY_TIMEOUT="${READY_TIMEOUT:-180}"' in text
+
+
+def test_bootstrap_cleans_gateway_container_after_startup_failure() -> None:
+    """If bootstrap fails after ``docker run``, it must not leave an orphan Gateway.
+
+    An orphan Gateway keeps serving the Control UI after Roboclaws has closed
+    its MCP server, so the nav tools disappear from the model's tool list.
+    """
+    text = _read_bootstrap()
+    assert "gateway_started=0" in text
+    assert "trap _cleanup_failed_gateway EXIT" in text
+    assert "gateway_started=1" in text
+    assert "removing Gateway container after bootstrap failure" in text
+
+
 def test_mcp_seeds_server_transport_and_url(tmp_path: Path) -> None:
     """The pre-seed must write ``mcp.servers.roboclaws`` with the
     ``transport`` key (not ``type``) set to ``streamable-http`` and the url

@@ -127,7 +127,12 @@ def _bootstrap_gateway(agent_id: int, extra_env: dict[str, str] | None = None) -
     env.setdefault("AGENTS", str(max(1, agent_id + 1)))
     env.setdefault("ROBOCLAWS_MCP_URL", "http://host.docker.internal:18788/mcp")
     env.setdefault("TIMEOUT_SECONDS", "7200")
-    log.info("bootstrapping Gateway (TIMEOUT_SECONDS=%s)", env["TIMEOUT_SECONDS"])
+    env.setdefault("READY_TIMEOUT", "180")
+    log.info(
+        "bootstrapping Gateway (TIMEOUT_SECONDS=%s READY_TIMEOUT=%s)",
+        env["TIMEOUT_SECONDS"],
+        env["READY_TIMEOUT"],
+    )
     result = subprocess.run(
         ["./scripts/openclaw-bootstrap.sh"],
         capture_output=True,
