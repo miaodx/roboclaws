@@ -1,4 +1,4 @@
-# Roboclaws 🦞🤖
+# Roboclaws
 
 [![CI (main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml)
 [![Live Smoke Reports](https://img.shields.io/badge/live%20smoke-GitHub%20Pages-0A66C2)](https://miaodx.com/roboclaws/)
@@ -6,129 +6,201 @@
 [![Install](https://img.shields.io/badge/install-uv%20recommended-5E5CE6)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-**Multiple OpenClaw Agents Controlling Multiple Simulated Robots: Competition & Cooperation**
+**AI coding agents and VLM/OpenClaw agents driving simulated robots in AI2-THOR.**
 
-> The first OpenClaw multi-agent simulated robotics demo
->
-> Operational hint: if the live smoke reports look stale, check the `CI (main)` badge first. GitHub Pages republishes only after both `Lint & mock tests` and `Real-model smoke test (Kimi)` succeed on `main`.
+Roboclaws is a robotics demo repo with one practical goal: make agent behavior
+visible. It can run multi-agent territory and coverage games, OpenClaw Gateway
+chat demos, a hosted Railway appliance, and a direct Codex/Claude Code MCP path
+where the coding agent itself drives the robot with `observe`, `move`, and
+`done`.
 
-## What is this
+> Operational hint: if the live smoke reports look stale, check the
+> `CI (main)` badge first. GitHub Pages republishes only after CI succeeds on
+> `main`.
 
-Roboclaws lets multiple VLM/OpenClaw agent instances simultaneously control robots in a simulated environment, competing (territory control) or cooperating (area coverage). Each robot is driven by an independent AI agent that makes navigation decisions from first-person camera views.
+## What You Can Run
 
-## Two Game Scenarios
+| Mode | Use it for | Entry point |
+|------|------------|-------------|
+| Direct VLM games | Fast local experiments without OpenClaw | `examples/territory_game.py`, `examples/coverage_game.py` |
+| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `make openclaw-nav`, `make chat` |
+| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `examples/coding_agent_nav_server.py` |
+| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `make photo-task` |
+| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo make appliance-run-local` |
+| Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
 
-**🗺️ Territory Control (Adversarial)** — 2-3 robots compete in an indoor scene. Cells you walk over become yours; others can't claim them. Choose between rapid expansion or blocking your opponents' paths.
+## Architecture
 
-**📸 Cooperative Coverage** — 2-3 robots collaboratively explore an entire room. Goal: reach 95% area coverage as fast as possible. Robots must autonomously decide who goes where.
+![Roboclaws architecture](docs/architecture.svg)
 
-## Live Visualization
+The shared center is intentionally small:
 
-Every CI run produces a self-contained, interactive `report.html` per game — step slider, overhead map, per-agent first-person frames, SVG metrics chart, and the full VLM reasoning log. Three stacks run in parallel, from cheapest to most realistic:
-
-### 1. Mock engine — every push, every branch
-
-Synthetic frames, no Unity, no API keys. Validates the visualization + reporting pipeline on every PR.
-
-| 🗺️ Territory Control | 📸 Cooperative Coverage |
-|---|---|
-| ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
-| [▶ Interactive report](https://miaodx.github.io/roboclaws/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/coverage/report.html) |
-
-### 2. Kimi on real AI2-THOR — push to `main`
-
-Real `FloorPlan201` rendered by Unity, first-person frames fed to the Kimi VLM. Produced by the `real-model-smoke` job. Runs up to 100 steps per game so the ground-truth termination logic (all reachable cells claimed, or 95% area covered) actually fires.
-
-| 🗺️ Territory Control | 📸 Cooperative Coverage |
-|---|---|
-| ![kimi territory](https://miaodx.github.io/roboclaws/smoke/territory/replay.gif) | ![kimi coverage](https://miaodx.github.io/roboclaws/smoke/coverage/replay.gif) |
-| [▶ Interactive report](https://miaodx.github.io/roboclaws/smoke/territory/report.html) | [▶ Interactive report](https://miaodx.github.io/roboclaws/smoke/coverage/report.html) |
-
-### 3. OpenClaw + Kimi — push to `main`
-
-Routes the same three demos through a long-running local Gateway with per-agent personalities
-(aggressive / defensive / cooperative SOULs from `skills/ai2thor-navigator/souls/`).
-Layer 3 GIFs include SOUL badges + colored trails — aggressive=red, defensive=blue, cooperative=green.
-
-**First local run takes ~15 min** (Docker pull + Unity download).
-
-Quickest local path:
-- [OpenClaw demo guide](docs/openclaw-demo.md) — shortest route to `examples/openclaw_demo.py`
-- [OpenClaw local guide](docs/openclaw-local.md) — full local matrix (games, interactive chat, autonomous MCP, provider/model notes)
-- [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md) — no Gateway; expose `observe` / `move` / `done` directly to a coding agent
-
-| Demo | GIF | Report |
-|------|-----|--------|
-| Navigation | ![nav](https://miaodx.github.io/roboclaws/openclaw/demo/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/demo/report.html) |
-| Territory  | ![ter](https://miaodx.github.io/roboclaws/openclaw/territory/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) |
-| Coverage   | ![cov](https://miaodx.github.io/roboclaws/openclaw/coverage/replay.gif) | [▶ report](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
-
-Also available: [A/B comparison view](https://miaodx.github.io/roboclaws/report_compare.html) (two mock runs side-by-side).
-
-> All reports are regenerated on every push to `main` and published to GitHub Pages by the CI workflow. To regenerate the mock demos locally: `python scripts/generate_demo_report.py --output-dir output/demo`.
+- `MultiAgentEngine` wraps AI2-THOR and keeps the simulation local.
+- The view system renders first-person, `map-v2`, and chase-cam images.
+- The MCP server exposes only `observe(label="")`, `move(...)`, and
+  `done(...)`.
+- OpenClaw, Codex, Claude Code, and direct VLM game loops all reuse that same
+  simulation and artifact path.
 
 ## Quick Start
 
 ```bash
-uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
+uv pip install -e ".[dev,openclaw]" || python -m pip install -e ".[dev,openclaw]"
+```
 
-# Single agent exploration
-python examples/single_agent_explore.py
+For real VLM/OpenClaw runs, load one provider key:
 
-# Territory control (3 agents)
+```bash
+export KIMI_API_KEY=...       # Kimi / Moonshot
+export MIMO_TP_KEY=...        # MiMo, used by the interactive chat defaults
+export NV_API_KEY=...         # NVIDIA NIM
+export ANTHROPIC_API_KEY=...  # Claude direct VLM path
+export OPENAI_API_KEY=...     # OpenAI direct VLM path
+```
+
+### Run a Game
+
+```bash
 python examples/territory_game.py --agents 3 --scene FloorPlan201
-
-# Cooperative coverage (3 agents)
 python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ```
 
-Direct Codex / Claude Code robot driver:
+### Run OpenClaw
+
+```bash
+make openclaw-nav
+make chat
+```
+
+`make chat` opens the local browser-control workflow. Useful companion
+terminals:
+
+```bash
+make chat-tail
+make chat-view
+```
+
+### Let Codex or Claude Drive the Robot
+
+Terminal 1:
 
 ```bash
 python examples/coding_agent_nav_server.py --scene FloorPlan201
-# then in another terminal:
+```
+
+Terminal 2:
+
+```bash
 codex mcp add roboclaws --url http://127.0.0.1:18788/mcp
-# or:
+# or
 claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
 ```
 
-Set a VLM API key:
+Then start Codex or Claude Code in this repo and ask it to read
+`skills/ai2thor-navigator/SKILL.md`, call `roboclaws__observe` first, and
+use labeled observes as photos.
+
+Full guide: [docs/coding-agent-nav-server.md](docs/coding-agent-nav-server.md).
+
+## Live Reports
+
+Every successful push to `main` publishes interactive artifacts to GitHub
+Pages. Reports include first-person frames, map/chase views, replay GIFs,
+tool traces, and run metrics.
+
+| Territory Control | Cooperative Coverage |
+|-------------------|----------------------|
+| ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
+| [Mock report](https://miaodx.github.io/roboclaws/territory/report.html) | [Mock report](https://miaodx.github.io/roboclaws/coverage/report.html) |
+
+| Stack | Territory | Coverage |
+|-------|-----------|----------|
+| Mock CI | [report](https://miaodx.github.io/roboclaws/territory/report.html) | [report](https://miaodx.github.io/roboclaws/coverage/report.html) |
+| Kimi + real AI2-THOR | [report](https://miaodx.github.io/roboclaws/smoke/territory/report.html) | [report](https://miaodx.github.io/roboclaws/smoke/coverage/report.html) |
+| OpenClaw + Kimi | [territory](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) | [coverage](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
+
+OpenClaw navigation report:
+[openclaw/demo/report.html](https://miaodx.github.io/roboclaws/openclaw/demo/report.html)
+
+A side-by-side report comparison view is also available:
+[report_compare.html](https://miaodx.github.io/roboclaws/report_compare.html).
+
+## Core Demos
+
+### Territory Control
+
+Two or three robots compete over a discrete grid in an iTHOR living room.
+Each cell belongs to the first robot that reaches it. The interesting behavior
+is strategic: rapid expansion, blocking, and route recovery when an agent gets
+stuck.
+
+### Cooperative Coverage
+
+Robots work together to see as much of the room as possible. The report shows
+coverage progress, work balance, and whether agents divide the room in useful
+ways.
+
+### Navigation and Photo Tasks
+
+The single-agent navigation loop is the smallest surface for debugging model
+behavior. The photo-task smoke builds on it: the agent must move around
+FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
+`done`.
+
 ```bash
-export KIMI_API_KEY=...            # Kimi / Moonshot
-# or
-export ANTHROPIC_API_KEY=sk-...    # Claude
-# or
-export OPENAI_API_KEY=sk-...       # GPT-4o / GPT-4o-mini
+make photo-task
+python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 
-## Architecture
+## Project Layout
 
+```text
+roboclaws/
+|-- roboclaws/core/          # AI2-THOR engine, views, providers, replay
+|-- roboclaws/games/         # territory and coverage game rules
+|-- roboclaws/openclaw/      # Gateway bridge, MCP server, reset server
+|-- examples/                # runnable demos and local drivers
+|-- scripts/                 # bootstrap, scoring, rendering, deployment helpers
+|-- skills/ai2thor-navigator # OpenClaw/Codex/Claude robot operating instructions
+|-- docs/                    # guides, architecture, deployment notes
+`-- tests/                   # mock-heavy CI coverage plus integration guards
 ```
-VLM Agent 0 ──┐
-VLM Agent 1 ──┤── Game Controller ── AI2-THOR (multi-agent sim)
-VLM Agent 2 ──┘
 
-Per-step loop:
-screenshot → generate overhead map → build prompt → VLM decision → execute action → log replay
+## Useful Commands
+
+```bash
+# Format / lint / tests
+ruff check .
+ruff format --check .
+pytest -q
+
+# This host may need ROS env stripped before pytest
+env -i PATH=".venv/bin:/usr/bin:/bin" HOME=$HOME KIMI_API_KEY="$KIMI_API_KEY" \
+  .venv/bin/pytest -q
+
+# Full repo confidence target
+make selfcheck
 ```
 
-Phase 1 calls VLM APIs directly (Claude/GPT-4o). Phase 2 integrates OpenClaw Gateway for persistent agent memory and multi-channel communication.
+## Documentation Map
 
-## Roadmap
-
-- [x] **Phase 0**: Technical research & design
-- [ ] **Phase 1**: AI2-THOR + VLM API multi-agent competition/cooperation demo
-- [x] **Phase 2**: OpenClaw integration (Skill + Gateway + memory)
-- [x] **Phase 2.2**: long-running OpenClaw games (territory + coverage) with per-agent SOULs
-- [ ] **Phase 3**: Isaac Lab migration (G1 humanoid + RL locomotion policy)
+- [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md)
+- [OpenClaw demo guide](docs/openclaw-demo.md)
+- [OpenClaw local guide](docs/openclaw-local.md)
+- [OpenClaw Gateway internals](docs/openclaw-gateway-internals.md)
+- [Model matrix](docs/model-matrix.md)
+- [Railway deploy runbook](docs/railway-deploy.md)
+- [Railway appliance plan](docs/railway-openclaw-appliance-plan.md)
+- [Technical design](docs/technical-design.md)
+- [Contributing](docs/contributing.md)
 
 ## Related Projects
 
-- [Roboharness](https://github.com/MiaoDX/roboharness) — Visual testing harness for AI coding agents in robot simulation
-- [Robowbc](https://github.com/MiaoDX/robowbc) — Whole Body Control experiments
-- [OpenClaw](https://github.com/openclaw/openclaw) — Open-source personal AI assistant
-- [ROSClaw](https://github.com/PlaiPin/rosclaw) — OpenClaw ↔ ROS 2 bridge
-- [AI2-THOR](https://github.com/allenai/ai2thor) — Interactive 3D indoor simulation
+- [Roboharness](https://github.com/MiaoDX/roboharness) — visual testing harness for AI coding agents in robot simulation
+- [Robowbc](https://github.com/MiaoDX/robowbc) — whole-body-control experiments
+- [OpenClaw](https://github.com/openclaw/openclaw) — open-source personal AI assistant
+- [ROSClaw](https://github.com/PlaiPin/rosclaw) — OpenClaw to ROS 2 bridge
+- [AI2-THOR](https://github.com/allenai/ai2thor) — interactive 3D indoor simulation
 
 ## License
 
