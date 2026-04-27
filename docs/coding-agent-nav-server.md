@@ -11,6 +11,23 @@ uv pip install -e ".[dev,openclaw]" || python -m pip install -e ".[dev,openclaw]
 python examples/coding_agent_nav_server.py --scene FloorPlan201
 ```
 
+Preferred one-command workflow:
+
+```bash
+just code::cc
+just code::codex
+```
+
+Cleanup (idempotent):
+
+```bash
+just code::cleanup
+```
+
+The `code:cc` and `code:codex` recipes start the MCP server, wait for it to come
+up, register `roboclaws`, then launch Claude Code or Codex and clean up everything
+on exit.
+
 The server prints the MCP URL, artifact directory, and setup commands. By
 default it listens on localhost:
 

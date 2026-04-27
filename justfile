@@ -16,6 +16,7 @@ mod vlm       'just/vlm.just'
 mod chat      'just/chat.just'
 mod appliance 'just/appliance.just'
 mod dev       'just/dev.just'
+mod code      'just/code.just'
 
 # Default: show the grouped recipe list.
 default:
