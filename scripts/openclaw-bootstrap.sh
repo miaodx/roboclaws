@@ -588,11 +588,17 @@ agent_entries = [
         "workspace": f"/home/node/.openclaw/workspaces/{aid}",
         "agentDir": f"/home/node/.openclaw/agents/{aid}/agent",
         "model": {"primary": model},
-        # tools.profile restricts the agent tool surface to
-        # session_status + whatever MCP tools we expose (spike U2).
-        # D-03 locks this to a single key — do NOT add alsoAllow or
-        # any other sibling keys without re-running the profile probe.
-        "tools": {"profile": tool_profile},
+        # tools.profile restricts the agent tool surface (spike U2).
+        # alsoAllow splices `bundle-mcp` into the profile's allow-list via
+        # mergeAlsoAllowPolicy in /app/dist/tool-policy-*.js.  Required
+        # since image 2026.4.25-beta.11: upstream consolidated MCP-tool
+        # exposure under the `bundle-mcp` policy ID, and only `coding` /
+        # `messaging` profiles get it for free — `minimal` no longer does.
+        # Without this splice, the agent ends up with only `session_status`
+        # and every roboclaws__* tool returns "Tool not found".
+        # See docs/openclaw-tool-profiles.md for the full image diff and
+        # re-validation steps when bumping the gateway image.
+        "tools": {"profile": tool_profile, "alsoAllow": ["bundle-mcp"]},
     }
     for aid in agent_ids
 ]
@@ -651,7 +657,10 @@ config = {
 # "streamable-http" and "sse" parse — anything else silently fails with
 # [bundle-mcp] SSE error: Non-200 status code (400) and the agent reports
 # it has no such tool (spike F-1).  Source of truth for the loader:
-# /app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170.
+# /app/dist/pi-bundle-mcp-tools-*.js (hash suffix changes per image).
+# Note: per-agent tools.alsoAllow=["bundle-mcp"] above is what actually
+# exposes these servers' tools to the agent — the config block alone is
+# necessary but not sufficient on image 2026.4.25-beta.11+.
 config["mcp"] = {
     "servers": {
         "roboclaws": {
