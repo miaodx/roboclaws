@@ -829,11 +829,19 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
         assert entry["tools"]["profile"] == "minimal", (
             f"agent {entry['id']!r} missing tools.profile=minimal; entry={entry!r}"
         )
-        # D-03 locks the tools block to profile only. Nothing else should
-        # sneak in — no alsoAllow, no deny, no custom overrides.
-        assert set(entry["tools"].keys()) == {"profile"}, (
-            f"agent {entry['id']!r} tools block has extra keys beyond "
-            f"'profile': {set(entry['tools'].keys())!r}"
+        # Image 2026.4.25-beta.11 consolidated MCP-tool exposure under the
+        # `bundle-mcp` policy ID, and `minimal` no longer includes it. The
+        # bootstrap splices it back in via alsoAllow so roboclaws__* tools
+        # remain reachable. See docs/openclaw-tool-profiles.md.  Lock the
+        # tools block to exactly these two keys so any drift (a stray deny,
+        # a custom override) trips the test.
+        assert set(entry["tools"].keys()) == {"profile", "alsoAllow"}, (
+            f"agent {entry['id']!r} tools block does not match expected "
+            f"shape; got keys={set(entry['tools'].keys())!r}"
+        )
+        assert entry["tools"]["alsoAllow"] == ["bundle-mcp"], (
+            f"agent {entry['id']!r} alsoAllow must splice exactly bundle-mcp; "
+            f"got {entry['tools']['alsoAllow']!r}"
         )
 
 
