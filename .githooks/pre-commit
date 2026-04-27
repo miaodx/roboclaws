@@ -10,6 +10,14 @@
 #     git commit --no-verify     # skips this hook entirely
 #     SKIP_TESTS=1 git commit    # skips tests but keeps the ruff gate
 #
+# Auto-skip:
+#
+#     Tests are auto-skipped when no .py / .toml / .lock files are
+#     staged (doc-only commits don't pay the ~30-60s test cost).
+#     Override the auto-skip with FORCE_TESTS=1 if your change
+#     affects test results in a non-obvious way (e.g., editing a JSON
+#     fixture or a Makefile target that tests depend on).
+#
 # Design notes:
 #   - Tests marked `@pytest.mark.integration` (Docker-dependent OR real
 #     model-provider API calls) are excluded via `-m "not integration"`.
@@ -57,6 +65,17 @@ fi
 # --- Pytest: fast subset --------------------------------------------------
 if [[ "${SKIP_TESTS:-0}" == "1" ]]; then
     echo "pre-commit: SKIP_TESTS=1 set — skipping pytest"
+    exit 0
+fi
+
+# Auto-skip pytest when no code-relevant files are staged. Doc-only
+# commits (markdown, .gitignore, .yml without test impact) shouldn't pay
+# the pytest cost. Override with FORCE_TESTS=1 if a change outside the
+# globs below affects test results.
+STAGED_CODE="$(git diff --cached --name-only --diff-filter=ACMR -- '*.py' '*.toml' '*.lock' || true)"
+
+if [[ -z "$STAGED_CODE" && "${FORCE_TESTS:-0}" != "1" ]]; then
+    echo "pre-commit: no staged .py/.toml/.lock files — skipping pytest (set FORCE_TESTS=1 to override)"
     exit 0
 fi
 
