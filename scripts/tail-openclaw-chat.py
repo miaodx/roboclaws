@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -37,6 +38,15 @@ _DEFAULT_AGENT = "agent-0"
 _ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_RUNS_DIR = _ROOT / "output" / "openclaw-interactive"
 _LATEST_SYMLINK = _DEFAULT_RUNS_DIR / "latest-chat.log"
+
+_SESSION_DIR_TMPL = "/home/node/.openclaw/agents/{agent}/sessions"
+# Match `<uuid>.jsonl` only — exclude sidecars introduced by newer Gateway
+# builds (`<uuid>.trajectory.jsonl`, `<uuid>.trajectory-path.json`,
+# `<uuid>.jsonl.reset.<ts>`, ...). Trajectory files are touched per-event
+# and would otherwise win `ls -t` over the per-turn message transcript.
+_SESSION_FILE_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$"
+)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -99,24 +109,22 @@ def _refresh_latest_symlink(target: Path) -> None:
 
 
 def _latest_session(container: str, agent: str) -> str:
-    """Return the basename of the most-recently-modified session .jsonl."""
+    """Return the path of the most-recently-modified `<uuid>.jsonl` session file."""
+    sessions_dir = _SESSION_DIR_TMPL.format(agent=agent)
     out = subprocess.run(
-        [
-            "docker",
-            "exec",
-            container,
-            "sh",
-            "-lc",
-            f"ls -t /home/node/.openclaw/agents/{agent}/sessions/*.jsonl 2>/dev/null | head -n1",
-        ],
+        ["docker", "exec", container, "sh", "-lc", f"ls -t {sessions_dir} 2>/dev/null"],
         capture_output=True,
         text=True,
         check=True,
     )
-    path = out.stdout.strip()
-    if not path:
-        raise RuntimeError(f"no session files found for agent '{agent}' in container '{container}'")
-    return path
+    for name in out.stdout.splitlines():
+        name = name.strip()
+        if _SESSION_FILE_RE.match(name):
+            return f"{sessions_dir}/{name}"
+    raise RuntimeError(
+        f"no session files matching <uuid>.jsonl found for agent '{agent}' "
+        f"in container '{container}'"
+    )
 
 
 def _fmt_content(content: Any) -> list[str]:
