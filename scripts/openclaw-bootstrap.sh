@@ -38,7 +38,7 @@
 #                                                     or you want deterministic
 #                                                     image/bridge routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
-#   READY_TIMEOUT  Seconds to wait for /readyz       (default: 60)
+#   READY_TIMEOUT  Seconds to wait for /readyz       (default: 180)
 #   TIMEOUT_SECONDS  Per-turn wall-clock cap         (default: 7200 = 2h;
 #                                                     written to agents.defaults.
 #                                                     timeoutSeconds.  NOT an
@@ -154,7 +154,17 @@ SKILLS_DIR="${SKILLS_DIR:-${PWD}/skills/ai2thor-navigator}"
 SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
 PERSONALITY_PROBE="${PERSONALITY_PROBE:-1}"
-READY_TIMEOUT="${READY_TIMEOUT:-60}"
+READY_TIMEOUT="${READY_TIMEOUT:-180}"
+
+gateway_started=0
+_cleanup_failed_gateway() {
+    local rc=$?
+    if [[ $rc -ne 0 && "${gateway_started:-0}" == "1" ]]; then
+        log "removing Gateway container after bootstrap failure"
+        docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    fi
+}
+trap _cleanup_failed_gateway EXIT
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-7200}"
 
 # Auto-detect PROVIDER when unset:
@@ -762,6 +772,7 @@ if [[ -n "$ROBOCLAWS_SNAPSHOTS_DIR" ]]; then
 fi
 docker run -d --name "$CONTAINER" "${mount_args[@]}" "$IMAGE" >/dev/null \
     || die "docker run failed" 2
+gateway_started=1
 
 # ----- 5. Wait for /readyz -----------------------------------------------
 # Token is generated on first boot. Read it from the volume so we can auth the

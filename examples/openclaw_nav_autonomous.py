@@ -309,6 +309,7 @@ def run_autonomous_navigation(
         else:
             env = dict(os.environ)
             env["TIMEOUT_SECONDS"] = str(int(wall_budget + 60))
+            env.setdefault("READY_TIMEOUT", "180")
             # Honor operator-supplied ROBOCLAWS_MCP_URL (e.g. local-probe runs) by
             # using setdefault; fall back to the container->host loopback URL. This
             # is what plan 02 Task 3's test_mcp_url_env_override_honored exercises.
