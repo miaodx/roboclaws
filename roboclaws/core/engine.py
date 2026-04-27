@@ -57,6 +57,7 @@ class MultiAgentEngine:
         platform: Any | None = None,
     ) -> None:
         self.agent_count = agent_count
+        self._scene = scene
         self._grid_size = grid_size
         self.field_of_view = field_of_view
         self.server_timeout = server_timeout
@@ -93,6 +94,22 @@ class MultiAgentEngine:
         self._controller.step(action="AddThirdPartyCamera", **pose, skyboxColor="white")
         self._last_event = self._controller.last_event
         self._overhead_camera_id = len(self._last_event.events[0].third_party_camera_frames) - 1
+
+    def reset(self) -> None:
+        """Reload the current scene from scratch and rebuild engine-side caches.
+
+        AI2-THOR's ``controller.reset()`` drops third-party cameras and resets
+        every object/agent pose. The engine caches that go stale must be
+        cleared in the same call so callers see a consistent post-reset state:
+        reachable positions, the overhead camera, and per-agent chase cameras.
+        Chase cameras are re-registered lazily by ``add_chase_cam``.
+        """
+        self._last_event = self._controller.reset(scene=self._scene)
+        self._reachable_positions = None
+        self._chase_camera_ids = {}
+        self._overhead_camera_pose = None
+        self._overhead_camera_id = 0
+        self._setup_overhead_camera()
 
     def get_agent_state(self, agent_id: int) -> AgentState:
         """Return the current state for a single agent from the last event."""
