@@ -32,7 +32,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 BOOTSTRAP = ROOT / "scripts" / "openclaw-bootstrap.sh"
-IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.14"
+IMAGE_DEFAULT = "ghcr.io/openclaw/openclaw:2026.4.24"
 
 
 # ---------------------------------------------------------------------------
@@ -225,26 +225,53 @@ def _extract_provider_base_urls() -> dict[str, str]:
     return out
 
 
-def _read_gateway_catalog(path_pattern: str) -> str:
-    """Read a dist file matching ``path_pattern`` (glob-like) from the pinned
-    Gateway image.
+def _cat_path_in_image(path: str) -> str:
+    """Return the contents of a single exact path inside the pinned Gateway
+    image. Use this when the path is already resolved (e.g. from a prior
+    ``find`` call); use :func:`_read_gateway_catalog` when the filename has
+    a content-hashed suffix.
     """
     result = subprocess.run(
-        [
-            "docker",
-            "run",
-            "--rm",
-            IMAGE_DEFAULT,
-            "sh",
-            "-lc",
-            f"cat {path_pattern}",
-        ],
+        ["docker", "run", "--rm", IMAGE_DEFAULT, "sh", "-lc", f"cat {path}"],
         capture_output=True,
         timeout=30,
         text=True,
     )
     if result.returncode != 0:
-        raise AssertionError(f"could not read {path_pattern} from {IMAGE_DEFAULT}: {result.stderr}")
+        raise AssertionError(f"could not read {path} from {IMAGE_DEFAULT}: {result.stderr}")
+    return result.stdout
+
+
+def _read_gateway_catalog(path_glob: str, content_marker: str) -> str:
+    """Return the body of the dist file matching ``path_glob`` whose content
+    contains ``content_marker``.
+
+    The Gateway bundles each provider catalog into its own JS chunk with a
+    webpack/vite content-hashed filename (e.g.
+    ``provider-catalog-C9xZ5Sl52.js``); the hash changes on every image
+    rebuild, so pinning a specific filename forces a test edit on every
+    image bump. ``content_marker`` is a fixed string we know lives only in
+    the catalog we want (e.g. ``NVIDIA_DEFAULT_COST``) — much more stable
+    than the hash.
+    """
+    err_msg = f"no file in {path_glob} contains {content_marker}"
+    script = (
+        "set -e; "
+        f"f=$(grep -lF {content_marker!r} {path_glob} 2>/dev/null | head -1); "
+        f'if [ -z "$f" ]; then echo "{err_msg}" >&2; exit 1; fi; '
+        'cat "$f"'
+    )
+    result = subprocess.run(
+        ["docker", "run", "--rm", IMAGE_DEFAULT, "sh", "-lc", script],
+        capture_output=True,
+        timeout=30,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(
+            f"could not read {path_glob} (marker={content_marker!r}) from "
+            f"{IMAGE_DEFAULT}: {result.stderr}"
+        )
     return result.stdout
 
 
@@ -460,7 +487,7 @@ def test_provider_base_urls_match_image_catalog() -> None:
     # the built-in catalog is authoritative.
     assert declared.get("nvidia"), "bootstrap.sh missing PROVIDER_BASE_URL for nvidia branch"
 
-    catalog_text = _read_gateway_catalog("/app/dist/provider-catalog-C9xZ5Sl52.js")
+    catalog_text = _read_gateway_catalog("/app/dist/provider-catalog-*.js", "NVIDIA_DEFAULT_COST")
     match = re.search(r'BASE_URL\s*=\s*"([^"]+)"', catalog_text)
     assert match, "could not find BASE_URL in the NVIDIA provider catalog"
     implicit = match.group(1)
@@ -485,7 +512,7 @@ def test_nvidia_extra_models_cost_free_in_image_catalog() -> None:
     if not _gateway_image_available():
         pytest.skip(f"{IMAGE_DEFAULT} not pulled locally; skip catalog cross-check")
 
-    catalog_text = _read_gateway_catalog("/app/dist/provider-catalog-C9xZ5Sl52.js")
+    catalog_text = _read_gateway_catalog("/app/dist/provider-catalog-*.js", "NVIDIA_DEFAULT_COST")
     # Find every cost block in the catalog — they all point at
     # NVIDIA_DEFAULT_COST which we require to be {input:0, output:0,...}.
     default_cost_match = re.search(r"NVIDIA_DEFAULT_COST\s*=\s*\{([^}]+)\}", catalog_text)
@@ -622,10 +649,8 @@ def test_provider_env_var_matches_plugin_manifest(provider_id: str, expected_aut
         pytest.skip(f"{IMAGE_DEFAULT} not pulled locally; skip plugin-manifest check")
     # A provider id may be served by a differently-named plugin directory
     # (e.g. the `kimi` provider is declared by the `kimi-coding` plugin).
-    # Search every manifest under /app/dist/extensions for one that claims
-    # the provider id.
-    manifests_listing = _read_gateway_catalog("/app/dist/extensions/*/openclaw.plugin.json")
-    # `cat file1 file2 …` concatenates — we need per-file reads. Use find + loop.
+    # Find every manifest under /app/dist/extensions and check which one
+    # claims the provider id.
     result = subprocess.run(
         [
             "docker",
@@ -645,7 +670,7 @@ def test_provider_env_var_matches_plugin_manifest(provider_id: str, expected_aut
     for path in result.stdout.strip().split("\n"):
         if not path.strip():
             continue
-        manifest = json.loads(_read_gateway_catalog(path.strip()))
+        manifest = json.loads(_cat_path_in_image(path.strip()))
         providers = manifest.get("providers") or []
         if provider_id not in providers:
             continue
@@ -660,8 +685,6 @@ def test_provider_env_var_matches_plugin_manifest(provider_id: str, expected_aut
         f"this provider; bootstrap uses {expected_auth_env!r} which isn't "
         "in the accepted list."
     )
-    # Silence the unused binding from earlier (readability).
-    del manifests_listing
 
 
 # ---------------------------------------------------------------------------
