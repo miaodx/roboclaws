@@ -8,6 +8,16 @@ Running `claude` (or `codex`) from inside this folder means **no repo
 as its operating doc. If the agent can drive the robot from here,
 SKILL.md is genuinely self-contained.
 
+## Kickoff (paste this as your first message)
+
+```
+Read ../skills/ai2thor-navigator/SKILL.md, then call roboclaws__observe(label="preflight") to verify the MCP is alive. After that, wait for my actual task.
+```
+
+The `label="preflight"` step is load-bearing: it doubles as a health
+check AND drops a baseline snapshot to disk so the run produces an
+artifact even if the MCP later disconnects.
+
 ## Run
 
 Two terminals, both started from repo root:
@@ -22,8 +32,7 @@ claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
 claude
 ```
 
-Kickoff message: "Read `../skills/ai2thor-navigator/SKILL.md`, then call
-`roboclaws__observe`." Run artifacts land in
+Then paste the kickoff prompt above. Run artifacts land in
 `../output/coding-agent-nav/<timestamp>/`.
 
 ## When the test fails
