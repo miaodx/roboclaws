@@ -65,8 +65,11 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
 # Open the live snapshot viewer for the most recent run (output/runs/).
 # Polls latest.{fpv,map,chase}.png written by every observe() call.
 # Defaults to port 8787; pass port=NNNN to override.
-view port="8787" agent="0":
-    @.venv/bin/python scripts/view-snapshots.py --agent-id "{{agent}}" --port "{{port}}"
+view run_dir="" port="8787" agent="0":
+    #!/usr/bin/env bash
+    args=(--agent-id "{{agent}}" --port "{{port}}")
+    [[ -n "{{run_dir}}" ]] && args+=(--run-dir "{{run_dir}}")
+    exec .venv/bin/python scripts/view-snapshots.py "${args[@]}"
 
 codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
