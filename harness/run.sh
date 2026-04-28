@@ -20,7 +20,7 @@ set -euo pipefail
 
 RUN_ID="${1:?usage: run.sh <run_id> <task_file> [time_cap_seconds]}"
 TASK_FILE="${2:?missing task_file}"
-TIME_CAP="${3:-600}"
+TIME_CAP="${3:-900}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 RUN_DIR="$REPO/harness/runs/$RUN_ID"
@@ -87,22 +87,26 @@ resolve_runs_dir() {
   ls -td "$REPO"/output/runs/* 2>/dev/null | head -1 || true
 }
 
-trace_count_request_tool() {
-  local path="$1" tool="$2"
+# grep -c on a missing pattern exits 1 with stdout "0", so `|| echo 0` would
+# double-print. Capture and ignore exit code instead, defaulting to 0 on any
+# error (file missing, etc).
+_grep_count() {
+  local pattern="$1" path="$2" n
   [[ -f "$path" ]] || { echo 0; return; }
-  grep -c "\"tool\": \"$tool\", \"event\": \"request\"" "$path" 2>/dev/null || echo 0
+  n=$(grep -c "$pattern" "$path" 2>/dev/null) || n=0
+  echo "${n:-0}"
+}
+
+trace_count_request_tool() {
+  _grep_count "\"tool\": \"$2\", \"event\": \"request\"" "$1"
 }
 
 trace_count_request_any() {
-  local path="$1"
-  [[ -f "$path" ]] || { echo 0; return; }
-  grep -c '"event": "request"' "$path" 2>/dev/null || echo 0
+  _grep_count '"event": "request"' "$1"
 }
 
 trace_count_blocked() {
-  local path="$1"
-  [[ -f "$path" ]] || { echo 0; return; }
-  grep -c '"result": "blocked"' "$path" 2>/dev/null || echo 0
+  _grep_count '"result": "blocked"' "$1"
 }
 
 echo "==> monitoring (cap ${TIME_CAP}s)..."
