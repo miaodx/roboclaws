@@ -21,18 +21,19 @@ just code::codex
 Cleanup:
 
 ```bash
-just code::mcp_down
+just mcp::down
 ```
 
 The `code::cc` and `code::codex` recipes start the MCP server, wait for it to come
 up, register `roboclaws`, then launch Claude Code or Codex and clean up everything
 on exit.
 
-You can also manage MCP lifecycle directly:
+You can also manage the MCP lifecycle directly (shared with `chat::run` /
+`appliance::run`; project policy is one roboclaws MCP per machine):
 
 ```bash
-just code::mcp_up
-just code::mcp_down
+just mcp::up
+just mcp::down
 ```
 
 The server prints the MCP URL, artifact directory, and setup commands. By

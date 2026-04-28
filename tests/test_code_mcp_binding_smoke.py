@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SERVER_DIR = REPO_ROOT / ".tmp" / "roboclaws-code-mcp"
+SERVER_DIR = REPO_ROOT / ".tmp" / "roboclaws-mcp"
 PID_FILE = SERVER_DIR / "server.pid"
 
 # Unique per process so concurrent runs (and the user's real `roboclaws`
@@ -79,7 +79,7 @@ def empty_mcp_url() -> str:
 
 @pytest.fixture
 def warm_path_pid():
-    """Inject a live PID so `just code::mcp_up` takes the warm path.
+    """Inject a live PID so `just mcp::up` takes the warm path.
 
     The warm path returns the URL immediately without trying to start a real
     AI2-THOR-backed server. Backs up and restores any pre-existing PID file
@@ -99,7 +99,7 @@ def warm_path_pid():
 
 @pytest.mark.usefixtures("warm_path_pid")
 def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
-    """`just code::mcp_up FloorPlan H P` returns http://H:P/mcp — no `name=` leak."""
+    """`just mcp::up FloorPlan H P` returns http://H:P/mcp — no `name=` leak."""
     port = empty_mcp_url.rsplit(":", 1)[1].split("/", 1)[0]
     # The recipe uses bare `python`; ensure the venv's bin dir is on PATH so
     # subprocess inherits it even when pytest was launched via .venv/bin/python
@@ -108,7 +108,7 @@ def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
     venv_bin = str(Path(sys.executable).parent)
     env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
     result = subprocess.run(
-        ["just", "code::mcp_up", "FloorPlan201", "127.0.0.1", port],
+        ["just", "mcp::up", "FloorPlan201", "127.0.0.1", port],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
