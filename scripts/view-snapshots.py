@@ -104,27 +104,27 @@ _HTML = """<!doctype html>
 """.replace("__POLL_MS__", str(_POLL_MS))
 
 
-def _resolve_run_dir(explicit: Path | None) -> Path:
+def _resolve_run_dir(explicit: Path | None) -> Path | None:
+    """Return the newest run dir, or None if none exists yet."""
     if explicit is not None:
         return explicit.resolve()
     if not _DEFAULT_RUNS_DIR.exists():
-        raise RuntimeError(f"no runs dir at {_DEFAULT_RUNS_DIR}; pass --run-dir explicitly")
+        return None
     runs = sorted(
         (p for p in _DEFAULT_RUNS_DIR.iterdir() if p.is_dir()),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
-    if not runs:
-        raise RuntimeError(f"no run subdirs under {_DEFAULT_RUNS_DIR}")
-    return runs[0].resolve()
+    return runs[0].resolve() if runs else None
 
 
 def _snapshots_dir(run_dir: Path, agent_id: int) -> Path:
     return run_dir / "snapshots" / f"agent-{agent_id}"
 
 
-def _make_handler(run_dir: Path, agent_id: int):
-    snap_dir = _snapshots_dir(run_dir, agent_id)
+def _make_handler(explicit_run_dir: Path | None, agent_id: int):
+    # Re-resolved on every request so the viewer auto-switches to a new run
+    # without a restart, and can be opened before any run has been started.
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: object) -> None:  # quieter
@@ -142,11 +142,19 @@ def _make_handler(run_dir: Path, agent_id: int):
             if path.startswith("/img/"):
                 kind = path.removeprefix("/img/").split("?", 1)[0]
                 if kind in {"fpv", "map", "chase"}:
-                    self._send_png(snap_dir / f"latest.{kind}.png")
+                    run_dir = _resolve_run_dir(explicit_run_dir)
+                    if run_dir is None:
+                        self._send(404, "text/plain", b"no runs yet\n")
+                        return
+                    self._send_png(_snapshots_dir(run_dir, agent_id) / f"latest.{kind}.png")
                     return
             self._send(404, "text/plain", b"not found\n")
 
         def _status(self) -> dict:
+            run_dir = _resolve_run_dir(explicit_run_dir)
+            if run_dir is None:
+                return {"ok": False, "run": None, "agent": f"agent-{agent_id}", "mtimes": {}}
+            snap_dir = _snapshots_dir(run_dir, agent_id)
             mtimes: dict[str, float] = {}
             for kind in ("fpv", "map", "chase"):
                 p = snap_dir / f"latest.{kind}.png"
@@ -195,19 +203,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args(argv)
 
-    try:
-        run_dir = _resolve_run_dir(args.run_dir)
-    except RuntimeError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return 1
-
-    snap_dir = _snapshots_dir(run_dir, args.agent_id)
-    snap_dir.mkdir(parents=True, exist_ok=True)
-    handler = _make_handler(run_dir, args.agent_id)
+    handler = _make_handler(args.run_dir, args.agent_id)
     socketserver.TCPServer.allow_reuse_address = True
     with socketserver.TCPServer((args.host, args.port), handler) as httpd:
-        print(f"snapshots dir : {snap_dir}")
-        print(f"open          : http://{args.host}:{args.port}/")
+        run_dir = _resolve_run_dir(args.run_dir)
+        if run_dir is None:
+            print(f"waiting for first run in {_DEFAULT_RUNS_DIR} …")
+        else:
+            print(f"watching       : {run_dir}")
+        print(f"open           : http://{args.host}:{args.port}/")
         print("Ctrl-C to stop.")
         try:
             httpd.serve_forever()
