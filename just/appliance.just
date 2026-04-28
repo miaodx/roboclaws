@@ -66,6 +66,8 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
       -e PROVIDER -e MODEL -e IMAGE_MODEL \
       -e KIMI_PROVIDER_MODE -e MIMO_PROVIDER_MODE \
       -p 8080:8080 \
+      --add-host openrouter.ai:0.0.0.0 \
+      --add-host raw.githubusercontent.com:0.0.0.0 \
       "${volume_args[@]}" \
       roboclaws-appliance
 

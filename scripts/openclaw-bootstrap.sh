@@ -680,7 +680,22 @@ config["mcp"] = {
 # wrapper as PLUGIN_ALLOW_JSON. See that file for per-entry justification.
 plugin_allow = json.loads(os.environ.get("PLUGIN_ALLOW_JSON") or "[]")
 if plugin_allow:
-    config["plugins"] = {"allow": plugin_allow}
+    config["plugins"] = {
+        "allow": plugin_allow,
+        # Pin the embedded-ACP health probe to one of OUR agents instead
+        # of the upstream default ``codex`` (which isn't installed and was
+        # suspected of stalling the post-pricing-fetch sidecar startup
+        # window). ``enabled: true`` is REQUIRED alongside ``config`` —
+        # without it the entries-system silently ignores the config block
+        # and warns ``plugin disabled (bundled (disabled by default)) but
+        # config is present`` (probed live 2026-04-28).
+        "entries": {
+            "acpx": {
+                "enabled": True,
+                "config": {"probeAgent": agent_ids[0]},
+            },
+        },
+    }
 # Inject extra model catalog entries so the Gateways model-catalog merger
 # recognizes the models we want to use. Without this, the Gateway rejects
 # models with 400 "Unknown model: <id>" because the pinned images built-in
@@ -791,6 +806,17 @@ mount_args=(
     -p "${HOST_IP}:${PORT}:18789"
     -v "$VOLUME:/home/node/.openclaw"
     --add-host=host.docker.internal:host-gateway
+    # Blackhole the two pricing-catalog URLs the gateway fetches at boot.
+    # They live in /app/dist/usage-format-*.js as
+    #   const OPENROUTER_MODELS_URL  = "https://openrouter.ai/api/v1/models";
+    #   const LITELLM_PRICING_URL    = "https://raw.githubusercontent.com/...";
+    #   const FETCH_TIMEOUT_MS       = 6e4;   // 60s
+    # When unreachable, both fail-fast with ECONNREFUSED instead of waiting
+    # the full 60s timeout, and the gateway's pricing layer falls through
+    # to ``replaceGatewayModelPricingCache(new Map())``. No config knob is
+    # exposed so we shape the network instead of the config.
+    --add-host=openrouter.ai:0.0.0.0
+    --add-host=raw.githubusercontent.com:0.0.0.0
     -e OPENCLAW_AUTH_MODE=token
     -e "ROBOCLAWS_MCP_URL=${ROBOCLAWS_MCP_URL}"
     # Gateway plugins read the provider key from the env var named by the plugin

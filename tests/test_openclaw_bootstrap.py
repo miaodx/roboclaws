@@ -871,6 +871,18 @@ def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
         "plugins.allow drift detected — update scripts/openclaw_plugin_allowlist.py "
         "or the bootstrap pre-seed in lockstep so both paths agree on the list"
     )
+    # acpx probeAgent pins the embedded-ACP health probe to one of our agents
+    # instead of the upstream default ``codex`` — see the same fix in
+    # scripts/appliance_seed_openclaw.py for rationale.
+    assert cfg["plugins"]["entries"]["acpx"]["enabled"] is True, (
+        "plugins.entries.acpx must set enabled=true or the entries-system "
+        "warns 'plugin disabled (bundled (disabled by default)) but config "
+        "is present' and silently drops the config block"
+    )
+    assert cfg["plugins"]["entries"]["acpx"]["config"]["probeAgent"] == "agent-0", (
+        "acpx probeAgent must point at our first agent so the embedded ACP "
+        "backend doesn't stall on the missing default 'codex' probe"
+    )
 
 
 def test_bootstrap_reads_canonical_plugin_allowlist() -> None:
