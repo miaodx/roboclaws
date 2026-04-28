@@ -138,7 +138,12 @@ mcp_down:
       server_pid="$(cat "{{server_pid_file}}" || true)"
       if [[ "$server_pid" =~ ^[0-9]+$ ]] && kill -0 "$server_pid" 2>/dev/null; then
         echo "==> stopping tracked roboclaws MCP server (pid=$server_pid)" >&2
-        kill "$server_pid" || true
+        if ! kill "$server_pid" 2>/dev/null; then
+          if kill -0 "$server_pid" 2>/dev/null; then
+            owner="$(ps -p "$server_pid" -o user= 2>/dev/null | tr -d ' ' || echo '?')"
+            echo "==> ERROR: cannot signal tracked pid=$server_pid (owner=$owner) — permission denied; try \`sudo kill $server_pid\`" >&2
+          fi
+        fi
         wait "$server_pid" 2>/dev/null || true
       else
         echo "==> no live tracked roboclaws MCP server for pid=$server_pid" >&2
@@ -146,6 +151,24 @@ mcp_down:
       rm -f "{{server_pid_file}}"
     else
       echo "==> no tracked roboclaws MCP pid file found" >&2
+    fi
+
+    # Backstop: reap any orphan roboclaws MCP server processes that lost their
+    # PID file (crash, disk wipe, manual rm). Project policy: only one
+    # roboclaws MCP per machine, so name-based reaping is safe.
+    if command -v pgrep >/dev/null 2>&1; then
+      orphan_pids="$(pgrep -f 'python[^ ]*[ ].*coding_agent_nav_server\.py' || true)"
+      if [[ -n "$orphan_pids" ]]; then
+        while IFS= read -r orphan_pid; do
+          [[ -z "$orphan_pid" ]] && continue
+          if kill "$orphan_pid" 2>/dev/null; then
+            echo "==> reaped orphan coding_agent_nav_server.py (pid=$orphan_pid)" >&2
+          elif kill -0 "$orphan_pid" 2>/dev/null; then
+            orphan_owner="$(ps -p "$orphan_pid" -o user= 2>/dev/null | tr -d ' ' || echo '?')"
+            echo "==> ERROR: cannot kill orphan pid=$orphan_pid (owner=$orphan_owner) — permission denied; try \`sudo kill $orphan_pid\`" >&2
+          fi
+        done <<< "$orphan_pids"
+      fi
     fi
 
     rm -f "{{server_log_file}}" "{{server_url_file}}"
