@@ -722,6 +722,136 @@ def test_labeled_observe_encodes_each_frame_once(engine: FakeEngine, tmp_path: P
 
 
 # ---------------------------------------------------------------------------
+# observe_archived: capture + archive without inlining images in the response.
+# Designed to keep main-session context lean during batch evidence capture.
+# ---------------------------------------------------------------------------
+
+
+def test_observe_archived_writes_snapshots_returns_paths(
+    engine: FakeEngine, tmp_path: Path
+) -> None:
+    """Happy path: PNGs land on disk, response carries host-side paths."""
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        snapshots_dir=snap_dir,
+    )
+    try:
+        response = srv._do_observe_archived(label="chair-1")
+
+        # Response shape: state + snapshot_paths + label, no inline images.
+        assert response["label"] == "chair-1"
+        assert "state" in response
+        assert "snapshot_paths" in response
+        for key in ("fpv", "map", "chase"):
+            assert key in response["snapshot_paths"]
+            path = Path(response["snapshot_paths"][key])
+            assert path.is_absolute(), (
+                f"observe_archived must return absolute host paths the agent "
+                f"can pass to filesystem tools; got: {path}"
+            )
+            assert path.exists()
+            assert path.read_bytes().startswith(b"\x89PNG")
+
+        # State is shaped like observe's, minus observe_delivery / bridge_model
+        # (no images in this response, so those fields don't apply).
+        state = response["state"]
+        for key in ("agent_id", "position", "rotation", "scene", "step"):
+            assert key in state
+        assert "observe_delivery" not in state
+        assert "bridge_model" not in state
+
+        # observe_archived counts as a real look at the scene — moves_since_observe
+        # resets so the blind-drift warning doesn't fire next move.
+        assert srv._moves_since_observe == 0
+        assert srv._observed_once is True
+    finally:
+        srv.close()
+
+
+def test_observe_archived_response_has_no_image_blocks(engine: FakeEngine, tmp_path: Path) -> None:
+    """Core context-economy contract: response must not carry any image data.
+
+    The whole point of observe_archived is that pixels stay on disk and out
+    of main-session context. A regression that re-introduces inline images
+    here would silently break the token-budget guarantee — guard it.
+    """
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        snapshots_dir=snap_dir,
+    )
+    try:
+        response = srv._do_observe_archived(label="evidence-1")
+
+        # The response is a plain dict — no MCPImage blocks anywhere.
+        # Walk the structure to be sure (state contains nested dicts).
+        def _no_bytes_or_image(obj: Any) -> None:
+            if isinstance(obj, dict):
+                for v in obj.values():
+                    _no_bytes_or_image(v)
+            elif isinstance(obj, list):
+                for v in obj:
+                    _no_bytes_or_image(v)
+            else:
+                assert not isinstance(obj, bytes), "observe_archived must not return bytes"
+                assert not hasattr(obj, "data") or not isinstance(
+                    getattr(obj, "data", None), bytes
+                ), f"observe_archived response carried image-like object: {type(obj).__name__}"
+
+        _no_bytes_or_image(response)
+    finally:
+        srv.close()
+
+
+def test_observe_archived_rejects_empty_label(engine: FakeEngine, tmp_path: Path) -> None:
+    """Empty label must return an error, not silently behave like observe()."""
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        snapshots_dir=snap_dir,
+    )
+    try:
+        response = srv._do_observe_archived(label="")
+
+        assert "error" in response
+        assert "label" in response["error"].lower()
+        # No snapshot files should have been written for the empty-label call.
+        assert list(snap_dir.glob("*.png")) == []
+        # The capture step must NOT have run — observed_once stays False if
+        # this was the first call.
+        assert srv._observed_once is False
+    finally:
+        srv.close()
+
+
+def test_observe_archived_rejects_no_snapshots_dir(engine: FakeEngine, tmp_path: Path) -> None:
+    """Without a snapshots_dir there is nothing to write — must error, not crash."""
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        # snapshots_dir intentionally omitted
+    )
+    try:
+        response = srv._do_observe_archived(label="chair-1")
+        assert "error" in response
+        assert "snapshots_dir" in response["error"]
+    finally:
+        srv.close()
+
+
+# ---------------------------------------------------------------------------
 # move response enrichment: pose_delta, visited_count, warning, blind-nudge
 # ---------------------------------------------------------------------------
 
