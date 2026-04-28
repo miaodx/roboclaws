@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
-from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
-from roboclaws.openclaw.vision_bridge import VisionBridgeResult
+from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.mcp.text_bridge import VisionBridgeResult
 
 REFERENCE = json.loads(
     (Path(__file__).parent / "fixtures" / "trace_schema_reference.json").read_text(encoding="utf-8")
@@ -498,7 +498,7 @@ def test_run_in_thread_raises_when_server_dies_before_listening(tmp_path: Path) 
         with (
             patch.object(srv._mcp, "run", return_value=None),
             patch(
-                "roboclaws.openclaw.mcp_server._port_accepting",
+                "roboclaws.mcp.server._port_accepting",
                 return_value=False,
             ),
         ):
@@ -706,10 +706,8 @@ def test_labeled_observe_encodes_each_frame_once(engine: FakeEngine, tmp_path: P
     # would be 6. Three 320px encodes for the MCP image blocks are a separate
     # code path (different max_dim) so we filter on max_dim=640.
     with patch(
-        "roboclaws.openclaw.mcp_server._encode_frame_png",
-        wraps=__import__(
-            "roboclaws.openclaw.mcp_server", fromlist=["_encode_frame_png"]
-        )._encode_frame_png,
+        "roboclaws.mcp.server._encode_frame_png",
+        wraps=__import__("roboclaws.mcp.server", fromlist=["_encode_frame_png"])._encode_frame_png,
     ) as enc:
         try:
             srv._do_observe(label="perf")

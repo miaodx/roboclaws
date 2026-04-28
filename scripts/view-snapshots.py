@@ -3,7 +3,7 @@
 
 Chat MEDIA can only render one set of images per turn (Control UI quirk —
 see the ``_maybe_write_labeled_snapshot`` hint in
-``roboclaws/openclaw/mcp_server.py``). For long-running sessions where you
+``roboclaws/mcp/server.py``). For long-running sessions where you
 want to watch the robot move frame-by-frame without asking it to pause
 between steps, open this viewer in a separate browser tab instead.
 

@@ -1,4 +1,10 @@
-"""Image-to-text bridge for text-only OpenClaw main models."""
+"""Generic OpenAI-compatible image→text adapter for nav models that can't see directly.
+
+Used by ``roboclaws.mcp.server`` when the configured main model is text-only
+(auto-detected via model name suffix in ``_TEXT_ONLY_MODEL_SUFFIXES``). The
+module has no OpenClaw-specific dependencies — any caller with an
+OpenAI-compatible vision model API key can use it.
+"""
 
 from __future__ import annotations
 

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from roboclaws.openclaw.vision_bridge import (
+from roboclaws.mcp.text_bridge import (
     VisionBridge,
     VisionBridgeResult,
     resolve_observe_delivery,

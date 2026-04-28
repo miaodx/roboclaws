@@ -18,9 +18,9 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.mcp.text_bridge import observe_runtime_config
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
-from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
-from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
 log = logging.getLogger("openclaw-nav-autonomous")
 _WATCHDOG_INTERVAL_S = 15.0
