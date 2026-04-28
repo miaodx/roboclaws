@@ -37,13 +37,16 @@ if [[ ! -f "$TASK_FILE" ]]; then
   exit 1
 fi
 
-# Find the next run_id by taking max(runs/NNN dirs, PLAN.md "## Run NNN" headers) + 1.
-# Both sources kept in sync because run.sh creates runs/<id>/ and PLAN.md is
-# appended manually after each run.
+# Find the next run_id by taking max(harness/runs/<NNN>/, harness/runs-log/<NNNN>-<slug>.md) + 1.
+# Two sources because they capture different things:
+#   - harness/runs/   per-run raw artifacts (gitignored, cleaned periodically)
+#   - harness/runs-log/  curated per-run markdown (committed)
+# Either may be missing for a given run_id (artifacts pruned, or curated log
+# not written yet); take the max so we don't collide with either.
 last_from_runs=$(ls -1 harness/runs 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1 || echo 0)
-last_from_plan=$(grep -oE '^## Run [0-9]+' harness/PLAN.md 2>/dev/null \
-  | grep -oE '[0-9]+' | sort -n | tail -1 || echo 0)
-last=$(( ${last_from_runs:-0} > ${last_from_plan:-0} ? ${last_from_runs:-0} : ${last_from_plan:-0} ))
+last_from_log=$(ls -1 harness/runs-log 2>/dev/null \
+  | sed -nE 's|^([0-9]+)-.*\.md$|\1|p' | sort -n | tail -1 || echo 0)
+last=$(( ${last_from_runs:-0} > ${last_from_log:-0} ? ${last_from_runs:-0} : ${last_from_log:-0} ))
 next=$(printf "%03d" $((last + 1)))
 
 echo "==> next run_id: $next  (last: $last)"

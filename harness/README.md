@@ -31,36 +31,51 @@ git).
 
 ```
 harness/
-├── PLAN.md            ← append-only logbook; each ## Run NNN block is one
-│                        iteration with metrics + root cause + queued change
+├── PLAN.md            ← STABLE shell: how-to + template + active carry-forward
+│                        + run-index table. Stays ~200 lines forever.
 ├── README.md          ← this file
 ├── run.sh             ← one iteration end-to-end (explicit run_id form)
 ├── run-next.sh        ← thin wrapper that auto-numbers the next run
 ├── tasks/             ← task prompts; one .txt file per task
 │   └── photo-living-room.txt
-└── runs/              ← per-run artifacts (gitignored)
+├── runs-log/          ← curated per-run analysis, ONE file per iteration
+│   ├── 0001-photo-living-room.md
+│   ├── 0002-photo-living-room.md
+│   └── ...
+└── runs/              ← per-run RAW artifacts (gitignored)
     └── <NNN>/
         ├── metrics.txt
         ├── trace.jsonl
         └── server.log
 ```
 
+The split: `runs-log/` is the curated record (committed); `runs/` is raw
+artifacts (gitignored, can be deleted any time). PLAN.md is the stable
+shell — it stops growing because per-run details live in their own files.
+
 ## Adding a new task
 
 1. Drop a single-paragraph prompt at `harness/tasks/<name>.txt`. Plain text;
    any language; what you'd type as the operator's message.
 2. `just harness::run <name>`.
-3. After the run, append a `## Run NNN` block to `PLAN.md` using the template
-   at the top of that file. Cite tool counts, friction points, root cause,
-   and one bounded change to apply before the next run.
+3. After the run, create `harness/runs-log/<NNN>-<task-slug>.md` using the
+   template in PLAN.md. Cite tool counts, friction points, root cause, and
+   one bounded change.
+4. Append a row to PLAN.md's **Run index** table in `H: predicted | A:
+   actual` format. Update **Active carry-forward** — tick boxes for items
+   the run resolved, add new items it uncovered.
 
 That's the loop. Don't run the same task twice without changing one
 intentional variable in between (skill, MCP code, or task scope) — re-running
 identical setups only measures model variance, not progress.
 
-## Reading PLAN.md
+## Reading the logbook
 
-Each `## Run NNN` block has the same shape:
+PLAN.md is the entry point: read **Active carry-forward** for what the next
+run owns, then the **Run index** for the trajectory at a glance. Click into
+`runs-log/<NNN>-...md` for full analysis on a specific run.
+
+Each per-run file has the same shape:
 
 - **Metrics** — tool calls, blocked moves, snapshots, wall-clock,
   per-tool breakdown.
@@ -77,8 +92,8 @@ Each `## Run NNN` block has the same shape:
 - **Hypothesis for next run** — predicted metric values. Stating it before
   the next run prevents post-hoc rationalization.
 
-The first six runs (Run 001–006 plus the closure) are worth reading as a
-worked example of what a useful entry looks like.
+Runs 001–005 are worth reading in order as a worked example of what a
+useful entry looks like.
 
 ## When to abort vs. iterate
 
