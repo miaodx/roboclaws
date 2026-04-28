@@ -76,4 +76,16 @@ not here.
        `scripts/openclaw-bootstrap.sh:153`. Update
        `docs/openclaw-tool-profiles.md` with the verdict either way.
 
+- **OpenClaw cold-start: close the remaining ~89s gap** (flagged 2026-04-28
+  after shipping commit `bd5037b` which cut 348s→136s). Per-phase trace in
+  `docs/retrospectives/openclaw-cold-start-2026-04-28.md` shows the
+  remaining cost is `sidecars.session-locks` (65s) + `sidecars.channels`
+  (39.5s). The session-locks number is anomalous — same code runs in 2.2ms
+  on the standalone gateway image (also captured in that doc), so the 65s
+  is event-loop starvation from concurrent appliance work, not the
+  cleanup itself. Next steps and a reproduction recipe (with pinned image
+  digest + repo commit) are in the doc's "What remains" section. Open this
+  only if a future image bump regresses cold-start past 136s and we need
+  the next lever; otherwise leave parked.
+
 _If this list empties, next work should come from a new plan or issue._
