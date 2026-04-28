@@ -83,17 +83,17 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     cleanup() {
       set +e
-      codex mcp remove roboclaws || true
-      claude mcp remove roboclaws || true
+      codex mcp remove roboclaws >/dev/null 2>&1 || true
+      claude mcp remove roboclaws >/dev/null 2>&1 || true
       just code::mcp_down
       set -e
     }
     trap cleanup EXIT INT TERM
 
     mcp_url="$(just code::mcp_up "{{scene}}" "{{host}}" "{{port}}")"
-    codex mcp remove roboclaws || true
+    codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
-    claude mcp remove roboclaws || true
+    claude mcp remove roboclaws >/dev/null 2>&1 || true
     claude mcp add --transport http roboclaws "$mcp_url"
 
     echo "==> launching Claude Code with MCP registration" >&2
@@ -112,14 +112,14 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     cleanup() {
       set +e
-      codex mcp remove roboclaws || true
+      codex mcp remove roboclaws >/dev/null 2>&1 || true
       just code::mcp_down
       set -e
     }
     trap cleanup EXIT INT TERM
 
     mcp_url="$(just code::mcp_up "{{scene}}" "{{host}}" "{{port}}")"
-    codex mcp remove roboclaws || true
+    codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
     echo "==> launching Codex with MCP registration" >&2
     echo "==> MCP URL: $mcp_url" >&2
@@ -131,8 +131,8 @@ mcp_down:
     set -euo pipefail
 
     echo "==> cleaning up roboclaws MCP registrations" >&2
-    codex mcp remove roboclaws || true
-    claude mcp remove roboclaws || true
+    codex mcp remove roboclaws >/dev/null 2>&1 || true
+    claude mcp remove roboclaws >/dev/null 2>&1 || true
 
     if [[ -f "{{server_pid_file}}" ]]; then
       server_pid="$(cat "{{server_pid_file}}" || true)"
