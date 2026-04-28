@@ -60,7 +60,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     echo "==> launching Claude Code (cwd=$(pwd))" >&2
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    claude
+    claude --dangerously-skip-permissions
 
 codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
@@ -101,4 +101,4 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     echo "==> launching Codex (cwd=$(pwd))" >&2
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    codex
+    codex --yolo
