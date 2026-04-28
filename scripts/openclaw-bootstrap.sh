@@ -166,14 +166,18 @@ PERSONALITY_PROBE="${PERSONALITY_PROBE:-1}"
 READY_TIMEOUT="${READY_TIMEOUT:-180}"
 
 gateway_started=0
-_cleanup_failed_gateway() {
+preseed_py=""
+_cleanup_on_exit() {
     local rc=$?
+    if [[ -n "$preseed_py" && -f "$preseed_py" ]]; then
+        rm -f "$preseed_py"
+    fi
     if [[ $rc -ne 0 && "${gateway_started:-0}" == "1" ]]; then
         log "removing Gateway container after bootstrap failure"
         docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
     fi
 }
-trap _cleanup_failed_gateway EXIT
+trap _cleanup_on_exit EXIT
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-7200}"
 
 # Auto-detect PROVIDER when unset:
@@ -506,26 +510,15 @@ for ((i=0; i<AGENTS; i++)); do
 done
 
 log "pre-seeding config volume + $AGENTS agent(s)"
-docker run --rm --user root \
-    -v "$VOLUME:/home/node/.openclaw" \
-    -v "${SOULS_DIR}:/host-souls:ro" \
-    -e PROVIDER_API_KEY="$PROVIDER_API_KEY" \
-    -e PROVIDER_ID="$PROVIDER" \
-    -e PROVIDER_ID_OVERRIDE="${PROVIDER_ID_OVERRIDE:-}" \
-    -e PROVIDER_ENTRY_JSON="${PROVIDER_ENTRY_JSON:-}" \
-    -e TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
-    -e MODEL="$MODEL" \
-    -e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \
-    -e AGENT_IDS_CSV="$AGENT_IDS_CSV" \
-    -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
-    -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
-    -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
-    -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
-    -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
-    -e OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}" \
-    "$IMAGE" sh -lc '
-set -eu
-python3 - <<'"'"'PY'"'"'
+# Write the pre-seed Python to a host temp file and bind-mount it into the
+# container instead of streaming it through `sh -lc '...heredoc...'`. The
+# wrapped-heredoc approach silently breaks the moment any character in the
+# Python body needs bash escaping — most recently, an apostrophe in a comment
+# (commit 934fa88) terminated the outer single-quoted string and Python died
+# with a misleading SyntaxError. A temp file decouples Python content from
+# bash quoting entirely; cleanup runs from the EXIT trap above.
+preseed_py="$(mktemp -t openclaw-preseed.XXXXXX.py)"
+cat > "$preseed_py" <<'PY'
 import json, os, shutil
 agent_ids = os.environ["AGENT_IDS_CSV"].split(",")
 provider_id = os.environ["PROVIDER_ID"]
@@ -744,8 +737,32 @@ for aid in agent_ids + ["main"]:
         json.dump(profile, fh, indent=2)
     os.chmod(path, 0o600)
 PY
-chown -R 1000:1000 /home/node/.openclaw
-' >&2 || die "volume pre-seed failed" 2
+
+# Sanity check the temp file before shipping it into the container — catches
+# typos before docker spins up, with a host-side stack trace.
+python3 -c "compile(open('$preseed_py').read(), '$preseed_py', 'exec')" \
+    || die "pre-seed Python failed to compile (see traceback above)" 2
+
+docker run --rm --user root \
+    -v "$VOLUME:/home/node/.openclaw" \
+    -v "${SOULS_DIR}:/host-souls:ro" \
+    -v "${preseed_py}:/preseed.py:ro" \
+    -e PROVIDER_API_KEY="$PROVIDER_API_KEY" \
+    -e PROVIDER_ID="$PROVIDER" \
+    -e PROVIDER_ID_OVERRIDE="${PROVIDER_ID_OVERRIDE:-}" \
+    -e PROVIDER_ENTRY_JSON="${PROVIDER_ENTRY_JSON:-}" \
+    -e TIMEOUT_SECONDS="$TIMEOUT_SECONDS" \
+    -e MODEL="$MODEL" \
+    -e IMAGE_MODEL="${IMAGE_MODEL:-$MODEL}" \
+    -e AGENT_IDS_CSV="$AGENT_IDS_CSV" \
+    -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
+    -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
+    -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
+    -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
+    -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
+    -e OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}" \
+    "$IMAGE" sh -lc 'set -eu; python3 /preseed.py; chown -R 1000:1000 /home/node/.openclaw' \
+    >&2 || die "volume pre-seed failed" 2
 
 # ----- 4. Launch the Gateway — one skill mount per agent -----------------
 log "starting Gateway with $AGENTS agent workspace(s)"
@@ -846,11 +863,20 @@ PY
 # ----- 7. Sanity probe: one-shot /v1/chat/completions on agent-0 --------
 probe_agent="${agent_ids[0]}"
 log "probing /v1/chat/completions via model=openclaw/${probe_agent} (~30s cold start)"
-probe=$(curl -s --max-time 90 -X POST "http://${HOST_IP}:${PORT}/v1/chat/completions" \
+# Bumped 90 → 180 because the model has the full tool surface (bundle-mcp +
+# session_status) on this turn and an over-eager model can squeeze in a tool
+# call before the PONG reply. Wrap in `if ... else probe_rc=$?` so curl
+# failure (e.g. 28 timeout) does not get pre-empted by `set -e` before our
+# diagnostic block at line below runs.
+PROBE_TIMEOUT="${PROBE_TIMEOUT:-180}"
+if probe=$(curl -s --max-time "$PROBE_TIMEOUT" -X POST "http://${HOST_IP}:${PORT}/v1/chat/completions" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
-    -d "{\"model\":\"openclaw/${probe_agent}\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with only PONG.\"}]}" 2>&1)
-probe_rc=$?
+    -d "{\"model\":\"openclaw/${probe_agent}\",\"messages\":[{\"role\":\"user\",\"content\":\"Reply with only PONG.\"}]}" 2>&1); then
+    probe_rc=0
+else
+    probe_rc=$?
+fi
 if [[ $probe_rc -ne 0 ]]; then
     log "probe failed (curl exit $probe_rc): $probe"
     docker logs --tail 20 "$CONTAINER" >&2 || true

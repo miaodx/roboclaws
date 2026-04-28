@@ -54,39 +54,38 @@ IMAGE_DEFAULT = _default_gateway_image()
 # ---------------------------------------------------------------------------
 #
 # ``scripts/openclaw-bootstrap.sh`` materialises ``openclaw.json`` inside a
-# short-lived throwaway container via a python3 heredoc.  The D-04 / spike F-3
-# contract (mcp.servers + tools.profile must be present BEFORE first container
-# start) is encoded entirely in that heredoc — so the regression tests have to
-# execute the heredoc against a tmp config root and inspect the resulting
-# openclaw.json.  Spinning docker for every test would be slow and require the
-# pinned image, which is not available in lint-and-mock CI.  Instead: extract
-# the heredoc body, patch the hard-coded ``/home/node/.openclaw`` root to
-# ``tmp_path``, and exec it with ``python3`` directly.  This is the same shape
-# the Gateway container runs, minus Docker's isolation.
+# short-lived throwaway container via a python3 pre-seed script.  The D-04 /
+# spike F-3 contract (mcp.servers + tools.profile must be present BEFORE first
+# container start) is encoded entirely in that pre-seed — so the regression
+# tests have to execute the pre-seed against a tmp config root and inspect the
+# resulting openclaw.json.  Spinning docker for every test would be slow and
+# require the pinned image, which is not available in lint-and-mock CI.
+# Instead: extract the heredoc body that bash writes to a host temp file via
+# ``cat > "$preseed_py" <<'PY'``, patch the hard-coded ``/home/node/.openclaw``
+# root to ``tmp_path``, and exec it with ``python3`` directly.  This is the
+# same script the Gateway container runs, minus Docker's isolation.
 
 
 def _extract_preseed_heredoc(script_src: str) -> str:
     """Return the body of the pre-seed python3 heredoc in ``openclaw-bootstrap.sh``.
 
-    Structure on disk (confirmed against the live file, see 02.6-02 plan):
+    Structure on disk (post-refactor — apostrophes in Python comments would
+    break the previous wrapped-heredoc-inside-sh-lc form, so the pre-seed is
+    now written to a host temp file and bind-mounted into the container):
 
-        ... docker run --rm ... "$IMAGE" sh -lc '
-        set -eu
-        python3 - <<'"'"'PY'"'"'
+        preseed_py="$(mktemp -t openclaw-preseed.XXXXXX.py)"
+        cat > "$preseed_py" <<'PY'
         <BODY>
         PY
-        chown -R 1000:1000 /home/node/.openclaw
-        ' >&2 || die ...
 
-    The opening fence line contains ``python3 - <<`` (followed by the shell
-    quoting dance for ``PY``).  The closing fence is a line whose stripped
-    content is exactly ``PY``.  Simple line-based scanning is more robust
-    than a regex over the multi-layer quoting.
+    The opening fence is the ``cat > "$preseed_py" <<'PY'`` line.  The
+    closing fence is a line whose stripped content is exactly ``PY``.
+    Simple line-based scanning is more robust than a regex over bash quoting.
     """
     lines = script_src.splitlines()
     start: int | None = None
     for idx, line in enumerate(lines):
-        if "python3 - <<" in line and "'PY'" in line:
+        if 'cat > "$preseed_py" <<' in line and "'PY'" in line:
             start = idx + 1
             break
     if start is None:
@@ -777,7 +776,9 @@ def test_bootstrap_cleans_gateway_container_after_startup_failure() -> None:
     """
     text = _read_bootstrap()
     assert "gateway_started=0" in text
-    assert "trap _cleanup_failed_gateway EXIT" in text
+    # Trap was renamed to ``_cleanup_on_exit`` when temp-file cleanup was
+    # folded into the same handler; guard the new name + behaviour.
+    assert "trap _cleanup_on_exit EXIT" in text
     assert "gateway_started=1" in text
     assert "removing Gateway container after bootstrap failure" in text
 

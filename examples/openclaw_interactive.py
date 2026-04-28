@@ -133,9 +133,14 @@ def _bootstrap_gateway(agent_id: int, extra_env: dict[str, str] | None = None) -
         env["TIMEOUT_SECONDS"],
         env["READY_TIMEOUT"],
     )
+    # Capture stdout (the bearer token is the only thing on stdout), but let
+    # stderr flow through to the operator's terminal so the bootstrap's
+    # `[bootstrap] ...` progress + error lines stay visible. With
+    # capture_output=True the entire stderr was buried inside CalledProcessError
+    # and operators saw a bare stack trace instead of the real failure.
     result = subprocess.run(
         ["./scripts/openclaw-bootstrap.sh"],
-        capture_output=True,
+        stdout=subprocess.PIPE,
         text=True,
         env=env,
         check=True,
