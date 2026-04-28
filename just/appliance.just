@@ -57,7 +57,15 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
     ENV_FILE_ARG=""
     [ -f .env ] && ENV_FILE_ARG="--env-file .env"
     docker rm -f "$container" >/dev/null 2>&1 || true
-    docker run --rm $ENV_FILE_ARG \
+    # --network host: container shares host's network namespace.
+    # Why not bridge: host runs Tailscale (MTU 1280) but docker0 default is
+    # 1500 — TLS handshakes to upstream LLM providers (e.g. mimo) silently
+    # PMTU-blackhole on bridge. Host network puts the container on the same
+    # stack the host already uses successfully. See docs/troubleshooting/
+    # docker-tailscale-mtu.md. Side-effect bonus: every internal port
+    # (8080, 18789 gateway, 18788 MCP, 18787 snapshot viewer) is reachable
+    # at 127.0.0.1:<port> from the host without -p forwarding.
+    docker run --rm --network host $ENV_FILE_ARG \
       --name "$container" \
       -e PORT=8080 \
       -e HOME=/data \
@@ -65,7 +73,6 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
       -e DEMO_PASSWORD="${DEMO_PASSWORD:-demo}" \
       -e PROVIDER -e MODEL -e IMAGE_MODEL \
       -e KIMI_PROVIDER_MODE -e MIMO_PROVIDER_MODE \
-      -p 8080:8080 \
       --add-host openrouter.ai:0.0.0.0 \
       --add-host raw.githubusercontent.com:0.0.0.0 \
       "${volume_args[@]}" \
@@ -81,4 +88,4 @@ smoke:
 # Pretty-tail the appliance Gateway session JSONL.
 [group('observer')]
 tail:
-    @{{strip_ros_env}} python scripts/tail-openclaw-chat.py --container "{{default_container}}"
+    @{{strip_ros_env}} .venv/bin/python scripts/tail-openclaw-chat.py --container "{{default_container}}"

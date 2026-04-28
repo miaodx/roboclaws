@@ -66,10 +66,10 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
 # Pretty-tail Gateway session JSONL (run in a second terminal).
 [group('observer')]
 tail:
-    @{{strip_ros_env}} python scripts/tail-openclaw-chat.py
+    @{{strip_ros_env}} .venv/bin/python scripts/tail-openclaw-chat.py
 
 # Live snapshot viewer at http://127.0.0.1:8787 (run in a second terminal).
 [group('observer')]
 view:
     -@fuser -k 8787/tcp 2>/dev/null
-    @{{strip_ros_env}} python scripts/view-snapshots.py
+    @{{strip_ros_env}} .venv/bin/python scripts/view-snapshots.py
