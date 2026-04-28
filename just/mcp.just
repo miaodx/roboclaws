@@ -46,6 +46,7 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
       if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
         mcp_url="http://{{host}}:{{port}}/mcp"
         printf '%s\n' "$mcp_url" > "{{server_url_file}}"
+        just mcp::_kickoff_banner "$mcp_url" >&2
         echo "$mcp_url"
         exit 0
       fi
@@ -65,7 +66,18 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     mcp_url="http://{{host}}:{{port}}/mcp"
     printf '%s\n' "$mcp_url" > "{{server_url_file}}"
+    just mcp::_kickoff_banner "$mcp_url" >&2
     echo "$mcp_url"
+
+# Print the canonical kickoff prompt for direct coding-agent usage.
+# Emitted on stderr by `up` so callers that capture stdout (`mcp_url=$(just mcp::up)`)
+# still get the URL clean. Centralised here so demo/, code::cc, and chat::run
+# show the same prompt.
+_kickoff_banner url:
+    #!/usr/bin/env bash
+    echo "==> roboclaws MCP ready at {{url}}"
+    echo "==> Kickoff prompt (paste as the first message to Claude / Codex):"
+    echo '    Read ../skills/ai2thor-navigator/SKILL.md, then call roboclaws__observe(label="preflight") to verify the MCP is alive. After that, wait for my actual task.'
 
 down:
     #!/usr/bin/env bash
