@@ -12,7 +12,12 @@ This directory contains technical research documents that inform Roboclaws proje
 | 04 | [openclaw-robotics-ecosystem](04-openclaw-robotics-ecosystem.md) | OpenClaw robotics ecosystem mapping | 6 active repos; multi-agent sim control is an open gap |
 | 05 | [real-model-smoke-validation](05-real-model-smoke-validation.md) | Issue #50 local-dev validation | Territory terminates early, coverage fails, follow-up tracked in #52 |
 
+## See Also
+
+- [`docs/research-checkpoints/`](../research-checkpoints/) — Monthly ecosystem checkpoint snapshots (Chinese, internal decision-oriented). Complementary to single-topic reports here: research/ answers "should we do X?", checkpoints/ answer "what does the ecosystem look like now and do our prior judgments still hold?".
+
 ## Changelog
 
 - **2026-04-13**: Initial version, 4 reports completed
 - **2026-04-14**: Added report 05 documenting the issue #50 real-model smoke validation outcome
+- **2026-04-28**: Added cross-link to new monthly checkpoint series at `docs/research-checkpoints/`
