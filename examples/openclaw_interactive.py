@@ -73,7 +73,7 @@ class Args:
     """AI2-THOR agent index bound to MCP tools (matches Gateway agent-<id>)."""
 
     output_dir: Path | None = None
-    """Output directory for trace.jsonl and snapshots. Defaults to output/openclaw-interactive/<stamp>."""  # noqa: E501
+    """Output directory for trace.jsonl and snapshots. Defaults to output/runs/<stamp>."""
 
     # Provider / model
     provider: Literal["mimo", "kimi", "nvidia"] = "mimo"
@@ -112,7 +112,7 @@ def _parse_args(argv: list[str] | None = None) -> Args:
 
 def _default_output_dir() -> Path:
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y%m%d%H%M")
-    return Path(f"output/openclaw-interactive/{stamp}")
+    return Path(f"output/runs/{stamp}")
 
 
 def _wipe_volume(volume: str) -> None:
