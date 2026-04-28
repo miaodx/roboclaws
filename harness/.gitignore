@@ -1,0 +1,4 @@
+# Per-run artifacts: transcripts, MCP logs, metrics. Run history lives in
+# PLAN.md as curated entries, not raw logs.
+runs/
+*-launch.log
