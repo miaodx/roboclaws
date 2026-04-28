@@ -386,6 +386,39 @@ class RoboclawsMCPServer:
             return server._do_move(direction, reason, steps=steps)
 
         @self._mcp.tool()
+        def scene_objects(filter_types: str = "") -> dict:
+            """Return ALL objects in the scene with positions and bounding boxes.
+
+            Use this BEFORE moving on any multi-target task — it gives you the
+            full target list with world coordinates so you can plan a route
+            instead of discovering objects by collision. The cost is one
+            tool call (no images), and it returns instantly because AI2-THOR
+            streams the full object list in every event.
+
+            Args:
+                filter_types: Optional comma-separated objectType values to
+                  cull the response (e.g. ``"Sofa,Chair,ArmChair"``). Empty
+                  returns every object. Case-sensitive — use the exact
+                  ``objectType`` strings AI2-THOR exposes (e.g. ``ArmChair``,
+                  not ``armchair``).
+
+            Returns ``{"count": N, "agent_position": {x,y,z},
+            "agent_yaw_deg": Y, "objects": [...]}`` where each object has
+            ``objectId``, ``objectType``, ``name``, ``position{x,y,z}``,
+            ``bbox_center{x,y,z}``, ``bbox_size{x,y,z}``, ``visible``, and
+            ``distance_xz`` (planar distance from the agent — sort by this
+            to plan a TSP-ish capture route).
+
+            Multi-target capture pattern:
+
+                1. ``scene_objects(filter_types="Sofa,Chair,ArmChair")``
+                2. Sort returned objects by ``distance_xz``.
+                3. For each: navigate, frame, ``observe_archived(label=...)``.
+                4. ``done(reason="captured ...")``.
+            """
+            return server._do_scene_objects(filter_types)
+
+        @self._mcp.tool()
         def done(reason: str) -> dict:
             """End the navigation episode and shut the host loop down.
 
@@ -738,6 +771,52 @@ class RoboclawsMCPServer:
         if warning is not None:
             response["warning"] = warning
         self._write_tool_response("move", response)
+        return response
+
+    def _do_scene_objects(self, filter_types: str = "") -> dict[str, Any]:
+        self._write_tool_request("scene_objects", {"filter_types": filter_types})
+        type_filter = {t.strip() for t in filter_types.split(",") if t.strip()} or None
+        with self._controller_lock:
+            agent_state = self.engine.get_agent_state(self.agent_id)
+            objects = self.engine.get_all_objects(self.agent_id)
+
+        ax = agent_state.position.get("x", 0.0)
+        az = agent_state.position.get("z", 0.0)
+        ay_yaw = agent_state.rotation.get("y", 0.0)
+
+        summaries: list[dict[str, Any]] = []
+        for obj in objects:
+            otype = obj.get("objectType")
+            if type_filter is not None and otype not in type_filter:
+                continue
+            pos = obj.get("position") or {}
+            bbox = obj.get("axisAlignedBoundingBox") or {}
+            ox = pos.get("x", 0.0)
+            oz = pos.get("z", 0.0)
+            distance_xz = ((ox - ax) ** 2 + (oz - az) ** 2) ** 0.5
+            summaries.append(
+                {
+                    "objectId": obj.get("objectId"),
+                    "objectType": otype,
+                    "name": obj.get("name"),
+                    "position": pos,
+                    "bbox_center": bbox.get("center"),
+                    "bbox_size": bbox.get("size"),
+                    "visible": bool(obj.get("visible", False)),
+                    "distance_xz": round(distance_xz, 3),
+                }
+            )
+
+        # Sort by planar distance so the agent's natural read-order matches
+        # a greedy nearest-target route.
+        summaries.sort(key=lambda s: s["distance_xz"])
+        response = {
+            "count": len(summaries),
+            "agent_position": {"x": ax, "y": agent_state.position.get("y", 0.0), "z": az},
+            "agent_yaw_deg": ay_yaw,
+            "objects": summaries,
+        }
+        self._write_tool_response("scene_objects", response)
         return response
 
     def _do_done(self, reason: str) -> dict[str, Any]:
