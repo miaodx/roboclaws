@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Auto-numbering wrapper around harness/run.sh.
+#
+# Reads the highest existing run_id under harness/runs/ + the highest
+# `## Run NNN` header in harness/PLAN.md, picks the next, then forwards to
+# run.sh.
+#
+# Usage:
+#   harness/run-next.sh <task_basename> [time_cap_seconds]
+#
+# `task_basename` is REQUIRED (no default). The harness loop is for curated
+# experiments — silently re-running yesterday's task by accident hides
+# regressions. Pass an explicit task each time. List available tasks with:
+#   just harness::list-tasks
+#
+# Examples:
+#   harness/run-next.sh photo-living-room
+#   harness/run-next.sh photo-living-room 600
+
+set -euo pipefail
+
+TASK="${1:-}"
+TIME_CAP="${2:-900}"
+
+if [[ -z "$TASK" ]]; then
+  echo "error: task is required. Usage: $0 <task_basename> [cap_seconds]" >&2
+  echo "       Available tasks:" >&2
+  ls harness/tasks/*.txt 2>/dev/null | sed 's|harness/tasks/|         - |;s|\.txt$||' >&2
+  exit 1
+fi
+
+TASK_FILE="harness/tasks/${TASK}.txt"
+if [[ ! -f "$TASK_FILE" ]]; then
+  echo "error: task file not found: $TASK_FILE" >&2
+  echo "       Available tasks:" >&2
+  ls harness/tasks/*.txt 2>/dev/null | sed 's|harness/tasks/|         - |;s|\.txt$||' >&2
+  exit 1
+fi
+
+# Find the next run_id by taking max(runs/NNN dirs, PLAN.md "## Run NNN" headers) + 1.
+# Both sources kept in sync because run.sh creates runs/<id>/ and PLAN.md is
+# appended manually after each run.
+last_from_runs=$(ls -1 harness/runs 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1 || echo 0)
+last_from_plan=$(grep -oE '^## Run [0-9]+' harness/PLAN.md 2>/dev/null \
+  | grep -oE '[0-9]+' | sort -n | tail -1 || echo 0)
+last=$(( ${last_from_runs:-0} > ${last_from_plan:-0} ? ${last_from_runs:-0} : ${last_from_plan:-0} ))
+next=$(printf "%03d" $((last + 1)))
+
+echo "==> next run_id: $next  (last: $last)"
+exec bash harness/run.sh "$next" "$TASK_FILE" "$TIME_CAP"
