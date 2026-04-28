@@ -131,6 +131,17 @@ class MultiAgentEngine:
         """Return current state for every agent."""
         return [self.get_agent_state(i) for i in range(self.agent_count)]
 
+    def get_all_objects(self, agent_id: int = 0) -> list[dict[str, Any]]:
+        """Return ALL scene objects (visible or not) from the last event.
+
+        AI2-THOR streams the full object list in every event's metadata; this
+        is the cheap counterpart to ``get_agent_state`` whose ``visible_objects``
+        only reflects what is currently in the camera cone. Used by the MCP
+        ``scene_objects`` tool so an agent can inventory the room before any
+        move instead of discovering targets by collision.
+        """
+        return list(self._last_event.events[agent_id].metadata.get("objects", []))
+
     def step(self, agent_id: int, action: str, **kwargs: Any) -> AgentState:
         """Execute an action for one agent; return that agent's updated state.
 

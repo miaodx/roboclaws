@@ -49,6 +49,9 @@ class FakeEngine:
         self._last_action_success = True
         self._last_action_error = ""
         self.visible_objects: list[dict[str, Any]] = []
+        # ALL scene objects (visible or not) — separate from visible_objects so
+        # a test can simulate "object exists but is around the corner".
+        self.all_objects: list[dict[str, Any]] = []
 
     def _state(self, agent_id: int) -> FakeAgentState:
         return FakeAgentState(
@@ -67,6 +70,9 @@ class FakeEngine:
 
     def get_all_agent_states(self) -> list[FakeAgentState]:
         return [self._state(0)]
+
+    def get_all_objects(self, agent_id: int = 0) -> list[dict[str, Any]]:
+        return list(self.all_objects)
 
     def get_reachable_positions(self) -> set[tuple[int, int]]:
         return {(4, -8), (5, -8), (6, -8), (6, -7)}
@@ -938,3 +944,83 @@ def test_blind_move_nudge_does_not_overwrite_real_human_message(
     server.enqueue_human_message("hey look left")
     r = server._do_move("RotateRight")
     assert r["human_message"] == "hey look left"
+
+
+# ---------------------------------------------------------------------------
+# scene_objects (P0a) — pre-flight inventory tool
+# ---------------------------------------------------------------------------
+
+
+def test_scene_objects_returns_all_with_distance_and_metadata(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    engine._position = {"x": 0.0, "y": 0.9, "z": 0.0}
+    engine.all_objects = [
+        {
+            "objectId": "Sofa|+1.0|+0.5|+2.0",
+            "objectType": "Sofa",
+            "name": "Sofa_1",
+            "position": {"x": 1.0, "y": 0.5, "z": 2.0},
+            "axisAlignedBoundingBox": {
+                "center": {"x": 1.0, "y": 0.5, "z": 2.0},
+                "size": {"x": 2.0, "y": 0.8, "z": 1.0},
+            },
+            "visible": False,
+        },
+        {
+            "objectId": "Chair|-3.0|+0.5|-1.0",
+            "objectType": "Chair",
+            "name": "Chair_1",
+            "position": {"x": -3.0, "y": 0.5, "z": -1.0},
+            "axisAlignedBoundingBox": {
+                "center": {"x": -3.0, "y": 0.5, "z": -1.0},
+                "size": {"x": 0.6, "y": 1.0, "z": 0.6},
+            },
+            "visible": True,
+        },
+    ]
+    response = server._do_scene_objects()
+    assert response["count"] == 2
+    assert response["agent_position"] == {"x": 0.0, "y": 0.9, "z": 0.0}
+    # Sorted by planar distance — Sofa at distance ~2.236, Chair at ~3.162
+    assert [o["objectType"] for o in response["objects"]] == ["Sofa", "Chair"]
+    sofa = response["objects"][0]
+    assert sofa["distance_xz"] == round((1.0**2 + 2.0**2) ** 0.5, 3)
+    assert sofa["bbox_center"] == {"x": 1.0, "y": 0.5, "z": 2.0}
+    assert sofa["bbox_size"] == {"x": 2.0, "y": 0.8, "z": 1.0}
+    assert sofa["visible"] is False
+
+
+def test_scene_objects_filters_by_type(server: RoboclawsMCPServer, engine: FakeEngine) -> None:
+    def _obj(otype: str, oid: str, x: float) -> dict[str, Any]:
+        return {
+            "objectType": otype,
+            "objectId": oid,
+            "name": oid,
+            "position": {"x": x, "y": 0, "z": 0},
+            "axisAlignedBoundingBox": {},
+        }
+
+    engine.all_objects = [
+        _obj("Sofa", "s1", 1.0),
+        _obj("Chair", "c1", 2.0),
+        _obj("Floor", "f1", 0.0),
+    ]
+    response = server._do_scene_objects(filter_types="Sofa,Chair")
+    assert response["count"] == 2
+    types = {o["objectType"] for o in response["objects"]}
+    assert types == {"Sofa", "Chair"}
+
+
+def test_scene_objects_handles_empty_filter_and_missing_bbox(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    # Missing axisAlignedBoundingBox should not blow up (None bbox center/size).
+    engine.all_objects = [
+        {"objectType": "Wall", "objectId": "w1", "name": "w1", "position": {"x": 0, "y": 0, "z": 0}}
+    ]
+    response = server._do_scene_objects(filter_types="")
+    assert response["count"] == 1
+    obj = response["objects"][0]
+    assert obj["bbox_center"] is None
+    assert obj["bbox_size"] is None
