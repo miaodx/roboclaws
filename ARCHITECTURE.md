@@ -172,8 +172,8 @@ not) and power the `just chat::view` live viewer.
 | Scenario design rationale, VLM strategy, references | [`docs/technical-design.md`](docs/technical-design.md) |
 | Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |
 | Direct coding-agent driver setup (Mode 3) | [`docs/coding-agent-nav-server.md`](docs/coding-agent-nav-server.md) |
-| OpenClaw local setup (Mode 2) | [`docs/openclaw-local.md`](docs/openclaw-local.md) |
-| OpenClaw Gateway internals | [`docs/openclaw-gateway-internals.md`](docs/openclaw-gateway-internals.md) |
+| OpenClaw local setup (Mode 2) | [`docs/openclw/openclaw-local.md`](docs/openclw/openclaw-local.md) |
+| OpenClaw Gateway internals | [`docs/openclw/openclaw-gateway-internals.md`](docs/openclw/openclaw-gateway-internals.md) |
 | Railway appliance deploy (Mode 4) | [`docs/railway-deploy.md`](docs/railway-deploy.md) |
 | Verified models per provider | [`docs/model-matrix.md`](docs/model-matrix.md) |
 | Operating rules for any agent driving the robot | [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md) |

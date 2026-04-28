@@ -12,7 +12,7 @@ Prerequisites
 -------------
 A local OpenClaw Gateway must be running with **N named agents**
 pre-registered (``agent-0``, ``agent-1``, ...).  Use
-``scripts/openclaw-bootstrap.sh`` — see ``docs/openclaw-local.md`` for the
+``scripts/openclaw-bootstrap.sh`` — see ``docs/openclw/openclaw-local.md`` for the
 full recipe.  No bind mount is required; frames flow inline as base64 data
 URLs over the OpenAI-compatible ``/v1/chat/completions`` endpoint.
 

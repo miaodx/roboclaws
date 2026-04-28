@@ -113,7 +113,7 @@ Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavio
 
 Local preflight steps (key loading, Docker hygiene, ROS env stripping for
 pytest) live in `AGENTS.md` §1. For the OpenClaw Gateway path specifically,
-see `docs/openclaw-local.md`.
+see `docs/openclw/openclaw-local.md`.
 
 ## Design principles
 

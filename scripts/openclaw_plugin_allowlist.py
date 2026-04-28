@@ -25,7 +25,7 @@ requires a real reason; removing one should be probed first.
 
 For the rationale, the live-probed before/after, the gotchas (manifest id
 vs directory name), and the image-bump checklist, see
-``docs/openclaw-plugin-allowlist.md``.
+``docs/openclw/openclaw-plugin-allowlist.md``.
 """
 
 from __future__ import annotations

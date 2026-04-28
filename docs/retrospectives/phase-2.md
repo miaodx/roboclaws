@@ -9,7 +9,7 @@ Phase 2 aims to prove that AI2-THOR simulated robots can be controlled through a
 ### In scope
 - Create a standalone `examples/openclaw_demo.py` that runs a simple multi-agent AI2-THOR scenario via `OpenClawProvider`
 - Fix the host/container shared image directory contract (`work_dir`)
-- Write `docs/openclaw-local.md` with the exact Docker run command including the bind mount
+- Write `docs/openclw/openclaw-local.md` with the exact Docker run command including the bind mount
 - Validate the demo locally first, then update CI `openclaw-smoke` to run the new demo
 - Ensure the demo produces replay GIF + `report.html` that can be published to GitHub Pages
 - Update README Phase 2 checkbox when the demo is live
@@ -76,7 +76,7 @@ No game logic (territory/coverage) — just pure navigation so the demo is focus
 
 ### Task 3: Local OpenClaw quick-start guide
 
-**New file:** `docs/openclaw-local.md`
+**New file:** `docs/openclw/openclaw-local.md`
 
 Contents:
 - Prerequisites: Docker, `KIMI_API_KEY` or Gateway already configured
@@ -176,7 +176,7 @@ Do:
 | Error | Cause | Rescue |
 |-------|-------|--------|
 | `Gateway did not become ready within 60s` | Docker image path/env drift | Read logs, check bind mounts |
-| `OpenClawUnavailable: Gateway unreachable` | Local Gateway not running | Point user to `docs/openclaw-local.md` |
+| `OpenClawUnavailable: Gateway unreachable` | Local Gateway not running | Point user to `docs/openclw/openclaw-local.md` |
 | `Gateway cannot read frame paths` | Missing `.openclaw-tmp` bind mount or path mismatch | Check `-v "$PWD/.openclaw-tmp:$PWD/.openclaw-tmp"` |
 
 ## Failure Modes
@@ -186,7 +186,7 @@ Do:
 | OpenClaw upstream changes image contract | CI breaks | Pinned to `ghcr.io/openclaw/openclaw:2026.4.14` (A3); record digest in Task 5 |
 | Session-key collision across local runs | MEMORY leaks between demo invocations | `session_prefix=f"roboclaws-demo-{int(time.time())}"` in Task 2 (A1) |
 | Stale `.openclaw-tmp` from prior run blocks host writes | PermissionError on JPEG save | `shutil.rmtree(work_dir, ignore_errors=True)` on demo startup (A2) |
-| `$PWD` outside Docker Desktop File Sharing (macOS) | Gateway reports "file not found" | Troubleshooting note in `docs/openclaw-local.md` (A4 / Task 3) |
+| `$PWD` outside Docker Desktop File Sharing (macOS) | Gateway reports "file not found" | Troubleshooting note in `docs/openclw/openclaw-local.md` (A4 / Task 3) |
 | Local developer lacks Docker | Can't run Gateway | Document that layers 1-2 work without it |
 | `openclaw-smoke` job fails | Pages section omits OpenClaw card | `continue-on-error: true` + best-effort artifact download keeps landing page alive |
 
@@ -254,7 +254,7 @@ Do:
 - **A5 README misrepresentation** — rewrite Layer 3 section as "OpenClaw navigation demo" rather than just flipping the checkbox → folded into **Task 6**.
 - **T1 precedence test** — add `test_provider_explicit_work_dir_overrides_env` for the 3-way work_dir fallback → added to Test Plan.
 - **A2 stale work_dir** (auto-fix) — `shutil.rmtree(work_dir, ignore_errors=True)` on demo startup → folded into Task 2.
-- **A4 macOS Docker File Sharing** (auto-fix) — troubleshooting block added to `docs/openclaw-local.md` → folded into Task 3.
+- **A4 macOS Docker File Sharing** (auto-fix) — troubleshooting block added to `docs/openclw/openclaw-local.md` → folded into Task 3.
 - **CQ1 dev-token doc hygiene** (auto-fix) — replace hardcoded `dev-token` with a generated `secrets.token_urlsafe(32)` + localhost-only `-p 127.0.0.1:18789:18789` → folded into Task 3.
 - **CQ4 vague verification** (auto-fix) — Task 5 rewritten with concrete `curl -sI` checks + image digest recording.
 - **REGRESSION (IRON RULE)** — default `work_dir` fallback changes from `tempfile.mkdtemp` to `./.openclaw-tmp`. Auto-added `test_provider_defaults_to_dot_openclaw_tmp` to Test Plan without AskUserQuestion.

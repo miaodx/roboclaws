@@ -1,7 +1,7 @@
 # OpenClaw plugin allow-list: why we pin it
 
 Captures *why* `openclaw.json` carries an explicit `plugins.allow` block and
-*how* to extend it safely. Companion to `openclaw-tool-profiles.md` — both
+*how* to extend it safely. Companion to `openclw/openclaw-tool-profiles.md` — both
 docs exist to keep image bumps from silently breaking startup.
 
 Audience: anyone bumping the `OPENCLAW_IMAGE_DEFAULT` pin, adding a new

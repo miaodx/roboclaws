@@ -318,7 +318,7 @@ def test_nvidia_curated_to_single_multi_image_model() -> None:
     model = models[0]
     assert model["id"] == "nvidia/nemotron-nano-12b-v2-vl", (
         f"unexpected nvidia model {model['id']!r}; curated entry is "
-        "'nvidia/nemotron-nano-12b-v2-vl'. See docs/openclaw-local.md."
+        "'nvidia/nemotron-nano-12b-v2-vl'. See docs/openclw/openclaw-local.md."
     )
     assert "image" in model.get("input", []), (
         "nvidia/nemotron-nano-12b-v2-vl must flag image input."
@@ -471,7 +471,7 @@ def test_only_curated_providers_supported() -> None:
          (or an explicit PROVIDER_ENTRY_JSON.baseUrl for custom hosts).
       3. Added a parametrize row in test_provider_env_var_matches_plugin_manifest
          if the upstream uses an auth env recognised by a Gateway plugin.
-      4. Updated docs/model-matrix.md and docs/openclaw-local.md.
+      4. Updated docs/model-matrix.md and docs/openclw/openclaw-local.md.
     """
     text = _read_bootstrap()
     case_labels = re.findall(r"^    ([a-z][a-z0-9]*)\)\s*$", text, flags=re.MULTILINE)
@@ -838,7 +838,7 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
         # Image 2026.4.25-beta.11 consolidated MCP-tool exposure under the
         # `bundle-mcp` policy ID, and `minimal` no longer includes it. The
         # bootstrap splices it back in via alsoAllow so roboclaws__* tools
-        # remain reachable. See docs/openclaw-tool-profiles.md.  Lock the
+        # remain reachable. See docs/openclw/openclaw-tool-profiles.md.  Lock the
         # tools block to exactly these two keys so any drift (a stray deny,
         # a custom override) trips the test.
         assert set(entry["tools"].keys()) == {"profile", "alsoAllow"}, (

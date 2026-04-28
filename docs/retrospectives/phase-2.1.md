@@ -92,12 +92,12 @@ End-to-end validation uncovered six first-run setup steps the original plan miss
 ## Scope
 
 ### In scope
-- `scripts/openclaw-bootstrap.sh` — idempotent first-run setup: volume chown, seed `openclaw.json`, seed `auth-profiles.json`, start container, wait for `/readyz`, print token. Used by both `docs/openclaw-local.md` and CI.
+- `scripts/openclaw-bootstrap.sh` — idempotent first-run setup: volume chown, seed `openclaw.json`, seed `auth-profiles.json`, start container, wait for `/readyz`, print token. Used by both `docs/openclw/openclaw-local.md` and CI.
 - Rewrite `OpenClawBridge.step()` to `POST /v1/chat/completions` with OpenAI multimodal format.
 - Simplify `OpenClawProvider.__init__` — drop `work_dir`, drop JPEG-on-disk flow, drop `.openclaw-tmp` handling.
 - Rewrite `examples/openclaw_demo.py` to use the new bridge surface (feeds numpy frames directly, not base64 strings), drop `shutil.rmtree` startup.
 - Live re-validation: run the demo end-to-end locally, capture `output/openclaw-demo/report.html` + `replay.gif`, commit the artefacts path in a demo-run log so Task 5 (post-merge verification) can diff against it.
-- Rewrite `docs/openclaw-local.md` — `bootstrap.sh` one-liner, no bind mount, drop the stale-files + macOS troubleshooting (they can't happen anymore).
+- Rewrite `docs/openclw/openclaw-local.md` — `bootstrap.sh` one-liner, no bind mount, drop the stale-files + macOS troubleshooting (they can't happen anymore).
 - Rewrite `.github/workflows/ci.yml` `openclaw-smoke` job to call `bootstrap.sh`.
 - Retire `OPENCLAW_WORK_DIR` env var and the `./.openclaw-tmp` `.gitignore` entry (or keep `.gitignore` line since it's harmless — decide inside T10).
 - Rewrite `tests/test_bridge.py` — existing tests assert the `/tools/invoke` contract and the work_dir fallback. Both are gone.
@@ -228,7 +228,7 @@ Body:
 - On startup, log: "Gateway URL:", "Agent prefix:", "Agents: agent-0, agent-1, ... (model=openclaw/<agentId>)", "Model (resolved by Gateway):" (read from the probe response).
 - Shorter main-flow since no bind-mount prep required.
 
-### Task 12: Rewrite `docs/openclaw-local.md`
+### Task 12: Rewrite `docs/openclw/openclaw-local.md`
 
 Target shape (much shorter than current):
 

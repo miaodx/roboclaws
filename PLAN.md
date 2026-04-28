@@ -139,7 +139,7 @@ contract.
 ### Task T29a: Add `NvidiaProvider` to `roboclaws/core/vlm.py`
 
 **Files:** `roboclaws/core/vlm.py`, `tests/test_nvidia_provider.py`,
-`docs/openclaw-local.md` (env-var table addition).
+`docs/openclw/openclaw-local.md` (env-var table addition).
 
 1. New class `NvidiaProvider` that follows `OpenAIProvider`'s shape:
    uses the `openai` SDK with `base_url="https://integrate.api.nvidia.com/v1"`,

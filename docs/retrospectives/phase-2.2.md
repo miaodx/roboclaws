@@ -16,7 +16,7 @@ Phase 2.1 shipped one OpenClaw tile in README Layer 3 (the nav demo). Layer 2 ha
 - Per-agent personality probe in `bootstrap.sh`: after the existing PONG probe, ask each agent the same leading question (e.g. "describe your strategy in one sentence") and assert the responses diverge along the persona axis. Fails fast if SOULs aren't loading.
 - Two new CI jobs: `territory-openclaw-smoke` and `coverage-openclaw-smoke`. Mirror the existing `openclaw-smoke` pattern (bootstrap → run game → upload report → publish to Pages). Use `AGENTS=2 AGENT_SOULS=aggressive,defensive` for territory and `AGENTS=2 AGENT_SOULS=cooperative,cooperative` for coverage.
 - README Layer 3 rewrite: replace the single nav-demo tile with three tiles (nav, territory, coverage) — symmetric with Layer 2.
-- `docs/openclaw-local.md`: add `AGENT_SOULS=aggressive,defensive,cooperative` example + per-game usage snippets.
+- `docs/openclw/openclaw-local.md`: add `AGENT_SOULS=aggressive,defensive,cooperative` example + per-game usage snippets.
 - `tests/test_openclaw_bootstrap.py` (new file or extend existing): one test that asserts `bootstrap.sh` with `AGENT_SOULS=aggressive,defensive` writes the right `SOUL.md` files into per-agent workspaces (image-check auto-skips when image not pulled).
 - `TODOS.md`: mark items 1 + 2 as shipped under Phase 2.2; demote item 3 (digest pinning) to Phase 2.3.
 - PLAN.md: short Phase 2.2 retrospective at end.
@@ -181,9 +181,9 @@ SOULs from `skills/ai2thor-navigator/souls/`).
 
 Also flip the Phase 2.2 box (add a new line if not present): `- [x] **Phase 2.2**: long-running OpenClaw games (territory + coverage) with per-agent SOULs`.
 
-### Task 25: Update `docs/openclaw-local.md`
+### Task 25: Update `docs/openclw/openclaw-local.md`
 
-**File:** `docs/openclaw-local.md`
+**File:** `docs/openclw/openclaw-local.md`
 
 Add a new "Per-agent personalities" section:
 
@@ -302,7 +302,7 @@ Append a "Phase 2.2 retrospective" section at the bottom capturing:
 | T22 (coverage CI job) | ~15 min | ~3 min |
 | T23 (publish-pages 3 artifacts) | ~30 min | ~5 min |
 | T24 (README Layer 3 rewrite) | ~20 min | ~3 min |
-| T25 (docs/openclaw-local.md) | ~20 min | ~3 min |
+| T25 (docs/openclw/openclaw-local.md) | ~20 min | ~3 min |
 | T26 (bootstrap test) | ~30 min | ~5 min |
 | T27 (TODOS.md update) | ~10 min | ~2 min |
 | T28 (live re-validation) | ~30 min | ~10 min |
@@ -315,7 +315,7 @@ Append a "Phase 2.2 retrospective" section at the bottom capturing:
 - **SOULs themselves** — `skills/ai2thor-navigator/souls/{aggressive,defensive,cooperative}.md` (3 files, all written). T17 only wires distribution.
 - **Long-running container behavior** — `scripts/openclaw-bootstrap.sh` already starts a container that survives until `docker rm -f`. No new lifecycle code.
 - **Per-agent named-agent isolation** — Phase 2.1 already created independent workspaces, agent dirs, and auth profiles per agent. T17 fills the SOUL slot inside the existing structure.
-- **Gateway workspace SOUL.md slot** — `docs/openclaw-gateway-internals.md:67` documents `workspaces/<agentId>/SOUL.md` as the persona slot. Already there, waiting to be filled.
+- **Gateway workspace SOUL.md slot** — `docs/openclw/openclaw-gateway-internals.md:67` documents `workspaces/<agentId>/SOUL.md` as the persona slot. Already there, waiting to be filled.
 - **`OpenClawProvider` as drop-in `VLMProvider`** — `roboclaws/openclaw/bridge.py:392-487`. `TerritoryGame` and `CoverageGame` already accept any `VLMProvider`; T19/T20 only wire construction.
 - **Per-turn `my_agent_id` routing** — `OpenClawProvider.get_action()` reads `state["my_agent_id"]` (`bridge.py:445`). Both games already include this in `prompt_state`.
 - **Existing `openclaw-smoke` CI job** (`.github/workflows/ci.yml:183-276`) — T21/T22 copy this shape, only changing the run command + artifact name.
@@ -431,7 +431,7 @@ surfaced it, the original plan text, the revision applied, and the principle.
 | 7 | DX2 + Eng F14 | Three new CLI flags per game (`--gateway-url`, `--token`, `--agent-prefix`); `--token` leaks via shell history | T19/T20 spec: drop `--token` and `--agent-prefix` CLI flags. Use `OPENCLAW_GATEWAY_TOKEN` and `OPENCLAW_AGENT_PREFIX` env vars only. Keep `--gateway-url` as debug escape hatch. | P3 (pragmatic) |
 | 8 | Eng F18 | T19/T20 duplicate ~15 lines of `OpenClawProvider` construction + ping + `SystemExit` — DRY violation | New T18.5 (before T19): extract `build_openclaw_provider_or_die(*, gateway_url=None, agent_prefix="agent-", agent_count) -> OpenClawProvider` to `roboclaws/openclaw/bridge.py`. T19/T20 each call the helper. | P4 (DRY) |
 | 9 | Eng F12 | Three CI jobs (openclaw-smoke, territory-openclaw-smoke, coverage-openclaw-smoke) hit Kimi simultaneously on push to main; share one rate budget | T21/T22 spec adds: `concurrency: { group: openclaw-kimi, cancel-in-progress: false }` on each job. OR: chain via `needs: openclaw-smoke` then `needs: territory-openclaw-smoke`. Default to chain — simpler, deterministic. | P3 (pragmatic) |
-| 10 | DX3 | TTHW for Layer 3 territory is ~15-30 min vs ~30s for Layer 2; plan claims "symmetry" but onboarding is asymmetric | New T24a: add `make openclaw-territory` + `make openclaw-coverage` targets (or `scripts/run-layer3-{territory,coverage}.sh`) wrapping bootstrap + token capture + game run with progress echoed. T24 README adds: "**First local run takes ~15 min** (Docker pull + Unity download). See `docs/openclaw-local.md`. Already set up? `make openclaw-territory`." | P1 (completeness) |
+| 10 | DX3 | TTHW for Layer 3 territory is ~15-30 min vs ~30s for Layer 2; plan claims "symmetry" but onboarding is asymmetric | New T24a: add `make openclaw-territory` + `make openclaw-coverage` targets (or `scripts/run-layer3-{territory,coverage}.sh`) wrapping bootstrap + token capture + game run with progress echoed. T24 README adds: "**First local run takes ~15 min** (Docker pull + Unity download). See `docs/openclw/openclaw-local.md`. Already set up? `make openclaw-territory`." | P1 (completeness) |
 | 11 | DX | Bootstrap goes silent for 60-180s during readyz/probe waits → user thinks it hung | T17/T18 spec adds: per-10s tick during the readyz wait (`log "readyz: still waiting (${elapsed}s/${READY_TIMEOUT}s)"`). Same for the probe wait. | P5 (explicit) |
 | 12 | DX | `SystemExit` hint always says "re-run bootstrap with AGENTS=N" but the actual cause is usually 401 token-expired | T19/T20 helper (T18.5) branches the hint by exception type: 401 → "token likely expired; re-capture with `TOKEN=$(./scripts/openclaw-bootstrap.sh)`"; 400 "Invalid model" → "agent N+1 not registered; re-run with AGENTS=N+1"; "unreachable" → "Gateway not running; check `docker ps`". | P5 (explicit) |
 | 13 | DX | SOUL filename validation: typo (`aggresive`) shows `cp: cannot stat` deep in pre-seed container log | T17 spec adds: validate `AGENT_SOULS` entries against `ls $SOULS_DIR/*.md` BEFORE the pre-seed run. Error message: `die "unknown SOUL '$soul'; available: $(ls $SOULS_DIR/*.md 2>/dev/null \| xargs -n1 basename \| sed 's/\\.md$//' \| paste -sd, -)"`. | P5 (explicit) |
@@ -579,7 +579,7 @@ was justified on that basis before any new code).
 | T20 | `examples/coverage_game.py` wiring | Mirror of T19. |
 | T21–T23 | CI: two new smoke jobs | `territory-openclaw-smoke` + `coverage-openclaw-smoke` chained via `needs:` to avoid Kimi rate-budget collisions; `publish-pages` collects all three OpenClaw artifacts. |
 | T24 + T24a | README + Makefile | 3-tile Layer 3 table; `make openclaw-territory` + `make openclaw-coverage` convenience targets. |
-| T25 | `docs/openclaw-local.md` update | Self-contained per-game recipes, AGENT_SOULS variable table, SOUL probe explanation. |
+| T25 | `docs/openclw/openclaw-local.md` update | Self-contained per-game recipes, AGENT_SOULS variable table, SOUL probe explanation. |
 | T26 | Tests | 369 lines across 4 test files: openclaw backend construction + numpy frame type contract (territory + coverage), SOUL CLI args, bootstrap SOUL contract checks (5 static), visualizer SOUL overlay (14 tests). |
 | T27 | TODOS.md | Items 1 + 2 struck; digest pin becomes item 1 as Phase 2.3. |
 

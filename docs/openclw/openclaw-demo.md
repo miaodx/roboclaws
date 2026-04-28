@@ -6,7 +6,7 @@ Fastest path to the OpenClaw navigation demo:
 If you only want to prove "OpenClaw can drive the robot end-to-end", start
 here. If you want the broader local matrix (territory, coverage, interactive
 chat, autonomous MCP, provider/model comparisons), use
-[`docs/openclaw-local.md`](./openclaw-local.md).
+[`openclaw-local.md`](./openclaw-local.md).
 
 ## Prerequisites
 
@@ -133,5 +133,5 @@ First run is slow:
 ## Next Steps
 
 - Longer OpenClaw game demos: `just openclaw::run territory`, `just openclaw::run coverage`
-- Full local guide: [`docs/openclaw-local.md`](./openclaw-local.md)
+- Full local guide: [`openclaw-local.md`](./openclaw-local.md)
 - Autonomous MCP loop and split-model MiMo: `python examples/openclaw_nav_autonomous.py ...`

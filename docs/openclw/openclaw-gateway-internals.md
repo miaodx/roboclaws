@@ -6,7 +6,7 @@ will want on hand. Keeps you from re-spelunking `/app/dist/` every time.
 
 > Scope: this file is for contributors touching the
 > `roboclaws/openclaw/` bridge or `scripts/openclaw-bootstrap.sh`. End users
-> should reach for `docs/openclaw-local.md` instead.
+> should reach for `docs/openclw/openclaw-local.md` instead.
 
 ## How the Gateway loads config + models
 

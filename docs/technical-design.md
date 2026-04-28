@@ -35,8 +35,8 @@ the decision shape. **Isaac Lab is intentionally deferred** to Phase 3 —
 see [ADR-0002](adr/0002-defer-isaac-lab-to-phase-3.md).
 
 For the OpenClaw integration shape, see
-[`docs/openclaw-local.md`](openclaw-local.md) and
-[`docs/openclaw-gateway-internals.md`](openclaw-gateway-internals.md).
+[`docs/openclw/openclaw-local.md`](openclw/openclaw-local.md) and
+[`docs/openclw/openclaw-gateway-internals.md`](openclw/openclaw-gateway-internals.md).
 For the direct coding-agent driver, see
 [`docs/coding-agent-nav-server.md`](coding-agent-nav-server.md).
 
