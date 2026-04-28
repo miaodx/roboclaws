@@ -22,6 +22,10 @@ so drift between the two paths is caught at lint-and-mock time.
 
 Each entry below is paired with a one-line justification. Adding an entry
 requires a real reason; removing one should be probed first.
+
+For the rationale, the live-probed before/after, the gotchas (manifest id
+vs directory name), and the image-bump checklist, see
+``docs/openclaw-plugin-allowlist.md``.
 """
 
 from __future__ import annotations
