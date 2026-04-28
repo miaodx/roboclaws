@@ -30,6 +30,7 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::run photo` |
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
+| Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just harness::run <task>` (see [`harness/README.md`](harness/README.md)) |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
 
