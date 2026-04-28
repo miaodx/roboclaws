@@ -855,6 +855,7 @@ class RoboclawsMCPServer:
 
         with self._controller_lock:
             objects = self.engine.get_all_objects(self.agent_id)
+            agent_state = self.engine.get_agent_state(self.agent_id)
         target = next((o for o in objects if o.get("objectId") == object_id), None)
         if target is None:
             response = {
@@ -868,7 +869,6 @@ class RoboclawsMCPServer:
         center = bbox.get("center") or target.get("position") or {}
         cx = center.get("x")
         cz = center.get("z")
-        cy = center.get("y", 0.9)
         if cx is None or cz is None:
             response = {
                 "result": "error",
@@ -876,6 +876,12 @@ class RoboclawsMCPServer:
             }
             self._write_tool_response("goto", response)
             return response
+
+        # Agent's standing y — NEVER use the target's y. The target's bbox
+        # center is at ~chair-seat height (~0.5m); teleporting the agent
+        # there clips its capsule into the floor and AI2-THOR rejects with
+        # "Collided with: Floor/Patio". Run 004 lost 10 gotos to this bug.
+        agent_y = agent_state.position.get("y", 0.9)
 
         with self._controller_lock:
             reachable_grid = self.engine.get_reachable_positions()
@@ -929,7 +935,7 @@ class RoboclawsMCPServer:
             state = self.engine.step(
                 self.agent_id,
                 "Teleport",
-                position={"x": wx, "y": cy, "z": wz},
+                position={"x": wx, "y": agent_y, "z": wz},
                 rotation={"x": 0.0, "y": yaw_deg, "z": 0.0},
                 horizon=0.0,
             )

@@ -44,7 +44,10 @@ class FakeEngine:
         self._chase = _frame(90)
         self.calls_step: list[tuple[int, str]] = []
         self.chase_updates = 0
-        self._position = {"x": 1.0, "y": 0.0, "z": -2.0}
+        # y=0.9 matches a typical AI2-THOR standing agent. goto must teleport
+        # using the AGENT's y, not the target's bbox-center y; the
+        # `test_goto_*` tests assert that.
+        self._position = {"x": 1.0, "y": 0.9, "z": -2.0}
         self._rotation = {"x": 0.0, "y": 90.0, "z": 0.0}
         self._last_action_success = True
         self._last_action_error = ""
@@ -1074,14 +1077,14 @@ def test_goto_picks_reachable_cell_at_target_distance(
     # Cell (1.5, -1.75) → distance to (1.5, 0) is 1.75. Cell (1.5, -2) → 2.0.
     # Cell (1, -2) → ~2.06. (1.25, -2) → ~2.01. So nearest-to-1.0 is (1.5, -1.75).
     pos = response["agent_position"]
-    assert pos == {"x": 1.5, "y": 0.5, "z": -1.75}
+    assert pos == {"x": 1.5, "y": 0.9, "z": -1.75}
     assert response["actual_distance"] == 1.75
     # Target is at +Z relative to chosen cell → yaw=0 (facing +Z).
     assert response["yaw_deg"] == 0.0
     # Engine recorded a Teleport call with the chosen cell.
     teleport = engine.last_teleport
     assert teleport is not None
-    assert teleport["position"] == {"x": 1.5, "y": 0.5, "z": -1.75}
+    assert teleport["position"] == {"x": 1.5, "y": 0.9, "z": -1.75}
     assert teleport["rotation"] == {"x": 0.0, "y": 0.0, "z": 0.0}
 
 
