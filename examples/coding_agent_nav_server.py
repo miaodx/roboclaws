@@ -22,7 +22,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
 
 log = logging.getLogger("coding-agent-nav-server")
 _DEFAULT_HOST = "127.0.0.1"

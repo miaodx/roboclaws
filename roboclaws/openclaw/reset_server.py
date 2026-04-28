@@ -29,7 +29,7 @@ from urllib.parse import urlparse
 _html_escape = _html.escape
 
 if TYPE_CHECKING:
-    from roboclaws.openclaw.mcp_server import RoboclawsMCPServer
+    from roboclaws.mcp.server import RoboclawsMCPServer
 
 
 _DEFAULT_HOST = "127.0.0.1"

@@ -50,9 +50,9 @@ import tyro
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
-from roboclaws.openclaw.mcp_server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
+from roboclaws.mcp.text_bridge import observe_runtime_config
 from roboclaws.openclaw.reset_server import ResetServer
-from roboclaws.openclaw.vision_bridge import observe_runtime_config
 
 log = logging.getLogger("openclaw-interactive")
 _DEFAULT_GATEWAY_CONTAINER = "openclaw-gateway"

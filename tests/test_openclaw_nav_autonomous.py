@@ -30,7 +30,7 @@ def _make_fake_mcp_server(snapshot_metrics: dict | None = None) -> MagicMock:
     """Build a MagicMock shaped like a RoboclawsMCPServer.
 
     Covers the five methods + attributes the example relies on
-    (see roboclaws/openclaw/mcp_server.py public surface). `done_event`
+    (see roboclaws/mcp/server.py public surface). `done_event`
     is a real threading.Event so tests can set() it if needed.
     """
     fake = MagicMock(

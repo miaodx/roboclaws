@@ -41,7 +41,7 @@ class _FakeEngine:
 
 def _make_stub_mcp(snapshots_dir: Path) -> SimpleNamespace:
     """Build the minimum MCP server surface that ``reset_world`` reads."""
-    from roboclaws.openclaw.mcp_server import RoboclawsMCPServer
+    from roboclaws.mcp.server import RoboclawsMCPServer
 
     # Drive the real bound method so we exercise the lock + trace path,
     # but on a hand-rolled object so we don't have to spin AI2-THOR.

@@ -84,7 +84,7 @@ from roboclaws.core.views import (
     pos_to_world_idx,
     render_navigation_prompt_bundle,
 )
-from roboclaws.openclaw.vision_bridge import (
+from roboclaws.mcp.text_bridge import (
     VisionBridge,
     normalize_observe_mode,
     resolve_bridge_model,
