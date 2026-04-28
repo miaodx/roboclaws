@@ -334,6 +334,44 @@ class RoboclawsMCPServer:
             return server._do_observe(label=label)
 
         @self._mcp.tool()
+        def observe_archived(label: str) -> dict:
+            """Capture FPV/chase/map and persist labeled PNGs WITHOUT inlining images.
+
+            Returns state + snapshot file paths only — keeps main-session
+            context lean when capturing batch evidence (e.g. photographing N
+            targets) and you don't need to look at the pixels this turn.
+
+            For navigation decisions still use `observe()` which returns the
+            same bundle inline — you cannot judge framing or distance from a
+            file-path summary.
+
+            `label` is REQUIRED (non-empty). An empty label returns an
+            ``{"error": ...}`` result rather than silently behaving like
+            `observe()`. The server's `snapshots_dir` must also be configured
+            (it always is for direct coding-agent and Gateway paths).
+
+            Use cases:
+              * Photograph every chair in the room — `observe()` once to
+                inventory + plan, then `observe_archived(label="chair-1")`,
+                `observe_archived(label="chair-2")`, ..., finally `done()`.
+              * Capture a baseline snapshot for later comparison without
+                re-burning context with images.
+
+            NOT for:
+              * Choosing the next move — you need pixels.
+              * Health-checking the MCP — use `observe(label="preflight")`.
+
+            Difference vs `observe(label="x")`: both write the same PNGs to
+            the same location and both reset moves_since_observe. The only
+            difference is whether the response carries the inline images
+            (~3 image-token blocks per call, persistent for the rest of the
+            session) or just a paths dict (~150 bytes of text). When you
+            need to revisit a frame later, read the snapshot path with
+            your filesystem tool instead of re-issuing `observe()`.
+            """
+            return server._do_observe_archived(label)
+
+        @self._mcp.tool()
         def move(direction: str, reason: str = "", steps: int = 1) -> dict:
             """Step the agent one or more grid cells / rotations in `direction`.
 
@@ -475,6 +513,119 @@ class RoboclawsMCPServer:
         if snapshot_paths is None:
             self._write_latest_snapshots(prompt_bundle)
         return result
+
+    def _do_observe_archived(self, label: str) -> dict[str, Any]:
+        """Implementation of the observe_archived tool. Tests call this directly.
+
+        Captures the same bundle as `_do_observe` and writes labeled PNGs to
+        `snapshots_dir`, but returns a plain dict containing only state +
+        host-side snapshot paths — no MCPImage blocks, no base64. The
+        agent reads pixels later with its filesystem tool when needed.
+        """
+        request_payload = {"label": label}
+        self._write_tool_request("observe_archived", request_payload)
+
+        if not label:
+            response = {
+                "error": (
+                    "observe_archived requires a non-empty label; "
+                    "use observe() if you want to inline-view the bundle"
+                ),
+                "label": label,
+            }
+            self._write_tool_response("observe_archived", response)
+            return response
+
+        if self.snapshots_dir is None:
+            response = {
+                "error": (
+                    "snapshots_dir is not configured on this MCP server; "
+                    "observe_archived has nothing to write"
+                ),
+                "label": label,
+            }
+            self._write_tool_response("observe_archived", response)
+            return response
+
+        with self._controller_lock:
+            agent_states = list(self.engine.get_all_agent_states())
+            state = agent_states[self.agent_id]
+            prompt_bundle = render_navigation_prompt_bundle(
+                engine=self.engine,
+                context=self._view_context,
+                agent_states=agent_states,
+                current_agent=self.agent_id,
+            )
+            self._observed_once = True
+            self._moves_since_observe = 0
+
+        human_message = self._pop_human_message()
+
+        # Reuse existing archive helper (handles label sanitization +
+        # counter + atomic latest.*.png refresh). Guarded above, so
+        # snapshot_paths is non-None here.
+        snapshot_paths_container = self._maybe_write_labeled_snapshot(label, prompt_bundle)
+        assert snapshot_paths_container is not None
+
+        # Translate container-side paths (returned by the helper for
+        # Control UI MEDIA: directives) to real host paths the agent can
+        # read with its filesystem tool. The PNGs already exist at the
+        # real host path under `self.snapshots_dir` — we just need to
+        # report that path instead of the bind-mount target.
+        snapshot_paths_host: dict[str, str] = {}
+        for view_name, container_path in snapshot_paths_container.items():
+            filename = container_path.rsplit("/", 1)[-1]
+            snapshot_paths_host[view_name] = str((self.snapshots_dir / filename).resolve())
+
+        # Trace event for replay parity. seen_by_agent=False because the
+        # response carries no inline images — useful for replay tools to
+        # distinguish "captured + shown" from "captured + archived only".
+        frame_payload = self._frame_capture_payload(
+            state=state,
+            prompt_bundle=prompt_bundle,
+            seen_by_agent=False,
+            human_message=human_message,
+            observe_delivery="archived",
+        )
+        self._write_trace(tool="observe_archived", event="frame_capture", **frame_payload)
+
+        # Match observe's state richness so an agent reading both responses
+        # can pick fields uniformly. Omit observe_delivery / bridge_model —
+        # they describe how images were rendered, and there are no images
+        # in this response.
+        full_state: dict[str, Any] = {
+            "agent_id": state.agent_id,
+            "position": state.position,
+            "rotation": state.rotation,
+            "camera_horizon": state.camera_horizon,
+            "last_action_success": state.last_action_success,
+            "scene": getattr(self.engine, "scene_name", None),
+            "step": self._total_moves,
+            "budget_remaining": None,
+            "human_message": human_message,
+            **self._view_metadata(list(prompt_bundle.image_labels)),
+        }
+        visible_objects = self._visible_object_summaries(state)
+        if visible_objects:
+            full_state["visible_objects"] = visible_objects
+
+        response: dict[str, Any] = {
+            "state": full_state,
+            "snapshot_paths": snapshot_paths_host,
+            "label": label,
+        }
+
+        self._write_tool_response(
+            "observe_archived",
+            {
+                "label": label,
+                "snapshot_paths": snapshot_paths_host,
+                "human_message": human_message,
+                "state": self._state_payload(state),
+                **self._view_metadata(list(prompt_bundle.image_labels)),
+            },
+        )
+        return response
 
     def _do_move(self, direction: str, reason: str = "", steps: int = 1) -> dict[str, Any]:
         steps = max(1, min(steps, 5))
