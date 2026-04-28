@@ -90,7 +90,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     }
     trap cleanup EXIT INT TERM
 
-    mcp_url="$(just code::mcp_up scene="{{scene}}" host="{{host}}" port="{{port}}")"
+    mcp_url="$(just code::mcp_up "{{scene}}" "{{host}}" "{{port}}")"
     codex mcp remove roboclaws || true
     codex mcp add roboclaws --url "$mcp_url"
     claude mcp remove roboclaws || true
@@ -118,7 +118,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     }
     trap cleanup EXIT INT TERM
 
-    mcp_url="$(just code::mcp_up scene="{{scene}}" host="{{host}}" port="{{port}}")"
+    mcp_url="$(just code::mcp_up "{{scene}}" "{{host}}" "{{port}}")"
     codex mcp remove roboclaws || true
     codex mcp add roboclaws --url "$mcp_url"
     echo "==> launching Codex with MCP registration" >&2
