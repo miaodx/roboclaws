@@ -47,15 +47,15 @@ echo "==> tmux session: $SESSION"
 echo "==> attach with: tmux attach -t $SESSION"
 echo "==> artifacts:   $RUN_DIR"
 
-# Pre-truncate the MCP log so our tool-call count starts at zero.
+# Pre-truncate the MCP log so our readiness check starts clean. We don't
+# parse it for metrics any more — trace.jsonl in the run output dir is the
+# authoritative source for tool calls, blocked moves, and done detection.
 mkdir -p "$(dirname "$MCP_LOG")"
 : > "$MCP_LOG"
 
-# Start tmux. Pipe the pane to a file so we keep the transcript even if the
-# session is killed before we capture it.
-TRANSCRIPT="$RUN_DIR/transcript.txt"
+# Start tmux. Don't pipe-pane — Claude Code's TUI emits unusable escape-code
+# soup and we have a clean signal source (trace.jsonl).
 tmux new-session -d -s "$SESSION" -x 200 -y 50 "cd $REPO && just code::cc"
-tmux pipe-pane -t "$SESSION" "cat > $TRANSCRIPT"
 
 # Wait for `claude` to be ready. The clearest signal is the MCP log printing
 # "Application startup complete" + the kickoff banner being emitted.
@@ -80,19 +80,42 @@ START_TS=$(date +%s)
 DEADLINE=$((START_TS + TIME_CAP))
 LAST_REPORT=$START_TS
 
+# Find the run output dir (trace.jsonl + snapshots) — created by the server
+# at startup, named output/runs/YYYYMMDDHHMM. It may not exist yet on the
+# first poll because the server is still booting; we re-resolve each tick.
+resolve_runs_dir() {
+  ls -td "$REPO"/output/runs/* 2>/dev/null | head -1 || true
+}
+
+trace_count_request_tool() {
+  local path="$1" tool="$2"
+  [[ -f "$path" ]] || { echo 0; return; }
+  grep -c "\"tool\": \"$tool\", \"event\": \"request\"" "$path" 2>/dev/null || echo 0
+}
+
+trace_count_request_any() {
+  local path="$1"
+  [[ -f "$path" ]] || { echo 0; return; }
+  grep -c '"event": "request"' "$path" 2>/dev/null || echo 0
+}
+
+trace_count_blocked() {
+  local path="$1"
+  [[ -f "$path" ]] || { echo 0; return; }
+  grep -c '"result": "blocked"' "$path" 2>/dev/null || echo 0
+}
+
 echo "==> monitoring (cap ${TIME_CAP}s)..."
 while true; do
   NOW=$(date +%s)
   ELAPSED=$((NOW - START_TS))
 
-  TOOL_CALLS=$(grep -c "Processing request of type CallToolRequest" "$MCP_LOG" 2>/dev/null || echo 0)
+  RUNS_DIR=$(resolve_runs_dir)
+  TRACE="$RUNS_DIR/trace.jsonl"
+  TOOL_CALLS=$(trace_count_request_any "$TRACE")
+  DONE_CALLS=$(trace_count_request_tool "$TRACE" done)
 
-  # Done if the agent called roboclaws__done. The MCP server prints a
-  # session-end shutdown notice; simplest signal is the agent's own banner
-  # "exits when the agent calls roboclaws__done" → log shows the tool body.
-  # Detect via the snapshot dir touch + a "done" marker we grep for in the log.
-  if grep -qE '"name":\s*"roboclaws__done"' "$MCP_LOG" 2>/dev/null \
-     || grep -q "Run completed" "$MCP_LOG" 2>/dev/null; then
+  if (( DONE_CALLS > 0 )); then
     echo "==> agent called done at t=${ELAPSED}s, tool_calls=$TOOL_CALLS"
     OUTCOME=done
     break
@@ -113,10 +136,15 @@ while true; do
   sleep 3
 done
 
-# Final metrics
-TOOL_CALLS=$(grep -c "Processing request of type CallToolRequest" "$MCP_LOG" 2>/dev/null || echo 0)
-BLOCKED=$(grep -c '"result": "blocked"' "$MCP_LOG" 2>/dev/null || echo 0)
-RUNS_DIR=$(ls -td "$REPO"/output/runs/* 2>/dev/null | head -1 || true)
+# Final metrics — read everything from trace.jsonl which is authoritative.
+RUNS_DIR=$(resolve_runs_dir)
+TRACE="$RUNS_DIR/trace.jsonl"
+TOOL_CALLS=$(trace_count_request_any "$TRACE")
+BLOCKED=$(trace_count_blocked "$TRACE")
+N_OBSERVE=$(trace_count_request_tool "$TRACE" observe)
+N_OBSERVE_ARCHIVED=$(trace_count_request_tool "$TRACE" observe_archived)
+N_MOVE=$(trace_count_request_tool "$TRACE" move)
+N_SCENE_OBJECTS=$(trace_count_request_tool "$TRACE" scene_objects)
 SNAPSHOT_COUNT=0
 if [[ -n "$RUNS_DIR" && -d "$RUNS_DIR/snapshots/agent-0" ]]; then
   SNAPSHOT_COUNT=$(find "$RUNS_DIR/snapshots/agent-0" -name '*.fpv.png' | wc -l)
@@ -129,13 +157,20 @@ run_id: $RUN_ID
 outcome: $OUTCOME
 elapsed_seconds: $ELAPSED
 tool_calls: $TOOL_CALLS
+  observe: $N_OBSERVE
+  observe_archived: $N_OBSERVE_ARCHIVED
+  move: $N_MOVE
+  scene_objects: $N_SCENE_OBJECTS
 blocked_moves: $BLOCKED
 fpv_snapshots: $SNAPSHOT_COUNT
-snapshot_dir: $RUNS_DIR
+trace: $TRACE
+snapshot_dir: $RUNS_DIR/snapshots/agent-0
 EOF
 
-# Copy MCP log and tear down.
+# Copy server log + trace into the harness run dir for archival.
 cp "$MCP_LOG" "$RUN_DIR/server.log" 2>/dev/null || true
+[[ -f "$TRACE" ]] && cp "$TRACE" "$RUN_DIR/trace.jsonl" 2>/dev/null || true
+
 echo "==> tearing down tmux session (will trigger mcp::down via cc trap)"
 tmux send-keys -t "$SESSION" 'q' 2>/dev/null || true
 sleep 2
@@ -143,4 +178,3 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 
 echo "==> metrics:"
 cat "$RUN_DIR/metrics.txt"
-echo "==> done. transcript: $TRANSCRIPT"
