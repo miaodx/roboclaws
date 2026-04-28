@@ -14,7 +14,7 @@ which every ``roboclaws__observe`` call rewrites atomically (labeled or not).
 Usage:
 
     python scripts/view-snapshots.py           # auto-pick newest run
-    python scripts/view-snapshots.py --run-dir output/openclaw-interactive/<ts>
+    python scripts/view-snapshots.py --run-dir output/runs/<ts>
     python scripts/view-snapshots.py --port 8787
 """
 
@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 _DEFAULT_PORT = 8787
 _POLL_MS = 500
 _ROOT = Path(__file__).resolve().parent.parent
-_DEFAULT_RUNS_DIR = _ROOT / "output" / "openclaw-interactive"
+_DEFAULT_RUNS_DIR = _ROOT / "output" / "runs"
 
 _HTML = """<!doctype html>
 <html lang="en">

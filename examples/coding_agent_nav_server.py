@@ -44,7 +44,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def _default_output_dir() -> Path:
     stamp = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).strftime("%Y%m%d%H%M")
-    return Path("output") / "coding-agent-nav" / stamp
+    return Path("output") / "runs" / stamp
 
 
 def _snapshots_dir(output_dir: Path, agent_id: int = _AGENT_ID) -> Path:
