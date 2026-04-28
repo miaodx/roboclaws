@@ -25,7 +25,7 @@ run game="territory" model="kimi-coding" agents="2" steps="20" souls="" output_d
         fi
         echo "==> Running territory game (model {{model}}, direct VLM, aggressive vs defensive) …"
         AGENT_SOULS="$souls" PYTHONUNBUFFERED=1 \
-          xvfb-run -a python -u examples/territory_game.py \
+          xvfb-run -a .venv/bin/python -u examples/territory_game.py \
           --backend vlm --model "{{model}}" --agents "{{agents}}" --steps "{{steps}}" \
           --output-dir "{{output_dir}}"
         ;;
@@ -36,7 +36,7 @@ run game="territory" model="kimi-coding" agents="2" steps="20" souls="" output_d
         fi
         echo "==> Running coverage game (model {{model}}, direct VLM, cooperative) …"
         AGENT_SOULS="$souls" PYTHONUNBUFFERED=1 \
-          xvfb-run -a python -u examples/coverage_game.py \
+          xvfb-run -a .venv/bin/python -u examples/coverage_game.py \
           --backend vlm --model "{{model}}" --agents "{{agents}}" --steps "{{steps}}" \
           --output-dir "{{output_dir}}"
         ;;

@@ -75,7 +75,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
     case "{{game}}" in
       nav)
         echo "==> Running navigation demo …"
-        OPENCLAW_GATEWAY_TOKEN="$TOKEN" xvfb-run -a python examples/openclaw_demo.py \
+        OPENCLAW_GATEWAY_TOKEN="$TOKEN" xvfb-run -a .venv/bin/python examples/openclaw_demo.py \
           --agents "{{agents}}" \
           --steps "{{steps}}" \
           --output-dir "{{output_dir}}"
@@ -86,12 +86,12 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
         if [[ -n "{{agent_souls}}" ]]; then
           AGENT_SOULS="{{agent_souls}}" \
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a python examples/territory_game.py \
+            xvfb-run -a .venv/bin/python examples/territory_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         else
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a python examples/territory_game.py \
+            xvfb-run -a .venv/bin/python examples/territory_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         fi
@@ -102,12 +102,12 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
         if [[ -n "{{agent_souls}}" ]]; then
           AGENT_SOULS="{{agent_souls}}" \
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a python examples/coverage_game.py \
+            xvfb-run -a .venv/bin/python examples/coverage_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         else
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a python examples/coverage_game.py \
+            xvfb-run -a .venv/bin/python examples/coverage_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         fi
@@ -116,7 +116,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
       photo)
         echo "==> Photo-task smoke (single agent, {{photo_scene}}, wall budget {{photo_wall_budget}}s)"
         {{strip_ros_env}} PROVIDER="{{provider}}" PYTHONUNBUFFERED=1 \
-          xvfb-run -a python examples/openclaw_photo_task.py \
+          xvfb-run -a .venv/bin/python examples/openclaw_photo_task.py \
           --output-dir "{{photo_output_dir}}" \
           --max-moves "{{photo_max_moves}}" --wall-budget "{{photo_wall_budget}}"
         ;;
