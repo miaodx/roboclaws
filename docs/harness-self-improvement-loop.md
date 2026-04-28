@@ -66,9 +66,15 @@ Each component owns one job:
   `Application startup complete`, sends the kickoff message via
   `tmux send-keys`, polls `output/runs/<ts>/trace.jsonl` for tool counts and
   the `done` request, and tears down at completion or cap.
-- **`PLAN.md`** is the only durable artifact. Per-run logs and snapshots are
-  gitignored — they're useful for the run that produced them and for one
-  follow-up debug session, but they don't belong in version control.
+- **`PLAN.md`** is the stable shell — how-to, template, active
+  carry-forward queue, and a run-index table. It stops growing because
+  the per-run details live in their own files under `runs-log/`.
+- **`runs-log/<NNN>-<task-slug>.md`** is the curated per-run record:
+  metrics, friction log, root cause, change applied, hypothesis for next
+  run, carry-forward. One iteration = one file = one PR-able unit.
+- **`runs/<NNN>/`** is raw artifacts — trace.jsonl, server.log, metrics.txt.
+  Gitignored. Useful for the run that produced them and one follow-up
+  debug session; safe to delete any time.
 
 ## Signal sources
 
@@ -110,11 +116,16 @@ variable separate.
 
 ### Why an append-only logbook
 
-Editing prior `## Run NNN` entries breaks the chain of reasoning that
-justified subsequent changes. If something in Run 003 turns out to have been
-wrong, the right move is a new Run 010 that says "Run 003's hypothesis was
-wrong, here's the corrected analysis", not a silent edit. Git history is
-the secondary defense; the convention is the primary one.
+Editing prior run files breaks the chain of reasoning that justified
+subsequent changes. If something in Run 003 turns out to have been wrong,
+the right move is a new Run 010 that says "Run 003's hypothesis was wrong,
+here's the corrected analysis", not a silent edit. Git history is the
+secondary defense; the convention is the primary one.
+
+The Layout-A split (one file per run under `runs-log/`) makes this
+mechanical: each run is its own commit, atomic to revert. PLAN.md itself
+is mutable — its **Active carry-forward** queue and **Run index** are
+expected to evolve — but the per-run files are write-once.
 
 ### Why aborts are first-class
 

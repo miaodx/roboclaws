@@ -39,23 +39,23 @@ list-tasks:
       printf "  %-30s %s\n" "$base" "${first_line:0:80}"
     done
 
-# Show the cross-run summary table from PLAN.md, if present.
-# Falls back to listing run_ids when no table is found.
+# Show the run index table from PLAN.md plus per-run files in runs-log/.
+# The PLAN.md index is the canonical "H: predicted | A: actual" view;
+# runs-log/ files carry the full per-run analysis.
 history:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "## Logged runs (harness/PLAN.md):"
-    echo
-    grep -E '^## Run [0-9]+' harness/PLAN.md 2>/dev/null || echo "  (none yet)"
-    # If a markdown table exists in any run entry, print the most recent one.
-    # If a markdown table exists in any run entry, print the most recent one.
-    last_header=$(grep -nE '^\| Run ' harness/PLAN.md 2>/dev/null | tail -1 | cut -d: -f1)
+    last_header=$(grep -nE '^\| Run ' harness/PLAN.md 2>/dev/null | head -1 | cut -d: -f1)
     if [[ -n "$last_header" ]]; then
+      echo "## Run index (from harness/PLAN.md):"
       echo
-      echo "## Most recent cross-run summary table:"
-      # Print from the header through the contiguous table block.
       tail -n +"$last_header" harness/PLAN.md | awk '
         /^\|/ { print; next }
         { exit }
       '
+    fi
+    if ls harness/runs-log/*.md >/dev/null 2>&1; then
+      echo
+      echo "## Per-run files (harness/runs-log/):"
+      ls -1 harness/runs-log/*.md | sed 's|^|  |'
     fi

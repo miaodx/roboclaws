@@ -1,4 +1,5 @@
-# Per-run artifacts: transcripts, MCP logs, metrics. Run history lives in
-# PLAN.md as curated entries, not raw logs.
+# Per-run RAW artifacts (transcripts, MCP logs, metrics, embedded JPEG
+# frames). Run history lives in harness/runs-log/<NNN>-<task>.md as curated
+# markdown — those ARE committed. Raw artifacts may be deleted any time.
 runs/
 *-launch.log
