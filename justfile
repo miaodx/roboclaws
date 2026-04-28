@@ -18,6 +18,7 @@ mod appliance 'just/appliance.just'
 mod dev       'just/dev.just'
 mod mcp       'just/mcp.just'
 mod code      'just/code.just'
+mod harness   'just/harness.just'
 
 # Default: show the grouped recipe list.
 default:
