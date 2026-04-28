@@ -47,7 +47,7 @@ not here.
 
 - **Benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding` tool profile**
   (flagged 2026-04-27 while fixing the OpenClaw 2026.4.25-beta.11 MCP
-  regression — see `docs/openclaw-tool-profiles.md` for the full diff and
+  regression — see `docs/openclw/openclaw-tool-profiles.md` for the full diff and
   why we picked the splice over the profile switch). The new image gave
   us a fork in the road: keep `minimal` and splice in `bundle-mcp` via
   `alsoAllow` (current choice — preserves the locked-down core surface),
@@ -74,7 +74,7 @@ not here.
        (model trying to call a `coding`-only tool inappropriately).
     5. Decide whether to flip the default at
        `scripts/openclaw-bootstrap.sh:153`. Update
-       `docs/openclaw-tool-profiles.md` with the verdict either way.
+       `docs/openclw/openclaw-tool-profiles.md` with the verdict either way.
 
 - **OpenClaw cold-start: close the remaining ~89s gap** (flagged 2026-04-28
   after shipping commit `bd5037b` which cut 348s→136s). Per-phase trace in

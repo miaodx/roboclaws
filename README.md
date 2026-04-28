@@ -161,9 +161,9 @@ python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timesta
 - [Architecture](ARCHITECTURE.md) — code map, four operating modes, MCP contract
 - [Architecture Decision Records](docs/adr/) — atomic decisions (platform choice, deferred integrations)
 - [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md)
-- [OpenClaw demo guide](docs/openclaw-demo.md)
-- [OpenClaw local guide](docs/openclaw-local.md)
-- [OpenClaw Gateway internals](docs/openclaw-gateway-internals.md)
+- [OpenClaw demo guide](docs/openclw/openclaw-demo.md)
+- [OpenClaw local guide](docs/openclw/openclaw-local.md)
+- [OpenClaw Gateway internals](docs/openclw/openclaw-gateway-internals.md)
 - [Model matrix](docs/model-matrix.md)
 - [Railway deploy runbook](docs/railway-deploy.md)
 - [Railway appliance plan](docs/railway-openclaw-appliance-plan.md)

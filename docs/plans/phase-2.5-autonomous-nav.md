@@ -213,7 +213,7 @@ either answer invalidates the pull-model shape, escalate before writing code.
      upstream response yet?
    This de-risks T52's blocking-call design.
 2. **Tool-format spike.** Read
-   `docs/openclaw-gateway-internals.md` first. Then
+   `docs/openclw/openclaw-gateway-internals.md` first. Then
    `docker exec openclaw-gateway sh -c 'cat /app/dist/skill-*.js | head -300'`
    to confirm how skills declare tools. Answer:
    - Is it free-text in SKILL.md, a YAML block, MCP manifest, or
@@ -444,7 +444,7 @@ separate things through. Enumerated so each change is reviewable:
    Error & Rescue.
 3. Existing `TIMEOUT_SECONDS` is already per-call; T53 passes
    `wall_budget + 60` through.
-4. Update `docs/openclaw-local.md` with the new env + the --add-host
+4. Update `docs/openclw/openclaw-local.md` with the new env + the --add-host
    rationale.
 
 Tests: not directly testable in cloud CI (depends on docker). A
@@ -582,7 +582,7 @@ AI2-THOR or real Gateway.
 
 | Failure | Rescue |
 |---|---|
-| Gateway container can't reach `host.docker.internal:18788` | T55 step 1 is the gate. Default setup uses `--add-host=host.docker.internal:host-gateway` (Docker 20.10+, cross-platform). If that doesn't resolve on user's machine, fall back to `--network host` (Linux-only) — documented in `docs/openclaw-local.md`. |
+| Gateway container can't reach `host.docker.internal:18788` | T55 step 1 is the gate. Default setup uses `--add-host=host.docker.internal:host-gateway` (Docker 20.10+, cross-platform). If that doesn't resolve on user's machine, fall back to `--network host` (Linux-only) — documented in `docs/openclw/openclaw-local.md`. |
 | OpenClaw skill's tool declaration format unknown | T49's tool-format spike resolves this before T51 writes anything. If T49 can't determine the format (e.g., undocumented + unreadable in /app/dist), STOP and escalate. Do NOT guess. |
 | Kickoff call exceeds `wall_budget_s + 60` | `httpx.ReadTimeout` → `start_run` returns `terminated_by="wall_clock"`, partial results. Server stays up. |
 | Agent never calls `done`, never calls `move` either (stuck in reasoning) | Wall-clock cap fires. No rescue — this is a quality regression, not a crash. Investigate via trace: if `tool_calls == 0`, the skill declarations didn't land. |

@@ -88,7 +88,7 @@
 # Gateway's agent framework). Kimi's coding-tier provider via the
 # Gateway plugin accepts multi-image too. Other models we probed hit
 # one of: 1-image cap, no tool-use support on :free, or server-side
-# errors. History lives in docs/openclaw-local.md if you want to
+# errors. History lives in docs/openclw/openclaw-local.md if you want to
 # re-evaluate after NIM / OpenRouter update their free-tier lineup.
 #
 # Exit codes:
@@ -601,7 +601,7 @@ agent_entries = [
         # `messaging` profiles get it for free — `minimal` no longer does.
         # Without this splice, the agent ends up with only `session_status`
         # and every roboclaws__* tool returns "Tool not found".
-        # See docs/openclaw-tool-profiles.md for the full image diff and
+        # See docs/openclw/openclaw-tool-profiles.md for the full image diff and
         # re-validation steps when bumping the gateway image.
         "tools": {"profile": tool_profile, "alsoAllow": ["bundle-mcp"]},
     }

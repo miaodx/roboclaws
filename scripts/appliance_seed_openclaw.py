@@ -307,7 +307,7 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
                     # up with only `session_status` and every roboclaws__* tool
                     # disappears from the tool list — the model then sees an
                     # empty toolset and hallucinates "I have no tools".
-                    # See docs/openclaw-tool-profiles.md for the image diff.
+                    # See docs/openclw/openclaw-tool-profiles.md for the image diff.
                     "tools": {
                         "profile": runtime.tool_profile,
                         "alsoAllow": ["bundle-mcp"],

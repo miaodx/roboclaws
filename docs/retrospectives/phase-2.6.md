@@ -48,7 +48,7 @@ from STATE.md performance metrics.
 | 02.6-04 (example-rewire-to-mcp) | `examples/openclaw_nav_autonomous.py` rewired to in-process MCP server; kickoff prompt 38 → 5 non-empty lines; stdin-interjection queue preserved | ~7 min |
 | 02.6-05 (delete-sim-server) | `git rm roboclaws/openclaw/sim_server.py tests/test_sim_server.py`; net -635 LOC; 475 tests still green | ~7 min |
 | 02.6-06 (live-probe-gate) | Six live probes against real Gateway + real Kimi + real AI2-THOR; 5 PASS + 1 threshold-revised; evidence in `02.6-LOCAL-PROBE-RESULTS.md` | ~32 min |
-| 02.6-07 (docs-update) | `openclaw-local.md` + `openclaw-gateway-internals.md` aligned to MCP-era; this retro | — |
+| 02.6-07 (docs-update) | `openclw/openclaw-local.md` + `openclw/openclaw-gateway-internals.md` aligned to MCP-era; this retro | — |
 
 Plan-level SUMMARYs in `.planning/phases/02.6-openclaw-mcp-tools-integration/`
 contain the full task-level commit hashes and decision logs.
@@ -172,8 +172,8 @@ limiting, image-cache tool) is deliberately deferred — see the
 - Spike findings:
   [`.planning/phases/02.6-.../02.6-SPIKE-FINDINGS.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md)
 - Operator recipe:
-  [`docs/openclaw-local.md` § MCP tool surface (Phase 2.6)](../openclaw-local.md#mcp-tool-surface-phase-26)
+  [`docs/openclw/openclaw-local.md` § MCP tool surface (Phase 2.6)](../openclw/openclaw-local.md#mcp-tool-surface-phase-26)
 - Gateway internals (config gotchas):
-  [`docs/openclaw-gateway-internals.md` § MCP config in openclaw.json](../openclaw-gateway-internals.md#mcp-config-in-openclawjson)
+  [`docs/openclw/openclaw-gateway-internals.md` § MCP config in openclaw.json](../openclw/openclaw-gateway-internals.md#mcp-config-in-openclawjson)
 - Phase 2.5 postmortem (why 2.6 exists):
   [`openclaw-kimi-provider-debug-2026-04-21.md`](openclaw-kimi-provider-debug-2026-04-21.md)

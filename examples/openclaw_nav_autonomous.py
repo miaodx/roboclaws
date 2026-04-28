@@ -266,7 +266,7 @@ def run_autonomous_navigation(
             # `host.docker.internal` → host-gateway on Linux. That's false on
             # 6.x kernels with Docker 29.x — the bridge routes to 172.17.0.1,
             # which cannot reach host loopback. `0.0.0.0` matches the spike +
-            # Phase 2.5 retros + docs/openclaw-local.md. LAN-exposure risk is
+            # Phase 2.5 retros + docs/openclw/openclaw-local.md. LAN-exposure risk is
             # accepted: single-operator local-dev on a trusted workstation.
             host="0.0.0.0",
             port=18788,
