@@ -65,6 +65,16 @@ def test_seed_writes_mimo_openclaw_config_and_snapshot_symlink(tmp_path: Path) -
     from openclaw_plugin_allowlist import ALLOWED as expected_allow
 
     assert config["plugins"]["allow"] == list(expected_allow)
+    # acpx probeAgent must point at one of OUR agents — pinning the upstream
+    # default ``codex`` (which isn't installed) was suspected of stalling
+    # post-pricing-fetch sidecar startup by ~90s. The first agent id in the
+    # roster is the canonical probe target.
+    assert config["plugins"]["entries"]["acpx"]["enabled"] is True, (
+        "plugins.entries.acpx must set enabled=true or the entries-system "
+        "ignores the config block (warning: 'plugin disabled but config is "
+        "present')"
+    )
+    assert config["plugins"]["entries"]["acpx"]["config"]["probeAgent"] == "agent-0"
     assert config["agents"]["defaults"]["model"]["primary"] == "mimo_openai/mimo-v2-omni"
     assert config["models"]["mode"] == "replace"
     assert "mimo_openai" in config["models"]["providers"]

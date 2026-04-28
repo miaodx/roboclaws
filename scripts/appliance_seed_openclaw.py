@@ -330,7 +330,31 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
         # per-entry justification. Adding a provider (or upgrading to a
         # gateway image whose new enabled-by-default plugin we actually
         # need) requires editing that file in lockstep.
-        "plugins": {"allow": list(OPENCLAW_PLUGIN_ALLOW)},
+        #
+        # ``entries.acpx.config.probeAgent`` pins the embedded-ACP health
+        # probe to one of OUR agents instead of the upstream default
+        # ``codex`` — which isn't installed and was suspected of stalling
+        # the post-pricing-fetch sidecar startup window (~90s of
+        # ``chat.history unavailable during gateway startup``).
+        # See acpx manifest ``probeAgent`` field for the documented
+        # rationale: "Set this explicitly so the whole embedded ACP
+        # backend does not get marked unavailable" when the default isn't
+        # authenticated.
+        "plugins": {
+            "allow": list(OPENCLAW_PLUGIN_ALLOW),
+            # ``enabled: true`` is required alongside ``config`` — without it
+            # the entries-system marks the plugin as
+            # ``bundled (disabled by default)`` and silently ignores the
+            # config block. Probed live 2026-04-28: setting only
+            # ``config.probeAgent`` produced ``plugin disabled but config is
+            # present`` and the embedded ACP backend stayed unconfigured.
+            "entries": {
+                "acpx": {
+                    "enabled": True,
+                    "config": {"probeAgent": runtime.agent_ids[0]},
+                },
+            },
+        },
     }
 
     if provider.provider_entry is not None:
