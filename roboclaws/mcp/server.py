@@ -62,6 +62,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import math
 import os
 import re
 import socket
@@ -417,6 +418,35 @@ class RoboclawsMCPServer:
                 4. ``done(reason="captured ...")``.
             """
             return server._do_scene_objects(filter_types)
+
+        @self._mcp.tool()
+        def goto(object_id: str, distance: float = 1.0, face: bool = True) -> dict:
+            """Teleport agent to a reachable cell near a target object.
+
+            Pairs with ``scene_objects`` for target-relative motion. Replaces
+            multi-step ``move``/``rotate`` chains for "go to that chair"
+            navigation. Each call is one tool invocation; previously the
+            same outcome required 5–10 grid steps with collision recovery.
+
+            Args:
+                object_id: ``objectId`` from ``scene_objects.objects[*]``.
+                  Required.
+                distance: Target standoff (meters) from the object's
+                  bbox center. Default 1.0m. The actual chosen cell is the
+                  reachable cell whose distance is closest to this value
+                  (may be more or less if no exact match exists).
+                face: If True (default), rotate the agent to point toward
+                  the object's bbox center, snapped to the nearest 90°.
+
+            Returns ``{"result": "ok"|"error", "agent_position": {x,y,z},
+            "yaw_deg": Y, "actual_distance": d, "object_id": ...}``. On
+            error: ``{"result": "error", "error": <reason>}``.
+
+            **Use after ``scene_objects``**: read the inventory once, then
+            call ``goto(object_id=...)`` per target. Verify framing with
+            one ``observe`` before capturing with ``observe_archived``.
+            """
+            return server._do_goto(object_id, distance=distance, face=face)
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
@@ -817,6 +847,112 @@ class RoboclawsMCPServer:
             "objects": summaries,
         }
         self._write_tool_response("scene_objects", response)
+        return response
+
+    def _do_goto(self, object_id: str, distance: float = 1.0, face: bool = True) -> dict[str, Any]:
+        request_payload = {"object_id": object_id, "distance": distance, "face": face}
+        self._write_tool_request("goto", request_payload)
+
+        with self._controller_lock:
+            objects = self.engine.get_all_objects(self.agent_id)
+        target = next((o for o in objects if o.get("objectId") == object_id), None)
+        if target is None:
+            response = {
+                "result": "error",
+                "error": f"objectId {object_id!r} not found in scene",
+            }
+            self._write_tool_response("goto", response)
+            return response
+
+        bbox = target.get("axisAlignedBoundingBox") or {}
+        center = bbox.get("center") or target.get("position") or {}
+        cx = center.get("x")
+        cz = center.get("z")
+        cy = center.get("y", 0.9)
+        if cx is None or cz is None:
+            response = {
+                "result": "error",
+                "error": "target has no position/bbox center",
+            }
+            self._write_tool_response("goto", response)
+            return response
+
+        with self._controller_lock:
+            reachable_grid = self.engine.get_reachable_positions()
+            grid = self.engine.grid_size
+
+        if not reachable_grid:
+            response = {"result": "error", "error": "no reachable positions"}
+            self._write_tool_response("goto", response)
+            return response
+
+        # Pick the reachable cell whose Euclidean distance to the target is
+        # closest to `distance`. Ties broken by preferring cells slightly
+        # closer than `distance` over slightly farther.
+        best_cell: tuple[float, float, float] | None = None
+        best_score = float("inf")
+        for ix, iz in reachable_grid:
+            wx = ix * grid
+            wz = iz * grid
+            d = math.hypot(wx - cx, wz - cz)
+            score = abs(d - distance)
+            # Tie-break toward closer cells (deterministic for same distance).
+            tie_breaks_closer = score == best_score and best_cell is not None and d < best_cell[2]
+            if score < best_score or tie_breaks_closer:
+                best_score = score
+                best_cell = (wx, wz, d)
+
+        if best_cell is None:
+            response = {"result": "error", "error": "no reachable cell candidate"}
+            self._write_tool_response("goto", response)
+            return response
+
+        wx, wz, actual_distance = best_cell
+
+        # Compute facing yaw. AI2-THOR convention on this codebase: yaw=0 → +Z,
+        # yaw=90 → +X. So the bearing from agent to target is:
+        #   atan2(dx, dz)  in degrees, normalised to [0, 360), snapped to 90°.
+        yaw_deg = 0.0
+        if face:
+            dx = cx - wx
+            dz = cz - wz
+            if dx == 0 and dz == 0:
+                yaw_deg = 0.0
+            else:
+                bearing = math.degrees(math.atan2(dx, dz))
+                if bearing < 0:
+                    bearing += 360.0
+                yaw_deg = float(round(bearing / 90.0) * 90 % 360)
+
+        # Issue Teleport. AI2-THOR's Teleport accepts position+rotation kwargs.
+        with self._controller_lock:
+            state = self.engine.step(
+                self.agent_id,
+                "Teleport",
+                position={"x": wx, "y": cy, "z": wz},
+                rotation={"x": 0.0, "y": yaw_deg, "z": 0.0},
+                horizon=0.0,
+            )
+
+        if not state.last_action_success:
+            response = {
+                "result": "error",
+                "error": state.last_action_error or "teleport failed",
+                "object_id": object_id,
+            }
+            self._write_tool_response("goto", response)
+            return response
+
+        response = {
+            "result": "ok",
+            "object_id": object_id,
+            "agent_position": dict(state.position),
+            "yaw_deg": state.rotation.get("y", yaw_deg),
+            "actual_distance": round(actual_distance, 3),
+            "requested_distance": distance,
+            "faced": face,
+        }
+        self._write_tool_response("goto", response)
         return response
 
     def _do_done(self, reason: str) -> dict[str, Any]:

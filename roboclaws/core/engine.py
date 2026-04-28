@@ -131,6 +131,16 @@ class MultiAgentEngine:
         """Return current state for every agent."""
         return [self.get_agent_state(i) for i in range(self.agent_count)]
 
+    @property
+    def grid_size(self) -> float:
+        """Public read-only view of the grid size used by AI2-THOR snapping.
+
+        Server-side helpers (``goto``, route planning) need this to convert
+        between grid-index tuples returned by ``get_reachable_positions`` and
+        world coordinates.
+        """
+        return self._grid_size
+
     def get_all_objects(self, agent_id: int = 0) -> list[dict[str, Any]]:
         """Return ALL scene objects (visible or not) from the last event.
 

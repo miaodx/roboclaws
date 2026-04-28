@@ -52,6 +52,12 @@ class FakeEngine:
         # ALL scene objects (visible or not) — separate from visible_objects so
         # a test can simulate "object exists but is around the corner".
         self.all_objects: list[dict[str, Any]] = []
+        # Public-shaped grid_size mirrors MultiAgentEngine; needed by goto's
+        # cell-projection. Set to AI2-THOR's default.
+        self.grid_size: float = 0.25
+        # Last Teleport target captured by step() so goto's tests can verify
+        # which cell+yaw the server picked without a real controller.
+        self.last_teleport: dict[str, Any] | None = None
 
     def _state(self, agent_id: int) -> FakeAgentState:
         return FakeAgentState(
@@ -89,7 +95,7 @@ class FakeEngine:
     def get_chase_cam_frame(self, agent_id: int) -> np.ndarray:
         return self._chase
 
-    def step(self, agent_id: int, direction: str) -> FakeAgentState:
+    def step(self, agent_id: int, direction: str, **kwargs: Any) -> FakeAgentState:
         self.calls_step.append((agent_id, direction))
         # MoveBack is used in the suite to exercise the "blocked" branch.
         success = direction != "MoveBack"
@@ -97,6 +103,16 @@ class FakeEngine:
         self._last_action_error = "" if success else "blocked"
         if success and direction == "MoveAhead":
             self._position["x"] = 1.25
+        # Teleport: snap our reported state to the requested position+rotation
+        # so goto's tests can verify which cell the server chose.
+        if direction == "Teleport" and success:
+            pos = kwargs.get("position")
+            rot = kwargs.get("rotation")
+            self.last_teleport = {"position": pos, "rotation": rot, "kwargs": dict(kwargs)}
+            if isinstance(pos, dict):
+                self._position = dict(pos)
+            if isinstance(rot, dict):
+                self._rotation = dict(rot)
         return self._state(agent_id)
 
 
@@ -1024,3 +1040,98 @@ def test_scene_objects_handles_empty_filter_and_missing_bbox(
     obj = response["objects"][0]
     assert obj["bbox_center"] is None
     assert obj["bbox_size"] is None
+
+
+# ---------------------------------------------------------------------------
+# goto (P1) — teleport-to-object navigation primitive
+# ---------------------------------------------------------------------------
+
+
+def _make_object(object_id: str, x: float, z: float, otype: str = "Chair") -> dict[str, Any]:
+    return {
+        "objectId": object_id,
+        "objectType": otype,
+        "name": object_id,
+        "position": {"x": x, "y": 0.5, "z": z},
+        "axisAlignedBoundingBox": {
+            "center": {"x": x, "y": 0.5, "z": z},
+            "size": {"x": 0.6, "y": 1.0, "z": 0.6},
+        },
+        "visible": False,
+    }
+
+
+def test_goto_picks_reachable_cell_at_target_distance(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    # FakeEngine's reachable cells default to {(4,-8), (5,-8), (6,-8), (6,-7)}
+    # at grid_size=0.25 → world {(1,-2), (1.25,-2), (1.5,-2), (1.5,-1.75)}.
+    engine.all_objects = [_make_object("Chair|+1.5|0|0", x=1.5, z=0.0)]
+
+    response = server._do_goto("Chair|+1.5|0|0", distance=1.0, face=True)
+    assert response["result"] == "ok"
+    assert response["object_id"] == "Chair|+1.5|0|0"
+    # Cell (1.5, -1.75) → distance to (1.5, 0) is 1.75. Cell (1.5, -2) → 2.0.
+    # Cell (1, -2) → ~2.06. (1.25, -2) → ~2.01. So nearest-to-1.0 is (1.5, -1.75).
+    pos = response["agent_position"]
+    assert pos == {"x": 1.5, "y": 0.5, "z": -1.75}
+    assert response["actual_distance"] == 1.75
+    # Target is at +Z relative to chosen cell → yaw=0 (facing +Z).
+    assert response["yaw_deg"] == 0.0
+    # Engine recorded a Teleport call with the chosen cell.
+    teleport = engine.last_teleport
+    assert teleport is not None
+    assert teleport["position"] == {"x": 1.5, "y": 0.5, "z": -1.75}
+    assert teleport["rotation"] == {"x": 0.0, "y": 0.0, "z": 0.0}
+
+
+def test_goto_face_false_keeps_yaw_zero_no_facing(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    engine.all_objects = [_make_object("Chair|0|0|0", x=0.0, z=0.0)]
+    response = server._do_goto("Chair|0|0|0", distance=2.0, face=False)
+    assert response["result"] == "ok"
+    assert response["faced"] is False
+    # With face=False yaw_deg sent in Teleport stays at 0.0
+    assert engine.last_teleport["rotation"] == {"x": 0.0, "y": 0.0, "z": 0.0}
+
+
+def test_goto_unknown_object_id_returns_error(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    engine.all_objects = [_make_object("Chair|known", 0.0, 0.0)]
+    response = server._do_goto("NotAThing|0|0|0")
+    assert response["result"] == "error"
+    assert "not found" in response["error"]
+    assert engine.last_teleport is None
+
+
+def test_goto_facing_yaw_rounds_to_nearest_90(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    # Chair at +X relative to all reachable cells. From (1.5, -2) the bearing
+    # to (3, 0) is atan2(+1.5, +2) ≈ 36.87°; snapped → 0°. Use a chair due-east
+    # of the cell to force yaw=90.
+    engine.all_objects = [_make_object("Chair|+5|0|-2", x=5.0, z=-2.0)]
+    response = server._do_goto("Chair|+5|0|-2", distance=1.0, face=True)
+    assert response["result"] == "ok"
+    # From cell (1.5, -2) the chair at (5, -2) is due +X → yaw=90.
+    assert response["yaw_deg"] == 90.0
+
+
+def test_goto_writes_trace_request_and_response(
+    server: RoboclawsMCPServer, engine: FakeEngine
+) -> None:
+    engine.all_objects = [_make_object("Chair|0|0|0", 0.0, 0.0)]
+    server._do_goto("Chair|0|0|0", distance=1.5)
+    trace = _read_trace(server.run_dir)
+    goto_events = [t for t in trace if t.get("tool") == "goto"]
+    assert len(goto_events) == 2
+    assert goto_events[0]["event"] == "request"
+    assert goto_events[0]["request"] == {
+        "object_id": "Chair|0|0|0",
+        "distance": 1.5,
+        "face": True,
+    }
+    assert goto_events[1]["event"] == "response"
+    assert goto_events[1]["response"]["result"] == "ok"
