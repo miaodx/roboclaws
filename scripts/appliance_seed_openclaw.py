@@ -293,7 +293,18 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
                     "workspace": f"/home/node/.openclaw/workspaces/{agent_id}",
                     "agentDir": f"/home/node/.openclaw/agents/{agent_id}/agent",
                     "model": {"primary": provider.model},
-                    "tools": {"profile": runtime.tool_profile},
+                    # alsoAllow=["bundle-mcp"] mirrors the openclaw-bootstrap.sh
+                    # fix from commit 934fa88. Image 2026.4.25-beta.11+ no
+                    # longer auto-includes the bundle-mcp policy in the
+                    # `minimal` profile, so without this splice the agent ends
+                    # up with only `session_status` and every roboclaws__* tool
+                    # disappears from the tool list — the model then sees an
+                    # empty toolset and hallucinates "I have no tools".
+                    # See docs/openclaw-tool-profiles.md for the image diff.
+                    "tools": {
+                        "profile": runtime.tool_profile,
+                        "alsoAllow": ["bundle-mcp"],
+                    },
                 }
                 for agent_id in runtime.agent_ids
             ],

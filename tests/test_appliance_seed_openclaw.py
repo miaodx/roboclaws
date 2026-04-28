@@ -51,6 +51,10 @@ def test_seed_writes_mimo_openclaw_config_and_snapshot_symlink(tmp_path: Path) -
     assert config["mcp"]["servers"]["roboclaws"]["url"] == "http://127.0.0.1:18788/mcp"
     assert config["agents"]["list"][0]["id"] == "agent-0"
     assert config["agents"]["list"][0]["tools"]["profile"] == "minimal"
+    # bundle-mcp must be spliced into the minimal profile or all roboclaws__*
+    # tools vanish from the agent on image 2026.4.25-beta.11+. Same fix as
+    # openclaw-bootstrap.sh (commit 934fa88) — guard against future drift.
+    assert config["agents"]["list"][0]["tools"]["alsoAllow"] == ["bundle-mcp"]
     assert config["agents"]["defaults"]["model"]["primary"] == "mimo_openai/mimo-v2-omni"
     assert config["models"]["mode"] == "replace"
     assert "mimo_openai" in config["models"]["providers"]
