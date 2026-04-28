@@ -16,6 +16,13 @@ Before writing any code, read in order:
 Shipped-phase history lives under `docs/retrospectives/` — not required reading,
 but the best source for "why was this decided?" context on prior phases.
 
+For navigator-skill / MCP-tool changes, also read `harness/PLAN.md` — the
+append-only logbook of scripted-loop runs that grades the skill on curated
+tasks. Each `## Run NNN` entry attributes a metric delta to one bounded
+change. See [`docs/harness-self-improvement-loop.md`](docs/harness-self-improvement-loop.md)
+for the design rationale and [`harness/README.md`](harness/README.md) for
+how to run another iteration (`just harness::run <task>`).
+
 ## Build & test
 
 ```bash

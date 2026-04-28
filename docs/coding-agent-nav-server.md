@@ -88,8 +88,32 @@ python scripts/check_photo_task.py --run-dir output/coding-agent-nav/<timestamp>
 
 ## Notes
 
-- The tool surface is intentionally small: observe, move, done.
-- `observe(label="...")` is the photo action.
-- `observe` may include currently visible AI2-THOR object names/types, but it
-  does not expose a room-wide object oracle or route planner.
+- Tool surface: `observe`, `observe_archived`, `move`, `scene_objects`,
+  `goto`, `done`.
+- `observe(label="...")` is the framing-and-archive action; the cheaper
+  `observe_archived(label="...")` captures without inlining images when
+  this turn does not need to see pixels.
+- `scene_objects(filter_types="...")` is the room-wide object oracle —
+  one call returns every object with world position, bounding box, and
+  planar distance from the agent (sorted nearest-first).
+- `goto(object_id, distance, face)` teleports to a reachable cell near a
+  target's bbox center. Pairs with `scene_objects` for target-relative
+  motion; replaces 5–10 grid-step move/rotate chains.
 - Stop the server with Ctrl-C, or let the agent call `roboclaws__done`.
+
+## Self-improvement loop
+
+The skill driving this MCP path was tuned via a scripted loop that
+spawns `just code::cc` agents, runs them on curated tasks, captures
+trace.jsonl metrics, and logs results to an append-only logbook.
+
+```bash
+just harness::list-tasks
+just harness::run photo-living-room
+just harness::history
+```
+
+See [`harness/README.md`](../harness/README.md) for operational details
+and [`docs/harness-self-improvement-loop.md`](harness-self-improvement-loop.md)
+for design rationale and the worked example that produced the current
+tool surface.
