@@ -13,9 +13,16 @@ import os
 import pwd
 import shlex
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+# When loaded via ``python3 scripts/appliance_seed_openclaw.py`` the script's
+# dir is auto-prepended to sys.path; when loaded via ``importlib`` (test path)
+# it is not. Make the sibling import work in both cases.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from openclaw_plugin_allowlist import ALLOWED as OPENCLAW_PLUGIN_ALLOW  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -317,6 +324,13 @@ def _openclaw_json(runtime: RuntimeConfig) -> dict[str, Any]:
                 }
             }
         },
+        # Strict allow-list: only these plugins activate, regardless of the
+        # gateway image's enabled-by-default set. See
+        # ``scripts/openclaw_plugin_allowlist.py`` for the rationale and
+        # per-entry justification. Adding a provider (or upgrading to a
+        # gateway image whose new enabled-by-default plugin we actually
+        # need) requires editing that file in lockstep.
+        "plugins": {"allow": list(OPENCLAW_PLUGIN_ALLOW)},
     }
 
     if provider.provider_entry is not None:

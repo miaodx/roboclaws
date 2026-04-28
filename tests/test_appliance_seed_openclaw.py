@@ -55,6 +55,16 @@ def test_seed_writes_mimo_openclaw_config_and_snapshot_symlink(tmp_path: Path) -
     # tools vanish from the agent on image 2026.4.25-beta.11+. Same fix as
     # openclaw-bootstrap.sh (commit 934fa88) — guard against future drift.
     assert config["agents"]["list"][0]["tools"]["alsoAllow"] == ["bundle-mcp"]
+    # Strict plugin allow-list — anything not on this list is rejected by the
+    # gateway, regardless of upstream enabledByDefault drift. Pinning the
+    # value here forces edits to scripts/openclaw_plugin_allowlist.py to be
+    # explicit, including any provider-plugin additions on a future image
+    # bump. The chat::run path is pinned in tests/test_openclaw_bootstrap.py
+    # against the same source-of-truth list.
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from openclaw_plugin_allowlist import ALLOWED as expected_allow
+
+    assert config["plugins"]["allow"] == list(expected_allow)
     assert config["agents"]["defaults"]["model"]["primary"] == "mimo_openai/mimo-v2-omni"
     assert config["models"]["mode"] == "replace"
     assert "mimo_openai" in config["models"]["providers"]

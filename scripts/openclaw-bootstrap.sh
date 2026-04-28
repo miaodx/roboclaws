@@ -510,6 +510,18 @@ for ((i=0; i<AGENTS; i++)); do
 done
 
 log "pre-seeding config volume + $AGENTS agent(s)"
+# Read the canonical OpenClaw plugin allow-list from its single source of
+# truth (``scripts/openclaw_plugin_allowlist.py``) and forward it to the
+# pre-seed container as JSON. Keeps the chat::run and appliance::run paths
+# from drifting; see that file for rationale + per-entry justification.
+PLUGIN_ALLOW_JSON="$(python3 -c "
+import json, sys
+sys.path.insert(0, '${SCRIPT_DIR}')
+from openclaw_plugin_allowlist import ALLOWED
+print(json.dumps(ALLOWED))
+")"
+[[ -n "$PLUGIN_ALLOW_JSON" ]] || die "failed to read openclaw_plugin_allowlist.py" 2
+
 # Write the pre-seed Python to a host temp file and bind-mount it into the
 # container instead of streaming it through `sh -lc '...heredoc...'`. The
 # wrapped-heredoc approach silently breaks the moment any character in the
@@ -662,6 +674,13 @@ config["mcp"] = {
         }
     }
 }
+# Strict plugin allow-list. Anything not in this list is hard-rejected by
+# the gateway, regardless of enabledByDefault. Source of truth lives in
+# scripts/openclaw_plugin_allowlist.py and is forwarded by the host bash
+# wrapper as PLUGIN_ALLOW_JSON. See that file for per-entry justification.
+plugin_allow = json.loads(os.environ.get("PLUGIN_ALLOW_JSON") or "[]")
+if plugin_allow:
+    config["plugins"] = {"allow": plugin_allow}
 # Inject extra model catalog entries so the Gateways model-catalog merger
 # recognizes the models we want to use. Without this, the Gateway rejects
 # models with 400 "Unknown model: <id>" because the pinned images built-in
@@ -761,6 +780,7 @@ docker run --rm --user root \
     -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
     -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
     -e OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}" \
+    -e PLUGIN_ALLOW_JSON="$PLUGIN_ALLOW_JSON" \
     "$IMAGE" sh -lc 'set -eu; python3 /preseed.py; chown -R 1000:1000 /home/node/.openclaw' \
     >&2 || die "volume pre-seed failed" 2
 

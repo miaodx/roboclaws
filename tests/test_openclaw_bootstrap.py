@@ -26,6 +26,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -143,6 +144,10 @@ def _run_preseed(tmp_path: Path, env_overrides: dict[str, str]) -> Path:
         "AGENT_SOUL_CSV": "",
         "ROBOCLAWS_MCP_URL": "http://host.docker.internal:18788/mcp",
         "ROBOCLAWS_TOOL_PROFILE": "minimal",
+        # In production the bash wrapper reads this from
+        # scripts/openclaw_plugin_allowlist.py; for the test we synthesize
+        # the same JSON so the pre-seed exercises the plugins.allow code path.
+        "PLUGIN_ALLOW_JSON": json.dumps(["acpx", "memory-core", "nvidia", "kimi", "xiaomi"]),
     }
     env.update(env_overrides)
     for k in ("PATH", "HOME", "LANG", "LC_ALL"):
@@ -844,6 +849,40 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
             f"agent {entry['id']!r} alsoAllow must splice exactly bundle-mcp; "
             f"got {entry['tools']['alsoAllow']!r}"
         )
+
+
+def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
+    """Seeded openclaw.json must carry ``plugins.allow`` from the canonical
+    list in ``scripts/openclaw_plugin_allowlist.py``.
+
+    Strict allow-list flips the failure mode on a gateway image bump: any
+    new auto-enabled plugin upstream is hard-rejected unless we explicitly
+    add it here. Without this, the bonjour/browser/document-extract/microsoft
+    family silently lazy-installs heavy npm tarballs (playwright, edge-tts,
+    pdfjs) on first start. See scripts/openclaw_plugin_allowlist.py for
+    rationale + per-entry justification.
+    """
+    cfg_path = _run_preseed(tmp_path, {})
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    sys.path.insert(0, str(BOOTSTRAP.parent))
+    from openclaw_plugin_allowlist import ALLOWED as expected_allow
+
+    assert cfg["plugins"]["allow"] == list(expected_allow), (
+        "plugins.allow drift detected — update scripts/openclaw_plugin_allowlist.py "
+        "or the bootstrap pre-seed in lockstep so both paths agree on the list"
+    )
+
+
+def test_bootstrap_reads_canonical_plugin_allowlist() -> None:
+    """The bash wrapper must source ``plugins.allow`` from
+    ``scripts/openclaw_plugin_allowlist.py`` (single source of truth shared
+    with the appliance seeder), not inline a copy of the list.
+    """
+    text = _read_bootstrap()
+    assert "openclaw_plugin_allowlist" in text and "PLUGIN_ALLOW_JSON" in text, (
+        "openclaw-bootstrap.sh must read the canonical allow-list module and "
+        "forward it to the pre-seed as PLUGIN_ALLOW_JSON"
+    )
 
 
 def test_mcp_url_env_override_honored(tmp_path: Path) -> None:
