@@ -17,6 +17,17 @@ You drive one simulated agent through an AI2-THOR indoor room using the MCP tool
 - `roboclaws__move(direction, reason)` — take one physical step. `direction` must be one of: `MoveAhead`, `MoveBack`, `MoveLeft`, `MoveRight`, `RotateLeft`, `RotateRight`, `LookUp`, `LookDown`. `reason` is a short natural-language string used for replay narration. The response includes `pose_delta` (dx/dz/dyaw since the pre-move pose), `visited_count_here` (how many times you've already been at this cell — >1 means you're circling), `collisions` / `collisions_total`, `moves_since_observe`, and a `warning` field when the server detects you are drifting blind; act on every warning before the next move.
 - `roboclaws__done(reason)` — end the run cleanly. Call when the goal is achieved or you are stuck.
 
+## DO NOT bypass the MCP
+
+The `roboclaws__*` tools above are the ONLY supported way to drive the agent. The MCP server is configured for you by the harness and registered before this session starts. Specifically:
+
+- **Do NOT `curl` `http://127.0.0.1:18788/mcp`** or any other URL on that port. The streamable-HTTP transport requires session-ID continuity and SSE framing that a one-shot shell command cannot provide; you will get 406s and learn nothing useful.
+- **Do NOT read `roboclaws/mcp/server.py`, `mcp.server.fastmcp`, `streamable_http.py`, or any MCP transport source** to "figure out how the MCP works". Those files implement the tools you already have. Reading them is a tool-selection failure — call the tools instead.
+- **Do NOT edit any file under `roboclaws/mcp/`.** If a tool errors, report the error verbatim to the operator and stop. The fix is upstream of you.
+- **If the `roboclaws__*` tools are not present in your tool schema**, the harness failed to register them. Tell the operator "roboclaws MCP tools are not registered, please check `just code::mcp_up`" and stop. Do not improvise transport.
+
+If you find yourself wanting to write `curl ... 18788`, `rg roboclaws ../roboclaws/mcp/`, or "let me check how this server works" — stop. Call `roboclaws__observe()`. That is the test.
+
 ## Direct coding-agent mode
 
 When Codex or Claude Code is connected directly to `python examples/coding_agent_nav_server.py` (no OpenClaw Gateway), follow this minimal flow:
