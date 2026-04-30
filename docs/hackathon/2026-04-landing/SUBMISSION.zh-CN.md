@@ -8,12 +8,13 @@
 > **飞书排版约定：**
 > 这版正文优先使用列表和 code block，不依赖 markdown 表格。
 > 推荐插图位置：
-> 1. 开头总览：`assets/mode3-self-improvement-loop.svg`
-> 2. “先看 Run 001 → 005”之后：`assets/run-roi-staircase.svg`
-> 3. “按落地赛五维评分标准看”之前：`assets/judge-score-evidence-map.svg`
+> 1. 开场故事线：`assets/evolution-storyline.svg`
+> 2. 演化逻辑：`assets/mode3-self-improvement-loop.svg`
+> 3. “先看 Run 001 → 005”之后：`assets/run-roi-staircase.svg`
+> 4. “按落地赛五维评分标准看”之前：`assets/judge-score-evidence-map.svg`
 > 可选补图：
-> 4. 真实系统路径：`../../assets/readme-control-paths.png`
-> 5. photo task 实景截图：`../../assets/readme-photo-task.png`
+> 5. 真实系统路径：`../../assets/readme-control-paths.png`
+> 6. photo task 实景截图：`../../assets/readme-photo-task.png`
 > 飞书直接粘贴时，建议优先使用当前 branch raw 链接；合并到 `main` 后再统一切回 `main` raw 链接。
 
 ---
@@ -32,6 +33,35 @@
 - Self-improvement loop 设计文档: [`docs/harness-self-improvement-loop.md`](../../harness-self-improvement-loop.md)
 - Harness logbook 总索引: [`harness/PLAN.md`](../../../harness/PLAN.md)
 - 评委自助验证指南: [`EVALUATION_GUIDE.zh-CN.md`](./EVALUATION_GUIDE.zh-CN.md)
+
+## 先看故事线：Roboclaws 不是单点 demo，而是四段式演化
+
+```text
+Phase 1  Direct VLM games       先证明“图像 + map + structured state”足够驱动机器人决策
+Phase 2  OpenClaw Gateway       再证明“SOUL / memory / browser UI / named agents”可以稳定跑通
+Phase 3  Mode 3 + harness       最后证明“fresh spawn + 可比较 rerun + self-improvement loop”成立
+Phase 4  Railway appliance      把前面能力压成对外可访问、可传播、可复查的 hosted 形态
+```
+
+![Evolution storyline](https://raw.githubusercontent.com/MiaoDX/roboclaws/docs/hackathon-2026-04-landing/docs/hackathon/2026-04-landing/assets/evolution-storyline.svg)
+
+第一次看这个 repo，很容易把它误读成“一个 Mode 3 + harness 的提交”。这会低估项目真正的完成度。
+
+Roboclaws 现在同时保留 Direct VLM、OpenClaw、Mode 3、Railway appliance 四条入口，不是因为没有收敛，而是因为每一层都回答了不同的问题：
+
+- Direct VLM 负责最低成本验证任务设计、prompt 设计、provider 行为和多 agent 游戏机制。
+- OpenClaw 负责长期 agent runtime、SOUL / memory、浏览器 Control UI、photo smoke 这条更接近真实使用的链路。
+- Mode 3 负责 clean spawn、append-only logbook、同任务多轮比较，这是 self-improvement loop 真正成立的关键。
+- Railway appliance 负责把前面的能力压成一个可以直接展示给别人看的 hosted 形态，而不是只能作者本机演示。
+
+如果只记一句，可以把它记成：
+
+```text
+Can move    → Phase 1  Direct VLM
+Can live    → Phase 2  OpenClaw
+Can improve → Phase 3  Mode 3 + harness
+Can ship    → Phase 4  Railway appliance
+```
 
 ![Mode 3 self-improvement loop](https://raw.githubusercontent.com/MiaoDX/roboclaws/docs/hackathon-2026-04-landing/docs/hackathon/2026-04-landing/assets/mode3-self-improvement-loop.svg)
 
@@ -68,6 +98,7 @@ self-improvement logbook 5 次同日连续 run
 - 有可复现的本地命令，而不是只放视频
 - 有连续 5 次迭代的 logbook，而不是只挑最好的结果展示
 - 有测试、CI、trace.jsonl、runs-log 这类可复核证据在托底
+- 4 个 operating modes 对应的是一条完整演化链，而不是互相竞争的平行 demo
 
 ## 这不是“再做一个机器人 demo”，而是把 agent 调试变成可测量的迭代基础设施
 
@@ -126,40 +157,61 @@ Run 005  修复 goto y 坐标                         37 calls    9/9  done in 3
 
 ![Run ROI staircase](https://raw.githubusercontent.com/MiaoDX/roboclaws/docs/hackathon-2026-04-landing/docs/hackathon/2026-04-landing/assets/run-roi-staircase.svg)
 
-## 为什么必须走到 Mode 3：Phase 1 / 2 / 3 的演进
+## 为什么最后收敛到 Mode 3，但 VLM / OpenClaw 没有消失
 
-Roboclaws 不是一开始就冲着“Mode 3 + harness”去的。我们实际走过了三条路径，最后才发现哪一条能支持真正的 self-improvement loop。
+Roboclaws 不是一开始就冲着“Mode 3 + harness”去的。它是被真实研发问题一步步逼出来的：先要证明机器人能动，再要证明长期 agent runtime 成立，最后才会逼出“怎么 clean rerun、怎么真正持续变好”。
 
-### Phase 1 · 直接调 VLM API
+### Phase 1 · 直接调 VLM API：先证明“机器人可以被图像驱动”
 
-最早让 GPT-4V / Claude 看截图直接决定下一步 action。这个阶段已经能跑通简单导航和 territory game。
+最早的入口是 direct VLM games。`examples/single_agent_explore.py`、`examples/territory_game.py`、`examples/coverage_game.py` 这几条路径完成了最基本但最关键的一步：
 
-但问题很快暴露出来：
+- 图像 + overhead map + structured state 足够让模型做导航 / 占地 / 协作决策
+- AI2-THOR 这套环境足够快，值得继续往前投工程量
+- provider 切换、prompt 设计、动作空间设计这些问题，可以先用最低成本验证
 
-- 每一步都是独立 chat completion，没有“agent 进程”这个概念
+但这个阶段也很快碰到上限：
+
+- 每一步都是独立 chat completion，没有“agent 进程”的 clean lifecycle
 - baseline 很难固定，同样任务每次上下文都不完全一样
-- 外部脚本没法 cleanly 重复 spawn “同一个 agent”
+- 外部 harness 很难 cleanly 重复 spawn “同一个 agent”
 
-### Phase 2 · OpenClaw Gateway（SOUL / skill / memory）
+所以 Phase 1 的价值不是“它已经完整”，而是它先把“这条路能走”验证掉。没有这个阶段，后面的 OpenClaw 和 Mode 3 都没有扎实起点。
 
-切到 OpenClaw 以后，持久化 agent 状态、SOUL、memory 都有了，`examples/openclaw_*.py` 和 Railway appliance 也是这一阶段的成果。
+### Phase 2 · OpenClaw Gateway：再证明“长期 agent runtime + UI + SOUL / memory”成立
+
+切到 OpenClaw 以后，项目第一次拥有了更接近真实 agent system 的能力：
+
+- named agents
+- SOUL / memory
+- browser Control UI
+- `examples/openclaw_demo.py`、`examples/openclaw_photo_task.py`
+- `just chat::run` 与 `just openclaw::run photo`
+- 最后还沉淀出了 Railway appliance 这条 hosted 路线
+
+这一步对评委非常重要，因为它说明 Roboclaws 不是“脚本调用几个 VLM API”而已，而是真的把 agent runtime、tool surface、交互入口做出来了。
 
 但它仍然不适合做“清洁、可重复、无污染”的 iteration loop：
 
 - Gateway 是常驻服务
 - agent 状态在 Gateway 进程里
 - SOUL / chat history / memory 会污染下一次 run
+- 长期 runtime 的优势，恰好和 benchmark / rerun 需要的 clean slate 形成张力
 
-它适合长期 agent runtime，不适合做基准化的 repeated experiment。
+所以 OpenClaw 没有失败，只是它回答的是另一个问题：
 
-### Phase 3 · Mode 3 + self-improvement harness（现在）
+> **能不能让 agent 长期在线、带人格、带记忆、可从浏览器和 hosted appliance 里被人使用。**
 
-直接让 Claude Code / Codex 通过 MCP 驾驶 AI2-THOR。关键不是模型更强，而是：
+这个答案是肯定的，而且现在 repo 里依然完整保留着。
+
+### Phase 3 · Mode 3 + self-improvement harness：最后证明“系统可以稳定变好”
+
+直接让 Claude Code / Codex 通过 MCP 驾驶 AI2-THOR。关键不是模型更强，而是 process shape 终于对了：
 
 - coding agent 本身就是一次性 CLI 进程
 - 可以被 tmux clean spawn
 - 可以被 harness 统一 teardown
 - 每次 run 都天然 fresh
+- 产物可以标准化落到 `trace.jsonl`、`metrics.txt`、`runs-log/*.md`
 
 ```text
 维度                  | Phase 1: VLM 直调         | Phase 2: OpenClaw Gateway   | Phase 3: Mode 3
@@ -170,6 +222,17 @@ trace 可标准化        | 分散在 chat 历史            | 分散在 Gateway
 ```
 
 这也是为什么现在 repo 同时保留 4 个 mode，但只有 Mode 3 成了“自我提升闭环”的主路径。不是别的 mode 没用，而是 **Mode 3 是唯一天然适合做 clean rerun 的形态**。
+
+### 这四条路径今天各自负责什么
+
+```text
+最快验证任务 / provider / prompt            → Direct VLM
+长期 agent runtime + SOUL / memory + UI    → OpenClaw
+clean rerun + benchmark + self-improvement  → Mode 3 + harness
+对外 demo / hosted 展示 / adoption wedge   → Railway appliance
+```
+
+这恰恰是评委应该看到的地方：Roboclaws 不是“删掉旧路线、只剩一个比赛版故事”，而是把每一层都沉淀成今天 submission 的证据链。
 
 ## 5 次迭代到底干了什么
 

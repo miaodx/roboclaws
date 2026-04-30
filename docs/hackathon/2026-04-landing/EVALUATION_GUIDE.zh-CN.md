@@ -33,7 +33,24 @@
 
 ## 5 分钟看懂版（不动手）
 
-### 1. 先看 5 次同日迭代是不是都公开了
+### 1. 先看这不是单点脚本，而是一条完整演化链
+
+- [`README.md` 里的 What You Can Run](https://github.com/MiaoDX/roboclaws/blob/main/README.md#what-you-can-run)
+- [`ARCHITECTURE.md` 里的 four operating modes](https://github.com/MiaoDX/roboclaws/blob/main/ARCHITECTURE.md#four-operating-modes)
+- [`SUBMISSION.zh-CN.md` 里的“先看故事线”](https://github.com/MiaoDX/roboclaws/blob/docs/hackathon-2026-04-landing/docs/hackathon/2026-04-landing/SUBMISSION.zh-CN.md)
+
+你只需要先确认四件事都在 repo 里真实存在：
+
+```text
+Direct VLM games
+OpenClaw Gateway
+Mode 3 + harness
+Railway appliance
+```
+
+这一步的意义，是避免把这次提交误读成“某一个 branch 上的一次 harness 好运 run”。更准确的理解是：**Run 005 只是四段式演化之后最能说明问题的那个结果。**
+
+### 2. 先看 5 次同日迭代是不是都公开了
 
 - [`harness/PLAN.md` Run index](https://github.com/MiaoDX/roboclaws/blob/main/harness/PLAN.md#run-index)
 - [Run 001](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/001-photo-living-room.md)
@@ -50,7 +67,7 @@ Run 005  37 calls / 9-of-9 / done in 3.8 min
 
 如果这三件事都能对上，SUBMISSION 的主线基本成立。
 
-### 2. 看 Run 004，验证“harness 抓到了测试抓不到的 bug”
+### 3. 看 Run 004，验证“harness 抓到了测试抓不到的 bug”
 
 - [Run 004 详情](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/004-photo-living-room.md)
 - [`ed6b5fb` 修复 commit](https://github.com/MiaoDX/roboclaws/commit/ed6b5fb)
@@ -66,7 +83,7 @@ FakeEngine tests 通过
 
 如果你只看一处来判断业务价值，这一处就够了。
 
-### 3. 看这是不是一个真的“闭环”，而不只是会跑一次
+### 4. 看这是不是一个真的“闭环”，而不只是会跑一次
 
 - [`docs/harness-self-improvement-loop.md`](https://github.com/MiaoDX/roboclaws/blob/main/docs/harness-self-improvement-loop.md)
 - [`harness/PLAN.md`](https://github.com/MiaoDX/roboclaws/blob/main/harness/PLAN.md)
@@ -80,7 +97,7 @@ FakeEngine tests 通过
 
 这决定了它是不是一个真正可持续迭代的系统。
 
-### 4. 看它是不是已经有公开落地形态
+### 5. 看它是不是已经有公开落地形态
 
 - 站点首页：https://miaodx.com/roboclaws/
 - OpenClaw demo report：https://miaodx.github.io/roboclaws/openclaw/demo/report.html
@@ -179,6 +196,11 @@ DEMO_PASSWORD=demo just appliance::run local
 "Run 004 的 goto 物理 bug 是 harness 抓出来的"
   → harness/runs-log/004-photo-living-room.md
   → commit ed6b5fb
+
+"Direct VLM / OpenClaw / Mode 3 / Railway 是一条演化链，不是四个无关 demo"
+  → README.md#what-you-can-run
+  → ARCHITECTURE.md#four-operating-modes
+  → SUBMISSION.zh-CN.md
 
 "这是 append-only 的 self-improvement loop"
   → docs/harness-self-improvement-loop.md
