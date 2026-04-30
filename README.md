@@ -6,31 +6,29 @@
 [![Install](https://img.shields.io/badge/install-uv%20recommended-5E5CE6)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
-**AI coding agents and VLM/OpenClaw agents driving simulated robots in AI2-THOR.**
+**AI coding agents, VLM agents, and OpenClaw-style robot assistants driving simulated worlds: AI2-THOR today, MolmoSpaces next.**
 
 ![Roboclaws robot navigation banner](docs/assets/readme-hero.png)
 
-Roboclaws is a robotics demo repo with one practical goal: make agent behavior
-visible. It can run multi-agent territory and coverage games, OpenClaw Gateway
-chat demos, a hosted Railway appliance, and a direct Codex/Claude Code MCP path
-where the coding agent itself drives the robot with `observe`, `move`, and
-`done`.
+Roboclaws is a small robotics-agent lab with one practical goal: make embodied
+agent behavior visible. The core loop stays deliberately simple: an agent sees,
+moves, calls tools, and leaves replayable evidence. Today that loop runs on
+AI2-THOR; the next substrate target is MolmoSpaces for object-rich navigation
+and manipulation.
 
 > Operational hint: if the live smoke reports look stale, check the
 > `CI (main)` badge first. GitHub Pages republishes only after CI succeeds on
 > `main`.
 
-## What You Can Run
+## Choose a Path
 
-| Mode | Use it for | Entry point |
+| Path | Use it for | Entry point |
 |------|------------|-------------|
-| Direct VLM games | Fast local experiments without OpenClaw | `examples/territory_game.py`, `examples/coverage_game.py` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just openclaw::run nav`, `just chat::run` |
-| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `examples/coding_agent_nav_server.py` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::run photo` |
-| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
-| Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
-| Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just harness::run <task>` (see [`harness/README.md`](harness/README.md)) |
+| Direct VLM games | Fast AI2-THOR territory / coverage experiments | `examples/territory_game.py`, `examples/coverage_game.py` |
+| OpenClaw / RobotClaws | Assistant-style robot skills, SOULs, browser Control UI | `just openclaw::run nav`, `just chat::run` |
+| Coding-agent MCP | Let Codex or Claude Code drive the robot with `observe`, `move`, `done` | `examples/coding_agent_nav_server.py` |
+| Reports + appliance | Replayable demos, hosted UI, CI-safe artifacts | `python scripts/generate_demo_report.py --output-dir output/demo`, `DEMO_PASSWORD=demo just appliance::run local` |
+| Next substrate | MolmoSpaces spike for richer scenes and manipulation | see [`docs/research-checkpoints/2026-04.md`](docs/research-checkpoints/2026-04.md) |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
 
@@ -38,8 +36,10 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 
 ![Roboclaws architecture](docs/architecture.svg)
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map, the four
-operating modes, and the shared MCP contract.
+One simulation core, several drivers: direct VLM policies, OpenClaw Gateway,
+coding agents over MCP, and a hosted appliance. See [`ARCHITECTURE.md`](ARCHITECTURE.md)
+for the code map and [`docs/research-checkpoints/2026-04.md`](docs/research-checkpoints/2026-04.md)
+for the OpenClaw / harness / MolmoSpaces direction.
 
 ## Quick Start
 
@@ -143,12 +143,13 @@ Robots work together to see as much of the room as possible. The report shows
 coverage progress, work balance, and whether agents divide the room in useful
 ways.
 
-### Navigation and Photo Tasks
+### Observation and Photo Tasks
 
 The single-agent navigation loop is the smallest surface for debugging model
-behavior. The photo-task smoke builds on it: the agent must move around
-FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
-`done`.
+behavior. The photo-task smoke builds on it: the agent moves around
+FloorPlan201, calls `observe(label="...")` for chairs/sofas, then finishes with
+`done`. The same observation contract is the bridge toward richer MolmoSpaces
+tasks.
 
 ![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
