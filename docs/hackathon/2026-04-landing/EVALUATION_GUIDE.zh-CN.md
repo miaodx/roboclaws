@@ -1,115 +1,250 @@
 # 评委自助验证指南 — Roboclaws AD Hackathon 2026
 
-> 这份文件是给评委 / 同事的自助验证路径。**不需要看完 SUBMISSION** 也能验主提交里的关键 claim。
+> 这份文件是给评委 / 同事的自助验证路径。**不需要先看完整 SUBMISSION**，也能验证主要 claim。
 > 时间预算：5 分钟看懂版 / 15 分钟亲手跑版。
+
+---
+
+## 先按五维评分标准快速定位
+
+```text
+需求匹配度（20）
+  看什么：这是不是一个真实研发痛点，而不是比赛包装
+  先看：SUBMISSION 里的“这不是再做一个机器人 demo” + docs/harness-self-improvement-loop.md
+
+落地可行性（25）
+  看什么：有没有清晰命令、真实产物、公开 report、稳定运行路径
+  先看：just harness::run photo-living-room + trace.jsonl + runs-log
+
+业务价值（25）
+  看什么：有没有明确的 ROI / KPI / 风险下降，而不是只有技术新奇
+  先看：Run 001 → 005 的指标变化，尤其是 Run 004 物理 bug
+
+用户体验（15）
+  看什么：工程师或评委是否能低成本发起一次 run、读懂结果、决定下一步
+  先看：just harness::history + runs-log/<NNN>.md + live report
+
+可复用性（15）
+  看什么：是不是单个 task 的脚本，还是一层能复用的基础设施
+  先看：ARCHITECTURE.md 四个 mode + skills/ai2thor-navigator/SKILL.md + harness/tasks/*.txt
+```
 
 ---
 
 ## 5 分钟看懂版（不动手）
 
-只需点开这几个 URL，所有数字 / artifact 都是 commit 进 main、CI 自动发布的：
+### 1. 先看 5 次同日迭代是不是都公开了
 
-### 1. 核心 ROI 数字直接看 logbook
-- [`harness/PLAN.md` Run index](https://github.com/MiaoDX/roboclaws/blob/main/harness/PLAN.md#run-index) —— 5 个 run 一表对比，hypothesis vs actual 格式
-- [Run 005 详情](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/005-photo-living-room.md) —— 完整指标 + 跨 run 总结表
-- [Run 004 详情](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/004-photo-living-room.md) —— **goto y 坐标 bug 被 harness 抓到的现场**，"Why FakeEngine didn't catch this" 一节是关键
+- [`harness/PLAN.md` Run index](https://github.com/MiaoDX/roboclaws/blob/main/harness/PLAN.md#run-index)
+- [Run 001](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/001-photo-living-room.md)
+- [Run 004](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/004-photo-living-room.md)
+- [Run 005](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/005-photo-living-room.md)
 
-### 2. SUBMISSION 里引用的 commit 全都可点
-- [`5729536` add scene_objects MCP tool](https://github.com/MiaoDX/roboclaws/commit/5729536) — Run 003 改动
-- [`8cb1700` add goto for target-relative navigation](https://github.com/MiaoDX/roboclaws/commit/8cb1700) — Run 004 引入
-- [`ed6b5fb` goto must teleport to AGENT y, not target bbox-center y](https://github.com/MiaoDX/roboclaws/commit/ed6b5fb) — Run 004 → 005 的修复
-- [`373454c` self-improvement loop scaffold](https://github.com/MiaoDX/roboclaws/commit/373454c) — harness 本身的引入
+你只需要确认三件事：
 
-### 3. Live demos
-- 站点首页：[https://miaodx.com/roboclaws/](https://miaodx.com/roboclaws/) （CI 在每次 push main 后自动重发布）
-- README 里所有图都是 GitHub raw 链接，点开即看
+```text
+Run 001  127+ calls / 3-of-9 / manual interrupt
+Run 004  goto 上线后在真实物理里翻车
+Run 005  37 calls / 9-of-9 / done in 3.8 min
+```
 
-### 4. SKILL.md 是真实"被改对象"
-- 当前版本：[`skills/ai2thor-navigator/SKILL.md`](https://github.com/MiaoDX/roboclaws/blob/main/skills/ai2thor-navigator/SKILL.md)
-- "inventory-first protocol" 改动：[commit `86a3a40`](https://github.com/MiaoDX/roboclaws/commit/86a3a40) 之前 vs 之后
-- 这份 markdown 同时被 OpenClaw Gateway / Mode 3 直驾 / Railway appliance 三种部署消费 —— 改一次三处生效
+如果这三件事都能对上，SUBMISSION 的主线基本成立。
+
+### 2. 看 Run 004，验证“harness 抓到了测试抓不到的 bug”
+
+- [Run 004 详情](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/004-photo-living-room.md)
+- [`ed6b5fb` 修复 commit](https://github.com/MiaoDX/roboclaws/commit/ed6b5fb)
+
+这里最值得看的不是 bug 本身，而是这条因果链：
+
+```text
+FakeEngine tests 通过
+→ goto 在真实 AI2-THOR 中 10/10 失败
+→ harness 发现“Collided with: Floor”
+→ 修复 y 坐标后，Run 005 clean done
+```
+
+如果你只看一处来判断业务价值，这一处就够了。
+
+### 3. 看这是不是一个真的“闭环”，而不只是会跑一次
+
+- [`docs/harness-self-improvement-loop.md`](https://github.com/MiaoDX/roboclaws/blob/main/docs/harness-self-improvement-loop.md)
+- [`harness/PLAN.md`](https://github.com/MiaoDX/roboclaws/blob/main/harness/PLAN.md)
+
+重点不是“有个脚本跑 agent”，而是下面这几件事是否同时存在：
+
+- 有 append-only run index
+- 有每轮 hypothesis vs actual
+- 有 active carry-forward
+- 有 raw artifacts 和 curated logbook 的分层
+
+这决定了它是不是一个真正可持续迭代的系统。
+
+### 4. 看它是不是已经有公开落地形态
+
+- 站点首页：https://miaodx.com/roboclaws/
+- OpenClaw demo report：https://miaodx.github.io/roboclaws/openclaw/demo/report.html
+- 报告对比页：https://miaodx.github.io/roboclaws/report_compare.html
+- README 架构 / 模式总览：https://github.com/MiaoDX/roboclaws/blob/main/README.md
+
+这几页的作用不是“给人看得热闹”，而是证明：
+
+- 它已经有 live report
+- 不是只剩 markdown 文档
+- 不是只有作者口头能描述的结果
 
 ---
 
 ## 15 分钟亲手跑版
 
-### 前置
-- macOS / Linux （Windows 用 WSL）
-- Python 3.10+
-- [`uv`](https://docs.astral.sh/uv/) 推荐 / 也可纯 pip
-- [`just`](https://github.com/casey/just) （任务编排）—— 不装也能直接跑底层脚本
-- 一个 LLM provider key（Anthropic 或 OpenAI 任一）
+### 前置环境
 
-### 跑通 Mode 1（最快验证 repo 没坏）
+- macOS / Linux（Windows 用 WSL）
+- Python 3.10+
+- `uv` 推荐，也可纯 pip
+- `just`
+- 一个可用的模型 provider key（Anthropic / OpenAI / Kimi 任一）
+
+### 第 1 步：把 repo 跑起来
 
 ```bash
 git clone https://github.com/MiaoDX/roboclaws.git
 cd roboclaws
 uv pip install -e ".[dev,openclaw]" || python -m pip install -e ".[dev,openclaw]"
-just openclaw::run nav   # 或 examples/territory_game.py 直跑
 ```
 
-打开浏览器看 Control UI，能看到 agent 在 AI2-THOR 场景里走 = 整套环境跑通。
-
-### 验证 self-improvement harness（**主要落地证据**）
+### 第 2 步：先确认 harness 的操作面是可用的
 
 ```bash
-# 列出可跑的 task
 just harness::list-tasks
-# 看现有 5 个 run 的简表
 just harness::history
-# 重跑 photo-living-room（重现 Run 005 那次 3.8 分钟 9/9 的成绩）
+```
+
+你应该能看到 `photo-living-room` 以及已有的 run history。
+
+### 第 3 步：重跑主要任务
+
+```bash
 just harness::run photo-living-room
 ```
 
-跑完会在 `harness/runs/<NNN>/` 看到 raw 产出（metrics.txt / trace.jsonl / server.log）。
+跑完以后，重点检查这些产物：
 
-**预期**：在 SKILL.md / MCP tool surface 不变的情况下，重跑结果应该接近 Run 005（37±10 calls / 9-of-9 / 4 分钟内 done）。如果你的复现明显偏离，**这是真实可报告的 bug**，请开 issue。
-
-### 验证 Run 004 那个 goto bug 真的存在过
-
-```bash
-git show ed6b5fb -- roboclaws/mcp/server.py
+```text
+harness/runs/<NNN>/metrics.txt
+harness/runs/<NNN>/trace.jsonl
+harness/runs/<NNN>/server.log
+harness/runs-log/<NNN>-photo-living-room.md
 ```
 
-看 commit message 和 diff —— 修复就是把 y 坐标从 target.bbox.center.y 改成 agent.position.y。Run 004 的 [logbook](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/004-photo-living-room.md) 描述的就是这个 bug 在仿真里翻车的现场。
+### 第 4 步：你该看到什么
 
-### 验证三种 mode 都还能跑（不只是 Mode 3）
+如果当前 skill / tool surface 没有明显漂移，预期结果应接近 Run 005：
 
-| Mode | 一行验证 |
-|---|---|
-| Mode 1: Direct VLM | `python examples/territory_game.py` |
-| Mode 2: OpenClaw Gateway | `just openclaw::run photo` |
-| Mode 3: Coding agent 直驾 | `python examples/coding_agent_nav_server.py` 然后另一窗口 `claude --dangerously-skip-permissions -p "..."` |
-| Mode 4: Railway appliance | `DEMO_PASSWORD=demo just appliance::run local` |
+```text
+大致 37±10 calls
+9/9 targets
+done
+wall-clock 约 4 分钟量级
+```
 
-**SUBMISSION 里讲的"演进性"是真的，不是事后包装** —— 三种 mode 的代码都还在 `examples/` 和 `deploy/` 里活着。
+如果你复现出来明显更差，这不是坏事，而是一个真实 regression。对这个项目来说，这恰恰说明 harness 在发挥作用。
+
+### 第 5 步：验证 Mode 3 不是单点脚本
+
+任选一个再跑：
+
+```bash
+python examples/coding_agent_nav_server.py
+just openclaw::run photo
+python examples/territory_game.py --agents 3 --scene FloorPlan201
+DEMO_PASSWORD=demo just appliance::run local
+```
+
+这一步主要在验证一个 claim：
+
+> self-improvement harness 不是悬在空中的，它是建立在一个已经有 4 个 operating mode 的代码基座之上。
 
 ---
 
-## KPI Cheat Sheet（直接核对 SUBMISSION 数字）
+## Claim → 证据 快速对照
 
-| Claim in SUBMISSION | 怎么核对 |
-|---|---|
-| "Run 001: 127+ calls, 3-of-9, 工程师按停" | [`harness/runs-log/001-photo-living-room.md`](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/001-photo-living-room.md) Metrics 节 |
-| "Run 005: 37 calls, 9/9, 3.8 min, 自动 done" | [`harness/runs-log/005-photo-living-room.md`](https://github.com/MiaoDX/roboclaws/blob/main/harness/runs-log/005-photo-living-room.md) Metrics 节 |
-| "5 次迭代同一天" | git log: `git log --pretty=format:"%h %ad %s" --date=short -- harness/runs-log/` |
-| "~7,700 行核心 Python / 30 modules" | `find roboclaws -name '*.py' \| xargs wc -l \| tail -1` |
-| "41 个 test 文件" | `find tests -name '*.py' \| wc -l` |
-| "4 modes 共享同一 MultiAgentEngine" | [`ARCHITECTURE.md`](https://github.com/MiaoDX/roboclaws/blob/main/ARCHITECTURE.md#four-operating-modes) |
-| "skills/ai2thor-navigator/SKILL.md 是被改对象" | git history: `git log --oneline -- skills/ai2thor-navigator/SKILL.md` |
+```text
+"Run 001: 127+ calls / 3-of-9 / manual interrupt"
+  → harness/runs-log/001-photo-living-room.md
+
+"Run 005: 37 calls / 9-of-9 / done in 3.8 min"
+  → harness/runs-log/005-photo-living-room.md
+
+"Run 004 的 goto 物理 bug 是 harness 抓出来的"
+  → harness/runs-log/004-photo-living-room.md
+  → commit ed6b5fb
+
+"这是 append-only 的 self-improvement loop"
+  → docs/harness-self-improvement-loop.md
+  → harness/PLAN.md
+
+"4 modes 共用同一个 MultiAgentEngine"
+  → ARCHITECTURE.md#four-operating-modes
+
+"SKILL.md 是被持续优化的真实对象"
+  → skills/ai2thor-navigator/SKILL.md
+  → commit 86a3a40
+```
 
 ---
 
-## 如果你想做更深的集成 / 验证
+## 如果你想再往深一点验证
 
-- **加一个新 task**：在 `harness/tasks/` 下新建 `<name>.txt`（一段中文 prompt 即可），跑 `just harness::run <name>` —— 这是验证"框架能扩展到新 task"最直接的路径
-- **挂自己的 MCP tool**：在 `roboclaws/mcp/server.py` 加一个 tool，FakeEngine 测试在 `tests/test_mcp_server.py`，参考 `goto` 的 PR 看完整 flow
-- **改 SKILL.md 看效果**：直接编辑 `skills/ai2thor-navigator/SKILL.md`，再 `harness::run` —— 跨两次 run 比较 metrics
+- **加一个新 task**
+  在 `harness/tasks/` 下新增一个 `<name>.txt`，跑 `just harness::run <name>`。
+- **重看 `goto` 修复**
+  `git show ed6b5fb -- roboclaws/openclaw/mcp_server.py`
+- **比较 skill 改动前后**
+  看 [`86a3a40`](https://github.com/MiaoDX/roboclaws/commit/86a3a40) 对 `SKILL.md` 的修改，再对照 Run 003 / 005。
+- **确认 live report 是持续发布的**
+  看 `README` 里的 GitHub Pages 报告入口，验证这些不是手工导出的一次性产物。
+
+---
+
+## 评分时建议特别留意的两个点
+
+### 1. 不要只看 Run 005，要连 Run 004 一起看
+
+只有 Run 005 很容易被理解成“挑了一个最好看的结果”。
+
+Run 004 的价值在于证明：
+
+- 系统会失败
+- 失败能被结构化暴露
+- 失败之后能更快进入下一轮
+
+这比单纯的成功案例更能支撑高分。
+
+### 2. 把“clean spawn”当成落地能力，而不是实现细节
+
+如果没有 clean spawn：
+
+- baseline 不稳定
+- SOUL / memory 污染下一轮
+- 对比没有可比性
+
+对这个项目来说，Mode 3 的意义不只是“通过 MCP 驾驶机器人”，而是：
+
+> **它第一次让 repeated, comparable, clean experiment 成为默认路径。**
 
 ---
 
 ## 反馈
 
-- 任何"我重跑数字对不上 SUBMISSION 的"或者"我重读 commit history 觉得 claim 站不住的" —— 都欢迎开 [GitHub issue](https://github.com/MiaoDX/roboclaws/issues)，**这是评审环节我们最看重的反馈**
-- 若有内部联系需要：见 SUBMISSION 末尾联系方式
+- 任何“我重跑数字对不上 SUBMISSION 的”
+- 任何“我重读 commit history 觉得 claim 站不住的”
+- 任何“我认为某个高分判断证据不够的”
+
+都欢迎开 issue：
+
+https://github.com/MiaoDX/roboclaws/issues
+
+对这个项目来说，最有价值的反馈从来不是“真厉害”，而是：
+
+> **哪一条 claim 还不够可复核。**
