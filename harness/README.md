@@ -2,9 +2,9 @@
 
 A scripted loop that runs the AI2-THOR navigator skill end-to-end on a named
 task, captures structured metrics, and writes them to an append-only logbook
-(`PLAN.md`). Each iteration spawns a fresh Claude Code agent in tmux, drives
-it through the MCP, monitors the trace, and tears down — no human in the
-inner loop.
+(`PLAN.md`). Each iteration spawns a fresh Claude Code agent in tmux by
+default, drives it through the MCP, monitors the trace, and tears down — no
+human in the inner loop. Codex is available as an opt-in comparison agent.
 
 This README is the operational quick-start. For why the harness exists and
 how it's been used to tune skill + MCP design, read
@@ -15,6 +15,7 @@ how it's been used to tune skill + MCP design, read
 ```bash
 just harness::list-tasks            # what's available
 just harness::run <task_name>       # run one iteration (auto-numbered)
+just harness::run <task_name> 900 codex
 just harness::history               # recent runs + summary table
 ```
 
@@ -64,6 +65,9 @@ shell — it stops growing because per-run details live in their own files.
 4. Append a row to PLAN.md's **Run index** table in `H: predicted | A:
    actual` format. Update **Active carry-forward** — tick boxes for items
    the run resolved, add new items it uncovered.
+5. Make exactly one atomic git commit for the completed loop: run log +
+   PLAN.md update + the one bounded change applied, if any. Raw
+   `harness/runs/<NNN>/` artifacts stay gitignored.
 
 That's the loop. Don't run the same task twice without changing one
 intentional variable in between (skill, MCP code, or task scope) — re-running
@@ -119,7 +123,7 @@ any time.
 
 ```bash
 # Stop a stuck harness run:
-tmux kill-session -t roboclaws-harness-<NNN>
+tmux kill-session -t roboclaws-harness-<NNN>-<agent>
 just mcp::down
 
 # List recent runs without launching anything:

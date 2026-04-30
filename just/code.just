@@ -109,5 +109,30 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     codex mcp add roboclaws --url "$mcp_url"
     echo "==> launching Codex (cwd=$(pwd))" >&2
     echo "==> MCP URL: $mcp_url" >&2
+    if [[ -n "${CODEX_MODEL:-}" ]]; then
+      echo "==> Codex model: $CODEX_MODEL" >&2
+    fi
+    if [[ -n "${CODEX_REASONING_EFFORT:-}" ]]; then
+      echo "==> Codex reasoning effort: $CODEX_REASONING_EFFORT" >&2
+    fi
+    if [[ -n "${CODEX_INITIAL_PROMPT_FILE:-}" ]]; then
+      echo "==> Codex initial prompt: $CODEX_INITIAL_PROMPT_FILE" >&2
+    fi
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    codex --yolo
+    codex_args=(--yolo)
+    if [[ -n "${CODEX_MODEL:-}" ]]; then
+      codex_args=(-m "$CODEX_MODEL" "${codex_args[@]}")
+    fi
+    if [[ -n "${CODEX_REASONING_EFFORT:-}" ]]; then
+      codex_args=(--config "model_reasoning_effort=\"$CODEX_REASONING_EFFORT\"" "${codex_args[@]}")
+    fi
+    if [[ -n "${CODEX_INITIAL_PROMPT_FILE:-}" ]]; then
+      if [[ ! -f "$CODEX_INITIAL_PROMPT_FILE" ]]; then
+        echo "error: CODEX_INITIAL_PROMPT_FILE not found: $CODEX_INITIAL_PROMPT_FILE" >&2
+        exit 1
+      fi
+      codex_initial_prompt="$(cat "$CODEX_INITIAL_PROMPT_FILE")"
+      codex "${codex_args[@]}" "$codex_initial_prompt"
+    else
+      codex "${codex_args[@]}"
+    fi

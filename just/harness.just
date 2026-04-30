@@ -5,7 +5,8 @@
 # Curated logbook lives in harness/PLAN.md.
 #
 # Preferred entrypoints:
-# - just harness::run <task>          run one iteration on a task
+# - just harness::run <task>          run one iteration on a task with Claude
+# - just harness::run <task> 900 codex run one iteration on a task with Codex
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
 
@@ -18,11 +19,15 @@ default:
 # `task` is REQUIRED (no default — see PLAN.md for why curated experiments
 # beat default-task convenience). `cap` is the wall-clock cap in seconds.
 #
+# `agent` is optional and defaults to `claude`; supported values are
+# `claude` and `codex`.
+#
 # Examples:
 #   just harness::run photo-living-room
 #   just harness::run photo-living-room 600
-run task cap="900":
-    bash harness/run-next.sh "{{task}}" "{{cap}}"
+#   just harness::run photo-living-room 900 codex
+run task cap="900" agent="claude":
+    bash harness/run-next.sh "{{task}}" "{{cap}}" "{{agent}}"
 
 # List task files available under harness/tasks/.
 list-tasks:

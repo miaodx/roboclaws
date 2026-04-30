@@ -6,7 +6,7 @@
 # run.sh.
 #
 # Usage:
-#   harness/run-next.sh <task_basename> [time_cap_seconds]
+#   harness/run-next.sh <task_basename> [time_cap_seconds] [agent]
 #
 # `task_basename` is REQUIRED (no default). The harness loop is for curated
 # experiments — silently re-running yesterday's task by accident hides
@@ -16,18 +16,28 @@
 # Examples:
 #   harness/run-next.sh photo-living-room
 #   harness/run-next.sh photo-living-room 600
+#   harness/run-next.sh photo-living-room 900 codex
 
 set -euo pipefail
 
 TASK="${1:-}"
 TIME_CAP="${2:-900}"
+AGENT="${3:-claude}"
 
 if [[ -z "$TASK" ]]; then
-  echo "error: task is required. Usage: $0 <task_basename> [cap_seconds]" >&2
+  echo "error: task is required. Usage: $0 <task_basename> [cap_seconds] [agent]" >&2
   echo "       Available tasks:" >&2
   ls harness/tasks/*.txt 2>/dev/null | sed 's|harness/tasks/|         - |;s|\.txt$||' >&2
   exit 1
 fi
+
+case "$AGENT" in
+  claude|codex) ;;
+  *)
+    echo "error: unsupported agent '$AGENT' (expected 'claude' or 'codex')" >&2
+    exit 1
+    ;;
+esac
 
 TASK_FILE="harness/tasks/${TASK}.txt"
 if [[ ! -f "$TASK_FILE" ]]; then
@@ -50,4 +60,4 @@ last=$(( ${last_from_runs:-0} > ${last_from_log:-0} ? ${last_from_runs:-0} : ${l
 next=$(printf "%03d" $((last + 1)))
 
 echo "==> next run_id: $next  (last: $last)"
-exec bash harness/run.sh "$next" "$TASK_FILE" "$TIME_CAP"
+exec bash harness/run.sh "$next" "$TASK_FILE" "$TIME_CAP" "$AGENT"

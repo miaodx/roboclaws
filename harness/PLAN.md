@@ -21,9 +21,11 @@ the active carry-forward queue, and an index of every run.
 4. **Update this file**: append a row to the **Run index** below in the
    *hypothesis-and-result* format. Then update **Active carry-forward** —
    tick boxes for items the run resolved, add new items the run uncovered.
-5. **Commit**: each run is one atomic commit. New `runs-log/<NNN>-...md` +
-   PLAN.md index update + (optionally) the change you applied. Keep them
-   separable so a botched analysis can be reverted with one `git revert`.
+5. **Commit immediately**: each completed loop is exactly one atomic commit:
+   new `runs-log/<NNN>-...md` + PLAN.md index/carry-forward update +
+   (optionally) the one bounded change you applied. Do not leave a completed
+   loop as loose working-tree state; the single commit is how future operators
+   track and revert the process.
 
 ## Run entry template
 
@@ -87,9 +89,10 @@ section, edited as items land or get re-prioritised.)
   for `claude -p ... --output-format=stream-json` so we can correlate the
   agent's chain-of-thought with the trace.jsonl tool calls. Bigger swing;
   defer until a class of bug demands it.
-- [ ] **Pick the next task class**. The photo task is solved (Run 005 = 9/9 in
-  37 calls, clean done). Plausible next: room-by-room object inventory, or
-  grasp+place manipulation. New task = new friction = new P-changes.
+- [ ] **Pick the next task class**. The photo task is solved under both Claude
+  (Run 005 = 9/9 in 37 calls) and Codex (Run 006 = 9/9 in 42 calls).
+  Plausible next: room-by-room object inventory, or grasp+place manipulation.
+  New task = new friction = new P-changes.
 
 ## Run index
 
@@ -104,3 +107,4 @@ run" predicted; actual is what this run measured.
 | [003](runs-log/003-photo-living-room.md) | 2026-04-28 | photo-living-room | 30–40 calls / 5+/7 / done | 65 calls / 9-of-9 / timeout @ 600s | scene_objects + skill rewrite; coverage exceeded prediction |
 | [004](runs-log/004-photo-living-room.md) | 2026-04-28 | photo-living-room | ~30 calls / 9-of-9 / done | aborted at t=272s — 10/10 gotos errored | goto y-coordinate bug, FakeEngine couldn't catch it |
 | [005](runs-log/005-photo-living-room.md) | 2026-04-28 | photo-living-room | ~30 calls / 9-of-9 / done | **37 calls / 9-of-9 / done in 3.8 min** | corrected goto; clean closure of the photo task |
+| [006](runs-log/006-photo-living-room-codex.md) | 2026-04-30 | photo-living-room (Codex comparison) | Codex parity: 40-45 calls / 9-of-9 / done | **42 calls / 9-of-9 / done in 4.1 min** | Codex opt-in path; prompt-file launch fixed TUI submit gap |

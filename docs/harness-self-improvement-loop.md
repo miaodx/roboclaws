@@ -44,7 +44,7 @@ harness/run-next.sh ──── auto-numbers next run_id ───┐
                                                      │
                               ┌──────────────────────┼─────────────────────┐
                               ▼                      ▼                     ▼
-                     tmux: just code::cc      .tmp/roboclaws-mcp/     output/runs/<ts>/
+              tmux: just code::cc|codex      .tmp/roboclaws-mcp/     output/runs/<ts>/
                        │                      server.log              trace.jsonl
                        │                                              snapshots/agent-0/
                        ▼
@@ -62,10 +62,11 @@ Each component owns one job:
 - **`run-next.sh`** picks the next run_id by `max(harness/runs/*, '## Run NNN'
   headers in PLAN.md) + 1`. Errors out if no task is named — see [Design
   decisions](#design-decisions) below.
-- **`run.sh`** spawns the tmux session, waits for the MCP to publish
-  `Application startup complete`, sends the kickoff message via
-  `tmux send-keys`, polls `output/runs/<ts>/trace.jsonl` for tool counts and
-  the `done` request, and tears down at completion or cap.
+- **`run.sh`** spawns the configured tmux agent session, waits for the MCP to
+  publish `Application startup complete`, delivers the kickoff message
+  (Claude via `tmux send-keys`, Codex as an initial prompt file), polls
+  `output/runs/<ts>/trace.jsonl` for tool counts and the `done` request, and
+  tears down at completion or cap.
 - **`PLAN.md`** is the stable shell — how-to, template, active
   carry-forward queue, and a run-index table. It stops growing because
   the per-run details live in their own files under `runs-log/`.
@@ -89,7 +90,7 @@ question matters when something goes wrong.
 | Did the agent call done? | `trace.jsonl` `"tool": "done", "event": "request"` | the only definitive signal |
 | What did the agent see? | `output/runs/<ts>/snapshots/agent-0/*.fpv.png` | labeled snapshots survive tmux teardown |
 
-The harness used to scrape the Claude Code TUI via `tmux pipe-pane`. That
+The harness used to scrape the interactive agent TUI via `tmux pipe-pane`. That
 captured raw escape codes and was unparseable. Run 002 surfaced this; the
 harness now ignores the TUI entirely.
 
