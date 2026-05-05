@@ -38,6 +38,28 @@ def test_image_labels_match_variant_sizes() -> None:
         assert len(labels) == 3
 
 
+def test_map_v2_chase_image_labels_are_exactly_fpv_map_v2_chase() -> None:
+    """Characterization: the map-v2+chase labels are exactly fpv, map_v2, chase in order."""
+    labels = image_labels_for_variant("map-v2+chase")
+    assert labels == ("fpv", "map_v2", "chase")
+
+
+def test_build_prompt_images_preserves_fpv_map_v2_chase_order() -> None:
+    """Characterization: build_prompt_images assembles images in fpv/map_v2/chase order."""
+    fpv = _frame(11)
+    map_v2 = _frame(22)
+    chase = _frame(33)
+    images = build_prompt_images(
+        fpv_frame=fpv,
+        structured_overhead_frame=map_v2,
+        chase_cam_frame=chase,
+    )
+    assert len(images) == 3
+    assert np.array_equal(images[0], fpv)
+    assert np.array_equal(images[1], map_v2)
+    assert np.array_equal(images[2], chase)
+
+
 def test_compute_world_bbox_spans_all_cells() -> None:
     bbox = compute_world_bbox({(0, 1), (2, -1)}, [(-3, 4)])
     assert bbox == (-3, -1, 2, 4)

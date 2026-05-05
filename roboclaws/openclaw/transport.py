@@ -463,6 +463,7 @@ class OpenClawBridge:
         agent_id: int,
         frame: np.ndarray,
         overhead: np.ndarray,
+        chase: np.ndarray,
         state: dict[str, Any],
         step_idx: int,
     ) -> dict[str, Any]:
@@ -473,9 +474,11 @@ class OpenClawBridge:
         agent_id:
             Simulation agent index.  Routed to ``openclaw/{agent_prefix}{agent_id}``.
         frame:
-            First-person RGB frame as a ``(H, W, 3) uint8`` numpy array.
+            First-person (FPV) RGB frame as a ``(H, W, 3) uint8`` numpy array.
         overhead:
-            Overhead map RGB as a ``(H, W, 3) uint8`` numpy array.
+            Structured overhead map RGB (map_v2) as a ``(H, W, 3) uint8`` numpy array.
+        chase:
+            Chase camera RGB as a ``(H, W, 3) uint8`` numpy array.
         state:
             Structured game state dict.  Serialised to JSON in the user
             message for the agent to read.
@@ -496,6 +499,7 @@ class OpenClawBridge:
         step_started = time.perf_counter()
         fpv_url, fpv_metrics = _ndarray_to_data_url(frame)
         map_url, map_metrics = _ndarray_to_data_url(overhead)
+        chase_url, chase_metrics = _ndarray_to_data_url(chase)
 
         agent_name = f"{self._agent_prefix}{agent_id}"
         state_started = time.perf_counter()
@@ -505,8 +509,8 @@ class OpenClawBridge:
             f"You are RoboClaws {agent_name}, step {step_idx}. "
             f"Follow the ai2thor-navigator skill. "
             f"Current state (JSON): {state_json}. "
-            "FPV and overhead map attached. "
-            'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.'
+            "FPV, structured overhead map, and chase camera attached in order. "
+            'Reply with ONLY JSON: {"reasoning": "...", "action": "...".}'
         )
 
         payload = {
@@ -518,6 +522,7 @@ class OpenClawBridge:
                         {"type": "text", "text": steer},
                         {"type": "image_url", "image_url": {"url": fpv_url}},
                         {"type": "image_url", "image_url": {"url": map_url}},
+                        {"type": "image_url", "image_url": {"url": chase_url}},
                     ],
                 },
             ],
@@ -540,6 +545,7 @@ class OpenClawBridge:
             "timings": {
                 "openclaw_encode_fpv_seconds": fpv_metrics["encode_seconds"],
                 "openclaw_encode_overhead_seconds": map_metrics["encode_seconds"],
+                "openclaw_encode_chase_seconds": chase_metrics["encode_seconds"],
                 "openclaw_state_json_seconds": round_seconds(state_json_seconds),
                 "openclaw_gateway_request_seconds": round_seconds(request_seconds),
                 "openclaw_response_parse_seconds": round_seconds(parse_seconds),
@@ -548,15 +554,16 @@ class OpenClawBridge:
             "payload": {
                 "transport": "openclaw_data_url",
                 "model": self.model_id(agent_id),
-                "image_count": 2,
+                "image_count": 3,
                 "state_json_chars": len(state_json),
                 "steer_text_chars": len(steer),
                 "images": [
                     {"label": "fpv", **fpv_metrics},
-                    {"label": "overhead", **map_metrics},
+                    {"label": "map_v2", **map_metrics},
+                    {"label": "chase", **chase_metrics},
                 ],
-                "total_jpeg_bytes": fpv_metrics["jpeg_bytes"] + map_metrics["jpeg_bytes"],
-                "total_base64_chars": fpv_metrics["base64_chars"] + map_metrics["base64_chars"],
+                "total_jpeg_bytes": fpv_metrics["jpeg_bytes"] + map_metrics["jpeg_bytes"] + chase_metrics["jpeg_bytes"],
+                "total_base64_chars": fpv_metrics["base64_chars"] + map_metrics["base64_chars"] + chase_metrics["base64_chars"],
             },
         }
         return result
