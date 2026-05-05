@@ -303,7 +303,7 @@ def test_nvidia_curated_to_single_multi_image_model() -> None:
     model we've verified end-to-end:
 
       - free (cost=$0 in the NIM catalog — checked by a separate test)
-      - multi-image (demo sends FPV + overhead = 2 images per turn)
+      - multi-image (demo sends 3 images per turn (FPV + structured overhead + chase camera))
       - survives the Gateway's tool-bearing agent framework
 
     We assert the curated list stays minimal; if you want to broaden it,
@@ -312,7 +312,7 @@ def test_nvidia_curated_to_single_multi_image_model() -> None:
     models = _extract_extra_models_for("nvidia")
     assert len(models) == 1, (
         "nvidia branch is curated to one verified model. To add another, "
-        "probe it live against /v1/chat/completions with a 2-image payload "
+        "probe it live against /v1/chat/completions with a 3-image payload "
         "+ tools, and update this test's expected count once verified."
     )
     model = models[0]
@@ -398,7 +398,7 @@ def test_kimi_branch_registers_anthropic_kimi_provider() -> None:
         "so local probes can compare model behavior without switching provider mode."
     )
     for model in models:
-        assert "image" in model.get("input", []), "demo sends 2 images per turn"
+        assert "image" in model.get("input", []), "demo sends 3 images per turn (fpv, map_v2, chase)"
         assert model.get("reasoning") is False, (
             "reasoning:true on api.kimi.com/coding/ is exactly what we're routing "
             "around — flipping this to true would re-introduce the slow path."
@@ -586,7 +586,7 @@ def test_advertised_context_windows_clear_flush_headroom() -> None:
     # to teach ``_extract_provider_entry_for`` another shape.
     pattern = re.compile(
         r'"id"\s*:\s*"(?P<id>[^"]+)"'
-        r'(?:(?!"id"\s*:\s*").)*?'
+        r'(?:(?!"id"\s*:\s*"").)*?'
         r'"contextWindow"\s*:\s*(?P<ctx>\d+)',
         flags=re.DOTALL,
     )
