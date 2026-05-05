@@ -88,13 +88,6 @@ class RunResult:
     debug: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class _SessionStoreCapture:
-    session_id: str
-    session_file: str
-    transcript_messages: list[TranscriptMessage]
-
-
 class OpenClawUnavailable(RuntimeError):
     """Raised when the Gateway is unreachable or rejects our request.
 
@@ -510,7 +503,7 @@ class OpenClawBridge:
             f"Follow the ai2thor-navigator skill. "
             f"Current state (JSON): {state_json}. "
             "FPV, structured overhead map, and chase camera attached in order. "
-            'Reply with ONLY JSON: {"reasoning": "...", "action": "...".}'
+            'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.',
         )
 
         payload = {
