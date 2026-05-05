@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460"
+     font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="460" fill="white"/>
+
+  <!-- title -->
+  <text x="380" y="32" text-anchor="middle" font-size="16" font-weight="600" fill="#1f2937">不变的抽象层 + 可换的 backend — 从 AI2-THOR 到 MolmoSpaces 到真机</text>
+
+  <!-- Top layer: SKILL.md + MCP interface (constant) -->
+  <rect x="60" y="60" width="640" height="78" fill="#fef3c7" stroke="#d97706" stroke-width="2.4" rx="8"/>
+  <text x="380" y="84" text-anchor="middle" font-size="14" font-weight="700" fill="#92400e">SKILL.md + MCP 工具契约</text>
+  <text x="380" y="103" text-anchor="middle" font-size="11" fill="#92400e">observe / observe_archived / move / scene_objects / goto / done</text>
+  <text x="380" y="122" text-anchor="middle" font-size="10" fill="#a16207" font-style="italic">不变 — coding agent 只看到这一层</text>
+
+  <!-- arrow down -->
+  <line x1="190" y1="138" x2="190" y2="178" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="380" y1="138" x2="380" y2="178" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <line x1="570" y1="138" x2="570" y2="178" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+  <!-- 3 backends side by side -->
+
+  <!-- Today: AI2-THOR -->
+  <rect x="60" y="178" width="260" height="160" fill="#dbeafe" stroke="#2563eb" stroke-width="2" rx="6"/>
+  <text x="190" y="204" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">现在 (Phase 1/2)</text>
+  <text x="190" y="226" text-anchor="middle" font-size="14" font-weight="700" fill="#1e3a8a">AI2-THOR</text>
+  <text x="190" y="248" text-anchor="middle" font-size="10" fill="#1d4ed8">Allen AI · Unity 室内仿真</text>
+  <text x="190" y="266" text-anchor="middle" font-size="10" fill="#1d4ed8">FPV / overhead / chase 三视图</text>
+  <text x="190" y="284" text-anchor="middle" font-size="10" fill="#1d4ed8">离散 action,房间级语义任务</text>
+  <text x="190" y="305" text-anchor="middle" font-size="9" fill="#1e40af" font-style="italic">→ FloorPlan201 客厅、9 件家具</text>
+  <text x="190" y="320" text-anchor="middle" font-size="9" fill="#1e40af" font-style="italic">→ photo task 跑通: 37 calls / 9-of-9</text>
+
+  <!-- Phase 3: MolmoSpaces -->
+  <rect x="345" y="178" width="260" height="160" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5 3" rx="6"/>
+  <text x="475" y="204" text-anchor="middle" font-size="13" font-weight="700" fill="#374151">Phase 3 (即将)</text>
+  <text x="475" y="226" text-anchor="middle" font-size="14" font-weight="700" fill="#1f2937">MolmoSpaces</text>
+  <text x="475" y="248" text-anchor="middle" font-size="10" fill="#4b5563">Allen AI 2026-02</text>
+  <text x="475" y="266" text-anchor="middle" font-size="10" fill="#4b5563">23 万+ 场景 · 13 万+ 物体</text>
+  <text x="475" y="284" text-anchor="middle" font-size="10" fill="#4b5563">4200 万抓取标注</text>
+  <text x="475" y="305" text-anchor="middle" font-size="9" fill="#6b7280" font-style="italic">→ AI2-THOR 精神继承者</text>
+  <text x="475" y="320" text-anchor="middle" font-size="9" fill="#6b7280" font-style="italic">→ USD 导出 MuJoCo / Isaac / ManiSkill</text>
+
+  <!-- transition arrow AI2-THOR → MolmoSpaces -->
+  <line x1="320" y1="258" x2="343" y2="258" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow3)"/>
+  <text x="332" y="248" text-anchor="middle" font-size="9" fill="#9ca3af">迁移</text>
+
+  <!-- Future: real robot -->
+  <rect x="630" y="178" width="80" height="160" fill="#f9fafb" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="5 3" rx="6"/>
+  <text x="670" y="204" text-anchor="middle" font-size="11" font-weight="700" fill="#6b7280">Phase 4</text>
+  <text x="670" y="222" text-anchor="middle" font-size="11" font-weight="700" fill="#6b7280">(future)</text>
+  <text x="670" y="246" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">真机</text>
+  <text x="670" y="270" text-anchor="middle" font-size="9" fill="#6b7280">LeRobot</text>
+  <text x="670" y="284" text-anchor="middle" font-size="9" fill="#6b7280">ros-mcp</text>
+  <text x="670" y="298" text-anchor="middle" font-size="9" fill="#6b7280">Reachy</text>
+
+  <!-- transition arrow MolmoSpaces → real -->
+  <line x1="605" y1="258" x2="628" y2="258" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow3)"/>
+
+  <!-- bottom note: what changes -->
+  <rect x="60" y="358" width="640" height="78" fill="#f3f4f6" stroke="#374151" stroke-width="1.5" rx="6"/>
+  <text x="380" y="380" text-anchor="middle" font-size="12" font-weight="600" fill="#111827">迁移成本被压缩到这两件事</text>
+  <text x="380" y="400" text-anchor="middle" font-size="10" fill="#374151">① 重写 6 个 MCP 工具的 backend 实现 (sim API / 真机 SDK 不同)</text>
+  <text x="380" y="416" text-anchor="middle" font-size="10" fill="#374151">② 改一份 SKILL.md (新 substrate 的 axes / 动作集 / 物理约束)</text>
+  <text x="380" y="430" text-anchor="middle" font-size="10" fill="#6b7280" font-style="italic">不变的: coding agent 不需要重训, harness/ 循环不需要重做, SKILL.md 里积累的策略经验可以跨平台复用</text>
+</svg>

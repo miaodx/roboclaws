@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 540"
+     font-family="-apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="540" fill="white"/>
+
+  <!-- title -->
+  <text x="380" y="34" text-anchor="middle" font-size="16" font-weight="600" fill="#1f2937">四个 mode 共享一个 MultiAgentEngine 内核,以及一份 SKILL.md</text>
+
+  <!-- SKILL.md banner (top, spans Mode 2/3/4) -->
+  <rect x="180" y="64" width="540" height="50" fill="#fef3c7" stroke="#d97706" stroke-width="2" rx="6"/>
+  <text x="450" y="85" text-anchor="middle" font-size="13" font-weight="600" fill="#92400e">📄 skills/ai2thor-navigator/SKILL.md</text>
+  <text x="450" y="103" text-anchor="middle" font-size="11" fill="#92400e">photo protocol · axes &amp; yaw convention · DO NOT bypass MCP</text>
+
+  <!-- read-arrows from SKILL.md down to Mode 2/3/4 -->
+  <line x1="245" y1="114" x2="245" y2="148" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <line x1="385" y1="114" x2="385" y2="148" stroke="#d97706" stroke-width="1.6" stroke-dasharray="4 4"/>
+  <line x1="525" y1="114" x2="525" y2="148" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <line x1="660" y1="114" x2="660" y2="148" stroke="#d97706" stroke-width="1.2" stroke-dasharray="4 4"/>
+  <text x="370" y="135" font-size="10" fill="#92400e" font-style="italic">load</text>
+
+  <!-- 4 mode boxes -->
+  <!-- Mode 1 (no SKILL.md) -->
+  <rect x="40" y="148" width="120" height="68" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" rx="6"/>
+  <text x="100" y="172" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2937">Mode 1</text>
+  <text x="100" y="190" text-anchor="middle" font-size="11" fill="#6b7280">VLM 直驱 game</text>
+  <text x="100" y="206" text-anchor="middle" font-size="9" fill="#9ca3af" font-style="italic">prompt 在 Python 里</text>
+
+  <!-- Mode 2 -->
+  <rect x="185" y="148" width="120" height="68" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" rx="6"/>
+  <text x="245" y="172" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2937">Mode 2</text>
+  <text x="245" y="190" text-anchor="middle" font-size="11" fill="#6b7280">OpenClaw Gateway</text>
+  <text x="245" y="206" text-anchor="middle" font-size="9" fill="#9ca3af" font-style="italic">channel · SOUL · UI</text>
+
+  <!-- Mode 3 (highlighted) -->
+  <rect x="325" y="148" width="120" height="68" fill="#dbeafe" stroke="#2563eb" stroke-width="2.4" rx="6"/>
+  <text x="385" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#1e40af">Mode 3 ★</text>
+  <text x="385" y="190" text-anchor="middle" font-size="11" fill="#2563eb">Coding agent</text>
+  <text x="385" y="206" text-anchor="middle" font-size="9" fill="#3730a3" font-style="italic">Codex / Claude Code</text>
+
+  <!-- Mode 4 -->
+  <rect x="465" y="148" width="120" height="68" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" rx="6"/>
+  <text x="525" y="172" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2937">Mode 4</text>
+  <text x="525" y="190" text-anchor="middle" font-size="11" fill="#6b7280">Railway appliance</text>
+  <text x="525" y="206" text-anchor="middle" font-size="9" fill="#9ca3af" font-style="italic">单容器对外 demo</text>
+
+  <!-- harness/ side note next to Mode 3 -->
+  <rect x="600" y="148" width="120" height="68" fill="#ecfeff" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="3 3" rx="6"/>
+  <text x="660" y="172" text-anchor="middle" font-size="12" font-weight="600" fill="#155e75">harness/</text>
+  <text x="660" y="190" text-anchor="middle" font-size="10" fill="#155e75">自我改进循环</text>
+  <text x="660" y="206" text-anchor="middle" font-size="9" fill="#0e7490" font-style="italic">spawn agent &amp; score</text>
+
+  <!-- harness drives Mode 3, edits SKILL.md -->
+  <line x1="600" y1="182" x2="445" y2="182" stroke="#0891b2" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="498" y="175" text-anchor="middle" font-size="9" fill="#0e7490">spawn</text>
+  <line x1="660" y1="148" x2="660" y2="124" stroke="#0891b2" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="668" y="138" font-size="9" fill="#0e7490">edit</text>
+
+  <!-- arrows from each mode going down -->
+  <line x1="100" y1="216" x2="100" y2="306" stroke="#6b7280" stroke-width="1.4"/>
+  <line x1="245" y1="216" x2="245" y2="266" stroke="#6b7280" stroke-width="1.4"/>
+  <line x1="385" y1="216" x2="385" y2="266" stroke="#2563eb" stroke-width="1.8"/>
+  <line x1="525" y1="216" x2="525" y2="266" stroke="#6b7280" stroke-width="1.4"/>
+
+  <!-- MCP server bar (used by Mode 2/3/4) -->
+  <rect x="180" y="266" width="410" height="44" fill="#e0e7ff" stroke="#4f46e5" stroke-width="1.6" rx="4"/>
+  <text x="385" y="290" text-anchor="middle" font-size="12" font-weight="600" fill="#3730a3">MCP server (127.0.0.1:18788)</text>
+  <text x="385" y="305" text-anchor="middle" font-size="10" fill="#4338ca">observe / observe_archived / move / scene_objects / goto / done</text>
+
+  <!-- arrow from MCP down -->
+  <line x1="385" y1="310" x2="385" y2="356" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Mode 1 arrow continues straight down (bypassing MCP) -->
+  <line x1="100" y1="306" x2="100" y2="356" stroke="#6b7280" stroke-width="1.4" marker-end="url(#arrow)"/>
+  <text x="62" y="334" font-size="9" fill="#9ca3af" font-style="italic">直驱</text>
+
+  <!-- MultiAgentEngine -->
+  <rect x="60" y="356" width="640" height="58" fill="#f3f4f6" stroke="#374151" stroke-width="2" rx="6"/>
+  <text x="380" y="383" text-anchor="middle" font-size="14" font-weight="700" fill="#111827">MultiAgentEngine</text>
+  <text x="380" y="402" text-anchor="middle" font-size="11" fill="#6b7280">一个 Unity controller、N 个 agent、共享 scene + camera + per-agent state</text>
+
+  <!-- arrow to substrate -->
+  <line x1="380" y1="414" x2="380" y2="450" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- substrate -->
+  <rect x="200" y="450" width="360" height="56" fill="#f9fafb" stroke="#6b7280" stroke-width="1.5" rx="6"/>
+  <text x="380" y="474" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2937">AI2-THOR (现状)</text>
+  <text x="380" y="494" text-anchor="middle" font-size="10" fill="#9ca3af" font-style="italic">→ MolmoSpaces (Phase 3) → 真机 (Phase 4)</text>
+
+  <!-- legend -->
+  <line x1="40" y1="525" x2="80" y2="525" stroke="#d97706" stroke-width="1.4" stroke-dasharray="4 4"/>
+  <text x="88" y="528" font-size="10" fill="#92400e">load SKILL.md</text>
+  <line x1="220" y1="525" x2="260" y2="525" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="268" y="528" font-size="10" fill="#6b7280">控制流</text>
+  <line x1="350" y1="525" x2="390" y2="525" stroke="#0891b2" stroke-width="1.4" stroke-dasharray="3 3"/>
+  <text x="398" y="528" font-size="10" fill="#0e7490">harness 操作</text>
+</svg>
