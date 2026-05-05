@@ -139,7 +139,7 @@ def test_healthcheck_returns_false_on_connection_error():
 
 
 def test_bridge_step_posts_to_chat_completions():
-    """POSTs to /v1/chat/completions with model=openclaw/agent-<id> and both images."""
+    """POSTs to /v1/chat/completions with model=openclaw/agent-<id> and all three images."""
     bridge = OpenClawBridge(token="abc")
     body = _chat_response('{"reasoning": "go", "action": "MoveAhead"}')
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body)) as post:
@@ -147,6 +147,7 @@ def test_bridge_step_posts_to_chat_completions():
             agent_id=1,
             frame=_rgb_frame(),
             overhead=_rgb_frame(color=32),
+            chase=_rgb_frame(color=64),
             state={"step": 3, "my_agent_id": 1},
             step_idx=3,
         )
@@ -157,12 +158,13 @@ def test_bridge_step_posts_to_chat_completions():
     payload = kwargs["json"]
     assert payload["model"] == "openclaw/agent-1"
     content = payload["messages"][0]["content"]
-    # one text block + two image_url blocks
+    # one text block + three image_url blocks (fpv, map_v2, chase)
     kinds = [b["type"] for b in content]
-    assert kinds == ["text", "image_url", "image_url"]
+    assert kinds == ["text", "image_url", "image_url", "image_url"]
     # image_urls are inline data URLs (no filesystem path leakage)
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert content[2]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert content[3]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     bridge.close()
 
 
@@ -174,12 +176,13 @@ def test_bridge_step_records_last_step_metrics():
             agent_id=1,
             frame=_rgb_frame(),
             overhead=_rgb_frame(color=32),
+            chase=_rgb_frame(color=64),
             state={"step": 3, "my_agent_id": 1},
             step_idx=3,
         )
     metrics = bridge.get_last_step_metrics()
     assert metrics["timings"]["openclaw_gateway_request_seconds"] >= 0.0
-    assert metrics["payload"]["image_count"] == 2
+    assert metrics["payload"]["image_count"] == 3
     assert metrics["payload"]["total_base64_chars"] > 0
     bridge.close()
 
@@ -190,7 +193,7 @@ def test_bridge_step_parses_action_from_response():
     fenced = '```json\n{"reasoning": "spin", "action": "RotateLeft"}\n```'
     body = _chat_response(fenced)
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body)):
-        result = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+        result = bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     assert result == {"reasoning": "spin", "action": "RotateLeft"}
     bridge.close()
 
@@ -200,7 +203,7 @@ def test_bridge_step_fallback_on_malformed_json():
     bridge = OpenClawBridge()
     body = _chat_response("Sorry, I don't know the map.")
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body)):
-        result = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+        result = bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     assert result["action"] == "MoveAhead"
     # reasoning falls back to the raw content (truncated) for debugging
     assert "Sorry" in result["reasoning"]
@@ -215,7 +218,7 @@ def test_bridge_step_raises_on_400_invalid_model():
     resp.text = 'Invalid model: "openclaw/agent-5"'
     with patch.object(bridge._client, "post", return_value=resp):
         with pytest.raises(OpenClawUnavailable, match="openclaw-bootstrap.sh"):
-            bridge.step(5, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(5, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -227,7 +230,7 @@ def test_bridge_step_raises_on_404():
     resp.text = "Not Found"
     with patch.object(bridge._client, "post", return_value=resp):
         with pytest.raises(OpenClawUnavailable, match="chat/completions not enabled"):
-            bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -235,7 +238,7 @@ def test_bridge_step_raises_on_401():
     bridge = OpenClawBridge()
     with patch.object(bridge._client, "post", return_value=_mock_response(401)):
         with pytest.raises(OpenClawUnavailable, match="401"):
-            bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -262,7 +265,7 @@ def test_bridge_step_raises_on_5xx():
     resp.json.return_value = {"error": {"message": "upstream overloaded"}}
     with patch.object(bridge._client, "post", return_value=resp):
         with pytest.raises(OpenClawUnavailable, match="upstream overloaded"):
-            bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -270,7 +273,7 @@ def test_bridge_step_raises_on_connection_error():
     bridge = OpenClawBridge()
     with patch.object(bridge._client, "post", side_effect=httpx.ConnectError("refused")):
         with pytest.raises(OpenClawUnavailable, match="unreachable"):
-            bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -278,7 +281,7 @@ def test_bridge_step_raises_on_read_timeout():
     bridge = OpenClawBridge()
     with patch.object(bridge._client, "post", side_effect=httpx.ReadTimeout("slow")):
         with pytest.raises(OpenClawUnavailable):
-            bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+            bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     bridge.close()
 
 
@@ -287,7 +290,7 @@ def test_bridge_uses_agent_prefix_in_model_id():
     bridge = OpenClawBridge(agent_prefix="bot-")
     body = _chat_response('{"reasoning": "", "action": "MoveAhead"}')
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body)) as post:
-        bridge.step(3, _rgb_frame(), _rgb_frame(), {}, 0)
+        bridge.step(3, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     payload = post.call_args.kwargs["json"]
     assert payload["model"] == "openclaw/bot-3"
     bridge.close()
@@ -299,12 +302,12 @@ def test_bridge_validates_action_in_navigation_actions():
     # Invalid
     body_bad = _chat_response('{"reasoning": "wrong", "action": "WalkIntoWall"}')
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body_bad)):
-        bad = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+        bad = bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     assert bad["action"] == "MoveAhead"
     # Valid (Teleport is in NAVIGATION_ACTIONS)
     body_ok = _chat_response('{"reasoning": "zap", "action": "Teleport"}')
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body_ok)):
-        ok = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+        ok = bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     assert ok["action"] == "Teleport"
     bridge.close()
 
@@ -354,7 +357,7 @@ def test_bridge_handles_content_block_list():
         ]
     }
     with patch.object(bridge._client, "post", return_value=_mock_response(200, body)):
-        result = bridge.step(0, _rgb_frame(), _rgb_frame(), {}, 0)
+        result = bridge.step(0, _rgb_frame(), _rgb_frame(), _rgb_frame(), {}, 0)
     assert result == {"reasoning": "ok", "action": "MoveBack"}
     bridge.close()
 
@@ -371,7 +374,7 @@ def test_provider_delegates_to_bridge_step_with_numpy_frames():
     bridge.step.return_value = {"reasoning": "ok", "action": "RotateLeft"}
 
     provider = OpenClawProvider(bridge=bridge)
-    images = [_rgb_frame(color=100), _rgb_frame(color=32)]
+    images = [_rgb_frame(color=100), _rgb_frame(color=32), _rgb_frame(color=64)]
     state = {"my_agent_id": 2, "step": 7, "game": "openclaw-demo"}
 
     result = provider.get_action(images=images, state=state)
@@ -383,8 +386,10 @@ def test_provider_delegates_to_bridge_step_with_numpy_frames():
     assert kwargs["step_idx"] == 7
     assert isinstance(kwargs["frame"], np.ndarray)
     assert isinstance(kwargs["overhead"], np.ndarray)
+    assert isinstance(kwargs["chase"], np.ndarray)
     assert kwargs["frame"].shape == images[0].shape
     assert kwargs["overhead"].shape == images[1].shape
+    assert kwargs["chase"].shape == images[2].shape
 
 
 def test_provider_handles_missing_images_with_placeholder():
@@ -399,6 +404,7 @@ def test_provider_handles_missing_images_with_placeholder():
     # Placeholder 1x1 black frames keep the named agent's payload well-formed.
     assert kwargs["frame"].shape == (1, 1, 3)
     assert kwargs["overhead"].shape == (1, 1, 3)
+    assert kwargs["chase"].shape == (1, 1, 3)
 
 
 def test_provider_uses_current_agent_when_my_agent_id_missing():
@@ -463,19 +469,19 @@ def test_provider_exposes_last_turn_metrics():
     bridge.step.return_value = {"reasoning": "ok", "action": "RotateLeft"}
     bridge.get_last_step_metrics.return_value = {
         "timings": {"openclaw_gateway_request_seconds": 12.3},
-        "payload": {"image_count": 2},
+        "payload": {"image_count": 3},
     }
 
     provider = OpenClawProvider(bridge=bridge)
     provider.get_action(
-        images=[_rgb_frame(), _rgb_frame(color=32)],
+        images=[_rgb_frame(), _rgb_frame(color=32), _rgb_frame(color=64)],
         state={"my_agent_id": 2, "step": 7},
     )
 
     metrics = provider.get_last_turn_metrics()
     assert metrics["timings"]["openclaw_provider_call_seconds"] >= 0.0
     assert metrics["timings"]["openclaw_gateway_request_seconds"] == pytest.approx(12.3)
-    assert metrics["payload"]["image_count"] == 2
+    assert metrics["payload"]["image_count"] == 3
     assert metrics["provider"]["attempts"] == 1
 
 
