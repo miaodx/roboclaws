@@ -88,6 +88,13 @@ class RunResult:
     debug: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class _SessionStoreCapture:
+    session_id: str
+    session_file: str
+    transcript_messages: list[TranscriptMessage]
+
+
 class OpenClawUnavailable(RuntimeError):
     """Raised when the Gateway is unreachable or rejects our request.
 
