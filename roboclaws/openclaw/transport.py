@@ -510,7 +510,7 @@ class OpenClawBridge:
             f"Follow the ai2thor-navigator skill. "
             f"Current state (JSON): {state_json}. "
             "FPV, structured overhead map, and chase camera attached in order. "
-            'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.',
+            'Reply with ONLY JSON: {"reasoning": "...", "action": "...".}'
         )
 
         payload = {
@@ -549,7 +549,9 @@ class OpenClawBridge:
                 "openclaw_state_json_seconds": round_seconds(state_json_seconds),
                 "openclaw_gateway_request_seconds": round_seconds(request_seconds),
                 "openclaw_response_parse_seconds": round_seconds(parse_seconds),
-                "openclaw_bridge_step_seconds": round_seconds(time.perf_counter() - step_started),
+                "openclaw_bridge_step_seconds": round_seconds(
+                    time.perf_counter() - step_started
+                ),
             },
             "payload": {
                 "transport": "openclaw_data_url",
@@ -562,8 +564,16 @@ class OpenClawBridge:
                     {"label": "map_v2", **map_metrics},
                     {"label": "chase", **chase_metrics},
                 ],
-                "total_jpeg_bytes": fpv_metrics["jpeg_bytes"] + map_metrics["jpeg_bytes"] + chase_metrics["jpeg_bytes"],
-                "total_base64_chars": fpv_metrics["base64_chars"] + map_metrics["base64_chars"] + chase_metrics["base64_chars"],
+                "total_jpeg_bytes": (
+                    fpv_metrics["jpeg_bytes"]
+                    + map_metrics["jpeg_bytes"]
+                    + chase_metrics["jpeg_bytes"]
+                ),
+                "total_base64_chars": (
+                    fpv_metrics["base64_chars"]
+                    + map_metrics["base64_chars"]
+                    + chase_metrics["base64_chars"]
+                ),
             },
         }
         return result
