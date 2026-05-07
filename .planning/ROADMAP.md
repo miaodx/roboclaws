@@ -14,9 +14,10 @@ via tool calls instead of the push model (Phase 2.5 → 2.6). The next follow-up
 on that autonomous branch is Phase 2.7: expose the agent's intermediate
 messages in artifacts, with a streaming-first preference if the real Gateway
 surface supports it cleanly. Phase 3 (Isaac Lab) is deferred indefinitely.
-Phase 6 is the MolmoSpaces cleanup pilot: a narrow, provenance-labeled
+Phase 6 is the MolmoSpaces cleanup scaffold: a narrow, provenance-labeled
 `api_semantic` cleanup loop that keeps AI2-THOR as the baseline while proving
-the first room-cleanup artifact contract.
+the first room-cleanup artifact contract. Phase 7 builds on it with a
+prompt-driven public-policy cleanup proof for `帮我整理这个房间`.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -48,6 +49,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.5 Refactor Regression Safety** - Phase 4 (completed 2026-04-23; deterministic fixtures + capture/analyze harnesses + first local probe evidence in `04-LOCAL-PROBE-RESULTS.md`)
 - ✅ **v1.6 Iterative Codebase Simplification** - Phase 5 (completed 2026-04-23; 18 target files simplified, global pytest+ruff green, net -203 lines across targets)
 - ✅ **v1.7 MolmoSpaces cleanup pilot** - Phase 6 (completed 2026-05-07; api-semantic cleanup contracts, scorer, direct MCP/demo artifacts; real planner-backed manipulation deferred)
+- ✅ **v1.8 MolmoSpaces prompt cleanup** - Phase 7 (completed 2026-05-07; public-policy prompt proof for `帮我整理这个房间`; real planner-backed manipulation deferred)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -70,6 +72,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
 - [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; real RBY1M/Franka planner-backed manipulation remains deferred.
+- [x] **Phase 7: MolmoSpaces prompt-driven cleanup demo** - Prompt `帮我整理这个房间` drives a public-only cleanup policy through the cleanup tool loop, without private-manifest planner access. Completed 2026-05-07; primitive execution remains `api_semantic`.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -381,10 +384,28 @@ Plans:
 `.planning/phases/06-molmospaces-api-semantic-cleanup/06-VERIFICATION.md`.
 **UI hint**: no
 
+#### ✅ v1.8 MolmoSpaces Prompt Cleanup (Phase 7) — Complete
+
+### Phase 7: MolmoSpaces prompt-driven cleanup demo
+**Goal**: Prove `帮我整理这个房间` can drive the cleanup loop from public room state and tool responses rather than private-manifest scripted targets.
+**Depends on**: Phase 6 cleanup scaffold.
+**Scope**: public cleanup policy, prompt-mode demo runner, prompt harness/verify gate, and source-plan update. Primitive execution remains `api_semantic`; no real robot planner, OpenClaw, or top-level MolmoSpaces import.
+**Plans**: `.planning/phases/07-molmospaces-prompt-driven-cleanup-demo/`
+
+- [x] 07-01: Public cleanup policy
+- [x] 07-02: Prompt demo harness and verify gate
+**Status update (2026-05-07):** `just harness::molmo-prompt-cleanup` runs
+`examples/molmospaces_cleanup_demo.py --planner public_heuristic --task
+"帮我整理这个房间"` and produces `cleanup_status=success`,
+`restored_count=5/5`, `planner=public_heuristic`, and
+`planner_uses_private_manifest=false`. Verification evidence is recorded in
+`.planning/phases/07-molmospaces-prompt-driven-cleanup-demo/07-VERIFICATION.md`.
+**UI hint**: no
+
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -403,4 +424,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 4/4 | Complete | 2026-04-23 |
 | 5. Iterative codebase simplification | v1.6 | 9/9 | Complete | 2026-04-23 |
 | 6. MolmoSpaces api-semantic cleanup pilot | v1.7 | 4/4 | Complete | 2026-05-07 |
+| 7. MolmoSpaces prompt-driven cleanup demo | v1.8 | 2/2 | Complete | 2026-05-07 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
