@@ -11,6 +11,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("run_result", type=Path)
     parser.add_argument("--require-public-planner", action="store_true")
     parser.add_argument("--expect-task")
+    parser.add_argument("--expect-backend")
     return parser.parse_args()
 
 
@@ -20,6 +21,8 @@ def main() -> None:
     score = data["score"]
     assert data["cleanup_status"] == "success", data
     assert data["primitive_provenance"] == "api_semantic", data
+    if args.expect_backend is not None:
+        assert data.get("backend") == args.expect_backend, data
     if args.expect_task is not None:
         assert data.get("task_prompt") == args.expect_task, data
     if args.require_public_planner:

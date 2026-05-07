@@ -83,6 +83,7 @@ def render_cleanup_report(
       <h1>MolmoSpaces Cleanup Pilot</h1>
       <div class="badges">
         {_badge("Scenario", scenario.scenario_id)}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
         {_badge("Planner", run_result.get("planner", "unknown"))}

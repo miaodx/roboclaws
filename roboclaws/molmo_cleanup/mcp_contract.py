@@ -14,8 +14,8 @@ class MolmoCleanupToolContract:
     network server. Tests and demos call the contract in process.
     """
 
-    def __init__(self, scenario: CleanupScenario | None = None):
-        self.backend = ApiSemanticCleanupBackend(scenario or build_cleanup_scenario())
+    def __init__(self, scenario: CleanupScenario | None = None, backend: Any | None = None):
+        self.backend = backend or ApiSemanticCleanupBackend(scenario or build_cleanup_scenario())
 
     def tool_specs(self) -> list[dict[str, Any]]:
         return [

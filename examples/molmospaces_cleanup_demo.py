@@ -25,10 +25,15 @@ from roboclaws.molmo_cleanup.scenario import (  # noqa: E402
     build_cleanup_scenario,
     write_scenario_bundle,
 )
+from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    MolmoSpacesSubprocessBackend,
+)
 
 DEFAULT_PROMPT = "帮我整理这个房间"
 SCRIPTED_REFERENCE = "scripted_reference"
 PUBLIC_HEURISTIC = "public_heuristic"
+SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -37,6 +42,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--restore-count", type=int, default=5)
     parser.add_argument("--task", default=DEFAULT_PROMPT)
+    parser.add_argument(
+        "--backend",
+        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND),
+        default=SYNTHETIC_BACKEND,
+    )
     parser.add_argument(
         "--planner",
         choices=(SCRIPTED_REFERENCE, PUBLIC_HEURISTIC),
@@ -52,18 +62,25 @@ def run_demo(
     restore_count: int = 5,
     planner: str = SCRIPTED_REFERENCE,
     task_prompt: str = DEFAULT_PROMPT,
+    backend: str = SYNTHETIC_BACKEND,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    scenario = build_cleanup_scenario(seed=seed)
+    backend_instance: Any | None = None
+    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+        backend_instance = MolmoSpacesSubprocessBackend(run_dir=output_dir, seed=seed)
+        scenario = backend_instance.scenario
+    else:
+        scenario = build_cleanup_scenario(seed=seed)
     paths = write_scenario_bundle(output_dir, scenario)
-    contract = MolmoCleanupToolContract(scenario)
+    contract = MolmoCleanupToolContract(scenario, backend=backend_instance)
     trace_events: list[dict[str, Any]] = []
     started_at = time.time()
 
-    before_snapshot = write_state_snapshot(
-        scenario,
-        contract.backend.object_locations(),
-        output_dir / "before.png",
+    before_snapshot = _write_snapshot(
+        backend=backend,
+        contract=contract,
+        scenario=scenario,
+        output_path=output_dir / "before.png",
         title="Before cleanup",
     )
 
@@ -116,20 +133,34 @@ def run_demo(
         lambda: contract.done(f"{planner} cleanup complete"),
     )
 
-    after_snapshot = write_state_snapshot(
-        scenario,
-        contract.backend.object_locations(),
-        output_dir / "after.png",
+    after_snapshot = _write_snapshot(
+        backend=backend,
+        contract=contract,
+        scenario=scenario,
+        output_path=output_dir / "after.png",
         title="After cleanup",
     )
     trace_path = output_dir / "trace.jsonl"
     write_trace_jsonl(trace_path, trace_events)
 
     run_result = {
+        "backend": backend,
         "scenario_id": scenario.scenario_id,
+        "seed": seed,
         "task_prompt": task_prompt,
+        "final_status": done["cleanup_status"],
+        "terminate_reason": f"{planner} cleanup complete",
         "cleanup_status": done["cleanup_status"],
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "primitive_provenance_summary": {
+            API_SEMANTIC_PROVENANCE: sum(
+                1
+                for event in trace_events
+                if event.get("event") == "response"
+                and isinstance(event.get("response"), dict)
+                and event["response"].get("primitive_provenance") == API_SEMANTIC_PROVENANCE
+            )
+        },
         "planner": planner,
         "planner_uses_private_manifest": uses_private_manifest,
         "scripted_reference_uses_private_manifest": uses_private_manifest
@@ -146,6 +177,14 @@ def run_demo(
             "after_snapshot": str(after_snapshot),
         },
     }
+    if backend_instance is not None:
+        run_result["molmospaces_runtime"] = {
+            "python_executable": str(backend_instance.python_executable),
+            "runtime": backend_instance.runtime,
+            "model_stats": backend_instance.model_stats,
+            "scene_xml": backend_instance.scene_xml,
+            "metadata_object_count": backend_instance.metadata_object_count,
+        }
     report_path = render_cleanup_report(
         run_dir=output_dir,
         scenario=scenario,
@@ -189,6 +228,24 @@ def _build_cleanup_plan(
     raise ValueError(f"unknown cleanup planner: {planner}")
 
 
+def _write_snapshot(
+    *,
+    backend: str,
+    contract: MolmoCleanupToolContract,
+    scenario: Any,
+    output_path: Path,
+    title: str,
+) -> Path:
+    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+        return contract.backend.write_snapshot(output_path, title=title)
+    return write_state_snapshot(
+        scenario,
+        contract.backend.object_locations(),
+        output_path,
+        title=title,
+    )
+
+
 def _call_tool(
     events: list[dict[str, Any]],
     started_at: float,
@@ -221,6 +278,7 @@ def main(argv: list[str] | None = None) -> None:
         restore_count=args.restore_count,
         planner=args.planner,
         task_prompt=args.task,
+        backend=args.backend,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 

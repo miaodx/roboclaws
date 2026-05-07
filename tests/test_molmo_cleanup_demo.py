@@ -26,6 +26,7 @@ def test_molmospaces_cleanup_demo_writes_success_artifacts(tmp_path: Path) -> No
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
 
     assert result["cleanup_status"] == "success"
+    assert result["backend"] == "api_semantic_synthetic"
     assert run_result["primitive_provenance"] == "api_semantic"
     assert run_result["planner"] == "scripted_reference"
     assert run_result["planner_uses_private_manifest"] is True
@@ -60,6 +61,7 @@ def test_molmospaces_cleanup_demo_runs_public_prompt_planner(tmp_path: Path) -> 
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
 
     assert result["cleanup_status"] == "success"
+    assert result["backend"] == "api_semantic_synthetic"
     assert result["task_prompt"] == "帮我整理这个房间"
     assert result["planner"] == "public_heuristic"
     assert result["planner_uses_private_manifest"] is False

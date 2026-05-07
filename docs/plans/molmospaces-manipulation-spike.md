@@ -2,12 +2,13 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 7 prompt-driven cleanup demo shipped and verified on 2026-05-07
+**Status:** Phase 8 real MolmoSpaces subprocess cleanup demo shipped and verified on 2026-05-07
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
-Phase 6 scaffold -> Phase 7 prompt-driven public cleanup. OpenClaw and real
-planner-backed manipulation remain deferred.
+Phase 6 scaffold -> Phase 7 prompt-driven public cleanup -> Phase 8 real
+MolmoSpaces/MuJoCo subprocess cleanup. OpenClaw and real planner-backed
+manipulation remain deferred.
 
 ## Why This Exists
 
@@ -192,6 +193,56 @@ Boundary:
 - The next meaningful pipeline stage is either a real coding-agent/OpenClaw
   policy proof over this same public contract or a Python 3.11 MolmoSpaces
   subprocess adapter.
+
+### Phase 8 Real MolmoSpaces Subprocess Result - 2026-05-07
+
+The follow-up GSD phase closed the fake/shim/backend gap in the prompt cleanup
+artifact:
+
+- `roboclaws/molmo_cleanup/subprocess_backend.py` shells the Python 3.10 repo
+  process into the isolated Python 3.11 MolmoSpaces runtime at
+  `/tmp/roboclaws-molmospaces-spike/.venv/bin/python`.
+- `scripts/molmospaces_subprocess_worker.py` loads upstream
+  `procthor-10k-val` scene index 0 through MolmoSpaces resource installation,
+  then loads the resulting MJCF into MuJoCo.
+- The worker builds public `observe` / `scene_objects` data from real
+  MolmoSpaces scene metadata plus MuJoCo state readback, while the private
+  manifest remains scorer-only.
+- `place` uses `api_semantic` direct MuJoCo free-joint `qpos` mutation against
+  the loaded real scene. This is not planner-backed robot manipulation, so it is
+  deliberately not labeled `real`.
+- `just harness::molmo-real-cleanup` and `just verify::molmo-real-cleanup` are
+  the focused real-runtime gates.
+- `.planning/phases/08-molmospaces-real-subprocess-cleanup/08-VERIFICATION.md`
+  records the verification evidence.
+
+Latest real-runtime harness result:
+
+| Field | Value |
+| --- | --- |
+| Artifact dir | `output/molmo-real-cleanup-harness/` |
+| Backend | `molmospaces_subprocess` |
+| Runtime | Python `3.11.14`, MuJoCo `3.4.0` |
+| Scene | upstream `procthor-10k-val` scene index `0` |
+| Scene stats | 140 metadata objects, 415 MuJoCo bodies, 3492 geoms, 129 joints |
+| Task prompt | `帮我整理这个房间` |
+| Cleanup status | `success` |
+| Restored objects | `5/5` |
+| Success threshold | `3/5` |
+| Planner | `public_heuristic` |
+| Planner uses private manifest | `false` |
+| Primitive provenance | `api_semantic` |
+| Required artifacts | `before.png`, `after.png`, `trace.jsonl`, `run_result.json`, `report.html` |
+
+Boundary:
+
+- This now satisfies the real upstream MolmoSpaces/MuJoCo scene requirement for
+  the semantic cleanup proof.
+- It still does not prove RBY1M/Franka planner-backed pick/place. Future
+  artifacts may use `primitive_provenance="real"` only after that planner-backed
+  path is proven.
+- It is still a deterministic public heuristic, not an OpenClaw/VLM policy.
+  OpenClaw integration remains a separate follow-up.
 
 ## Upstream Findings
 
@@ -464,12 +515,18 @@ Phase 7 then added the prompt-driven public-policy proof.
    cleanup policy using `observe` / `scene_objects` data, with
    `planner_uses_private_manifest=false` in `run_result.json`.
 
-6. **OpenClaw follow-up**
+6. **Real MolmoSpaces subprocess cleanup**
+   Completed in Phase 8. The prompt `帮我整理这个房间` now runs through the same
+   public cleanup loop against a real upstream MolmoSpaces/MuJoCo scene loaded
+   by the isolated Python 3.11 runtime, with
+   `backend=molmospaces_subprocess` in `run_result.json`.
+
+7. **OpenClaw follow-up**
    Reuse the working MCP surface through OpenClaw only after the direct cleanup
    demo is stable. Split this into a separate GSD phase if direct MCP cleanup is
    not stable quickly.
 
-7. **Docs and ADR**
+8. **Docs and ADR**
    Reframe README / ARCHITECTURE / technical design after evidence exists. Add
    an ADR that AI2-THOR remains baseline and MolmoSpaces is the next substrate
    for manipulation.
@@ -586,10 +643,12 @@ completed:
   gsd-plan-phase 07-molmospaces-prompt-driven-cleanup-demo
   gsd-execute-phase 07-molmospaces-prompt-driven-cleanup-demo
   gsd-verify-work 07-molmospaces-prompt-driven-cleanup-demo
+  gsd-plan-phase 08-molmospaces-real-subprocess-cleanup
+  gsd-execute-phase 08-molmospaces-real-subprocess-cleanup
+  gsd-verify-work 08-molmospaces-real-subprocess-cleanup
 
 next pipeline candidates:
   real coding-agent policy over the public contract
-  optional MolmoSpaces Python 3.11 adapter/subprocess
   real RBY1M/Franka planner-backed manipulation proof
   OpenClaw cleanup-agent integration
 ```
