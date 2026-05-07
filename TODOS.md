@@ -40,10 +40,11 @@ not here.
 
 - **Phase 2.6 deferred-items sweep** (from plan 02.6-05 — see
   `.planning/phases/02.6-openclaw-mcp-tools-integration/deferred-items.md`).
-  5 ruff check errors + 6 format diffs in unrelated Phase 2.2 / Kimi-era
-  files surfaced during the phase-wide gate. Scoped out of 2.6 to keep
-  the sim_server deletion commit focused. Resolve as a standalone
-  `chore: ruff cleanup` PR.
+  Re-check the deferred-items file before starting. The architecture cleanup on
+  2026-05-07 left `ruff check .`, `ruff format --check .`, `git diff --check`,
+  and `./scripts/run_pytest_standalone.sh -q` clean, so this item may now be
+  partly or fully obsolete. Close it with evidence if no Kimi-era / Phase 2.2
+  lint drift remains.
 
 - **Benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding` tool profile**
   (flagged 2026-04-27 while fixing the OpenClaw 2026.4.25-beta.11 MCP
