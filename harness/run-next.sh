@@ -46,7 +46,11 @@ fi
 last_from_runs=$(ls -1 harness/runs 2>/dev/null | grep -E '^[0-9]+$' | sort -n | tail -1 || echo 0)
 last_from_log=$(ls -1 harness/runs-log 2>/dev/null \
   | sed -nE 's|^([0-9]+)-.*\.md$|\1|p' | sort -n | tail -1 || echo 0)
-last=$(( ${last_from_runs:-0} > ${last_from_log:-0} ? ${last_from_runs:-0} : ${last_from_log:-0} ))
+last_from_runs="${last_from_runs:-0}"
+last_from_log="${last_from_log:-0}"
+last_runs_dec=$((10#$last_from_runs))
+last_log_dec=$((10#$last_from_log))
+last=$(( last_runs_dec > last_log_dec ? last_runs_dec : last_log_dec ))
 next=$(printf "%03d" $((last + 1)))
 
 echo "==> next run_id: $next  (last: $last)"
