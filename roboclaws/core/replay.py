@@ -10,6 +10,9 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from roboclaws.core.run_artifacts import build_replay_manifest, build_replay_step
+from roboclaws.core.run_artifacts import jsonify as _artifact_jsonify
+
 try:
     import imageio  # type: ignore[import-untyped]
 
@@ -224,40 +227,30 @@ class ReplayRecorder:
             composite_frames.append(_rgb_array(composite_img))
 
             steps_data.append(
-                {
-                    "step": rec.step,
-                    "agent_id": rec.agent_id,
-                    "game_state": _jsonify(rec.game_state),
-                    "vlm_prompt_state": _jsonify(rec.vlm_prompt_state),
-                    "vlm_response": _jsonify(rec.vlm_response),
-                    "provider_status": _jsonify(rec.provider_status),
-                    "turn_metrics": _jsonify(rec.turn_metrics),
-                    "overhead_label": rec.overhead_label,
-                    "extra_views": extra_views_data,
-                }
+                build_replay_step(
+                    step=rec.step,
+                    agent_id=rec.agent_id,
+                    game_state=rec.game_state,
+                    vlm_prompt_state=rec.vlm_prompt_state,
+                    vlm_response=rec.vlm_response,
+                    provider_status=rec.provider_status,
+                    turn_metrics=rec.turn_metrics,
+                    overhead_label=rec.overhead_label,
+                    extra_views=extra_views_data,
+                )
             )
 
         duration = time.time() - self._start_time
-        scores = final_scores or {}
-        manifest: dict[str, Any] = {
-            "metadata": {
-                "game": self._game,
-                "agent_count": self._agent_count,
-                "total_steps": len(self._steps),
-                "duration_seconds": round(duration, 2),
-                "vlm_cost_usd": round(vlm_cost_usd, 6),
-            },
-            "summary": {
-                "final_scores": _jsonify(scores),
-                "total_steps": len(self._steps),
-                "vlm_cost_usd": round(vlm_cost_usd, 6),
-                "step_count": len(self._steps),
-                "game_duration_seconds": round(duration, 2),
-                "termination_reason": termination_reason,
-                "provider_status": _jsonify(provider_status or {}),
-            },
-            "steps": steps_data,
-        }
+        manifest = build_replay_manifest(
+            game=self._game,
+            agent_count=self._agent_count,
+            duration_seconds=duration,
+            vlm_cost_usd=vlm_cost_usd,
+            final_scores=final_scores or {},
+            termination_reason=termination_reason,
+            provider_status=provider_status or {},
+            steps=steps_data,
+        )
         (out / "replay.json").write_text(json.dumps(manifest, indent=2))
 
         if generate_gif and composite_frames and _HAS_IMAGEIO:
@@ -409,17 +402,7 @@ def _rgb_array(frame: np.ndarray | Image.Image) -> np.ndarray:
 
 def _jsonify(obj: Any) -> Any:
     """Recursively convert numpy scalars/arrays to JSON-serialisable types."""
-    if isinstance(obj, dict):
-        return {k: _jsonify(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_jsonify(v) for v in obj]
-    if isinstance(obj, np.integer):
-        return int(obj)
-    if isinstance(obj, np.floating):
-        return float(obj)
-    if isinstance(obj, np.ndarray):
-        return obj.tolist()
-    return obj
+    return _artifact_jsonify(obj)
 
 
 def _panel_slug(label: str) -> str:

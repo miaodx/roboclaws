@@ -5,7 +5,6 @@ import argparse
 import base64
 import io
 import json
-import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -18,10 +17,13 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.run_artifacts import build_autonomous_summary as _artifact_summary  # noqa: E402
+from roboclaws.core.run_artifacts import (
+    extract_frame_events,  # noqa: E402
+    extract_transcript_entries,  # noqa: E402
+)
 
 GIF_DURATION_MS = 150
-FRAME_EVENT = "frame_capture"
-TRANSCRIPT_EVENT = "assistant_transcript"
 SEEN_BADGE = "👁"
 UNSEEN_BADGE = "🚶"
 
@@ -51,65 +53,6 @@ def load_events(trace_path: Path) -> list[dict[str, Any]]:
             continue
         events.append(json.loads(stripped))
     return events
-
-
-def extract_frame_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [event for event in events if event.get("event") == FRAME_EVENT]
-
-
-def extract_transcript_entries(
-    events: list[dict[str, Any]],
-    run_result: dict[str, Any],
-) -> list[dict[str, Any]]:
-    transcript: list[dict[str, Any]] = []
-    for event in events:
-        if event.get("event") != TRANSCRIPT_EVENT:
-            continue
-        content = str(event.get("content", ""))
-        if not content:
-            continue
-        transcript.append(
-            {
-                "ts": float(event.get("wallclock_elapsed", 0.0)),
-                "source": str(event.get("source", "unknown")),
-                "content": content,
-                "is_final": bool(event.get("is_final", False)),
-                "message_index": int(event.get("message_index", 0)),
-                "chunk_index": int(event.get("chunk_index", 0)),
-            }
-        )
-    if transcript:
-        return sorted(
-            transcript,
-            key=lambda entry: (entry["ts"], entry["message_index"], entry["chunk_index"]),
-        )
-
-    run_result_messages = run_result.get("transcript_messages")
-    if not isinstance(run_result_messages, list):
-        return []
-    fallback: list[dict[str, Any]] = []
-    for index, entry in enumerate(run_result_messages):
-        if not isinstance(entry, dict):
-            continue
-        content = str(entry.get("content", ""))
-        if not content:
-            continue
-        fallback.append(
-            {
-                "ts": float(entry.get("wallclock_s", 0.0)),
-                "source": str(
-                    entry.get("source") or run_result.get("transcript_source") or "unknown"
-                ),
-                "content": content,
-                "is_final": bool(entry.get("is_final", False)),
-                "message_index": int(entry.get("message_index", 0)),
-                "chunk_index": int(entry.get("chunk_index", index)),
-            }
-        )
-    return sorted(
-        fallback,
-        key=lambda entry: (entry["ts"], entry["message_index"], entry["chunk_index"]),
-    )
 
 
 def _strip_data_url(encoded: str) -> str:
@@ -275,89 +218,7 @@ def _build_summary_from_events(
     frames: list[dict[str, Any]],
     run_result: dict[str, Any],
 ) -> dict[str, Any]:
-    transcript_entries = extract_transcript_entries(events, run_result)
-    observe_request_events = [
-        event
-        for event in events
-        if event.get("tool") == "observe" and event.get("event") == "request"
-    ]
-    move_request_events = [
-        event for event in events if event.get("tool") == "move" and event.get("event") == "request"
-    ]
-    done_request_events = [
-        event for event in events if event.get("tool") == "done" and event.get("event") == "request"
-    ]
-    seen_frames = [frame for frame in frames if frame.get("seen_by_agent") is True]
-    unseen_frames = [frame for frame in frames if frame.get("seen_by_agent") is False]
-    observe_count = len(observe_request_events) or sum(
-        1 for frame in frames if frame.get("tool") == "observe"
-    )
-    move_count = len(move_request_events) or sum(
-        1 for frame in frames if frame.get("tool") == "move"
-    )
-    done_count = len(done_request_events) or int(run_result.get("terminated_by") == "done")
-    decision_modes = {
-        "fresh_observe": 0,
-        "reasoned_batch": 0,
-        "blind_batch": 0,
-    }
-    for frame in frames:
-        if frame.get("tool") != "move":
-            continue
-        decision_mode = str(frame.get("decision_mode", ""))
-        if decision_mode in decision_modes:
-            decision_modes[decision_mode] += 1
-    human_delivered = sum(
-        1
-        for event in events
-        if event.get("event") == "response" and event.get("response", {}).get("human_message")
-    )
-
-    if move_count:
-        observe_to_move_ratio = observe_count / move_count
-    elif observe_count:
-        observe_to_move_ratio = math.inf
-    else:
-        observe_to_move_ratio = 0.0
-
-    wallclock_seconds = float(run_result.get("wallclock_s", 0.0))
-    if wallclock_seconds <= 0.0 and frames:
-        wallclock_seconds = max(
-            0.0,
-            float(frames[-1].get("wallclock_elapsed", 0.0))
-            - float(frames[0].get("wallclock_elapsed", 0.0)),
-        )
-
-    latest_frame = frames[-1] if frames else {}
-    transcript_source = "none"
-    if transcript_entries:
-        transcript_source = str(transcript_entries[0].get("source", "none"))
-    elif run_result.get("transcript_source"):
-        transcript_source = str(run_result.get("transcript_source"))
-
-    return {
-        "total_tool_calls": observe_count + move_count + done_count,
-        "tool_calls_by_type": {
-            "observe": observe_count,
-            "move": move_count,
-            "done": done_count,
-        },
-        "moves": move_count,
-        "observes_by_agent": len(seen_frames),
-        "frames_unseen_by_agent": len(unseen_frames),
-        "observe_to_move_ratio": observe_to_move_ratio,
-        "decision_modes": decision_modes,
-        "wallclock_seconds": wallclock_seconds,
-        "frame_count": len(frames),
-        "view_variant": latest_frame.get("view_variant", "baseline"),
-        "terminated_by": (
-            run_result.get("terminated_by") or ("done" if done_count else "wall_clock")
-        ),
-        "human_messages_delivered": human_delivered,
-        "transcript_message_count": len(transcript_entries),
-        "transcript_source": transcript_source,
-        "final_message": run_result.get("final_message"),
-    }
+    return _artifact_summary(events=events, frames=frames, run_result=run_result)
 
 
 def _format_position(agent_state: dict[str, Any]) -> str:

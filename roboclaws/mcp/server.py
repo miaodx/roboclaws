@@ -78,6 +78,16 @@ from mcp.server.fastmcp import Image as MCPImage
 from PIL import Image as PILImage
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS, AgentState, MultiAgentEngine
+from roboclaws.core.run_artifacts import (
+    FRAME_CAPTURE_EVENT,
+    SNAPSHOT_ARCHIVE_VIEW_NAMES,
+    build_frame_capture_payload,
+    build_snapshot_archive_paths,
+    build_snapshot_metrics,
+    build_trace_event,
+    snapshot_png_filename,
+    snapshot_view_name,
+)
 from roboclaws.core.views import (
     image_labels_for_variant,
     make_navigation_view_context,
@@ -108,15 +118,6 @@ _DEFAULT_PORT = 18788
 _STARTUP_TIMEOUT_S = 2.0
 _VIEW_VARIANT = "map-v2+chase"
 _VIEW_IMAGE_LABELS = tuple(image_labels_for_variant(_VIEW_VARIANT))
-
-# Maps per-variant image labels to the stable filenames the live viewer polls.
-_LABEL_TO_VIEWER_NAME: dict[str, str] = {
-    "fpv": "fpv",
-    "overhead": "map",
-    "map_v2": "map",
-    "chase": "chase",
-}
-
 
 # ---------------------------------------------------------------------------
 # Frame encoders
@@ -539,7 +540,7 @@ class RoboclawsMCPServer:
             observe_delivery=observe_delivery,
             bridge_model=bridge_model,
         )
-        self._write_trace(tool="observe", event="frame_capture", **frame_payload)
+        self._write_trace(tool="observe", event=FRAME_CAPTURE_EVENT, **frame_payload)
 
         state_payload = dict(base_state_payload)
         state_payload["observe_delivery"] = observe_delivery
@@ -650,7 +651,7 @@ class RoboclawsMCPServer:
             human_message=human_message,
             observe_delivery="archived",
         )
-        self._write_trace(tool="observe_archived", event="frame_capture", **frame_payload)
+        self._write_trace(tool="observe_archived", event=FRAME_CAPTURE_EVENT, **frame_payload)
 
         # Match observe's state richness so an agent reading both responses
         # can pick fields uniformly. Omit observe_delivery / bridge_model —
@@ -782,7 +783,7 @@ class RoboclawsMCPServer:
             move_direction=direction,
             move_reason=normalized_reason,
         )
-        self._write_trace(tool="move", event="frame_capture", **frame_payload)
+        self._write_trace(tool="move", event=FRAME_CAPTURE_EVENT, **frame_payload)
 
         result = "ok" if state.last_action_success else "blocked"
         response: dict[str, Any] = {
@@ -1003,15 +1004,22 @@ class RoboclawsMCPServer:
         # relative `./snapshots/...` paths silently drop in the Control UI;
         # only absolute paths under the agent workspace render.
         container_dir = f"/home/node/.openclaw/workspaces/agent-{self.agent_id}/snapshots"
-        paths: dict[str, str] = {}
+        archive_stem = clean
+        paths = build_snapshot_archive_paths(
+            container_dir=container_dir,
+            archive_stem=archive_stem,
+        )
         # One encode per frame, shared between the archive write and the live
         # viewer's latest.*.png refresh. `_do_observe` skips its own
         # `_write_latest_snapshots` call when this branch runs.
-        for name, frame in zip(("fpv", "map", "chase"), prompt_bundle.prompt_images, strict=False):
+        for name, frame in zip(
+            SNAPSHOT_ARCHIVE_VIEW_NAMES,
+            prompt_bundle.prompt_images,
+            strict=False,
+        ):
             png_bytes = _encode_frame_png(frame, max_dim=640)
-            dest = self.snapshots_dir / f"{clean}.{name}.png"
+            dest = self.snapshots_dir / snapshot_png_filename(archive_stem, name)
             dest.write_bytes(png_bytes)
-            paths[name] = f"{container_dir}/{dest.name}"
             self._atomic_write_latest(name, png_bytes)
         return paths
 
@@ -1093,16 +1101,16 @@ class RoboclawsMCPServer:
             last_trace_age_s = round(time.monotonic() - self._last_trace_monotonic, 3)
         with self._queue_lock:
             queued_human_messages = len(self._human_queue)
-        return {
-            "runtime_s": round(time.monotonic() - self._started, 3),
-            "last_trace_age_s": last_trace_age_s,
-            "queued_human_messages": queued_human_messages,
-            "observed_once": self._observed_once,
-            "moves_since_observe": self._moves_since_observe,
-            "done_event_set": self.done_event.is_set(),
-            "done_reason": self._done_reason,
-            "tool_event_counts": tool_event_counts,
-        }
+        return build_snapshot_metrics(
+            runtime_s=time.monotonic() - self._started,
+            last_trace_age_s=last_trace_age_s,
+            queued_human_messages=queued_human_messages,
+            observed_once=self._observed_once,
+            moves_since_observe=self._moves_since_observe,
+            done_event_set=self.done_event.is_set(),
+            done_reason=self._done_reason,
+            tool_event_counts=tool_event_counts,
+        )
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
         """Append a `tool=<runtime>` trace line (for example-level telemetry)."""
@@ -1185,28 +1193,23 @@ class RoboclawsMCPServer:
         observe_delivery: str | None = None,
         bridge_model: str | None = None,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "seen_by_agent": seen_by_agent,
-            "fpv": _encode_frame_jpeg_b64(state.frame),
-            "overhead": _encode_frame_jpeg_b64(prompt_bundle.trace_overhead_frame),
-            "agent_state": self._state_payload(state),
-            **self._view_metadata(prompt_bundle.image_labels),
-        }
-        payload["baseline_overhead"] = _encode_frame_jpeg_b64(prompt_bundle.raw_overhead_frame)
-        payload["chase"] = _encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame)
-        if decision_mode is not None:
-            payload["decision_mode"] = decision_mode
-        if human_message is not None:
-            payload["human_message"] = human_message
-        if move_direction is not None:
-            payload["move_direction"] = move_direction
-        if move_reason is not None:
-            payload["move_reason"] = move_reason
-        if observe_delivery is not None:
-            payload["observe_delivery"] = observe_delivery
-        if bridge_model is not None:
-            payload["bridge_model"] = bridge_model
-        return payload
+        view_metadata = self._view_metadata(prompt_bundle.image_labels)
+        return build_frame_capture_payload(
+            seen_by_agent=seen_by_agent,
+            fpv=_encode_frame_jpeg_b64(state.frame),
+            overhead=_encode_frame_jpeg_b64(prompt_bundle.trace_overhead_frame),
+            agent_state=self._state_payload(state),
+            view_variant=view_metadata["view_variant"],
+            image_labels=view_metadata["image_labels"],
+            baseline_overhead=_encode_frame_jpeg_b64(prompt_bundle.raw_overhead_frame),
+            chase=_encode_frame_jpeg_b64(prompt_bundle.chase_cam_frame),
+            decision_mode=decision_mode,
+            human_message=human_message,
+            move_direction=move_direction,
+            move_reason=move_reason,
+            observe_delivery=observe_delivery,
+            bridge_model=bridge_model,
+        )
 
     def _state_payload(self, state: AgentState) -> dict[str, Any]:
         return {
@@ -1240,7 +1243,7 @@ class RoboclawsMCPServer:
         if self.snapshots_dir is None:
             return
         for label, frame in zip(prompt_bundle.image_labels, prompt_bundle.prompt_images):
-            viewer_name = _LABEL_TO_VIEWER_NAME.get(label)
+            viewer_name = snapshot_view_name(label)
             if viewer_name is None:
                 continue
             self._atomic_write_latest(viewer_name, _encode_frame_png(frame, max_dim=640))
@@ -1281,13 +1284,18 @@ class RoboclawsMCPServer:
         # close() flips `_closed` after we read it but before we write.
         if self._closed:
             return
-        payload = {
-            "ts": time.time(),
-            "tool": tool,
-            "event": event,
-            "wallclock_elapsed": round(time.monotonic() - self._started, 6),
-            **data,
-        }
+        event_data = dict(data)
+        ts = float(event_data.pop("ts", time.time()))
+        wallclock_elapsed = float(
+            event_data.pop("wallclock_elapsed", time.monotonic() - self._started)
+        )
+        payload = build_trace_event(
+            tool=tool,
+            event=event,
+            ts=ts,
+            wallclock_elapsed=wallclock_elapsed,
+            **event_data,
+        )
         with self._trace_lock:
             if self._closed:  # re-check under lock (close() holds this lock)
                 return
