@@ -2,11 +2,11 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Approved pre-GSD plan; cleanup-first capability spike is next
+**Status:** Capability spike completed; narrow GSD handoff is now allowed
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
-**Workflow:** Matt-style plan first; optional `to-issues`; GSD only after
-MolmoSpaces cleanup-demo capabilities are proven
+**Workflow:** Matt-style plan first; optional `to-issues`; GSD now owns only
+the bounded fake-backend/scorer/direct-MCP cleanup slices described below
 
 ## Why This Exists
 
@@ -57,6 +57,65 @@ the APIs below on the target local workstation.
 
 If any required capability is missing, stop after the spike, document the
 blocker, and do not fake the cleanup demo as a successful MolmoSpaces result.
+
+### Local Capability Spike Result - 2026-05-07
+
+The capability spike ran locally against upstream `allenai/molmospaces` main at
+commit `3c50ae6093f7e4a4ef32529f8a773715da410a2f`.
+
+Environment result:
+
+- Roboclaws' repo `.venv` is Python `3.10.19`; upstream MolmoSpaces requires
+  Python `>=3.11`, so the integration must use an isolated Python 3.11 runtime
+  until or unless Roboclaws raises its Python floor.
+- Isolated setup succeeded with
+  `uv venv --python 3.11 /tmp/roboclaws-molmospaces-spike/.venv` and
+  `uv pip install --python /tmp/roboclaws-molmospaces-spike/.venv/bin/python --torch-backend cpu -e ".[mujoco]"`.
+- Installed versions: `molmo-spaces 0.0.1`, `mujoco 3.4.0`,
+  `molmospaces-resources 0.0.1b4`.
+- A minimal MuJoCo EGL render produced a `(64, 64, 3) uint8` RGB frame. This
+  proves the local workstation can render headless MuJoCo frames without
+  involving AI2-THOR or a real VLM.
+
+API/resource result:
+
+| Capability | Result | Evidence |
+| --- | --- | --- |
+| Install/runtime | Passed with an isolated Python 3.11 venv; blocked for the repo Python 3.10 venv. | Upstream `pyproject.toml` requires `>=3.11`; local install/import succeeded in `/tmp/roboclaws-molmospaces-spike/.venv`. |
+| Scene load/reset | Passed for a tiny on-demand ProcTHOR val scene. | `get_scenes("procthor-10k", "val")` found `val_0.xml`; `install_scene_from_source_index("procthor-10k-val", 0)` installed `procthor-10k-val_val_0.tar.zst`; `mujoco.MjModel.from_xml_path(...)` loaded 415 bodies, 3492 geoms, 129 joints, and `mj_resetData` restored `qpos` exactly. |
+| Object inventory | Passed from scene metadata and MuJoCo model state. | `get_scene_metadata(val_0.xml)` returned 140 objects; top categories included `Pencil`, `Chair`, `Pen`, `CellPhone`, `Television`, `Plate`, and `Cup`. |
+| Camera frames | Passed at MuJoCo renderer level. | `mujoco.Renderer(...).render()` returned RGB frames for both a toy model and the loaded MolmoSpaces scene. |
+| State readback | Passed at MuJoCo state level. | Free-joint object positions are readable through `data.xpos` and `data.qpos`; `ladle_...` moved by `delta_x=0.1` after a controlled `qpos` edit and `mj_forward`. |
+| Semantic manipulation | Partially passed as `api_semantic`, not as real robot manipulation. | Direct MuJoCo free-joint edits can move objects and be scored, but that must be labeled `api_semantic`; RBY1M/Franka planner-backed pick/place remains unproven for this demo. |
+| Cleanup scoring | Ready for implementation, not upstream-provided as the Roboclaws scenario. | Upstream benchmark schemas cover pick, pick/place, open/close, and nav-to-object episode specs; Roboclaws still needs its private valid-receptacle manifest and 3-of-5 scorer. |
+| Failure semantics | Passed at ID lookup level. | `mujoco.mj_name2id(..., "missing-object-id") == -1`; the MCP layer should translate that into `stale_reference` rather than success. |
+
+Operational finding:
+
+- Avoid broad MolmoSpaces config imports during normal Roboclaws startup. A
+  config-instantiation probe triggered the resource manager and pulled about
+  5 GB into `~/.cache/molmo-spaces-resources`, mostly `objects/thor`,
+  `objathor_metadata`, `grasps/droid`, and all robot packages. The first
+  implementation slice must use an explicit pinned resource manifest and
+  on-demand scene installation only.
+- The aborted config probe briefly left the MolmoSpaces cache manifest missing
+  the `grasps/droid: 20251116` entry; the local manifest was repaired before
+  continuing. Treat this as evidence that demo setup scripts must be
+  idempotent and must fail before partial bulk downloads when a manifest is too
+  broad.
+
+GSD handoff decision:
+
+- The original "identify actual APIs" gate is satisfied for a narrow first
+  GSD phase: fake-backend contracts, private scorer, report schema, and a
+  direct MCP cleanup server that uses `api_semantic` object moves against
+  MolmoSpaces/MuJoCo state.
+- Do not claim real robot manipulation yet. A later local-dev acceptance gate
+  must separately prove planner-backed RBY1M or Franka pick/place before any
+  artifact uses `primitive_provenance="real"`.
+- Do not make Roboclaws import MolmoSpaces at top level. Keep it behind an
+  optional subprocess/extra or adapter boundary so the existing AI2-THOR paths
+  and CI stay Python 3.10-safe.
 
 ## Upstream Findings
 
@@ -297,19 +356,19 @@ Pass criteria:
 
 ## Task Slices
 
-These are approved vertical slices. Run the capability spike first; only convert
-the rest into GSD execution work after the API facts are known.
+These are approved vertical slices. The capability spike above makes the first
+GSD handoff concrete enough to proceed, but only for the narrow
+`api_semantic` cleanup path.
 
 1. **Cleanup capability spike**
-   Install/run the smallest MolmoSpaces/MuJoCo example needed for the cleanup
-   path. Identify APIs for scene load, reset, object inventory, camera frames,
-   object state readback, API-backed semantic manipulation, and failure
-   semantics.
+   Completed locally on 2026-05-07. Keep the result in this plan as source
+   context; do not repeat broad config-instantiation probes in GSD.
 
 2. **Provenance and fake-backend contract**
    Define the primitive provenance enum and fake-backend response shapes before
    real MolmoSpaces code. Reuse existing trace/report patterns where possible
-   and keep additive compatibility with current trace consumers.
+   and keep additive compatibility with current trace consumers. This is the
+   first GSD implementation slice.
 
 3. **Scenario builder and scoring**
    Add seeded room messiness outside MCP, private manifest, state-delta scoring,
@@ -319,7 +378,10 @@ the rest into GSD execution work after the API facts are known.
 4. **Direct MCP cleanup demo**
    Add the minimal MolmoSpaces MCP server/entry point, then run
    `帮我收拾这个房间` through a coding agent and validate 3-of-5 cleanup on an
-   easy seed. Keep failures visible in `run_result.json` and the report.
+   easy seed. The first implementation may use `api_semantic` MuJoCo state
+   changes, but must label that provenance in `trace.jsonl`, `run_result.json`,
+   and `report.html`. Keep failures visible in `run_result.json` and the
+   report.
 
 5. **OpenClaw follow-up**
    Reuse the working MCP surface through OpenClaw only after the direct cleanup
@@ -400,16 +462,18 @@ Do not claim real MolmoSpaces validation from cloud-only evidence.
 
 ## GSD Handoff Trigger
 
-Ingest this plan into GSD only after the capability spike identifies the actual
-MolmoSpaces APIs and the implementation slices are no longer speculative.
-
-At that point:
+The 2026-05-07 local capability spike identifies enough concrete MolmoSpaces /
+MuJoCo APIs for a narrow GSD phase. The handoff is allowed with these limits:
 
 - Optionally run `to-issues` first if the work should be divided across multiple
   agents or tracked in GitHub Issues.
 - Add/update the phase in `.planning/ROADMAP.md`.
 - Create `.planning/phases/<phase>/` from this doc.
 - Let GSD own execution, validation, summaries, and shipped state.
+- Keep the first phase scoped to `api_semantic` cleanup, fake-backend contracts,
+  scorer, artifact schema, report rendering, and direct coding-agent MCP.
+- Defer real RBY1M/Franka planner-backed manipulation and OpenClaw until the
+  direct MCP cleanup artifact is stable and explicitly provenance-labeled.
 
 During implementation, use `tdd` inside the slices where behavior needs to drive
 the code: scenario scoring, manifest parsing, MCP tool contracts, artifact
@@ -432,9 +496,9 @@ schema, and any regression found during local MolmoSpaces validation.
 ## Next Workflow
 
 ```text
-run capability spike
--> update this plan with real API facts
--> optionally run to-issues
--> gsd-plan-phase / gsd-ingest-docs
--> gsd-execute-phase
+optionally run to-issues
+-> gsd-ingest-docs docs/plans/molmospaces-manipulation-spike.md
+-> gsd-plan-phase <created MolmoSpaces cleanup phase>
+-> gsd-execute-phase <phase>
+-> gsd-verify-work <phase>
 ```
