@@ -72,6 +72,7 @@ def test_probe_openclaw_turn_returns_transport_metrics() -> None:
         prompt_state={"step": 0, "my_agent_id": 1},
         frame=np.zeros((4, 4, 3), dtype=np.uint8),
         overhead=np.zeros((4, 4, 3), dtype=np.uint8),
+        chase=np.ones((4, 4, 3), dtype=np.uint8),
     )
     result = probe_openclaw_turn(bridge, turn)
     assert result["probe"] == "openclaw_turn"
@@ -84,7 +85,7 @@ def test_probe_openclaw_turn_returns_transport_metrics() -> None:
 def test_probe_direct_provider_reports_payload_metrics() -> None:
     class Provider:
         def get_action(self, images, state):
-            assert len(images) == 2
+            assert len(images) == 3
             assert state["my_agent_id"] == 1
             return {"reasoning": "ok", "action": "MoveAhead"}
 
@@ -95,10 +96,11 @@ def test_probe_direct_provider_reports_payload_metrics() -> None:
         prompt_state={"step": 0, "my_agent_id": 1},
         frame=np.zeros((4, 4, 3), dtype=np.uint8),
         overhead=np.zeros((4, 4, 3), dtype=np.uint8),
+        chase=np.ones((4, 4, 3), dtype=np.uint8),
     )
     result = probe_direct_provider(Provider(), turn)
     assert result["probe"] == "direct_provider_turn"
-    assert result["payload"]["image_count"] == 2
+    assert result["payload"]["image_count"] == 3
     assert result["payload"]["state_json_chars"] > 0
     assert result["response"]["action"] == "MoveAhead"
 

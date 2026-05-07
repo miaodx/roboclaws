@@ -157,19 +157,18 @@ class OpenClawProvider:
         Parameters
         ----------
         images:
-            Ordered list of numpy RGB frames.  ``images[0]`` is treated as
-            the first-person frame; ``images[1]`` (if present) as the
-            overhead map.  Missing or empty entries fall back to a 1×1
-            black placeholder so the named agent still gets a valid payload.
+            Ordered list of numpy RGB frames for the normal navigation
+            contract: first-person frame, structured map-v2 overhead, and
+            chase camera.  Partial image sets are rejected so the runtime does
+            not silently downgrade back to the older two-image prompt shape.
         state:
             Structured game state.  ``state["my_agent_id"]`` (preferred) or
             ``state["current_agent"]`` routes the turn to the right agent.
         """
+        if len(images) != 3:
+            raise ValueError(f"OpenClaw navigation requires exactly 3 images, got {len(images)}.")
         agent_id = int(state.get("my_agent_id", state.get("current_agent", 0)))
         step_idx = int(state.get("step", self._step))
-
-        frame = images[0] if images else _placeholder_frame()
-        overhead = images[1] if len(images) > 1 else _placeholder_frame()
 
         started = time.monotonic()
         retry_delay_seconds_this_call = 0.0
@@ -177,8 +176,9 @@ class OpenClawProvider:
             try:
                 result = self._bridge.step(
                     agent_id=agent_id,
-                    frame=frame,
-                    overhead=overhead,
+                    frame=images[0],
+                    map_v2=images[1],
+                    chase=images[2],
                     state=state,
                     step_idx=step_idx,
                 )
@@ -236,11 +236,6 @@ class OpenClawProvider:
     def close(self) -> None:
         if self._owns_bridge:
             self._bridge.close()
-
-
-def _placeholder_frame() -> np.ndarray:
-    """1×1 black RGB frame used when the caller omits an image."""
-    return np.zeros((1, 1, 3), dtype=np.uint8)
 
 
 def build_openclaw_provider_or_die(

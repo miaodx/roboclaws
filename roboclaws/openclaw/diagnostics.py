@@ -30,6 +30,7 @@ class ReplayTurn:
     prompt_state: dict[str, Any]
     frame: np.ndarray
     overhead: np.ndarray
+    chase: np.ndarray | None = None
 
 
 def load_replay_turn(replay_dir: str | Path, *, step: int = 0) -> ReplayTurn:
@@ -52,6 +53,7 @@ def load_replay_turn(replay_dir: str | Path, *, step: int = 0) -> ReplayTurn:
 
     frame = np.asarray(Image.open(frame_path).convert("RGB"), dtype=np.uint8)
     overhead = np.asarray(Image.open(overhead_path).convert("RGB"), dtype=np.uint8)
+    chase = _load_extra_view(replay_path, record, "chase")
     return ReplayTurn(
         replay_dir=replay_path,
         step=step,
@@ -59,7 +61,21 @@ def load_replay_turn(replay_dir: str | Path, *, step: int = 0) -> ReplayTurn:
         prompt_state=dict(record.get("vlm_prompt_state", {})),
         frame=frame,
         overhead=overhead,
+        chase=chase,
     )
+
+
+def _load_extra_view(replay_path: Path, record: dict[str, Any], label: str) -> np.ndarray | None:
+    for view in record.get("extra_views", []):
+        if not isinstance(view, dict) or view.get("label") != label:
+            continue
+        rel_path = view.get("path")
+        if not rel_path:
+            continue
+        path = replay_path / str(rel_path)
+        if path.exists():
+            return np.asarray(Image.open(path).convert("RGB"), dtype=np.uint8)
+    return None
 
 
 def probe_openclaw_ping(bridge: OpenClawBridge, *, agent_id: int) -> dict[str, Any]:
@@ -80,7 +96,8 @@ def probe_openclaw_turn(bridge: OpenClawBridge, turn: ReplayTurn) -> dict[str, A
     response = bridge.step(
         agent_id=turn.agent_id,
         frame=turn.frame,
-        overhead=turn.overhead,
+        map_v2=turn.overhead,
+        chase=turn.chase if turn.chase is not None else turn.overhead,
         state=turn.prompt_state,
         step_idx=turn.step,
     )
@@ -102,9 +119,11 @@ def probe_direct_provider(provider: Any, turn: ReplayTurn) -> dict[str, Any]:
     prompt_state_text, prompt_state_metrics = serialize_prompt_state(turn.prompt_state)
     fpv_b64, fpv_metrics = encode_frame_to_b64_jpeg(turn.frame)
     overhead_b64, overhead_metrics = encode_frame_to_b64_jpeg(turn.overhead)
+    chase_frame = turn.chase if turn.chase is not None else turn.overhead
+    chase_b64, chase_metrics = encode_frame_to_b64_jpeg(chase_frame)
     started = time.perf_counter()
     response = provider.get_action(
-        images=[fpv_b64, overhead_b64],
+        images=[fpv_b64, overhead_b64, chase_b64],
         state=turn.prompt_state,
     )
     duration_seconds = round_seconds(time.perf_counter() - started)
@@ -122,7 +141,8 @@ def probe_direct_provider(provider: Any, turn: ReplayTurn) -> dict[str, Any]:
             prompt_state_chars=prompt_state_metrics["chars"],
             image_metrics=[
                 {"label": "fpv", **fpv_metrics},
-                {"label": "overhead", **overhead_metrics},
+                {"label": "map_v2", **overhead_metrics},
+                {"label": "chase", **chase_metrics},
             ],
             extra={"prompt_state_preview": prompt_state_text[:120]},
         ),
