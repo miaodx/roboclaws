@@ -15,7 +15,6 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from typing import Any, Literal, NoReturn
 
 import numpy as np
@@ -26,6 +25,13 @@ from roboclaws.core.action_decision import (
     parse_action_decision,
 )
 from roboclaws.core.turn_metrics import round_seconds
+from roboclaws.openclaw.transcript_recovery import (
+    SESSION_STORE_SOURCE,
+    SessionStoreReader,
+    TranscriptMessage,
+    TranscriptSource,
+    extract_text_blocks,
+)
 
 _DEFAULT_GATEWAY_URL = "http://localhost:18789"
 _DEFAULT_AGENT_PREFIX = "agent-"
@@ -41,36 +47,14 @@ _DEFAULT_MAX_TOKENS = 1024
 # are NOT retried here — they fail fast so the caller can surface the root cause.
 _RETRY_ATTEMPTS = 3
 
-_TRANSCRIPT_SOURCE = Literal["terminal-body", "session-store", "none"]
-_SESSION_STORE_SOURCE: Literal["session-store"] = "session-store"
 _GATEWAY_CONTAINER = "openclaw-gateway"
-
-
-@dataclass
-class TranscriptMessage:
-    wallclock_s: float
-    source: _TRANSCRIPT_SOURCE
-    content: str
-    message_index: int
-    chunk_index: int
-    is_final: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "wallclock_s": self.wallclock_s,
-            "source": self.source,
-            "content": self.content,
-            "message_index": self.message_index,
-            "chunk_index": self.chunk_index,
-            "is_final": self.is_final,
-        }
 
 
 @dataclass
 class _StartRunCapture:
     terminated_by: Literal["done", "wall_clock", "error"]
     final_message: str
-    transcript_source: _TRANSCRIPT_SOURCE
+    transcript_source: TranscriptSource
     transcript_messages: list[TranscriptMessage] = field(default_factory=list)
     http_status_code: int | None = None
     response_bytes: int | None = None
@@ -84,16 +68,9 @@ class RunResult:
     final_message: str
     wallclock_s: float
     terminated_by: Literal["done", "wall_clock", "error"]
-    transcript_source: _TRANSCRIPT_SOURCE = "none"
+    transcript_source: TranscriptSource = "none"
     transcript_messages: list[TranscriptMessage] = field(default_factory=list)
     debug: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class _SessionStoreCapture:
-    session_id: str
-    session_file: str
-    transcript_messages: list[TranscriptMessage]
 
 
 class OpenClawUnavailable(RuntimeError):
@@ -102,146 +79,6 @@ class OpenClawUnavailable(RuntimeError):
     Callers (e.g. the CI wrapper) can catch this to skip/degrade the
     OpenClaw backend without masking unrelated HTTP errors.
     """
-
-
-class _SessionStoreReader:
-    """Reads agent session transcripts from the OpenClaw Gateway Docker container."""
-
-    def __init__(self, agent_prefix: str) -> None:
-        self._agent_prefix = agent_prefix
-
-    def ids(self, agent_id: int) -> set[str]:
-        agent_name = f"{self._agent_prefix}{agent_id}"
-        return {
-            str(entry.get("sessionId"))
-            for entry in self._read_index(agent_name)
-            if entry.get("sessionId")
-        }
-
-    def recover(
-        self,
-        *,
-        agent_id: int,
-        started_wallclock: float,
-        preexisting_ids: set[str],
-    ) -> _SessionStoreCapture | None:
-        agent_name = f"{self._agent_prefix}{agent_id}"
-        candidates = self._read_index(agent_name)
-        started_ms = int(started_wallclock * 1000)
-
-        def _sort_key(entry: dict[str, Any]) -> tuple[int, str]:
-            started_at = entry.get("startedAt")
-            return (
-                int(started_at) if isinstance(started_at, int) else -1,
-                str(entry.get("sessionId", "")),
-            )
-
-        matching: list[dict[str, Any]] = []
-        for entry in candidates:
-            session_id = str(entry.get("sessionId", ""))
-            if not session_id or session_id in preexisting_ids:
-                continue
-            started_at = entry.get("startedAt")
-            if isinstance(started_at, int) and started_at >= started_ms - 5000:
-                matching.append(entry)
-        if not matching:
-            for entry in sorted(candidates, key=_sort_key, reverse=True):
-                started_at = entry.get("startedAt")
-                if isinstance(started_at, int) and started_at >= started_ms - 5000:
-                    matching = [entry]
-                    break
-        if not matching:
-            return None
-
-        selected = sorted(matching, key=_sort_key, reverse=True)[0]
-        session_id = str(selected.get("sessionId", ""))
-        session_file = str(selected.get("sessionFile", "")).strip()
-        if not session_id or not session_file:
-            return None
-        transcript_messages = self._read_transcript(
-            session_file=session_file,
-            started_wallclock=started_wallclock,
-        )
-        if not transcript_messages:
-            return None
-        return _SessionStoreCapture(
-            session_id=session_id,
-            session_file=session_file,
-            transcript_messages=transcript_messages,
-        )
-
-    def _read_container_text(self, path: str) -> str:
-        result = subprocess.run(
-            ["docker", "exec", _GATEWAY_CONTAINER, "cat", path],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout if result.returncode == 0 and result.stdout.strip() else ""
-
-    def _read_index(self, agent_name: str) -> list[dict[str, Any]]:
-        path = f"/home/node/.openclaw/agents/{agent_name}/sessions/sessions.json"
-        stdout = self._read_container_text(path)
-        if not stdout:
-            return []
-        try:
-            payload = json.loads(stdout)
-        except json.JSONDecodeError:
-            return []
-        if not isinstance(payload, dict):
-            return []
-
-        entries: list[dict[str, Any]] = []
-        session_root = f"/home/node/.openclaw/agents/{agent_name}/sessions/"
-        for value in payload.values():
-            if not isinstance(value, dict):
-                continue
-            session_file = value.get("sessionFile")
-            if isinstance(session_file, str) and session_file.startswith(session_root):
-                entries.append(value)
-        return entries
-
-    def _read_transcript(
-        self,
-        *,
-        session_file: str,
-        started_wallclock: float,
-    ) -> list[TranscriptMessage]:
-        stdout = self._read_container_text(session_file)
-        if not stdout:
-            return []
-
-        transcript_messages: list[TranscriptMessage] = []
-        for line in stdout.splitlines():
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if entry.get("type") != "message":
-                continue
-            message = entry.get("message") or {}
-            if not isinstance(message, dict) or message.get("role") != "assistant":
-                continue
-            content = _extract_text_blocks(message.get("content"))
-            if not content.strip():
-                continue
-            timestamp = _timestamp_to_epoch_seconds(entry.get("timestamp"))
-            transcript_messages.append(
-                TranscriptMessage(
-                    wallclock_s=max(
-                        0.0,
-                        round_seconds(
-                            timestamp - started_wallclock if timestamp is not None else 0.0
-                        ),
-                    ),
-                    source=_SESSION_STORE_SOURCE,
-                    content=content,
-                    message_index=len(transcript_messages),
-                    chunk_index=0,
-                    is_final=_is_terminal_stop_reason(message.get("stopReason")),
-                )
-            )
-        return transcript_messages
 
 
 class OpenClawBridge:
@@ -301,7 +138,7 @@ class OpenClawBridge:
         )
         self._last_step_metrics: dict[str, Any] = {}
         self._last_run_metrics: dict[str, Any] = {}
-        self._session_store = _SessionStoreReader(agent_prefix)
+        self._session_store = SessionStoreReader(agent_prefix)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -421,7 +258,7 @@ class OpenClawBridge:
             preexisting_ids=preexisting_session_ids,
         )
         if not capture.transcript_messages and session_store_capture is not None:
-            capture.transcript_source = _SESSION_STORE_SOURCE
+            capture.transcript_source = SESSION_STORE_SOURCE
             capture.transcript_messages = list(session_store_capture.transcript_messages)
             run_metrics["session_store_session_id"] = session_store_capture.session_id
             run_metrics["session_store_session_file"] = session_store_capture.session_file
@@ -751,7 +588,7 @@ def _extract_content(body: dict[str, Any]) -> str:
     if content is None:
         text = ""
     else:
-        text = _extract_text_blocks(content)
+        text = extract_text_blocks(content)
     if text:
         return text
     # Reasoning-only fallback: some providers surface the chain-of-thought in
@@ -761,39 +598,6 @@ def _extract_content(body: dict[str, Any]) -> str:
         if isinstance(val, str) and val.strip():
             return val
     return text
-
-
-def _extract_text_blocks(content: Any) -> str:
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(str(block.get("text", "")))
-        return "".join(parts)
-    if isinstance(content, str):
-        return content
-    if content is None:
-        return ""
-    return str(content)
-
-
-def _is_terminal_stop_reason(stop_reason: Any) -> bool:
-    if not isinstance(stop_reason, str):
-        return False
-    return stop_reason not in {"toolUse", "aborted"}
-
-
-def _timestamp_to_epoch_seconds(value: Any) -> float | None:
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        return (
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
-            .astimezone(timezone.utc)
-            .timestamp()
-        )
-    except ValueError:
-        return None
 
 
 def _parse_action(content: str) -> dict[str, Any]:
