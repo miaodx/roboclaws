@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from roboclaws.core.scene_grid import world_to_cell
+
 # ---------------------------------------------------------------------------
 # Shared grid / heading helpers — used by both CoverageGame and TerritoryGame.
 # ---------------------------------------------------------------------------
@@ -58,4 +60,4 @@ def _move_target_cell(
 
 def _pos_to_cell(pos: dict[str, float], grid_size: float) -> tuple[int, int]:
     """Convert a continuous (x, z) position to a discrete grid cell index."""
-    return (round(pos["x"] / grid_size), round(pos["z"] / grid_size))
+    return world_to_cell(pos, grid_size=grid_size)

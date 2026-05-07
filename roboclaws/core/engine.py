@@ -8,6 +8,8 @@ from typing import Any
 import numpy as np
 from ai2thor.controller import Controller
 
+from roboclaws.core.scene_grid import SceneGrid
+
 NAVIGATION_ACTIONS: list[str] = [
     "MoveAhead",
     "MoveBack",
@@ -59,6 +61,7 @@ class MultiAgentEngine:
         self.agent_count = agent_count
         self._scene = scene
         self._grid_size = grid_size
+        self._scene_grid = SceneGrid(grid_size=grid_size)
         self.field_of_view = field_of_view
         self.server_timeout = server_timeout
         self.server_start_timeout = server_start_timeout
@@ -176,10 +179,7 @@ class MultiAgentEngine:
         if self._reachable_positions is None:
             event = self._controller.step(action="GetReachablePositions")
             positions = event.metadata.get("actionReturn", []) or []
-            self._reachable_positions = {
-                (round(p["x"] / self._grid_size), round(p["z"] / self._grid_size))
-                for p in positions
-            }
+            self._reachable_positions = self._scene_grid.normalize_reachable_positions(positions)
         return self._reachable_positions
 
     def get_overhead_frame(self) -> np.ndarray:
