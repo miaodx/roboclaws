@@ -4,6 +4,7 @@ import os
 import time
 from typing import Any
 
+from roboclaws.core.action_decision import action_decision_from_fields
 from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
 from roboclaws.core.vlm import (
     _COST_PER_M,
@@ -169,7 +170,7 @@ class _AnthropicBase:
                 usage.input_tokens / 1_000_000 * self._cost_table["input"]
                 + usage.output_tokens / 1_000_000 * self._cost_table["output"]
             )
-        return {"reasoning": result.reasoning, "action": result.action}
+        return action_decision_from_fields(result.reasoning, result.action).to_dict()
 
 
 class AnthropicProvider(_AnthropicBase):

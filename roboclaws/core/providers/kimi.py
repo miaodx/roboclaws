@@ -5,6 +5,11 @@ import os
 import time
 from typing import Any
 
+from roboclaws.core.action_decision import (
+    action_decision_from_fields,
+    fallback_action_decision,
+    parse_action_decision,
+)
 from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
 from roboclaws.core.providers.anthropic import _AnthropicBase
@@ -290,15 +295,10 @@ class KimiCodingProvider:
         candidates = [msg.get("content") or "", msg.get("reasoning_content") or ""]
         parsed = _extract_action_json(candidates)
         if parsed is None:
-            raise ValueError(
-                f"Kimi returned no parseable JSON action "
-                f"(content={candidates[0][:80]!r} reasoning={candidates[1][:80]!r})"
-            )
-
-        action = str(parsed.get("action", "")).strip()
-        if action not in NAVIGATION_ACTIONS:
-            raise ValueError(f"invalid action from Kimi: {action!r}")
-        return {"reasoning": str(parsed.get("reasoning", "")), "action": action}
+            return parse_action_decision("\n".join(candidates)).to_dict()
+        return action_decision_from_fields(
+            parsed.get("reasoning", ""), parsed.get("action", "")
+        ).to_dict()
 
     def _record_usage(self, usage: dict[str, Any]) -> None:
         self._cost += (
@@ -307,12 +307,9 @@ class KimiCodingProvider:
         )
 
     def _fallback_action(self, error: Exception) -> dict[str, str]:
-        return {
-            "reasoning": (
-                f"Retries exhausted on {error.__class__.__name__}; falling back to RotateRight."
-            ),
-            "action": "RotateRight",
-        }
+        return fallback_action_decision(
+            f"Retries exhausted on {error.__class__.__name__}; falling back to RotateRight."
+        ).to_dict()
 
     def get_action(
         self,
