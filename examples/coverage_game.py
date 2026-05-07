@@ -26,10 +26,10 @@ from roboclaws.core.turn_metrics import (
     summarize_payload_metrics,
 )
 from roboclaws.core.views import (
-    build_prompt_images,
     compute_world_bbox,
     encode_prompt_images,
     image_labels_for_variant,
+    render_game_prompt_bundle,
 )
 from roboclaws.core.views import (
     pos_to_world_idx as shared_pos_to_world_idx,
@@ -327,32 +327,27 @@ def run_coverage_game(
 
             map_render_started = time.perf_counter()
             covered_cells = list(game._covered.keys())
-            if overhead_camera_pose is not None and overhead_bg is not None:
-                structured_img = viz.render_projected_structured_map(
-                    agent_positions=agent_positions_world,
-                    agent_rotations=final_agent_rotations,
-                    reachable_cells=reachable_cells,
-                    covered_cells=covered_cells,
-                    world_bbox=world_bbox,
-                    camera_pose=overhead_camera_pose,
-                    image_size=(int(overhead_bg.shape[1]), int(overhead_bg.shape[0])),
-                    grid_size=_GRID_SIZE,
-                )
-            else:
-                structured_img = viz.render_structured_map(
-                    agent_positions=agent_positions_world,
-                    agent_rotations=final_agent_rotations,
-                    reachable_cells=reachable_cells,
-                    covered_cells=covered_cells,
-                    world_bbox=world_bbox,
-                )
-            structured_map_frame = np.asarray(structured_img.convert("RGB"), dtype=np.uint8)
+            current_agent = game.current_agent_id
+            prompt_bundle = render_game_prompt_bundle(
+                engine=engine,
+                visualizer=viz,
+                agent_states=agent_states,
+                current_agent=current_agent,
+                reachable_cells=reachable_cells,
+                world_bbox=world_bbox,
+                overhead_background=overhead_bg,
+                overhead_camera_pose=overhead_camera_pose,
+                covered_cells=covered_cells,
+                grid_size=_GRID_SIZE,
+            )
+            structured_map_frame = prompt_bundle.trace_overhead_frame
+            agent_positions_world = prompt_bundle.agent_positions_world
+            final_agent_positions_world = agent_positions_world
             turn_metrics["timings"]["map_render_seconds"] = round_seconds(
                 time.perf_counter() - map_render_started
             )
 
             game_state = game.get_state()
-            current_agent = game.current_agent_id
             prompt_state_started = time.perf_counter()
             prompt_state = game.get_prompt_state(current_agent)
             prompt_state["views"] = _VIEW_VARIANT
@@ -364,22 +359,13 @@ def run_coverage_game(
             turn_metrics["timings"]["prompt_state_json_seconds"] = prompt_state_metrics[
                 "serialize_seconds"
             ]
-            engine.add_chase_cam(current_agent)
-            engine.update_chase_cam(current_agent)
-            chase_cam_frame = engine.get_chase_cam_frame(current_agent)
-
-            prompt_image_frames = build_prompt_images(
-                fpv_frame=agent_states[current_agent].frame,
-                structured_overhead_frame=structured_map_frame,
-                chase_cam_frame=chase_cam_frame,
-            )
             (
                 prompt_images,
                 turn_metrics["payload"],
                 turn_metrics["timings"]["image_encode_seconds"],
             ) = _prepare_prompt_payload(
                 backend=effective_backend,
-                prompt_image_frames=prompt_image_frames,
+                prompt_image_frames=prompt_bundle.prompt_images,
                 prompt_state_text=prompt_state_text,
                 prompt_state_metrics=prompt_state_metrics,
             )

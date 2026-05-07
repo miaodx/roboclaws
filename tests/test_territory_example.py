@@ -458,6 +458,45 @@ def test_backend_openclaw_passes_numpy_frames(mock_engine_cls, tmp_path: Path) -
         assert isinstance(img, np.ndarray), f"expected ndarray, got {type(img)}"
 
 
+def test_run_uses_shared_prompt_image_renderer(mock_engine_cls, tmp_path: Path) -> None:
+    class SpyProvider:
+        cumulative_cost = 0.0
+
+        def __init__(self) -> None:
+            self.calls: list[list[np.ndarray]] = []
+
+        def get_action(self, images, state):
+            self.calls.append(images)
+            return {"reasoning": "move", "action": "MoveAhead"}
+
+    spy = SpyProvider()
+    fake_bundle = MagicMock()
+    fake_bundle.prompt_images = [_make_frame(11), _make_frame(22), _make_frame(33)]
+    fake_bundle.trace_overhead_frame = _make_frame(22)
+    fake_bundle.raw_overhead_frame = _make_frame(44)
+    fake_bundle.image_labels = ("fpv", "map_v2", "chase")
+    fake_bundle.agent_positions_world = [(0, 0), (1, 0)]
+    fake_bundle.structured_overhead_frame = fake_bundle.trace_overhead_frame
+    fake_bundle.chase_cam_frame = fake_bundle.prompt_images[2]
+
+    with patch(
+        "roboclaws.openclaw.bridge.build_openclaw_provider_or_die",
+        return_value=spy,
+    ):
+        with patch("territory_game.render_game_prompt_bundle", return_value=fake_bundle):
+            run_territory_game(
+                scene="FloorPlan201",
+                agent_count=2,
+                steps=1,
+                model="mock",
+                output_dir=str(tmp_path / "territory"),
+                backend="openclaw",
+            )
+
+    assert len(spy.calls) == 1
+    assert [int(frame[0, 0, 0]) for frame in spy.calls[0]] == [11, 22, 33]
+
+
 def test_backend_openclaw_replay_records_provider_turn_metrics(
     mock_engine_cls, tmp_path: Path
 ) -> None:
