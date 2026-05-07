@@ -84,6 +84,7 @@ def _create_game_provider(
     agent_count: int,
     model: str,
     agent_soul_content: dict[int, str],
+    provider_seed: int | None = None,
 ):
     from roboclaws.openclaw.bridge import build_openclaw_provider_or_die
 
@@ -94,6 +95,8 @@ def _create_game_provider(
     # KimiProvider + AnthropicProvider both accept ``agent_souls``; others
     # silently ignore the kwarg.
     kwargs = {"agent_souls": agent_soul_content} if agent_soul_content else {}
+    if model == "mock" and provider_seed is not None:
+        kwargs["seed"] = provider_seed
     try:
         return create_provider(model, **kwargs)
     except TypeError:
@@ -209,6 +212,7 @@ def run_territory_game(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
+    provider_seed: int | None = None,
 ) -> dict[str, object]:
     """Run a territory episode and save replay/artifacts to ``output_dir``."""
     from roboclaws.openclaw.bridge import OpenClawUnavailable
@@ -228,6 +232,7 @@ def run_territory_game(
         agent_count=agent_count,
         model=model,
         agent_soul_content=agent_soul_content,
+        provider_seed=provider_seed,
     )
     engine = MultiAgentEngine(
         scene=scene,

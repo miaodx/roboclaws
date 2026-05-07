@@ -86,6 +86,61 @@ class RegressionSuite:
     default_variant: str | None = None
     local_dev_only: bool = False
 
+    def capture_ok_row(
+        self,
+        *,
+        request: CaptureRequest,
+        artifact_dir: Path,
+        run_id: str,
+        elapsed_seconds: float,
+    ) -> dict[str, Any]:
+        """Run this suite coordinate and return its normalized success row."""
+        if self.local_dev_only and not request.allow_local:
+            raise LocalOnlySuiteError(
+                f"Suite {self.name!r} is local-dev only. Re-run with --allow-local "
+                "from a workstation session that satisfies AGENTS.md §1 and §7."
+            )
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        seed_rng(request.seed)
+        metrics = dict(self.capture(request, artifact_dir))
+        variant = metrics.pop("variant", self.default_variant)
+        row_model = metrics.pop("model", request.model)
+        metrics.setdefault("wallclock_seconds", round(elapsed_seconds, 3))
+        return normalize_capture_row(
+            suite=self,
+            request=request,
+            artifact_dir=artifact_dir,
+            run_id=run_id,
+            status="ok",
+            variant=variant,
+            model=str(row_model) if row_model is not None else request.model,
+            extra=metrics,
+        )
+
+    def capture_error_row(
+        self,
+        *,
+        request: CaptureRequest,
+        artifact_dir: Path,
+        run_id: str,
+        exc: Exception,
+        elapsed_seconds: float,
+    ) -> dict[str, Any]:
+        """Return the normalized error row for a failed suite coordinate."""
+        return normalize_capture_row(
+            suite=self,
+            request=request,
+            artifact_dir=artifact_dir,
+            run_id=run_id,
+            status="error",
+            variant=self.default_variant,
+            extra={
+                "error_kind": exc.__class__.__name__,
+                "error": str(exc),
+                "wallclock_seconds": round(elapsed_seconds, 3),
+            },
+        )
+
 
 SUITE_REGISTRY: dict[str, RegressionSuite] = {}
 _COMMIT_SHA_CACHE: str | None = None
@@ -357,6 +412,7 @@ def _capture_explore_vlm(request: CaptureRequest, artifact_dir: Path) -> dict[st
         steps=request.steps,
         model=request.model,
         output_dir=str(artifact_dir),
+        provider_seed=request.seed,
     )
     _ensure_non_provider_failure(result)
     summary = load_replay_summary(artifact_dir)
@@ -378,6 +434,7 @@ def _capture_territory_vlm(request: CaptureRequest, artifact_dir: Path) -> dict[
         model=request.model,
         output_dir=str(artifact_dir),
         backend="vlm",
+        provider_seed=request.seed,
     )
     _ensure_non_provider_failure(result)
     summary = load_replay_summary(artifact_dir)
@@ -406,6 +463,7 @@ def _capture_coverage_vlm(request: CaptureRequest, artifact_dir: Path) -> dict[s
         model=request.model,
         output_dir=str(artifact_dir),
         backend="vlm",
+        provider_seed=request.seed,
     )
     _ensure_non_provider_failure(result)
     summary = load_replay_summary(artifact_dir)
