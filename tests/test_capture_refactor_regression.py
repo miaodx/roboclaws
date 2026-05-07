@@ -334,7 +334,10 @@ def test_openclaw_demo_suite_recovers_visited_cells_from_replay(
 def test_openclaw_autonomous_suite_extracts_structured_summary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    seen_kwargs: dict[str, object] = {}
+
     def fake_run_autonomous(**kwargs):
+        seen_kwargs.update(kwargs)
         out_dir = Path(kwargs["output_dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "run_result.json").write_text(
@@ -365,6 +368,7 @@ def test_openclaw_autonomous_suite_extracts_structured_summary(
         return {"terminated_by": "done"}
 
     monkeypatch.setattr("roboclaws.regression._run_autonomous_navigation", fake_run_autonomous)
+    monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "token-123")
     metrics = _capture_openclaw_autonomous(
         CaptureRequest(
             label="baseline-2026-04-23",
@@ -382,6 +386,7 @@ def test_openclaw_autonomous_suite_extracts_structured_summary(
     assert metrics["transcript_source"] == "terminal-body"
     assert metrics["tool_calls_by_type"]["move"] == 2
     assert metrics["frames_unseen_by_agent"] == 1
+    assert seen_kwargs["skip_bootstrap"] is True
 
 
 def test_openclaw_autonomous_capture_raises_on_error_termination(

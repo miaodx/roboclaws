@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import importlib
 import json
+import os
 import random
 import re
 import subprocess
@@ -565,12 +566,13 @@ def _autonomous_wall_budget(steps: int) -> float:
 
 
 def _capture_openclaw_autonomous(request: CaptureRequest, artifact_dir: Path) -> dict[str, Any]:
+    reuse_gateway = bool(os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip())
     _run_autonomous_navigation(
         scene=request.scene,
         max_moves=request.steps,
         wall_budget=_autonomous_wall_budget(request.steps),
         output_dir=artifact_dir,
-        skip_bootstrap=False,
+        skip_bootstrap=reuse_gateway,
     )
     run_result = load_json(artifact_dir / "run_result.json")
     summary = load_json(artifact_dir / "summary.json")
