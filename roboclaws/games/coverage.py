@@ -15,6 +15,11 @@ from roboclaws.games.common import (
     _pos_to_cell,
     _rotation_after_turn,
 )
+from roboclaws.games.turns import (
+    decide_turn,
+    execute_control_turn,
+    normalize_navigation_action,
+)
 
 _MOVE_ACTION_ORDER: tuple[str, ...] = ("MoveAhead", "MoveBack", "MoveLeft", "MoveRight")
 
@@ -216,18 +221,14 @@ class CoverageGame:
 
     def _normalize_action(self, agent_id: int, action: Any) -> str:
         """Clamp a raw model action to the safe game-local action space."""
-        action_name = str(action or "").strip()
-        if action_name not in self.ACTION_SPACE:
-            return self.SAFE_FALLBACK_ACTION
-
-        current_state = self.engine.get_agent_state(agent_id)
-        if (
-            not current_state.last_action_success
-            and action_name in _MOVE_ACTIONS
-            and self._last_action_by_agent.get(agent_id) == action_name
-        ):
-            return self.SAFE_FALLBACK_ACTION
-        return action_name
+        return normalize_navigation_action(
+            action=action,
+            action_space=self.ACTION_SPACE,
+            safe_fallback_action=self.SAFE_FALLBACK_ACTION,
+            current_state=self.engine.get_agent_state(agent_id),
+            last_action_by_agent=self._last_action_by_agent,
+            agent_id=agent_id,
+        )
 
     @staticmethod
     def _visible_object_names(visible_objects: list[dict[str, Any]]) -> list[str]:
@@ -516,36 +517,39 @@ class CoverageGame:
             self._wall_started_at = time.monotonic()
         agent_id = self._current_agent
         prompt_state = prompt_state or self.get_prompt_state(agent_id)
-        raw_response = self.provider.get_action(images=images or [], state=prompt_state)
-        raw_action = raw_response.get("action", self.SAFE_FALLBACK_ACTION)
-        action_name = self._normalize_action(agent_id, raw_action)
-        action_name, override_reason = self._override_with_stall_recovery(
-            action_name=action_name,
+        return decide_turn(
+            provider=self.provider,
+            images=images or [],
             prompt_state=prompt_state,
+            normalize_action=lambda action: self._normalize_action(agent_id, action),
+            override_action=lambda action_name, state: self._override_with_stall_recovery(
+                action_name=action_name,
+                prompt_state=state,
+            ),
         )
-        return {
-            "reasoning": str(raw_response.get("reasoning", "")),
-            "action": action_name,
-            "raw_action": raw_action,
-            "override_reason": override_reason,
-        }
 
     def execute_action(self, action: Any) -> str:
         """Apply one action for the current agent and update coverage state."""
         agent_id = self._current_agent
-        action_name = self._normalize_action(agent_id, action)
-        new_state = self.engine.step(agent_id=agent_id, action=action_name)
-        self._last_action_by_agent[agent_id] = action_name
 
-        new_cells = (
-            self._mark_covered(agent_id, new_state.position, new_state.rotation)
-            if new_state.last_action_success
-            else 0
+        def after_step(agent_id: int, action_name: str, new_state: Any) -> None:
+            self._last_action_by_agent[agent_id] = action_name
+            new_cells = (
+                self._mark_covered(agent_id, new_state.position, new_state.rotation)
+                if new_state.last_action_success
+                else 0
+            )
+            self._no_progress_steps = 0 if new_cells > 0 else self._no_progress_steps + 1
+            self._step_count += 1
+
+        action_name, self._current_agent = execute_control_turn(
+            engine=self.engine,
+            agent_count=self.engine.agent_count,
+            current_agent=agent_id,
+            action=action,
+            normalize_action=lambda raw_action: self._normalize_action(agent_id, raw_action),
+            after_step=after_step,
         )
-        self._no_progress_steps = 0 if new_cells > 0 else self._no_progress_steps + 1
-
-        self._step_count += 1
-        self._current_agent = (self._current_agent + 1) % self.engine.agent_count
         return action_name
 
     def _wall_exceeded(self) -> bool:
