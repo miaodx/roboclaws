@@ -4,10 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from roboclaws.core.action_decision import SAFE_FALLBACK_ACTION
 from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.provider_retry import retry_delay_seconds
 from roboclaws.core.vlm import (
     AnthropicProvider,
+    KimiCodingProvider,
     KimiProvider,
     MockProvider,
     OpenAIProvider,
@@ -184,6 +186,20 @@ def test_openai_get_action_calls_api(openai_provider):
     result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
     assert result["action"] == "MoveAhead"
     mock_client.chat.completions.create_with_completion.assert_called_once()
+
+
+def test_openai_get_action_uses_shared_decision_fallback(openai_provider):
+    provider, mock_client = openai_provider
+    mock_response = MagicMock()
+    mock_response.usage = _mock_openai_usage()
+    mock_client.chat.completions.create_with_completion.return_value = (
+        _mock_action_result("bad action", "WalkIntoWall"),
+        mock_response,
+    )
+
+    result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    assert result == {"reasoning": "bad action", "action": SAFE_FALLBACK_ACTION}
 
 
 def test_openai_accumulates_cost(openai_provider):
@@ -388,6 +404,25 @@ def test_kimi_missing_api_key_raises(monkeypatch):
     with patch.dict("sys.modules", {"anthropic": MagicMock(), "instructor": MagicMock()}):
         with pytest.raises(KeyError):
             KimiProvider(model="kimi-k2-5")
+
+
+def test_kimi_coding_get_action_uses_shared_decision_fallback(monkeypatch):
+    monkeypatch.setenv("KIMI_API_KEY", "test-key")
+    provider = KimiCodingProvider(api_key="test-key", retry_attempts=1)
+
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {
+        "choices": [{"message": {"content": "not json", "reasoning_content": ""}}],
+        "usage": {},
+    }
+    provider._client = MagicMock()
+    provider._client.post.return_value = response
+
+    result = provider.get_action(SAMPLE_IMAGES, SAMPLE_STATE)
+
+    assert result["action"] == SAFE_FALLBACK_ACTION
+    assert "not json" in result["reasoning"]
 
 
 # ---------------------------------------------------------------------------

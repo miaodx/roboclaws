@@ -5,7 +5,7 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.action_decision import action_decision_from_fields, parse_action_decision
 from roboclaws.core.vlm import (
     _COST_PER_M,
     _SYSTEM_PROMPT,
@@ -24,21 +24,10 @@ def _parse_mimo_message(message: Any) -> dict[str, str]:
         args = json.loads(tool_calls[0].function.arguments)
         reasoning = args.get("reasoning", getattr(message, "reasoning_content", "") or "")
         action = args.get("action", "MoveAhead")
+        return action_decision_from_fields(reasoning, action).to_dict()
     else:
         content = message.content or ""
-        try:
-            parsed = json.loads(content)
-        except json.JSONDecodeError:
-            reasoning = content[:200]
-            action = "MoveAhead"
-        else:
-            reasoning = parsed.get("reasoning", "")
-            action = parsed.get("action", "MoveAhead")
-
-    action_text = str(action)
-    if action_text not in NAVIGATION_ACTIONS:
-        action_text = "MoveAhead"
-    return {"reasoning": str(reasoning), "action": action_text}
+        return parse_action_decision(content).to_dict()
 
 
 class _OpenAIBase:
@@ -155,7 +144,7 @@ class OpenAIProvider(_OpenAIBase):
 
         _record_call_success(self._status, duration_seconds=time.monotonic() - started)
         self._record_usage(response.usage)
-        return {"reasoning": result.reasoning, "action": result.action}
+        return action_decision_from_fields(result.reasoning, result.action).to_dict()
 
 
 class NvidiaProvider(OpenAIProvider):
