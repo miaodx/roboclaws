@@ -2,11 +2,11 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Approved pre-GSD plan; capability spike is next
+**Status:** Approved pre-GSD plan; cleanup-first capability spike is next
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan first; optional `to-issues`; GSD only after
-MolmoSpaces capabilities are proven
+MolmoSpaces cleanup-demo capabilities are proven
 
 ## Why This Exists
 
@@ -17,27 +17,32 @@ AI2-THOR remains the stable baseline and regression backend. MolmoSpaces is the
 future-default substrate for manipulation work because it has richer scenes,
 manipulable objects, grasp data, and a path toward MuJoCo / ManiSkill / Isaac.
 
-This spike should prove one agent can manipulate objects before we attempt
-multi-agent territory/coverage on the new substrate.
+This spike should prove a single coding agent can run the visible cleanup task
+`帮我收拾这个房间` through a small MolmoSpaces-backed tool contract before we
+attempt OpenClaw, hardware, or multi-agent work on the new substrate.
 
 ## Operating Decisions
 
 - Use a dual-backend transition: keep AI2-THOR, add MolmoSpaces.
 - Direct coding-agent MCP path comes first.
 - OpenClaw path comes second after direct MCP works.
-- Territory/coverage stay AI2-THOR-only until one-agent MolmoSpaces
-  manipulation works well.
+- Territory/coverage stay AI2-THOR-only until the one-agent MolmoSpaces cleanup
+  demo works well.
 - Room randomization happens before the run, outside MCP.
-- Semantic/scripted manipulation is acceptable for v0, but every artifact must
-  disclose whether each primitive used `real`, `scripted`, or `shim` behavior.
+- The first public proof is cleanup-first, not a separate pick/place milestone.
+- MolmoSpaces API-backed semantic manipulation is acceptable for v0, but every
+  artifact must disclose whether each primitive used `real`, `api_semantic`,
+  `scripted`, or `shim` behavior.
+- Navigation comes inside the demo path. `goto` is acceptable; add other
+  abilities only when the cleanup loop exposes a real gap.
 - Split-model navigation work is paused until this path proves useful.
 - Do not build a broad backend-neutral simulator abstraction before the
   MolmoSpaces API shape is known.
 
 ## Capability Gate
 
-Do not ingest this plan into GSD until the capability spike proves the APIs below
-on the target local workstation.
+Do not ingest this plan into GSD until the cleanup-first capability spike proves
+the APIs below on the target local workstation.
 
 | Capability | Must prove | Evidence |
 | --- | --- | --- |
@@ -46,11 +51,131 @@ on the target local workstation.
 | Object inventory | Objects and receptacles can be listed with stable IDs/types. | Sample `scene_objects` payload. |
 | Camera frames | Before/after images can be captured for reports. | Saved image artifacts. |
 | State readback | Final object/receptacle state can be scored after actions. | Sample state dump used by scorer. |
-| Manipulation primitive | `pick` and `place` can be implemented as real, scripted, or shimmed primitives. | Primitive provenance recorded in trace and `run_result.json`. |
+| Semantic manipulation | Object state can be changed through MolmoSpaces APIs or a clearly-labeled temporary shim. | Primitive provenance recorded in trace and `run_result.json`. |
+| Cleanup scoring | Seeded misplaced objects can be scored against private valid receptacles. | Sample scorer input/output with private manifest kept out of MCP context. |
 | Failure semantics | Failed/stale/impossible actions return explicit errors. | Example failure payloads. |
 
 If any required capability is missing, stop after the spike, document the
-blocker, and do not fake Layer 1 as a successful MolmoSpaces manipulation demo.
+blocker, and do not fake the cleanup demo as a successful MolmoSpaces result.
+
+## Upstream Findings
+
+Checked against upstream MolmoSpaces docs/source on 2026-05-07:
+
+- MuJoCo is the primary runtime for this spike. MolmoSpaces supports classic
+  MuJoCo and optional MuJoCo Filament installs, and upstream currently states
+  data generation and benchmarking are only supported for MuJoCo.
+- ManiSkill is useful as a future rendering/loading path because the upstream
+  `molmo_spaces_maniskill` package can load MolmoSpaces MJCF assets and scenes
+  into SAPIEN/ManiSkill, but it is not the first execution backend for our
+  coding-agent MCP demo.
+- Isaac Sim / Isaac Lab remain deferred because they are heavier than needed for
+  this demo.
+- The full Hugging Face dataset is large. Use a pinned micro-set and on-demand
+  asset install; never require the whole dataset for a Roboclaws demo.
+- Upstream task support maps well to our cleanup-first direction: `PickTask`,
+  `PickAndPlaceTask`, `PickAndPlaceNextToTask`, `PickAndPlaceColorTask`,
+  `OpeningTask`, `DoorOpeningTask`, and `NavToObjTask`.
+- Upstream includes mobile manipulation robots: `RBY1` and `RBY1M` are the best
+  fit for Roboclaws' "moving robot with arm(s)" story. `RBY1M` is the preferred
+  demo embodiment because it is a mecanum-wheel mobile manipulator / humanoid
+  form. Unitree G1-like humanoids are not native in MolmoSpaces today and should
+  remain future custom integration work.
+
+Observed small-set download sizes from the public Hugging Face tree on
+2026-05-07, before decompression:
+
+| Resource | Approx. archive size | Use |
+| --- | ---: | --- |
+| `mujoco/scenes/procthor-10k-val/20251217` | 82 MB | First small procedural scene pack. |
+| `mujoco/scenes/ithor/20251217` | 540 MB | Hand-authored rooms with articulated assets. |
+| `mujoco/robots/rby1/20251224` | 8 MB | Mobile humanoid-style robot. |
+| `mujoco/robots/rby1m/20251224` | 11 MB | Preferred mecanum-wheel mobile manipulator. |
+| `mujoco/robots/franka_droid/20260127` | 43 MB | Fallback official pick/place benchmark robot. |
+| `mujoco/objects/thor/20251117` | 1.6 GB | Avoid initially unless adding standalone objects outside the chosen scene. |
+| `mujoco/grasps/droid/20251116` | 384 MB | DROID/Franka grasp annotations. |
+
+The capability spike should record actual disk use after extraction because
+archive granularity and lazy-linking behavior may change upstream.
+
+## Demo Scenario Shortlist
+
+Use this order; do not start with a broad "all rooms" setup.
+
+| Priority | Scenario | Scene set | Robot | Why |
+| --- | --- | --- | --- | --- |
+| 1 | Cleanup: `帮我收拾这个房间` | one iTHOR or ProcTHOR room with 5 seeded misplaced objects | RBY1M target; Franka fallback if needed | The public "wow, it works" proof for robot-agent developers. |
+| 2 | One-room navigation-to-object: "Go to the mug/book." | `procthor-10k-val`, same house | RBY1/RBY1M | Bring-up helper for camera, base movement, and object inventory if cleanup exposes nav gaps. |
+| 3 | Articulation: "Open the drawer/cabinet/fridge." | `ithor`, one kitchen/office room | RBY1M or Franka fallback | Add only if cleanup needs visible open/close abilities. |
+| 4 | One-room pick/place: "Pick up the book/cup and place it on the table." | `procthor-10k-val`, one `house_inds` value | RBY1M if planner works; Franka fallback | Internal debugging fallback, not a standalone milestone. |
+| 5 | Two-room cleanup | one small ProcTHOR house with two rooms | RBY1M | Only after single-room cleanup works. |
+
+Avoid for the first demo:
+
+- `holodeck` and `procthor-objaverse` scene sets. They are good later, but they
+  pull us toward Objaverse-scale dependencies and more visual variability.
+- Full benchmark sweeps. Use benchmark task definitions as examples, not as the
+  first Roboclaws product surface.
+- G1-like humanoids. Use RBY1M now; revisit G1 after the MCP/scenario/scoring
+  path works.
+
+## Small Asset Strategy
+
+The demo must work from a tiny pinned asset manifest, not from a full dataset
+install.
+
+Start with this target bundle:
+
+```text
+roboclaws-molmo-demo-v0/
+  scenes:
+    - procthor-10k-val: one selected house
+    - ithor: one selected articulated room, only if needed for open/close
+  objects:
+    - prefer objects already embedded/referenced by the selected scenes
+    - install standalone thor objects only if the cleanup randomizer needs them
+  robots:
+    - rby1m
+    - franka_droid fallback
+  grasps:
+    - omit initially unless MolmoSpaces API-backed cleanup requires them
+```
+
+Capability spike requirements:
+
+- Pin exact upstream asset versions in a small manifest.
+- Record archive size and extracted disk size.
+- Verify that the selected scenes load without installing unrelated scene sets.
+- Prefer `install_scene_with_objects_and_grasps_from_path(...)` or equivalent
+  on-demand installation over bulk download.
+- If upstream archive granularity still downloads a larger source shard, record
+  it honestly and keep the selected shard count minimal.
+- First attempt should use scene-existing objects only; adding standalone objects
+  is a second step because it may pull the larger object bank.
+
+## Renderer And Embodiment Choice
+
+Default path:
+
+1. **MuJoCo classic** for the capability spike and CI-adjacent fake-backend
+   contracts.
+2. **MuJoCo Filament** for nicer public screenshots/reports if the install is
+   stable on the local workstation.
+3. **ManiSkill** only as a follow-up visual/runtime comparison after the MuJoCo
+   MCP path works.
+4. **Isaac Sim / Isaac Lab** deferred.
+
+Robot path:
+
+1. **RBY1M** is the target embodiment for the visible Roboclaws demo because it
+   is a moving robot with arms and fits the household cleanup story.
+2. **RBY1** is acceptable for mobile navigation and object-search checks.
+3. **Franka DROID / Franka FR3** remain fallback bring-up robots because they
+   align with upstream pick/place benchmarks.
+4. **G1-like humanoid** remains future work. It likely requires importing an
+   external MuJoCo model, creating robot config/view/controller bindings, and
+   designing locomotion or whole-body-control assumptions before it can be a
+   credible Roboclaws demo.
 
 ## Architecture Shape
 
@@ -63,7 +188,7 @@ output/runs/<id>/scenario.json  +  private scoring manifest
         v
 MolmoSpaces MCP entry point
         |
-        +--> observe / scene_objects / reach / pick / place / open / close / done
+        +--> observe / scene_objects / goto / pick / place / open / close / done
         |
         v
 Coding agent skill
@@ -84,7 +209,7 @@ Keep the tool surface small:
 
 - `observe(label="")`
 - `scene_objects(filter_types="")`
-- `goto` or `reach`
+- `goto(object_id | location_id, distance=...)`
 - `pick(object_id)`
 - `place(receptacle_id | location_id)`
 - `open(object_id)`
@@ -101,41 +226,24 @@ Contract requirements:
 - The private scoring manifest must never be exposed through MCP or copied into
   agent prompt context.
 - Timeout/no-progress must be an explicit terminal status, not success.
+- Manipulation responses must include a provenance field:
+  `real`, `api_semantic`, `scripted`, or `shim`.
 
-## Layer 1: Smallest Demo
+## First Demo: Cleanup-First Semantic Manipulation
 
-Goal: deterministic pick/place with one object and one receptacle.
+Goal: natural-language room cleanup that is impressive as a runnable demo and
+honest as an engineering artifact.
 
 Example:
 
 ```text
-Pick up the book from the floor and place it on the table.
+帮我收拾这个房间
 ```
 
 Expected tool flow:
 
 ```text
-observe -> scene_objects -> goto/reach -> pick -> place -> observe -> done
-```
-
-Pass criteria:
-
-- Object ends on the required receptacle.
-- `trace.jsonl` records all tool calls.
-- `run_result.json` records backend, scenario id, final status, artifact paths,
-  and primitive provenance.
-- `report.html` shows before/after snapshots and the tool trace.
-- The report states whether `pick` / `place` used real MolmoSpaces APIs, a
-  scripted planner, or a temporary shim.
-
-## Layer 2: Open Cleanup Demo
-
-Goal: natural-language room cleanup.
-
-Operator prompt:
-
-```text
-帮我整理这个房间
+observe -> scene_objects -> goto -> pick/place/open/close as needed -> observe -> done
 ```
 
 Pre-run setup should create a seeded messy room, outside MCP:
@@ -175,37 +283,48 @@ Pass criteria:
 - At least 3 of 5 misplaced objects move to valid receptacles.
 - No high-severity failure: lost object, impossible placement marked as success,
   or timeout with no progress.
+- `trace.jsonl` records all tool calls, result status, state delta, and
+  primitive provenance.
+- `run_result.json` records backend, scenario id, seed, final status, artifact
+  paths, score summary, and primitive provenance summary.
 - `report.html` shows initial room, final room, restored/missed object table,
   primitive provenance, and tool trace.
+- The report states whether `pick` / `place` / `open` / `close` used real
+  MolmoSpaces behavior, API-backed semantic manipulation, a scripted planner, or
+  a temporary shim.
+- A robot-agent developer can rerun the demo through the existing
+  `just code::codex` / `just code::cc` workflow shape.
 
 ## Task Slices
 
 These are approved vertical slices. Run the capability spike first; only convert
 the rest into GSD execution work after the API facts are known.
 
-1. **Capability spike**
-   Install/run the smallest MolmoSpaces/MuJoCo example and fill the capability
-   matrix. Identify APIs for scene load, reset, object inventory, object state
-   changes, camera frames, and manipulation primitives.
+1. **Cleanup capability spike**
+   Install/run the smallest MolmoSpaces/MuJoCo example needed for the cleanup
+   path. Identify APIs for scene load, reset, object inventory, camera frames,
+   object state readback, API-backed semantic manipulation, and failure
+   semantics.
 
-2. **Direct MCP Layer 1**
-   Add the minimal MolmoSpaces MCP server/entry point and complete deterministic
-   pick/place with artifacts. Reuse existing trace/report patterns where
-   possible and keep additive compatibility with current trace consumers.
+2. **Provenance and fake-backend contract**
+   Define the primitive provenance enum and fake-backend response shapes before
+   real MolmoSpaces code. Reuse existing trace/report patterns where possible
+   and keep additive compatibility with current trace consumers.
 
 3. **Scenario builder and scoring**
    Add seeded room messiness outside MCP, private manifest, state-delta scoring,
    and report rendering. Use `tdd` for manifest parsing, scorer behavior, and
    privacy boundaries.
 
-4. **Direct MCP Layer 2**
-   Run `帮我整理这个房间` through a coding agent and validate 3-of-5 cleanup on
-   an easy seed. Keep failures visible in `run_result.json` and the report.
+4. **Direct MCP cleanup demo**
+   Add the minimal MolmoSpaces MCP server/entry point, then run
+   `帮我收拾这个房间` through a coding agent and validate 3-of-5 cleanup on an
+   easy seed. Keep failures visible in `run_result.json` and the report.
 
 5. **OpenClaw follow-up**
-   Reuse the working MCP surface through OpenClaw. Validate Layer 1 first, then
-   Layer 2. Split this into a separate GSD phase if direct MCP Layer 1 is not
-   stable quickly.
+   Reuse the working MCP surface through OpenClaw only after the direct cleanup
+   demo is stable. Split this into a separate GSD phase if direct MCP cleanup is
+   not stable quickly.
 
 6. **Docs and ADR**
    Reframe README / ARCHITECTURE / technical design after evidence exists. Add
@@ -228,9 +347,9 @@ Local-dev checks:
 - MolmoSpaces/MuJoCo install and import.
 - Scene load/reset and frame capture.
 - Object inventory and object state readback.
-- Real/scripted/shim `pick` and `place` behavior.
-- End-to-end Layer 1 coding-agent run with artifacts.
-- End-to-end Layer 2 cleanup run restoring at least 3 of 5 misplaced objects.
+- API-backed semantic manipulation behavior, with provenance labels.
+- End-to-end cleanup coding-agent run restoring at least 3 of 5 misplaced
+  objects.
 
 Do not claim real MolmoSpaces validation from cloud-only evidence.
 
@@ -261,11 +380,11 @@ Do not claim real MolmoSpaces validation from cloud-only evidence.
 
 | Failure | Rescue |
 | --- | --- |
-| MolmoSpaces local install or APIs do not support the needed loop. | Stop after capability spike, document exact blocker, and do not fake Layer 1. |
-| Scripted shim becomes indistinguishable from real manipulation. | Store primitive provenance in `run_result.json`, trace events, and report. |
-| Layer 2 prompt is too open and produces noisy failures. | Seed easy scenarios first, cap to 5 misplaced objects, require 3/5 restored. |
+| MolmoSpaces local install or APIs do not support the needed loop. | Stop after capability spike, document exact blocker, and do not fake cleanup success. |
+| API-backed semantic behavior or scripted shim becomes indistinguishable from real manipulation. | Store primitive provenance in `run_result.json`, trace events, and report. |
+| Cleanup prompt is too open and produces noisy failures. | Seed easy scenarios first, cap to 5 misplaced objects, require 3/5 restored. |
 | Local-only validation gets implied as cloud-validated. | File/use a `local-dev` validation issue with exact commands and artifacts. |
-| Scope expands into territory/multi-agent before one-agent works. | Keep territory and multi-agent explicitly deferred until Layer 2 evidence exists. |
+| Scope expands into territory/multi-agent before one-agent works. | Keep territory and multi-agent explicitly deferred until cleanup evidence exists. |
 | Large scene inventory overwhelms context. | Filter by visible/relevant types and cap response size. |
 | Object/receptacle IDs drift between observe and action. | Use stable IDs or explicit stale-object errors. |
 
@@ -277,7 +396,7 @@ Do not claim real MolmoSpaces validation from cloud-only evidence.
 - Isaac Lab humanoid migration.
 - Full backend-neutral simulator abstraction.
 - Split-model navigation optimization.
-- Raising Layer 2 beyond 3-of-5 until the first easy cleanup demo works.
+- Raising cleanup beyond 3-of-5 until the first easy cleanup demo works.
 
 ## GSD Handoff Trigger
 
@@ -307,7 +426,8 @@ schema, and any regression found during local MolmoSpaces validation.
 | Treat `report.html` as artifact UI, not product UI. | Accepted. |
 | Keep territory/coverage deferred. | Accepted. |
 | Gate real MolmoSpaces validation as local-dev. | Accepted. |
-| Split OpenClaw follow-up if direct Layer 1 is unstable. | Accepted as guidance. |
+| Make `帮我收拾这个房间` the first public proof instead of a separate pick/place milestone. | Accepted in office-hours follow-up. |
+| Split OpenClaw follow-up if direct cleanup is unstable. | Accepted as guidance. |
 
 ## Next Workflow
 
