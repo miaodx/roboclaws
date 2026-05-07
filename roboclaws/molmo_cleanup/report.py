@@ -69,6 +69,7 @@ def render_cleanup_report(
     trace_events: list[dict[str, Any]],
     before_snapshot: Path,
     after_snapshot: Path,
+    robot_view_steps: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Write a self-contained cleanup `report.html`."""
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -88,6 +89,7 @@ def render_cleanup_report(
         {_badge("Restored", restored_summary)}
         {_badge("Planner", run_result.get("planner", "unknown"))}
         {_badge("Provenance", run_result["primitive_provenance"])}
+        {_robot_badge(run_result)}
       </div>
     </section>
     <section class="snapshots">
@@ -104,6 +106,7 @@ def render_cleanup_report(
       <h2>Object Moves</h2>
       {_moves_table(moves)}
     </section>
+    {_robot_timeline(robot_view_steps or [])}
     <section>
       <h2>Score</h2>
       {_score_table(score)}
@@ -117,6 +120,54 @@ def _badge(label: str, value: Any) -> str:
     return (
         f'<span class="badge">{html.escape(str(label))}: '
         f"<strong>{html.escape(str(value))}</strong></span>"
+    )
+
+
+def _robot_badge(run_result: dict[str, Any]) -> str:
+    robot_name = run_result.get("robot_name")
+    if not robot_name:
+        return ""
+    return _badge("Robot", robot_name)
+
+
+def _robot_timeline(steps: list[dict[str, Any]]) -> str:
+    if not steps:
+        return ""
+    cards = []
+    for index, step in enumerate(steps, start=1):
+        views = step.get("views", {})
+        pose = step.get("robot_pose") or {}
+        pose_text = f"x={pose.get('x', '?')} y={pose.get('y', '?')} theta={pose.get('theta', '?')}"
+        cards.append(
+            '<article class="robot-step">'
+            f"<h3>{index}. {html.escape(str(step.get('action', step.get('label', 'step'))))}</h3>"
+            f'<p class="pose">{html.escape(pose_text)}</p>'
+            '<div class="views">'
+            f"{_view_figure(views.get('fpv'), 'FPV')}"
+            f"{_view_figure(views.get('chase'), 'Chase')}"
+            f"{_view_figure(views.get('map'), 'Map')}"
+            "</div>"
+            "</article>"
+        )
+    return (
+        "<section><h2>Robot View Timeline</h2>"
+        '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
+        "The map is a report artifact from public simulator state.</p>"
+        + "".join(cards)
+        + "</section>"
+    )
+
+
+def _view_figure(path: Any, label: str) -> str:
+    if not path:
+        return ""
+    escaped_path = html.escape(str(path))
+    escaped_label = html.escape(label)
+    return (
+        "<figure>"
+        f'<img src="{escaped_path}" alt="{escaped_label} view">'
+        f"<figcaption>{escaped_label}</figcaption>"
+        "</figure>"
     )
 
 
@@ -199,6 +250,21 @@ def _wrap_html(body: str) -> str:
     }}
     img {{ width: 100%; height: auto; display: block; }}
     figcaption {{ margin-top: 8px; color: #565f70; font-size: 14px; }}
+    .note {{ color: #565f70; margin: 0 0 12px; }}
+    .robot-step {{
+      background: #fff;
+      border: 1px solid #d9dde6;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }}
+    .robot-step h3 {{ font-size: 16px; margin: 0 0 4px; }}
+    .pose {{ margin: 0 0 10px; color: #565f70; font-size: 13px; }}
+    .views {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+    }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dde6; }}
     th, td {{
       padding: 9px 10px;

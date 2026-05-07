@@ -54,3 +54,54 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()
+
+
+def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    for name in ("step.fpv.png", "step.chase.png", "step.map.png"):
+        (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
+        (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "robot_name": "rby1m",
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "goto sink",
+                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+                "views": {
+                    "fpv": "robot_views/step.fpv.png",
+                    "chase": "robot_views/step.chase.png",
+                    "map": "robot_views/step.map.png",
+                },
+            }
+        ],
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Robot View Timeline" in html
+    assert "rby1m" in html
+    assert "robot_views/step.fpv.png" in html

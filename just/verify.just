@@ -14,6 +14,7 @@
 # - just verify::molmo-cleanup     MolmoSpaces cleanup contract + harness
 # - just verify::molmo-prompt-cleanup  prompt-driven public cleanup proof
 # - just verify::molmo-real-cleanup    real MolmoSpaces/MuJoCo cleanup proof
+# - just verify::molmo-robot-visual    real MolmoSpaces/RBY1M visual proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -98,6 +99,19 @@ molmo-real-cleanup:
       tests/test_molmo_cleanup_demo.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-real-cleanup
+
+# Real upstream MolmoSpaces/MuJoCo robot visual gate. Requires the isolated
+# Python 3.11 MolmoSpaces runtime and local robot assets.
+molmo-robot-visual:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_policy.py \
+      tests/test_molmo_cleanup_demo.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_molmo_cleanup_subprocess_backend.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-robot-visual
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

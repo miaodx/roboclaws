@@ -52,6 +52,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=(SCRIPTED_REFERENCE, PUBLIC_HEURISTIC),
         default=SCRIPTED_REFERENCE,
     )
+    parser.add_argument("--include-robot", action="store_true")
+    parser.add_argument("--robot-name", default="rby1m")
+    parser.add_argument("--record-robot-views", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -63,11 +66,21 @@ def run_demo(
     planner: str = SCRIPTED_REFERENCE,
     task_prompt: str = DEFAULT_PROMPT,
     backend: str = SYNTHETIC_BACKEND,
+    include_robot: bool = False,
+    robot_name: str = "rby1m",
+    record_robot_views: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     backend_instance: Any | None = None
+    if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
+        raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
-        backend_instance = MolmoSpacesSubprocessBackend(run_dir=output_dir, seed=seed)
+        backend_instance = MolmoSpacesSubprocessBackend(
+            run_dir=output_dir,
+            seed=seed,
+            include_robot=include_robot,
+            robot_name=robot_name,
+        )
         scenario = backend_instance.scenario
     else:
         scenario = build_cleanup_scenario(seed=seed)
@@ -83,8 +96,13 @@ def run_demo(
         output_path=output_dir / "before.png",
         title="Before cleanup",
     )
+    robot_view_steps: list[dict[str, Any]] = []
+    if record_robot_views:
+        _record_robot_views(robot_view_steps, contract, output_dir, "0000_before", "before")
 
     _call_tool(trace_events, started_at, "observe", {}, contract.observe)
+    if record_robot_views:
+        _record_robot_views(robot_view_steps, contract, output_dir, "0001_observe", "observe")
     scene_objects = _call_tool(
         trace_events,
         started_at,
@@ -92,6 +110,14 @@ def run_demo(
         {},
         contract.scene_objects,
     )
+    if record_robot_views:
+        _record_robot_views(
+            robot_view_steps,
+            contract,
+            output_dir,
+            "0002_scene_objects",
+            "scene_objects",
+        )
     cleanup_plan, uses_private_manifest = _build_cleanup_plan(
         planner=planner,
         task_prompt=task_prompt,
@@ -100,7 +126,8 @@ def run_demo(
         restore_count=restore_count,
     )
 
-    for action in cleanup_plan:
+    view_index = 3
+    for action_index, action in enumerate(cleanup_plan, start=1):
         object_id = action["object_id"]
         target_receptacle_id = action["receptacle_id"]
         _call_tool(
@@ -110,6 +137,15 @@ def run_demo(
             {"object_id": object_id, "receptacle_id": target_receptacle_id},
             lambda target=target_receptacle_id: contract.goto(target),
         )
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_goto_{action_index}",
+                f"goto {target_receptacle_id}",
+            )
+            view_index += 1
         _call_tool(
             trace_events,
             started_at,
@@ -124,6 +160,15 @@ def run_demo(
             {"receptacle_id": target_receptacle_id},
             lambda target=target_receptacle_id: contract.place(target),
         )
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_place_{action_index}",
+                f"place {object_id}",
+            )
+            view_index += 1
 
     done = _call_tool(
         trace_events,
@@ -140,6 +185,14 @@ def run_demo(
         output_path=output_dir / "after.png",
         title="After cleanup",
     )
+    if record_robot_views:
+        _record_robot_views(
+            robot_view_steps,
+            contract,
+            output_dir,
+            f"{view_index:04d}_after",
+            "after",
+        )
     trace_path = output_dir / "trace.jsonl"
     write_trace_jsonl(trace_path, trace_events)
 
@@ -185,6 +238,13 @@ def run_demo(
             "scene_xml": backend_instance.scene_xml,
             "metadata_object_count": backend_instance.metadata_object_count,
         }
+        if getattr(backend_instance, "robot", None) is not None:
+            run_result["robot"] = backend_instance.robot
+            run_result["robot_name"] = backend_instance.robot.get("robot_name")
+    if robot_view_steps:
+        run_result["view_variant"] = "molmospaces-rby1m-fpv-map-chase"
+        run_result["robot_view_steps"] = robot_view_steps
+        run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     report_path = render_cleanup_report(
         run_dir=output_dir,
         scenario=scenario,
@@ -192,6 +252,7 @@ def run_demo(
         trace_events=trace_events,
         before_snapshot=before_snapshot,
         after_snapshot=after_snapshot,
+        robot_view_steps=robot_view_steps,
     )
     run_result["artifacts"]["report"] = str(report_path)
     run_result_path = output_dir / "run_result.json"
@@ -246,6 +307,40 @@ def _write_snapshot(
     )
 
 
+def _record_robot_views(
+    steps: list[dict[str, Any]],
+    contract: MolmoCleanupToolContract,
+    output_dir: Path,
+    label: str,
+    action: str,
+) -> None:
+    result = contract.backend.write_robot_views(output_dir / "robot_views", label=label)
+    if not result.get("ok"):
+        raise RuntimeError(f"robot view capture failed: {result}")
+    steps.append(
+        {
+            "label": label,
+            "action": action,
+            "robot_pose": result.get("robot_pose"),
+            "robot_trajectory_count": len(result.get("robot_trajectory", [])),
+            "view_variant": result.get("view_variant"),
+            "view_provenance": result.get("view_provenance"),
+            "views": _relative_view_paths(output_dir, result["views"]),
+        }
+    )
+
+
+def _relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:
+    relative = {}
+    for key, value in views.items():
+        path = Path(value)
+        try:
+            relative[key] = str(path.relative_to(output_dir))
+        except ValueError:
+            relative[key] = str(path)
+    return relative
+
+
 def _call_tool(
     events: list[dict[str, Any]],
     started_at: float,
@@ -279,6 +374,9 @@ def main(argv: list[str] | None = None) -> None:
         planner=args.planner,
         task_prompt=args.task,
         backend=args.backend,
+        include_robot=args.include_robot,
+        robot_name=args.robot_name,
+        record_robot_views=args.record_robot_views,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 

@@ -30,21 +30,25 @@ class MolmoSpacesSubprocessBackend:
         python_executable: Path | None = None,
         scene_source: str = "procthor-10k-val",
         scene_index: int = 0,
+        include_robot: bool = False,
+        robot_name: str = "rby1m",
     ) -> None:
         self.run_dir = run_dir
         self.state_path = run_dir / "molmospaces_backend_state.json"
         self.python_executable = python_executable or Path(
             os.environ.get("ROBOCLAWS_MOLMOSPACES_PYTHON", str(DEFAULT_MOLMOSPACES_PYTHON))
         )
-        result = self._run_worker(
-            "init",
+        init_args = [
             "--seed",
             str(seed),
             "--scene-source",
             scene_source,
             "--scene-index",
             str(scene_index),
-        )
+        ]
+        if include_robot:
+            init_args.extend(["--include-robot", "--robot-name", robot_name])
+        result = self._run_worker("init", *init_args)
         self.backend = MOLMOSPACES_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(
             result["scenario"],
@@ -54,6 +58,7 @@ class MolmoSpacesSubprocessBackend:
         self.model_stats = result["model_stats"]
         self.scene_xml = result["scene_xml"]
         self.metadata_object_count = result["metadata_object_count"]
+        self.robot = result.get("robot")
 
     @property
     def held_object_id(self) -> str | None:
@@ -68,6 +73,9 @@ class MolmoSpacesSubprocessBackend:
     def write_snapshot(self, output_path: Path, *, title: str) -> Path:
         self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
         return output_path
+
+    def write_robot_views(self, output_dir: Path, *, label: str) -> dict[str, Any]:
+        return self._run_worker("robot_views", "--output-dir", str(output_dir), "--label", label)
 
     def observe(self) -> dict[str, Any]:
         return self._run_worker("observe")

@@ -5,11 +5,12 @@ import argparse
 import json
 import math
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import mujoco
-from PIL import Image
+from PIL import Image, ImageDraw
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("--seed", type=int, default=7)
     init.add_argument("--scene-source", default="procthor-10k-val")
     init.add_argument("--scene-index", type=int, default=0)
+    init.add_argument("--include-robot", action="store_true")
+    init.add_argument("--robot-name", default="rby1m")
 
     subparsers.add_parser("observe")
     subparsers.add_parser("scene_objects")
@@ -41,6 +44,10 @@ def main(argv: list[str] | None = None) -> None:
     snapshot = subparsers.add_parser("snapshot")
     snapshot.add_argument("--output-path", type=Path, required=True)
     snapshot.add_argument("--title", default="")
+
+    robot_views = subparsers.add_parser("robot_views")
+    robot_views.add_argument("--output-dir", type=Path, required=True)
+    robot_views.add_argument("--label", required=True)
 
     goto = subparsers.add_parser("goto")
     goto.add_argument("--receptacle-id", required=True)
@@ -61,6 +68,8 @@ def main(argv: list[str] | None = None) -> None:
             seed=args.seed,
             scene_source=args.scene_source,
             scene_index=args.scene_index,
+            include_robot=args.include_robot,
+            robot_name=args.robot_name,
         )
     else:
         state = _read_state(args.state_path)
@@ -74,6 +83,8 @@ def main(argv: list[str] | None = None) -> None:
             result = _ok("locations", final_locations=_read_locations(state))
         elif args.command == "snapshot":
             result = write_snapshot(state, args.output_path, args.title)
+        elif args.command == "robot_views":
+            result = write_robot_views(state, args.output_dir, args.label)
         elif args.command == "goto":
             result = goto_receptacle(state, args.receptacle_id)
             _write_state(args.state_path, state)
@@ -97,8 +108,10 @@ def init_state(
     seed: int,
     scene_source: str,
     scene_index: int,
+    include_robot: bool = False,
+    robot_name: str = "rby1m",
 ) -> dict[str, Any]:
-    from molmo_spaces.molmo_spaces_constants import get_scenes_root
+    from molmo_spaces.molmo_spaces_constants import get_robot_path, get_scenes_root
     from molmo_spaces.utils.lazy_loading_utils import install_scene_from_source_index
     from molmo_spaces.utils.scene_metadata_utils import get_scene_metadata
 
@@ -107,7 +120,14 @@ def init_state(
     if not scene_xml.is_file():
         raise FileNotFoundError(scene_xml)
 
-    model, data = _load_model_data(scene_xml)
+    robot_xml: Path | None = None
+    if include_robot:
+        robot_xml = get_robot_path(robot_name) / _robot_xml_name(robot_name)
+        if not robot_xml.is_file():
+            raise FileNotFoundError(robot_xml)
+        model, data = _load_robot_model_data(scene_xml, robot_xml)
+    else:
+        model, data = _load_model_data(scene_xml)
     metadata = get_scene_metadata(scene_xml)
     if metadata is None:
         raise RuntimeError(f"missing scene metadata for {scene_xml}")
@@ -124,6 +144,9 @@ def init_state(
         "scene_source": scene_source,
         "scene_index": scene_index,
         "scene_xml": str(scene_xml),
+        "robot_included": include_robot,
+        "robot_name": robot_name if include_robot else None,
+        "robot_xml": str(robot_xml) if robot_xml is not None else None,
         "python_executable": sys.executable,
         "runtime": {
             "python_version": sys.version.split()[0],
@@ -145,6 +168,20 @@ def init_state(
         "tool_event_counts": {},
     }
     _seed_misplaced_objects(model, data, state, targets)
+    if include_robot:
+        initial_receptacle = state["receptacles"][_first_wrong_receptacle(state, targets[0])]
+        robot_pose = _robot_pose_near_receptacle(state, initial_receptacle)
+        _set_robot_pose(model, data, robot_pose)
+        state["robot_pose"] = robot_pose
+        state["robot_trajectory"] = [robot_pose]
+        state["robot_camera_names"] = _robot_camera_names(model)
+        state["robot_body_name"] = "robot_0/base"
+        state["robot_control_provenance"] = "semantic_robot_base_qpos"
+        state["robot_view_provenance"] = {
+            "fpv": "rby1m_head_camera",
+            "chase": "rby1m_follower_camera",
+            "map": "public_sim_state_report",
+        }
     state["qpos"] = [float(value) for value in data.qpos]
     state["current_receptacle_id"] = _first_wrong_receptacle(state, targets[0])
     state["private_manifest"] = {
@@ -169,6 +206,7 @@ def init_state(
         runtime=state["runtime"],
         model_stats=state["model_stats"],
         metadata_object_count=state["metadata_object_count"],
+        robot=_robot_result_payload(state, model) if include_robot else None,
     )
 
 
@@ -200,7 +238,7 @@ def scene_objects(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict[str, Any]:
-    model, data = _load_model_data(Path(state["scene_xml"]))
+    model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     mujoco.mj_forward(model, data)
     renderer = mujoco.Renderer(model, height=360, width=540)
@@ -217,18 +255,76 @@ def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict
     return _ok("snapshot", path=str(output_path), title=title, shape=list(frame.shape))
 
 
+def write_robot_views(state: dict[str, Any], output_dir: Path, label: str) -> dict[str, Any]:
+    if not state.get("robot_included"):
+        return _error("robot_views", "robot_not_included")
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    mujoco.mj_forward(model, data)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_label = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label)
+    fpv_path = output_dir / f"{safe_label}.fpv.png"
+    chase_path = output_dir / f"{safe_label}.chase.png"
+    map_path = output_dir / f"{safe_label}.map.png"
+
+    fpv = _render_fixed_camera(model, data, "robot_0/head_camera")
+    chase = _render_fixed_camera(model, data, "robot_0/camera_follower")
+    Image.fromarray(fpv).save(fpv_path)
+    Image.fromarray(chase).save(chase_path)
+    _render_robot_map(state).save(map_path)
+
+    return _ok(
+        "robot_views",
+        backend=BACKEND,
+        robot_name=state.get("robot_name"),
+        robot_pose=state.get("robot_pose"),
+        robot_trajectory=state.get("robot_trajectory", []),
+        view_variant="molmospaces-rby1m-fpv-map-chase",
+        view_provenance=state.get("robot_view_provenance", {}),
+        views={
+            "fpv": str(fpv_path),
+            "chase": str(chase_path),
+            "map": str(map_path),
+        },
+        shapes={
+            "fpv": list(fpv.shape),
+            "chase": list(chase.shape),
+            "map": [420, 620, 3],
+        },
+    )
+
+
 def goto_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     _count(state, "goto")
     if receptacle_id not in state["receptacles"]:
         return _error("goto", "stale_reference", receptacle_id=receptacle_id)
     previous = state.get("current_receptacle_id")
     state["current_receptacle_id"] = receptacle_id
+    robot_pose = None
+    qpos_changed = False
+    state_mutation = "agent_pose_semantic"
+    if state.get("robot_included"):
+        model, data = _load_model_data_for_state(state)
+        _apply_qpos(data, state["qpos"])
+        robot_pose = _robot_pose_near_receptacle(state, state["receptacles"][receptacle_id])
+        _set_robot_pose(model, data, robot_pose)
+        mujoco.mj_forward(model, data)
+        state["qpos"] = [float(value) for value in data.qpos]
+        state["robot_pose"] = robot_pose
+        state.setdefault("robot_trajectory", []).append(robot_pose)
+        qpos_changed = True
+        state_mutation = "robot_base_qpos"
     return _ok(
         "goto",
         primitive_provenance=API_SEMANTIC_PROVENANCE,
         receptacle_id=receptacle_id,
         previous_receptacle_id=previous,
-        state_mutation="agent_pose_semantic",
+        state_mutation=state_mutation,
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=qpos_changed,
         backend=BACKEND,
     )
 
@@ -260,7 +356,7 @@ def place_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     if object_id is None:
         return _error("place", "not_holding")
 
-    model, data = _load_model_data(Path(state["scene_xml"]))
+    model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     obj = state["objects"][object_id]
     receptacle = state["receptacles"][receptacle_id]
@@ -486,7 +582,7 @@ def _public_scenario(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _read_locations(state: dict[str, Any]) -> dict[str, str]:
-    model, data = _load_model_data(Path(state["scene_xml"]))
+    model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     mujoco.mj_forward(model, data)
     receptacles = list(state["receptacles"].values())
@@ -574,6 +670,214 @@ def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
     return model, data
+
+
+def _load_model_data_for_state(state: dict[str, Any]) -> tuple[mujoco.MjModel, mujoco.MjData]:
+    if state.get("robot_included"):
+        robot_xml = state.get("robot_xml")
+        if not robot_xml:
+            raise ValueError("robot_included state missing robot_xml")
+        return _load_robot_model_data(Path(state["scene_xml"]), Path(robot_xml))
+    return _load_model_data(Path(state["scene_xml"]))
+
+
+def _load_robot_model_data(
+    scene_xml: Path,
+    robot_xml: Path,
+) -> tuple[mujoco.MjModel, mujoco.MjData]:
+    xml_content = scene_xml.read_text(encoding="utf-8")
+    mujoco_tag_end = xml_content.find(">") + 1
+    include_line = f'\n  <include file="{robot_xml}"/>\n'
+    modified_xml = xml_content[:mujoco_tag_end] + include_line + xml_content[mujoco_tag_end:]
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            suffix=".xml",
+            prefix="roboclaws_robot_scene_",
+            dir=str(scene_xml.parent),
+            delete=False,
+            encoding="utf-8",
+        ) as temp:
+            temp.write(modified_xml)
+            temp_path = Path(temp.name)
+        return _load_model_data(temp_path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+
+
+def _robot_xml_name(robot_name: str) -> str:
+    if robot_name == "rby1m":
+        return "rby1_v1.2_site_control.xml"
+    if robot_name == "rby1":
+        return "rby1_site_control.xml"
+    raise ValueError(f"unsupported robot for visual cleanup demo: {robot_name}")
+
+
+def _robot_camera_names(model: mujoco.MjModel) -> list[str]:
+    names = []
+    for camera_id in range(model.ncam):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_id)
+        if name and name.startswith("robot_0/"):
+            names.append(name)
+    return names
+
+
+def _robot_result_payload(state: dict[str, Any], model: mujoco.MjModel) -> dict[str, Any]:
+    return {
+        "robot_included": True,
+        "robot_name": state.get("robot_name"),
+        "robot_xml": state.get("robot_xml"),
+        "robot_body_name": state.get("robot_body_name"),
+        "robot_camera_names": state.get("robot_camera_names") or _robot_camera_names(model),
+        "robot_control_provenance": state.get("robot_control_provenance"),
+        "robot_view_provenance": state.get("robot_view_provenance"),
+        "robot_pose": state.get("robot_pose"),
+        "robot_model_stats": {
+            "nbody": int(model.nbody),
+            "ngeom": int(model.ngeom),
+            "njnt": int(model.njnt),
+            "nq": int(model.nq),
+            "nu": int(model.nu),
+        },
+    }
+
+
+def _set_robot_pose(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    pose: dict[str, float],
+) -> None:
+    _set_joint_qpos(model, data, "robot_0/base_x", pose["x"])
+    _set_joint_qpos(model, data, "robot_0/base_y", pose["y"])
+    _set_joint_qpos(model, data, "robot_0/base_theta", pose["theta"])
+    if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "robot_0/head_0") >= 0:
+        _set_joint_qpos(model, data, "robot_0/head_0", 0.0)
+    if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "robot_0/head_1") >= 0:
+        _set_joint_qpos(model, data, "robot_0/head_1", 0.0)
+
+
+def _set_joint_qpos(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    joint_name: str,
+    value: float,
+) -> None:
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if joint_id < 0:
+        raise ValueError(f"missing robot joint: {joint_name}")
+    qposadr = int(model.jnt_qposadr[joint_id])
+    data.qpos[qposadr] = float(value)
+
+
+def _robot_pose_near_receptacle(
+    state: dict[str, Any],
+    receptacle: dict[str, Any],
+) -> dict[str, float]:
+    target = receptacle["position"]
+    center = _scene_center(list(state["receptacles"].values()))
+    dx = center[0] - target[0]
+    dy = center[1] - target[1]
+    norm = math.hypot(dx, dy) or 1.0
+    stand_off = 1.15
+    x = target[0] + dx / norm * stand_off
+    y = target[1] + dy / norm * stand_off
+    # This phase proves visual embodiment, not planner-backed navigation. A
+    # stable review heading keeps the RBY1M head camera readable in this room.
+    theta = math.pi / 2.0
+    return {
+        "x": round(float(x), 6),
+        "y": round(float(y), 6),
+        "z": 0.0,
+        "theta": round(float(theta), 6),
+        "target_receptacle_id": receptacle["receptacle_id"],
+    }
+
+
+def _scene_center(items: list[dict[str, Any]]) -> tuple[float, float]:
+    if not items:
+        return (0.0, 0.0)
+    return (
+        sum(float(item["position"][0]) for item in items) / len(items),
+        sum(float(item["position"][1]) for item in items) / len(items),
+    )
+
+
+def _render_fixed_camera(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera_name: str,
+) -> Any:
+    renderer = mujoco.Renderer(model, height=360, width=540)
+    renderer.update_scene(data, camera=camera_name)
+    return renderer.render()
+
+
+def _render_robot_map(state: dict[str, Any]) -> Image.Image:
+    width, height = 620, 420
+    margin = 34
+    image = Image.new("RGB", (width, height), (247, 248, 250))
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((12, 12, width - 12, height - 12), outline=(187, 193, 204), width=2)
+
+    points = [item["position"] for item in state["receptacles"].values()]
+    points += [state["objects"][oid]["position"] for oid in state["selected_object_ids"]]
+    points += [[pose["x"], pose["y"], 0.0] for pose in state.get("robot_trajectory", [])]
+    min_x, max_x, min_y, max_y = _map_bounds(points)
+
+    def project(x: float, y: float) -> tuple[int, int]:
+        px = margin + (x - min_x) / max(max_x - min_x, 0.001) * (width - 2 * margin)
+        py = height - margin - (y - min_y) / max(max_y - min_y, 0.001) * (height - 2 * margin)
+        return (int(round(px)), int(round(py)))
+
+    for receptacle in state["receptacles"].values():
+        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
+        draw.rounded_rectangle((x - 5, y - 5, x + 5, y + 5), radius=2, fill=(99, 116, 139))
+
+    for object_id in state["selected_object_ids"]:
+        obj = state["objects"][object_id]
+        x, y = project(float(obj["position"][0]), float(obj["position"][1]))
+        draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(192, 88, 68))
+
+    trajectory = state.get("robot_trajectory", [])
+    projected_path = [project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
+    if len(projected_path) >= 2:
+        draw.line(projected_path, fill=(37, 99, 235), width=3)
+    for index, (x, y) in enumerate(projected_path):
+        radius = 5 if index == len(projected_path) - 1 else 3
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill=(37, 99, 235))
+    if trajectory:
+        pose = trajectory[-1]
+        x, y = projected_path[-1]
+        heading = float(pose["theta"]) - math.pi / 2.0
+        tip = (int(round(x + math.cos(heading) * 18)), int(round(y - math.sin(heading) * 18)))
+        left = (
+            int(round(x + math.cos(heading + 2.45) * 10)),
+            int(round(y - math.sin(heading + 2.45) * 10)),
+        )
+        right = (
+            int(round(x + math.cos(heading - 2.45) * 10)),
+            int(round(y - math.sin(heading - 2.45) * 10)),
+        )
+        draw.polygon([tip, left, right], fill=(15, 23, 42))
+
+    draw.text((24, 22), "RBY1M map", fill=(31, 41, 55))
+    draw.text(
+        (24, height - 30),
+        "blue: robot trajectory  gray: receptacles  red: cleanup objects",
+        fill=(75, 85, 99),
+    )
+    return image
+
+
+def _map_bounds(points: list[list[float]]) -> tuple[float, float, float, float]:
+    if not points:
+        return (0.0, 1.0, 0.0, 1.0)
+    xs = [float(point[0]) for point in points]
+    ys = [float(point[1]) for point in points]
+    pad = 0.8
+    return (min(xs) - pad, max(xs) + pad, min(ys) - pad, max(ys) + pad)
 
 
 def _apply_qpos(data: mujoco.MjData, qpos: list[float]) -> None:
