@@ -85,6 +85,7 @@ def render_cleanup_report(
         {_badge("Scenario", scenario.scenario_id)}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
+        {_badge("Planner", run_result.get("planner", "unknown"))}
         {_badge("Provenance", run_result["primitive_provenance"])}
       </div>
     </section>

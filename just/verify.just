@@ -12,6 +12,7 @@
 # - just verify::local-openclaw    real OpenClaw/Gateway regression harness
 # - just verify::navigator <task>  coding-agent navigator harness
 # - just verify::molmo-cleanup     MolmoSpaces cleanup contract + harness
+# - just verify::molmo-prompt-cleanup  prompt-driven public cleanup proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -75,6 +76,16 @@ molmo-cleanup:
       tests/test_molmo_cleanup_demo.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-cleanup
+
+# Prompt-driven public-policy MolmoSpaces cleanup gate.
+molmo-prompt-cleanup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_policy.py \
+      tests/test_molmo_cleanup_demo.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-prompt-cleanup
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

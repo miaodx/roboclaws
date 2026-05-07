@@ -118,6 +118,21 @@ molmo-cleanup seed="7" output_dir="output/molmo-cleanup-harness":
       --output-dir "{{output_dir}}"
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py "{{output_dir}}/run_result.json"
 
+# Prompt-driven public-policy MolmoSpaces cleanup harness.
+molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" task="帮我整理这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --planner public_heuristic \
+      --task "{{task}}" \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+      --require-public-planner \
+      --expect-task "{{task}}" \
+      "{{output_dir}}/run_result.json"
+
 # List task files available under harness/tasks/.
 list-tasks:
     #!/usr/bin/env bash

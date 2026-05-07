@@ -37,6 +37,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::openclaw",
         "just harness::navigator",
         "just harness::molmo-cleanup",
+        "just harness::molmo-prompt-cleanup",
     )
     for call in expected_calls:
         assert call in text
@@ -51,6 +52,7 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^sim scenes=\"FloorPlan201\"",
         r"^openclaw scenes=\"FloorPlan201\"",
         r"^molmo-cleanup seed=\"7\"",
+        r"^molmo-prompt-cleanup seed=\"7\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
