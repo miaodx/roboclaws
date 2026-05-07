@@ -7,6 +7,7 @@
 # Preferred entrypoints:
 # - just harness::run <task>          run one iteration on a task
 # - just harness::navigator <task>    explicit navigator-harness alias
+# - just harness::molmo-cleanup       deterministic MolmoSpaces cleanup artifact
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -106,6 +107,16 @@ sim scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
 # Local OpenClaw/Gateway regression harness. Requires local preflight and keys.
 openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
     just harness::regression local-openclaw "" "" "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
+
+# Deterministic MolmoSpaces-shaped cleanup artifact harness.
+molmo-cleanup seed="7" output_dir="output/molmo-cleanup-harness":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmospaces_cleanup_result.py "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.
 list-tasks:
