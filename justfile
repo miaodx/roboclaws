@@ -1,7 +1,7 @@
 # Roboclaws command runner.
 #
 # Run `just` (or `just --list`) to see all recipes grouped by module.
-# Run `just <module> --list` to see one module (e.g. `just openclaw --list`).
+# Run `just <module>` to see one module (e.g. `just openclaw`).
 #
 # Modules live in `just/<name>.just`. Each is self-contained — delete the file
 # to remove a whole family of recipes, no edits elsewhere required.
@@ -19,6 +19,7 @@ mod dev       'just/dev.just'
 mod mcp       'just/mcp.just'
 mod code      'just/code.just'
 mod harness   'just/harness.just'
+mod verify    'just/verify.just'
 
 # Default: show the grouped recipe list.
 default:
