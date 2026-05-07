@@ -25,6 +25,8 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from roboclaws.core.run_artifacts import build_replay_report_context
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -112,12 +114,13 @@ def _build_run_section(
     run_id: str = "run",
 ) -> str:
     """Return the HTML string for a single run's section."""
-    metadata = manifest.get("metadata", {})
-    summary = manifest.get("summary", {})
-    steps_data: list[dict[str, Any]] = manifest.get("steps", [])
+    context = build_replay_report_context(manifest)
+    metadata = context.metadata
+    summary = context.summary
+    steps_data = context.steps
 
     agent_count = int(metadata.get("agent_count", 1))
-    provider_status: dict[str, Any] = summary.get("provider_status", {}) or {}
+    provider_status = context.provider_status
 
     summary_bar = _build_summary_bar(metadata, summary, provider_status)
     provider_health_html = _render_provider_health(provider_status)

@@ -18,6 +18,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.run_artifacts import build_run_result
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.mcp.text_bridge import observe_runtime_config
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
@@ -392,25 +393,23 @@ def run_autonomous_navigation(
 
         _write_json(
             output_dir / "run_result.json",
-            {
-                "terminated_by": run_result.terminated_by,
-                "wallclock_s": run_result.wallclock_s,
-                "final_message": run_result.final_message,
-                "view_variant": "map-v2+chase",
-                "model": runtime_config["model_name"],
-                "image_model": runtime_config["image_model"],
-                "observe_mode": runtime_config["observe_mode"],
-                "observe_delivery": runtime_config["observe_delivery"],
-                "vision_bridge_model": runtime_config["vision_bridge_model"],
-                "bridge_metrics": bridge_metrics,
+            build_run_result(
+                terminated_by=run_result.terminated_by,
+                wallclock_s=run_result.wallclock_s,
+                final_message=run_result.final_message,
+                view_variant="map-v2+chase",
+                model=runtime_config["model_name"],
+                image_model=runtime_config["image_model"],
+                observe_mode=runtime_config["observe_mode"],
+                observe_delivery=runtime_config["observe_delivery"],
+                vision_bridge_model=runtime_config["vision_bridge_model"],
+                bridge_metrics=bridge_metrics,
                 # Key kept verbatim for report/schema compat; backing data is MCP metrics.
-                "sim_server_metrics": sim_server_metrics,
-                "transcript_source": run_result.transcript_source,
-                "transcript_messages": [
-                    entry.to_dict() for entry in run_result.transcript_messages
-                ],
-                "diagnostics_files": diagnostics_files,
-            },
+                sim_server_metrics=sim_server_metrics,
+                transcript_source=run_result.transcript_source,
+                transcript_messages=[entry.to_dict() for entry in run_result.transcript_messages],
+                diagnostics_files=diagnostics_files,
+            ),
         )
 
         log.info("rendering replay.gif + report.html")
