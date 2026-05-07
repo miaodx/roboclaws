@@ -46,7 +46,7 @@ def test_resolve_observe_delivery_auto_keeps_images_for_image_capable_models() -
     assert resolve_observe_delivery("anthropic_kimi/k2p5", observe_mode="auto") == "images"
 
 
-def test_vision_bridge_sends_both_images_in_one_request() -> None:
+def test_vision_bridge_sends_navigation_images_in_one_request() -> None:
     client = _FakeClient(content="Immediate view: table ahead.\nNavigation cues: rotate right.")
     bridge = VisionBridge(
         bridge_model="mimo_openai/mimo-v2-omni",
@@ -55,8 +55,8 @@ def test_vision_bridge_sends_both_images_in_one_request() -> None:
     )
 
     result = bridge.describe(
-        images=[_frame(10), _frame(200)],
-        image_labels=["fpv", "map_v2"],
+        images=[_frame(10), _frame(200), _frame(80)],
+        image_labels=["fpv", "map_v2", "chase"],
         state={"position": {"x": 1.0, "y": 0.0, "z": -2.0}, "rotation": {"y": 90.0}},
         view_variant="map-v2+chase",
     )
@@ -71,7 +71,7 @@ def test_vision_bridge_sends_both_images_in_one_request() -> None:
     assert request["model"] == "mimo-v2-omni"
     content = request["messages"][1]["content"]
     image_parts = [part for part in content if part["type"] == "image_url"]
-    assert len(image_parts) == 2
+    assert len(image_parts) == 3
     assert content[0]["type"] == "text"
 
 

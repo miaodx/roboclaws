@@ -22,7 +22,13 @@ from typing import Any
 # dir is auto-prepended to sys.path; when loaded via ``importlib`` (test path)
 # it is not. Make the sibling import work in both cases.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from openclaw_plugin_allowlist import ALLOWED as OPENCLAW_PLUGIN_ALLOW  # noqa: E402
+
+from roboclaws.core.provider_catalog import (  # noqa: E402
+    model_supports_images,
+    openclaw_model_id,
+)
 
 
 @dataclass(frozen=True)
@@ -134,10 +140,10 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
         mode = env.get("MIMO_PROVIDER_MODE", "openai")
         if mode != "openai":
             raise SystemExit("The appliance currently supports MIMO_PROVIDER_MODE=openai")
-        model = env.get("MODEL", "mimo_openai/mimo-v2-omni")
+        model = env.get("MODEL", openclaw_model_id("mimo-v2-omni"))
         image_model = env.get("IMAGE_MODEL", "")
-        if not image_model and ("mimo-v2.5-pro" in model or "mimo-v2.5" in model):
-            image_model = "mimo_openai/mimo-v2-omni"
+        if not image_model and not model_supports_images(model):
+            image_model = openclaw_model_id("mimo-v2-omni")
         image_model = image_model or model
         return ProviderConfig(
             provider_id="mimo",
@@ -184,7 +190,7 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
         api_key = env.get("KIMI_API_KEY", "")
         if not api_key:
             raise SystemExit("KIMI_API_KEY is required for PROVIDER=kimi")
-        model = env.get("MODEL", "anthropic_kimi/k2.6")
+        model = env.get("MODEL", openclaw_model_id("kimi-k2.6"))
         image_model = env.get("IMAGE_MODEL", model)
         return ProviderConfig(
             provider_id="kimi",

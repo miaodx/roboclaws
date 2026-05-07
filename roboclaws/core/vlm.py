@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
+from roboclaws.core.provider_catalog import model_aliases, resolve_model
+
 # ---------------------------------------------------------------------------
 # Cost tables (USD per 1 M tokens)
 # ---------------------------------------------------------------------------
@@ -330,51 +332,25 @@ def _parse_soul_labels(souls_env: str, agent_count: int) -> list[str]:
     return [entries[idx] if idx < len(entries) else "default" for idx in range(agent_count)]
 
 
-_MODEL_ALIASES: dict[str, str] = {
-    "mock": "mock",
-    "gpt-4o": "gpt-4o",
-    "gpt-4o-mini": "gpt-4o-mini",
-    "kimi": "kimi-k2.6",
-    "kimi-k2-5": "kimi-k2-5",
-    "kimi-k2.6": "kimi-k2.6",
-    "kimi-coding": "kimi-for-coding",
-    "kimi-for-coding": "kimi-for-coding",
-    "anthropic": "claude-3-5-sonnet-20241022",
-    "claude-3-5-sonnet-20241022": "claude-3-5-sonnet-20241022",
-    "claude-3-haiku-20240307": "claude-3-haiku-20240307",
-    "nvidia": "meta/llama-4-maverick-17b-128e-instruct",
-    "meta/llama-4-maverick-17b-128e-instruct": "meta/llama-4-maverick-17b-128e-instruct",
-    "nvidia-nano-vl": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
-    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
-    # MiMo: only mimo-omni is exposed for direct VLM use (vision + tool-calls).
-    # mimo-v2.5-pro / mimo-v2.5 are text-only; use OpenClaw IMAGE_MODEL delegation instead.
-    "mimo-omni": "mimo-v2-omni",
-    "mimo-v2-omni": "mimo-v2-omni",
-    "mimo-v2.5-pro": "mimo-v2.5-pro",
-    "mimo-v2.5": "mimo-v2.5",
-}
+_MODEL_ALIASES: dict[str, str] = model_aliases()
 
 _PROVIDER_CLASSES: dict[str, type[Any]] = {
     "mock": MockProvider,
-    "gpt-4o": OpenAIProvider,
-    "gpt-4o-mini": OpenAIProvider,
-    "kimi-k2-5": KimiProvider,
-    "kimi-k2.6": KimiProvider,
-    "kimi-for-coding": KimiCodingProvider,
-    "claude-3-5-sonnet-20241022": AnthropicProvider,
-    "claude-3-haiku-20240307": AnthropicProvider,
-    "meta/llama-4-maverick-17b-128e-instruct": NvidiaProvider,
-    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": NvidiaProvider,
-    "mimo-v2-omni": MimoProvider,
-    "mimo-v2.5-pro": MimoProvider,
-    "mimo-v2.5": MimoProvider,
+    "openai": OpenAIProvider,
+    "kimi": KimiProvider,
+    "kimi-coding": KimiCodingProvider,
+    "anthropic": AnthropicProvider,
+    "nvidia": NvidiaProvider,
+    "mimo": MimoProvider,
 }
 
 
 def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
     """Map a ``--model`` CLI flag to a provider instance."""
-    canonical = _MODEL_ALIASES.get(model)
-    if canonical is None:
+    try:
+        metadata = resolve_model(model)
+    except KeyError:
         raise ValueError(f"Unknown model: {model!r}. Choose from {list(_MODEL_ALIASES)}")
-    provider_class = _PROVIDER_CLASSES[canonical]
+    canonical = metadata.canonical_model
+    provider_class = _PROVIDER_CLASSES[metadata.adapter]
     return provider_class(**({} if canonical == "mock" else {"model": canonical}), **kwargs)

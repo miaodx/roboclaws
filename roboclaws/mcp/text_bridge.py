@@ -19,9 +19,10 @@ from typing import Any, Literal, Sequence
 import numpy as np
 from PIL import Image as PILImage
 
+from roboclaws.core.provider_catalog import model_supports_images
+
 ObserveDelivery = Literal["images", "text-bridge"]
 
-_TEXT_ONLY_MODEL_SUFFIXES = frozenset({"mimo-v2.5-pro", "mimo-v2.5"})
 _VALID_OBSERVE_MODES = frozenset({"auto", "images", "text-bridge"})
 _MIMO_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 _DEFAULT_BRIDGE_MAX_TOKENS = 600
@@ -78,7 +79,7 @@ def resolve_observe_delivery(
     mode = normalize_observe_mode(observe_mode)
     if mode != "auto":
         return mode
-    return "text-bridge" if _model_suffix(model_name) in _TEXT_ONLY_MODEL_SUFFIXES else "images"
+    return "images" if model_supports_images(model_name) else "text-bridge"
 
 
 def resolve_bridge_model(
@@ -176,7 +177,7 @@ def _fallback_result(
 
 
 class VisionBridge:
-    """Small OpenAI-compatible helper that turns two images into nav text."""
+    """Small OpenAI-compatible helper that turns navigation images into nav text."""
 
     def __init__(
         self,
