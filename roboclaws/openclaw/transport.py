@@ -11,7 +11,6 @@ import base64
 import io
 import json
 import os
-import re
 import subprocess
 import sys
 import time
@@ -22,13 +21,15 @@ from typing import Any, Literal, NoReturn
 import numpy as np
 from PIL import Image
 
-from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.core.action_decision import (
+    SAFE_FALLBACK_ACTION,
+    parse_action_decision,
+)
 from roboclaws.core.turn_metrics import round_seconds
 
 _DEFAULT_GATEWAY_URL = "http://localhost:18789"
 _DEFAULT_AGENT_PREFIX = "agent-"
 _CHAT_PATH = "/v1/chat/completions"
-_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 # Generous enough for reasoning models (e.g. nvidia/nemotron-nano-12b-v2-vl:free
 # on OpenRouter) whose hidden chain-of-thought easily consumes 200+ tokens
 # before producing the visible content. Non-reasoning models ignore the cap
@@ -462,7 +463,8 @@ class OpenClawBridge:
         self,
         agent_id: int,
         frame: np.ndarray,
-        overhead: np.ndarray,
+        map_v2: np.ndarray,
+        chase: np.ndarray,
         state: dict[str, Any],
         step_idx: int,
     ) -> dict[str, Any]:
@@ -474,8 +476,10 @@ class OpenClawBridge:
             Simulation agent index.  Routed to ``openclaw/{agent_prefix}{agent_id}``.
         frame:
             First-person RGB frame as a ``(H, W, 3) uint8`` numpy array.
-        overhead:
-            Overhead map RGB as a ``(H, W, 3) uint8`` numpy array.
+        map_v2:
+            Structured overhead map RGB as a ``(H, W, 3) uint8`` numpy array.
+        chase:
+            Chase camera RGB frame as a ``(H, W, 3) uint8`` numpy array.
         state:
             Structured game state dict.  Serialised to JSON in the user
             message for the agent to read.
@@ -495,7 +499,8 @@ class OpenClawBridge:
         """
         step_started = time.perf_counter()
         fpv_url, fpv_metrics = _ndarray_to_data_url(frame)
-        map_url, map_metrics = _ndarray_to_data_url(overhead)
+        map_url, map_metrics = _ndarray_to_data_url(map_v2)
+        chase_url, chase_metrics = _ndarray_to_data_url(chase)
 
         agent_name = f"{self._agent_prefix}{agent_id}"
         state_started = time.perf_counter()
@@ -505,7 +510,7 @@ class OpenClawBridge:
             f"You are RoboClaws {agent_name}, step {step_idx}. "
             f"Follow the ai2thor-navigator skill. "
             f"Current state (JSON): {state_json}. "
-            "FPV and overhead map attached. "
+            "FPV, structured map-v2 overhead, and chase camera attached. "
             'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.'
         )
 
@@ -518,6 +523,7 @@ class OpenClawBridge:
                         {"type": "text", "text": steer},
                         {"type": "image_url", "image_url": {"url": fpv_url}},
                         {"type": "image_url", "image_url": {"url": map_url}},
+                        {"type": "image_url", "image_url": {"url": chase_url}},
                     ],
                 },
             ],
@@ -539,7 +545,8 @@ class OpenClawBridge:
         self._last_step_metrics = {
             "timings": {
                 "openclaw_encode_fpv_seconds": fpv_metrics["encode_seconds"],
-                "openclaw_encode_overhead_seconds": map_metrics["encode_seconds"],
+                "openclaw_encode_map_v2_seconds": map_metrics["encode_seconds"],
+                "openclaw_encode_chase_seconds": chase_metrics["encode_seconds"],
                 "openclaw_state_json_seconds": round_seconds(state_json_seconds),
                 "openclaw_gateway_request_seconds": round_seconds(request_seconds),
                 "openclaw_response_parse_seconds": round_seconds(parse_seconds),
@@ -548,15 +555,24 @@ class OpenClawBridge:
             "payload": {
                 "transport": "openclaw_data_url",
                 "model": self.model_id(agent_id),
-                "image_count": 2,
+                "image_count": 3,
                 "state_json_chars": len(state_json),
                 "steer_text_chars": len(steer),
                 "images": [
                     {"label": "fpv", **fpv_metrics},
-                    {"label": "overhead", **map_metrics},
+                    {"label": "map_v2", **map_metrics},
+                    {"label": "chase", **chase_metrics},
                 ],
-                "total_jpeg_bytes": fpv_metrics["jpeg_bytes"] + map_metrics["jpeg_bytes"],
-                "total_base64_chars": fpv_metrics["base64_chars"] + map_metrics["base64_chars"],
+                "total_jpeg_bytes": (
+                    fpv_metrics["jpeg_bytes"]
+                    + map_metrics["jpeg_bytes"]
+                    + chase_metrics["jpeg_bytes"]
+                ),
+                "total_base64_chars": (
+                    fpv_metrics["base64_chars"]
+                    + map_metrics["base64_chars"]
+                    + chase_metrics["base64_chars"]
+                ),
             },
         }
         return result
@@ -781,49 +797,29 @@ def _timestamp_to_epoch_seconds(value: Any) -> float | None:
 
 
 def _parse_action(content: str) -> dict[str, Any]:
-    """Parse ``{"reasoning": "...", "action": "..."}`` out of the LLM reply.
-
-    LLMs often wrap JSON in ```` ```json ... ``` ```` fences.  Strip any
-    fences, attempt ``json.loads``, and validate ``action`` is in
-    :data:`~roboclaws.core.engine.NAVIGATION_ACTIONS`.  On any parse or
-    validation failure, log a warning and fall back to ``MoveAhead`` so the
-    demo keeps moving instead of crashing.
-    """
-    stripped = _CODE_FENCE_RE.sub("", content).strip()
-
-    # If the LLM wrote text-then-JSON, pull the outermost {...} block.
-    if not stripped.startswith("{"):
-        start = stripped.find("{")
-        end = stripped.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            stripped = stripped[start : end + 1]
-
-    fallback = {"reasoning": content.strip()[:500], "action": "MoveAhead"}
-    try:
-        parsed = json.loads(stripped)
-    except json.JSONDecodeError:
-        _warn_malformed(content)
-        return fallback
-
-    if not isinstance(parsed, dict):
-        _warn_malformed(content)
-        return fallback
-
-    action = str(parsed.get("action", "MoveAhead"))
-    reasoning = str(parsed.get("reasoning", ""))
-    if action not in NAVIGATION_ACTIONS:
-        _warn_invalid_action(action)
-        action = "MoveAhead"
-    return {"reasoning": reasoning, "action": action}
+    """Parse a Gateway navigation decision through the shared action module."""
+    decision = parse_action_decision(content)
+    if decision.action == SAFE_FALLBACK_ACTION and SAFE_FALLBACK_ACTION not in content:
+        if "{" in content and "}" in content:
+            _warn_invalid_action(content)
+        else:
+            _warn_malformed(content)
+    return decision.to_dict()
 
 
 def _warn_malformed(content: str) -> None:
     snippet = content.strip().replace("\n", " ")[:200]
-    print(f"[openclaw] warning: LLM returned non-JSON content, using MoveAhead: {snippet!r}")
+    print(
+        f"[openclaw] warning: LLM returned non-JSON content, using "
+        f"{SAFE_FALLBACK_ACTION}: {snippet!r}"
+    )
 
 
 def _warn_invalid_action(action: str) -> None:
-    print(f"[openclaw] warning: LLM returned invalid action {action!r}, coercing to MoveAhead")
+    print(
+        f"[openclaw] warning: LLM returned invalid action {action!r}, "
+        f"coercing to {SAFE_FALLBACK_ACTION}"
+    )
 
 
 def _ndarray_to_data_url(frame: np.ndarray, quality: int = 70) -> tuple[str, dict[str, Any]]:

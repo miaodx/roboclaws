@@ -184,14 +184,14 @@ def test_save_replay_json_includes_turn_metrics(tmp_path) -> None:
         vlm_response={"reasoning": "move", "action": "MoveAhead"},
         turn_metrics={
             "timings": {"provider_call_seconds": 1.25},
-            "payload": {"image_count": 2},
+            "payload": {"image_count": 3},
         },
     )
     out = recorder.save(tmp_path / "run", generate_gif=False)
     manifest = json.loads((out / "replay.json").read_text())
     step = manifest["steps"][0]
     assert step["turn_metrics"]["timings"]["provider_call_seconds"] == pytest.approx(1.25)
-    assert step["turn_metrics"]["payload"]["image_count"] == 2
+    assert step["turn_metrics"]["payload"]["image_count"] == 3
 
 
 def test_save_creates_composite_pngs(tmp_path) -> None:
