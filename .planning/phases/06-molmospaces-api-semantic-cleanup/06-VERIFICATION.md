@@ -25,6 +25,25 @@ so this was treated as another agent's state and not modified.
 | `just verify::contract` | PASS — 63 contract/report/regression tests passed. |
 | `just verify::static` | PASS — ruff check and format check passed; `git diff --check` passed. |
 
+## Rerun Evidence - 2026-05-07
+
+The hybrid pipeline was rechecked after the Phase 6 shipped state was already
+recorded. Current results:
+
+| Command | Result |
+| --- | --- |
+| `uv --version && uv pip install -e ".[dev]"` | PASS — editable install rebuilt in the repo venv. |
+| `.venv/bin/python -c "import ai2thor; ..."` | PASS — `ai2thor 5.0.0 ok`. |
+| `set -a && source .env && ... VLM key check` | PASS — at least one VLM key is present; no key value printed. |
+| `just harness::molmo-cleanup` | PASS — deterministic cleanup wrote `run_result.json` and `report.html`. |
+| `just verify::molmo-cleanup` | PASS — 20 focused tests passed, then the harness passed. |
+| `just verify::contract` | PASS — 63 contract/report/regression tests passed. |
+| `just verify::static` | PASS — ruff check, format check, and whitespace check passed. |
+
+The existing `openclaw-gateway` container was observed as healthy and left
+untouched because this phase does not use OpenClaw and the worktree contains
+unrelated OpenClaw transcript edits from another active workflow.
+
 Commit hooks also ran the fast non-integration pytest subset on each Python
 slice commit.
 
