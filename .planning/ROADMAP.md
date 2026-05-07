@@ -14,6 +14,9 @@ via tool calls instead of the push model (Phase 2.5 → 2.6). The next follow-up
 on that autonomous branch is Phase 2.7: expose the agent's intermediate
 messages in artifacts, with a streaming-first preference if the real Gateway
 surface supports it cleanly. Phase 3 (Isaac Lab) is deferred indefinitely.
+Phase 6 is the MolmoSpaces cleanup pilot: a narrow, provenance-labeled
+`api_semantic` cleanup loop that keeps AI2-THOR as the baseline while proving
+the first room-cleanup artifact contract.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -44,6 +47,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
 - ✅ **v1.5 Refactor Regression Safety** - Phase 4 (completed 2026-04-23; deterministic fixtures + capture/analyze harnesses + first local probe evidence in `04-LOCAL-PROBE-RESULTS.md`)
 - ✅ **v1.6 Iterative Codebase Simplification** - Phase 5 (completed 2026-04-23; 18 target files simplified, global pytest+ruff green, net -203 lines across targets)
+- 📋 **v1.7 MolmoSpaces cleanup pilot** - Phase 6 (api-semantic cleanup contracts, scorer, direct MCP/demo artifacts; real planner-backed manipulation deferred)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -65,6 +69,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
+- [ ] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Real RBY1M/Franka planner-backed manipulation remains deferred.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -355,12 +360,25 @@ Plans:
 - [x] 04-03: OpenClaw capture suites
 - [x] 04-04: Compare/analyze thresholds + operator workflow
 **Status update (2026-04-23):** `roboclaws/regression.py`, `scripts/capture_refactor_regression.py`, `scripts/analyze_refactor_regression.py`, `docs/refactor-regression.md`, and the Phase 4 contract/analyzer tests are implemented. Real local captures now exist for `explore-vlm`, `openclaw-demo`, and `openclaw-autonomous`; the first probe cycle and threshold/harness adjustments are recorded in `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md`.
+
+#### 📋 v1.7 MolmoSpaces Cleanup Pilot (Phase 6) — Active
+
+### Phase 6: MolmoSpaces api-semantic cleanup pilot
+**Goal**: Prove the first `帮我收拾这个房间` artifact loop without overstating robotics capability: a direct coding-agent MCP/demo path can inspect a messy room, move objects through `api_semantic` operations, score against a private manifest, and render trace/report/run-result artifacts that clearly label primitive provenance.
+**Depends on**: `docs/plans/molmospaces-manipulation-spike.md` local capability spike (2026-05-07), Phase 2.6 MCP/trace/report lessons, and Phase 4 harness conventions.
+**Scope**: fake/MolmoSpaces-shaped backend contracts, private scoring manifest, `api_semantic` cleanup primitives, deterministic scripted demo, report rendering, and harness/verify gates. No top-level MolmoSpaces import; no repo Python upgrade; no claim of real planner-backed manipulation.
+**Plans**: `.planning/phases/06-molmospaces-api-semantic-cleanup/`
+
+- [ ] 06-01: Scenario contracts, private manifest, scorer
+- [ ] 06-02: API-semantic backend and direct MCP-style tool contract
+- [ ] 06-03: Demo runner, report rendering, harness recipe
+- [ ] 06-04: Verification, provenance write-up, and shipped-state update
 **UI hint**: no
 
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -378,4 +396,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
 | 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 4/4 | Complete | 2026-04-23 |
 | 5. Iterative codebase simplification | v1.6 | 9/9 | Complete | 2026-04-23 |
+| 6. MolmoSpaces api-semantic cleanup pilot | v1.7 | 0/4 | Active | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
