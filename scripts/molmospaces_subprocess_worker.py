@@ -579,6 +579,14 @@ def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
     joints = _openable_receptacle_joints(model, receptacle["body_name"])
     for joint in joints:
         _set_joint_qpos(model, data, joint["joint_name"], joint["open_value"])
+    robot_pose = None
+    robot_pose_changed = False
+    if state.get("robot_included") and joints:
+        robot_pose = _robot_pose_for_open_receptacle(state, receptacle)
+        _set_robot_pose(model, data, robot_pose)
+        state["robot_pose"] = robot_pose
+        state.setdefault("robot_trajectory", []).append(robot_pose)
+        robot_pose_changed = True
     mujoco.mj_forward(model, data)
     state["qpos"] = [float(value) for value in data.qpos]
     open_ids = set(state.get("open_receptacle_ids", []))
@@ -591,8 +599,9 @@ def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
         receptacle_id=receptacle_id,
         opened=bool(joints),
         open_joints=joints,
-        qpos_changed=bool(joints),
-        state_mutation="mujoco_receptacle_joint_qpos" if joints else "no_openable_joint",
+        robot_pose=robot_pose,
+        qpos_changed=bool(joints) or robot_pose_changed,
+        state_mutation=_open_receptacle_state_mutation(bool(joints), robot_pose_changed),
         backend=BACKEND,
     )
 
@@ -615,6 +624,16 @@ def object_done(state: dict[str, Any], object_id: str, receptacle_id: str) -> di
         matches_expected_location=final_locations.get(object_id) == receptacle_id,
         backend=BACKEND,
     )
+
+
+def _open_receptacle_state_mutation(joints_changed: bool, robot_pose_changed: bool) -> str:
+    if joints_changed and robot_pose_changed:
+        return "mujoco_receptacle_joint_qpos+robot_base_qpos"
+    if joints_changed:
+        return "mujoco_receptacle_joint_qpos"
+    if robot_pose_changed:
+        return "robot_base_qpos"
+    return "no_openable_joint"
 
 
 def done_cleanup(state: dict[str, Any], reason: str) -> dict[str, Any]:
@@ -1119,6 +1138,51 @@ def _robot_pose_near_receptacle(
     pose["robot_room_id"] = pose.get("robot_room_id")
     pose.update(_room_relation_payload(state, receptacle, [pose["x"], pose["y"]]))
     return pose
+
+
+def _robot_pose_for_open_receptacle(
+    state: dict[str, Any],
+    receptacle: dict[str, Any],
+) -> dict[str, float]:
+    if receptacle.get("category") != "Fridge":
+        return _robot_pose_near_receptacle(state, receptacle)
+
+    base = receptacle["position"]
+    target_room_id = _target_room_id(state, receptacle)
+    candidates = [
+        (float(base[0]) - 0.76, float(base[1]) + 0.20),
+        (float(base[0]) - 0.72, float(base[1]) + 0.36),
+        (float(base[0]) - 0.90, float(base[1]) + 0.08),
+    ]
+    x, y = _first_same_room_point(state, candidates, target_room_id)
+    target = [float(base[0]), float(base[1]), float(base[2]) + 0.35]
+    theta = math.atan2(target[1] - y, target[0] - x)
+    pose = {
+        "x": round(float(x), 6),
+        "y": round(float(y), 6),
+        "z": 0.0,
+        "theta": round(float(theta), 6),
+        "theta_source": "opened_receptacle_access_yaw",
+        "head_yaw": 0.0,
+        "head_yaw_source": "base_yaw_handles_target_bearing",
+        "head_pitch": _robot_head_pitch_for_target(target, [x, y]),
+        "head_pitch_source": "target_framing_head_pitch",
+        "target_receptacle_id": receptacle["receptacle_id"],
+        "robot_room_id": _room_for_point(state, [x, y]) or target_room_id,
+    }
+    pose.update(_room_relation_payload(state, receptacle, [pose["x"], pose["y"]]))
+    return {key: value for key, value in pose.items() if value is not None}
+
+
+def _first_same_room_point(
+    state: dict[str, Any],
+    candidates: list[tuple[float, float]],
+    target_room_id: str | None,
+) -> tuple[float, float]:
+    for x, y in candidates:
+        if _room_for_point(state, [x, y]) == target_room_id:
+            return x, y
+    return candidates[0]
 
 
 def _robot_pose_near_object(
