@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 
@@ -80,9 +81,18 @@ def main() -> None:
                     assert int(visibility.get("object_pixels") or 0) >= 100, step
                 elif action.startswith("pick "):
                     assert focus.get("object_position"), step
+                elif action.startswith("navigate_to_receptacle ") and (
+                    focus.get("object_location_relation") == "held"
+                ):
+                    assert focus.get("object_position"), step
+                    _assert_held_object_tracks_robot(step)
+                    assert int(fpv_visibility.get("object_pixels") or 0) >= 100, step
+                    assert int(fpv_visibility.get("receptacle_pixels") or 0) > 0, step
                 else:
                     assert focus.get("receptacle_id"), step
                     assert int(fpv_visibility.get("receptacle_pixels") or 0) > 0, step
+                    if focus.get("object_location_relation") == "held":
+                        _assert_held_object_tracks_robot(step)
                 visibility = focus.get("visibility") or {}
                 assert visibility.get("status") == "ok", step
                 if not action.startswith(("pick ", "place_inside ")):
@@ -134,6 +144,20 @@ def _is_focused_robot_action(action: str) -> bool:
             "place_inside ",
         )
     )
+
+
+def _assert_held_object_tracks_robot(step: dict) -> None:
+    focus = step.get("focus") or {}
+    pose = step.get("robot_pose") or {}
+    object_position = focus.get("object_position") or []
+    assert len(object_position) >= 3, step
+    assert {"x", "y", "theta"} <= set(pose), step
+    expected = [
+        float(pose["x"]) + math.cos(float(pose["theta"])) * 0.45,
+        float(pose["y"]) + math.sin(float(pose["theta"])) * 0.45,
+        1.05,
+    ]
+    assert math.dist([float(value) for value in object_position[:3]], expected) <= 0.02, step
 
 
 def _resolve_path(base: Path, value: str) -> Path:

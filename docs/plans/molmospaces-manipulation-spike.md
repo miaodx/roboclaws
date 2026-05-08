@@ -2,14 +2,14 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 10 semantic MolmoSpaces cleanup substeps shipped and verified on 2026-05-08
+**Status:** Phase 11 held-object carry visuals shipped and verified on 2026-05-08
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
 Phase 6 scaffold -> Phase 7 prompt-driven public cleanup -> Phase 8 real
 MolmoSpaces/MuJoCo subprocess cleanup -> Phase 9 RBY1M visual plausibility ->
-Phase 10 semantic cleanup substeps. OpenClaw and real planner-backed
-manipulation remain deferred.
+Phase 10 semantic cleanup substeps -> Phase 11 held-object carry visuals.
+OpenClaw and real planner-backed manipulation remain deferred.
 
 ## Why This Exists
 
@@ -311,6 +311,46 @@ Boundary:
   prove RBY1M/Franka planner-backed pick/place, so `primitive_provenance="real"`
   remains deferred.
 - It is still a deterministic public heuristic, not a real VLM/OpenClaw policy.
+
+### Phase 11 Held-Object Carry Visuals Result - 2026-05-08
+
+The follow-up GSD phase fixed the mismatch where the semantic state said an
+object was held, but the rendered object stayed at the pickup pose while RBY1M
+navigated to the target receptacle:
+
+- `navigate_to_receptacle` now moves the held object's real MuJoCo free-joint
+  qpos to a robot-relative held pose whenever RBY1M changes pose.
+- `open_receptacle` does the same after moving RBY1M to the opened-fridge access
+  pose, so the held apple follows the robot before `place_inside`.
+- Tool responses record
+  `state_mutation=robot_base_qpos+held_object_freejoint_qpos` for carried
+  navigation and
+  `mujoco_receptacle_joint_qpos+robot_base_qpos+held_object_freejoint_qpos` for
+  fridge opening.
+- The visual checker now requires held-object `navigate_to_receptacle` rows to
+  have positive FPV object pixels and verifies the object position is the
+  expected robot-relative held pose.
+- `.planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md`
+  records the verification evidence.
+
+Latest carried-object visual evidence from
+`output/molmo-robot-visual-harness/run_result.json`:
+
+| Row | Object | FPV object pixels | Robot-relative error |
+| --- | --- | ---: | ---: |
+| `0005_navigate_receptacle_1` | Apple | `1917` | `0.0` |
+| `0010_navigate_receptacle_2` | Book | `22602` | `0.0` |
+| `0014_navigate_receptacle_3` | Bowl | `18569` | `0.000001` |
+| `0018_navigate_receptacle_4` | Pillow | `38946` | `0.0` |
+| `0022_navigate_receptacle_5` | RemoteControl | `3798` | `0.0` |
+
+Boundary:
+
+- This improves visual/semantic consistency for the `api_semantic` demo. It is
+  still not planner-backed RBY1M/Franka manipulation, so
+  `primitive_provenance="real"` remains deferred.
+- The planner remains deterministic `public_heuristic` and public-only:
+  `planner_uses_private_manifest=false`.
 
 ## Upstream Findings
 

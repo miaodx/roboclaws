@@ -392,6 +392,7 @@ def _navigate_to_receptacle(
     previous = state.get("current_receptacle_id")
     state["current_receptacle_id"] = receptacle_id
     robot_pose = None
+    held_object_pose = None
     qpos_changed = False
     state_mutation = "agent_pose_semantic"
     if state.get("robot_included"):
@@ -399,18 +400,21 @@ def _navigate_to_receptacle(
         _apply_qpos(data, state["qpos"])
         robot_pose = _robot_pose_near_receptacle(state, state["receptacles"][receptacle_id])
         _set_robot_pose(model, data, robot_pose)
-        mujoco.mj_forward(model, data)
-        state["qpos"] = [float(value) for value in data.qpos]
         state["robot_pose"] = robot_pose
         state.setdefault("robot_trajectory", []).append(robot_pose)
+        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
+        mujoco.mj_forward(model, data)
+        _refresh_object_positions(model, data, state)
+        state["qpos"] = [float(value) for value in data.qpos]
         qpos_changed = True
-        state_mutation = "robot_base_qpos"
+        state_mutation = _robot_pose_state_mutation(held_object_pose is not None)
     return _ok(
         tool,
         primitive_provenance=API_SEMANTIC_PROVENANCE,
         receptacle_id=receptacle_id,
         previous_receptacle_id=previous,
         state_mutation=state_mutation,
+        held_object_pose=held_object_pose,
         robot_name=state.get("robot_name"),
         robot_pose=robot_pose,
         robot_control_provenance=state.get("robot_control_provenance"),
@@ -586,8 +590,12 @@ def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
         _set_robot_pose(model, data, robot_pose)
         state["robot_pose"] = robot_pose
         state.setdefault("robot_trajectory", []).append(robot_pose)
+        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
         robot_pose_changed = True
+    else:
+        held_object_pose = None
     mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
     state["qpos"] = [float(value) for value in data.qpos]
     open_ids = set(state.get("open_receptacle_ids", []))
     if joints:
@@ -600,8 +608,13 @@ def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
         opened=bool(joints),
         open_joints=joints,
         robot_pose=robot_pose,
+        held_object_pose=held_object_pose,
         qpos_changed=bool(joints) or robot_pose_changed,
-        state_mutation=_open_receptacle_state_mutation(bool(joints), robot_pose_changed),
+        state_mutation=_open_receptacle_state_mutation(
+            bool(joints),
+            robot_pose_changed,
+            held_object_pose is not None,
+        ),
         backend=BACKEND,
     )
 
@@ -626,14 +639,26 @@ def object_done(state: dict[str, Any], object_id: str, receptacle_id: str) -> di
     )
 
 
-def _open_receptacle_state_mutation(joints_changed: bool, robot_pose_changed: bool) -> str:
-    if joints_changed and robot_pose_changed:
-        return "mujoco_receptacle_joint_qpos+robot_base_qpos"
+def _robot_pose_state_mutation(held_object_changed: bool) -> str:
+    parts = ["robot_base_qpos"]
+    if held_object_changed:
+        parts.append("held_object_freejoint_qpos")
+    return "+".join(parts)
+
+
+def _open_receptacle_state_mutation(
+    joints_changed: bool,
+    robot_pose_changed: bool,
+    held_object_changed: bool,
+) -> str:
+    parts = []
     if joints_changed:
-        return "mujoco_receptacle_joint_qpos"
+        parts.append("mujoco_receptacle_joint_qpos")
     if robot_pose_changed:
-        return "robot_base_qpos"
-    return "no_openable_joint"
+        parts.append("robot_base_qpos")
+    if held_object_changed:
+        parts.append("held_object_freejoint_qpos")
+    return "+".join(parts) if parts else "no_openable_joint"
 
 
 def done_cleanup(state: dict[str, Any], reason: str) -> dict[str, Any]:
@@ -1078,6 +1103,27 @@ def _set_joint_qpos(
     data.qpos[qposadr] = float(value)
 
 
+def _sync_held_object_to_robot_pose(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    state: dict[str, Any],
+) -> dict[str, Any] | None:
+    object_id = state.get("held_object_id")
+    if not object_id:
+        return None
+    obj = state["objects"].get(str(object_id))
+    if obj is None:
+        return None
+    target_position = _held_object_position(state)
+    _set_free_body_position(model, data, obj["body_name"], target_position)
+    obj["position"] = target_position
+    return {
+        "object_id": object_id,
+        "position": target_position,
+        "position_source": "robot_relative_held_pose",
+    }
+
+
 def _held_object_position(state: dict[str, Any]) -> list[float]:
     pose = state.get("robot_pose") or {}
     if "x" not in pose or "y" not in pose or "theta" not in pose:
@@ -1406,8 +1452,9 @@ def _focus_payload(
     if obj is not None and receptacle is not None:
         object_position = obj["position"]
         receptacle_position = receptacle["position"]
-        if receptacle.get("category") == "Fridge" and obj.get("contained_in") == receptacle.get(
-            "receptacle_id"
+        if receptacle.get("category") == "Fridge" and (
+            obj.get("location_relation") == "held"
+            or obj.get("contained_in") == receptacle.get("receptacle_id")
         ):
             focus_position = receptacle_position
             focus_mode = "receptacle_context"
