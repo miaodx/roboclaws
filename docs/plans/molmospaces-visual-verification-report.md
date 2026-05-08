@@ -89,3 +89,27 @@ framing, and recording segmentation-derived FPV visibility pixels. The final
 `just verify::molmo-robot-visual` run passed against the real
 `molmospaces_subprocess` backend with `planner=public_heuristic`,
 `planner_uses_private_manifest=false`, and 5/5 restored objects.
+
+## Follow-Up: Semantic Cleanup Substeps
+
+Artifact review after Phase 09 found that the visual timeline was readable but
+the loop was still too coarse: it jumped from source state to target placement
+instead of showing object-side navigation, pick, target-side navigation,
+receptacle opening when needed, placement, and object-level completion.
+
+The accepted follow-up is tracked as GSD phase 10:
+`.planning/phases/10-molmospaces-semantic-substeps/10-01-semantic-cleanup-substeps-PLAN.md`.
+
+Phase 10 closed the follow-up by recording each cleanup target as:
+
+`navigate_to_object -> pick -> navigate_to_receptacle -> optional open_receptacle -> place/place_inside -> object_done`
+
+The apple/fridge path now opens the real fridge joint, records `place_inside`,
+and finishes with public readback showing the apple `inside` the refrigerator
+rather than visible outside it. The report now shows semantic phase badges and
+suppresses the Verification panel plus zero-pixel visibility badges on
+non-focused context rows such as `before`, `observe`, `scene_objects`, and
+`after`. The final `just verify::molmo-robot-visual` run passed against
+`backend=molmospaces_subprocess`, with
+`planner_uses_private_manifest=false`, `primitive_provenance=api_semantic`,
+25 robot-view timeline rows, and 5/5 restored objects.

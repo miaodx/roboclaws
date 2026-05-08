@@ -150,6 +150,7 @@ molmo-real-cleanup seed="7" output_dir="output/molmo-real-cleanup-harness" task=
       --require-public-planner \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
+      --require-semantic-substeps \
       "{{output_dir}}/run_result.json"
 
 # Real upstream MolmoSpaces cleanup with an actual RBY1M robot, FPV/chase/map,
@@ -173,6 +174,7 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
       --expect-backend molmospaces_subprocess \
       --expect-robot rby1m \
       --require-robot-views \
+      --require-semantic-substeps \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

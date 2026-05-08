@@ -55,11 +55,27 @@ def main(argv: list[str] | None = None) -> None:
     goto = subparsers.add_parser("goto")
     goto.add_argument("--receptacle-id", required=True)
 
+    navigate_object = subparsers.add_parser("navigate_to_object")
+    navigate_object.add_argument("--object-id", required=True)
+
+    navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
+    navigate_receptacle.add_argument("--receptacle-id", required=True)
+
     pick = subparsers.add_parser("pick")
     pick.add_argument("--object-id", required=True)
 
+    open_receptacle_parser = subparsers.add_parser("open_receptacle")
+    open_receptacle_parser.add_argument("--receptacle-id", required=True)
+
     place = subparsers.add_parser("place")
     place.add_argument("--receptacle-id", required=True)
+
+    place_inside_parser = subparsers.add_parser("place_inside")
+    place_inside_parser.add_argument("--receptacle-id", required=True)
+
+    object_done_parser = subparsers.add_parser("object_done")
+    object_done_parser.add_argument("--object-id", required=True)
+    object_done_parser.add_argument("--receptacle-id", required=True)
 
     done = subparsers.add_parser("done")
     done.add_argument("--reason", default="")
@@ -97,11 +113,26 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "goto":
             result = goto_receptacle(state, args.receptacle_id)
             _write_state(args.state_path, state)
+        elif args.command == "navigate_to_object":
+            result = navigate_to_object(state, args.object_id)
+            _write_state(args.state_path, state)
+        elif args.command == "navigate_to_receptacle":
+            result = navigate_to_receptacle(state, args.receptacle_id)
+            _write_state(args.state_path, state)
         elif args.command == "pick":
             result = pick_object(state, args.object_id)
             _write_state(args.state_path, state)
+        elif args.command == "open_receptacle":
+            result = open_receptacle(state, args.receptacle_id)
+            _write_state(args.state_path, state)
         elif args.command == "place":
             result = place_object(state, args.receptacle_id)
+            _write_state(args.state_path, state)
+        elif args.command == "place_inside":
+            result = place_inside_object(state, args.receptacle_id)
+            _write_state(args.state_path, state)
+        elif args.command == "object_done":
+            result = object_done(state, args.object_id, args.receptacle_id)
             _write_state(args.state_path, state)
         elif args.command == "done":
             result = done_cleanup(state, args.reason)
@@ -174,6 +205,7 @@ def init_state(
         "qpos": [float(value) for value in data.qpos],
         "held_object_id": None,
         "current_receptacle_id": None,
+        "open_receptacle_ids": [],
         "tool_event_counts": {},
     }
     _seed_misplaced_objects(model, data, state, targets)
@@ -299,8 +331,14 @@ def write_robot_views(
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower")
     verify_camera = _focus_camera(state, focus)
     verify = _render_free_camera(model, data, verify_camera)
-    focus["fpv_visibility"] = _focus_visibility(model, data, "robot_0/head_camera", focus)
-    focus["visibility"] = _focus_visibility(model, data, verify_camera, focus)
+    focus["fpv_visibility"] = _focus_visibility(
+        model,
+        data,
+        "robot_0/head_camera",
+        focus,
+        frame=fpv,
+    )
+    focus["visibility"] = _focus_visibility(model, data, verify_camera, focus, frame=verify)
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -335,8 +373,22 @@ def write_robot_views(
 
 def goto_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     _count(state, "goto")
+    return _navigate_to_receptacle(state, receptacle_id, tool="goto")
+
+
+def navigate_to_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    _count(state, "navigate_to_receptacle")
+    return _navigate_to_receptacle(state, receptacle_id, tool="navigate_to_receptacle")
+
+
+def _navigate_to_receptacle(
+    state: dict[str, Any],
+    receptacle_id: str,
+    *,
+    tool: str,
+) -> dict[str, Any]:
     if receptacle_id not in state["receptacles"]:
-        return _error("goto", "stale_reference", receptacle_id=receptacle_id)
+        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
     previous = state.get("current_receptacle_id")
     state["current_receptacle_id"] = receptacle_id
     robot_pose = None
@@ -354,10 +406,58 @@ def goto_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
         qpos_changed = True
         state_mutation = "robot_base_qpos"
     return _ok(
-        "goto",
+        tool,
         primitive_provenance=API_SEMANTIC_PROVENANCE,
         receptacle_id=receptacle_id,
         previous_receptacle_id=previous,
+        state_mutation=state_mutation,
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=qpos_changed,
+        backend=BACKEND,
+    )
+
+
+def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
+    _count(state, "navigate_to_object")
+    if object_id not in state["objects"]:
+        return _error("navigate_to_object", "stale_reference", object_id=object_id)
+    if state.get("held_object_id") == object_id:
+        return _error("navigate_to_object", "object_already_held", object_id=object_id)
+    locations = _read_locations(state)
+    source_receptacle_id = locations.get(object_id)
+    if not source_receptacle_id or source_receptacle_id == HELD_LOCATION_ID:
+        return _error("navigate_to_object", "object_not_at_public_location", object_id=object_id)
+    previous = state.get("current_receptacle_id")
+    state["current_receptacle_id"] = source_receptacle_id
+    robot_pose = None
+    qpos_changed = False
+    state_mutation = "agent_pose_semantic"
+    if state.get("robot_included"):
+        model, data = _load_model_data_for_state(state)
+        _apply_qpos(data, state["qpos"])
+        mujoco.mj_forward(model, data)
+        _refresh_object_positions(model, data, state)
+        robot_pose = _robot_pose_near_object(
+            state,
+            state["objects"][object_id],
+            source_receptacle_id=source_receptacle_id,
+        )
+        _set_robot_pose(model, data, robot_pose)
+        mujoco.mj_forward(model, data)
+        state["qpos"] = [float(value) for value in data.qpos]
+        state["robot_pose"] = robot_pose
+        state.setdefault("robot_trajectory", []).append(robot_pose)
+        qpos_changed = True
+        state_mutation = "robot_base_qpos"
+    return _ok(
+        "navigate_to_object",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        object_id=object_id,
+        source_receptacle_id=source_receptacle_id,
+        previous_receptacle_id=previous,
+        location_id=source_receptacle_id,
         state_mutation=state_mutation,
         robot_name=state.get("robot_name"),
         robot_pose=robot_pose,
@@ -374,33 +474,74 @@ def pick_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
     if state.get("held_object_id") is not None:
         return _error("pick", "already_holding", held_object_id=state["held_object_id"])
     locations = _read_locations(state)
+    qpos_changed = False
+    state_mutation = "held_state_only"
+    if state.get("robot_included"):
+        model, data = _load_model_data_for_state(state)
+        _apply_qpos(data, state["qpos"])
+        target_position = _held_object_position(state)
+        _set_free_body_position(
+            model, data, state["objects"][object_id]["body_name"], target_position
+        )
+        mujoco.mj_forward(model, data)
+        _refresh_object_positions(model, data, state)
+        state["qpos"] = [float(value) for value in data.qpos]
+        qpos_changed = True
+        state_mutation = "mujoco_freejoint_qpos_held_pose"
     state["held_object_id"] = object_id
+    state["objects"][object_id]["contained_in"] = None
+    state["objects"][object_id]["location_relation"] = "held"
     return _ok(
         "pick",
         primitive_provenance=API_SEMANTIC_PROVENANCE,
         object_id=object_id,
         previous_location_id=locations.get(object_id),
         location_id=HELD_LOCATION_ID,
-        state_mutation="held_state_only",
+        state_mutation=state_mutation,
+        qpos_changed=qpos_changed,
         backend=BACKEND,
     )
 
 
 def place_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     _count(state, "place")
+    return _place_object_at_receptacle(state, receptacle_id, tool="place", relation="on")
+
+
+def place_inside_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    _count(state, "place_inside")
+    return _place_object_at_receptacle(
+        state,
+        receptacle_id,
+        tool="place_inside",
+        relation="inside",
+    )
+
+
+def _place_object_at_receptacle(
+    state: dict[str, Any],
+    receptacle_id: str,
+    *,
+    tool: str,
+    relation: str,
+) -> dict[str, Any]:
     if receptacle_id not in state["receptacles"]:
-        return _error("place", "stale_reference", receptacle_id=receptacle_id)
+        return _error(tool, "stale_reference", receptacle_id=receptacle_id)
     object_id = state.get("held_object_id")
     if object_id is None:
-        return _error("place", "not_holding")
+        return _error(tool, "not_holding")
+    receptacle = state["receptacles"][receptacle_id]
+    if relation == "inside" and receptacle_id not in set(state.get("open_receptacle_ids", [])):
+        return _error(tool, "receptacle_closed", receptacle_id=receptacle_id)
 
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     obj = state["objects"][object_id]
-    receptacle = state["receptacles"][receptacle_id]
     target_position = _placement_position(
         receptacle,
         index=state["selected_object_ids"].index(object_id),
+        relation=relation,
+        object_category=obj.get("category"),
     )
     _set_free_body_position(model, data, obj["body_name"], target_position)
     mujoco.mj_forward(model, data)
@@ -409,16 +550,69 @@ def place_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     state["qpos"] = [float(value) for value in data.qpos]
     state["held_object_id"] = None
     state["current_receptacle_id"] = receptacle_id
+    state["objects"][object_id]["contained_in"] = receptacle_id if relation == "inside" else None
+    state["objects"][object_id]["location_relation"] = relation
     final_locations = _read_locations(state)
     return _ok(
-        "place",
+        tool,
         primitive_provenance=API_SEMANTIC_PROVENANCE,
         object_id=object_id,
         receptacle_id=receptacle_id,
         location_id=final_locations.get(object_id),
+        contained_in=receptacle_id if relation == "inside" else None,
+        location_relation=relation,
         mujoco_body_name=obj["body_name"],
         qpos_changed=True,
         state_mutation="mujoco_freejoint_qpos",
+        backend=BACKEND,
+    )
+
+
+def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    _count(state, "open_receptacle")
+    if receptacle_id not in state["receptacles"]:
+        return _error("open_receptacle", "stale_reference", receptacle_id=receptacle_id)
+
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    receptacle = state["receptacles"][receptacle_id]
+    joints = _openable_receptacle_joints(model, receptacle["body_name"])
+    for joint in joints:
+        _set_joint_qpos(model, data, joint["joint_name"], joint["open_value"])
+    mujoco.mj_forward(model, data)
+    state["qpos"] = [float(value) for value in data.qpos]
+    open_ids = set(state.get("open_receptacle_ids", []))
+    if joints:
+        open_ids.add(receptacle_id)
+    state["open_receptacle_ids"] = sorted(open_ids)
+    return _ok(
+        "open_receptacle",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        receptacle_id=receptacle_id,
+        opened=bool(joints),
+        open_joints=joints,
+        qpos_changed=bool(joints),
+        state_mutation="mujoco_receptacle_joint_qpos" if joints else "no_openable_joint",
+        backend=BACKEND,
+    )
+
+
+def object_done(state: dict[str, Any], object_id: str, receptacle_id: str) -> dict[str, Any]:
+    _count(state, "object_done")
+    if object_id not in state["objects"]:
+        return _error("object_done", "stale_reference", object_id=object_id)
+    if receptacle_id not in state["receptacles"]:
+        return _error("object_done", "stale_reference", receptacle_id=receptacle_id)
+    final_locations = _read_locations(state)
+    obj = state["objects"][object_id]
+    return _ok(
+        "object_done",
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        location_id=final_locations.get(object_id),
+        contained_in=obj.get("contained_in"),
+        location_relation=obj.get("location_relation", "on"),
+        matches_expected_location=final_locations.get(object_id) == receptacle_id,
         backend=BACKEND,
     )
 
@@ -433,6 +627,7 @@ def done_cleanup(state: dict[str, Any], reason: str) -> dict[str, Any]:
         cleanup_status=score["status"],
         score=score,
         final_locations=final_locations,
+        final_containment=_read_containment(state),
         tool_event_counts=state["tool_event_counts"],
         backend=BACKEND,
     )
@@ -569,7 +764,7 @@ def _seed_misplaced_objects(
             model,
             data,
             target["body_name"],
-            _placement_position(wrong, index=index),
+            _placement_position(wrong, index=index, object_category=target.get("category")),
         )
     mujoco.mj_forward(model, data)
 
@@ -587,6 +782,8 @@ def _public_scenario(state: dict[str, Any]) -> dict[str, Any]:
             "location_id": locations.get(obj["object_id"], ""),
             "pickupable": obj.get("pickupable", True),
             "upstream_object_id": obj.get("upstream_object_id"),
+            "contained_in": obj.get("contained_in"),
+            "location_relation": obj.get("location_relation", "on"),
         }
         if obj["object_id"] in selected_ids:
             selected.append(public)
@@ -627,12 +824,30 @@ def _read_locations(state: dict[str, Any]) -> dict[str, str]:
     receptacles = list(state["receptacles"].values())
     locations = {}
     for object_id in state["selected_object_ids"]:
+        if object_id == state.get("held_object_id"):
+            locations[object_id] = HELD_LOCATION_ID
+            continue
         obj = state["objects"][object_id]
+        if obj.get("contained_in"):
+            locations[object_id] = str(obj["contained_in"])
+            continue
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, obj["body_name"])
         if body_id < 0:
             continue
         locations[object_id] = _nearest_receptacle(_xyz(data.xpos[body_id]), receptacles)
     return locations
+
+
+def _read_containment(state: dict[str, Any]) -> dict[str, dict[str, str]]:
+    containment = {}
+    for object_id in state.get("selected_object_ids", []):
+        obj = state["objects"][object_id]
+        if obj.get("contained_in") or obj.get("location_relation"):
+            containment[object_id] = {
+                "contained_in": obj.get("contained_in"),
+                "location_relation": obj.get("location_relation", "on"),
+            }
+    return containment
 
 
 def _score(final_locations: dict[str, str], manifest: dict[str, Any]) -> dict[str, Any]:
@@ -709,12 +924,21 @@ def _refresh_object_positions(
             obj["position"] = _xyz(data.xpos[body_id])
 
 
-def _placement_position(receptacle: dict[str, Any], *, index: int) -> list[float]:
+def _placement_position(
+    receptacle: dict[str, Any],
+    *,
+    index: int,
+    relation: str = "on",
+    object_category: str | None = None,
+) -> list[float]:
     base = receptacle["position"]
+    if receptacle.get("category") == "Fridge" and relation == "inside":
+        return [float(base[0]) + 0.02, float(base[1]) + 0.08, float(base[2]) + 0.45]
     if receptacle.get("category") == "Fridge":
         return [float(base[0]) + 0.25, float(base[1]) + 0.5, float(base[2]) + 0.55]
     offset = ((index % 3) - 1) * 0.12
-    return [float(base[0]) + offset, float(base[1]) + 0.08 * (index % 2), float(base[2]) + 0.35]
+    height = 0.45 if object_category in {"RemoteControl"} else 0.35
+    return [float(base[0]) + offset, float(base[1]) + 0.08 * (index % 2), float(base[2]) + height]
 
 
 def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:
@@ -824,15 +1048,111 @@ def _set_joint_qpos(
     data.qpos[qposadr] = float(value)
 
 
+def _held_object_position(state: dict[str, Any]) -> list[float]:
+    pose = state.get("robot_pose") or {}
+    if "x" not in pose or "y" not in pose or "theta" not in pose:
+        return [0.0, 0.0, 1.0]
+    theta = float(pose["theta"])
+    return [
+        round(float(pose["x"]) + math.cos(theta) * 0.45, 6),
+        round(float(pose["y"]) + math.sin(theta) * 0.45, 6),
+        1.05,
+    ]
+
+
+def _openable_receptacle_joints(
+    model: mujoco.MjModel,
+    body_name: str,
+) -> list[dict[str, Any]]:
+    joints = []
+    for body_id in _subtree_body_ids(model, body_name):
+        joint_count = int(model.body_jntnum[body_id])
+        if joint_count <= 0:
+            continue
+        for offset in range(joint_count):
+            joint_id = int(model.body_jntadr[body_id]) + offset
+            joint_type = int(model.jnt_type[joint_id])
+            if joint_type not in {
+                int(mujoco.mjtJoint.mjJNT_HINGE),
+                int(mujoco.mjtJoint.mjJNT_SLIDE),
+            }:
+                continue
+            joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+            if not joint_name:
+                continue
+            open_value = float(model.jnt_range[joint_id][1])
+            joints.append(
+                {
+                    "joint_name": joint_name,
+                    "joint_type": "hinge"
+                    if joint_type == int(mujoco.mjtJoint.mjJNT_HINGE)
+                    else "slide",
+                    "open_value": round(open_value, 6),
+                }
+            )
+    return joints
+
+
 def _robot_pose_near_receptacle(
     state: dict[str, Any],
     receptacle: dict[str, Any],
 ) -> dict[str, float]:
     target = receptacle["position"]
+    target_room_id = _target_room_id(state, receptacle)
+    pose = _robot_pose_near_position(
+        state,
+        target,
+        target_room_id=target_room_id,
+        target_receptacle_id=receptacle["receptacle_id"],
+    )
+    pose["robot_room_id"] = pose.get("robot_room_id")
+    pose.update(_room_relation_payload(state, receptacle, [pose["x"], pose["y"]]))
+    return pose
+
+
+def _robot_pose_near_object(
+    state: dict[str, Any],
+    obj: dict[str, Any],
+    *,
+    source_receptacle_id: str | None = None,
+) -> dict[str, float]:
+    target = obj["position"]
+    source_receptacle = state["receptacles"].get(
+        source_receptacle_id or obj.get("seeded_start_receptacle_id", "")
+    )
+    source_room_id = _target_room_id(state, source_receptacle) if source_receptacle else None
+    target_room_id = _room_for_point(state, target) or source_room_id
+    pose = _robot_pose_near_position(
+        state,
+        target,
+        target_room_id=target_room_id,
+        target_object_id=obj["object_id"],
+    )
+    robot_room_id = pose.get("robot_room_id")
+    pose.update(
+        {
+            "target_room_id": target_room_id,
+            "same_room_as_target": robot_room_id == target_room_id,
+            "room_relation_source": "mujoco_room_outline",
+            "room_plausibility": "same_room"
+            if robot_room_id == target_room_id
+            else "room_mismatch",
+        }
+    )
+    return pose
+
+
+def _robot_pose_near_position(
+    state: dict[str, Any],
+    target: list[float],
+    *,
+    target_room_id: str | None,
+    target_receptacle_id: str | None = None,
+    target_object_id: str | None = None,
+) -> dict[str, float]:
     center = _scene_center(list(state["receptacles"].values()))
     stand_off = 1.15
     preferred_angle = math.atan2(center[1] - target[1], center[0] - target[0])
-    target_room_id = _target_room_id(state, receptacle)
     target_room = _room_outline_for_id(state, target_room_id)
     candidate_angles = [preferred_angle] + [index * math.tau / 24.0 for index in range(24)]
     candidates = []
@@ -857,10 +1177,11 @@ def _robot_pose_near_receptacle(
             )
         )
     _, _, _, x, y, robot_room = max(candidates)
+    if robot_room is None and target_room_id is not None:
+        robot_room = target_room_id
     theta = math.atan2(float(target[1]) - y, float(target[0]) - x)
     head_pitch = _robot_head_pitch_for_target(target, [x, y])
-    room_relation = _room_relation_payload(state, receptacle, [x, y])
-    return {
+    pose = {
         "x": round(float(x), 6),
         "y": round(float(y), 6),
         "z": 0.0,
@@ -870,10 +1191,11 @@ def _robot_pose_near_receptacle(
         "head_yaw_source": "base_yaw_handles_target_bearing",
         "head_pitch": head_pitch,
         "head_pitch_source": "target_framing_head_pitch",
-        "target_receptacle_id": receptacle["receptacle_id"],
+        "target_receptacle_id": target_receptacle_id,
+        "target_object_id": target_object_id,
         "robot_room_id": robot_room,
-        **room_relation,
     }
+    return {key: value for key, value in pose.items() if value is not None}
 
 
 def _robot_head_pitch_for_target(target: list[float], robot_xy: list[float]) -> float:
@@ -1051,6 +1373,8 @@ def _focus_visibility(
     data: mujoco.MjData,
     camera: mujoco.MjvCamera | str,
     focus: dict[str, Any],
+    *,
+    frame: Any | None = None,
 ) -> dict[str, Any]:
     boxes = []
     object_pixels = 0
@@ -1073,6 +1397,16 @@ def _focus_visibility(
             label=str(focus.get("object_label") or "object"),
             color=[239, 68, 68],
         )
+        if box is None:
+            box = _highlight_diff_box(
+                model,
+                data,
+                camera,
+                focus["object_body_name"],
+                label=str(focus.get("object_label") or "object"),
+                color=[239, 68, 68],
+                frame=frame,
+            )
         if box is not None:
             object_pixels = int(box["pixels"])
             boxes.append(box)
@@ -1138,10 +1472,77 @@ def _segmentation_box(
         "bbox": [left, top, right, bottom],
         "pixels": pixels,
         "color": color,
+        "source": "segmentation",
     }
 
 
+def _highlight_diff_box(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera: mujoco.MjvCamera | str,
+    body_name: str,
+    *,
+    label: str,
+    color: list[int],
+    frame: Any | None,
+) -> dict[str, Any] | None:
+    geom_ids = _subtree_geom_ids(model, body_name)
+    if not geom_ids:
+        return None
+    import numpy as np
+
+    baseline = frame if frame is not None else _render_color_frame(model, data, camera)
+    baseline = np.asarray(baseline)
+    previous_rgba = model.geom_rgba[geom_ids].copy()
+    previous_matid = model.geom_matid[geom_ids].copy()
+    try:
+        for geom_id in geom_ids:
+            model.geom_rgba[geom_id] = np.array([1.0, 0.0, 1.0, 1.0])
+            model.geom_matid[geom_id] = -1
+        highlighted = _render_color_frame(model, data, camera)
+    finally:
+        model.geom_rgba[geom_ids] = previous_rgba
+        model.geom_matid[geom_ids] = previous_matid
+    diff = np.abs(np.asarray(highlighted, dtype=np.int16) - baseline.astype(np.int16)).max(axis=2)
+    mask = diff > 35
+    pixels = int(mask.sum())
+    if pixels <= 0:
+        return None
+    ys, xs = np.where(mask)
+    left, right = int(xs.min()), int(xs.max())
+    top, bottom = int(ys.min()), int(ys.max())
+    left, top, right, bottom = _inflate_bbox(left, top, right, bottom, baseline.shape)
+    return {
+        "label": label,
+        "bbox": [left, top, right, bottom],
+        "pixels": pixels,
+        "color": color,
+        "source": "highlight_diff",
+    }
+
+
+def _render_color_frame(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera: mujoco.MjvCamera | str,
+) -> Any:
+    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    renderer.update_scene(data, camera=camera)
+    frame = renderer.render()
+    renderer.close()
+    return frame
+
+
 def _subtree_geom_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
+    body_ids = _subtree_body_ids(model, body_name)
+    return [
+        geom_id
+        for geom_id in range(model.ngeom)
+        if int(model.geom_bodyid[geom_id]) in set(body_ids)
+    ]
+
+
+def _subtree_body_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
     body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
     if body_id < 0:
         return []
@@ -1153,11 +1554,7 @@ def _subtree_geom_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
                 body_ids.append(candidate_id)
                 break
             current_id = int(model.body_parentid[current_id])
-    return [
-        geom_id
-        for geom_id in range(model.ngeom)
-        if int(model.geom_bodyid[geom_id]) in set(body_ids)
-    ]
+    return body_ids
 
 
 def _inflate_bbox(

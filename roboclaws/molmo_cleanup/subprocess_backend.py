@@ -103,11 +103,32 @@ class MolmoSpacesSubprocessBackend:
     def goto(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("goto", "--receptacle-id", receptacle_id)
 
+    def navigate_to_object(self, object_id: str) -> dict[str, Any]:
+        return self._run_worker("navigate_to_object", "--object-id", object_id)
+
+    def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._run_worker("navigate_to_receptacle", "--receptacle-id", receptacle_id)
+
     def pick(self, object_id: str) -> dict[str, Any]:
         return self._run_worker("pick", "--object-id", object_id)
 
+    def open_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._run_worker("open_receptacle", "--receptacle-id", receptacle_id)
+
     def place(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("place", "--receptacle-id", receptacle_id)
+
+    def place_inside(self, receptacle_id: str) -> dict[str, Any]:
+        return self._run_worker("place_inside", "--receptacle-id", receptacle_id)
+
+    def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
+        return self._run_worker(
+            "object_done",
+            "--object-id",
+            object_id,
+            "--receptacle-id",
+            receptacle_id,
+        )
 
     def done(self, reason: str = "") -> dict[str, Any]:
         return self._run_worker("done", "--reason", reason)

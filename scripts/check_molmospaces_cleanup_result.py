@@ -14,6 +14,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-backend")
     parser.add_argument("--expect-robot")
     parser.add_argument("--require-robot-views", action="store_true")
+    parser.add_argument("--require-semantic-substeps", action="store_true")
     return parser.parse_args()
 
 
@@ -36,6 +37,8 @@ def main() -> None:
     if args.require_public_planner:
         assert data.get("planner") == "public_heuristic", data
         assert data.get("planner_uses_private_manifest") is False, data
+    if args.require_semantic_substeps:
+        _assert_semantic_substeps(data)
     assert score["restored_count"] >= score["success_threshold"], data
     artifacts = data["artifacts"]
     for key in ("trace", "before_snapshot", "after_snapshot", "report"):
@@ -53,11 +56,10 @@ def main() -> None:
                 path = _resolve_path(report.parent, views[key])
                 assert path.is_file(), path
                 assert path.stat().st_size > 0, path
-            if str(step.get("action", "")).startswith(("goto ", "place ")):
+            if _is_focused_robot_action(str(step.get("action", ""))):
                 focus = step.get("focus") or {}
                 assert focus.get("has_focus") is True, step
                 assert focus.get("object_id"), step
-                assert focus.get("receptacle_id"), step
                 assert focus.get("provenance") == "public_mujoco_state_report_aid", step
                 pose = step.get("robot_pose") or {}
                 assert pose.get("theta_source") == "target_facing_base_yaw", step
@@ -66,10 +68,18 @@ def main() -> None:
                 fpv_visibility = focus.get("fpv_visibility") or {}
                 assert fpv_visibility.get("status") == "ok", step
                 assert fpv_visibility.get("boxes"), step
-                assert int(fpv_visibility.get("receptacle_pixels") or 0) > 0, step
+                action = str(step.get("action", ""))
+                if action.startswith("navigate_to_object "):
+                    assert int(fpv_visibility.get("object_pixels") or 0) > 0, step
+                elif action.startswith("pick "):
+                    assert focus.get("object_position"), step
+                else:
+                    assert focus.get("receptacle_id"), step
+                    assert int(fpv_visibility.get("receptacle_pixels") or 0) > 0, step
                 visibility = focus.get("visibility") or {}
                 assert visibility.get("status") == "ok", step
-                assert visibility.get("boxes"), step
+                if not action.startswith(("pick ", "place_inside ")):
+                    assert visibility.get("boxes"), step
                 if (
                     str(step.get("action", "")).startswith("place ")
                     and focus.get("object_category") == "Apple"
@@ -77,6 +87,46 @@ def main() -> None:
                     assert int(visibility.get("object_pixels") or 0) > 0, step
         assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
     print(f"molmo-cleanup ok: {args.run_result} -> {report}")
+
+
+def _assert_semantic_substeps(data: dict) -> None:
+    assert data.get("semantic_loop_variant") == "navigate-pick-navigate-open-place-object_done", (
+        data
+    )
+    semantic_substeps = data.get("semantic_substeps") or []
+    assert semantic_substeps, data
+    final_containment = data.get("final_containment") or {}
+    saw_inside = False
+    for item in semantic_substeps:
+        phases = [step.get("phase") for step in item.get("steps", [])]
+        assert phases[:3] == ["navigate_to_object", "pick", "navigate_to_receptacle"], item
+        assert phases[-1:] == ["object_done"], item
+        assert "place" in phases or "place_inside" in phases, item
+        done_step = item["steps"][-1]
+        assert done_step.get("matches_expected_location") is True, item
+        if item.get("target_receptacle_category") == "Fridge":
+            assert "open_receptacle" in phases, item
+            assert "place_inside" in phases, item
+            containment = final_containment.get(item["object_id"]) or {}
+            assert containment.get("contained_in") == item["target_receptacle_id"], item
+            assert containment.get("location_relation") == "inside", item
+            assert done_step.get("contained_in") == item["target_receptacle_id"], item
+            assert done_step.get("location_relation") == "inside", item
+            saw_inside = True
+    assert saw_inside, semantic_substeps
+
+
+def _is_focused_robot_action(action: str) -> bool:
+    return action.startswith(
+        (
+            "navigate_to_object ",
+            "pick ",
+            "navigate_to_receptacle ",
+            "open_receptacle ",
+            "place ",
+            "place_inside ",
+        )
+    )
 
 
 def _resolve_path(base: Path, value: str) -> Path:

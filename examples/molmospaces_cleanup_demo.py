@@ -125,54 +125,149 @@ def run_demo(
         scenario=scenario,
         restore_count=restore_count,
     )
+    initial_locations = _object_locations_from_scene_objects(scene_objects)
+    receptacles_by_id = {
+        str(item["receptacle_id"]): item for item in scene_objects.get("receptacles", [])
+    }
 
     view_index = 3
+    semantic_substeps: list[dict[str, Any]] = []
     for action_index, action in enumerate(cleanup_plan, start=1):
         object_id = action["object_id"]
         target_receptacle_id = action["receptacle_id"]
-        _call_tool(
+        source_receptacle_id = initial_locations.get(object_id, "")
+        object_steps: list[dict[str, Any]] = []
+
+        response = _call_tool(
             trace_events,
             started_at,
-            "goto",
-            {"object_id": object_id, "receptacle_id": target_receptacle_id},
-            lambda target=target_receptacle_id: contract.goto(target),
+            "navigate_to_object",
+            {"object_id": object_id, "source_receptacle_id": source_receptacle_id},
+            lambda selected_object=object_id: contract.navigate_to_object(selected_object),
         )
+        _record_semantic_step(object_steps, "navigate_to_object", response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
                 contract,
                 output_dir,
-                f"{view_index:04d}_goto_{action_index}",
-                f"goto {target_receptacle_id}",
+                f"{view_index:04d}_navigate_object_{action_index}",
+                f"navigate_to_object {object_id}",
                 focus_object_id=object_id,
-                focus_receptacle_id=target_receptacle_id,
+                focus_receptacle_id=source_receptacle_id or None,
+                semantic_phase="navigate_to_object",
             )
             view_index += 1
-        _call_tool(
+
+        response = _call_tool(
             trace_events,
             started_at,
             "pick",
             {"object_id": object_id},
             lambda selected_object=object_id: contract.pick(selected_object),
         )
-        _call_tool(
-            trace_events,
-            started_at,
-            "place",
-            {"receptacle_id": target_receptacle_id},
-            lambda target=target_receptacle_id: contract.place(target),
-        )
+        _record_semantic_step(object_steps, "pick", response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
                 contract,
                 output_dir,
-                f"{view_index:04d}_place_{action_index}",
-                f"place {object_id}",
+                f"{view_index:04d}_pick_{action_index}",
+                f"pick {object_id}",
                 focus_object_id=object_id,
-                focus_receptacle_id=target_receptacle_id,
+                focus_receptacle_id=source_receptacle_id or None,
+                semantic_phase="pick",
             )
             view_index += 1
+
+        response = _call_tool(
+            trace_events,
+            started_at,
+            "navigate_to_receptacle",
+            {"object_id": object_id, "receptacle_id": target_receptacle_id},
+            lambda target=target_receptacle_id: contract.navigate_to_receptacle(target),
+        )
+        _record_semantic_step(object_steps, "navigate_to_receptacle", response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_navigate_receptacle_{action_index}",
+                f"navigate_to_receptacle {target_receptacle_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
+                semantic_phase="navigate_to_receptacle",
+            )
+            view_index += 1
+
+        target_receptacle = receptacles_by_id.get(target_receptacle_id, {})
+        place_tool = "place_inside" if _requires_inside_place(target_receptacle) else "place"
+        if place_tool == "place_inside":
+            response = _call_tool(
+                trace_events,
+                started_at,
+                "open_receptacle",
+                {"object_id": object_id, "receptacle_id": target_receptacle_id},
+                lambda target=target_receptacle_id: contract.open_receptacle(target),
+            )
+            _record_semantic_step(object_steps, "open_receptacle", response)
+            if record_robot_views:
+                _record_robot_views(
+                    robot_view_steps,
+                    contract,
+                    output_dir,
+                    f"{view_index:04d}_open_receptacle_{action_index}",
+                    f"open_receptacle {target_receptacle_id}",
+                    focus_object_id=object_id,
+                    focus_receptacle_id=target_receptacle_id,
+                    semantic_phase="open_receptacle",
+                )
+                view_index += 1
+
+        response = _call_tool(
+            trace_events,
+            started_at,
+            place_tool,
+            {"receptacle_id": target_receptacle_id},
+            lambda target=target_receptacle_id, tool=place_tool: (
+                contract.place_inside(target) if tool == "place_inside" else contract.place(target)
+            ),
+        )
+        _record_semantic_step(object_steps, place_tool, response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_{place_tool}_{action_index}",
+                f"{place_tool} {object_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
+                semantic_phase=place_tool,
+            )
+            view_index += 1
+
+        response = _call_tool(
+            trace_events,
+            started_at,
+            "object_done",
+            {"object_id": object_id, "receptacle_id": target_receptacle_id},
+            lambda selected_object=object_id, target=target_receptacle_id: contract.object_done(
+                selected_object,
+                target,
+            ),
+        )
+        _record_semantic_step(object_steps, "object_done", response)
+        semantic_substeps.append(
+            {
+                "object_id": object_id,
+                "source_receptacle_id": source_receptacle_id,
+                "target_receptacle_id": target_receptacle_id,
+                "target_receptacle_category": _receptacle_category(target_receptacle),
+                "steps": object_steps,
+            }
+        )
 
     done = _call_tool(
         trace_events,
@@ -224,8 +319,11 @@ def run_demo(
         if planner == SCRIPTED_REFERENCE
         else False,
         "cleanup_plan": cleanup_plan,
+        "semantic_loop_variant": "navigate-pick-navigate-open-place-object_done",
+        "semantic_substeps": semantic_substeps,
         "score": done["score"],
         "final_locations": done["final_locations"],
+        "final_containment": done.get("final_containment", {}),
         "tool_event_counts": done["tool_event_counts"],
         "artifacts": {
             "scenario": str(paths["scenario"]),
@@ -293,6 +391,51 @@ def _build_cleanup_plan(
     raise ValueError(f"unknown cleanup planner: {planner}")
 
 
+def _object_locations_from_scene_objects(scene_objects: dict[str, Any]) -> dict[str, str]:
+    return {
+        str(item["object_id"]): str(item.get("location_id", ""))
+        for item in scene_objects.get("objects", [])
+    }
+
+
+def _requires_inside_place(receptacle: dict[str, Any]) -> bool:
+    return _receptacle_category(receptacle) == "Fridge"
+
+
+def _receptacle_category(receptacle: dict[str, Any]) -> str:
+    category = str(receptacle.get("category", ""))
+    if category:
+        return category
+    name = str(receptacle.get("name", "")).lower()
+    receptacle_id = str(receptacle.get("receptacle_id", "")).lower()
+    if "fridge" in name or "refrigerator" in name or "fridge" in receptacle_id:
+        return "Fridge"
+    return ""
+
+
+def _record_semantic_step(
+    steps: list[dict[str, Any]],
+    phase: str,
+    response: dict[str, Any],
+) -> None:
+    steps.append(
+        {
+            "phase": phase,
+            "tool": response.get("tool"),
+            "ok": response.get("ok"),
+            "object_id": response.get("object_id"),
+            "receptacle_id": response.get("receptacle_id"),
+            "source_receptacle_id": response.get("source_receptacle_id"),
+            "location_id": response.get("location_id"),
+            "contained_in": response.get("contained_in"),
+            "location_relation": response.get("location_relation"),
+            "opened": response.get("opened"),
+            "matches_expected_location": response.get("matches_expected_location"),
+            "primitive_provenance": response.get("primitive_provenance"),
+        }
+    )
+
+
 def _write_snapshot(
     *,
     backend: str,
@@ -320,6 +463,7 @@ def _record_robot_views(
     *,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
+    semantic_phase: str | None = None,
 ) -> None:
     result = contract.backend.write_robot_views(
         output_dir / "robot_views",
@@ -338,6 +482,7 @@ def _record_robot_views(
             "view_variant": result.get("view_variant"),
             "view_provenance": result.get("view_provenance"),
             "focus": result.get("focus"),
+            "semantic_phase": semantic_phase,
             "room_outline_count": result.get("room_outline_count"),
             "views": _relative_view_paths(output_dir, result["views"]),
         }

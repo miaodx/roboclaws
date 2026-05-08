@@ -12,7 +12,19 @@ def test_tool_contract_exposes_expected_direct_call_methods() -> None:
 
     names = {spec["name"] for spec in contract.tool_specs()}
 
-    assert names == {"observe", "scene_objects", "goto", "pick", "place", "done"}
+    assert names == {
+        "observe",
+        "scene_objects",
+        "goto",
+        "pick",
+        "place",
+        "done",
+        "navigate_to_object",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+        "object_done",
+    }
 
 
 def test_tool_contract_public_results_do_not_leak_private_targets() -> None:

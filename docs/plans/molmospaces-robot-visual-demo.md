@@ -85,3 +85,14 @@ that later phase may change manipulation provenance from `api_semantic` to
 
 This plan is approved for direct execution when the user asks to "do this" and
 finish with a working HTML artifact.
+
+## Current Result
+
+Phase 09 shipped the RBY1M FPV/chase/map/verification visual proof. Phase 10
+then extended the same report into a semantic cleanup timeline with
+`navigate_to_object`, `pick`, `navigate_to_receptacle`, optional
+`open_receptacle`, `place/place_inside`, and `object_done` rows. The latest
+`just verify::molmo-robot-visual` run passes against the real
+`molmospaces_subprocess` backend with `robot_name=rby1m`,
+`planner_uses_private_manifest=false`, `primitive_provenance=api_semantic`, and
+5/5 restored objects.
