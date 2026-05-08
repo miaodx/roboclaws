@@ -223,62 +223,22 @@ Required for any task tagged `local-dev` on the issue tracker. Good for:
 
 ---
 
-## 8) Dual-stack workflow: gstack + GSD
+## 8) Planning workflow
 
-This repo is set up for both skill families. Use the right one per task.
+Use the `hybrid-phase-pipeline` skill when available. It is the router for
+combining Matt-style skills, gstack review, and GSD without duplicating process.
 
-### 8.1 Which family owns what
+Invariant: one source of truth per stage.
 
-- **gstack** owns pre-plan (strategy, architecture review, design, autoplan)
-  and PR-creation (`/ship`, `/review`). Plan files can live anywhere; gstack
-  is filesystem-agnostic. Key commands: `/office-hours`, `/plan-ceo-review`,
-  `/plan-eng-review`, `/plan-design-review`, `/autoplan`, `/review`, `/ship`,
-  `/retro`, `/document-release`.
-- **GSD** owns phase execution, verification, and the `.planning/` lifecycle.
-  Key commands: `/gsd-plan-phase`, `/gsd-execute-phase`, `/gsd-verify-work`,
-  `/gsd-ship`, `/gsd-quick` (small tasks), `/gsd-fast` (trivial tasks),
-  `/gsd-debug` (investigation), `/gsd-next` (workflow routing),
-  `/gsd-progress` (status).
+- Before execution: `docs/plans/*.md` or GitHub issues.
+- During execution: `.planning/STATE.md` and `.planning/phases/*`.
+- After shipping: summaries, verification reports, and retrospectives.
 
-### 8.2 Intended handoff
+Do not create `.planning/phases/*` for brainstorming. Once a phase is under GSD,
+execute and ship it with GSD (`/gsd-execute-phase`, `/gsd-ship`) unless the user
+explicitly changes the workflow.
 
-**gstack produces a reviewed plan; GSD structures it into
-`.planning/phases/XX-name/` and executes.**
-
-Typical flow for a new phase:
-
-1. `/office-hours` — brainstorm + design doc for the phase
-2. `/plan-ceo-review` or `/plan-eng-review` — pressure-test scope + architecture
-3. `/autoplan` — full CEO + Design + Eng + DX review gauntlet
-4. `/gsd-ingest-docs` (first time) or `/gsd-plan-phase` — hand plan to GSD
-5. `/gsd-execute-phase` — build it
-6. `/gsd-verify-work` — UAT
-7. `/gsd-ship` — PR and land
-
-See CLAUDE.md § "Workflow: gstack for pre-plan, GSD for execution" for the
-command mapping.
-
-### 8.3 Current state
-
-GSD is bootstrapped. Active phase work lives under `.planning/phases/` with
-state tracked in `.planning/STATE.md`. Top-level `PLAN.md` holds the current
-active phase only; shipped-phase history (Phase 2.0–2.4) is archived under
-`docs/retrospectives/`.
-
-For a new phase, use `/gsd-plan-phase` (fresh planning) or `/gsd-ingest-docs`
-(if you already have a draft plan in markdown). Don't accumulate new phase
-plans in the top-level `PLAN.md` — that file is a sliding window of the
-active phase, not a history log.
-
-### 8.4 Don't mix mid-phase
-
-Once a phase is under GSD (has a `.planning/phases/XX-name/` directory),
-execute it with `/gsd-execute-phase` and ship with `/gsd-ship`. Don't
-switch back to `/ship` mid-phase; GSD tracks phase state and the mismatch
-will confuse the handoff.
-
-Conversely, don't run `/gsd-plan-phase` on a plan that's still being
-pressure-tested in gstack review. Finish the reviews first, then hand over.
+Current hybrid pilot: `docs/plans/molmospaces-manipulation-spike.md`.
 
 ## Agent skills
 
