@@ -144,6 +144,8 @@ def run_demo(
                 output_dir,
                 f"{view_index:04d}_goto_{action_index}",
                 f"goto {target_receptacle_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
             )
             view_index += 1
         _call_tool(
@@ -167,6 +169,8 @@ def run_demo(
                 output_dir,
                 f"{view_index:04d}_place_{action_index}",
                 f"place {object_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
             )
             view_index += 1
 
@@ -242,7 +246,7 @@ def run_demo(
             run_result["robot"] = backend_instance.robot
             run_result["robot_name"] = backend_instance.robot.get("robot_name")
     if robot_view_steps:
-        run_result["view_variant"] = "molmospaces-rby1m-fpv-map-chase"
+        run_result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     report_path = render_cleanup_report(
@@ -313,8 +317,16 @@ def _record_robot_views(
     output_dir: Path,
     label: str,
     action: str,
+    *,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
 ) -> None:
-    result = contract.backend.write_robot_views(output_dir / "robot_views", label=label)
+    result = contract.backend.write_robot_views(
+        output_dir / "robot_views",
+        label=label,
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
+    )
     if not result.get("ok"):
         raise RuntimeError(f"robot view capture failed: {result}")
     steps.append(
@@ -325,6 +337,8 @@ def _record_robot_views(
             "robot_trajectory_count": len(result.get("robot_trajectory", [])),
             "view_variant": result.get("view_variant"),
             "view_provenance": result.get("view_provenance"),
+            "focus": result.get("focus"),
+            "room_outline_count": result.get("room_outline_count"),
             "views": _relative_view_paths(output_dir, result["views"]),
         }
     )

@@ -71,7 +71,7 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
         tmp_path / "after.png",
         title="After",
     )
-    for name in ("step.fpv.png", "step.chase.png", "step.map.png"):
+    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (tmp_path / "robot_views" / name).parent.mkdir(exist_ok=True)
         (tmp_path / "robot_views" / name).write_bytes(b"placeholder")
     run_result = {
@@ -96,6 +96,13 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
                     "fpv": "robot_views/step.fpv.png",
                     "chase": "robot_views/step.chase.png",
                     "map": "robot_views/step.map.png",
+                    "verify": "robot_views/step.verify.png",
+                },
+                "focus": {
+                    "has_focus": True,
+                    "object_label": "Mug mug",
+                    "receptacle_label": "Sink sink",
+                    "provenance": "public_mujoco_state_report_aid",
                 },
             }
         ],
@@ -105,3 +112,6 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "Robot View Timeline" in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
+    assert "Verification" in html
+    assert "Mug mug" in html
+    assert "public_mujoco_state_report_aid" in html

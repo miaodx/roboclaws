@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -48,6 +49,8 @@ def main(argv: list[str] | None = None) -> None:
     robot_views = subparsers.add_parser("robot_views")
     robot_views.add_argument("--output-dir", type=Path, required=True)
     robot_views.add_argument("--label", required=True)
+    robot_views.add_argument("--focus-object-id")
+    robot_views.add_argument("--focus-receptacle-id")
 
     goto = subparsers.add_parser("goto")
     goto.add_argument("--receptacle-id", required=True)
@@ -84,7 +87,13 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "snapshot":
             result = write_snapshot(state, args.output_path, args.title)
         elif args.command == "robot_views":
-            result = write_robot_views(state, args.output_dir, args.label)
+            result = write_robot_views(
+                state,
+                args.output_dir,
+                args.label,
+                focus_object_id=args.focus_object_id,
+                focus_receptacle_id=args.focus_receptacle_id,
+            )
         elif args.command == "goto":
             result = goto_receptacle(state, args.receptacle_id)
             _write_state(args.state_path, state)
@@ -168,6 +177,8 @@ def init_state(
         "tool_event_counts": {},
     }
     _seed_misplaced_objects(model, data, state, targets)
+    _refresh_object_positions(model, data, state)
+    state["room_outlines"] = _collect_room_outlines(model, data, state)
     if include_robot:
         initial_receptacle = state["receptacles"][_first_wrong_receptacle(state, targets[0])]
         robot_pose = _robot_pose_near_receptacle(state, initial_receptacle)
@@ -181,6 +192,7 @@ def init_state(
             "fpv": "rby1m_head_camera",
             "chase": "rby1m_follower_camera",
             "map": "public_sim_state_report",
+            "verify": "public_sim_state_report_focus_camera",
         }
     state["qpos"] = [float(value) for value in data.qpos]
     state["current_receptacle_id"] = _first_wrong_receptacle(state, targets[0])
@@ -255,24 +267,42 @@ def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict
     return _ok("snapshot", path=str(output_path), title=title, shape=list(frame.shape))
 
 
-def write_robot_views(state: dict[str, Any], output_dir: Path, label: str) -> dict[str, Any]:
+def write_robot_views(
+    state: dict[str, Any],
+    output_dir: Path,
+    label: str,
+    *,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
+) -> dict[str, Any]:
     if not state.get("robot_included"):
         return _error("robot_views", "robot_not_included")
+    if focus_object_id is not None and focus_object_id not in state["objects"]:
+        return _error("robot_views", "stale_reference", object_id=focus_object_id)
+    if focus_receptacle_id is not None and focus_receptacle_id not in state["receptacles"]:
+        return _error("robot_views", "stale_reference", receptacle_id=focus_receptacle_id)
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     safe_label = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in label)
     fpv_path = output_dir / f"{safe_label}.fpv.png"
     chase_path = output_dir / f"{safe_label}.chase.png"
     map_path = output_dir / f"{safe_label}.map.png"
+    verify_path = output_dir / f"{safe_label}.verify.png"
 
+    focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
     fpv = _render_fixed_camera(model, data, "robot_0/head_camera")
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower")
+    verify = _render_focus_view(state, model, data, focus)
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
-    _render_robot_map(state).save(map_path)
+    verify_image = Image.fromarray(verify)
+    _annotate_focus_image(verify_image, focus)
+    verify_image.save(verify_path)
+    _render_robot_map(state, focus=focus).save(map_path)
 
     return _ok(
         "robot_views",
@@ -280,16 +310,20 @@ def write_robot_views(state: dict[str, Any], output_dir: Path, label: str) -> di
         robot_name=state.get("robot_name"),
         robot_pose=state.get("robot_pose"),
         robot_trajectory=state.get("robot_trajectory", []),
-        view_variant="molmospaces-rby1m-fpv-map-chase",
+        view_variant="molmospaces-rby1m-fpv-map-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
+        focus=focus,
+        room_outline_count=len(state.get("room_outlines", [])),
         views={
             "fpv": str(fpv_path),
             "chase": str(chase_path),
             "map": str(map_path),
+            "verify": str(verify_path),
         },
         shapes={
             "fpv": list(fpv.shape),
             "chase": list(chase.shape),
+            "verify": list(verify.shape),
             "map": [420, 620, 3],
         },
     )
@@ -366,6 +400,7 @@ def place_object(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
     )
     _set_free_body_position(model, data, obj["body_name"], target_position)
     mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
 
     state["qpos"] = [float(value) for value in data.qpos]
     state["held_object_id"] = None
@@ -659,6 +694,17 @@ def _set_free_body_position(
     data.qpos[qposadr : qposadr + 3] = position
 
 
+def _refresh_object_positions(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    state: dict[str, Any],
+) -> None:
+    for obj in state.get("objects", {}).values():
+        body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, obj["body_name"])
+        if body_id >= 0:
+            obj["position"] = _xyz(data.xpos[body_id])
+
+
 def _placement_position(receptacle: dict[str, Any], *, index: int) -> list[float]:
     base = receptacle["position"]
     offset = ((index % 3) - 1) * 0.12
@@ -734,6 +780,7 @@ def _robot_result_payload(state: dict[str, Any], model: mujoco.MjModel) -> dict[
         "robot_control_provenance": state.get("robot_control_provenance"),
         "robot_view_provenance": state.get("robot_view_provenance"),
         "robot_pose": state.get("robot_pose"),
+        "room_outline_count": len(state.get("room_outlines", [])),
         "robot_model_stats": {
             "nbody": int(model.nbody),
             "ngeom": int(model.ngeom),
@@ -784,7 +831,8 @@ def _robot_pose_near_receptacle(
     x = target[0] + dx / norm * stand_off
     y = target[1] + dy / norm * stand_off
     # This phase proves visual embodiment, not planner-backed navigation. A
-    # stable review heading keeps the RBY1M head camera readable in this room.
+    # stable review heading keeps the RBY1M head camera readable in this room;
+    # the report verification camera carries target-specific context.
     theta = math.pi / 2.0
     return {
         "x": round(float(x), 6),
@@ -814,22 +862,153 @@ def _render_fixed_camera(
     return renderer.render()
 
 
-def _render_robot_map(state: dict[str, Any]) -> Image.Image:
+def _render_focus_view(
+    state: dict[str, Any],
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    focus: dict[str, Any],
+) -> Any:
+    focus_position = focus.get("focus_position") or _scene_focus_position(state)
+    renderer = mujoco.Renderer(model, height=360, width=540)
+    camera = mujoco.MjvCamera()
+    camera.type = mujoco.mjtCamera.mjCAMERA_FREE
+    camera.lookat[:] = [
+        float(focus_position[0]),
+        float(focus_position[1]),
+        float(focus_position[2]) + 0.35,
+    ]
+    camera.distance = 4.0 if focus.get("has_focus") else 7.5
+    camera.azimuth = _focus_camera_azimuth(state, focus_position)
+    camera.elevation = -68 if focus.get("has_focus") else -45
+    renderer.update_scene(data, camera=camera)
+    return renderer.render()
+
+
+def _annotate_focus_image(image: Image.Image, focus: dict[str, Any]) -> None:
+    if not focus.get("has_focus"):
+        return
+    draw = ImageDraw.Draw(image)
+    object_label = str(focus.get("object_label") or "object")
+    receptacle_label = str(focus.get("receptacle_label") or "target")
+    label = f"Object: {object_label}   Target: {receptacle_label}"
+    draw.rectangle((0, 0, image.width, 28), fill=(15, 23, 42))
+    draw.text((10, 8), label, fill=(248, 250, 252))
+
+
+def _focus_camera_azimuth(state: dict[str, Any], focus_position: list[float]) -> float:
+    pose = state.get("robot_pose") or {}
+    if "x" not in pose or "y" not in pose:
+        return 225.0
+    dx = float(focus_position[0]) - float(pose["x"])
+    dy = float(focus_position[1]) - float(pose["y"])
+    if math.hypot(dx, dy) < 0.001:
+        return 225.0
+    return math.degrees(math.atan2(dx, dy))
+
+
+def _focus_payload(
+    state: dict[str, Any],
+    focus_object_id: str | None,
+    focus_receptacle_id: str | None,
+) -> dict[str, Any]:
+    obj = state["objects"].get(focus_object_id) if focus_object_id else None
+    receptacle = state["receptacles"].get(focus_receptacle_id) if focus_receptacle_id else None
+    positions = []
+    if obj is not None:
+        positions.append(obj["position"])
+    if receptacle is not None:
+        positions.append(receptacle["position"])
+    if obj is not None and receptacle is not None:
+        object_position = obj["position"]
+        receptacle_position = receptacle["position"]
+        if math.dist(object_position[:2], receptacle_position[:2]) > 1.2:
+            focus_position = receptacle_position
+        else:
+            focus_position = _average_position([object_position, receptacle_position])
+    else:
+        focus_position = _average_position(positions) if positions else _scene_focus_position(state)
+    return {
+        "has_focus": obj is not None or receptacle is not None,
+        "object_id": focus_object_id,
+        "object_label": _item_label(obj, "object_id") if obj is not None else None,
+        "object_category": obj.get("category") if obj is not None else None,
+        "object_position": obj.get("position") if obj is not None else None,
+        "receptacle_id": focus_receptacle_id,
+        "receptacle_label": _item_label(receptacle, "receptacle_id")
+        if receptacle is not None
+        else None,
+        "receptacle_category": receptacle.get("category") if receptacle is not None else None,
+        "receptacle_position": receptacle.get("position") if receptacle is not None else None,
+        "focus_position": focus_position,
+        "provenance": "public_mujoco_state_report_aid",
+    }
+
+
+def _average_position(positions: list[list[float]]) -> list[float]:
+    return [
+        round(sum(float(position[index]) for position in positions) / len(positions), 6)
+        for index in range(3)
+    ]
+
+
+def _scene_focus_position(state: dict[str, Any]) -> list[float]:
+    points = [item["position"] for item in state["receptacles"].values()]
+    if not points:
+        return [0.0, 0.0, 0.0]
+    return _average_position(points)
+
+
+def _item_label(item: dict[str, Any] | None, id_key: str) -> str:
+    if item is None:
+        return ""
+    category = str(item.get("category") or item.get("kind") or "item")
+    identifier = str(item.get(id_key, ""))
+    short_id = identifier.split("_", 1)[0]
+    return f"{category} {short_id}"
+
+
+def _render_robot_map(state: dict[str, Any], *, focus: dict[str, Any] | None = None) -> Image.Image:
     width, height = 620, 420
     margin = 34
     image = Image.new("RGB", (width, height), (247, 248, 250))
     draw = ImageDraw.Draw(image)
     draw.rectangle((12, 12, width - 12, height - 12), outline=(187, 193, 204), width=2)
 
-    points = [item["position"] for item in state["receptacles"].values()]
-    points += [state["objects"][oid]["position"] for oid in state["selected_object_ids"]]
-    points += [[pose["x"], pose["y"], 0.0] for pose in state.get("robot_trajectory", [])]
+    focus = focus or {}
+    points = _map_points(state, focus)
     min_x, max_x, min_y, max_y = _map_bounds(points)
 
     def project(x: float, y: float) -> tuple[int, int]:
         px = margin + (x - min_x) / max(max_x - min_x, 0.001) * (width - 2 * margin)
         py = height - margin - (y - min_y) / max(max_y - min_y, 0.001) * (height - 2 * margin)
         return (int(round(px)), int(round(py)))
+
+    for outline in state.get("room_outlines", []):
+        center = outline["center"]
+        half_x, half_y = outline["half_extents"]
+        x1, y1 = project(float(center[0]) - float(half_x), float(center[1]) - float(half_y))
+        x2, y2 = project(float(center[0]) + float(half_x), float(center[1]) + float(half_y))
+        left, right = sorted((x1, x2))
+        top, bottom = sorted((y1, y2))
+        draw.rectangle((left, top, right, bottom), outline=(148, 163, 184), width=2)
+        draw.text((left + 5, top + 5), str(outline.get("label", "room")), fill=(71, 85, 105))
+
+    focus_receptacle_id = focus.get("receptacle_id")
+    focus_object_id = focus.get("object_id")
+    if focus_receptacle_id in state["receptacles"]:
+        receptacle = state["receptacles"][focus_receptacle_id]
+        x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
+        draw.rounded_rectangle(
+            (x - 13, y - 13, x + 13, y + 13),
+            radius=5,
+            outline=(8, 145, 178),
+            width=4,
+        )
+        draw.text(
+            (x + 10, y - 20),
+            _item_label(receptacle, "receptacle_id"),
+            fill=(8, 92, 116),
+        )
 
     for receptacle in state["receptacles"].values():
         x, y = project(float(receptacle["position"][0]), float(receptacle["position"][1]))
@@ -839,6 +1018,9 @@ def _render_robot_map(state: dict[str, Any]) -> Image.Image:
         obj = state["objects"][object_id]
         x, y = project(float(obj["position"][0]), float(obj["position"][1]))
         draw.ellipse((x - 4, y - 4, x + 4, y + 4), fill=(192, 88, 68))
+        if object_id == focus_object_id:
+            draw.ellipse((x - 11, y - 11, x + 11, y + 11), outline=(220, 38, 38), width=4)
+            draw.text((x + 10, y + 4), _item_label(obj, "object_id"), fill=(153, 27, 27))
 
     trajectory = state.get("robot_trajectory", [])
     projected_path = [project(float(pose["x"]), float(pose["y"])) for pose in trajectory]
@@ -865,10 +1047,102 @@ def _render_robot_map(state: dict[str, Any]) -> Image.Image:
     draw.text((24, 22), "RBY1M map", fill=(31, 41, 55))
     draw.text(
         (24, height - 30),
-        "blue: robot trajectory  gray: receptacles  red: cleanup objects",
+        "blue: robot path  gray: receptacles  red: objects  cyan/red rings: focus",
         fill=(75, 85, 99),
     )
     return image
+
+
+def _map_points(state: dict[str, Any], focus: dict[str, Any]) -> list[list[float]]:
+    points = [item["position"] for item in state["receptacles"].values()]
+    points += [state["objects"][oid]["position"] for oid in state["selected_object_ids"]]
+    points += [[pose["x"], pose["y"], 0.0] for pose in state.get("robot_trajectory", [])]
+    if focus.get("focus_position"):
+        points.append(focus["focus_position"])
+    for outline in state.get("room_outlines", []):
+        center = outline["center"]
+        half_x, half_y = outline["half_extents"]
+        points.extend(
+            [
+                [float(center[0]) - float(half_x), float(center[1]) - float(half_y), 0.0],
+                [float(center[0]) + float(half_x), float(center[1]) + float(half_y), 0.0],
+            ]
+        )
+    return points
+
+
+def _collect_room_outlines(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    state: dict[str, Any],
+) -> list[dict[str, Any]]:
+    outlines: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for geom_id in range(model.ngeom):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id)
+        if name is None:
+            continue
+        match = re.match(r"^(room_\d+)_visual", name)
+        if match is None:
+            continue
+        room_id = match.group(1)
+        if room_id in seen:
+            continue
+        size = [float(value) for value in model.geom_size[geom_id]]
+        half_extents = sorted(size)[-2:]
+        if half_extents[0] < 0.25 or half_extents[1] < 0.25:
+            continue
+        center = _xyz(data.geom_xpos[geom_id])
+        outlines.append(
+            {
+                "room_id": room_id,
+                "label": room_id.replace("_", " ").title(),
+                "center": [center[0], center[1]],
+                "half_extents": [round(half_extents[1], 6), round(half_extents[0], 6)],
+                "provenance": "mujoco_room_geom",
+            }
+        )
+        seen.add(room_id)
+    if outlines:
+        return sorted(outlines, key=lambda item: item["room_id"])
+    return _fallback_room_outlines(state)
+
+
+def _fallback_room_outlines(state: dict[str, Any]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[list[float]]] = {}
+    for receptacle in state["receptacles"].values():
+        grouped.setdefault(str(receptacle.get("room_area", "room_unknown")), []).append(
+            receptacle["position"]
+        )
+    for obj in state["objects"].values():
+        location_id = obj.get("seeded_start_receptacle_id") or obj.get("target_receptacle_id")
+        receptacle = state["receptacles"].get(location_id)
+        if receptacle is None:
+            continue
+        grouped.setdefault(str(receptacle.get("room_area", "room_unknown")), []).append(
+            obj["position"]
+        )
+    outlines = []
+    for room_id, points in grouped.items():
+        if not points:
+            continue
+        xs = [float(point[0]) for point in points]
+        ys = [float(point[1]) for point in points]
+        center = [round((min(xs) + max(xs)) / 2.0, 6), round((min(ys) + max(ys)) / 2.0, 6)]
+        half_extents = [
+            round(max((max(xs) - min(xs)) / 2.0, 0.8), 6),
+            round(max((max(ys) - min(ys)) / 2.0, 0.8), 6),
+        ]
+        outlines.append(
+            {
+                "room_id": room_id,
+                "label": room_id.replace("_", " ").title(),
+                "center": center,
+                "half_extents": half_extents,
+                "provenance": "public_object_room_area_bounds",
+            }
+        )
+    return sorted(outlines, key=lambda item: item["room_id"])
 
 
 def _map_bounds(points: list[list[float]]) -> tuple[float, float, float, float]:

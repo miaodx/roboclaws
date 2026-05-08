@@ -74,8 +74,20 @@ class MolmoSpacesSubprocessBackend:
         self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
         return output_path
 
-    def write_robot_views(self, output_dir: Path, *, label: str) -> dict[str, Any]:
-        return self._run_worker("robot_views", "--output-dir", str(output_dir), "--label", label)
+    def write_robot_views(
+        self,
+        output_dir: Path,
+        *,
+        label: str,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+    ) -> dict[str, Any]:
+        args = ["--output-dir", str(output_dir), "--label", label]
+        if focus_object_id is not None:
+            args.extend(["--focus-object-id", focus_object_id])
+        if focus_receptacle_id is not None:
+            args.extend(["--focus-receptacle-id", focus_receptacle_id])
+        return self._run_worker("robot_views", *args)
 
     def observe(self) -> dict[str, Any]:
         return self._run_worker("observe")

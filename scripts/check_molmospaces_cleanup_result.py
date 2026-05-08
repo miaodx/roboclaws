@@ -37,18 +37,40 @@ def main() -> None:
         assert data.get("planner") == "public_heuristic", data
         assert data.get("planner_uses_private_manifest") is False, data
     assert score["restored_count"] >= score["success_threshold"], data
-    report = Path(data["artifacts"]["report"])
+    artifacts = data["artifacts"]
+    for key in ("trace", "before_snapshot", "after_snapshot", "report"):
+        path = _resolve_path(args.run_result.parent, artifacts[key])
+        assert path.is_file(), path
+    report = _resolve_path(args.run_result.parent, artifacts["report"])
     assert report.is_file(), report
     if args.require_robot_views:
         steps = data.get("robot_view_steps") or []
         assert len(steps) >= 2, data
         for step in steps:
             views = step.get("views") or {}
-            for key in ("fpv", "chase", "map"):
-                path = report.parent / views[key]
+            assert int(step.get("room_outline_count") or 0) > 0, step
+            for key in ("fpv", "chase", "map", "verify"):
+                path = _resolve_path(report.parent, views[key])
                 assert path.is_file(), path
-        assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase", data
+                assert path.stat().st_size > 0, path
+            if str(step.get("action", "")).startswith(("goto ", "place ")):
+                focus = step.get("focus") or {}
+                assert focus.get("has_focus") is True, step
+                assert focus.get("object_id"), step
+                assert focus.get("receptacle_id"), step
+                assert focus.get("provenance") == "public_mujoco_state_report_aid", step
+        assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
     print(f"molmo-cleanup ok: {args.run_result} -> {report}")
+
+
+def _resolve_path(base: Path, value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute() or path.exists():
+        return path
+    repo_path = Path(__file__).resolve().parents[1] / path
+    if repo_path.exists():
+        return repo_path
+    return base / path
 
 
 if __name__ == "__main__":

@@ -137,25 +137,40 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
     for index, step in enumerate(steps, start=1):
         views = step.get("views", {})
         pose = step.get("robot_pose") or {}
+        focus = step.get("focus") or {}
         pose_text = f"x={pose.get('x', '?')} y={pose.get('y', '?')} theta={pose.get('theta', '?')}"
         cards.append(
             '<article class="robot-step">'
             f"<h3>{index}. {html.escape(str(step.get('action', step.get('label', 'step'))))}</h3>"
             f'<p class="pose">{html.escape(pose_text)}</p>'
+            f"{_focus_summary(focus)}"
             '<div class="views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
             f"{_view_figure(views.get('chase'), 'Chase')}"
             f"{_view_figure(views.get('map'), 'Map')}"
+            f"{_view_figure(views.get('verify'), 'Verification')}"
             "</div>"
             "</article>"
         )
     return (
         "<section><h2>Robot View Timeline</h2>"
         '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
-        "The map is a report artifact from public simulator state.</p>"
-        + "".join(cards)
-        + "</section>"
+        "The map and verification panels are report artifacts from public MuJoCo state, "
+        "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
     )
+
+
+def _focus_summary(focus: dict[str, Any]) -> str:
+    if not focus.get("has_focus"):
+        return ""
+    bits = []
+    if focus.get("object_label"):
+        bits.append(_badge("Object", focus["object_label"]))
+    if focus.get("receptacle_label"):
+        bits.append(_badge("Target", focus["receptacle_label"]))
+    if focus.get("provenance"):
+        bits.append(_badge("Focus provenance", focus["provenance"]))
+    return '<div class="focus-badges">' + "".join(bits) + "</div>"
 
 
 def _view_figure(path: Any, label: str) -> str:
@@ -260,9 +275,11 @@ def _wrap_html(body: str) -> str:
     }}
     .robot-step h3 {{ font-size: 16px; margin: 0 0 4px; }}
     .pose {{ margin: 0 0 10px; color: #565f70; font-size: 13px; }}
+    .focus-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
+    .focus-badges .badge {{ font-size: 13px; padding: 5px 8px; }}
     .views {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dde6; }}
