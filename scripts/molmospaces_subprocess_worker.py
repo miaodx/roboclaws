@@ -933,12 +933,23 @@ def _placement_position(
 ) -> list[float]:
     base = receptacle["position"]
     if receptacle.get("category") == "Fridge" and relation == "inside":
-        return [float(base[0]) + 0.02, float(base[1]) + 0.08, float(base[2]) + 0.45]
+        return [float(base[0]) + 0.08, float(base[1]) - 0.16, float(base[2]) + 0.35]
     if receptacle.get("category") == "Fridge":
         return [float(base[0]) + 0.25, float(base[1]) + 0.5, float(base[2]) + 0.55]
     offset = ((index % 3) - 1) * 0.12
-    height = 0.45 if object_category in {"RemoteControl"} else 0.35
-    return [float(base[0]) + offset, float(base[1]) + 0.08 * (index % 2), float(base[2]) + height]
+    y_offset = 0.08 * (index % 2)
+    if object_category == "Apple":
+        y_offset = 0.16
+    elif object_category == "RemoteControl":
+        offset = 0.0
+        y_offset = 0.34
+    if object_category == "Apple":
+        height = 0.58
+    elif object_category == "RemoteControl":
+        height = 0.45
+    else:
+        height = 0.35
+    return [float(base[0]) + offset, float(base[1]) + y_offset, float(base[2]) + height]
 
 
 def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:
@@ -1151,7 +1162,7 @@ def _robot_pose_near_position(
     target_object_id: str | None = None,
 ) -> dict[str, float]:
     center = _scene_center(list(state["receptacles"].values()))
-    stand_off = 1.15
+    stand_off = _robot_stand_off_for_target(state, target_object_id)
     preferred_angle = math.atan2(center[1] - target[1], center[0] - target[0])
     target_room = _room_outline_for_id(state, target_room_id)
     candidate_angles = [preferred_angle] + [index * math.tau / 24.0 for index in range(24)]
@@ -1196,6 +1207,17 @@ def _robot_pose_near_position(
         "robot_room_id": robot_room,
     }
     return {key: value for key, value in pose.items() if value is not None}
+
+
+def _robot_stand_off_for_target(state: dict[str, Any], target_object_id: str | None) -> float:
+    obj = state.get("objects", {}).get(target_object_id or "")
+    if not obj:
+        return 1.15
+    if obj.get("category") == "RemoteControl":
+        return 0.85
+    if obj.get("category") == "Apple":
+        return 1.0
+    return 1.15
 
 
 def _robot_head_pitch_for_target(target: list[float], robot_xy: list[float]) -> float:
@@ -1289,7 +1311,11 @@ def _focus_camera_azimuth(
     focus_position: list[float],
     focus: dict[str, Any] | None = None,
 ) -> float:
-    if focus is not None and focus.get("receptacle_category") == "Fridge":
+    if (
+        focus is not None
+        and focus.get("receptacle_category") == "Fridge"
+        and focus.get("object_contained_in") != focus.get("receptacle_id")
+    ):
         return 45.0
     pose = state.get("robot_pose") or {}
     if "x" not in pose or "y" not in pose:
@@ -1316,7 +1342,12 @@ def _focus_payload(
     if obj is not None and receptacle is not None:
         object_position = obj["position"]
         receptacle_position = receptacle["position"]
-        if math.dist(object_position[:2], receptacle_position[:2]) > 1.2:
+        if receptacle.get("category") == "Fridge" and obj.get("contained_in") == receptacle.get(
+            "receptacle_id"
+        ):
+            focus_position = receptacle_position
+            focus_mode = "receptacle_context"
+        elif math.dist(object_position[:2], receptacle_position[:2]) > 1.2:
             focus_position = receptacle_position
             focus_mode = "receptacle_context"
         else:
@@ -1332,6 +1363,8 @@ def _focus_payload(
         "object_category": obj.get("category") if obj is not None else None,
         "object_position": obj.get("position") if obj is not None else None,
         "object_body_name": obj.get("body_name") if obj is not None else None,
+        "object_contained_in": obj.get("contained_in") if obj is not None else None,
+        "object_location_relation": obj.get("location_relation") if obj is not None else None,
         "receptacle_id": focus_receptacle_id,
         "receptacle_label": _item_label(receptacle, "receptacle_id")
         if receptacle is not None
@@ -1397,8 +1430,10 @@ def _focus_visibility(
             label=str(focus.get("object_label") or "object"),
             color=[239, 68, 68],
         )
-        if box is None:
-            box = _highlight_diff_box(
+        if focus.get("object_category") == "RemoteControl" and (
+            box is None or int(box.get("pixels") or 0) < 20
+        ):
+            highlight_box = _highlight_diff_box(
                 model,
                 data,
                 camera,
@@ -1407,6 +1442,10 @@ def _focus_visibility(
                 color=[239, 68, 68],
                 frame=frame,
             )
+            if highlight_box is not None and (
+                box is None or int(highlight_box.get("pixels") or 0) > int(box.get("pixels") or 0)
+            ):
+                box = highlight_box
         if box is not None:
             object_pixels = int(box["pixels"])
             boxes.append(box)

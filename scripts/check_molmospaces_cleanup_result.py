@@ -70,7 +70,9 @@ def main() -> None:
                 assert fpv_visibility.get("boxes"), step
                 action = str(step.get("action", ""))
                 if action.startswith("navigate_to_object "):
-                    assert int(fpv_visibility.get("object_pixels") or 0) > 0, step
+                    assert int(fpv_visibility.get("object_pixels") or 0) >= 250, step
+                    visibility = focus.get("visibility") or {}
+                    assert int(visibility.get("object_pixels") or 0) >= 100, step
                 elif action.startswith("pick "):
                     assert focus.get("object_position"), step
                 else:
