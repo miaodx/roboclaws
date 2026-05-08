@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 08 MolmoSpaces real subprocess cleanup completed on 2026-05-07; next MolmoSpaces follow-up is real coding-agent/OpenClaw policy or planner-backed RBY1M/Franka manipulation.
-last_updated: "2026-05-07T13:26:31Z"
-last_activity: 2026-05-07
+stopped_at: Phase 09 MolmoSpaces FPV room plausibility completed on 2026-05-08; next MolmoSpaces follow-up is real coding-agent/OpenClaw policy or planner-backed RBY1M/Franka manipulation.
+last_updated: "2026-05-08T12:31:00+08:00"
+last_activity: 2026-05-08
 progress:
-  total_phases: 6
-  completed_phases: 4
-  total_plans: 7
-  completed_plans: 7
+  total_phases: 7
+  completed_phases: 5
+  total_plans: 8
+  completed_plans: 8
   percent: 100
 ---
 
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 08 — molmospaces-real-subprocess-cleanup (completed; next queued MolmoSpaces work not yet planned)
+**Current focus:** Phase 09 — molmospaces-fpv-room-plausibility (completed; next queued MolmoSpaces work not yet planned)
 
 ## Current Position
 
-Phase: 08 (molmospaces-real-subprocess-cleanup) — COMPLETE
-Plan: 1 of 1 closed — `08-01` added the Python 3.11 MolmoSpaces subprocess backend, real-scene cleanup harness, and verification evidence.
-Status: The prompt `帮我整理这个房间` now runs through the public cleanup loop against upstream `procthor-10k-val` scene index 0 loaded by the isolated Python 3.11 runtime. `run_result.json` records `backend=molmospaces_subprocess`, `planner_uses_private_manifest=false`, and `primitive_provenance=api_semantic`. The `api_semantic` label is acceptable here because `place` mutates real MuJoCo free-joint `qpos`; `primitive_provenance=real` remains deferred until RBY1M/Franka planner-backed pick/place is proven.
-Last activity: 2026-05-07 - Verified `just verify::molmo-real-cleanup` with 5/5 restored objects and required artifacts under `output/molmo-real-cleanup-harness/`
+Phase: 09 (molmospaces-fpv-room-plausibility) — COMPLETE
+Plan: 1 of 1 closed — `09-01` made RBY1M FPV target-facing/readable by combining target-facing base yaw with target-framing head pitch, same-room stand-off evidence, and FPV/verification visibility checks.
+Status: The prompt `帮我整理这个房间` still runs through the public cleanup loop against upstream `procthor-10k-val` scene index 0 loaded by the isolated Python 3.11 runtime. The visual harness now records `backend=molmospaces_subprocess`, `planner_uses_private_manifest=false`, `primitive_provenance=api_semantic`, `theta_source=target_facing_base_yaw`, `head_pitch_source=target_framing_head_pitch`, `same_room_as_target=true`, and positive FPV target pixels for focused manipulation steps. The `api_semantic` label is acceptable here because commands mutate real MuJoCo scene state; `primitive_provenance=real` remains deferred until RBY1M/Franka planner-backed pick/place is proven.
+Last activity: 2026-05-08 - Verified `just verify::molmo-robot-visual` with 5/5 restored objects and required artifacts under `output/molmo-robot-visual-harness/`
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Remaining MolmoSpaces work is follow-up scope, not a blocker.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual-review follow-up. Remaining MolmoSpaces work is future policy/planner scope, not a blocker.)
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [##########] 100%
 | Phase 02.6 P06 | 32min | 6 tasks | 2 files |
 | Phase 02.6 P07 | 20min | 3 tasks | 3 files |
 | Phase 08 P01 | ~2h | 4 tasks | 18 files |
+| Phase 09 P01 | ~2h | 4 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,11 @@ Recent decisions affecting current work:
   `report.html` artifacts. Provenance remains `api_semantic` because the worker
   mutates real MuJoCo free-joint `qpos`; reserve `real` for future
   RBY1M/Franka planner-backed pick/place.
+- **Phase 09 completion (2026-05-08):** RBY1M FPV orientation now uses
+  target-facing base yaw for horizontal direction and a separately recorded
+  target-framing head pitch for camera readability. Same-room stand-off
+  selection is checked against MuJoCo room outlines, and the visual gate now
+  requires positive FPV target pixels on focused manipulation steps.
 - **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
 - **Phase 02.4 execution checkpoint (2026-04-21):** Plans `02.4-01` through `02.4-03` are complete and the cloud-safe slice of `02.4-04` (`scripts/analyze_view_experiment.py` plus synthetic-data coverage) is implemented. The actual Kimi/NVIDIA sweep and `docs/view-experiment-2026-04.md` remain local-dev only and are tracked in issue #70.
 - **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
@@ -133,8 +139,9 @@ None yet.
 ### Blockers/Concerns
 
 - No active blocker for the MolmoSpaces cleanup definition of done. Phase 08
-  completed the real-scene subprocess proof; future OpenClaw policy and
-  planner-backed manipulation are separate follow-ups.
+  completed the real-scene subprocess proof, and Phase 09 completed the
+  target-facing FPV / same-room visual-review follow-up. Future OpenClaw policy
+  and planner-backed manipulation are separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -166,11 +173,11 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-05-07T13:26:31Z
-Stopped at: Phase 08 real MolmoSpaces subprocess cleanup is complete. Latest
-evidence is `.planning/phases/08-molmospaces-real-subprocess-cleanup/08-VERIFICATION.md`
-and `output/molmo-real-cleanup-harness/run_result.json`.
-Resume file: .planning/phases/08-molmospaces-real-subprocess-cleanup/08-VERIFICATION.md
+Last session: 2026-05-08T12:31:00+08:00
+Stopped at: Phase 09 MolmoSpaces FPV room plausibility is complete. Latest
+evidence is `.planning/phases/09-molmospaces-fpv-room-plausibility/09-VERIFICATION.md`
+and `output/molmo-robot-visual-harness/run_result.json`.
+Resume file: .planning/phases/09-molmospaces-fpv-room-plausibility/09-VERIFICATION.md
 
 ## Dual-Stack Workflow
 
@@ -178,6 +185,6 @@ Resume file: .planning/phases/08-molmospaces-real-subprocess-cleanup/08-VERIFICA
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** 08 (molmospaces-real-subprocess-cleanup) — complete; next
+**Active Phase:** 09 (molmospaces-fpv-room-plausibility) — complete; next
 MolmoSpaces phase should be opened only for real coding-agent/OpenClaw policy or
-planner-backed RBY1M/Franka manipulation — 2026-05-07T13:26:31Z
+planner-backed RBY1M/Franka manipulation — 2026-05-08T12:31:00+08:00

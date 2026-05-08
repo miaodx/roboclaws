@@ -138,12 +138,16 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
         views = step.get("views", {})
         pose = step.get("robot_pose") or {}
         focus = step.get("focus") or {}
-        pose_text = f"x={pose.get('x', '?')} y={pose.get('y', '?')} theta={pose.get('theta', '?')}"
+        pose_text = (
+            f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
+            f"theta={pose.get('theta', '?')} head_pitch={pose.get('head_pitch', '?')}"
+        )
         cards.append(
             '<article class="robot-step">'
             f"<h3>{index}. {html.escape(str(step.get('action', step.get('label', 'step'))))}</h3>"
             f'<p class="pose">{html.escape(pose_text)}</p>'
             f"{_focus_summary(focus)}"
+            f"{_robot_evidence_summary(step)}"
             '<div class="views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
             f"{_view_figure(views.get('chase'), 'Chase')}"
@@ -171,6 +175,37 @@ def _focus_summary(focus: dict[str, Any]) -> str:
     if focus.get("provenance"):
         bits.append(_badge("Focus provenance", focus["provenance"]))
     return '<div class="focus-badges">' + "".join(bits) + "</div>"
+
+
+def _robot_evidence_summary(step: dict[str, Any]) -> str:
+    pose = step.get("robot_pose") or {}
+    focus = step.get("focus") or {}
+    bits = []
+    if pose.get("theta_source"):
+        bits.append(_badge("Theta", pose["theta_source"]))
+    if pose.get("head_pitch_source"):
+        bits.append(_badge("Head pitch", pose["head_pitch_source"]))
+    if pose.get("target_room_id"):
+        relation = "same room" if pose.get("same_room_as_target") else "room mismatch"
+        room_text = f"{relation} ({pose.get('robot_room_id')} -> {pose.get('target_room_id')})"
+        bits.append(_badge("Room", room_text))
+    fpv_visibility = focus.get("fpv_visibility") or {}
+    if fpv_visibility.get("status") == "ok":
+        fpv_visible = (
+            f"object {fpv_visibility.get('object_pixels', 0)} px, "
+            f"target {fpv_visibility.get('receptacle_pixels', 0)} px"
+        )
+        bits.append(_badge("FPV visibility", fpv_visible))
+    visibility = focus.get("visibility") or {}
+    if visibility.get("status") == "ok":
+        visible = (
+            f"object {visibility.get('object_pixels', 0)} px, "
+            f"target {visibility.get('receptacle_pixels', 0)} px"
+        )
+        bits.append(_badge("Verify visibility", visible))
+    if not bits:
+        return ""
+    return '<div class="evidence-badges">' + "".join(bits) + "</div>"
 
 
 def _view_figure(path: Any, label: str) -> str:
@@ -277,6 +312,8 @@ def _wrap_html(body: str) -> str:
     .pose {{ margin: 0 0 10px; color: #565f70; font-size: 13px; }}
     .focus-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
     .focus-badges .badge {{ font-size: 13px; padding: 5px 8px; }}
+    .evidence-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px; }}
+    .evidence-badges .badge {{ font-size: 12px; padding: 4px 7px; background: #f8fafc; }}
     .views {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));

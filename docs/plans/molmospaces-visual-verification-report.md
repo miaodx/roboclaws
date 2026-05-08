@@ -71,3 +71,21 @@ The report can become a step-by-step inspection surface:
 ## GSD Handoff Trigger
 
 If the existing harness cannot produce target-focused robot visual artifacts from the real MolmoSpaces subprocess backend, create and execute the next GSD phase before marking the work complete.
+
+## Follow-Up: FPV Orientation And Room Plausibility
+
+Artifact review after the first visual-verification pass found three follow-up issues:
+
+- FPV/chase are real RBY1M camera renders, but FPV can face away from the active target when base orientation is held fixed for readability.
+- Some semantic `goto` poses can land on the wrong side of room borders even though placement mutates real MuJoCo state.
+- Refrigerator/apple verification needs stronger target visibility than the first top-down context camera provides.
+
+The accepted follow-up is tracked as GSD phase 09:
+`.planning/phases/09-molmospaces-fpv-room-plausibility/09-01-target-facing-base-and-room-plausibility-PLAN.md`.
+
+Phase 09 closed the follow-up by making base yaw target-facing, adding
+same-room stand-off evidence, pitching the RBY1M head camera for target
+framing, and recording segmentation-derived FPV visibility pixels. The final
+`just verify::molmo-robot-visual` run passed against the real
+`molmospaces_subprocess` backend with `planner=public_heuristic`,
+`planner_uses_private_manifest=false`, and 5/5 restored objects.

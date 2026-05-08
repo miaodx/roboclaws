@@ -187,9 +187,9 @@ def init_state(
         state["robot_trajectory"] = [robot_pose]
         state["robot_camera_names"] = _robot_camera_names(model)
         state["robot_body_name"] = "robot_0/base"
-        state["robot_control_provenance"] = "semantic_robot_base_qpos"
+        state["robot_control_provenance"] = "semantic_robot_base_and_head_qpos"
         state["robot_view_provenance"] = {
-            "fpv": "rby1m_head_camera",
+            "fpv": "rby1m_head_camera_target_framed",
             "chase": "rby1m_follower_camera",
             "map": "public_sim_state_report",
             "verify": "public_sim_state_report_focus_camera",
@@ -262,6 +262,7 @@ def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict
     camera.elevation = -45
     renderer.update_scene(data, camera=camera)
     frame = renderer.render()
+    renderer.close()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(frame).save(output_path)
     return _ok("snapshot", path=str(output_path), title=title, shape=list(frame.shape))
@@ -296,7 +297,10 @@ def write_robot_views(
     focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
     fpv = _render_fixed_camera(model, data, "robot_0/head_camera")
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower")
-    verify = _render_focus_view(state, model, data, focus)
+    verify_camera = _focus_camera(state, focus)
+    verify = _render_free_camera(model, data, verify_camera)
+    focus["fpv_visibility"] = _focus_visibility(model, data, "robot_0/head_camera", focus)
+    focus["visibility"] = _focus_visibility(model, data, verify_camera, focus)
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -707,6 +711,8 @@ def _refresh_object_positions(
 
 def _placement_position(receptacle: dict[str, Any], *, index: int) -> list[float]:
     base = receptacle["position"]
+    if receptacle.get("category") == "Fridge":
+        return [float(base[0]) + 0.25, float(base[1]) + 0.5, float(base[2]) + 0.55]
     offset = ((index % 3) - 1) * 0.12
     return [float(base[0]) + offset, float(base[1]) + 0.08 * (index % 2), float(base[2]) + 0.35]
 
@@ -800,9 +806,9 @@ def _set_robot_pose(
     _set_joint_qpos(model, data, "robot_0/base_y", pose["y"])
     _set_joint_qpos(model, data, "robot_0/base_theta", pose["theta"])
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "robot_0/head_0") >= 0:
-        _set_joint_qpos(model, data, "robot_0/head_0", 0.0)
+        _set_joint_qpos(model, data, "robot_0/head_0", float(pose.get("head_yaw", 0.0)))
     if mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "robot_0/head_1") >= 0:
-        _set_joint_qpos(model, data, "robot_0/head_1", 0.0)
+        _set_joint_qpos(model, data, "robot_0/head_1", float(pose.get("head_pitch", 0.0)))
 
 
 def _set_joint_qpos(
@@ -824,23 +830,62 @@ def _robot_pose_near_receptacle(
 ) -> dict[str, float]:
     target = receptacle["position"]
     center = _scene_center(list(state["receptacles"].values()))
-    dx = center[0] - target[0]
-    dy = center[1] - target[1]
-    norm = math.hypot(dx, dy) or 1.0
     stand_off = 1.15
-    x = target[0] + dx / norm * stand_off
-    y = target[1] + dy / norm * stand_off
-    # This phase proves visual embodiment, not planner-backed navigation. A
-    # stable review heading keeps the RBY1M head camera readable in this room;
-    # the report verification camera carries target-specific context.
-    theta = math.pi / 2.0
+    preferred_angle = math.atan2(center[1] - target[1], center[0] - target[0])
+    target_room_id = _target_room_id(state, receptacle)
+    target_room = _room_outline_for_id(state, target_room_id)
+    candidate_angles = [preferred_angle] + [index * math.tau / 24.0 for index in range(24)]
+    candidates = []
+    for angle in candidate_angles:
+        x = float(target[0]) + math.cos(angle) * stand_off
+        y = float(target[1]) + math.sin(angle) * stand_off
+        robot_room = _room_for_point(state, [x, y])
+        same_room = robot_room == target_room_id
+        inside_target_room = target_room is not None and _point_inside_outline(
+            [x, y], target_room, margin=0.08
+        )
+        clearance = _outline_clearance([x, y], target_room) if target_room is not None else 0.0
+        angle_penalty = _angle_delta(angle, preferred_angle)
+        candidates.append(
+            (
+                1 if same_room or inside_target_room else 0,
+                clearance,
+                -angle_penalty,
+                x,
+                y,
+                robot_room,
+            )
+        )
+    _, _, _, x, y, robot_room = max(candidates)
+    theta = math.atan2(float(target[1]) - y, float(target[0]) - x)
+    head_pitch = _robot_head_pitch_for_target(target, [x, y])
+    room_relation = _room_relation_payload(state, receptacle, [x, y])
     return {
         "x": round(float(x), 6),
         "y": round(float(y), 6),
         "z": 0.0,
         "theta": round(float(theta), 6),
+        "theta_source": "target_facing_base_yaw",
+        "head_yaw": 0.0,
+        "head_yaw_source": "base_yaw_handles_target_bearing",
+        "head_pitch": head_pitch,
+        "head_pitch_source": "target_framing_head_pitch",
         "target_receptacle_id": receptacle["receptacle_id"],
+        "robot_room_id": robot_room,
+        **room_relation,
     }
+
+
+def _robot_head_pitch_for_target(target: list[float], robot_xy: list[float]) -> float:
+    horizontal = math.hypot(
+        float(target[0]) - float(robot_xy[0]),
+        float(target[1]) - float(robot_xy[1]),
+    )
+    horizontal = max(horizontal, 0.25)
+    camera_height = 1.55
+    focus_height = float(target[2]) + 0.2
+    pitch = math.atan2(camera_height - focus_height, horizontal)
+    return round(max(0.25, min(0.75, pitch)), 6)
 
 
 def _scene_center(items: list[dict[str, Any]]) -> tuple[float, float]:
@@ -857,19 +902,15 @@ def _render_fixed_camera(
     data: mujoco.MjData,
     camera_name: str,
 ) -> Any:
-    renderer = mujoco.Renderer(model, height=360, width=540)
+    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
     renderer.update_scene(data, camera=camera_name)
-    return renderer.render()
+    frame = renderer.render()
+    renderer.close()
+    return frame
 
 
-def _render_focus_view(
-    state: dict[str, Any],
-    model: mujoco.MjModel,
-    data: mujoco.MjData,
-    focus: dict[str, Any],
-) -> Any:
+def _focus_camera(state: dict[str, Any], focus: dict[str, Any]) -> mujoco.MjvCamera:
     focus_position = focus.get("focus_position") or _scene_focus_position(state)
-    renderer = mujoco.Renderer(model, height=360, width=540)
     camera = mujoco.MjvCamera()
     camera.type = mujoco.mjtCamera.mjCAMERA_FREE
     camera.lookat[:] = [
@@ -877,11 +918,31 @@ def _render_focus_view(
         float(focus_position[1]),
         float(focus_position[2]) + 0.35,
     ]
-    camera.distance = 4.0 if focus.get("has_focus") else 7.5
-    camera.azimuth = _focus_camera_azimuth(state, focus_position)
-    camera.elevation = -68 if focus.get("has_focus") else -45
+    if focus.get("focus_mode") == "object_closeup":
+        camera.lookat[:] = [
+            float(focus_position[0]),
+            float(focus_position[1]),
+            float(focus_position[2]) + 0.05,
+        ]
+        camera.distance = 1.8
+        camera.elevation = -65
+    else:
+        camera.distance = 4.0 if focus.get("has_focus") else 7.5
+        camera.elevation = -68 if focus.get("has_focus") else -45
+    camera.azimuth = _focus_camera_azimuth(state, focus_position, focus)
+    return camera
+
+
+def _render_free_camera(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera: mujoco.MjvCamera,
+) -> Any:
+    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
     renderer.update_scene(data, camera=camera)
-    return renderer.render()
+    frame = renderer.render()
+    renderer.close()
+    return frame
 
 
 def _annotate_focus_image(image: Image.Image, focus: dict[str, Any]) -> None:
@@ -893,9 +954,21 @@ def _annotate_focus_image(image: Image.Image, focus: dict[str, Any]) -> None:
     label = f"Object: {object_label}   Target: {receptacle_label}"
     draw.rectangle((0, 0, image.width, 28), fill=(15, 23, 42))
     draw.text((10, 8), label, fill=(248, 250, 252))
+    visibility = focus.get("visibility") or {}
+    for box in visibility.get("boxes", []):
+        left, top, right, bottom = box["bbox"]
+        color = tuple(box["color"])
+        draw.rectangle((left, top, right, bottom), outline=color, width=4)
+        draw.text((left, max(30, top - 14)), box["label"], fill=color)
 
 
-def _focus_camera_azimuth(state: dict[str, Any], focus_position: list[float]) -> float:
+def _focus_camera_azimuth(
+    state: dict[str, Any],
+    focus_position: list[float],
+    focus: dict[str, Any] | None = None,
+) -> float:
+    if focus is not None and focus.get("receptacle_category") == "Fridge":
+        return 45.0
     pose = state.get("robot_pose") or {}
     if "x" not in pose or "y" not in pose:
         return 225.0
@@ -923,23 +996,29 @@ def _focus_payload(
         receptacle_position = receptacle["position"]
         if math.dist(object_position[:2], receptacle_position[:2]) > 1.2:
             focus_position = receptacle_position
+            focus_mode = "receptacle_context"
         else:
-            focus_position = _average_position([object_position, receptacle_position])
+            focus_position = object_position
+            focus_mode = "object_closeup"
     else:
         focus_position = _average_position(positions) if positions else _scene_focus_position(state)
+        focus_mode = "receptacle_context" if receptacle is not None else "scene_context"
     return {
         "has_focus": obj is not None or receptacle is not None,
         "object_id": focus_object_id,
         "object_label": _item_label(obj, "object_id") if obj is not None else None,
         "object_category": obj.get("category") if obj is not None else None,
         "object_position": obj.get("position") if obj is not None else None,
+        "object_body_name": obj.get("body_name") if obj is not None else None,
         "receptacle_id": focus_receptacle_id,
         "receptacle_label": _item_label(receptacle, "receptacle_id")
         if receptacle is not None
         else None,
         "receptacle_category": receptacle.get("category") if receptacle is not None else None,
         "receptacle_position": receptacle.get("position") if receptacle is not None else None,
+        "receptacle_body_name": receptacle.get("body_name") if receptacle is not None else None,
         "focus_position": focus_position,
+        "focus_mode": focus_mode,
         "provenance": "public_mujoco_state_report_aid",
     }
 
@@ -965,6 +1044,143 @@ def _item_label(item: dict[str, Any] | None, id_key: str) -> str:
     identifier = str(item.get(id_key, ""))
     short_id = identifier.split("_", 1)[0]
     return f"{category} {short_id}"
+
+
+def _focus_visibility(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera: mujoco.MjvCamera | str,
+    focus: dict[str, Any],
+) -> dict[str, Any]:
+    boxes = []
+    object_pixels = 0
+    receptacle_pixels = 0
+    try:
+        segmentation = _render_segmentation(model, data, camera)
+    except Exception as exc:  # pragma: no cover - depends on MuJoCo renderer internals
+        return {
+            "status": "segmentation_unavailable",
+            "error": type(exc).__name__,
+            "object_pixels": 0,
+            "receptacle_pixels": 0,
+            "boxes": [],
+        }
+    if focus.get("object_body_name"):
+        box = _segmentation_box(
+            model,
+            segmentation,
+            focus["object_body_name"],
+            label=str(focus.get("object_label") or "object"),
+            color=[239, 68, 68],
+        )
+        if box is not None:
+            object_pixels = int(box["pixels"])
+            boxes.append(box)
+    if focus.get("receptacle_body_name"):
+        box = _segmentation_box(
+            model,
+            segmentation,
+            focus["receptacle_body_name"],
+            label=str(focus.get("receptacle_label") or "target"),
+            color=[8, 145, 178],
+        )
+        if box is not None:
+            receptacle_pixels = int(box["pixels"])
+            boxes.append(box)
+    return {
+        "status": "ok",
+        "object_pixels": object_pixels,
+        "receptacle_pixels": receptacle_pixels,
+        "boxes": boxes,
+    }
+
+
+def _render_segmentation(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera: mujoco.MjvCamera | str,
+) -> Any:
+    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    renderer.update_scene(data, camera=camera)
+    renderer.render()
+    renderer.enable_segmentation_rendering()
+    renderer.update_scene(data, camera=camera)
+    segmentation = renderer.render()
+    renderer.close()
+    return segmentation
+
+
+def _segmentation_box(
+    model: mujoco.MjModel,
+    segmentation: Any,
+    body_name: str,
+    *,
+    label: str,
+    color: list[int],
+) -> dict[str, Any] | None:
+    geom_ids = _subtree_geom_ids(model, body_name)
+    if not geom_ids:
+        return None
+    import numpy as np
+
+    mask = np.isin(segmentation[:, :, 0], geom_ids) & (
+        segmentation[:, :, 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
+    )
+    pixels = int(mask.sum())
+    if pixels <= 0:
+        return None
+    ys, xs = np.where(mask)
+    left, right = int(xs.min()), int(xs.max())
+    top, bottom = int(ys.min()), int(ys.max())
+    left, top, right, bottom = _inflate_bbox(left, top, right, bottom, segmentation.shape)
+    return {
+        "label": label,
+        "bbox": [left, top, right, bottom],
+        "pixels": pixels,
+        "color": color,
+    }
+
+
+def _subtree_geom_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    if body_id < 0:
+        return []
+    body_ids = []
+    for candidate_id in range(model.nbody):
+        current_id = candidate_id
+        while current_id > 0:
+            if current_id == body_id:
+                body_ids.append(candidate_id)
+                break
+            current_id = int(model.body_parentid[current_id])
+    return [
+        geom_id
+        for geom_id in range(model.ngeom)
+        if int(model.geom_bodyid[geom_id]) in set(body_ids)
+    ]
+
+
+def _inflate_bbox(
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+    shape: Any,
+    *,
+    min_size: int = 32,
+    pad: int = 8,
+) -> tuple[int, int, int, int]:
+    height, width = int(shape[0]), int(shape[1])
+    center_x = (left + right) // 2
+    center_y = (top + bottom) // 2
+    half_width = max((right - left) // 2 + pad, min_size // 2)
+    half_height = max((bottom - top) // 2 + pad, min_size // 2)
+    return (
+        max(0, center_x - half_width),
+        max(29, center_y - half_height),
+        min(width - 1, center_x + half_width),
+        min(height - 1, center_y + half_height),
+    )
 
 
 def _render_robot_map(state: dict[str, Any], *, focus: dict[str, Any] | None = None) -> Image.Image:
@@ -1032,7 +1248,7 @@ def _render_robot_map(state: dict[str, Any], *, focus: dict[str, Any] | None = N
     if trajectory:
         pose = trajectory[-1]
         x, y = projected_path[-1]
-        heading = float(pose["theta"]) - math.pi / 2.0
+        heading = float(pose["theta"])
         tip = (int(round(x + math.cos(heading) * 18)), int(round(y - math.sin(heading) * 18)))
         left = (
             int(round(x + math.cos(heading + 2.45) * 10)),
@@ -1069,6 +1285,86 @@ def _map_points(state: dict[str, Any], focus: dict[str, Any]) -> list[list[float
             ]
         )
     return points
+
+
+def _room_relation_payload(
+    state: dict[str, Any],
+    receptacle: dict[str, Any],
+    robot_point: list[float],
+) -> dict[str, Any]:
+    target_room_id = _target_room_id(state, receptacle)
+    robot_room_id = _room_for_point(state, robot_point)
+    same_room = robot_room_id == target_room_id
+    return {
+        "target_room_id": target_room_id,
+        "same_room_as_target": same_room,
+        "room_relation_source": "mujoco_room_outline",
+        "room_plausibility": "same_room" if same_room else "room_mismatch",
+    }
+
+
+def _target_room_id(state: dict[str, Any], receptacle: dict[str, Any]) -> str:
+    return _room_for_point(state, receptacle["position"]) or str(
+        receptacle.get("room_area") or "room_unknown"
+    )
+
+
+def _room_outline_for_id(
+    state: dict[str, Any],
+    room_id: Any,
+) -> dict[str, Any] | None:
+    if room_id is None:
+        return None
+    for outline in state.get("room_outlines", []):
+        if outline.get("room_id") == room_id:
+            return outline
+    return None
+
+
+def _room_for_point(state: dict[str, Any], point: list[float]) -> str | None:
+    containing = [
+        outline
+        for outline in state.get("room_outlines", [])
+        if _point_inside_outline(point, outline, margin=0.0)
+    ]
+    if not containing:
+        return None
+    return max(containing, key=lambda outline: _outline_clearance(point, outline)).get("room_id")
+
+
+def _point_inside_outline(
+    point: list[float],
+    outline: dict[str, Any],
+    *,
+    margin: float,
+) -> bool:
+    center = outline["center"]
+    half_x, half_y = outline["half_extents"]
+    return (
+        float(center[0]) - float(half_x) + margin
+        <= float(point[0])
+        <= float(center[0]) + float(half_x) - margin
+        and float(center[1]) - float(half_y) + margin
+        <= float(point[1])
+        <= float(center[1]) + float(half_y) - margin
+    )
+
+
+def _outline_clearance(point: list[float], outline: dict[str, Any] | None) -> float:
+    if outline is None:
+        return 0.0
+    center = outline["center"]
+    half_x, half_y = outline["half_extents"]
+    return min(
+        float(point[0]) - (float(center[0]) - float(half_x)),
+        (float(center[0]) + float(half_x)) - float(point[0]),
+        float(point[1]) - (float(center[1]) - float(half_y)),
+        (float(center[1]) + float(half_y)) - float(point[1]),
+    )
+
+
+def _angle_delta(a: float, b: float) -> float:
+    return abs((a - b + math.pi) % math.tau - math.pi)
 
 
 def _collect_room_outlines(

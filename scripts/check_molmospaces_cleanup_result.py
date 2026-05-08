@@ -59,6 +59,22 @@ def main() -> None:
                 assert focus.get("object_id"), step
                 assert focus.get("receptacle_id"), step
                 assert focus.get("provenance") == "public_mujoco_state_report_aid", step
+                pose = step.get("robot_pose") or {}
+                assert pose.get("theta_source") == "target_facing_base_yaw", step
+                assert pose.get("head_pitch_source") == "target_framing_head_pitch", step
+                assert pose.get("same_room_as_target") is True, step
+                fpv_visibility = focus.get("fpv_visibility") or {}
+                assert fpv_visibility.get("status") == "ok", step
+                assert fpv_visibility.get("boxes"), step
+                assert int(fpv_visibility.get("receptacle_pixels") or 0) > 0, step
+                visibility = focus.get("visibility") or {}
+                assert visibility.get("status") == "ok", step
+                assert visibility.get("boxes"), step
+                if (
+                    str(step.get("action", "")).startswith("place ")
+                    and focus.get("object_category") == "Apple"
+                ):
+                    assert int(visibility.get("object_pixels") or 0) > 0, step
         assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
     print(f"molmo-cleanup ok: {args.run_result} -> {report}")
 

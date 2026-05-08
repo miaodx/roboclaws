@@ -91,7 +91,17 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
         robot_view_steps=[
             {
                 "action": "goto sink",
-                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+                "robot_pose": {
+                    "x": 1.0,
+                    "y": 2.0,
+                    "theta": 0.5,
+                    "theta_source": "target_facing_base_yaw",
+                    "head_pitch": 0.6,
+                    "head_pitch_source": "target_framing_head_pitch",
+                    "robot_room_id": "room_1",
+                    "target_room_id": "room_1",
+                    "same_room_as_target": True,
+                },
                 "views": {
                     "fpv": "robot_views/step.fpv.png",
                     "chase": "robot_views/step.chase.png",
@@ -103,6 +113,16 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
                     "object_label": "Mug mug",
                     "receptacle_label": "Sink sink",
                     "provenance": "public_mujoco_state_report_aid",
+                    "fpv_visibility": {
+                        "status": "ok",
+                        "object_pixels": 12,
+                        "receptacle_pixels": 80,
+                    },
+                    "visibility": {
+                        "status": "ok",
+                        "object_pixels": 24,
+                        "receptacle_pixels": 120,
+                    },
                 },
             }
         ],
@@ -115,3 +135,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "Verification" in html
     assert "Mug mug" in html
     assert "public_mujoco_state_report_aid" in html
+    assert "target_facing_base_yaw" in html
+    assert "target_framing_head_pitch" in html
+    assert "FPV visibility" in html
+    assert "same room" in html
+    assert "object 24 px" in html
