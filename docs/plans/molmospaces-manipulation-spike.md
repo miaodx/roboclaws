@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 28 RBY1M CuRobo runtime gate completed on 2026-05-09
+**Status:** Phase 30 report underlay consolidation planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -23,8 +23,10 @@ and expose a per-subphase cleanup primitive gate. Current cleanup-loop
 subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
 gate before actual planner-backed cleanup primitive replacement. Current local
 RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
-before execution. Camera-only
-model-policy cleanup remains a separate follow-up.
+before execution. Phase 29 closes the camera-only model-policy cleanup follow-up.
+Phase 30 consolidates the shared Cleanup Artifact Report presentation so the
+visual core keeps the same review shape across current-contract and ADR-0003
+artifacts while still showing all contract-specific evidence.
 
 ## Why This Exists
 

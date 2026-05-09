@@ -47,7 +47,9 @@ Phase 28 closes the RBY1M/CuRobo runtime gate that must be ready before planner
 primitive replacement can depend on the target robot path. Phase 29 closes the
 unblocked camera-only model-policy gap by deriving observed handles from public
 raw FPV observations while reusing the ADR-0003 semantic cleanup/report
-underlay.
+underlay. Phase 30 consolidates the shared Cleanup Artifact Report presentation
+so current-contract and ADR-0003 artifacts keep one visual core while rendering
+their contract-specific evidence.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -102,6 +104,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.28 MolmoSpaces cleanup planner-backed primitive gate** - Phase 27 (completed 2026-05-09; per-subphase evidence gate before real planner-backed cleanup primitive replacement)
 - ✅ **v1.29 MolmoSpaces RBY1M CuRobo runtime gate** - Phase 28 (completed 2026-05-09; target-robot runtime readiness gate before cleanup primitive replacement)
 - ✅ **v1.30 MolmoSpaces camera model policy cleanup** - Phase 29 (completed 2026-05-09; camera-derived model-policy cleanup over the ADR-0003 shared underlay)
+- 📋 **v1.31 MolmoSpaces report underlay consolidation** - Phase 30 (planned 2026-05-09; canonical report visual core and semantic subphase labels)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
