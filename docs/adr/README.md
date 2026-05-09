@@ -25,6 +25,7 @@ one decision per file, sequential numbering, explicit status.
 | [0014](0014-gate-planner-backed-manipulation-provenance.md) | Gate Planner-Backed Manipulation Provenance | Accepted |
 | [0015](0015-capture-planner-runtime-diagnostics-before-strict-execution.md) | Capture Planner Runtime Diagnostics Before Strict Execution | Accepted |
 | [0016](0016-use-probe-local-egl-renderer-adapter-for-headless-planner-proof.md) | Use Probe-Local EGL Renderer Adapter For Headless Planner Proof | Accepted |
+| [0017](0017-attach-strict-planner-proof-to-cleanup-artifacts.md) | Attach Strict Planner Proof To Cleanup Artifacts | Accepted |
 
 ## Adding a new ADR
 
