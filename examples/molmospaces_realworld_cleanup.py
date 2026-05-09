@@ -37,6 +37,9 @@ from roboclaws.molmo_cleanup.planner_proof_bundle import (  # noqa: E402
     attach_planner_proof_bundle,
     planner_proof_attachment_for_target,
 )
+from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
+    write_planner_proof_requests,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -350,6 +353,12 @@ def run_realworld_cleanup(
     )
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
     cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
+    planner_proof_requests_path = output_dir / "planner_proof_requests.json"
+    planner_proof_requests = write_planner_proof_requests(
+        output_path=planner_proof_requests_path,
+        contract=contract,
+        substeps=substeps,
+    )
 
     primitive_summary = primitive_provenance_counts(trace_events)
     cleanup_primitives_planner_backed = cleanup_primitive_evidence.get("planner_backed") is True
@@ -398,6 +407,7 @@ def run_realworld_cleanup(
         "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
         "semantic_substeps": substeps,
         "cleanup_primitive_evidence": cleanup_primitive_evidence,
+        "planner_proof_requests": planner_proof_requests,
         "agent_view": agent_view,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
@@ -413,6 +423,7 @@ def run_realworld_cleanup(
             "agent_view": str(agent_view_path),
             "private_evaluation": str(private_evaluation_path),
             "advisory_evaluation": str(advisory_evaluation_path),
+            "planner_proof_requests": str(planner_proof_requests_path),
             "trace": str(trace_path),
             "before_snapshot": str(before_snapshot),
             "after_snapshot": str(after_snapshot),

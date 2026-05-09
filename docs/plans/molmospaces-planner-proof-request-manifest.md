@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Request Manifest
 
-**Status:** Planned for GSD Phase 46
+**Status:** Completed in GSD Phase 46 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0035, ADR-0037, Phase 45 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -54,3 +54,10 @@ This phase should:
 - `uv run ruff format --check roboclaws/molmo_cleanup/planner_proof_requests.py examples/molmospaces_realworld_cleanup.py roboclaws/molmo_cleanup/realworld_mcp_server.py scripts/run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_planner_proof_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_proof_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py`
 - Existing real ADR-0003 visual artifact checker remains valid.
+
+## Completion
+
+Phase 46 shipped the manifest helper, deterministic/MCP artifact integration,
+dry-run local runner, and focused tests. The implementation also extends the
+ADR-0003 artifact checker to validate request manifests when present without
+failing older artifacts that predate the manifest.

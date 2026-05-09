@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.planner_proof_bundle import (
     planner_proof_attachments,
     validate_planner_proof_bundle,
 )
+from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -206,6 +207,7 @@ def _assert_result(
         require_agent_view=True,
         require_private_evaluation=True,
     )
+    _assert_planner_proof_requests(data, base)
     if require_openclaw_minimum:
         _assert_openclaw_minimum(data)
     if require_clean_agent_run:
@@ -544,6 +546,29 @@ def _assert_planner_cleanup_bridge(
     assert "Planner Cleanup Bridge" in report_text, report_text[:500]
     if require_ready:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
+
+
+def _assert_planner_proof_requests(data: dict[str, Any], base: Path) -> None:
+    artifacts = data.get("artifacts") or {}
+    manifest = data.get("planner_proof_requests")
+    if manifest is None and artifacts.get("planner_proof_requests"):
+        path = _resolve_path(base, str(artifacts["planner_proof_requests"]))
+        assert path.is_file(), path
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest is None:
+        return
+    assert manifest.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, manifest
+    assert manifest.get("agent_view_exposed") is False, manifest
+    requests = manifest.get("requests") or []
+    assert manifest.get("request_count") == len(requests), manifest
+    semantic_substeps = data.get("semantic_substeps") or []
+    if semantic_substeps:
+        assert len(requests) == len(semantic_substeps), manifest
+    for request in requests:
+        assert request.get("object_id"), request
+        assert request.get("target_receptacle_id"), request
+        assert "planner_probe_args" in request, request
+    assert "planner_proof_requests" not in data.get("agent_view", {}), data.get("agent_view")
 
 
 def _is_focused_robot_action(action: str) -> bool:

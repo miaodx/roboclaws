@@ -114,6 +114,10 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert run_result["agent_view"]["observed_objects"]
+    assert "planner_object_id" not in json.dumps(run_result["agent_view"])
+    assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
+    assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
+    assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text
     assert '"tool": "scene_objects"' not in trace_text
@@ -122,6 +126,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert (tmp_path / "agent_view.json").is_file()
     assert (tmp_path / "private_evaluation.json").is_file()
     assert (tmp_path / "advisory_evaluation.json").is_file()
+    assert (tmp_path / "planner_proof_requests.json").is_file()
 
 
 class _FakeVisualBackend(ApiSemanticCleanupBackend):
