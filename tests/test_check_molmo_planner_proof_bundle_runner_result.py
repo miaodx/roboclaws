@@ -148,6 +148,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
         ],
         "fallback_generation": {
             "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+            "status": "generated",
             "enabled": True,
             "generated_request_count": 1,
             "discovered_alias_count": 1,

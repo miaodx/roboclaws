@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 70 prior proof evidence merge completed; next work is upstream task-feasibility handling or richer root-body alias derivation
+**Status:** Phase 71 fallback exhaustion status completed; next work is upstream task-feasibility handling or richer root-body alias derivation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -164,6 +164,10 @@ failed-candidate memory generated zero commands while still rendering five
 discovered aliases, seven filtered aliases, and two filtered pairs. The current
 fallback pool is now exhausted without depending on a single chosen prior
 manifest.
+Phase 71 makes that exhausted pool explicit in the artifact schema and visual
+report. Generated fallback selection now reports `Fallback status: exhausted`
+when blocked requests remain but every candidate is filtered or unavailable,
+and the runner checker validates the status.
 
 ## Why This Exists
 

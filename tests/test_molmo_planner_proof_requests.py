@@ -340,6 +340,7 @@ def test_proof_request_selection_generates_fallback_alias_requests(
         "proof_001_fallback_01",
         "proof_001_fallback_02",
     ]
+    assert selection["fallback_generation"]["status"] == "generated"
     generated = selection["fallback_generation"]["generated_requests"]
     assert generated[0]["source_request_id"] == "proof_001"
     assert generated[0]["object_id"] == "observed_001"
@@ -404,6 +405,7 @@ def test_proof_request_selection_filters_non_runtime_fallback_aliases() -> None:
     assert selection["generated_fallback_request_count"] == 0
     assert selection["fallback_required"] is True
     fallback_generation = selection["fallback_generation"]
+    assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["unavailable_source_request_count"] == 1
     assert fallback_generation["filtered_alias_count"] == 2
     assert {
@@ -635,6 +637,7 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     fallback_generation = selection["fallback_generation"]
     assert selection["selected_request_ids"] == []
     assert selection["fallback_required"] is True
+    assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
@@ -776,6 +779,7 @@ def test_proof_request_selection_carries_prior_filtered_candidates() -> None:
     fallback_generation = selection["fallback_generation"]
     assert selection["selected_request_ids"] == []
     assert selection["fallback_required"] is True
+    assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
@@ -839,6 +843,7 @@ def test_proof_request_selection_keeps_fallback_required_when_no_alias_available
     assert selection["selected_count"] == 0
     assert selection["generated_fallback_request_count"] == 0
     assert selection["fallback_required"] is True
+    assert selection["fallback_generation"]["status"] == "exhausted"
     assert selection["fallback_generation"]["unavailable_source_request_count"] == 1
 
 

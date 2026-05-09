@@ -765,27 +765,14 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         return ""
     selected = selection.get("selected_requests") or []
     excluded = selection.get("excluded_requests") or []
-    fallback_generation = selection.get("fallback_generation") or {}
-    generated = (
-        fallback_generation.get("generated_requests") or []
-        if isinstance(fallback_generation, dict)
-        else []
+    raw_fallback_generation = selection.get("fallback_generation") or {}
+    fallback_generation = (
+        raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
     )
-    filtered_aliases = (
-        fallback_generation.get("filtered_aliases") or []
-        if isinstance(fallback_generation, dict)
-        else []
-    )
-    discovered_aliases = (
-        fallback_generation.get("discovered_aliases") or []
-        if isinstance(fallback_generation, dict)
-        else []
-    )
-    filtered_pairs = (
-        fallback_generation.get("filtered_pairs") or []
-        if isinstance(fallback_generation, dict)
-        else []
-    )
+    generated = fallback_generation.get("generated_requests") or []
+    filtered_aliases = fallback_generation.get("filtered_aliases") or []
+    discovered_aliases = fallback_generation.get("discovered_aliases") or []
+    filtered_pairs = fallback_generation.get("filtered_pairs") or []
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
@@ -796,6 +783,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
         f"{_metric('Filtered aliases', len(filtered_aliases))}"
         f"{_metric('Filtered pairs', len(filtered_pairs))}"
+        f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )

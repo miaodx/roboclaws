@@ -434,6 +434,7 @@ def _fallback_generation(
     if not enabled and not generated_requests:
         return {
             "schema": PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA,
+            "status": "disabled",
             "enabled": False,
             "generated_request_count": 0,
             "generated_requests": [],
@@ -448,6 +449,11 @@ def _fallback_generation(
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
     return {
         "schema": PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA,
+        "status": _fallback_generation_status(
+            enabled=enabled,
+            excluded_request_count=len(excluded_requests),
+            generated_request_count=len(generated_requests),
+        ),
         "enabled": enabled,
         "ready_request_count": ready_request_count,
         "excluded_request_count": len(excluded_requests),
@@ -466,6 +472,21 @@ def _fallback_generation(
             "object and target IDs while trying alternate exact-scene planner aliases."
         ),
     }
+
+
+def _fallback_generation_status(
+    *,
+    enabled: bool,
+    excluded_request_count: int,
+    generated_request_count: int,
+) -> str:
+    if not enabled:
+        return "disabled"
+    if generated_request_count > 0:
+        return "generated"
+    if excluded_request_count > 0:
+        return "exhausted"
+    return "not_required"
 
 
 def _fallback_requests_for_blocked_request(

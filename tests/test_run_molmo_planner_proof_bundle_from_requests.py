@@ -529,11 +529,14 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert manifest["command_count"] == 0
     assert selection["fallback_required"] is True
     assert selection["prior_result_count"] == 3
+    assert fallback["status"] == "exhausted"
     assert fallback["discovered_alias_count"] == 1
     assert fallback["filtered_pair_count"] == 1
     assert fallback["filtered_pairs"][0]["object_alias"] == "book_beef_1_0_8"
     assert fallback["filtered_pairs"][0]["target_alias"] == "shelf_cafe_1_1_2"
     report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Fallback status" in report
+    assert "exhausted" in report
     assert "shelf_cafe_1_1_2" in report
     assert "prior_task_feasibility_blocked_pair" in report
 
@@ -664,6 +667,7 @@ def test_runner_carries_prior_failed_runtime_fallback_candidates(
     selection = manifest["proof_request_selection"]
     assert manifest["command_count"] == 0
     assert selection["fallback_required"] is True
+    assert selection["fallback_generation"]["status"] == "exhausted"
     assert selection["fallback_generation"]["filtered_pair_count"] == 1
     assert selection["fallback_generation"]["filtered_alias_count"] == 4
     report = Path(result["report_path"]).read_text(encoding="utf-8")

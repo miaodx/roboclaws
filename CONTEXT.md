@@ -330,6 +330,11 @@ manifests into one private selection input, preserving discovered aliases,
 filtered aliases, filtered pairs, and proof results together.
 _Avoid_: choosing between alias discovery and failed-candidate memory
 
+**Fallback Exhaustion Status**:
+The proof-bundle runner report classification that says whether generated
+fallback selection is `disabled`, `not_required`, `generated`, or `exhausted`.
+_Avoid_: inferring exhausted candidate pools from empty command tables alone
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -490,6 +495,9 @@ _Avoid_: full cleanup replacement claim
   target aliases need separate task-feasibility evidence.
 - **Prior Proof Evidence Merge** should combine older alias-discovery evidence
   with newer failed-candidate memory before generating fallback proof commands.
+- **Fallback Exhaustion Status** should make no-command generated fallback
+  states visible in the runner report and checker when all candidates are
+  filtered or unavailable.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -594,3 +602,7 @@ _Avoid_: full cleanup replacement claim
   multiple prior proof-bundle manifests and merge runtime alias discovery with
   carried failed-candidate memory before selection, so Phase 62 KeyError
   evidence and Phase 68 filtered-pair evidence can be consumed together.
+- Phase 71 surfaced fallback exhaustion status. Generated fallback selection now
+  reports `disabled`, `not_required`, `generated`, or `exhausted`, and the
+  proof-bundle runner report/checker make the exhausted no-command state
+  explicit.

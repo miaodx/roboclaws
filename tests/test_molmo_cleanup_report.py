@@ -744,6 +744,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             ],
             "fallback_generation": {
                 "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+                "status": "generated",
                 "enabled": True,
                 "generated_request_count": 1,
                 "discovered_alias_count": 1,
@@ -917,6 +918,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "observed_001" in html
     assert "sink/alt" in html
     assert "HouseInvalidForTask" in html
+    assert "Fallback status" in html
+    assert "generated" in html
     assert "Fallback required" in html
     assert "prior_task_feasibility_blocked" in html
     assert "Generated Fallback Requests" in html

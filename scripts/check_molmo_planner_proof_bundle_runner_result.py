@@ -192,6 +192,11 @@ def _assert_proof_request_selection(
             assert str(item[key]) in report_text, (key, report_text[:500])
     fallback_generation = selection.get("fallback_generation") or {}
     if fallback_generation:
+        fallback_status = str(fallback_generation.get("status") or "")
+        assert fallback_status in {"disabled", "not_required", "generated", "exhausted"}, (
+            fallback_generation
+        )
+        assert fallback_status in report_text, (fallback_status, report_text[:500])
         generated = fallback_generation.get("generated_requests") or []
         filtered_aliases = fallback_generation.get("filtered_aliases") or []
         discovered_aliases = fallback_generation.get("discovered_aliases") or []
@@ -208,6 +213,11 @@ def _assert_proof_request_selection(
         assert int(fallback_generation.get("filtered_pair_count") or 0) == len(filtered_pairs), (
             fallback_generation
         )
+        if fallback_status == "generated":
+            assert generated, fallback_generation
+        if fallback_status == "exhausted":
+            assert not generated, fallback_generation
+            assert selection.get("fallback_required") is True, selection
         for item in generated:
             fallback = item.get("fallback_request") or {}
             for key in ("request_id", "object_id", "target_receptacle_id"):
