@@ -41,7 +41,8 @@ state edits cannot be confused with real RBY1M/Franka planner execution. Phase
 24 adds runtime diagnostics for strict planner probe blockers. Phase 25 closes
 standalone Franka planner proof with a probe-local headless renderer adapter;
 Phase 26 attached that strict proof to cleanup reports while preserving
-`api_semantic` cleanup-loop provenance.
+`api_semantic` cleanup-loop provenance. Phase 27 adds the per-subphase cleanup
+primitive gate that future real planner-backed cleanup execution must pass.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -93,6 +94,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.25 MolmoSpaces planner runtime diagnostics** - Phase 24 (completed 2026-05-09; dependency/crash diagnostics for strict planner probe blockers)
 - ✅ **v1.26 MolmoSpaces planner headless renderer** - Phase 25 (completed 2026-05-09; probe-local EGL renderer adapter and strict Franka planner proof)
 - ✅ **v1.27 MolmoSpaces cleanup planner proof attachment** - Phase 26 (completed 2026-05-09; render strict planner proof inside cleanup reports without relabeling cleanup primitives)
+- 📋 **v1.28 MolmoSpaces cleanup planner-backed primitive gate** - Phase 27 (planned 2026-05-09; per-subphase evidence gate before real planner-backed cleanup primitive replacement)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -135,6 +137,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 24: MolmoSpaces planner runtime diagnostics** - ADR-0015 dependency/crash diagnostics for strict planner probe blockers. Completed 2026-05-09.
 - [x] **Phase 25: MolmoSpaces planner headless renderer** - ADR-0016 probe-local EGL renderer adapter for strict Franka planner proof. Completed 2026-05-09.
 - [x] **Phase 26: MolmoSpaces cleanup planner proof attachment** - ADR-0017 render strict standalone planner proof inside ADR-0003 cleanup reports while preserving `api_semantic` cleanup primitive provenance. Completed 2026-05-09.
+- [ ] **Phase 27: MolmoSpaces cleanup planner-backed primitive gate** - ADR-0018 per-subphase gate for real planner-backed cleanup primitive evidence before replacement work.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -467,7 +470,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -506,4 +509,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 24. MolmoSpaces planner runtime diagnostics | v1.25 | 1/1 | Complete | 2026-05-09 |
 | 25. MolmoSpaces planner headless renderer | v1.26 | 1/1 | Complete | 2026-05-09 |
 | 26. MolmoSpaces cleanup planner proof attachment | v1.27 | 1/1 | Complete | 2026-05-09 |
+| 27. MolmoSpaces cleanup planner-backed primitive gate | v1.28 | 0/1 | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

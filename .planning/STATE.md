@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 26 MolmoSpaces cleanup planner proof attachment completed on 2026-05-09; attached strict Franka proof now renders beside cleanup-loop artifacts.
+stopped_at: Phase 27 MolmoSpaces cleanup planner-backed primitive gate planned on 2026-05-09; next work is per-subphase evidence gating before real primitive replacement.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 21
+  total_phases: 22
   completed_phases: 21
-  total_plans: 24
+  total_plans: 25
   completed_plans: 24
-  percent: 100
+  percent: 96
 ---
 
 # Project State
@@ -21,21 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Next MolmoSpaces gap: replace cleanup-loop primitives with
-planner-backed execution adapters, or resolve the RBY1M CuRobo dependency gap.
+**Current focus:** Phase 27 cleanup planner-backed primitive gate.
 
 ## Current Position
 
-Phase: 26 (molmospaces-cleanup-planner-proof-attachment) — COMPLETE
-Plan: 1 of 1 complete — `26-01` attaches strict standalone planner proof to
-ADR-0003 cleanup artifacts.
-Status: Phase 26 closed the attached-proof report gap. ADR-0003 cleanup reports
-now render strict standalone Franka planner proof beside cleanup-loop evidence
-while cleanup object moves remain `api_semantic`.
-Last activity: 2026-05-09 - Completed Phase 26 cleanup planner proof attachment.
+Phase: 27 (molmospaces-cleanup-planner-backed-primitives) — PLANNED
+Plan: 1 of 1 planned — `27-01` adds a per-subphase cleanup primitive gate for
+planner-backed cleanup evidence.
+Status: Phase 26 closed attached proof in reports. Phase 27 defines and
+checker-gates what actual planner-backed cleanup-loop subphases must prove
+before primitive replacement can be claimed.
+Last activity: 2026-05-09 - Planned Phase 27 cleanup planner-backed primitive gate.
 
-Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance.)
+Progress: [#########.] 96%
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 will add the per-subphase cleanup primitive gate.)
 
 ## Performance Metrics
 
@@ -259,6 +258,12 @@ Recent decisions affecting current work:
   `--require-planner-proof-attachment`. The local MolmoSpaces/RBY1M artifact
   passed with `backend=molmospaces_subprocess`, 176 robot-view PNGs, 2 attached
   planner-proof PNGs, and cleanup primitive provenance still `api_semantic`.
+- **Phase 27 planning (2026-05-09):** ADR-0018 adds a per-subphase
+  planner-backed cleanup primitive gate. The phase should derive
+  `cleanup_primitive_evidence` from semantic substeps, render the gate in the
+  shared Cleanup Artifact Report, accept explicit blocked-capability evidence
+  for current `api_semantic` cleanup, and reject current artifacts when strict
+  planner-backed cleanup primitives are required.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
@@ -392,6 +397,9 @@ Recent decisions affecting current work:
 - Phase 26 completed (2026-05-09): **MolmoSpaces cleanup planner proof
   attachment** — ADR-0017 renders a strict standalone planner proof in cleanup
   reports without relabeling cleanup-loop primitives.
+- Phase 27 planned (2026-05-09): **MolmoSpaces cleanup planner-backed primitive
+  gate** — ADR-0018 defines the per-subphase evidence gate for actual
+  planner-backed cleanup primitive claims.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -426,7 +434,8 @@ None yet.
   Phase 24 completed runtime diagnostics for strict planner blockers. Phase 25
   completed standalone strict Franka planner proof with a headless renderer
   adapter. Phase 26 attached that proof to cleanup reports while preserving
-  `api_semantic` cleanup primitive provenance. Camera-only
+  `api_semantic` cleanup primitive provenance. Phase 27 is planned to add the
+  per-subphase primitive gate before actual primitive replacement. Camera-only
   model-policy cleanup, RBY1M CuRobo setup, and actual planner-backed
   cleanup-loop primitive replacement remain separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
@@ -461,14 +470,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 26 MolmoSpaces cleanup planner proof attachment completed; the
-standalone Franka strict planner proof now renders beside the cleanup loop
-without changing primitive provenance.
+Stopped at: Phase 27 MolmoSpaces cleanup planner-backed primitive gate planned;
+the next implementation should add per-subphase cleanup primitive evidence and
+strict/blocked checker modes.
 Latest planning artifacts are
-`docs/adr/0017-attach-strict-planner-proof-to-cleanup-artifacts.md`,
-`docs/plans/molmospaces-cleanup-planner-proof-attachment.md`, and
-`.planning/phases/26-molmospaces-cleanup-planner-proof-attachment/26-01-cleanup-planner-proof-attachment-PLAN.md`.
-Resume file: .planning/phases/26-molmospaces-cleanup-planner-proof-attachment/26-VERIFICATION.md
+`docs/adr/0018-gate-planner-backed-cleanup-primitives.md`,
+`docs/plans/molmospaces-cleanup-planner-backed-primitives.md`, and
+`.planning/phases/27-molmospaces-cleanup-planner-backed-primitives/27-01-cleanup-primitive-gate-PLAN.md`.
+Resume file: .planning/phases/27-molmospaces-cleanup-planner-backed-primitives/27-01-cleanup-primitive-gate-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -476,7 +485,7 @@ Resume file: .planning/phases/26-molmospaces-cleanup-planner-proof-attachment/26
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** none. Phase 26 is complete; the next likely MolmoSpaces phase
-is actual planner-backed cleanup-loop primitive replacement or RBY1M CuRobo
-enablement.
+**Active Phase:** 27 (molmospaces-cleanup-planner-backed-primitives) —
+planned; implementation should add the strict per-subphase cleanup primitive
+gate before actual planner-backed primitive replacement.
 2026-05-09T00:00:00+08:00

@@ -180,6 +180,12 @@ A strict standalone planner-backed manipulation proof rendered alongside a
 cleanup artifact, without changing the cleanup loop's own primitive provenance.
 _Avoid_: planner-backed cleanup
 
+**Planner-Backed Cleanup Primitive Gate**:
+A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
+`nav, pick, nav, open?, place` steps are planner-backed, separate from attached
+standalone proof.
+_Avoid_: report-only proof attachment
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -230,6 +236,7 @@ _Avoid_: planner-backed cleanup
 - Planner runtime blockers should be reported as dependency/runtime diagnostics, not inferred from sparse shell failures.
 - A **Headless Planner Renderer Adapter** may help reach planner execution in local probes, but it is not itself **Planner-Backed Manipulation Proof**.
 - An **Attached Planner Proof** may make planner capability visible in a cleanup report, but cleanup object moves remain `api_semantic` unless the cleanup loop actually calls planner-backed primitives.
+- A **Planner-Backed Cleanup Primitive Gate** should reject `api_semantic` cleanup subphases as strict planner-backed cleanup execution, while allowing explicit blocked-capability evidence until real primitives exist.
 
 ## Example Dialogue
 
@@ -283,4 +290,4 @@ _Avoid_: planner-backed cleanup
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Actual planner-backed cleanup-loop primitive replacement remains a separate follow-up.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Phase 27 adds the per-subphase cleanup primitive gate before actual planner-backed cleanup-loop primitive replacement.
