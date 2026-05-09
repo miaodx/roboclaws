@@ -92,7 +92,8 @@ that runner manifest/report pair. Phase 50 removes the remaining hand-written
 MCP smoke cleanup loops so current-contract and ADR-0003 smoke demos reuse the
 shared semantic cleanup loop seam. Phase 51 adds a dry-run harness for the
 planner proof bundle runner so the cleanup-to-proof-command handoff is
-repeatable before local GPU execution.
+repeatable before local GPU execution. Phase 52 makes cleanup rerun outputs
+from executed proof-bundle runs first-class manifest/report/checker artifacts.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans

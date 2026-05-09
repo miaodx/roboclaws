@@ -51,6 +51,7 @@ one decision per file, sequential numbering, explicit status.
 | [0040](0040-check-planner-proof-bundle-runner-artifacts.md) | Check Planner Proof Bundle Runner Artifacts | Accepted |
 | [0041](0041-reuse-shared-semantic-cleanup-loop-in-mcp-smoke-demos.md) | Reuse Shared Semantic Cleanup Loop In MCP Smoke Demos | Accepted |
 | [0042](0042-add-dry-run-harness-for-planner-proof-bundle-runner.md) | Add Dry-Run Harness For Planner Proof Bundle Runner | Accepted |
+| [0043](0043-track-cleanup-rerun-artifacts-in-proof-bundle-runner.md) | Track Cleanup Rerun Artifacts In Proof Bundle Runner | Accepted |
 
 ## Adding a new ADR
 
