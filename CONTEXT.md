@@ -224,6 +224,12 @@ _Avoid_: per-demo hand-rolled cleanup loop
 Evidence that joins attached target planner proof with per-subphase cleanup primitive provenance, showing whether planner-backed cleanup replacement is actually ready.
 _Avoid_: standalone proof implies cleanup execution
 
+**Planner Proof Request Manifest**:
+Private cleanup artifact metadata that turns completed ADR-0003 semantic
+substeps into exact bound planner probe requests for local proof-bundle
+generation.
+_Avoid_: Agent View planner aliases
+
 **Planner-Backed Cleanup Primitive Executor**:
 The strict execution seam behind the shared semantic cleanup loop. It can mark a cleanup subphase as `planner_backed` only after per-call planner execution evidence exists for that exact `nav`, `pick`, `nav`, `open`, or `place` step.
 _Avoid_: relabeled semantic state sync

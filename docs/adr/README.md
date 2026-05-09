@@ -45,6 +45,7 @@ one decision per file, sequential numbering, explicit status.
 | [0034](0034-use-probe-backed-executor-for-bounded-cleanup-loop.md) | Use Probe-Backed Executor for Bounded Cleanup Loop | Accepted |
 | [0035](0035-use-bound-planner-proof-bundles-for-cleanup-coverage.md) | Use Bound Planner Proof Bundles for Cleanup Coverage | Accepted |
 | [0036](0036-centralize-cleanup-report-visual-core-checks.md) | Centralize Cleanup Report Visual Core Checks | Accepted |
+| [0037](0037-emit-cleanup-planner-proof-request-manifests.md) | Emit Cleanup Planner Proof Request Manifests | Accepted |
 
 ## Adding a new ADR
 

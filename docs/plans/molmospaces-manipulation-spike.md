@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 45 report visual core contract completed on 2026-05-10
+**Status:** Phase 46 planner proof request manifest in progress on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -57,7 +57,9 @@ leaving default and mismatched-proof cleanup on the normal semantic path. Phase
 proof per cleaned object before passing the planner cleanup bridge. Phase 45
 closes the remaining report architecture drift by centralizing visual-core
 checks and routing ADR-0003 MCP robot-view capture through the shared semantic
-timeline mapping.
+timeline mapping. Phase 46 adds private proof request manifests and a local
+runner so completed ADR-0003 cleanup artifacts can be turned into real bound
+planner proof bundle runs without hand-matching aliases.
 
 ## Why This Exists
 
