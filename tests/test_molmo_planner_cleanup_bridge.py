@@ -119,9 +119,25 @@ def _attachment(
 
 
 def _step(phase: str, provenance: str) -> dict[str, object]:
-    return {
+    step: dict[str, object] = {
         "phase": phase,
         "tool": phase,
         "status": "ok",
         "primitive_provenance": provenance,
     }
+    if provenance == "planner_backed":
+        step["planner_primitive_evidence"] = {
+            "schema": "planner_cleanup_primitive_executor_v1",
+            "tool": phase,
+            "object_id": "observed_001",
+            "target_receptacle_id": "sink_01",
+            "status": "ok",
+            "primitive_provenance": "planner_backed",
+            "planner_backed": True,
+            "strict_proof_eligible": True,
+            "exact_tool_match": True,
+            "executor": "unit-test",
+            "evidence": {"planner_run_id": f"{phase}-proof"},
+            "blockers": [],
+        }
+    return step

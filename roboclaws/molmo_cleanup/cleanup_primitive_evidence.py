@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from typing import Any
 
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     BLOCKED_CAPABILITY_PROVENANCE,
     PLANNER_BACKED_PROVENANCE,
+)
+from roboclaws.molmo_cleanup.planner_primitive_executor import (
+    PLANNER_PRIMITIVE_EXECUTOR_SCHEMA,
 )
 from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
 
@@ -31,6 +35,12 @@ def cleanup_primitive_evidence_from_substeps(
             provenance = str(step.get("primitive_provenance") or "missing")
             planner_backed = provenance == PLANNER_BACKED_PROVENANCE
             status = str(step.get("status") or "unknown")
+            planner_primitive_evidence = _planner_primitive_evidence(step)
+            strict_primitive_evidence = _strict_planner_primitive_evidence(
+                planner_primitive_evidence,
+                phase=phase,
+            )
+            strict_proof_eligible = planner_backed and status == "ok" and strict_primitive_evidence
             row = {
                 "phase": phase,
                 "label": label,
@@ -39,8 +49,10 @@ def cleanup_primitive_evidence_from_substeps(
                 "status": status,
                 "primitive_provenance": provenance,
                 "planner_backed": planner_backed,
-                "strict_proof_eligible": planner_backed and status == "ok",
+                "strict_proof_eligible": strict_proof_eligible,
+                "planner_primitive_evidence": planner_primitive_evidence,
                 "state_mutation": step.get("state_mutation"),
+                "state_sync_provenance": step.get("state_sync_provenance"),
             }
             object_rows.append(row)
             provenance_counts[provenance] += 1
@@ -55,6 +67,31 @@ def cleanup_primitive_evidence_from_substeps(
                         "message": (
                             f"{phase} used primitive_provenance={provenance}; "
                             "strict planner-backed cleanup requires planner_backed."
+                        ),
+                    }
+                )
+            elif status != "ok":
+                blockers.append(
+                    {
+                        "code": "cleanup_subphase_not_ok",
+                        "object_id": str(item.get("object_id", "")),
+                        "phase": phase,
+                        "status": status,
+                        "message": (
+                            f"{phase} status is {status}; strict planner-backed cleanup "
+                            "requires status=ok."
+                        ),
+                    }
+                )
+            elif not strict_primitive_evidence:
+                blockers.append(
+                    {
+                        "code": "cleanup_subphase_missing_planner_primitive_evidence",
+                        "object_id": str(item.get("object_id", "")),
+                        "phase": phase,
+                        "message": (
+                            f"{phase} is labeled planner_backed but lacks strict "
+                            "planner_cleanup_primitive_executor_v1 evidence."
                         ),
                     }
                 )
@@ -111,6 +148,11 @@ def validate_cleanup_primitive_evidence(
             for step in item.get("subphases") or []:
                 assert step.get("primitive_provenance") == PLANNER_BACKED_PROVENANCE, step
                 assert step.get("planner_backed") is True, step
+                assert step.get("strict_proof_eligible") is True, step
+                assert _strict_planner_primitive_evidence(
+                    _planner_primitive_evidence(step),
+                    phase=str(step.get("phase") or ""),
+                ), step
         return
     if accept_blocked_capability:
         assert evidence.get("status") in {
@@ -121,3 +163,27 @@ def validate_cleanup_primitive_evidence(
             assert evidence.get("planner_backed") is False, evidence
             assert evidence.get("strict_proof_eligible") is False, evidence
             assert evidence.get("blockers"), evidence
+
+
+def _planner_primitive_evidence(step: Mapping[str, Any]) -> dict[str, Any]:
+    raw = step.get("planner_primitive_evidence") or {}
+    return dict(raw) if isinstance(raw, Mapping) else {}
+
+
+def _strict_planner_primitive_evidence(
+    evidence: Mapping[str, Any],
+    *,
+    phase: str,
+) -> bool:
+    payload = evidence.get("evidence") or {}
+    return (
+        evidence.get("schema") == PLANNER_PRIMITIVE_EXECUTOR_SCHEMA
+        and evidence.get("tool") == phase
+        and evidence.get("primitive_provenance") == PLANNER_BACKED_PROVENANCE
+        and evidence.get("planner_backed") is True
+        and evidence.get("strict_proof_eligible") is True
+        and evidence.get("exact_tool_match") is True
+        and isinstance(payload, Mapping)
+        and bool(payload)
+        and not evidence.get("blockers")
+    )

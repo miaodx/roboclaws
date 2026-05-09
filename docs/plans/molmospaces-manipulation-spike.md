@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 38 planner-backed cleanup primitive executor planned on 2026-05-09
+**Status:** Phase 38 planner-backed cleanup primitive executor completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -38,11 +38,11 @@ profile before retrying target execute mode again. That retry passes strict
 standalone RBY1M/CuRobo planner-backed proof with nonzero robot-state movement;
 Phase 36 moves current-contract and ADR-0003 cleanup demos through one shared
 semantic cleanup loop; Phase 37 adds bridge-readiness evidence that joins the
-target proof with cleanup primitive provenance. Phase 38 adds the strict
-planner-backed cleanup primitive executor seam behind the shared cleanup loop.
-Cleanup-loop primitives remain `api_semantic` until a real object-specific
-executor integrates target planner-backed primitives into the cleanup
-subphases.
+target proof with cleanup primitive provenance. Phase 38 adds and tests the
+strict planner-backed cleanup primitive executor seam behind the shared cleanup
+loop. Cleanup-loop primitives remain `api_semantic` until a real
+object-specific executor integrates target planner-backed primitives into the
+cleanup subphases.
 
 ## Why This Exists
 

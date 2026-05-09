@@ -8,18 +8,18 @@ exact subphase has per-call planner evidence.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Add planner-backed cleanup primitive request/result models.
-3. [ ] Add a contract adapter that calls a supplied primitive executor before
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
+2. [x] Add planner-backed cleanup primitive request/result models.
+3. [x] Add a contract adapter that calls a supplied primitive executor before
    delegating state synchronization to the underlying cleanup contract.
-4. [ ] Ensure missing or blocked executor results fail closed in strict mode.
-5. [ ] Add focused tests through `run_semantic_cleanup_loop`,
+4. [x] Ensure missing or blocked executor results fail closed in strict mode.
+5. [x] Add focused tests through `run_semantic_cleanup_loop`,
    `cleanup_primitive_evidence`, and `planner_cleanup_bridge_evidence`.
-6. [ ] Re-run visual artifact checker against the current real
+6. [x] Re-run visual artifact checker against the current real
    MolmoSpaces/RBY1M report to guard the shared report views.
 
 ## Acceptance
@@ -37,10 +37,10 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` on changed Python files.
-- `uv run ruff format --check` on changed Python files.
-- `./scripts/run_pytest_standalone.sh -q` on focused executor/gate/report tests.
-- Real visual artifact checker against
+- Passed `uv run ruff check` on changed Python files.
+- Passed `uv run ruff format --check` on changed Python files.
+- Passed `./scripts/run_pytest_standalone.sh -q` on focused executor/gate/report tests.
+- Passed real visual artifact checker against
   `output/molmospaces-planner-cleanup-bridge-readiness/run_result.json` with
   robot views, attached proof, cleanup primitive gate, and planner cleanup
   bridge accepted as blocked.

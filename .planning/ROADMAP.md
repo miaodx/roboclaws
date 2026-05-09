@@ -67,9 +67,10 @@ the duplicated current-contract and ADR-0003 object cleanup loops behind one
 shared semantic driver before planner-backed primitive replacement begins.
 Phase 37 added explicit planner cleanup bridge-readiness evidence so reports
 distinguish target RBY1M/CuRobo runtime readiness from cleanup subphases that
-still remain `api_semantic`. Phase 38 adds the strict planner-backed cleanup
-primitive executor seam behind that shared driver, so actual object-specific
-replacement has one path into `nav -> pick -> nav -> open? -> place`.
+still remain `api_semantic`. Phase 38 added the strict planner-backed cleanup
+primitive executor seam behind that shared driver. The next MolmoSpaces slice
+can wire a real object-specific RBY1M/CuRobo executor into that one path for
+`nav -> pick -> nav -> open? -> place`.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -132,7 +133,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (completed 2026-05-09; visible low-memory CuRobo retry profile and strict target proof)
 - ✅ **v1.37 MolmoSpaces shared semantic cleanup loop** - Phase 36 (completed 2026-05-09; one reusable `nav -> pick -> nav -> open? -> place` driver across cleanup demos)
 - ✅ **v1.38 MolmoSpaces planner cleanup bridge readiness** - Phase 37 (completed 2026-05-09; explicit bridge evidence joining target proof and cleanup subphase provenance)
-- 📋 **v1.39 MolmoSpaces planner-backed cleanup primitive executor** - Phase 38 (planned 2026-05-09; strict executor seam before object-specific cleanup primitive replacement)
+- ✅ **v1.39 MolmoSpaces planner-backed cleanup primitive executor** - Phase 38 (completed 2026-05-09; strict executor seam before object-specific cleanup primitive replacement)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -186,7 +187,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM. Completed 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof passes under the visible low-memory profile.
 - [x] **Phase 36: MolmoSpaces shared semantic cleanup loop** - ADR-0027 shared object-level cleanup loop driver for current-contract and ADR-0003 demos before planner-backed primitive replacement. Completed 2026-05-09.
 - [x] **Phase 37: MolmoSpaces planner cleanup bridge readiness** - ADR-0028 bridge evidence for target RBY1M/CuRobo proof plus cleanup primitive subphase provenance before actual primitive replacement. Completed 2026-05-09.
-- [ ] **Phase 38: MolmoSpaces planner-backed cleanup primitive executor** - ADR-0029 strict per-call executor seam for planner-backed cleanup subphases behind the shared semantic cleanup loop. Planned 2026-05-09.
+- [x] **Phase 38: MolmoSpaces planner-backed cleanup primitive executor** - ADR-0029 strict per-call executor seam for planner-backed cleanup subphases behind the shared semantic cleanup loop. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

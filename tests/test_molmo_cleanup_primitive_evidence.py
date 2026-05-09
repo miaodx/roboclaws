@@ -61,11 +61,56 @@ def test_cleanup_primitive_evidence_accepts_all_planner_backed_subphases() -> No
     assert not evidence["blockers"]
 
 
+def test_cleanup_primitive_evidence_rejects_planner_backed_without_executor_evidence() -> None:
+    evidence = cleanup_primitive_evidence_from_substeps(
+        [
+            {
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {
+                        "phase": "pick",
+                        "tool": "pick",
+                        "status": "ok",
+                        "primitive_provenance": "planner_backed",
+                    }
+                ],
+            }
+        ]
+    )
+
+    validate_cleanup_primitive_evidence(evidence, accept_blocked_capability=True)
+    assert evidence["status"] == "blocked_capability"
+    assert evidence["blockers"][0]["code"] == (
+        "cleanup_subphase_missing_planner_primitive_evidence"
+    )
+
+
 def _step(phase: str, provenance: str) -> dict[str, object]:
-    return {
+    step: dict[str, object] = {
         "phase": phase,
         "tool": phase,
         "status": "ok",
         "primitive_provenance": provenance,
         "state_mutation": "test_mutation",
+    }
+    if provenance == "planner_backed":
+        step["planner_primitive_evidence"] = _planner_primitive_evidence(phase)
+    return step
+
+
+def _planner_primitive_evidence(phase: str) -> dict[str, object]:
+    return {
+        "schema": "planner_cleanup_primitive_executor_v1",
+        "tool": phase,
+        "object_id": "observed_001",
+        "target_receptacle_id": "sink_01",
+        "status": "ok",
+        "primitive_provenance": "planner_backed",
+        "planner_backed": True,
+        "strict_proof_eligible": True,
+        "exact_tool_match": True,
+        "executor": "unit-test",
+        "evidence": {"planner_run_id": f"{phase}-proof"},
+        "blockers": [],
     }

@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-PrimitiveProvenance = Literal["api_semantic", "real", "scripted", "shim"]
+PrimitiveProvenance = Literal[
+    "api_semantic",
+    "real",
+    "scripted",
+    "shim",
+    "planner_backed",
+    "blocked_capability",
+]
 CleanupStatus = Literal["success", "partial_success", "failed"]
 
 

@@ -412,19 +412,25 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
         object_id = html.escape(str(item.get("object_id", "")))
         for step in item.get("subphases") or []:
             label = _display_subphase_from_evidence(step)
+            planner_evidence = step.get("planner_primitive_evidence") or {}
+            planner_evidence_summary = _planner_primitive_evidence_summary(planner_evidence)
             rows.append(
                 "<tr>"
                 f"<td>{object_id}</td>"
                 f"<td>{html.escape(str(label))}</td>"
                 f"<td>{html.escape(str(step.get('phase', '')))}</td>"
                 f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
+                f"<td>{html.escape(planner_evidence_summary)}</td>"
+                f"<td>{html.escape(str(step.get('state_sync_provenance') or ''))}</td>"
                 f"<td>{html.escape(str(step.get('state_mutation') or ''))}</td>"
                 "</tr>"
             )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
         "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
-        "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        "<th>Planner evidence</th><th>State sync</th><th>State mutation</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
     metrics = (
         '<div class="metric-grid">'
@@ -450,6 +456,18 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(str(note))}</p>'
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
+
+
+def _planner_primitive_evidence_summary(evidence: Any) -> str:
+    if not isinstance(evidence, dict) or not evidence:
+        return ""
+    executor = str(evidence.get("executor") or "unknown")
+    status = str(evidence.get("status") or "unknown")
+    payload = evidence.get("evidence") if isinstance(evidence.get("evidence"), dict) else {}
+    run_id = str(payload.get("planner_run_id") or payload.get("run_id") or "")
+    if run_id:
+        return f"{executor} {status} {run_id}"
+    return f"{executor} {status}"
 
 
 def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:
