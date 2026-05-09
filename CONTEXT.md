@@ -290,6 +290,12 @@ allowing only exact-scene runtime-style aliases to become generated fallback
 proof command inputs.
 _Avoid_: retrying upstream/display aliases that fail task sampling with `KeyError`
 
+**Fallback Runtime Alias Discovery**:
+The proof-bundle runner step that mines prior exact-scene `KeyError`
+valid-name lists for same-family runtime aliases and turns them into bounded
+generated fallback proof commands.
+_Avoid_: treating discovered command candidates as planner-backed proof
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -510,3 +516,4 @@ _Avoid_: full cleanup replacement claim
 - Phase 61 added a visible fallback proof warmup step to the proof-bundle runner so the next local generated-fallback retry can warm RBY1M/CuRobo `config_import` once, share an output-local Torch extension cache with proof commands, and render/check that warmup in the runner report.
 - Phase 62 executed the warmed generated fallback proof bundle locally. The warmup got through `rby1m_config_import`, and all four generated proofs reached task sampling; they now fail with `KeyError` invalid planner alias names instead of timeout.
 - Phase 63 closed the exact-scene fallback alias validity gap by filtering upstream/display aliases from generated fallback command inputs while rendering the skipped aliases in the runner manifest/report. The current local artifact now has no executable alternate fallback aliases, so the next blocker is runtime alias discovery rather than retrying display IDs.
+- Phase 64 closed runtime alias discovery by mining Phase 62 `KeyError` valid-name lists for same-family exact-scene aliases. The dry-run generated four runtime-sibling fallback commands and rendered discovered aliases, filtered aliases, fallback rows, and commands in the proof-bundle runner report.

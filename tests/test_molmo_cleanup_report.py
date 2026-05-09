@@ -746,6 +746,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "schema": "planner_cleanup_proof_request_fallback_generation_v1",
                 "enabled": True,
                 "generated_request_count": 1,
+                "discovered_alias_count": 1,
                 "filtered_alias_count": 1,
                 "generated_requests": [
                     {
@@ -765,6 +766,16 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                             "reason": "prior_task_feasibility_blocked",
                             "prior_blockers": [{"code": "HouseInvalidForTask"}],
                         },
+                    }
+                ],
+                "discovered_aliases": [
+                    {
+                        "source_request_id": "proof_001",
+                        "axis": "target",
+                        "alias": "sink/body_alt",
+                        "derived_from": "proof_001_fallback_01",
+                        "invalid_alias": "Sink|1|2",
+                        "reason": "valid_name_sibling_from_prior_keyerror",
                     }
                 ],
                 "filtered_aliases": [
@@ -898,6 +909,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Fallback required" in html
     assert "prior_task_feasibility_blocked" in html
     assert "Generated Fallback Requests" in html
+    assert "Discovered Runtime Aliases" in html
+    assert "Discovered aliases" in html
+    assert "sink/body_alt" in html
+    assert "valid_name_sibling_from_prior_keyerror" in html
     assert "Filtered Fallback Aliases" in html
     assert "Filtered aliases" in html
     assert "Sink|1|2" in html

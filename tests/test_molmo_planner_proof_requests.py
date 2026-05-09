@@ -415,6 +415,114 @@ def test_proof_request_selection_filters_non_runtime_fallback_aliases() -> None:
     }
 
 
+def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "binding": {
+                    "candidate_pickup_names": [
+                        "book_beef_1_0_8",
+                        "Book|surface|8|79",
+                    ],
+                    "candidate_place_receptacle_names": [
+                        "shelf_cafe_1_0_2",
+                        "ShelvingUnit|2|3",
+                    ],
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "shelf_01",
+                    "--cleanup-planner-object-id": "book_beef_1_0_8",
+                    "--cleanup-planner-target-receptacle-id": "shelf_cafe_1_0_2",
+                },
+            }
+        ],
+    }
+    valid_names = [
+        "book_beef_1_0_8",
+        "book_beef_1_1_8",
+        "book_beef_1_2_8",
+        "shelf_cafe_1_0_2",
+        "shelf_cafe_1_1_2",
+        "sink_other_1_1_5",
+    ]
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            },
+            {
+                "request_id": "proof_001_fallback_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "book_beef_1_0_8",
+                    "planner_target_receptacle_id": "ShelvingUnit|2|3",
+                },
+                "blockers": [
+                    {
+                        "code": "KeyError",
+                        "message": (
+                            f"\"Invalid name 'ShelvingUnit|2|3'. Valid names: {valid_names}\""
+                        ),
+                    }
+                ],
+            },
+            {
+                "request_id": "proof_001_fallback_02",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "Book|surface|8|79",
+                    "planner_target_receptacle_id": "shelf_cafe_1_0_2",
+                },
+                "blockers": [
+                    {
+                        "code": "KeyError",
+                        "message": (
+                            f"\"Invalid name 'Book|surface|8|79'. Valid names: {valid_names}\""
+                        ),
+                    }
+                ],
+            },
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=2,
+    )
+
+    assert selection["fallback_required"] is False
+    assert selection["generated_fallback_request_count"] == 2
+    fallback_generation = selection["fallback_generation"]
+    assert fallback_generation["discovered_alias_count"] == 3
+    assert {
+        (item["axis"], item["alias"], item["derived_from"])
+        for item in fallback_generation["discovered_aliases"]
+    } == {
+        ("target", "shelf_cafe_1_1_2", "proof_001_fallback_01"),
+        ("object", "book_beef_1_1_8", "proof_001_fallback_02"),
+        ("object", "book_beef_1_2_8", "proof_001_fallback_02"),
+    }
+    generated = fallback_generation["generated_requests"]
+    assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
+        "shelf_cafe_1_1_2"
+    )
+    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("book_beef_1_1_8")
+
+
 def test_proof_request_selection_keeps_fallback_required_when_no_alias_available() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,

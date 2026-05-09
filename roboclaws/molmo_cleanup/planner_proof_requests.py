@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ast
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -14,6 +16,9 @@ PLANNER_PROOF_REQUEST_SELECTION_SCHEMA = "planner_cleanup_proof_request_selectio
 PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA = (
     "planner_cleanup_proof_request_fallback_generation_v1"
 )
+_FALLBACK_REQUEST_ID_MARKER = "_fallback_"
+_INVALID_NAME_RE = re.compile(r"Invalid name '([^']+)'\. Valid names: (\[.*\])")
+_RUNTIME_ALIAS_RE = re.compile(r"^(?P<prefix>.+)_(?P<group>\d+)_(?P<variant>\d+)_(?P<room>\d+)$")
 
 
 def planner_proof_requests_from_substeps(
@@ -264,10 +269,15 @@ def proof_request_selection_from_summary(
         request for request in proof_requests.get("requests") or [] if request.get("ready")
     ]
     prior_results = _prior_results_by_request_id(prior_proof_result_summary or {})
+    discovered_aliases_by_request = _discovered_runtime_aliases_by_source_request(
+        ready_requests,
+        prior_proof_result_summary or {},
+    )
     selected = []
     excluded = []
     generated = []
     filtered_aliases = []
+    discovered_aliases = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
         prior_result = prior_results.get(request_id, {})
@@ -281,9 +291,11 @@ def proof_request_selection_from_summary(
                     request,
                     prior_result,
                     limit=fallback_alias_limit,
+                    discovered_aliases=discovered_aliases_by_request.get(request_id, {}),
                 )
                 generated.extend(fallback["generated_requests"])
                 filtered_aliases.extend(fallback["filtered_aliases"])
+                discovered_aliases.extend(fallback["discovered_aliases"])
             continue
         selected.append(_selected_request(request, prior_result))
     selected.extend(_selected_request(request, {}) for request in generated)
@@ -308,6 +320,7 @@ def proof_request_selection_from_summary(
             excluded_requests=excluded,
             generated_requests=generated,
             filtered_aliases=filtered_aliases,
+            discovered_aliases=discovered_aliases,
             fallback_alias_limit=fallback_alias_limit,
         ),
         "prior_summary_available": bool(prior_proof_result_summary),
@@ -406,6 +419,7 @@ def _fallback_generation(
     excluded_requests: list[dict[str, Any]],
     generated_requests: list[dict[str, Any]],
     filtered_aliases: list[dict[str, Any]],
+    discovered_aliases: list[dict[str, Any]],
     fallback_alias_limit: int,
 ) -> dict[str, Any]:
     if not enabled and not generated_requests:
@@ -416,6 +430,8 @@ def _fallback_generation(
             "generated_requests": [],
             "filtered_alias_count": 0,
             "filtered_aliases": [],
+            "discovered_alias_count": 0,
+            "discovered_aliases": [],
         }
     generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
@@ -430,6 +446,8 @@ def _fallback_generation(
         "generated_requests": generated_requests,
         "filtered_alias_count": len(filtered_aliases),
         "filtered_aliases": filtered_aliases,
+        "discovered_alias_count": len(discovered_aliases),
+        "discovered_aliases": discovered_aliases,
         "evidence_note": (
             "Private generated fallback proof requests. They preserve cleanup-facing "
             "object and target IDs while trying alternate exact-scene planner aliases."
@@ -442,27 +460,35 @@ def _fallback_requests_for_blocked_request(
     prior_result: dict[str, Any],
     *,
     limit: int,
+    discovered_aliases: dict[str, list[dict[str, Any]]] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     if limit <= 0:
-        return {"generated_requests": [], "filtered_aliases": []}
+        return {"generated_requests": [], "filtered_aliases": [], "discovered_aliases": []}
     args = request.get("planner_probe_args") or {}
     current_object_alias = _planner_arg(args, "--cleanup-planner-object-id")
     current_target_alias = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
+    discovered = discovered_aliases or {}
     pickup_candidates, filtered_pickup_aliases = _executable_candidate_aliases(
         request,
         axis="object",
         candidate_key="candidate_pickup_names",
         current_alias=current_object_alias,
+        extra_aliases=_discovered_alias_values(discovered, "object"),
     )
     target_candidates, filtered_target_aliases = _executable_candidate_aliases(
         request,
         axis="target",
         candidate_key="candidate_place_receptacle_names",
         current_alias=current_target_alias,
+        extra_aliases=_discovered_alias_values(discovered, "target"),
     )
     filtered_aliases = [
         *filtered_pickup_aliases,
         *filtered_target_aliases,
+    ]
+    flattened_discovered_aliases = [
+        *discovered.get("object", []),
+        *discovered.get("target", []),
     ]
     generated: list[dict[str, Any]] = []
     seen_pairs: set[tuple[str, str]] = set()
@@ -484,8 +510,16 @@ def _fallback_requests_for_blocked_request(
                 )
             )
             if len(generated) >= limit:
-                return {"generated_requests": generated, "filtered_aliases": filtered_aliases}
-    return {"generated_requests": generated, "filtered_aliases": filtered_aliases}
+                return {
+                    "generated_requests": generated,
+                    "filtered_aliases": filtered_aliases,
+                    "discovered_aliases": flattened_discovered_aliases,
+                }
+    return {
+        "generated_requests": generated,
+        "filtered_aliases": filtered_aliases,
+        "discovered_aliases": flattened_discovered_aliases,
+    }
 
 
 def _fallback_request_with_planner_aliases(
@@ -554,12 +588,18 @@ def _executable_candidate_aliases(
     axis: str,
     candidate_key: str,
     current_alias: str,
+    extra_aliases: list[str] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     source_request_id = str(request.get("request_id") or "")
-    candidates = _candidate_aliases(
-        request,
-        candidate_key=candidate_key,
-        current_alias=current_alias,
+    candidates = _unique_nonempty_values(
+        [
+            *_candidate_aliases(
+                request,
+                candidate_key=candidate_key,
+                current_alias=current_alias,
+            ),
+            *(extra_aliases or []),
+        ]
     )
     executable = []
     filtered = []
@@ -584,6 +624,142 @@ def _executable_candidate_aliases(
 
 def _is_exact_scene_planner_alias(alias: str) -> bool:
     return bool(alias) and "|" not in alias
+
+
+def _discovered_alias_values(
+    discovered_aliases: dict[str, list[dict[str, Any]]],
+    axis: str,
+) -> list[str]:
+    return [
+        str(item.get("alias") or "")
+        for item in discovered_aliases.get(axis, [])
+        if isinstance(item, dict)
+    ]
+
+
+def _discovered_runtime_aliases_by_source_request(
+    ready_requests: list[dict[str, Any]],
+    prior_summary: dict[str, Any],
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
+    request_by_id = {
+        str(request.get("request_id") or ""): request
+        for request in ready_requests
+        if request.get("request_id")
+    }
+    discovered: dict[str, dict[str, list[dict[str, Any]]]] = {}
+    seen: set[tuple[str, str, str]] = set()
+    for result in prior_summary.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        source_request_id = _source_request_id_from_result(result)
+        request = request_by_id.get(source_request_id)
+        if not request:
+            continue
+        config = _proof_cleanup_task_config(result)
+        invalid_names = _invalid_name_entries_from_blockers(result.get("blockers") or [])
+        for invalid in invalid_names:
+            axis = _invalid_alias_axis(invalid["invalid_alias"], config)
+            if not axis:
+                continue
+            current_alias = _planner_arg(
+                request.get("planner_probe_args") or {},
+                (
+                    "--cleanup-planner-object-id"
+                    if axis == "object"
+                    else "--cleanup-planner-target-receptacle-id"
+                ),
+            )
+            for alias in _runtime_alias_siblings(current_alias, invalid["valid_names"]):
+                key = (source_request_id, axis, alias)
+                if key in seen:
+                    continue
+                seen.add(key)
+                discovered.setdefault(source_request_id, {"object": [], "target": []})[axis].append(
+                    {
+                        "source_request_id": source_request_id,
+                        "axis": axis,
+                        "alias": alias,
+                        "derived_from": str(result.get("request_id") or ""),
+                        "invalid_alias": invalid["invalid_alias"],
+                        "reason": "valid_name_sibling_from_prior_keyerror",
+                        "evidence_note": (
+                            "Derived from a prior exact-scene KeyError valid-name list "
+                            "for the same runtime object or target family."
+                        ),
+                    }
+                )
+    return discovered
+
+
+def _source_request_id_from_result(result: dict[str, Any]) -> str:
+    request_id = str(result.get("request_id") or "")
+    return request_id.split(_FALLBACK_REQUEST_ID_MARKER, 1)[0]
+
+
+def _proof_cleanup_task_config(result: dict[str, Any]) -> dict[str, Any]:
+    config = result.get("cleanup_task_config")
+    if isinstance(config, dict):
+        return config
+    requested = result.get("requested_cleanup_primitive_binding")
+    return requested if isinstance(requested, dict) else {}
+
+
+def _invalid_name_entries_from_blockers(blockers: Any) -> list[dict[str, Any]]:
+    entries = []
+    for blocker in blockers:
+        if not isinstance(blocker, dict):
+            continue
+        match = _INVALID_NAME_RE.search(str(blocker.get("message") or ""))
+        if not match:
+            continue
+        valid_names = _valid_names_from_literal(match.group(2))
+        if valid_names:
+            entries.append(
+                {
+                    "invalid_alias": match.group(1),
+                    "valid_names": valid_names,
+                }
+            )
+    return entries
+
+
+def _valid_names_from_literal(value: str) -> list[str]:
+    try:
+        parsed = ast.literal_eval(value)
+    except (SyntaxError, ValueError):
+        single_quoted = re.findall(r"'([^']+)'", value)
+        double_quoted = re.findall(r'"([^"]+)"', value)
+        return _unique_nonempty_values([*single_quoted, *double_quoted])
+    if not isinstance(parsed, list):
+        return []
+    return _unique_nonempty_values([str(item) for item in parsed if isinstance(item, str)])
+
+
+def _invalid_alias_axis(invalid_alias: str, config: dict[str, Any]) -> str:
+    if invalid_alias == str(config.get("planner_object_id") or ""):
+        return "object"
+    if invalid_alias == str(config.get("planner_target_receptacle_id") or ""):
+        return "target"
+    return ""
+
+
+def _runtime_alias_siblings(current_alias: str, valid_names: list[str]) -> list[str]:
+    match = _RUNTIME_ALIAS_RE.match(current_alias)
+    if not match:
+        return []
+    siblings = []
+    for name in valid_names:
+        candidate = _RUNTIME_ALIAS_RE.match(name)
+        if (
+            candidate
+            and candidate.group("prefix") == match.group("prefix")
+            and candidate.group("group") == match.group("group")
+            and candidate.group("room") == match.group("room")
+            and name != current_alias
+            and _is_exact_scene_planner_alias(name)
+        ):
+            siblings.append(name)
+    return _unique_nonempty_values(siblings)
 
 
 def _planner_arg(args: Any, key: str) -> str:

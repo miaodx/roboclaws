@@ -306,6 +306,110 @@ def test_runner_generates_fallback_requests_from_prior_blocked_aliases(
     assert "Sink|1|2" in report
 
 
+def test_runner_discovers_runtime_aliases_from_prior_fallback_keyerrors(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    request = requests["requests"][0]
+    request["target_receptacle_id"] = "shelf_01"
+    request["planner_probe_args"] = {
+        "--cleanup-object-id": "observed_001",
+        "--cleanup-target-receptacle-id": "shelf_01",
+        "--cleanup-planner-object-id": "book_beef_1_0_8",
+        "--cleanup-planner-target-receptacle-id": "shelf_cafe_1_0_2",
+    }
+    request["binding"] = {
+        "candidate_pickup_names": ["book_beef_1_0_8", "Book|surface|8|79"],
+        "candidate_place_receptacle_names": ["shelf_cafe_1_0_2", "ShelvingUnit|2|3"],
+    }
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}),
+        encoding="utf-8",
+    )
+    prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior.parent.mkdir()
+    valid_names = [
+        "book_beef_1_0_8",
+        "book_beef_1_1_8",
+        "shelf_cafe_1_0_2",
+        "shelf_cafe_1_1_2",
+    ]
+    prior.write_text(
+        json.dumps(
+            {
+                "proof_request_selection": {
+                    "excluded_requests": [
+                        {
+                            "request_id": "proof_001",
+                            "prior_status": "blocked_capability",
+                            "prior_task_feasibility_status": "blocked",
+                            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ]
+                },
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001_fallback_01",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "cleanup_task_config": {
+                                "planner_object_id": "book_beef_1_0_8",
+                                "planner_target_receptacle_id": "ShelvingUnit|2|3",
+                            },
+                            "blockers": [
+                                {
+                                    "code": "KeyError",
+                                    "message": (
+                                        f"\"Invalid name 'ShelvingUnit|2|3'. "
+                                        f'Valid names: {valid_names}"'
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    assert manifest["command_count"] == 1
+    assert selection["selected_request_ids"] == ["proof_001_fallback_01"]
+    assert selection["fallback_generation"]["discovered_alias_count"] == 1
+    assert "shelf_cafe_1_1_2" in manifest["commands"][0]["command"]
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Discovered Runtime Aliases" in report
+    assert "shelf_cafe_1_1_2" in report
+    assert "proof_001_fallback_01" in report
+
+
 def test_runner_can_add_visible_warmup_with_output_local_cache(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_run_result = tmp_path / "cleanup" / "run_result.json"

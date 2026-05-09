@@ -280,7 +280,38 @@ def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     summary = data.get("proof_result_summary")
-    return dict(summary) if isinstance(summary, dict) else {}
+    prior = dict(summary) if isinstance(summary, dict) else {}
+    prior["results"] = _merged_prior_results(
+        prior.get("results") or [],
+        (data.get("proof_request_selection") or {}).get("excluded_requests") or [],
+    )
+    return prior
+
+
+def _merged_prior_results(
+    results: list[dict[str, Any]],
+    excluded_requests: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged = [dict(item) for item in results if isinstance(item, dict)]
+    result_ids = {str(item.get("request_id") or "") for item in merged}
+    for item in excluded_requests:
+        if not isinstance(item, dict):
+            continue
+        request_id = str(item.get("request_id") or "")
+        if not request_id or request_id in result_ids:
+            continue
+        merged.append(
+            {
+                "request_id": request_id,
+                "status": str(item.get("prior_status") or "blocked_capability"),
+                "task_feasibility_status": str(
+                    item.get("prior_task_feasibility_status") or "blocked"
+                ),
+                "blockers": list(item.get("prior_blockers") or []),
+            }
+        )
+        result_ids.add(request_id)
+    return merged
 
 
 def _effective_torch_extensions_dir(

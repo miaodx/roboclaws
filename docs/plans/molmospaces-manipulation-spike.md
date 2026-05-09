@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 63 exact-scene fallback alias validation completed; next work is runtime alias discovery for fallback proofs
+**Status:** Phase 64 fallback runtime alias discovery completed; next work is local execution of discovered runtime-sibling fallback proofs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -119,6 +119,12 @@ commands, renders filtered aliases in `report.html`, and checks that evidence.
 The local dry-run filtered all four previously failing aliases and generated no
 fallback commands, so the next blocker is discovering or deriving additional
 exact-scene runtime aliases instead of retrying display IDs.
+Phase 64 mines prior exact-scene `KeyError` proof outputs for runtime sibling
+aliases from the valid-name list. The runner report now includes discovered
+runtime aliases, filtered display aliases, generated fallback request rows, and
+commands in one proof-bundle artifact. The Phase 64 dry-run generated four new
+fallback commands from five discovered runtime aliases, so the next local-dev
+slice is executing those commands.
 
 ## Why This Exists
 
@@ -962,7 +968,10 @@ completed:
   gsd-plan-phase 63-molmospaces-exact-scene-fallback-alias-validation
   gsd-execute-phase 63-molmospaces-exact-scene-fallback-alias-validation
   gsd-verify-work 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-plan-phase 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-execute-phase 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-verify-work 64-molmospaces-fallback-runtime-alias-discovery
 
 next pipeline candidates:
-  plan exact-scene fallback runtime alias discovery
+  plan discovered runtime-alias fallback proof execution
 ```

@@ -150,6 +150,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
             "schema": "planner_cleanup_proof_request_fallback_generation_v1",
             "enabled": True,
             "generated_request_count": 1,
+            "discovered_alias_count": 1,
             "filtered_alias_count": 1,
             "generated_requests": [
                 {
@@ -167,6 +168,16 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                         "reason": "prior_task_feasibility_blocked",
                         "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     },
+                }
+            ],
+            "discovered_aliases": [
+                {
+                    "source_request_id": "proof_001",
+                    "axis": "target",
+                    "alias": "sink/alt",
+                    "derived_from": "proof_001_fallback_01",
+                    "invalid_alias": "Sink|1|2",
+                    "reason": "valid_name_sibling_from_prior_keyerror",
                 }
             ],
             "filtered_aliases": [
