@@ -1,6 +1,6 @@
 # MolmoSpaces RBY1M CuRobo Runtime Gate
 
-**Status:** Planned under GSD Phase 28
+**Status:** Completed under GSD Phase 28 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0014, ADR-0015, ADR-0016, ADR-0018, ADR-0019
 **Workflow:** `hybrid-phase-pipeline`
@@ -41,6 +41,19 @@ This phase should:
 - Shared RBY1M/CuRobo gate builder and validator.
 - Planner probe report and checker support for blocked and strict modes.
 - Local artifact showing the current RBY1M/CuRobo state.
+
+## Completion Result
+
+Phase 28 implemented the target-runtime gate without changing cleanup primitive
+execution. Planner probe artifacts now include `rby1m_curobo_gate`, and the
+shared planner probe report renders `RBY1M CuRobo Gate`.
+
+The local artifact
+`output/molmo-planner-rby1m-curobo-gate/report.html` shows the current RBY1M
+state as explicit `blocked_capability`: CuRobo is unavailable in the isolated
+MolmoSpaces runtime, and RBY1M planner execution was not attempted. The strict
+checker mode rejects the same artifact until RBY1M/CuRobo planner execution is
+genuinely available.
 
 ## Verification
 

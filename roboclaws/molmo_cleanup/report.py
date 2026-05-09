@@ -172,6 +172,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
+    {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
@@ -428,6 +429,54 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
         '<section class="panel"><h2>Runtime Diagnostics</h2>'
         f'<p class="note">{html.escape(summary)}</p>{module_table}</section>'
     )
+
+
+def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:
+    gate = run_result.get("rby1m_curobo_gate") or {}
+    if not gate:
+        return ""
+    blockers = gate.get("blockers") or []
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+    )
+    if not rows:
+        rows = '<tr><td colspan="2">None</td></tr>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', gate.get('status', 'unknown'))}"
+        f"{_metric('Embodiment', gate.get('embodiment', 'unknown'))}"
+        f"{_metric('CuRobo', 'available' if gate.get('curobo_available') else 'missing')}"
+        f"{_metric('Execution', _execution_gate_label(gate))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("RBY1M CuRobo ready", gate.get("rby1m_curobo_ready", False)),
+            _badge("Planner backed", gate.get("planner_backed", False)),
+            _badge("Strict proof", gate.get("strict_proof_eligible", False)),
+        )
+    )
+    note = gate.get("evidence_note") or (
+        "RBY1M/CuRobo readiness requires target-robot planner execution."
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+        f"<th>Message</th></tr></thead><tbody>{rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel rby1m-curobo-gate">'
+        "<h2>RBY1M CuRobo Gate</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}</section>'
+    )
+
+
+def _execution_gate_label(gate: dict[str, Any]) -> str:
+    return "attempted" if gate.get("execution_attempted") else "not attempted"
 
 
 def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:

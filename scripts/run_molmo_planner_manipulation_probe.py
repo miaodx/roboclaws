@@ -28,6 +28,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     blocked_planner_probe_evidence,
     planner_backed_probe_evidence,
 )
+from roboclaws.molmo_cleanup.rby1m_curobo_gate import (  # noqa: E402
+    rby1m_curobo_gate_from_planner_probe,
+)
 from roboclaws.molmo_cleanup.report import render_planner_manipulation_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     DEFAULT_MOLMOSPACES_PYTHON,
@@ -537,6 +540,7 @@ def _write_probe_result(
             "stderr": stderr_path.name,
         },
     }
+    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
     report_path = render_planner_manipulation_report(run_dir=output_dir, run_result=run_result)
     run_result["artifacts"]["report"] = report_path.name
     (output_dir / "run_result.json").write_text(

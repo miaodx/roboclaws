@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 28 RBY1M CuRobo runtime gate planned on 2026-05-09
+**Status:** Phase 28 RBY1M CuRobo runtime gate completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -20,8 +20,9 @@ Phase 25 planner headless renderer -> Phase 26 cleanup planner proof
 attachment -> Phase 27 cleanup planner-backed primitive gate. Cleanup reports
 now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts
 and expose a per-subphase cleanup primitive gate. Current cleanup-loop
-subphases remain `api_semantic`; Phase 28 plans the RBY1M CuRobo target-runtime
-gate before actual planner-backed cleanup primitive replacement. Camera-only
+subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
+gate before actual planner-backed cleanup primitive replacement. Current local
+RBY1M planner execution remains blocked by missing CuRobo. Camera-only
 model-policy cleanup remains a separate follow-up.
 
 ## Why This Exists
@@ -795,9 +796,11 @@ completed:
   gsd-execute-phase 27-molmospaces-cleanup-planner-backed-primitives
   gsd-verify-work 27-molmospaces-cleanup-planner-backed-primitives
   gsd-plan-phase 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-execute-phase 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-verify-work 28-molmospaces-rby1m-curobo-runtime-gate
 
 next pipeline candidates:
-  gsd-execute-phase 28-molmospaces-rby1m-curobo-runtime-gate
+  plan RBY1M/CuRobo runtime enablement if strict target execution is required locally
   plan actual planner-backed cleanup-loop primitive replacement
   plan camera-only model-policy cleanup
 ```

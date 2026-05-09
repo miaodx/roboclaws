@@ -12,6 +12,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
 )
+from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
+    rby1m_curobo_gate_from_planner_probe,
+    validate_rby1m_curobo_gate,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,6 +25,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path, help="run_result.json or probe output directory")
     parser.add_argument("--accept-blocked-capability", action="store_true")
     parser.add_argument("--require-planner-backed", action="store_true")
+    parser.add_argument("--accept-rby1m-curobo-blocked", action="store_true")
+    parser.add_argument("--require-rby1m-curobo-ready", action="store_true")
     return parser.parse_args()
 
 
@@ -33,6 +39,8 @@ def main() -> None:
         path.parent,
         accept_blocked_capability=args.accept_blocked_capability,
         require_planner_backed=args.require_planner_backed,
+        accept_rby1m_curobo_blocked=args.accept_rby1m_curobo_blocked,
+        require_rby1m_curobo_ready=args.require_rby1m_curobo_ready,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -43,6 +51,8 @@ def _assert_probe_result(
     *,
     accept_blocked_capability: bool = False,
     require_planner_backed: bool = False,
+    accept_rby1m_curobo_blocked: bool = False,
+    require_rby1m_curobo_ready: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -59,6 +69,13 @@ def _assert_probe_result(
     assert "Manipulation Provenance" in report_text, report_text[:500]
     if evidence.get("runtime_diagnostics"):
         assert "Runtime Diagnostics" in report_text, report_text[:500]
+    if accept_rby1m_curobo_blocked or require_rby1m_curobo_ready:
+        _assert_rby1m_curobo_gate(
+            data,
+            report_text,
+            accept_blocked=accept_rby1m_curobo_blocked,
+            require_ready=require_rby1m_curobo_ready,
+        )
 
     if require_planner_backed:
         _assert_planner_backed(data, evidence)
@@ -90,6 +107,22 @@ def _assert_planner_backed(data: dict[str, Any], evidence: dict[str, Any]) -> No
     assert float(evidence.get("max_abs_qpos_delta") or 0.0) > 0.0, evidence
     assert not evidence.get("blockers"), evidence
     assert evidence.get("upstream_policy_class"), evidence
+
+
+def _assert_rby1m_curobo_gate(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    accept_blocked: bool = False,
+    require_ready: bool = False,
+) -> None:
+    gate = data.get("rby1m_curobo_gate") or rby1m_curobo_gate_from_planner_probe(data)
+    validate_rby1m_curobo_gate(
+        gate,
+        accept_blocked=accept_blocked,
+        require_ready=require_ready,
+    )
+    assert "RBY1M CuRobo Gate" in report_text, report_text[:500]
 
 
 def _resolve_path(base: Path, value: str) -> Path:

@@ -8,21 +8,31 @@ proof or generic planner diagnostics.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. Add ADR/source-plan documentation and update roadmap/state/context
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. Add an RBY1M/CuRobo gate builder that derives readiness from planner probe
+2. [x] Add an RBY1M/CuRobo gate builder that derives readiness from planner probe
    artifacts.
-3. Render the gate in the shared planner probe report.
-4. Add checker modes:
+3. [x] Render the gate in the shared planner probe report.
+4. [x] Add checker modes:
    - accept explicit blocked-capability evidence for missing CuRobo/current
      RBY1M blockers;
    - require strict RBY1M/CuRobo readiness for future cleanup primitive
      replacement.
-5. Add focused tests and generate/validate a local RBY1M artifact.
+5. [x] Add focused tests and generate/validate a local RBY1M artifact.
+
+## Outcome
+
+Planner probe artifacts now include `rby1m_curobo_gate`, and the shared planner
+probe report renders `RBY1M CuRobo Gate`. The checker can accept current
+missing-CuRobo evidence explicitly or require strict RBY1M/CuRobo readiness.
+
+The local RBY1M probe remains blocked because CuRobo is missing. This is the
+expected honest state: standalone Franka proof remains useful planner evidence,
+but it does not satisfy target RBY1M/CuRobo readiness.
 
 ## Verification
 
@@ -33,6 +43,16 @@ Planned 2026-05-09.
 - Strict gate should reject the same artifact with
   `--require-rby1m-curobo-ready` unless the local runtime genuinely has RBY1M
   CuRobo planner execution.
+
+Evidence:
+
+- Artifact: `output/molmo-planner-rby1m-curobo-gate/report.html`.
+- Result: `output/molmo-planner-rby1m-curobo-gate/run_result.json`.
+- Gate result: `status=blocked_capability`, `embodiment=rby1m`,
+  `curobo_available=false`, `execution_attempted=false`.
+- Strict rejection blockers include `ModuleNotFoundError`,
+  `curobo_unavailable`, `rby1m_execution_not_attempted`, and
+  `rby1m_planner_not_backed`.
 
 ## Risks
 

@@ -11,6 +11,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
 )
+from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
+    rby1m_curobo_gate_from_planner_probe,
+)
 from roboclaws.molmo_cleanup.report import (
     render_cleanup_report,
     render_planner_manipulation_report,
@@ -428,6 +431,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "molmo_spaces": {"available": True, "version": "0.1.0"},
         },
     }
+    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
     html = report_path.read_text(encoding="utf-8")
@@ -441,3 +445,5 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "renderer_adapter=True" in html
     assert "MUJOCO_GL=egl" in html
     assert "curobo" in html
+    assert "RBY1M CuRobo Gate" in html
+    assert "wrong_embodiment" in html
