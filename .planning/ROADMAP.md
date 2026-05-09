@@ -162,6 +162,9 @@ narrowing the remaining fallback blocker to target-side task feasibility.
 Phase 74 preserves target-feasibility proof links for filtered fallback pairs
 and merges colliding generated fallback IDs by planner aliases so distinct
 prior attempts remain visible.
+Phase 75 renders a target-feasibility blocker matrix that joins blocked source
+requests and blocked generated fallback pairs in one selection-owned report
+view, while keeping source rows honest when no prior proof report link exists.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -261,6 +264,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.73 MolmoSpaces fallback exhaustion blockers** - Phase 72 (completed 2026-05-10; exhausted fallback reports name root-body alias, task-feasibility pair, and no-candidate blockers)
 - ✅ **v1.74 MolmoSpaces pickup root alias normalization** - Phase 73 (completed 2026-05-10; non-root pickup runtime aliases normalize to variant-0 root aliases in runner reports)
 - ✅ **v1.75 MolmoSpaces target feasibility proof links** - Phase 74 (completed 2026-05-10; filtered target-feasibility pairs link to exact prior proof reports)
+- ✅ **v1.76 MolmoSpaces target feasibility blocker matrix** - Phase 75 (completed 2026-05-10; source and fallback target-feasibility blockers render in one runner report table)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -351,6 +355,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 72: MolmoSpaces fallback exhaustion blockers** - ADR-0063 renders and checks blocker summaries for exhausted generated fallback pools. Completed 2026-05-10.
 - [x] **Phase 73: MolmoSpaces pickup root alias normalization** - ADR-0064 normalizes non-root object runtime aliases to variant-0 pickup root aliases before blocker classification. Completed 2026-05-10.
 - [x] **Phase 74: MolmoSpaces target feasibility proof links** - ADR-0065 preserves distinct fallback attempts and links filtered target-feasibility pairs to their prior proof artifacts. Completed 2026-05-10.
+- [x] **Phase 75: MolmoSpaces target feasibility blocker matrix** - ADR-0066 renders source request blockers and fallback pair blockers together as the target-feasibility blocker matrix. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

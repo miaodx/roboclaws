@@ -193,6 +193,12 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
                 "request_id": "proof_001",
                 "status": "blocked_capability",
                 "task_feasibility_status": "blocked",
+                "run_result": str(tmp_path / "prior" / "run_result.json"),
+                "report": str(tmp_path / "prior" / "report.html"),
+                "stdout": str(tmp_path / "prior" / "stdout.txt"),
+                "stderr": str(tmp_path / "prior" / "stderr.txt"),
+                "last_worker_stage": "worker_exception",
+                "execution_attempted": True,
                 "blockers": [{"code": "HouseInvalidForTask"}],
             }
         ],
@@ -215,6 +221,31 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
     assert selection["selected_request_ids"] == ["proof_002"]
     assert selection["excluded_requests"][0]["request_id"] == "proof_001"
     assert selection["excluded_requests"][0]["reason"] == "prior_task_feasibility_blocked"
+    assert selection["excluded_requests"][0]["prior_report"] == str(
+        tmp_path / "prior" / "report.html"
+    )
+    assert selection["target_feasibility_blocker_count"] == 1
+    assert selection["target_feasibility_blockers"] == [
+        {
+            "kind": "source_request",
+            "source_request_id": "proof_001",
+            "object_id": "observed_001",
+            "target_receptacle_id": "sink_01",
+            "object_alias": "",
+            "target_alias": "",
+            "derived_from": "",
+            "reason": "prior_task_feasibility_blocked",
+            "prior_status": "blocked_capability",
+            "prior_task_feasibility_status": "blocked",
+            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            "prior_run_result": str(tmp_path / "prior" / "run_result.json"),
+            "prior_report": str(tmp_path / "prior" / "report.html"),
+            "prior_stdout": str(tmp_path / "prior" / "stdout.txt"),
+            "prior_stderr": str(tmp_path / "prior" / "stderr.txt"),
+            "last_worker_stage": "worker_exception",
+            "execution_attempted": True,
+        }
+    ]
     assert selection["fallback_required"] is False
     assert len(commands) == 1
     assert commands[0]["request_id"] == "proof_002"
@@ -249,6 +280,7 @@ def test_proof_request_selection_marks_fallback_required_when_all_ready_blocked(
 
     assert selection["selected_count"] == 0
     assert selection["excluded_count"] == 1
+    assert selection["target_feasibility_blocker_count"] == 1
     assert selection["fallback_required"] is True
 
 

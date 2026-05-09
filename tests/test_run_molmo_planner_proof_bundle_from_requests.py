@@ -133,6 +133,12 @@ def test_runner_excludes_prior_task_feasibility_blocked_requests(tmp_path: Path)
                             "request_id": "proof_001",
                             "status": "blocked_capability",
                             "task_feasibility_status": "blocked",
+                            "run_result": str(tmp_path / "prior-proof" / "run_result.json"),
+                            "report": str(tmp_path / "prior-proof" / "report.html"),
+                            "stdout": str(tmp_path / "prior-proof" / "stdout.txt"),
+                            "stderr": str(tmp_path / "prior-proof" / "stderr.txt"),
+                            "last_worker_stage": "worker_exception",
+                            "execution_attempted": True,
                             "blockers": [{"code": "HouseInvalidForTask"}],
                         }
                     ],
@@ -165,12 +171,23 @@ def test_runner_excludes_prior_task_feasibility_blocked_requests(tmp_path: Path)
     assert selection["mode"] == "exclude_task_feasibility_blocked"
     assert selection["selected_request_ids"] == ["proof_002"]
     assert selection["excluded_requests"][0]["request_id"] == "proof_001"
+    assert selection["excluded_requests"][0]["prior_report"] == str(
+        tmp_path / "prior-proof" / "report.html"
+    )
+    assert selection["target_feasibility_blocker_count"] == 1
+    assert selection["target_feasibility_blockers"][0]["kind"] == "source_request"
+    assert selection["target_feasibility_blockers"][0]["prior_report"] == str(
+        tmp_path / "prior-proof" / "report.html"
+    )
     assert result["manifest"]["command_count"] == 1
     assert result["manifest"]["commands"][0]["request_id"] == "proof_002"
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Proof Request Selection" in report
+    assert "Target Feasibility Blockers" in report
+    assert "source_request" in report
     assert "prior_task_feasibility_blocked" in report
     assert "HouseInvalidForTask" in report
+    assert str(tmp_path / "prior-proof" / "report.html") in report
 
 
 def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path: Path) -> None:
@@ -533,6 +550,11 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert manifest["command_count"] == 0
     assert selection["fallback_required"] is True
     assert selection["prior_result_count"] == 2
+    assert selection["target_feasibility_blocker_count"] == 2
+    assert {item["kind"] for item in selection["target_feasibility_blockers"]} == {
+        "source_request",
+        "fallback_pair",
+    }
     assert fallback["status"] == "exhausted"
     assert {item["code"] for item in fallback["exhaustion_blockers"]} == {
         "target_task_feasibility_blocked_pairs",
@@ -550,6 +572,9 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert "Fallback status" in report
     assert "exhausted" in report
     assert "Fallback Exhaustion Blockers" in report
+    assert "Target Feasibility Blockers" in report
+    assert "source_request" in report
+    assert "fallback_pair" in report
     assert "target_task_feasibility_blocked_pairs" in report
     assert "no_fallback_candidate_available" in report
     assert "shelf_cafe_1_1_2" in report

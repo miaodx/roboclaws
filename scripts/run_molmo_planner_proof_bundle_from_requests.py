@@ -464,6 +464,12 @@ def _merged_prior_results(
                     item.get("prior_task_feasibility_status") or "blocked"
                 ),
                 "blockers": list(item.get("prior_blockers") or []),
+                "run_result": str(item.get("prior_run_result") or ""),
+                "report": str(item.get("prior_report") or ""),
+                "stdout": str(item.get("prior_stdout") or ""),
+                "stderr": str(item.get("prior_stderr") or ""),
+                "last_worker_stage": str(item.get("last_worker_stage") or ""),
+                "execution_attempted": bool(item.get("execution_attempted")),
             }
         )
         result_ids.add(request_id)

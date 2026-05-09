@@ -354,6 +354,13 @@ task-feasibility block to the exact prior proof report, run result, worker
 stage, and blockers that established it.
 _Avoid_: filtered pair rows that require manual archaeology through output dirs
 
+**Target Feasibility Blocker Matrix**:
+The proof-bundle runner report view that joins task-feasibility-blocked source
+requests and task-feasibility-blocked generated fallback pairs into one
+selection-owned blocker table.
+_Avoid_: splitting the current target-side blocker across source and fallback
+tables that reviewers must reconcile manually
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.

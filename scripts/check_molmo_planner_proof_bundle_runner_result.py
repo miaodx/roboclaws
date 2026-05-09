@@ -190,6 +190,28 @@ def _assert_proof_request_selection(
         for key in ("request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
             assert str(item[key]) in report_text, (key, report_text[:500])
+    target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
+    if "target_feasibility_blocker_count" in selection:
+        assert int(selection.get("target_feasibility_blocker_count") or 0) == len(
+            target_feasibility_blockers
+        ), selection
+    if target_feasibility_blockers:
+        assert "Target Feasibility Blockers" in report_text, report_text[:500]
+    for item in target_feasibility_blockers:
+        for key in ("kind", "source_request_id", "reason", "prior_task_feasibility_status"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
+        for key in (
+            "object_id",
+            "target_receptacle_id",
+            "object_alias",
+            "target_alias",
+            "derived_from",
+            "prior_report",
+            "last_worker_stage",
+        ):
+            if item.get(key):
+                assert str(item[key]) in report_text, (key, report_text[:500])
     fallback_generation = selection.get("fallback_generation") or {}
     if fallback_generation:
         fallback_status = str(fallback_generation.get("status") or "")

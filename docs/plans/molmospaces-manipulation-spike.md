@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 74 target-feasibility proof links completed; next work is upstream task-feasibility handling for target-side fallback pairs
+**Status:** Phase 75 target-feasibility blocker matrix completed; next work is upstream task-feasibility handling for target-side fallback pairs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -181,6 +181,11 @@ Phase 74 makes that remaining target-side blocker reviewable. Filtered fallback
 pairs now carry the exact prior proof report/run-result paths and worker stage,
 and prior fallback attempts merge by request ID plus planner aliases so
 different runs do not overwrite distinct proof attempts.
+Phase 75 adds a `Target Feasibility Blockers` report view that joins blocked
+source requests and blocked generated fallback pairs into one table. The latest
+dry-run shows four target blockers: two source requests without prior proof
+links in the available evidence and two fallback pairs linked to Phase 65 proof
+reports with `worker_exception` stage.
 
 ## Why This Exists
 

@@ -146,6 +146,30 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
             }
         ],
+        "target_feasibility_blocker_count": 2,
+        "target_feasibility_blockers": [
+            {
+                "kind": "source_request",
+                "source_request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "reason": "prior_task_feasibility_blocked",
+                "prior_task_feasibility_status": "blocked",
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            },
+            {
+                "kind": "fallback_pair",
+                "source_request_id": "proof_001",
+                "object_alias": "pickup/body",
+                "target_alias": "sink/body_alt",
+                "derived_from": "proof_001_fallback_02",
+                "reason": "prior_task_feasibility_blocked_pair",
+                "prior_task_feasibility_status": "blocked",
+                "last_worker_stage": "worker_exception",
+                "prior_report": str(tmp_path / "prior-proof" / "report.html"),
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            },
+        ],
         "fallback_generation": {
             "schema": "planner_cleanup_proof_request_fallback_generation_v1",
             "status": "generated",

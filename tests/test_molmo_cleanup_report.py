@@ -742,6 +742,30 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
+            "target_feasibility_blocker_count": 2,
+            "target_feasibility_blockers": [
+                {
+                    "kind": "source_request",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+                {
+                    "kind": "fallback_pair",
+                    "source_request_id": "proof_001",
+                    "object_alias": "pickup/body",
+                    "target_alias": "sink/body_alt",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_task_feasibility_status": "blocked",
+                    "last_worker_stage": "worker_exception",
+                    "prior_report": str(tmp_path / "prior-proof" / "report.html"),
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+            ],
             "fallback_generation": {
                 "schema": "planner_cleanup_proof_request_fallback_generation_v1",
                 "status": "generated",
@@ -933,6 +957,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "not_exact_scene_runtime_alias" in html
     assert "Filtered Fallback Pairs" in html
     assert "Filtered pairs" in html
+    assert "Target Feasibility Blockers" in html
+    assert "Target blockers" in html
+    assert "source_request" in html
+    assert "fallback_pair" in html
+    assert "worker_exception" in html
     assert "pickup/body" in html
     assert "sink/body_alt" in html
     assert "prior_task_feasibility_blocked_pair" in html

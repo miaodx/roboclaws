@@ -309,6 +309,21 @@ def proof_request_selection_from_summary(
         selected.append(_selected_request(request, prior_result))
     selected.extend(_selected_request(request, {}) for request in generated)
     fallback_required = bool(ready_requests) and not selected
+    fallback_generation = _fallback_generation(
+        enabled=generate_fallback_requests,
+        ready_request_count=len(ready_requests),
+        excluded_requests=excluded,
+        generated_requests=generated,
+        filtered_aliases=filtered_aliases,
+        discovered_aliases=discovered_aliases,
+        filtered_pairs=filtered_pairs,
+        normalized_aliases=normalized_aliases,
+        fallback_alias_limit=fallback_alias_limit,
+    )
+    target_feasibility_blockers = _target_feasibility_blockers(
+        excluded_requests=excluded,
+        filtered_pairs=fallback_generation.get("filtered_pairs") or [],
+    )
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
@@ -323,17 +338,9 @@ def proof_request_selection_from_summary(
         "selected_request_ids": [item["request_id"] for item in selected],
         "selected_requests": selected,
         "excluded_requests": excluded,
-        "fallback_generation": _fallback_generation(
-            enabled=generate_fallback_requests,
-            ready_request_count=len(ready_requests),
-            excluded_requests=excluded,
-            generated_requests=generated,
-            filtered_aliases=filtered_aliases,
-            discovered_aliases=discovered_aliases,
-            filtered_pairs=filtered_pairs,
-            normalized_aliases=normalized_aliases,
-            fallback_alias_limit=fallback_alias_limit,
-        ),
+        "target_feasibility_blocker_count": len(target_feasibility_blockers),
+        "target_feasibility_blockers": target_feasibility_blockers,
+        "fallback_generation": fallback_generation,
         "prior_summary_available": bool(prior_proof_result_summary),
         "prior_result_count": len(prior_results),
         "evidence_note": (
@@ -420,6 +427,84 @@ def _excluded_request(
         "prior_status": str(prior_result.get("status") or ""),
         "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
+        **_prior_result_evidence_fields(prior_result),
+    }
+
+
+def _target_feasibility_blockers(
+    *,
+    excluded_requests: list[dict[str, Any]],
+    filtered_pairs: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    blockers: list[dict[str, Any]] = []
+    for item in excluded_requests:
+        if str(item.get("prior_task_feasibility_status") or "") != "blocked":
+            continue
+        blockers.append(
+            _target_feasibility_blocker(
+                item,
+                kind="source_request",
+                source_request_id=str(item.get("request_id") or ""),
+                object_id=str(item.get("object_id") or ""),
+                target_receptacle_id=str(item.get("target_receptacle_id") or ""),
+            )
+        )
+    for item in filtered_pairs:
+        if str(item.get("reason") or "") != "prior_task_feasibility_blocked_pair":
+            continue
+        blockers.append(
+            _target_feasibility_blocker(
+                item,
+                kind="fallback_pair",
+                source_request_id=str(item.get("source_request_id") or ""),
+                object_alias=str(item.get("object_alias") or ""),
+                target_alias=str(item.get("target_alias") or ""),
+                derived_from=str(item.get("derived_from") or ""),
+            )
+        )
+    return blockers
+
+
+def _target_feasibility_blocker(
+    item: dict[str, Any],
+    *,
+    kind: str,
+    source_request_id: str,
+    object_id: str = "",
+    target_receptacle_id: str = "",
+    object_alias: str = "",
+    target_alias: str = "",
+    derived_from: str = "",
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "source_request_id": source_request_id,
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "object_alias": object_alias,
+        "target_alias": target_alias,
+        "derived_from": derived_from,
+        "reason": str(item.get("reason") or ""),
+        "prior_status": str(item.get("prior_status") or ""),
+        "prior_task_feasibility_status": str(item.get("prior_task_feasibility_status") or ""),
+        "prior_blockers": _blockers(item.get("prior_blockers") or []),
+        "prior_run_result": str(item.get("prior_run_result") or ""),
+        "prior_report": str(item.get("prior_report") or ""),
+        "prior_stdout": str(item.get("prior_stdout") or ""),
+        "prior_stderr": str(item.get("prior_stderr") or ""),
+        "last_worker_stage": str(item.get("last_worker_stage") or ""),
+        "execution_attempted": bool(item.get("execution_attempted")),
+    }
+
+
+def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "prior_run_result": str(result.get("run_result") or ""),
+        "prior_report": str(result.get("report") or ""),
+        "prior_stdout": str(result.get("stdout") or ""),
+        "prior_stderr": str(result.get("stderr") or ""),
+        "last_worker_stage": str(result.get("last_worker_stage") or ""),
+        "execution_attempted": bool(result.get("execution_attempted")),
     }
 
 
@@ -1043,12 +1128,7 @@ def _task_feasibility_pair_filter(
         "prior_status": str(result.get("status") or ""),
         "prior_task_feasibility_status": str(result.get("task_feasibility_status") or ""),
         "prior_blockers": blockers,
-        "prior_run_result": str(result.get("run_result") or ""),
-        "prior_report": str(result.get("report") or ""),
-        "prior_stdout": str(result.get("stdout") or ""),
-        "prior_stderr": str(result.get("stderr") or ""),
-        "last_worker_stage": str(result.get("last_worker_stage") or ""),
-        "execution_attempted": bool(result.get("execution_attempted")),
+        **_prior_result_evidence_fields(result),
     }
 
 

@@ -765,6 +765,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         return ""
     selected = selection.get("selected_requests") or []
     excluded = selection.get("excluded_requests") or []
+    target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
     raw_fallback_generation = selection.get("fallback_generation") or {}
     fallback_generation = (
         raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
@@ -775,6 +776,10 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     filtered_pairs = fallback_generation.get("filtered_pairs") or []
     normalized_aliases = fallback_generation.get("normalized_aliases") or []
     exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
+    target_blocker_count = selection.get(
+        "target_feasibility_blocker_count",
+        len(target_feasibility_blockers),
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
@@ -788,6 +793,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Filtered pairs', len(filtered_pairs))}"
         f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
         f"{_metric('Exhaustion blockers', len(exhaustion_blockers))}"
+        f"{_metric('Target blockers', target_blocker_count)}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
@@ -832,6 +838,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)
+    target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
     normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
     filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
@@ -844,7 +851,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{generated_table}{discovered_table}"
+        f"{selected_table}{excluded_table}{target_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
@@ -880,6 +887,39 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
         "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
         "<th>Prior blockers</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _target_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or ""
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or ""
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(object_value))}</td>"
+            f"<td>{html.escape(str(target_value))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
+            f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="10">No target feasibility blockers recorded.</td></tr>')
+    return (
+        "<h3>Target Feasibility Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
+        "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
+        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

@@ -74,6 +74,7 @@ one decision per file, sequential numbering, explicit status.
 | [0063](0063-summarize-fallback-exhaustion-blockers.md) | Summarize Fallback Exhaustion Blockers | Accepted |
 | [0064](0064-normalize-pickup-root-runtime-aliases.md) | Normalize Pickup Root Runtime Aliases | Accepted |
 | [0065](0065-preserve-target-feasibility-proof-links.md) | Preserve Target Feasibility Proof Links | Accepted |
+| [0066](0066-render-target-feasibility-blocker-matrix.md) | Render Target Feasibility Blocker Matrix | Accepted |
 
 ## Adding a new ADR
 
