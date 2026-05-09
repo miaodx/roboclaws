@@ -217,6 +217,7 @@ _Avoid_: planner class import, `api_semantic` success
 - A **Raw FPV Observation** may include waypoint, room, observation id, and image artifact references, but not structured movable-object detections or private scoring truth.
 - **Planner-Backed Manipulation Proof** must require planner policy execution evidence, nonzero robot-state movement, and no `api_semantic` fallback.
 - `api_semantic` cleanup artifacts may be useful cleanup evidence, but must not satisfy **Planner-Backed Manipulation Proof**.
+- Planner runtime blockers should be reported as dependency/runtime diagnostics, not inferred from sparse shell failures.
 
 ## Example Dialogue
 
@@ -270,4 +271,4 @@ _Avoid_: planner class import, `api_semantic` success
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate; actual planner-backed cleanup execution remains separate until a probe passes the strict proof checker.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 records planner runtime diagnostics for strict-proof blockers; actual planner-backed cleanup execution remains separate until a probe passes the strict proof checker.

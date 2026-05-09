@@ -21,18 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 23 complete; strict planner-backed cleanup execution remains separate until a real planner probe passes `--require-planner-backed`.
+**Current focus:** Phase 24 planner runtime diagnostics for strict planner probe blockers.
 
 ## Current Position
 
-Phase: 23 (molmospaces-planner-backed-manipulation-proof) — COMPLETE
-Plan: 1 of 1 complete — `23-01` implements ADR-0014 by adding a
-planner-backed manipulation provenance/proof gate.
-Status: Current-contract and ADR-0003 cleanup artifacts now include explicit
-`manipulation_evidence`; the standalone planner probe/checker path records
-blocked-capability evidence and refuses to treat `api_semantic` as strict
-planner-backed proof. The latest execute-mode probe records SIGSEGV as a
-blocked capability rather than passing the strict proof gate.
+Phase: 24 (molmospaces-planner-runtime-diagnostics) — PLANNED
+Plan: 1 of 1 planned — `24-01` adds runtime diagnostics to planner probe
+artifacts.
+Status: Phase 23's strict proof gate is complete, but execute-mode planner
+proof is blocked by missing RBY1M CuRobo dependency and Franka worker SIGSEGV.
+Phase 24 should make those blockers actionable in `run_result.json`,
+stderr/stdout, and `report.html`.
 Last activity: 2026-05-09 - Completed Phase 23 planner-backed manipulation
 provenance/proof gate and recorded blocked-capability verification evidence.
 
@@ -218,6 +217,10 @@ Recent decisions affecting current work:
   default `just verify::molmo-planner-manipulation-probe` gate passed with
   `PickAndPlacePlannerPolicy` import evidence and
   `status=blocked_capability`.
+- **Phase 24 planning (2026-05-09):** ADR-0015 adds runtime diagnostics for
+  strict planner probe blockers. The planner probe should enable faulthandler,
+  record planner dependency availability, render Runtime Diagnostics in the
+  shared planner report, and keep `--require-planner-backed` semantics strict.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
