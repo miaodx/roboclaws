@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 66 fallback failed-candidate memory completed; next work is local execution of the remaining filtered fallback commands
+**Status:** Phase 67 filtered fallback proof execution completed; next work is pickup root-body alias derivation or validation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -140,6 +140,12 @@ task-feasibility-blocked pairs. The Phase 66 dry-run against the Phase 65
 manifest generated two remaining commands for the untried book runtime sibling
 and rendered discovered aliases, filtered aliases, filtered pairs, and commands
 in one runner report.
+Phase 67 executed those two remaining filtered fallback commands locally with
+RBY1M/CuRobo warmup and strict proof-output checking. Both proofs reached task
+sampling with no config-import timeout, but both failed with
+`AssertionError: Object is not a root body` for the untried book runtime
+sibling. The next blocker is deriving or validating pickup root-body aliases
+before creating more object-side fallback commands.
 
 ## Why This Exists
 

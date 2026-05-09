@@ -308,6 +308,11 @@ filtering prior non-root object aliases and prior task-feasibility-blocked
 object/target alias pairs before generating new fallback commands.
 _Avoid_: retrying known-bad generated fallback commands
 
+**Filtered Fallback Proof Execution**:
+Local-dev execution of generated fallback commands after **Fallback Failed
+Candidate Memory** has removed known bad aliases and alias pairs.
+_Avoid_: treating a filtered retry as proof success before strict outputs pass
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -458,6 +463,9 @@ _Avoid_: full cleanup replacement claim
 - **Fallback Failed Candidate Memory** should be visible in the **Planner Proof
   Bundle Runner Report** before another fallback execution, including filtered
   alias rows and filtered object/target pair rows.
+- **Filtered Fallback Proof Execution** should still require planner-backed
+  proof, cleanup binding promotion, and planner views before changing cleanup
+  readiness.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -546,3 +554,7 @@ _Avoid_: full cleanup replacement claim
   aliases, filters prior task-feasibility-blocked object/target pairs, renders
   `Filtered Fallback Pairs`, and dry-runs two remaining commands for the
   untried book runtime sibling.
+- Phase 67 executed those two filtered fallback commands locally. Both reached
+  task sampling without timeout, but the remaining book runtime sibling also
+  failed as a non-root body; no proof became planner-backed, promoted cleanup
+  binding, or produced planner views.
