@@ -53,6 +53,19 @@ def test_checker_accepts_directory_path_via_main(
     assert "molmo-planner-proof-bundle-runner ok" in capsys.readouterr().out
 
 
+def test_checker_accepts_paths_relative_to_current_working_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checker = _load_checker()
+    monkeypatch.chdir(tmp_path)
+    base = Path("bundle")
+    base.mkdir()
+    manifest = _write_runner_artifact(base)
+
+    checker._assert_runner_result(manifest, base)
+
+
 def test_checker_rejects_missing_report(tmp_path: Path) -> None:
     checker = _load_checker()
     manifest = _write_runner_artifact(tmp_path)

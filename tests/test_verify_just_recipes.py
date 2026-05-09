@@ -48,6 +48,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-realworld-openclaw-dogfood-kit",
         "just harness::molmo-realworld-openclaw-visual-dogfood-kit",
         "just harness::molmo-realworld-raw-fpv",
+        "just harness::molmo-planner-proof-bundle-runner",
         "just harness::molmo-planner-manipulation-probe",
     )
     for call in expected_calls:
@@ -74,6 +75,10 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^molmo-realworld-openclaw-dogfood-kit seed=\"7\"",
         r"^molmo-realworld-openclaw-visual-dogfood-kit seed=\"7\"",
         r"^molmo-realworld-raw-fpv seed=\"7\"",
+        (
+            r"^molmo-planner-proof-bundle-runner "
+            r"output_dir=\"output/molmo-planner-proof-bundle-runner-harness\""
+        ),
         (
             r"^molmo-planner-manipulation-probe "
             r"output_dir=\"output/molmo-planner-manipulation-probe-harness\""
@@ -164,3 +169,25 @@ def test_planner_manipulation_probe_accepts_only_explicit_blocked_gate() -> None
         "--accept-blocked-capability",
     ):
         assert expected in body
+
+
+def test_planner_proof_bundle_runner_harness_stays_dry_run() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    recipe = re.search(
+        r"^molmo-planner-proof-bundle-runner[\s\S]*?(?=^# ADR-0014)",
+        text,
+        re.MULTILINE,
+    )
+    assert recipe is not None
+    body = recipe.group(0)
+    for expected in (
+        "examples/molmospaces_realworld_cleanup.py",
+        "scripts/check_molmo_realworld_cleanup_result.py",
+        "scripts/run_molmo_planner_proof_bundle_from_requests.py",
+        "scripts/check_molmo_planner_proof_bundle_runner_result.py",
+        "--backend api_semantic_synthetic",
+        "--probe-mode execute",
+    ):
+        assert expected in body
+    assert "--execute-probes" not in body

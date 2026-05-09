@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Runner Harness
 
-**Status:** Planned for GSD Phase 51 on 2026-05-10
+**Status:** Completed in GSD Phase 51 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0037, ADR-0038, ADR-0039, ADR-0040, ADR-0042
 **Workflow:** `hybrid-phase-pipeline`
@@ -43,11 +43,15 @@ This phase should:
 
 ## Verification Plan
 
-- `uv run ruff check tests/test_verify_just_recipes.py`
-- `uv run ruff format --check tests/test_verify_just_recipes.py`
+- `uv run ruff check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py tests/test_verify_just_recipes.py`
+- `uv run ruff format --check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py tests/test_verify_just_recipes.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_verify_just_recipes.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_check_molmo_planner_proof_bundle_runner_result.py`
 - `just harness::molmo-planner-proof-bundle-runner`
+- `just verify::molmo-planner-proof-bundle-runner`
 
 ## Completion
 
-Pending Phase 51 implementation.
+Phase 51 added the proof-bundle runner dry-run harness and verify gate. The
+harness writes a fresh synthetic ADR-0003 cleanup artifact, generates planner
+proof commands without `--execute-probes`, and validates the runner report. It
+also fixed the runner checker so repo-relative manifest paths resolve correctly.

@@ -868,9 +868,8 @@ completed:
   gsd-execute-phase 50-molmospaces-mcp-smoke-shared-semantic-loop
   gsd-verify-work 50-molmospaces-mcp-smoke-shared-semantic-loop
   gsd-plan-phase 51-molmospaces-planner-proof-bundle-runner-harness
-
-in progress:
   gsd-execute-phase 51-molmospaces-planner-proof-bundle-runner-harness
+  gsd-verify-work 51-molmospaces-planner-proof-bundle-runner-harness
 
 next pipeline candidates:
   plan actual planner-backed cleanup-loop primitive replacement after proof-bundle handoff

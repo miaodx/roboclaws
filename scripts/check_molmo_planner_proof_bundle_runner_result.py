@@ -108,7 +108,7 @@ def _assert_command(
 
 def _resolve_path(base: Path, value: str) -> Path:
     path = Path(value)
-    if path.is_absolute():
+    if path.is_absolute() or path.exists():
         return path
     return base / path
 
