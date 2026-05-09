@@ -7,16 +7,16 @@ cache state and record extension-cache evidence in the planner probe artifact.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. [ ] Add a planner probe option for an explicit `TORCH_EXTENSIONS_DIR`.
-3. [ ] Record CuRobo extension cache diagnostics for known CUDA extensions.
-4. [ ] Render cache diagnostics in planner probe reports and checker/test it.
-5. [ ] Rerun local RBY1M/CuRobo config-import with an output-local cache and a
+2. [x] Add a planner probe option for an explicit `TORCH_EXTENSIONS_DIR`.
+3. [x] Record CuRobo extension cache diagnostics for known CUDA extensions.
+4. [x] Render cache diagnostics in planner probe reports and checker/test it.
+5. [x] Rerun local RBY1M/CuRobo config-import with an output-local cache and a
    longer timeout; if it passes, attempt execute mode and strict readiness.
 
 ## Acceptance
@@ -36,6 +36,33 @@ Planned 2026-05-09.
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
 - Local RBY1M/CuRobo isolated-cache artifact under
   `output/molmo-planner-rby1m-curobo-cache-isolation/`.
+
+## Evidence
+
+- `uv run ruff check scripts/run_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py scripts/check_molmo_planner_manipulation_probe.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed.
+- `uv run ruff format --check scripts/run_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py scripts/check_molmo_planner_manipulation_probe.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed.
+- `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed with 22 tests.
+- The first isolated-cache config-import run compiled the CuRobo extensions and
+  reached `rby1m_policy_class` in 388 seconds.
+- The warm isolated-cache config-import rerun under
+  `output/molmo-planner-rby1m-curobo-cache-isolation/` reached
+  `rby1m_policy_class` in about 15 seconds and records 5/5 known CuRobo
+  extension `.so` files with 0 locks.
+- `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked --require-curobo-extension-cache output/molmo-planner-rby1m-curobo-cache-isolation/run_result.json`
+  passed.
+- Execute mode under
+  `output/molmo-planner-rby1m-curobo-cache-isolation-execute/` reached
+  `execute_policy_construct` but failed with `AttributeError: module 'warp' has
+  no attribute 'torch'`.
+- The execute artifact renders `CuRobo Extension Cache`,
+  `Worker Stage Timeline`, and `RBY1M CuRobo Gate`, with 5/5 known extension
+  `.so` files and 0 locks.
+- Strict readiness with `--require-rby1m-curobo-ready` rejected the execute
+  artifact, as intended, because no planner-backed robot-state movement was
+  produced.
 
 ## Risks
 

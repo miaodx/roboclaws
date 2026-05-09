@@ -158,6 +158,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
+    {_planner_probe_curobo_extension_cache_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
     {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
@@ -501,6 +502,64 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(summary)}</p>'
         f'<p class="note">{html.escape(torch_summary)}</p>{module_table}</section>'
     )
+
+
+def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    cache = diagnostics.get("curobo_extension_cache") or {}
+    extensions = cache.get("extensions") or {}
+    if not extensions:
+        return ""
+    rows = []
+    lock_count = 0
+    so_count = 0
+    for name, item in sorted(extensions.items()):
+        if item.get("lock_exists"):
+            lock_count += 1
+        if item.get("so_exists"):
+            so_count += 1
+        files = item.get("files") or []
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(name))}</td>"
+            f"<td>{html.escape(str(item.get('build_dir', '')))}</td>"
+            f"<td>{html.escape(_yes_no(item.get('so_exists')))}</td>"
+            f"<td>{html.escape(_yes_no(item.get('lock_exists')))}</td>"
+            f"<td>{len(files)}</td>"
+            f"<td>{html.escape(_curobo_cache_file_detail(files))}</td>"
+            "</tr>"
+        )
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Configured dir', cache.get('configured_dir') or 'default')}"
+        f"{_metric('Extensions', len(extensions))}"
+        f"{_metric('Compiled .so', f'{so_count}/{len(extensions)}')}"
+        f"{_metric('Locks', lock_count)}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Extension</th>'
+        "<th>Build dir</th><th>.so</th><th>Lock</th><th>Files</th><th>Detail</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    note = (
+        "CuRobo planner imports JIT-compile several Torch CUDA extensions. "
+        "This panel makes stale locks and missing binaries visible before strict readiness."
+    )
+    return (
+        '<section class="panel"><h2>CuRobo Extension Cache</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
+
+
+def _curobo_cache_file_detail(files: list[dict[str, Any]]) -> str:
+    if not files:
+        return ""
+    return "; ".join(f"{item.get('name')}:{item.get('size_bytes')}" for item in files[:6])
+
+
+def _yes_no(value: Any) -> str:
+    return "yes" if bool(value) else "no"
 
 
 def _planner_probe_worker_stages_section(evidence: dict[str, Any]) -> str:

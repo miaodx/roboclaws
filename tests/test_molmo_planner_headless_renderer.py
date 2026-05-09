@@ -121,3 +121,23 @@ def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
     assert payload["runtime_diagnostics"] == {"renderer": True}
     assert payload["last_worker_stage"] == "runtime_diagnostics"
     assert payload["worker_stage_events"][0]["event"] == "runtime_diagnostics"
+
+
+def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) -> None:
+    probe = _load_probe_module()
+    build_dir = tmp_path / "lbfgs_step_cu"
+    build_dir.mkdir()
+    (build_dir / "lbfgs_step_cu.so").write_bytes(b"binary")
+    (build_dir / "lock").write_text("", encoding="utf-8")
+    (build_dir / "build.ninja").write_text("rule build\n", encoding="utf-8")
+
+    entry = probe._curobo_extension_cache_entry("lbfgs_step_cu", build_dir)
+
+    assert entry["exists"] is True
+    assert entry["so_exists"] is True
+    assert entry["lock_exists"] is True
+    assert {item["name"] for item in entry["files"]} == {
+        "build.ninja",
+        "lbfgs_step_cu.so",
+        "lock",
+    }

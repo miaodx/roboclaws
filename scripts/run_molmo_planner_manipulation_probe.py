@@ -40,6 +40,13 @@ from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
 
 DEFAULT_MOLMOSPACES_ROOT = Path("/tmp/roboclaws-molmospaces-spike/molmospaces")
 PROBE_TASK = "pick_and_place"
+CUROBO_EXTENSION_NAMES = (
+    "geom_cu",
+    "kinematics_fused_cu",
+    "tensor_step_cu",
+    "lbfgs_step_cu",
+    "line_search_cu",
+)
 _WORKER_EVENT_STARTED_AT = time.monotonic()
 
 
@@ -63,6 +70,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--embodiment", choices=("franka", "rby1m"), default="franka")
     parser.add_argument(
         "--probe-mode", choices=("config_import", "execute"), default="config_import"
+    )
+    parser.add_argument(
+        "--torch-extensions-dir",
+        type=Path,
+        default=(
+            Path(os.environ["TORCH_EXTENSIONS_DIR"])
+            if os.environ.get("TORCH_EXTENSIONS_DIR")
+            else None
+        ),
+        help="Optional isolated Torch extension cache directory for CuRobo JIT builds.",
     )
     parser.add_argument(
         "--renderer-device-id",
@@ -96,6 +113,7 @@ def main() -> None:
         embodiment=args.embodiment,
         probe_mode=args.probe_mode,
         renderer_device_id=args.renderer_device_id,
+        torch_extensions_dir=args.torch_extensions_dir,
         steps=args.steps,
         timeout_s=args.timeout_s,
     )
@@ -117,6 +135,7 @@ def run_probe(
     embodiment: str,
     probe_mode: str,
     renderer_device_id: int,
+    torch_extensions_dir: Path | None,
     steps: int,
     timeout_s: float,
 ) -> dict[str, Any]:
@@ -147,6 +166,10 @@ def run_probe(
     env = os.environ.copy()
     env["PYTHONPATH"] = _prepend_pythonpath(molmospaces_root, env.get("PYTHONPATH"))
     env["PYTHONFAULTHANDLER"] = "1"
+    if torch_extensions_dir is not None:
+        torch_extensions_dir = torch_extensions_dir.expanduser().resolve()
+        torch_extensions_dir.mkdir(parents=True, exist_ok=True)
+        env["TORCH_EXTENSIONS_DIR"] = str(torch_extensions_dir)
     worker_renderer_device_id = _renderer_device_id_for_probe(
         probe_mode=probe_mode,
         renderer_device_id=renderer_device_id,
@@ -170,6 +193,8 @@ def run_probe(
         "--steps",
         str(steps),
     ]
+    if torch_extensions_dir is not None:
+        command.extend(["--torch-extensions-dir", str(torch_extensions_dir)])
     try:
         completed = subprocess.run(
             command,
@@ -232,8 +257,14 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             payload = _probe_franka(args)
         else:
             payload = _probe_rby1m(args)
-        return {"ok": True, "runtime_diagnostics": runtime_diagnostics, **payload}
+        return {
+            "ok": True,
+            "initial_runtime_diagnostics": runtime_diagnostics,
+            "runtime_diagnostics": _runtime_diagnostics(args),
+            **payload,
+        }
     except BaseException as exc:  # noqa: BLE001 - worker must report capability blockers.
+        final_runtime_diagnostics = _runtime_diagnostics(args)
         return {
             "ok": False,
             "exception_type": type(exc).__name__,
@@ -242,7 +273,8 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "embodiment": args.embodiment,
             "probe_mode": args.probe_mode,
             "execution_attempted": args.probe_mode == "execute",
-            "runtime_diagnostics": runtime_diagnostics,
+            "initial_runtime_diagnostics": runtime_diagnostics,
+            "runtime_diagnostics": final_runtime_diagnostics,
         }
 
 
@@ -295,7 +327,9 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "pyopengl_platform_env": os.environ.get("PYOPENGL_PLATFORM", ""),
         "cuda_home_env": os.environ.get("CUDA_HOME", ""),
         "torch_cuda_arch_list_env": os.environ.get("TORCH_CUDA_ARCH_LIST", ""),
+        "torch_extensions_dir_env": os.environ.get("TORCH_EXTENSIONS_DIR", ""),
         "torch": _torch_diagnostics(),
+        "curobo_extension_cache": _curobo_extension_cache_diagnostics(),
         "renderer_adapter_enabled": renderer_device_id is not None,
         "renderer_device_id": renderer_device_id,
     }
@@ -328,6 +362,54 @@ def _torch_diagnostics() -> dict[str, Any]:
             "error_type": type(exc).__name__,
             "error": str(exc),
         }
+
+
+def _curobo_extension_cache_diagnostics() -> dict[str, Any]:
+    if importlib.util.find_spec("torch") is None:
+        return {"available": False, "extensions": {}}
+    try:
+        from torch.utils.cpp_extension import _get_build_directory
+
+        extensions = {}
+        for name in CUROBO_EXTENSION_NAMES:
+            build_dir = Path(_get_build_directory(name, verbose=False))
+            extensions[name] = _curobo_extension_cache_entry(name, build_dir)
+        return {
+            "available": True,
+            "configured_dir": os.environ.get("TORCH_EXTENSIONS_DIR", ""),
+            "extensions": extensions,
+        }
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return {
+            "available": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "configured_dir": os.environ.get("TORCH_EXTENSIONS_DIR", ""),
+            "extensions": {},
+        }
+
+
+def _curobo_extension_cache_entry(name: str, build_dir: Path) -> dict[str, Any]:
+    files = []
+    if build_dir.is_dir():
+        for path in sorted(build_dir.iterdir(), key=lambda item: item.name):
+            if not path.is_file():
+                continue
+            stat = path.stat()
+            files.append(
+                {
+                    "name": path.name,
+                    "size_bytes": stat.st_size,
+                    "modified_time": round(stat.st_mtime, 3),
+                }
+            )
+    return {
+        "build_dir": str(build_dir),
+        "exists": build_dir.is_dir(),
+        "so_exists": (build_dir / f"{name}.so").is_file(),
+        "lock_exists": (build_dir / "lock").exists(),
+        "files": files,
+    }
 
 
 def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:

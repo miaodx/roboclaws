@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-backed", action="store_true")
     parser.add_argument("--accept-rby1m-curobo-blocked", action="store_true")
     parser.add_argument("--require-rby1m-curobo-ready", action="store_true")
+    parser.add_argument("--require-curobo-extension-cache", action="store_true")
     return parser.parse_args()
 
 
@@ -41,6 +42,7 @@ def main() -> None:
         require_planner_backed=args.require_planner_backed,
         accept_rby1m_curobo_blocked=args.accept_rby1m_curobo_blocked,
         require_rby1m_curobo_ready=args.require_rby1m_curobo_ready,
+        require_curobo_extension_cache=args.require_curobo_extension_cache,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -53,6 +55,7 @@ def _assert_probe_result(
     require_planner_backed: bool = False,
     accept_rby1m_curobo_blocked: bool = False,
     require_rby1m_curobo_ready: bool = False,
+    require_curobo_extension_cache: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -69,6 +72,14 @@ def _assert_probe_result(
     assert "Manipulation Provenance" in report_text, report_text[:500]
     if evidence.get("runtime_diagnostics"):
         assert "Runtime Diagnostics" in report_text, report_text[:500]
+        cache = (evidence.get("runtime_diagnostics") or {}).get("curobo_extension_cache") or {}
+        if cache.get("extensions"):
+            assert "CuRobo Extension Cache" in report_text, report_text[:500]
+    if require_curobo_extension_cache:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        cache = diagnostics.get("curobo_extension_cache") or {}
+        assert cache.get("extensions"), diagnostics
+        assert "CuRobo Extension Cache" in report_text, report_text[:500]
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]

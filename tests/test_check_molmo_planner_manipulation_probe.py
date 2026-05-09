@@ -48,6 +48,7 @@ def _write_report_files(
     diagnostics: bool = False,
     rby1m_gate: bool = False,
     worker_stages: bool = False,
+    curobo_cache: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -61,6 +62,8 @@ def _write_report_files(
         body += "Runtime Diagnostics\n"
     if worker_stages:
         body += "Worker Stage Timeline\n"
+    if curobo_cache:
+        body += "CuRobo Extension Cache\n"
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
     report.write_text(body, encoding="utf-8")
@@ -266,6 +269,69 @@ def test_checker_requires_worker_stage_report_when_stage_events_exist(
             tmp_path,
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
+        )
+
+
+def test_checker_requires_curobo_extension_cache_report_when_requested(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="config_import",
+        blockers=[{"code": "timeout", "message": "Probe exceeded 300.0s"}],
+    )
+    evidence["runtime_diagnostics"] = {
+        "curobo_extension_cache": {
+            "configured_dir": str(tmp_path / "torch_extensions"),
+            "extensions": {
+                "lbfgs_step_cu": {
+                    "build_dir": str(tmp_path / "torch_extensions" / "lbfgs_step_cu"),
+                    "so_exists": False,
+                    "lock_exists": True,
+                    "files": [{"name": "lock", "size_bytes": 0}],
+                }
+            },
+        }
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            diagnostics=True,
+            rby1m_gate=True,
+            curobo_cache=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+        require_curobo_extension_cache=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        diagnostics=True,
+        rby1m_gate=True,
+        curobo_cache=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+            require_curobo_extension_cache=True,
         )
 
 

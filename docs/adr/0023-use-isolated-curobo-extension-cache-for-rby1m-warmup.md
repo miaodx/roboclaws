@@ -12,7 +12,8 @@ ADR-0022 made the RBY1M/CuRobo warmup blocker precise:
 `output/molmo-planner-rby1m-curobo-warmup/run_result.json` records
 `last_worker_stage=rby1m_config_import` after a 300-second timeout. The local
 stderr shows CuRobo CUDA extension JIT messages for `geom_cu`,
-`kinematics_fused_cu`, `tensor_step_cu`, and `lbfgs_step_cu`.
+`kinematics_fused_cu`, `tensor_step_cu`, `lbfgs_step_cu`, and
+`line_search_cu`.
 
 The global Torch extension cache now contains compiled `py311_cu128` artifacts
 for most of those extensions, but `lbfgs_step_cu` has object files and a

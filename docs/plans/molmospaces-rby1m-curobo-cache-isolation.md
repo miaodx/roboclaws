@@ -1,6 +1,6 @@
 # MolmoSpaces RBY1M CuRobo Cache Isolation
 
-**Status:** Planned under GSD Phase 32 on 2026-05-09
+**Status:** Completed under GSD Phase 32 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0019, ADR-0022, ADR-0023, Phase 31 evidence
 **Workflow:** `hybrid-phase-pipeline`
@@ -26,7 +26,8 @@ This phase should:
 - add a planner probe option for an explicit Torch extension cache directory;
 - pass that directory into the worker through `TORCH_EXTENSIONS_DIR`;
 - record CuRobo extension cache diagnostics for `geom_cu`,
-  `kinematics_fused_cu`, `tensor_step_cu`, and `lbfgs_step_cu`;
+  `kinematics_fused_cu`, `tensor_step_cu`, `lbfgs_step_cu`, and
+  `line_search_cu`;
 - render a `CuRobo Extension Cache` report section;
 - add checker/test coverage for cache diagnostics when requested;
 - rerun RBY1M config import with an output-local cache directory and a longer
@@ -74,5 +75,32 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
 - `CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-cache-isolation --embodiment rby1m --probe-mode config_import --torch-extensions-dir output/molmo-planner-rby1m-curobo-cache-isolation/torch_extensions --steps 2 --timeout-s 900`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked --require-curobo-extension-cache output/molmo-planner-rby1m-curobo-cache-isolation/run_result.json`
-- If config import succeeds: rerun execute mode and require
-  `--require-rby1m-curobo-ready`.
+- Execute mode artifact:
+  `output/molmo-planner-rby1m-curobo-cache-isolation-execute/run_result.json`
+- `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked --require-curobo-extension-cache output/molmo-planner-rby1m-curobo-cache-isolation-execute/run_result.json`
+- Strict readiness rejected the execute artifact with
+  `--require-rby1m-curobo-ready`, as intended.
+
+## Completion Evidence
+
+Phase 32 completed as cache-isolation and blocked execute evidence, not as
+target runtime readiness.
+
+The isolated-cache run records:
+
+- configured `TORCH_EXTENSIONS_DIR` under
+  `output/molmo-planner-rby1m-curobo-cache-isolation/torch_extensions`;
+- 5/5 known CuRobo extension `.so` files present:
+  `geom_cu`, `kinematics_fused_cu`, `tensor_step_cu`, `lbfgs_step_cu`, and
+  `line_search_cu`;
+- 0 extension lock files;
+- config import reaching `rby1m_policy_class` with
+  `CuroboPickAndPlacePlannerPolicy`;
+- execute mode reaching `execute_policy_construct`;
+- execute mode blocked by `AttributeError: module 'warp' has no attribute
+  'torch'`;
+- report sections for `CuRobo Extension Cache`, `Worker Stage Timeline`, and
+  `RBY1M CuRobo Gate`.
+
+Because execute mode did not produce planner-backed robot-state movement,
+actual planner-backed cleanup primitive replacement remains gated.

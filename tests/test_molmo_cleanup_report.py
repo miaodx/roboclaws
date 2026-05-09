@@ -699,6 +699,23 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "curobo": {"available": False, "version": None},
             "molmo_spaces": {"available": True, "version": "0.1.0"},
         },
+        "curobo_extension_cache": {
+            "configured_dir": "output/cache",
+            "extensions": {
+                "lbfgs_step_cu": {
+                    "build_dir": "output/cache/lbfgs_step_cu",
+                    "so_exists": False,
+                    "lock_exists": True,
+                    "files": [{"name": "lock", "size_bytes": 0}],
+                },
+                "geom_cu": {
+                    "build_dir": "output/cache/geom_cu",
+                    "so_exists": True,
+                    "lock_exists": False,
+                    "files": [{"name": "geom_cu.so", "size_bytes": 12}],
+                },
+            },
+        },
     }
     run_result["manipulation_evidence"]["worker_stage_events"] = [
         {
@@ -723,6 +740,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "CuRobo Extension Cache" in html
+    assert "lbfgs_step_cu" in html
     assert "Worker Stage Timeline" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
