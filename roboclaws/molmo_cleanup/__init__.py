@@ -6,6 +6,9 @@ from roboclaws.molmo_cleanup.planner_primitive_executor import (
     CleanupPrimitiveResult,
     PlannerBackedCleanupContractAdapter,
 )
+from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (
+    ProbeBackedCleanupPrimitiveExecutor,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
@@ -21,6 +24,7 @@ __all__ = [
     "CleanupPrimitiveRequest",
     "CleanupPrimitiveResult",
     "PlannerBackedCleanupContractAdapter",
+    "ProbeBackedCleanupPrimitiveExecutor",
     "RealWorldCleanupContract",
     "annotate_score_with_semantic_acceptability",
     "build_advisory_evaluation",

@@ -29,7 +29,7 @@ def attach_planner_proof(
     )
     runtime = evidence.get("runtime_diagnostics") or {}
     worker_payload = evidence.get("worker_payload") or {}
-    return {
+    attachment = {
         "schema": PLANNER_PROOF_ATTACHMENT_SCHEMA,
         "source_run_result": str(proof_path),
         "contract": proof.get("contract"),
@@ -51,6 +51,10 @@ def attach_planner_proof(
             "review. Cleanup-loop object moves keep their own primitive provenance."
         ),
     }
+    cleanup_binding = _cleanup_primitive_binding(evidence)
+    if cleanup_binding:
+        attachment["cleanup_primitive_binding"] = cleanup_binding
+    return attachment
 
 
 def validate_planner_proof_attachment(attachment: dict[str, Any]) -> None:
@@ -124,3 +128,10 @@ def _resolve_path(base: Path, value: str) -> Path:
     if path.is_absolute():
         return path
     return base / path
+
+
+def _cleanup_primitive_binding(evidence: dict[str, Any]) -> dict[str, Any]:
+    raw = (
+        evidence.get("cleanup_primitive_binding") or evidence.get("planner_primitive_binding") or {}
+    )
+    return dict(raw) if isinstance(raw, dict) else {}

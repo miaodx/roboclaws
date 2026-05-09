@@ -8,17 +8,17 @@ cleanup primitive binding.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Preserve optional cleanup primitive binding fields in planner proof
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
+2. [x] Preserve optional cleanup primitive binding fields in planner proof
    attachments.
-3. [ ] Add a probe-backed cleanup primitive executor callable.
-4. [ ] Block generic standalone proof with explicit missing-binding evidence.
-5. [ ] Add focused tests for bound proof, generic proof, and mismatch cases.
-6. [ ] Re-run focused executor/gate/bridge/report tests and the current real
+3. [x] Add a probe-backed cleanup primitive executor callable.
+4. [x] Block generic standalone proof with explicit missing-binding evidence.
+5. [x] Add focused tests for bound proof, generic proof, and mismatch cases.
+6. [x] Re-run focused executor/gate/bridge/report tests and the current real
    visual artifact checker.
 
 ## Acceptance
@@ -33,11 +33,11 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` on changed Python/tests.
-- `uv run ruff format --check` on changed Python/tests.
-- `./scripts/run_pytest_standalone.sh -q` on focused probe-backed executor,
+- Passed `uv run ruff check` on changed Python/tests.
+- Passed `uv run ruff format --check` on changed Python/tests.
+- Passed `./scripts/run_pytest_standalone.sh -q` on focused probe-backed executor,
   attachment, primitive-gate, bridge, and report tests.
-- Real visual artifact checker against
+- Passed real visual artifact checker against
   `output/molmospaces-planner-cleanup-bridge-readiness/run_result.json` with
   bridge accepted as blocked.
 

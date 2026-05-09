@@ -50,7 +50,28 @@ def test_attach_planner_proof_rejects_non_strict_probe(tmp_path: Path) -> None:
         )
 
 
-def _write_strict_planner_proof(base: Path) -> Path:
+def test_attach_planner_proof_preserves_cleanup_primitive_binding(tmp_path: Path) -> None:
+    binding = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "observed_001",
+        "target_receptacle_id": "sink_01",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
+    proof_path = _write_strict_planner_proof(tmp_path / "proof", cleanup_binding=binding)
+
+    attachment = attach_planner_proof(
+        proof_run_result_path=proof_path,
+        cleanup_run_dir=tmp_path / "cleanup",
+    )
+
+    assert attachment["cleanup_primitive_binding"] == binding
+
+
+def _write_strict_planner_proof(
+    base: Path,
+    *,
+    cleanup_binding: dict[str, object] | None = None,
+) -> Path:
     base.mkdir(parents=True)
     views = base / "planner_views"
     views.mkdir()
@@ -72,6 +93,8 @@ def _write_strict_planner_proof(base: Path) -> Path:
     )
     evidence["runtime_diagnostics"] = {"renderer_adapter_enabled": True}
     evidence["worker_payload"] = {"renderer_adapter": {"camera": "wrist"}}
+    if cleanup_binding is not None:
+        evidence["cleanup_primitive_binding"] = cleanup_binding
     data = {
         "contract": MANIPULATION_PROBE_CONTRACT,
         "status": PLANNER_BACKED_PROVENANCE,

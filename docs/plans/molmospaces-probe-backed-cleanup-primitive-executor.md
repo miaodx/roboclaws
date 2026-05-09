@@ -1,6 +1,6 @@
 # MolmoSpaces Probe-Backed Cleanup Primitive Executor
 
-**Status:** Planned for GSD Phase 40 on 2026-05-09
+**Status:** Completed GSD Phase 40 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0029, ADR-0030, ADR-0031
 **Workflow:** `hybrid-phase-pipeline`
@@ -53,3 +53,24 @@ This phase should:
 - Focused shared-loop/gate/bridge tests.
 - Ruff check/format on changed files.
 - Current ADR-0003 visual artifact checker in blocked mode.
+
+## Completion Result
+
+Phase 40 added `ProbeBackedCleanupPrimitiveExecutor`, a callable adapter from
+planner proof attachments to cleanup primitive executor results. It requires
+strict target RBY1M/CuRobo execute evidence and explicit
+`planner_probe_cleanup_primitive_binding_v1` fields before returning
+`planner_backed`.
+
+Generic standalone proof now returns `blocked_capability` with
+`planner_probe_missing_cleanup_binding`, so the Phase 35 target proof remains
+runtime-readiness evidence only. Bound proof can pass through the shared
+semantic cleanup loop, cleanup primitive gate, and planner cleanup bridge in
+unit tests.
+
+## Verification Evidence
+
+- `uv run ruff check roboclaws/molmo_cleanup/planner_probe_primitive_executor.py roboclaws/molmo_cleanup/planner_proof_attachment.py roboclaws/molmo_cleanup/__init__.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py`
+- `uv run ruff format --check roboclaws/molmo_cleanup/planner_probe_primitive_executor.py roboclaws/molmo_cleanup/planner_proof_attachment.py roboclaws/molmo_cleanup/__init__.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py tests/test_molmo_planner_primitive_executor.py tests/test_molmo_cleanup_primitive_evidence.py tests/test_molmo_planner_cleanup_bridge.py tests/test_molmo_cleanup_report.py`
+- `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`

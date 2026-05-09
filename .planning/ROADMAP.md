@@ -72,7 +72,8 @@ primitive executor seam behind that shared driver. Phase 39 tightens that seam
 so planner primitive evidence must bind to the exact cleanup object and target.
 Phase 40 adds the probe-backed executor adapter that accepts only bound
 RBY1M/CuRobo proof, keeping generic standalone target proof blocked as cleanup
-primitive evidence.
+primitive evidence. The next MolmoSpaces slice can make the actual planner
+probe emit that binding from the sampled task.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -137,7 +138,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.38 MolmoSpaces planner cleanup bridge readiness** - Phase 37 (completed 2026-05-09; explicit bridge evidence joining target proof and cleanup subphase provenance)
 - ✅ **v1.39 MolmoSpaces planner-backed cleanup primitive executor** - Phase 38 (completed 2026-05-09; strict executor seam before object-specific cleanup primitive replacement)
 - ✅ **v1.40 MolmoSpaces planner primitive target binding** - Phase 39 (completed 2026-05-09; object/target-bound primitive evidence before real executor wiring)
-- 📋 **v1.41 MolmoSpaces probe-backed cleanup primitive executor** - Phase 40 (planned 2026-05-09; adapter from bound RBY1M/CuRobo proof to primitive executor evidence)
+- ✅ **v1.41 MolmoSpaces probe-backed cleanup primitive executor** - Phase 40 (completed 2026-05-09; adapter from bound RBY1M/CuRobo proof to primitive executor evidence)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -193,7 +194,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 37: MolmoSpaces planner cleanup bridge readiness** - ADR-0028 bridge evidence for target RBY1M/CuRobo proof plus cleanup primitive subphase provenance before actual primitive replacement. Completed 2026-05-09.
 - [x] **Phase 38: MolmoSpaces planner-backed cleanup primitive executor** - ADR-0029 strict per-call executor seam for planner-backed cleanup subphases behind the shared semantic cleanup loop. Completed 2026-05-09.
 - [x] **Phase 39: MolmoSpaces planner primitive target binding** - ADR-0030 object/target binding for planner primitive evidence before real object-specific executor wiring. Completed 2026-05-09.
-- [ ] **Phase 40: MolmoSpaces probe-backed cleanup primitive executor** - ADR-0031 adapter that converts only bound target RBY1M/CuRobo proof into cleanup primitive executor evidence. Planned 2026-05-09.
+- [x] **Phase 40: MolmoSpaces probe-backed cleanup primitive executor** - ADR-0031 adapter that converts only bound target RBY1M/CuRobo proof into cleanup primitive executor evidence. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
