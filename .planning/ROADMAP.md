@@ -105,7 +105,10 @@ cleanup-scene task feasibility and robot placement. Phase 55 makes executed
 proof-bundle runner reports render per-proof result status, task-feasibility
 classification, cleanup binding promotion, blockers, proof report links, and
 planner views so the next fallback-selection phase has explicit bundle-level
-evidence.
+evidence. Phase 56 adds proof request feasibility selection: local bundle runs
+can consume a prior proof-result summary, skip requests already known to be
+RBY1M task-feasibility blocked, and report when alternate request generation is
+required.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -186,6 +189,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.54 MolmoSpaces planner proof bundle execute rerun** - Phase 53 (completed 2026-05-10; local-dev execute-rerun gate exposed sampled-task mismatch blocker)
 - ✅ **v1.55 MolmoSpaces bind proof probes to cleanup scene** - Phase 54 (completed 2026-05-10; exact cleanup-scene binding exposed RBY1M task-feasibility blocker)
 - ✅ **v1.56 MolmoSpaces proof bundle result feasibility report** - Phase 55 (completed 2026-05-10; executed bundle reports show per-proof feasibility, blockers, and planner views)
+- ✅ **v1.57 MolmoSpaces proof request feasibility selection** - Phase 56 (completed 2026-05-10; prior infeasible requests can be excluded and fallback-required state is reported)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -257,6 +261,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 53: MolmoSpaces planner proof bundle execute rerun** - ADR-0044 local-dev gate for executing proof bundles, rerunning cleanup, and checking final planner-backed cleanup readiness. Completed 2026-05-10 with explicit blocker: executed proofs do not yet promote cleanup primitive binding because sampled upstream tasks differ from requested cleanup aliases.
 - [x] **Phase 54: MolmoSpaces bind proof probes to cleanup scene** - ADR-0045 proof-bundle commands carry the real cleanup scene XML and requested planner aliases into exact-scene probe sampling. Completed 2026-05-10 with explicit blocker: upstream RBY1M task sampling rejects the real cleanup objects with `HouseInvalidForTask` / robot placement infeasibility.
 - [x] **Phase 55: MolmoSpaces proof bundle result feasibility report** - ADR-0046 executed proof-bundle runner manifests/reports summarize proof status, task-feasibility classification, cleanup binding promotion, blockers, proof report links, and planner views. Completed 2026-05-10; fallback selection for RBY1M-feasible cleanup objects remains next.
+- [x] **Phase 56: MolmoSpaces proof request feasibility selection** - ADR-0047 proof-bundle runner can consume a prior result summary, skip requests already known task-feasibility blocked, and report fallback-required state. Completed 2026-05-10; alternate RBY1M-feasible request generation remains next.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

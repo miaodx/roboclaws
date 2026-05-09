@@ -217,6 +217,7 @@ def render_planner_proof_bundle_runner_report(
         )
     }
     </section>
+    {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
     {_proof_bundle_commands_section(commands)}
     {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
     {_cleanup_rerun_command_section(cleanup_command)}
@@ -752,6 +753,76 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         '<p class="note">Command evidence only. A command row is not planner proof until '
         "the referenced proof artifact passes the strict planner probe checker.</p>"
         f"{table}</section>"
+    )
+
+
+def _proof_request_selection_section(selection: dict[str, Any]) -> str:
+    if not selection:
+        return ""
+    selected = selection.get("selected_requests") or []
+    excluded = selection.get("excluded_requests") or []
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Mode', selection.get('mode', 'unknown'))}"
+        f"{_metric('Ready', selection.get('ready_request_count', 0))}"
+        f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
+        f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
+        f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
+        "</div>"
+    )
+    selected_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        "</tr>"
+        for item in selected
+        if isinstance(item, dict)
+    )
+    excluded_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+        "</tr>"
+        for item in excluded
+        if isinstance(item, dict)
+    )
+    if not selected_rows:
+        selected_rows = '<tr><td colspan="4">No proof requests selected.</td></tr>'
+    if not excluded_rows:
+        excluded_rows = '<tr><td colspan="6">No proof requests excluded.</td></tr>'
+    selected_table = (
+        '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Object</th><th>Target</th><th>Prior feasibility</th>"
+        f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
+    )
+    excluded_table = (
+        '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
+        "<th>Prior feasibility</th><th>Prior blockers</th>"
+        f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
+    )
+    note = selection.get("evidence_note") or (
+        "Private proof request selection for local proof-bundle execution."
+    )
+    return (
+        '<section class="panel proof-request-selection">'
+        "<h2>Proof Request Selection</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}'
+        f"{selected_table}{excluded_table}</section>"
+    )
+
+
+def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
+    return ", ".join(
+        str(item.get("code") or item.get("message") or "")
+        for item in blockers
+        if isinstance(item, dict)
     )
 
 

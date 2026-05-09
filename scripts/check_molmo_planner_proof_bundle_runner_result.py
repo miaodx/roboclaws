@@ -8,6 +8,7 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
     PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
 
@@ -55,6 +56,9 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    proof_request_selection = data.get("proof_request_selection") or {}
+    if proof_request_selection:
+        _assert_proof_request_selection(proof_request_selection, commands, report_text)
     proof_result_summary = data.get("proof_result_summary") or {}
     if proof_result_summary:
         _assert_proof_result_summary(
@@ -126,6 +130,27 @@ def _assert_command(
         proof_report = _resolve_path(base, str(item["report"]))
         assert run_result.is_file(), run_result
         assert proof_report.is_file(), proof_report
+
+
+def _assert_proof_request_selection(
+    selection: dict[str, Any],
+    commands: list[dict[str, Any]],
+    report_text: str,
+) -> None:
+    assert selection.get("schema") == PLANNER_PROOF_REQUEST_SELECTION_SCHEMA, selection
+    selected_ids = [str(item) for item in selection.get("selected_request_ids") or []]
+    command_ids = [str(item.get("request_id") or "") for item in commands]
+    assert selected_ids == command_ids, selection
+    assert int(selection.get("selected_count") or 0) == len(command_ids), selection
+    assert "Proof Request Selection" in report_text, report_text[:500]
+    for item in selection.get("selected_requests") or []:
+        for key in ("request_id", "object_id", "target_receptacle_id"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
+    for item in selection.get("excluded_requests") or []:
+        for key in ("request_id", "reason", "prior_task_feasibility_status"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
 
 
 def _assert_proof_result_summary(

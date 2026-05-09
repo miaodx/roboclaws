@@ -11,6 +11,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_probe_commands,
     planner_proof_requests_from_substeps,
+    proof_request_selection_from_summary,
     proof_result_summary_from_commands,
     write_planner_proof_requests,
 )
@@ -129,6 +130,96 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
     assert commands[0]["run_result"].endswith("run_result.json")
+
+
+def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "request_count": 2,
+        "ready_count": 2,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            },
+            {
+                "request_id": "proof_002",
+                "ready": True,
+                "object_id": "observed_002",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_002"},
+            },
+        ],
+    }
+    prior_summary = {
+        "schema": "planner_cleanup_proof_result_summary_v1",
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+    commands = build_probe_commands(
+        manifest=manifest,
+        output_dir=tmp_path,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        request_selection=selection,
+    )
+
+    assert selection["schema"] == "planner_cleanup_proof_request_selection_v1"
+    assert selection["selected_request_ids"] == ["proof_002"]
+    assert selection["excluded_requests"][0]["request_id"] == "proof_001"
+    assert selection["excluded_requests"][0]["reason"] == "prior_task_feasibility_blocked"
+    assert selection["fallback_required"] is False
+    assert len(commands) == 1
+    assert commands[0]["request_id"] == "proof_002"
+
+
+def test_proof_request_selection_marks_fallback_required_when_all_ready_blocked() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            }
+        ],
+    }
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary={
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "task_feasibility_status": "blocked",
+                    "blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ]
+        },
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert selection["selected_count"] == 0
+    assert selection["excluded_count"] == 1
+    assert selection["fallback_required"] is True
 
 
 def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Path) -> None:

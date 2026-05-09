@@ -66,6 +66,8 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert manifest["proof_request_count"] == 1
     assert manifest["ready_request_count"] == 1
     assert manifest["command_count"] == 1
+    assert manifest["proof_request_selection"]["mode"] == "all_ready"
+    assert manifest["proof_request_selection"]["selected_request_ids"] == ["proof_001"]
     command = manifest["commands"][0]["command"]
     assert command[:2] == ["python", "probe.py"]
     assert "--cleanup-object-id" in command
@@ -82,6 +84,7 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert Path(result["report_path"]).is_file()
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in report
+    assert "Proof Request Selection" in report
     assert "Proof Probe Commands" in report
     assert "Proof Probe Results" in report
     assert "not_run" in report
@@ -90,6 +93,140 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "--cleanup-object-id" in report
     assert "sink/body" in report
     assert "/tmp/molmospaces-scene.xml" in report
+
+
+def test_runner_excludes_prior_task_feasibility_blocked_requests(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    requests["request_count"] = 2
+    requests["ready_count"] = 2
+    requests["requests"] = [
+        requests["requests"][0],
+        {
+            "request_id": "proof_002",
+            "ready": True,
+            "object_id": "observed_002",
+            "target_receptacle_id": "shelf_01",
+            "source_receptacle_id": "table_01",
+            "planner_probe_args": {
+                "--cleanup-object-id": "observed_002",
+                "--cleanup-target-receptacle-id": "shelf_01",
+                "--cleanup-planner-object-id": "book/body",
+                "--cleanup-planner-target-receptacle-id": "shelf/body",
+            },
+        },
+    ]
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}), encoding="utf-8"
+    )
+    prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior.parent.mkdir()
+    prior.write_text(
+        json.dumps(
+            {
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    selection = result["manifest"]["proof_request_selection"]
+    assert selection["mode"] == "exclude_task_feasibility_blocked"
+    assert selection["selected_request_ids"] == ["proof_002"]
+    assert selection["excluded_requests"][0]["request_id"] == "proof_001"
+    assert result["manifest"]["command_count"] == 1
+    assert result["manifest"]["commands"][0]["request_id"] == "proof_002"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Proof Request Selection" in report
+    assert "prior_task_feasibility_blocked" in report
+    assert "HouseInvalidForTask" in report
+
+
+def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior.parent.mkdir()
+    prior.write_text(
+        json.dumps(
+            {
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert result["manifest"]["command_count"] == 0
+    selection = result["manifest"]["proof_request_selection"]
+    assert selection["fallback_required"] is True
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Fallback required" in report
+    assert "No proof requests selected" in report
 
 
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:

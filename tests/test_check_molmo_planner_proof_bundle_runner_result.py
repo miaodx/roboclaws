@@ -9,6 +9,7 @@ import pytest
 
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report
@@ -145,6 +146,20 @@ def _write_runner_artifact(base: Path) -> dict[str, object]:
 
 
 def _write_manifest_and_report(base: Path, manifest: dict[str, object]) -> None:
+    manifest["proof_request_selection"] = proof_request_selection_from_summary(
+        {
+            "schema": "planner_cleanup_proof_requests_v1",
+            "requests": [
+                {
+                    "request_id": command["request_id"],
+                    "object_id": command["object_id"],
+                    "target_receptacle_id": command["target_receptacle_id"],
+                    "ready": True,
+                }
+                for command in manifest["commands"]
+            ],
+        }
+    )
     manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
     (base / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",

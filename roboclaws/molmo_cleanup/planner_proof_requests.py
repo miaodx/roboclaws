@@ -9,6 +9,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
 PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
 PLANNER_PROOF_RESULT_SUMMARY_SCHEMA = "planner_cleanup_proof_result_summary_v1"
+PLANNER_PROOF_REQUEST_SELECTION_SCHEMA = "planner_cleanup_proof_request_selection_v1"
 
 
 def planner_proof_requests_from_substeps(
@@ -73,9 +74,19 @@ def write_planner_proof_requests(
     return manifest
 
 
-def ready_planner_proof_requests(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def ready_planner_proof_requests(
+    manifest: dict[str, Any],
+    *,
+    request_selection: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     assert manifest.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, manifest
-    return [request for request in manifest.get("requests") or [] if request.get("ready")]
+    selected_ids = _selected_request_ids(request_selection)
+    return [
+        request
+        for request in manifest.get("requests") or []
+        if request.get("ready")
+        and (selected_ids is None or str(request.get("request_id") or "") in selected_ids)
+    ]
 
 
 def build_probe_commands(
@@ -93,9 +104,14 @@ def build_probe_commands(
     renderer_device_id: int = 0,
     torch_extensions_dir: Path | None = None,
     rby1m_curobo_memory_profile: str = "low",
+    request_selection: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     commands = []
-    for index, request in enumerate(ready_planner_proof_requests(manifest), start=1):
+    ready_requests = ready_planner_proof_requests(
+        manifest,
+        request_selection=request_selection,
+    )
+    for index, request in enumerate(ready_requests, start=1):
         proof_dir = output_dir / "proofs" / _proof_dir_name(index, request)
         command = [
             str(runner_python),
@@ -146,6 +162,7 @@ def proof_bundle_run_manifest(
     output_dir: Path,
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
+    proof_request_selection: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
@@ -157,6 +174,8 @@ def proof_bundle_run_manifest(
         "proof_request_count": int(proof_requests.get("request_count") or 0),
         "ready_request_count": int(proof_requests.get("ready_count") or 0),
         "planner_scene": proof_requests.get("planner_scene") or {},
+        "proof_request_selection": proof_request_selection
+        or proof_request_selection_from_summary(proof_requests),
         "command_count": len(commands),
         "commands": commands,
         "proof_result_summary": proof_result_summary
@@ -167,6 +186,97 @@ def proof_bundle_run_manifest(
             "Dry-run manifest for generating bound planner proofs from an ADR-0003 "
             "cleanup artifact. Use --execute-probes in a local RBY1M/CuRobo session."
         ),
+    }
+
+
+def proof_request_selection_from_summary(
+    proof_requests: dict[str, Any],
+    *,
+    prior_proof_result_summary: dict[str, Any] | None = None,
+    exclude_task_feasibility_blocked: bool = False,
+) -> dict[str, Any]:
+    """Select ready proof requests, optionally excluding known infeasible requests."""
+    ready_requests = [
+        request for request in proof_requests.get("requests") or [] if request.get("ready")
+    ]
+    prior_results = _prior_results_by_request_id(prior_proof_result_summary or {})
+    selected = []
+    excluded = []
+    for request in ready_requests:
+        request_id = str(request.get("request_id") or "")
+        prior_result = prior_results.get(request_id, {})
+        if (
+            exclude_task_feasibility_blocked
+            and prior_result.get("task_feasibility_status") == "blocked"
+        ):
+            excluded.append(_excluded_request(request, prior_result))
+            continue
+        selected.append(_selected_request(request, prior_result))
+    fallback_required = bool(ready_requests) and not selected
+    return {
+        "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
+        "mode": (
+            "exclude_task_feasibility_blocked" if exclude_task_feasibility_blocked else "all_ready"
+        ),
+        "ready_request_count": len(ready_requests),
+        "selected_count": len(selected),
+        "excluded_count": len(excluded),
+        "fallback_required": fallback_required,
+        "selected_request_ids": [item["request_id"] for item in selected],
+        "selected_requests": selected,
+        "excluded_requests": excluded,
+        "prior_summary_available": bool(prior_proof_result_summary),
+        "prior_result_count": len(prior_results),
+        "evidence_note": (
+            "Private proof request selection for local proof-bundle execution. "
+            "Excluded requests require fallback generation before another exact proof run."
+        ),
+    }
+
+
+def _selected_request_ids(request_selection: dict[str, Any] | None) -> set[str] | None:
+    if not request_selection:
+        return None
+    raw = request_selection.get("selected_request_ids")
+    if raw is None:
+        return None
+    return {str(item) for item in raw}
+
+
+def _prior_results_by_request_id(summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(item.get("request_id") or ""): dict(item)
+        for item in summary.get("results") or []
+        if isinstance(item, dict) and item.get("request_id")
+    }
+
+
+def _selected_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "request_id": str(request.get("request_id") or ""),
+        "object_id": str(request.get("object_id") or ""),
+        "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
+        "prior_task_feasibility_status": str(
+            prior_result.get("task_feasibility_status") or "unknown"
+        ),
+    }
+
+
+def _excluded_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "request_id": str(request.get("request_id") or ""),
+        "object_id": str(request.get("object_id") or ""),
+        "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
+        "reason": "prior_task_feasibility_blocked",
+        "prior_status": str(prior_result.get("status") or ""),
+        "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
+        "prior_blockers": _blockers(prior_result.get("blockers") or []),
     }
 
 

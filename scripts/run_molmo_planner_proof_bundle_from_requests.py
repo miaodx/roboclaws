@@ -18,6 +18,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_cleanup_rerun_command,
     build_probe_commands,
     proof_bundle_run_manifest,
+    proof_request_selection_from_summary,
 )
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
@@ -52,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--execute-probes", action="store_true")
     parser.add_argument("--rerun-cleanup", action="store_true")
     parser.add_argument("--cleanup-output-dir", type=Path)
+    parser.add_argument("--prior-proof-bundle-manifest", type=Path)
+    parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
     return parser.parse_args()
 
 
@@ -75,6 +78,8 @@ def main() -> None:
         execute_probes=args.execute_probes,
         rerun_cleanup=args.rerun_cleanup,
         cleanup_output_dir=args.cleanup_output_dir,
+        prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
+        exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
     )
     print(
         json.dumps(
@@ -106,11 +111,19 @@ def run_from_cleanup_result(
     execute_probes: bool = False,
     rerun_cleanup: bool = False,
     cleanup_output_dir: Path | None = None,
+    prior_proof_bundle_manifest: Path | None = None,
+    exclude_task_feasibility_blocked: bool = False,
 ) -> dict[str, Any]:
     cleanup_run_result = cleanup_run_result.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     source_run = json.loads(cleanup_run_result.read_text(encoding="utf-8"))
     requests = _load_proof_requests(source_run, cleanup_run_result.parent)
+    prior_summary = _load_prior_proof_result_summary(prior_proof_bundle_manifest)
+    proof_request_selection = proof_request_selection_from_summary(
+        requests,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+    )
     commands = build_probe_commands(
         manifest=requests,
         output_dir=output_dir,
@@ -125,6 +138,7 @@ def run_from_cleanup_result(
         renderer_device_id=renderer_device_id,
         torch_extensions_dir=torch_extensions_dir,
         rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
+        request_selection=proof_request_selection,
     )
     proof_results: list[Path] = []
     status = "dry_run"
@@ -158,6 +172,7 @@ def run_from_cleanup_result(
         output_dir=output_dir,
         proof_requests=requests,
         commands=commands,
+        proof_request_selection=proof_request_selection,
         cleanup_command=cleanup_command,
         cleanup_rerun=cleanup_rerun,
     )
@@ -217,6 +232,15 @@ def _with_source_planner_scene(
         ),
     }
     return enriched
+
+
+def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    summary = data.get("proof_result_summary")
+    return dict(summary) if isinstance(summary, dict) else {}
 
 
 def _run_command(command: list[str]) -> None:

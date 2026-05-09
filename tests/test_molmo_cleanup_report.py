@@ -711,6 +711,26 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
         "output_dir": str(tmp_path),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_request_selection": {
+            "schema": "planner_cleanup_proof_request_selection_v1",
+            "mode": "exclude_task_feasibility_blocked",
+            "ready_request_count": 1,
+            "selected_count": 0,
+            "excluded_count": 1,
+            "fallback_required": True,
+            "selected_request_ids": [],
+            "selected_requests": [],
+            "excluded_requests": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ],
+        },
         "command_count": 1,
         "commands": [
             {
@@ -784,6 +804,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     html = report_path.read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
+    assert "Proof Request Selection" in html
     assert "Proof Probe Commands" in html
     assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
@@ -792,6 +813,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "observed_001" in html
     assert "sink/body" in html
     assert "HouseInvalidForTask" in html
+    assert "Fallback required" in html
+    assert "prior_task_feasibility_blocked" in html
     assert "Task feasibility" in html
     assert "blocked" in html
     assert "initial.png" in html

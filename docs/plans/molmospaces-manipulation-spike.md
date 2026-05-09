@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 55 proof-bundle result feasibility reporting completed; RBY1M task-feasibility/fallback selection remains next on 2026-05-10
+**Status:** Phase 56 proof request feasibility selection completed; alternate RBY1M-feasible request generation remains next on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -78,7 +78,10 @@ RBY1M robot placement infeasibility before sampled binding can promote. Phase
 55 makes executed proof-bundle runner reports summarize each generated proof's
 status, task-feasibility classification, cleanup binding promotion, blockers,
 proof report, and planner views so fallback-selection work can consume explicit
-bundle-level evidence.
+bundle-level evidence. Phase 56 adds the first fallback-selection seam: a
+runner can consume a prior proof-bundle manifest, exclude requests already known
+to be RBY1M task-feasibility blocked, and report when alternate request
+generation is required.
 
 ## Why This Exists
 
@@ -898,7 +901,10 @@ completed:
   gsd-plan-phase 55-molmospaces-proof-bundle-result-feasibility-report
   gsd-execute-phase 55-molmospaces-proof-bundle-result-feasibility-report
   gsd-verify-work 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-plan-phase 56-molmospaces-proof-request-feasibility-selection
+  gsd-execute-phase 56-molmospaces-proof-request-feasibility-selection
+  gsd-verify-work 56-molmospaces-proof-request-feasibility-selection
 
 next pipeline candidates:
-  plan RBY1M cleanup-scene task feasibility/fallback selection for proof requests
+  plan alternate RBY1M-feasible cleanup proof request generation
 ```
