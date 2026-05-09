@@ -48,6 +48,7 @@ one decision per file, sequential numbering, explicit status.
 | [0037](0037-emit-cleanup-planner-proof-request-manifests.md) | Emit Cleanup Planner Proof Request Manifests | Accepted |
 | [0038](0038-render-planner-proof-requests-in-cleanup-reports.md) | Render Planner Proof Requests In Cleanup Reports | Accepted |
 | [0039](0039-render-planner-proof-bundle-runner-reports.md) | Render Planner Proof Bundle Runner Reports | Accepted |
+| [0040](0040-check-planner-proof-bundle-runner-artifacts.md) | Check Planner Proof Bundle Runner Artifacts | Accepted |
 
 ## Adding a new ADR
 

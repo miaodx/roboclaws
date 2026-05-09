@@ -87,7 +87,8 @@ local-dev handoff from completed cleanup artifacts to executable planner proof
 requests, so real multi-proof bundle runs can be generated repeatably. Phase 47
 makes those private proof requests reviewable in the shared cleanup report
 without moving planner aliases into Agent View. Phase 48 adds a visual report
-for the local proof-bundle runner output itself.
+for the local proof-bundle runner output itself. Phase 49 adds a checker for
+that runner manifest/report pair.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -161,6 +162,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.47 MolmoSpaces planner proof request manifest** - Phase 46 (completed 2026-05-10; private proof request manifest and local bundle runner)
 - ✅ **v1.48 MolmoSpaces planner proof request report view** - Phase 47 (completed 2026-05-10; private proof request report section)
 - ✅ **v1.49 MolmoSpaces planner proof bundle runner report** - Phase 48 (completed 2026-05-10; visual command report for local proof generation)
+- 🚧 **v1.50 MolmoSpaces planner proof bundle runner checker** - Phase 49 (in progress 2026-05-10; gate runner manifest/report integrity)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -225,6 +227,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 46: MolmoSpaces planner proof request manifest** - ADR-0037 private manifest and local runner that turn completed ADR-0003 cleanup artifacts into executable bound planner proof requests. Completed 2026-05-10.
 - [x] **Phase 47: MolmoSpaces planner proof request report view** - ADR-0038 shared report section that renders private planner proof requests while keeping Agent View clean. Completed 2026-05-10.
 - [x] **Phase 48: MolmoSpaces planner proof bundle runner report** - ADR-0039 visual `report.html` for local proof-bundle runner command manifests. Completed 2026-05-10.
+- [ ] **Phase 49: MolmoSpaces planner proof bundle runner checker** - ADR-0040 checker for local proof-bundle runner manifest/report integrity. In progress 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
