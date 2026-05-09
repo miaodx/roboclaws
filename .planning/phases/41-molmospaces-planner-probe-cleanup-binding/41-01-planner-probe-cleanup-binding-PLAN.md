@@ -8,16 +8,16 @@ upstream task.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Add optional cleanup binding request CLI fields to the planner probe.
-3. [ ] Record sampled pickup/place task binding from the upstream task config.
-4. [ ] Promote cleanup primitive binding only on exact request/sample match.
-5. [ ] Add focused tests for matching, mismatch, and no-request behavior.
-6. [ ] Re-run focused probe/executor/report tests and the current real visual
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
+2. [x] Add optional cleanup binding request CLI fields to the planner probe.
+3. [x] Record sampled pickup/place task binding from the upstream task config.
+4. [x] Promote cleanup primitive binding only on exact request/sample match.
+5. [x] Add focused tests for matching, mismatch, and no-request behavior.
+6. [x] Re-run focused probe/executor/report tests and the current real visual
    artifact checker.
 
 ## Acceptance
@@ -32,11 +32,10 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` on changed Python/tests.
-- `uv run ruff format --check` on changed Python/tests.
-- `./scripts/run_pytest_standalone.sh -q` on focused probe, executor,
-  attachment, gate, bridge, and report tests.
-- Real visual artifact checker against
+- Passed: `uv run ruff check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
+- Passed: `uv run ruff format --check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
+- Passed: `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py`
+- Passed: real visual artifact checker against
   `output/molmospaces-planner-cleanup-bridge-readiness/run_result.json` with
   bridge accepted as blocked.
 
@@ -46,3 +45,12 @@ Planned 2026-05-09.
   require exact requested object/target match.
 - The upstream sampled names may use MuJoCo body names while ADR-0003 uses
   observed handles. Mismatches should remain blocked until a real mapping exists.
+
+## Completion Notes
+
+The planner probe now accepts optional requested cleanup object, target, source,
+and tool fields. Execute-mode evidence includes `sampled_task_binding`,
+`requested_cleanup_primitive_binding`, `cleanup_primitive_binding`, and
+`cleanup_primitive_binding_blockers` when applicable. Promotion remains strict:
+no request means no cleanup primitive binding, and sampled-task mismatches stay
+blocked.

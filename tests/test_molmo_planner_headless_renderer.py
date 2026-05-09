@@ -244,6 +244,88 @@ def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
     assert payload["worker_stage_events"][0]["event"] == "runtime_diagnostics"
 
 
+def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None:
+    probe = _load_probe_module()
+    requested = probe._requested_cleanup_primitive_binding(
+        Namespace(
+            cleanup_object_id="pickup/body",
+            cleanup_target_receptacle_id="target/body",
+            cleanup_source_receptacle_id="source/body",
+            cleanup_tools="navigate_to_object,pick,navigate_to_receptacle,place",
+        )
+    )
+    sampled = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "pickup/body",
+        "place_receptacle_name": "target/body",
+        "place_target_name": "target/body",
+    }
+
+    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+
+    assert result["promoted"] is True
+    binding = result["cleanup_primitive_binding"]
+    assert binding["schema"] == "planner_probe_cleanup_primitive_binding_v1"
+    assert binding["object_id"] == "pickup/body"
+    assert binding["target_receptacle_id"] == "target/body"
+    assert binding["source_receptacle_id"] == "source/body"
+    assert binding["tools"] == [
+        "navigate_to_object",
+        "navigate_to_receptacle",
+        "pick",
+        "place",
+    ]
+
+
+def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
+    probe = _load_probe_module()
+    requested = probe._requested_cleanup_primitive_binding(
+        Namespace(
+            cleanup_object_id="observed_001",
+            cleanup_target_receptacle_id="sink_01",
+            cleanup_source_receptacle_id="counter_01",
+            cleanup_tools="place",
+        )
+    )
+    sampled = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "different_object",
+        "place_receptacle_name": "different_target",
+        "place_target_name": "different_target",
+    }
+
+    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+
+    assert result["promoted"] is False
+    assert result["cleanup_primitive_binding"] is None
+    assert [item["code"] for item in result["blockers"]] == [
+        "cleanup_binding_object_mismatch",
+        "cleanup_binding_target_mismatch",
+    ]
+
+
+def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
+    probe = _load_probe_module()
+    requested = probe._requested_cleanup_primitive_binding(
+        Namespace(
+            cleanup_object_id="",
+            cleanup_target_receptacle_id="",
+            cleanup_source_receptacle_id="",
+            cleanup_tools="",
+        )
+    )
+
+    result = probe._cleanup_primitive_binding_from_sampled_task(
+        requested,
+        {"pickup_obj_name": "pickup/body", "place_receptacle_name": "target/body"},
+    )
+
+    assert requested["requested"] is False
+    assert result["promoted"] is False
+    assert result["blockers"] == []
+    assert result["cleanup_primitive_binding"] is None
+
+
 def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) -> None:
     probe = _load_probe_module()
     build_dir = tmp_path / "lbfgs_step_cu"

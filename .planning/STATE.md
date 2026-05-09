@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 41 MolmoSpaces planner probe cleanup binding planned on 2026-05-09; implementation should emit sampled-task binding and exact-match cleanup primitive binding from probe artifacts.
+stopped_at: Phase 41 MolmoSpaces planner probe cleanup binding completed on 2026-05-09; next slice should force an upstream sampler/object mapping to ADR-0003 observed handles and use the real executor path.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 34
-  completed_phases: 33
+  completed_phases: 34
   total_plans: 37
-  completed_plans: 36
-  percent: 97
+  completed_plans: 37
+  percent: 100
 ---
 
 # Project State
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 41 should make the planner probe emit sampled-task binding and promote cleanup primitive binding only on exact request/sample match.
+**Current focus:** Next MolmoSpaces cleanup slice should force or map planner sampled tasks to ADR-0003 observed handles and route matching proof through the real cleanup primitive executor.
 
 ## Current Position
 
-Phase: 41 (molmospaces-planner-probe-cleanup-binding) — PLANNED
-Plan: 0 of 1 complete — `41-01` should add sampled-task binding diagnostics
+Phase: none active - Phase 41 (molmospaces-planner-probe-cleanup-binding) is COMPLETE.
+Plan: 1 of 1 complete - `41-01` added sampled-task binding diagnostics
 and exact-match cleanup primitive binding promotion to the planner probe.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
@@ -38,11 +38,11 @@ target runtime ready, cleanup primitives not ready, and bridge status
 Phase 38 closed the implementation seam before object-specific RBY1M/CuRobo
 cleanup primitive replacement. Phase 39 closed the object/target binding
 hardening slice. Phase 40 closed the adapter slice from bound target proof into
-the executor seam. Phase 41 is the probe-source binding slice.
-Last activity: 2026-05-09 - Planned Phase 41 planner probe cleanup binding.
+the executor seam. Phase 41 closed the probe-source binding slice.
+Last activity: 2026-05-09 - Completed Phase 41 planner probe cleanup binding.
 
-Progress: [#########-] 97%
-Phase 41 note: do not promote cleanup primitive binding unless requested object/target match the sampled upstream task.
+Progress: [##########] 100%
+Phase 41 result: the probe emits sampled-task binding and promotes cleanup primitive binding only when requested object/target/tools match the sampled upstream task.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
@@ -76,8 +76,8 @@ Phase 41 note: do not promote cleanup primitive binding unless requested object/
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 38, 39, 40
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, and a probe-backed executor adapter that blocks generic standalone proof.
+- Last 3 shipped phases: 39, 40, 41
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, and planner probe diagnostics that promote cleanup binding only on exact request/sample match.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -506,6 +506,11 @@ Recent decisions affecting current work:
   make the planner probe record sampled pickup/place task names, accept optional
   requested cleanup binding fields, and promote cleanup primitive binding only
   on exact request/sample match.
+- Phase 41 completed (2026-05-09): **MolmoSpaces planner probe cleanup
+  binding** - planner probe artifacts now carry sampled task binding,
+  requested cleanup binding, promoted cleanup primitive binding on exact
+  request/sample match, and mismatch blockers. Generic proof remains target
+  runtime proof only.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -554,9 +559,12 @@ None yet.
   that adapter visible and probe-local, then moves execution to
   `execute_policy_run_start`; Phase 35 later produced strict standalone target
   proof, Phase 36 consolidated the shared loop, Phase 37 added bridge-readiness
-  evidence, and Phase 38 added the strict primitive executor seam. Actual
-  planner-backed cleanup-loop primitive replacement now requires a real
-  object-specific RBY1M/CuRobo executor through that seam.
+  evidence, Phase 38 added the strict primitive executor seam, Phase 39 bound
+  primitive evidence to exact cleanup object/target, Phase 40 added the
+  probe-backed executor adapter, and Phase 41 made the probe emit exact-match
+  cleanup binding. Actual planner-backed cleanup-loop primitive replacement now
+  requires forcing or mapping sampled RBY1M/CuRobo tasks to ADR-0003 observed
+  handles and routing them through the real executor.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -589,9 +597,9 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 41 MolmoSpaces planner probe cleanup binding planned. The next
-implementation should make the real planner probe emit sampled-task binding and
-exact-match cleanup primitive binding.
+Stopped at: Phase 41 MolmoSpaces planner probe cleanup binding completed. The
+next implementation should force or map upstream sampled planner tasks to
+ADR-0003 observed handles and run the real cleanup primitive executor path.
 Latest phase artifacts are
 `docs/adr/0032-emit-cleanup-primitive-binding-from-planner-probe.md`,
 `docs/plans/molmospaces-planner-probe-cleanup-binding.md`, and
@@ -607,6 +615,6 @@ Resume file: .planning/phases/41-molmospaces-planner-probe-cleanup-binding/41-01
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** Phase 41 MolmoSpaces planner probe cleanup binding. Add
-sampled-task binding diagnostics and exact-match cleanup primitive binding
-promotion to the planner probe.
+**Active Phase:** None. Phase 41 is complete; the next phase should bridge
+ADR-0003 observed handles to upstream sampled planner tasks and use the real
+cleanup primitive executor path.
