@@ -149,7 +149,7 @@ molmo-agent-bridge-visual:
 
 # ADR-0003 public/private cleanup gate. Requires the isolated Python 3.11
 # MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
-molmo-realworld-cleanup:
+molmo-realworld-cleanup generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
@@ -158,7 +158,7 @@ molmo-realworld-cleanup:
       tests/test_check_molmo_realworld_cleanup_result.py \
       tests/test_molmo_cleanup_report.py \
       tests/test_verify_just_recipes.py
-    just harness::molmo-realworld-cleanup
+    just harness::molmo-realworld-cleanup "1 2 3" "output/molmo-realworld-cleanup-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

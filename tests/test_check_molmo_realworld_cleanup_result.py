@@ -31,7 +31,24 @@ def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
         path.parent,
         expect_task=None,
         expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
     )
+
+
+def test_checker_rejects_too_small_generated_mess_set(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=6,
+        )
 
 
 def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None:

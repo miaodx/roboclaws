@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-task")
     parser.add_argument("--expect-backend")
     parser.add_argument("--expect-seeds")
+    parser.add_argument("--min-generated-mess-count", type=int, default=1)
     parser.add_argument("--require-robot-views", action="store_true")
     return parser.parse_args()
 
@@ -42,6 +43,7 @@ def main() -> None:
             path.parent,
             expect_task=args.expect_task,
             expect_backend=args.expect_backend,
+            min_generated_mess_count=args.min_generated_mess_count,
             require_robot_views=args.require_robot_views,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
@@ -65,6 +67,7 @@ def _assert_result(
     *,
     expect_task: str | None,
     expect_backend: str | None,
+    min_generated_mess_count: int = 1,
     require_robot_views: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
@@ -74,7 +77,7 @@ def _assert_result(
     assert data.get("policy_uses_private_truth") is False, data
     assert data.get("planner_uses_private_manifest") is False, data
     assert data.get("fixture_hint_mode") == "room_only", data
-    assert data.get("generated_mess_count", 0) >= 1, data
+    assert data.get("generated_mess_count", 0) >= min_generated_mess_count, data
     assert data.get("mess_restoration_rate", 0) >= 0.70, data
     assert data.get("sweep_coverage_rate", 0) >= 0.90, data
     assert data.get("disturbance_count", 999) <= 2, data
@@ -89,6 +92,7 @@ def _assert_result(
     _assert_trace_is_public(_resolve_path(base, data["artifacts"]["trace"]))
     private = data.get("private_evaluation") or {}
     assert private.get("generated_mess_count") == data.get("generated_mess_count"), data
+    assert private.get("generated_mess_count", 0) >= min_generated_mess_count, data
     assert private.get("acceptable_destination_sets"), data
     for item in data.get("semantic_substeps") or []:
         phases = [str(step.get("phase")) for step in item.get("steps", [])]

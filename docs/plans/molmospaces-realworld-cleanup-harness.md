@@ -37,6 +37,13 @@ destination sets, `is_misplaced` labels, or a global movable-object inventory.
 The private scorer data appears only in post-run `private_evaluation` artifacts
 and the report's Private Evaluation section.
 
+Follow-up update, 2026-05-09: Phase 15 implemented ADR-0005 and expanded the
+real ADR-0003 harness recipe to request 10 hidden generated objects by default.
+See
+[`docs/plans/molmospaces-generated-mess-set-scale.md`](molmospaces-generated-mess-set-scale.md)
+and
+`.planning/phases/15-molmospaces-generated-mess-set-scale/15-VERIFICATION.md`.
+
 Architecture note: current-contract bridge artifacts and ADR-0003 harness
 artifacts intentionally keep separate public contracts, but share the same
 semantic timeline/report underlay in `roboclaws/molmo_cleanup/semantic_timeline.py`.

@@ -88,6 +88,7 @@ def render_cleanup_report(
         {_badge("Contract", run_result.get("contract", "legacy"))}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
+        {_badge("Generated mess", _generated_mess_summary(run_result))}
         {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
         {_badge("Agent driven", run_result.get("agent_driven", False))}
         {_badge("Provenance", run_result["primitive_provenance"])}
@@ -136,6 +137,16 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     if not robot_name:
         return ""
     return _badge("Robot", robot_name)
+
+
+def _generated_mess_summary(run_result: dict[str, Any]) -> str:
+    actual = run_result.get("generated_mess_count")
+    requested = run_result.get("requested_generated_mess_count")
+    if actual is None:
+        return "n/a"
+    if requested is None or requested == actual:
+        return actual
+    return f"{actual} actual / {requested} requested"
 
 
 def _current_contract_note(run_result: dict[str, Any]) -> str:
@@ -227,7 +238,8 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
         + "</tbody></table>"
     )
     summary = (
-        f"Generated mess count {private.get('generated_mess_count', 0)}; "
+        f"Generated mess count {private.get('generated_mess_count', 0)}"
+        f"{_requested_generated_text(private)}; "
         f"mess restoration rate {private.get('mess_restoration_rate', 0)}; "
         f"sweep coverage rate {private.get('sweep_coverage_rate', 0)}; "
         f"disturbance count {private.get('disturbance_count', 0)}."
@@ -236,6 +248,13 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
         "<section><h2>Private Evaluation</h2>"
         f'<p class="note">{html.escape(summary)}</p>{table}</section>'
     )
+
+
+def _requested_generated_text(private: dict[str, Any]) -> str:
+    requested = private.get("requested_generated_mess_count")
+    if requested is None:
+        return ""
+    return f" (requested {requested})"
 
 
 def _robot_timeline(steps: list[dict[str, Any]]) -> str:

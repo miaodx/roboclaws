@@ -62,6 +62,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
+    parser.add_argument("--generated-mess-count", type=int, default=10)
     return parser.parse_args(argv)
 
 
@@ -75,6 +76,7 @@ def run_realworld_cleanup(
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
+    generated_mess_count: int = 10,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -83,6 +85,8 @@ def run_realworld_cleanup(
         raise ValueError(
             "record_robot_views requires backend=molmospaces_subprocess and include_robot"
         )
+    if generated_mess_count < 1:
+        raise ValueError("generated_mess_count must be >= 1")
 
     backend_instance: Any | None = None
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -91,6 +95,7 @@ def run_realworld_cleanup(
             seed=seed,
             include_robot=include_robot,
             robot_name=robot_name,
+            generated_mess_count=generated_mess_count,
         )
         scenario = backend_instance.scenario
     else:
@@ -220,6 +225,7 @@ def run_realworld_cleanup(
     private_evaluation_path = output_dir / "private_evaluation.json"
     agent_view = contract.agent_view_payload()
     private_evaluation = contract.private_evaluation_payload(done["score"])
+    private_evaluation["requested_generated_mess_count"] = generated_mess_count
     agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
     private_evaluation_path.write_text(
         json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
@@ -245,6 +251,7 @@ def run_realworld_cleanup(
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
         "fixture_hint_mode": fixture_hint_mode,
+        "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": private_evaluation["generated_mess_count"],
         "mess_restoration_rate": done["score"]["mess_restoration_rate"],
         "sweep_coverage_rate": done["score"]["sweep_coverage_rate"],
@@ -273,6 +280,8 @@ def run_realworld_cleanup(
             "model_stats": backend_instance.model_stats,
             "scene_xml": backend_instance.scene_xml,
             "metadata_object_count": backend_instance.metadata_object_count,
+            "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
+            "generated_mess_count": backend_instance.generated_mess_count,
         }
         if getattr(backend_instance, "robot", None) is not None:
             run_result["robot"] = backend_instance.robot
@@ -507,6 +516,7 @@ def main(argv: list[str] | None = None) -> int:
         include_robot=args.include_robot,
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
+        generated_mess_count=args.generated_mess_count,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

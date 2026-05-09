@@ -10,20 +10,22 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
 import mujoco
 from PIL import Image, ImageDraw
+
+from roboclaws.molmo_cleanup.generated_mess import (
+    generated_mess_success_threshold,
+    select_generated_mess_targets,
+)
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
 HELD_LOCATION_ID = "held_by_agent"
-
-TARGET_RULES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (("Cup", "Mug", "Plate", "Bowl"), ("Sink",)),
-    (("Book", "Newspaper"), ("ShelvingUnit", "Desk")),
-    (("Apple", "Bread", "Egg", "Potato", "Lettuce"), ("Fridge",)),
-    (("RemoteControl",), ("TVStand",)),
-    (("Pillow", "TeddyBear"), ("Bed", "Sofa")),
-)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -37,6 +39,7 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("--scene-index", type=int, default=0)
     init.add_argument("--include-robot", action="store_true")
     init.add_argument("--robot-name", default="rby1m")
+    init.add_argument("--generated-mess-count", type=int, default=5)
 
     subparsers.add_parser("observe")
     subparsers.add_parser("scene_objects")
@@ -89,6 +92,7 @@ def main(argv: list[str] | None = None) -> None:
             scene_index=args.scene_index,
             include_robot=args.include_robot,
             robot_name=args.robot_name,
+            generated_mess_count=args.generated_mess_count,
         )
     else:
         state = _read_state(args.state_path)
@@ -150,6 +154,7 @@ def init_state(
     scene_index: int,
     include_robot: bool = False,
     robot_name: str = "rby1m",
+    generated_mess_count: int = 5,
 ) -> dict[str, Any]:
     from molmo_spaces.molmo_spaces_constants import get_robot_path, get_scenes_root
     from molmo_spaces.utils.lazy_loading_utils import install_scene_from_source_index
@@ -174,9 +179,17 @@ def init_state(
 
     receptacles = _collect_receptacles(model, data, metadata)
     objects = _collect_dynamic_objects(model, data, metadata)
-    targets = _select_targets(objects, receptacles)
-    if len(targets) < 5:
-        raise RuntimeError(f"expected at least 5 cleanup targets, found {len(targets)}")
+    if generated_mess_count < 1:
+        raise ValueError("generated_mess_count must be >= 1")
+    targets = select_generated_mess_targets(
+        objects,
+        receptacles,
+        target_count=generated_mess_count,
+    )
+    if len(targets) < generated_mess_count:
+        raise RuntimeError(
+            f"expected at least {generated_mess_count} cleanup targets, found {len(targets)}"
+        )
 
     state = {
         "backend": BACKEND,
@@ -202,6 +215,8 @@ def init_state(
         "objects": {item["object_id"]: item for item in objects},
         "receptacles": {item["receptacle_id"]: item for item in receptacles},
         "selected_object_ids": [target["object_id"] for target in targets],
+        "requested_generated_mess_count": generated_mess_count,
+        "generated_mess_count": len(targets),
         "qpos": [float(value) for value in data.qpos],
         "held_object_id": None,
         "current_receptacle_id": None,
@@ -230,7 +245,7 @@ def init_state(
     state["current_receptacle_id"] = _first_wrong_receptacle(state, targets[0])
     state["private_manifest"] = {
         "scenario_id": f"molmospaces-procthor-val-{scene_index}-{seed}",
-        "success_threshold": 3,
+        "success_threshold": generated_mess_success_threshold(len(targets)),
         "targets": [
             {
                 "object_id": target["object_id"],
@@ -246,6 +261,8 @@ def init_state(
         backend=BACKEND,
         scenario=state["scenario_public"],
         private_manifest=state["private_manifest"],
+        requested_generated_mess_count=state["requested_generated_mess_count"],
+        generated_mess_count=state["generated_mess_count"],
         scene_xml=state["scene_xml"],
         runtime=state["runtime"],
         model_stats=state["model_stats"],
@@ -745,42 +762,6 @@ def _collect_receptacles(
             }
         )
     return sorted(items, key=lambda item: (item["category"], item["receptacle_id"]))
-
-
-def _select_targets(
-    objects: list[dict[str, Any]],
-    receptacles: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    selected = []
-    used: set[str] = set()
-    for object_categories, receptacle_categories in TARGET_RULES:
-        obj = next(
-            (
-                item
-                for item in objects
-                if item["object_id"] not in used and item["category"] in object_categories
-            ),
-            None,
-        )
-        receptacle = _first_receptacle_for_categories(receptacles, receptacle_categories)
-        if obj is None or receptacle is None:
-            continue
-        obj = dict(obj)
-        obj["target_receptacle_id"] = receptacle["receptacle_id"]
-        selected.append(obj)
-        used.add(obj["object_id"])
-    return selected
-
-
-def _first_receptacle_for_categories(
-    receptacles: list[dict[str, Any]],
-    categories: tuple[str, ...],
-) -> dict[str, Any] | None:
-    for category in categories:
-        for receptacle in receptacles:
-            if receptacle["category"] == category:
-                return receptacle
-    return None
 
 
 def _seed_misplaced_objects(

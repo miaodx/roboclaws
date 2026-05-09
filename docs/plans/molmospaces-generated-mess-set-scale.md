@@ -1,9 +1,32 @@
 # MolmoSpaces Generated Mess Set Scale
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 15
+**Status:** Implemented 2026-05-09 under GSD Phase 15
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0005, Phase 14 verification
 **Workflow:** `hybrid-phase-pipeline`
+
+## Implementation Result
+
+Implemented under GSD Phase 15:
+`.planning/phases/15-molmospaces-generated-mess-set-scale/`.
+
+Shipped artifacts:
+
+- `roboclaws/molmo_cleanup/generated_mess.py`
+- configurable `generated_mess_count` support in
+  `scripts/molmospaces_subprocess_worker.py`
+- `MolmoSpacesSubprocessBackend(..., generated_mess_count=...)`
+- `examples/molmospaces_realworld_cleanup.py --generated-mess-count`
+- `scripts/check_molmo_realworld_cleanup_result.py --min-generated-mess-count`
+- `just harness::molmo-realworld-cleanup ... generated_mess_count=10`
+
+Local evidence from 2026-05-09:
+
+| Gate | Artifact | Result |
+| --- | --- | --- |
+| Focused tests | `tests/test_molmospaces_realworld_cleanup.py`, `tests/test_check_molmo_realworld_cleanup_result.py`, `tests/test_molmo_cleanup_subprocess_backend.py`, report/recipe/contract tests | 19 focused tests passed with one MuJoCo-dependent skip in the standalone environment. |
+| Real MolmoSpaces one-seed scale run | `output/molmo-realworld-cleanup-harness-scale-check/seed-1/run_result.json` | Checker passed with `requested_generated_mess_count=10`, `generated_mess_count=10`, `cleanup_status=success`, `mess_restoration_rate=0.8`, `sweep_coverage_rate=1.0`, and `disturbance_count=0`. |
+| Visual report scale check | `output/molmo-realworld-cleanup-harness-scale-check/seed-1/report.html` | Report includes Agent View, Private Evaluation, Final Result/Score, Cleanup Trace, and Robot View Timeline with 10 semantic object rows, 44 robot timeline steps, and 176 FPV/chase/map/verification PNGs. |
 
 ## Problem
 

@@ -247,9 +247,10 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited
 # to metric map, room-level fixture hints, and robot-local observed handles.
+# Phase 15 requests 10 hidden generated objects by default.
 # It also records RBY1M robot views so report.html has the same review surface
 # as the current-contract visual bridge report.
-molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup-harness" task="帮我收拾这个房间":
+molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     rm -rf "{{output_dir}}"
@@ -260,6 +261,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
         --backend molmospaces_subprocess \
         --task "{{task}}" \
         --fixture-hint-mode room_only \
+        --generated-mess-count "{{generated_mess_count}}" \
         --include-robot \
         --robot-name rby1m \
         --record-robot-views \
@@ -270,6 +272,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --expect-seeds "${seed_csv}" \
+      --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
       "{{output_dir}}"
 

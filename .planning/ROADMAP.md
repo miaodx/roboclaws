@@ -22,7 +22,7 @@ that proof onto a real upstream MolmoSpaces/MuJoCo scene through the isolated
 Python 3.11 subprocess backend while keeping `api_semantic` provenance explicit.
 Phases 9-14 add visual reviewability, semantic substeps, carried-object visual
 consistency, current-contract agent bridge evidence, and the ADR-0003
-public/private real-world cleanup boundary. Phase 15 now scales that ADR-0003
+public/private real-world cleanup boundary. Phase 15 scales that ADR-0003
 hidden Generated Mess Set from the historical five-object fixture to the v1
 lower bound of 10 generated objects.
 
@@ -64,7 +64,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.13 MolmoSpaces current-contract agent bridge** - Phase 12 (completed 2026-05-08; Codex/Claude/OpenClaw tool viability on the current contract)
 - ✅ **v1.14 MolmoSpaces agent bridge visual results** - Phase 13 (completed 2026-05-08; reviewable bridge reports)
 - ✅ **v1.15 MolmoSpaces real-world cleanup harness** - Phase 14 (completed 2026-05-09; ADR-0003 public/private contract and visual parity)
-- 📋 **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (active 2026-05-09; ADR-0005 configurable hidden generated object count)
+- ✅ **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (completed 2026-05-09; ADR-0005 configurable hidden generated object count with real 10-object evidence)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -95,7 +95,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 12: MolmoSpaces current-contract agent bridge** - FastMCP bridge for Codex, Claude Code, and OpenClaw Gateway on the current five-object cleanup contract. Completed 2026-05-08.
 - [x] **Phase 13: MolmoSpaces agent bridge visual results** - Current-contract agent bridge reports include robot-view images and semantic mid-phase rows. Completed 2026-05-08.
 - [x] **Phase 14: MolmoSpaces real-world cleanup harness** - ADR-0003 public/private contract with Agent View, Private Evaluation, deterministic sweep baseline, and visual parity. Completed 2026-05-09.
-- [ ] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set.
+- [x] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -455,5 +455,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 12. MolmoSpaces current-contract agent bridge | v1.13 | 1/1 | Complete | 2026-05-08 |
 | 13. MolmoSpaces agent bridge visual results | v1.14 | 1/1 | Complete | 2026-05-08 |
 | 14. MolmoSpaces real-world cleanup harness | v1.15 | 1/1 | Complete | 2026-05-09 |
-| 15. MolmoSpaces Generated Mess Set scale | v1.16 | 0/1 | Active | - |
+| 15. MolmoSpaces Generated Mess Set scale | v1.16 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
