@@ -24,6 +24,8 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+    CAMERA_MODEL_POLICY_MODE,
+    CAMERA_MODEL_POLICY_NAME,
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
     RAW_FPV_ONLY_MODE,
@@ -71,7 +73,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--perception-mode",
-        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
     )
     parser.add_argument("--include-robot", action="store_true")
@@ -153,8 +155,13 @@ def run_realworld_cleanup(
         trace_events, started_at, "fixture_hints", {}, contract.fixture_hints
     )
 
+    policy_name = (
+        CAMERA_MODEL_POLICY_NAME
+        if perception_mode == CAMERA_MODEL_POLICY_MODE
+        else DETERMINISTIC_SWEEP_POLICY
+    )
     agent_memory: dict[str, Any] = {
-        "policy": DETERMINISTIC_SWEEP_POLICY,
+        "policy": policy_name,
         "observed_handles": [],
         "decisions": [],
         "skipped_handles": [],
@@ -187,7 +194,14 @@ def run_realworld_cleanup(
             ),
         )
         view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
-        for detection in observation.get("visible_object_detections", []):
+        detections = _detections_for_policy(
+            trace_events=trace_events,
+            started_at=started_at,
+            contract=contract,
+            observation=observation,
+            perception_mode=perception_mode,
+        )
+        for detection in detections:
             handle = str(detection["object_id"])
             if handle in handled_handles:
                 continue
@@ -225,7 +239,10 @@ def run_realworld_cleanup(
                     "category": detection.get("category"),
                     "from_fixture_id": support.get("fixture_id"),
                     "to_fixture_id": target_fixture_id,
-                    "reason": "public category/fixture affordance heuristic",
+                    "reason": _decision_reason(perception_mode),
+                    "perception_source": detection.get("perception_source", "visible_detection"),
+                    "model_provenance": detection.get("model_provenance"),
+                    "source_observation_id": detection.get("source_observation_id"),
                 }
             )
 
@@ -233,8 +250,8 @@ def run_realworld_cleanup(
         trace_events,
         started_at,
         "done",
-        {"reason": f"{DETERMINISTIC_SWEEP_POLICY} complete"},
-        lambda: contract.done(f"{DETERMINISTIC_SWEEP_POLICY} complete"),
+        {"reason": f"{policy_name} complete"},
+        lambda: contract.done(f"{policy_name} complete"),
     )
 
     after_snapshot = _write_snapshot(
@@ -277,6 +294,7 @@ def run_realworld_cleanup(
     cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
 
     primitive_summary = primitive_provenance_counts(trace_events)
+    public_tool_counts = _tool_event_counts(trace_events)
     run_result = {
         "backend": backend,
         "scenario_id": scenario.scenario_id,
@@ -285,7 +303,7 @@ def run_realworld_cleanup(
         "contract": REALWORLD_CONTRACT,
         "adr_0003_satisfied": True,
         "final_status": done["cleanup_status"],
-        "terminate_reason": f"{DETERMINISTIC_SWEEP_POLICY} complete",
+        "terminate_reason": f"{policy_name} complete",
         "cleanup_status": done["cleanup_status"],
         "completion_status": done["score"]["completion_status"],
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
@@ -294,8 +312,8 @@ def run_realworld_cleanup(
             backend=backend,
             primitive_summary=primitive_summary,
         ),
-        "policy": DETERMINISTIC_SWEEP_POLICY,
-        "planner": DETERMINISTIC_SWEEP_POLICY,
+        "policy": policy_name,
+        "planner": policy_name,
         "agent_driven": False,
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
@@ -311,13 +329,15 @@ def run_realworld_cleanup(
         "cleanup_primitive_evidence": cleanup_primitive_evidence,
         "agent_view": agent_view,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
+        "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
         "agent_memory": agent_memory,
         "private_evaluation": private_evaluation,
         "advisory_evaluation": advisory_evaluation,
         "score": done["score"],
         "final_locations": done["final_locations"],
         "final_containment": done.get("final_containment", {}),
-        "tool_event_counts": done["tool_event_counts"],
+        "tool_event_counts": public_tool_counts,
+        "backend_tool_event_counts": done["tool_event_counts"],
         "artifacts": {
             "agent_view": str(agent_view_path),
             "private_evaluation": str(private_evaluation_path),
@@ -364,6 +384,45 @@ def run_realworld_cleanup(
     run_result_path = output_dir / "run_result.json"
     run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True) + "\n")
     return run_result
+
+
+def _detections_for_policy(
+    *,
+    trace_events: list[dict[str, Any]],
+    started_at: float,
+    contract: RealWorldCleanupContract,
+    observation: dict[str, Any],
+    perception_mode: str,
+) -> list[dict[str, Any]]:
+    if perception_mode != CAMERA_MODEL_POLICY_MODE:
+        return list(observation.get("visible_object_detections", []))
+    raw = observation.get("raw_fpv_observation") or {}
+    candidates = _call_tool(
+        trace_events,
+        started_at,
+        "infer_camera_model_candidates",
+        {"observation_id": raw.get("observation_id", "")},
+        lambda: contract.infer_camera_model_candidates(str(raw.get("observation_id", ""))),
+    )
+    return list(candidates.get("camera_model_candidates", []))
+
+
+def _decision_reason(perception_mode: str) -> str:
+    if perception_mode == CAMERA_MODEL_POLICY_MODE:
+        return "camera model category/fixture affordance heuristic"
+    return "public category/fixture affordance heuristic"
+
+
+def _tool_event_counts(events: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for event in events:
+        tool = event.get("tool")
+        event_name = event.get("event")
+        if not tool or not event_name:
+            continue
+        key = f"{tool}:{event_name}"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def _clean_visible_object(
@@ -569,7 +628,7 @@ def _attach_raw_fpv_robot_view(
     record_robot_views: bool,
 ) -> dict[str, Any]:
     if (
-        contract.perception_mode != RAW_FPV_ONLY_MODE
+        contract.perception_mode not in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}
         or not record_robot_views
         or not response.get("ok")
     ):

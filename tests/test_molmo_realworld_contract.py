@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    CAMERA_MODEL_POLICY_SCHEMA,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    SIMULATED_CAMERA_MODEL_PROVENANCE,
     RealWorldCleanupContract,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
@@ -143,6 +146,48 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert "support_estimate" not in str(agent_view["raw_fpv_observations"])
     assert "target_receptacle_id" not in str(agent_view["raw_fpv_observations"])
     _assert_no_forbidden_keys(observation)
+    _assert_no_forbidden_keys(agent_view)
+
+
+def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
+    contract = RealWorldCleanupContract(
+        MolmoCleanupToolContract(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    observation = {}
+    candidate_response = {}
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        candidate_response = contract.infer_camera_model_candidates(
+            observation["raw_fpv_observation"]["observation_id"]
+        )
+        if candidate_response["camera_model_candidates"]:
+            break
+    agent_view = contract.agent_view_payload()
+
+    assert observation["perception_mode"] == CAMERA_MODEL_POLICY_MODE
+    assert observation["structured_detections_available"] is False
+    assert observation["visible_object_detections"] == []
+    assert observation["raw_fpv_observation"]["perception_mode"] == CAMERA_MODEL_POLICY_MODE
+    assert candidate_response["ok"] is True
+    assert candidate_response["visible_object_detections"] == []
+    assert candidate_response["camera_model_candidates"]
+    candidate = candidate_response["camera_model_candidates"][0]
+    assert candidate["object_id"].startswith("observed_")
+    assert candidate["perception_source"] == CAMERA_MODEL_POLICY_MODE
+    assert candidate["model_provenance"] == SIMULATED_CAMERA_MODEL_PROVENANCE
+    assert candidate["source_observation_id"].startswith("raw_fpv_")
+    assert candidate["support_estimate"]["source"] == CAMERA_MODEL_POLICY_MODE
+    evidence = agent_view["camera_model_policy_evidence"]
+    assert evidence["schema"] == CAMERA_MODEL_POLICY_SCHEMA
+    assert evidence["enabled"] is True
+    assert evidence["event_count"] >= 1
+    assert evidence["candidate_count"] >= len(candidate_response["camera_model_candidates"])
+    assert agent_view["observed_objects"]
+    _assert_no_forbidden_keys(observation)
+    _assert_no_forbidden_keys(candidate_response)
     _assert_no_forbidden_keys(agent_view)
 
 

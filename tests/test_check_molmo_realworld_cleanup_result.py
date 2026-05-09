@@ -11,6 +11,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
+from roboclaws.molmo_cleanup.realworld_contract import CAMERA_MODEL_POLICY_MODE
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
@@ -395,6 +396,51 @@ def test_checker_rejects_raw_fpv_when_structured_detections_leak(tmp_path: Path)
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_raw_fpv_observations=True,
+        )
+
+
+def test_checker_can_require_camera_model_policy(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="camera_model_policy_baseline",
+        min_generated_mess_count=5,
+        require_camera_model_policy=True,
+        accept_blocked_planner_cleanup_primitives=True,
+    )
+
+
+def test_checker_rejects_unlabelled_camera_model_candidates(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    result["agent_view"]["observed_objects"][0].pop("model_provenance")
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            expect_policy="camera_model_policy_baseline",
+            min_generated_mess_count=5,
+            require_camera_model_policy=True,
         )
 
 

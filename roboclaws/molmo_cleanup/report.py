@@ -127,6 +127,7 @@ def render_cleanup_report(
     </section>
     {_agent_view_section(run_result)}
     {_raw_fpv_observations_section(run_result)}
+    {_camera_model_policy_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
     <section class="panel">
@@ -541,6 +542,29 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
             "detections, categories, support estimates, target labels, and generated "
             "mess truth are not present in Agent View.</p>"
         )
+    elif mode == "camera_model_policy":
+        rows = []
+        for item in observed:
+            support = item.get("support_estimate") or {}
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('category', '')))}</td>"
+                f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('model_provenance', '')))}</td>"
+                "</tr>"
+            )
+        if not rows:
+            observed_table = "<p>No camera-model candidates registered.</p>"
+        else:
+            observed_table = (
+                '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
+                "<th>Category</th><th>Support estimate</th><th>Raw observation</th>"
+                "<th>Model provenance</th></tr></thead><tbody>"
+                + "".join(rows)
+                + "</tbody></table></div>"
+            )
     else:
         rows = []
         for item in observed:
@@ -573,6 +597,49 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
         f"{observed_table}</section>"
+    )
+
+
+def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("camera_model_policy_evidence") or (
+        (run_result.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+    )
+    if not evidence or not evidence.get("enabled"):
+        return ""
+    rows = []
+    for event in evidence.get("events") or []:
+        handles = ", ".join(str(item) for item in event.get("registered_observed_handles") or [])
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(event.get('observation_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('room_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('model_provenance', '')))}</td>"
+            f"<td>{html.escape(str(event.get('candidate_count', 0)))}</td>"
+            f"<td>{html.escape(handles)}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="5">No camera-model candidate events recorded.</td></tr>')
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Events', evidence.get('event_count', 0))}"
+        f"{_metric('Candidates', evidence.get('candidate_count', 0))}"
+        f"{_metric('Model', evidence.get('model_provenance', 'unknown'))}"
+        f"{_metric('Private truth', evidence.get('private_truth_included', 'unknown'))}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Observation</th>'
+        "<th>Room</th><th>Model provenance</th><th>Candidates</th><th>Handles</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    note = evidence.get("policy_note") or (
+        "Camera-model policy candidates are model-labelled public observations, "
+        "not private scoring truth."
+    )
+    return (
+        '<section class="panel camera-model-policy"><h2>Camera Model Policy</h2>'
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{table}</section>'
     )
 
 

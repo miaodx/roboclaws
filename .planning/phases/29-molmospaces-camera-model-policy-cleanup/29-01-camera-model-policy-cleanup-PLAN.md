@@ -8,19 +8,19 @@ cleanup loop and shared visual report underlay.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. [ ] Add `camera_model_policy` mode and model-labelled candidate registration
+2. [x] Add `camera_model_policy` mode and model-labelled candidate registration
    to `RealWorldCleanupContract`.
-3. [ ] Wire the deterministic demo policy to use camera-model candidates while
+3. [x] Wire the deterministic demo policy to use camera-model candidates while
    preserving existing default and raw-FPV behavior.
-4. [ ] Render and checker-gate `Camera Model Policy` evidence through the shared
+4. [x] Render and checker-gate `Camera Model Policy` evidence through the shared
    cleanup report underlay.
-5. [ ] Add focused tests, generate a local artifact, and validate it with the
+5. [x] Add focused tests, generate a local artifact, and validate it with the
    new checker flag.
 
 ## Acceptance
@@ -40,6 +40,19 @@ Planned 2026-05-09.
 - Focused pytest for the realworld contract, report, checker, and demo path.
 - Local artifact:
   `output/molmo-realworld-camera-model-policy/report.html`.
+- Real visual artifact:
+  `output/molmo-realworld-camera-model-policy-visual/report.html`.
+
+Evidence:
+
+- `output/molmo-realworld-camera-model-policy/run_result.json` passed
+  `--require-camera-model-policy --accept-blocked-planner-cleanup-primitives`.
+- `output/molmo-realworld-camera-model-policy-visual/run_result.json` passed
+  `--require-camera-model-policy --require-robot-views --accept-blocked-planner-cleanup-primitives`.
+- The real visual artifact records `backend=molmospaces_subprocess`,
+  `policy=camera_model_policy_baseline`, `restored=2/2`, 14 raw FPV
+  observations, 14 camera-model policy events, 2 model-derived candidates, 2
+  semantic cleanup objects, and 24 robot-view timeline steps.
 
 ## Risks
 

@@ -101,7 +101,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.27 MolmoSpaces cleanup planner proof attachment** - Phase 26 (completed 2026-05-09; render strict planner proof inside cleanup reports without relabeling cleanup primitives)
 - ✅ **v1.28 MolmoSpaces cleanup planner-backed primitive gate** - Phase 27 (completed 2026-05-09; per-subphase evidence gate before real planner-backed cleanup primitive replacement)
 - ✅ **v1.29 MolmoSpaces RBY1M CuRobo runtime gate** - Phase 28 (completed 2026-05-09; target-robot runtime readiness gate before cleanup primitive replacement)
-- 📋 **v1.30 MolmoSpaces camera model policy cleanup** - Phase 29 (planned 2026-05-09; camera-derived model-policy cleanup over the ADR-0003 shared underlay)
+- ✅ **v1.30 MolmoSpaces camera model policy cleanup** - Phase 29 (completed 2026-05-09; camera-derived model-policy cleanup over the ADR-0003 shared underlay)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -146,7 +146,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 26: MolmoSpaces cleanup planner proof attachment** - ADR-0017 render strict standalone planner proof inside ADR-0003 cleanup reports while preserving `api_semantic` cleanup primitive provenance. Completed 2026-05-09.
 - [x] **Phase 27: MolmoSpaces cleanup planner-backed primitive gate** - ADR-0018 per-subphase gate for real planner-backed cleanup primitive evidence before replacement work. Completed 2026-05-09.
 - [x] **Phase 28: MolmoSpaces RBY1M CuRobo runtime gate** - ADR-0019 target-robot runtime readiness gate before planner-backed cleanup primitive replacement. Completed 2026-05-09.
-- [ ] **Phase 29: MolmoSpaces camera model policy cleanup** - ADR-0020 camera-derived model-policy cleanup over public raw FPV observations and the shared ADR-0003 report underlay.
+- [x] **Phase 29: MolmoSpaces camera model policy cleanup** - ADR-0020 camera-derived model-policy cleanup over public raw FPV observations and the shared ADR-0003 report underlay. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -520,5 +520,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 26. MolmoSpaces cleanup planner proof attachment | v1.27 | 1/1 | Complete | 2026-05-09 |
 | 27. MolmoSpaces cleanup planner-backed primitive gate | v1.28 | 1/1 | Complete | 2026-05-09 |
 | 28. MolmoSpaces RBY1M CuRobo runtime gate | v1.29 | 1/1 | Complete | 2026-05-09 |
-| 29. MolmoSpaces camera model policy cleanup | v1.30 | 0/1 | Planned | - |
+| 29. MolmoSpaces camera model policy cleanup | v1.30 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

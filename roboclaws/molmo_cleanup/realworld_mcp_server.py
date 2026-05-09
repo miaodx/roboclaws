@@ -22,6 +22,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
@@ -193,6 +194,14 @@ class RealWorldMolmoCleanupMCPServer:
             return server.call_tool("observe")
 
         @self._mcp.tool()
+        def infer_camera_model_candidates(observation_id: str = "") -> dict:
+            """Register camera-model cleanup candidates from a raw FPV observation."""
+            return server.call_tool(
+                "infer_camera_model_candidates",
+                observation_id=observation_id,
+            )
+
+        @self._mcp.tool()
         def inspect_visible_object(object_id: str) -> dict:
             """Inspect a previously observed object handle."""
             return server.call_tool("inspect_visible_object", object_id=object_id)
@@ -247,6 +256,9 @@ class RealWorldMolmoCleanupMCPServer:
                 str(kwargs.get("waypoint_id", ""))
             ),
             "observe": self.contract.observe,
+            "infer_camera_model_candidates": lambda: self.contract.infer_camera_model_candidates(
+                str(kwargs.get("observation_id", ""))
+            ),
             "inspect_visible_object": lambda: self.contract.inspect_visible_object(
                 str(kwargs.get("object_id", ""))
             ),
@@ -298,6 +310,12 @@ class RealWorldMolmoCleanupMCPServer:
             augmented["instruction"] = (
                 "Use inspection_waypoints to sweep rooms. Call navigate_to_waypoint "
                 "then observe. Use only observed_* object handles returned by observe."
+            )
+        if tool == "observe" and self.perception_mode == CAMERA_MODEL_POLICY_MODE:
+            raw = augmented.get("raw_fpv_observation") or {}
+            augmented["instruction"] = (
+                "Call infer_camera_model_candidates with observation_id="
+                f"{raw.get('observation_id', '')} before choosing cleanup candidates."
             )
         if tool == "fixture_hints":
             augmented["instruction"] = (
@@ -379,6 +397,7 @@ class RealWorldMolmoCleanupMCPServer:
             "cleanup_plan": cleanup_plan,
             "agent_view": agent_view,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
+            "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
             "private_evaluation": private_evaluation,
             "advisory_evaluation": advisory_evaluation,
             "score": done_response["score"],
@@ -448,7 +467,7 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> dict[str, Any]:
         if (
             tool != "observe"
-            or self.perception_mode != RAW_FPV_ONLY_MODE
+            or self.perception_mode not in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}
             or not response.get("ok")
             or not self.record_robot_views
         ):

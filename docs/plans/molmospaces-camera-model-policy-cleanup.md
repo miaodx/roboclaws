@@ -1,6 +1,6 @@
 # MolmoSpaces Camera Model Policy Cleanup
 
-**Status:** Planned under GSD Phase 29 on 2026-05-09
+**Status:** Completed under GSD Phase 29 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0009, ADR-0013, ADR-0020, Phase 28 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -80,3 +80,24 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_realworld_contract.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_realworld_cleanup_result.py tests/test_molmospaces_realworld_cleanup.py`
 - `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmo-realworld-camera-model-policy --perception-mode camera_model_policy`
 - `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --require-camera-model-policy --accept-blocked-planner-cleanup-primitives output/molmo-realworld-camera-model-policy/run_result.json`
+
+## Completion Evidence
+
+- Added `perception_mode=camera_model_policy` and
+  `infer_camera_model_candidates` to the shared `RealWorldCleanupContract`.
+- The deterministic camera model registers observed handles with
+  `model_provenance=simulated_camera_model`, `perception_source=camera_model_policy`,
+  and source raw FPV observation ids.
+- The deterministic demo and realworld MCP surface both reuse the same contract
+  primitive and shared report underlay.
+- Reports now render `Camera Model Policy` alongside Agent View, Raw FPV
+  Observations, Semantic Substeps, Robot View Timeline, Score, Advisory Review,
+  Private Evaluation, and the cleanup primitive gate.
+- Synthetic artifact:
+  `output/molmo-realworld-camera-model-policy/report.html`.
+- Real MolmoSpaces/RBY1M visual artifact:
+  `output/molmo-realworld-camera-model-policy-visual/report.html`.
+- The real visual artifact passed
+  `--require-camera-model-policy --require-robot-views --accept-blocked-planner-cleanup-primitives`
+  with 2/2 restored targets, 14 raw FPV observations, 14 camera-model events,
+  2 model-derived candidates, and 24 robot-view timeline steps.

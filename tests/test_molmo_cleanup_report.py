@@ -326,6 +326,98 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "support estimates" in html
 
 
+def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "agent_view": {
+            "perception_mode": "camera_model_policy",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "camera_model_policy",
+                    "structured_detections_available": False,
+                    "artifact_status": "pending_robot_view_capture",
+                    "image_artifacts": {},
+                }
+            ],
+            "observed_objects": [
+                {
+                    "object_id": "observed_001",
+                    "category": "dish",
+                    "name": "Mug",
+                    "current_room_id": "kitchen",
+                    "perception_source": "camera_model_policy",
+                    "model_provenance": "simulated_camera_model",
+                    "source_observation_id": "raw_fpv_001",
+                    "support_estimate": {
+                        "fixture_id": "coffee_table_01",
+                        "source": "camera_model_policy",
+                        "model_provenance": "simulated_camera_model",
+                    },
+                }
+            ],
+            "camera_model_policy_evidence": {
+                "schema": "camera_model_policy_v1",
+                "enabled": True,
+                "model_provenance": "simulated_camera_model",
+                "event_count": 1,
+                "candidate_count": 1,
+                "private_truth_included": False,
+                "events": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "room_id": "kitchen",
+                        "model_provenance": "simulated_camera_model",
+                        "candidate_count": 1,
+                        "registered_observed_handles": ["observed_001"],
+                    }
+                ],
+            },
+        },
+    }
+    run_result["raw_fpv_observations"] = run_result["agent_view"]["raw_fpv_observations"]
+    run_result["camera_model_policy_evidence"] = run_result["agent_view"][
+        "camera_model_policy_evidence"
+    ]
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Camera Model Policy" in html
+    assert "simulated_camera_model" in html
+    assert "observed_001" in html
+    assert "raw_fpv_001" in html
+    assert "Raw FPV Observations" in html
+
+
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
