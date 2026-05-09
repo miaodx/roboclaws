@@ -729,6 +729,50 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 ],
             }
         ],
+        "proof_result_summary": {
+            "schema": "planner_cleanup_proof_result_summary_v1",
+            "expected_count": 1,
+            "result_count": 1,
+            "planner_backed_count": 0,
+            "blocked_count": 1,
+            "missing_result_count": 0,
+            "cleanup_binding_promoted_count": 0,
+            "task_feasibility_blocked_count": 1,
+            "view_artifact_count": 2,
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
+                    "report": str(tmp_path / "proofs" / "001" / "report.html"),
+                    "run_result_exists": True,
+                    "report_exists": True,
+                    "status": "blocked_capability",
+                    "planner_backed": False,
+                    "cleanup_binding_promoted": False,
+                    "task_feasibility_status": "blocked",
+                    "visual_status": "views_recorded",
+                    "blockers": [{"code": "HouseInvalidForTask", "message": "robot placement"}],
+                    "cleanup_binding_blockers": [],
+                    "requested_cleanup_primitive_binding": {
+                        "scene_xml": "/tmp/scene.xml",
+                        "planner_object_id": "pickup/body",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "views": [
+                        {
+                            "label": "initial",
+                            "path": str(tmp_path / "proofs" / "001" / "initial.png"),
+                        },
+                        {
+                            "label": "final",
+                            "path": str(tmp_path / "proofs" / "001" / "final.png"),
+                        },
+                    ],
+                }
+            ],
+        },
         "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
     }
 
@@ -741,11 +785,17 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
     assert "Proof Probe Commands" in html
+    assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
     assert "dry_run" in html
     assert "proof_001" in html
     assert "observed_001" in html
     assert "sink/body" in html
+    assert "HouseInvalidForTask" in html
+    assert "Task feasibility" in html
+    assert "blocked" in html
+    assert "initial.png" in html
+    assert "final.png" in html
     assert "report.html" in html
     assert "--planner-proof-run-result" in html
 

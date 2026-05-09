@@ -54,6 +54,7 @@ one decision per file, sequential numbering, explicit status.
 | [0043](0043-track-cleanup-rerun-artifacts-in-proof-bundle-runner.md) | Track Cleanup Rerun Artifacts In Proof Bundle Runner | Accepted |
 | [0044](0044-add-local-gate-for-planner-proof-bundle-execution.md) | Add Local Gate For Planner Proof Bundle Execution | Accepted |
 | [0045](0045-bind-proof-probes-to-real-cleanup-scenes.md) | Bind Proof Probes To Real Cleanup Scenes | Accepted |
+| [0046](0046-render-proof-bundle-result-feasibility.md) | Render Proof Bundle Result Feasibility | Accepted |
 
 ## Adding a new ADR
 

@@ -8,6 +8,7 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
 
 
@@ -54,6 +55,16 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    proof_result_summary = data.get("proof_result_summary") or {}
+    if proof_result_summary:
+        _assert_proof_result_summary(
+            proof_result_summary,
+            commands,
+            report_text,
+            require_outputs=require_proof_outputs,
+        )
+    elif require_proof_outputs:
+        raise AssertionError("proof_result_summary is required with --require-proof-outputs")
     for item in commands:
         _assert_command(item, base, report_text, require_proof_outputs=require_proof_outputs)
     cleanup_command = data.get("cleanup_command") or []
@@ -115,6 +126,43 @@ def _assert_command(
         proof_report = _resolve_path(base, str(item["report"]))
         assert run_result.is_file(), run_result
         assert proof_report.is_file(), proof_report
+
+
+def _assert_proof_result_summary(
+    summary: dict[str, Any],
+    commands: list[dict[str, Any]],
+    report_text: str,
+    *,
+    require_outputs: bool,
+) -> None:
+    assert summary.get("schema") == PLANNER_PROOF_RESULT_SUMMARY_SCHEMA, summary
+    assert int(summary.get("expected_count") or 0) == len(commands), summary
+    results = summary.get("results") or []
+    assert len(results) == len(commands), summary
+    assert "Proof Probe Results" in report_text, report_text[:500]
+    if require_outputs:
+        assert int(summary.get("result_count") or 0) == len(commands), summary
+    for item in results:
+        for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
+        assert item.get("task_feasibility_status") in {
+            "not_run",
+            "not_reached",
+            "ready",
+            "binding_not_promoted",
+            "blocked",
+            "unknown",
+        }, item
+        for blocker in [
+            *(item.get("blockers") or []),
+            *(item.get("cleanup_binding_blockers") or []),
+        ]:
+            code = str(blocker.get("code") or "")
+            if code:
+                assert code in report_text, (code, report_text[:500])
+        for view in item.get("views") or []:
+            assert str(view.get("path") or "") in report_text, (view, report_text[:500])
 
 
 def _assert_cleanup_rerun(

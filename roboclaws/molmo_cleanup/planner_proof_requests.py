@@ -8,6 +8,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
 
 PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
+PLANNER_PROOF_RESULT_SUMMARY_SCHEMA = "planner_cleanup_proof_result_summary_v1"
 
 
 def planner_proof_requests_from_substeps(
@@ -145,6 +146,7 @@ def proof_bundle_run_manifest(
     output_dir: Path,
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
+    proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -157,6 +159,8 @@ def proof_bundle_run_manifest(
         "planner_scene": proof_requests.get("planner_scene") or {},
         "command_count": len(commands),
         "commands": commands,
+        "proof_result_summary": proof_result_summary
+        or proof_result_summary_from_commands(commands),
         "cleanup_command": cleanup_command or [],
         "cleanup_rerun": cleanup_rerun or {},
         "evidence_note": (
@@ -164,6 +168,157 @@ def proof_bundle_run_manifest(
             "cleanup artifact. Use --execute-probes in a local RBY1M/CuRobo session."
         ),
     }
+
+
+def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:
+    """Summarize generated proof outputs without replacing strict proof validation."""
+    results = [_proof_result_from_command(item) for item in commands]
+    return {
+        "schema": PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
+        "expected_count": len(commands),
+        "result_count": sum(1 for item in results if item["run_result_exists"]),
+        "planner_backed_count": sum(1 for item in results if item["planner_backed"]),
+        "blocked_count": sum(1 for item in results if item["status"] == "blocked_capability"),
+        "missing_result_count": sum(1 for item in results if not item["run_result_exists"]),
+        "cleanup_binding_promoted_count": sum(
+            1 for item in results if item["cleanup_binding_promoted"]
+        ),
+        "task_feasibility_blocked_count": sum(
+            1 for item in results if item["task_feasibility_status"] == "blocked"
+        ),
+        "view_artifact_count": sum(len(item.get("views") or []) for item in results),
+        "results": results,
+        "evidence_note": (
+            "Bundle-level summary of generated proof artifacts. Strict per-proof "
+            "checkers still decide whether a proof is planner-backed."
+        ),
+    }
+
+
+def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
+    run_result_path = Path(str(item.get("run_result") or ""))
+    proof_report_path = Path(str(item.get("report") or ""))
+    base = run_result_path.parent if str(run_result_path) else Path(".")
+    result = {
+        "request_id": str(item.get("request_id") or ""),
+        "object_id": str(item.get("object_id") or ""),
+        "target_receptacle_id": str(item.get("target_receptacle_id") or ""),
+        "run_result": str(run_result_path),
+        "report": str(proof_report_path),
+        "run_result_exists": run_result_path.is_file(),
+        "report_exists": proof_report_path.is_file(),
+        "status": "not_run",
+        "planner_backed": False,
+        "cleanup_binding_promoted": False,
+        "task_feasibility_status": "not_run",
+        "visual_status": "not_run",
+        "blockers": [],
+        "cleanup_binding_blockers": [],
+        "views": [],
+    }
+    if not run_result_path.is_file():
+        return result
+    try:
+        data = json.loads(run_result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        result.update(
+            {
+                "status": "unreadable",
+                "task_feasibility_status": "unknown",
+                "visual_status": "unknown",
+                "blockers": [
+                    {
+                        "code": "proof_run_result_unreadable",
+                        "message": f"{type(exc).__name__}: {exc}",
+                    }
+                ],
+            }
+        )
+        return result
+    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    evidence = evidence if isinstance(evidence, dict) else {}
+    blockers = _blockers(evidence.get("blockers") or [])
+    cleanup_binding_blockers = _blockers(evidence.get("cleanup_primitive_binding_blockers") or [])
+    cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    requested_binding = evidence.get("requested_cleanup_primitive_binding") or {}
+    sampled_binding = evidence.get("sampled_task_binding") or {}
+    cleanup_binding = evidence.get("cleanup_primitive_binding") or {}
+    planner_backed = data.get("status") == "planner_backed"
+    views = _proof_views(base, evidence)
+    result.update(
+        {
+            "status": str(data.get("status") or "unknown"),
+            "planner_backed": planner_backed,
+            "cleanup_binding_promoted": bool(cleanup_binding),
+            "task_feasibility_status": _task_feasibility_status(
+                status=str(data.get("status") or ""),
+                planner_backed=planner_backed,
+                cleanup_binding_promoted=bool(cleanup_binding),
+                blockers=blockers,
+                cleanup_binding_blockers=cleanup_binding_blockers,
+                execution_attempted=bool(evidence.get("execution_attempted")),
+            ),
+            "visual_status": "views_recorded" if views else "no_views_recorded",
+            "blockers": blockers,
+            "cleanup_binding_blockers": cleanup_binding_blockers,
+            "cleanup_task_config": cleanup_task_config,
+            "requested_cleanup_primitive_binding": requested_binding,
+            "sampled_task_binding": sampled_binding,
+            "cleanup_primitive_binding": cleanup_binding,
+            "views": views,
+        }
+    )
+    return result
+
+
+def _task_feasibility_status(
+    *,
+    status: str,
+    planner_backed: bool,
+    cleanup_binding_promoted: bool,
+    blockers: list[dict[str, Any]],
+    cleanup_binding_blockers: list[dict[str, Any]],
+    execution_attempted: bool,
+) -> str:
+    codes = {str(item.get("code") or "") for item in blockers}
+    messages = " ".join(str(item.get("message") or "") for item in blockers).lower()
+    if "HouseInvalidForTask" in codes or "robot placement" in messages:
+        return "blocked"
+    if cleanup_binding_promoted:
+        return "ready"
+    if planner_backed:
+        return "binding_not_promoted" if cleanup_binding_blockers else "ready"
+    if not execution_attempted:
+        return "not_reached"
+    if status == "blocked_capability":
+        return "blocked"
+    return "unknown"
+
+
+def _proof_views(base: Path, evidence: dict[str, Any]) -> list[dict[str, str]]:
+    artifacts = evidence.get("image_artifacts") or {}
+    if not isinstance(artifacts, dict):
+        return []
+    views = []
+    for label, value in sorted(artifacts.items()):
+        if not value:
+            continue
+        path = Path(str(value))
+        views.append(
+            {
+                "label": str(label),
+                "path": str(path if path.is_absolute() else base / path),
+            }
+        )
+    return views
+
+
+def _blockers(raw: Any) -> list[dict[str, Any]]:
+    if isinstance(raw, dict):
+        return [dict(raw)]
+    if not isinstance(raw, list):
+        return []
+    return [dict(item) for item in raw if isinstance(item, dict)]
 
 
 def build_cleanup_rerun_command(

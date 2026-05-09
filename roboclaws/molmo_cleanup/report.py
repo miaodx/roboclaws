@@ -218,6 +218,7 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_bundle_commands_section(commands)}
+    {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
@@ -751,6 +752,94 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         '<p class="note">Command evidence only. A command row is not planner proof until '
         "the referenced proof artifact passes the strict planner probe checker.</p>"
         f"{table}</section>"
+    )
+
+
+def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
+    if not summary:
+        return ""
+    results = summary.get("results") or []
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Expected', summary.get('expected_count', len(results)))}"
+        f"{_metric('Results', summary.get('result_count', 0))}"
+        f"{_metric('Planner-backed', summary.get('planner_backed_count', 0))}"
+        f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
+        f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
+        f"{_metric('Views', summary.get('view_artifact_count', 0))}"
+        "</div>"
+    )
+    body = (
+        "".join(_proof_bundle_result_card(item) for item in results)
+        if results
+        else '<p class="note">No proof result rows recorded.</p>'
+    )
+    note = summary.get("evidence_note") or (
+        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
+    )
+    return (
+        '<section class="panel proof-bundle-results">'
+        "<h2>Proof Probe Results</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{body}</section>'
+    )
+
+
+def _proof_bundle_result_card(item: dict[str, Any]) -> str:
+    blockers = list(item.get("blockers") or [])
+    binding_blockers = list(item.get("cleanup_binding_blockers") or [])
+    blocker_text = ", ".join(
+        str(blocker.get("code") or blocker.get("message") or "")
+        for blocker in [*blockers, *binding_blockers]
+        if isinstance(blocker, dict)
+    )
+    requested = item.get("requested_cleanup_primitive_binding") or {}
+    sampled = item.get("sampled_task_binding") or {}
+    config = item.get("cleanup_task_config") or {}
+    rows = [
+        ("Request", item.get("request_id", "")),
+        ("Object", item.get("object_id", "")),
+        ("Target", item.get("target_receptacle_id", "")),
+        ("Status", item.get("status", "")),
+        ("Task feasibility", item.get("task_feasibility_status", "")),
+        ("Cleanup binding promoted", _yes_no(item.get("cleanup_binding_promoted"))),
+        ("Proof run result", item.get("run_result", "")),
+        ("Proof report", item.get("report", "")),
+        ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Planner object alias", requested.get("planner_object_id", "")),
+        ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
+        ("Sampled pickup", sampled.get("pickup_obj_name", "")),
+        (
+            "Sampled target",
+            sampled.get("place_receptacle_name") or sampled.get("place_target_name") or "",
+        ),
+        ("Blockers", blocker_text),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value
+    )
+    views = item.get("views") or []
+    if views:
+        figures = "".join(
+            _view_figure(
+                view.get("path"),
+                f"{item.get('request_id', '')} {view.get('label', '')}",
+            )
+            for view in views
+            if isinstance(view, dict)
+        )
+        view_html = f'<div class="views">{figures}</div>'
+    else:
+        view_html = (
+            '<p class="note">No planner probe views recorded'
+            f" ({html.escape(str(item.get('visual_status', 'unknown')))}).</p>"
+        )
+    return (
+        '<article class="proof-result">'
+        f"<h3>{html.escape(str(item.get('request_id') or 'proof result'))}</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{table_rows}</tbody></table></div>{view_html}</article>"
     )
 
 

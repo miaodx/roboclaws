@@ -76,11 +76,15 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "/tmp/molmospaces-scene.xml" in command
     assert manifest["commands"][0]["report"].endswith("report.html")
     assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
+    assert manifest["proof_result_summary"]["expected_count"] == 1
+    assert manifest["proof_result_summary"]["results"][0]["task_feasibility_status"] == "not_run"
     assert Path(result["manifest_path"]).is_file()
     assert Path(result["report_path"]).is_file()
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in report
     assert "Proof Probe Commands" in report
+    assert "Proof Probe Results" in report
+    assert "not_run" in report
     assert "Cleanup Rerun Command" in report
     assert "observed_001" in report
     assert "--cleanup-object-id" in report
@@ -192,7 +196,30 @@ def test_runner_records_cleanup_rerun_artifacts_when_rerun_requested(
         commands_run.append(list(command))
         output_dir = Path(command[command.index("--output-dir") + 1])
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "run_result.json").write_text("{}", encoding="utf-8")
+        if "--cleanup-object-id" in command:
+            (output_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "blocked_capability",
+                        "manipulation_evidence": {
+                            "execution_attempted": True,
+                            "blockers": [
+                                {
+                                    "code": "HouseInvalidForTask",
+                                    "message": "robot placement failed",
+                                }
+                            ],
+                            "requested_cleanup_primitive_binding": {
+                                "planner_object_id": "pickup/body",
+                                "planner_target_receptacle_id": "sink/body",
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+        else:
+            (output_dir / "run_result.json").write_text("{}", encoding="utf-8")
         (output_dir / "report.html").write_text("<h1>report</h1>", encoding="utf-8")
 
     monkeypatch.setattr(runner, "_run_command", fake_run_command)
@@ -226,7 +253,13 @@ def test_runner_records_cleanup_rerun_artifacts_when_rerun_requested(
     assert cleanup_rerun["output_dir"] == str(tmp_path / "rerun")
     assert cleanup_rerun["run_result"] == str(tmp_path / "rerun" / "run_result.json")
     assert cleanup_rerun["report"] == str(tmp_path / "rerun" / "report.html")
+    summary = manifest["proof_result_summary"]
+    assert summary["result_count"] == 1
+    assert summary["task_feasibility_blocked_count"] == 1
+    assert summary["results"][0]["task_feasibility_status"] == "blocked"
     report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Proof Probe Results" in report
+    assert "HouseInvalidForTask" in report
     assert "Cleanup Rerun Artifact" in report
     assert str(tmp_path / "rerun" / "run_result.json") in report
 

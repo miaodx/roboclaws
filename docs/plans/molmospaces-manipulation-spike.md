@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 54 exact cleanup-scene proof binding completed with upstream RBY1M task-feasibility blocker on 2026-05-10
+**Status:** Phase 55 proof-bundle result feasibility reporting completed; RBY1M task-feasibility/fallback selection remains next on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -74,7 +74,11 @@ binds generated proof probes to the real cleanup scene XML and requested
 planner aliases from a `molmospaces_subprocess` cleanup artifact. Local
 exact-scene probes now reach upstream task sampling for the requested cleanup
 objects, and the remaining blocker has narrowed to `HouseInvalidForTask` /
-RBY1M robot placement infeasibility before sampled binding can promote.
+RBY1M robot placement infeasibility before sampled binding can promote. Phase
+55 makes executed proof-bundle runner reports summarize each generated proof's
+status, task-feasibility classification, cleanup binding promotion, blockers,
+proof report, and planner views so fallback-selection work can consume explicit
+bundle-level evidence.
 
 ## Why This Exists
 
@@ -891,6 +895,9 @@ completed:
   gsd-plan-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
   gsd-execute-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
   gsd-verify-work 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-plan-phase 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-execute-phase 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-verify-work 55-molmospaces-proof-bundle-result-feasibility-report
 
 next pipeline candidates:
   plan RBY1M cleanup-scene task feasibility/fallback selection for proof requests

@@ -9,6 +9,7 @@ import pytest
 
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    proof_result_summary_from_commands,
 )
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report
 
@@ -96,6 +97,8 @@ def test_checker_can_require_expected_proof_outputs(tmp_path: Path) -> None:
     proof_dir.mkdir(parents=True, exist_ok=True)
     (proof_dir / "run_result.json").write_text("{}", encoding="utf-8")
     (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    _write_manifest_and_report(tmp_path, manifest)
 
     checker._assert_runner_result(manifest, tmp_path, require_proof_outputs=True)
 
@@ -142,6 +145,7 @@ def _write_runner_artifact(base: Path) -> dict[str, object]:
 
 
 def _write_manifest_and_report(base: Path, manifest: dict[str, object]) -> None:
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
     (base / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

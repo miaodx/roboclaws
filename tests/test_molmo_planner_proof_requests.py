@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,6 +11,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_probe_commands,
     planner_proof_requests_from_substeps,
+    proof_result_summary_from_commands,
     write_planner_proof_requests,
 )
 
@@ -127,6 +129,76 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
     assert commands[0]["run_result"].endswith("run_result.json")
+
+
+def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    views_dir = proof_dir / "planner_views"
+    views_dir.mkdir(parents=True)
+    (views_dir / "initial.png").write_bytes(b"initial")
+    (views_dir / "final.png").write_bytes(b"final")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "manipulation_evidence": {
+                    "execution_attempted": True,
+                    "blockers": [
+                        {
+                            "code": "HouseInvalidForTask",
+                            "message": "robot placement failed near object",
+                        }
+                    ],
+                    "cleanup_task_config": {
+                        "scene_xml": "/tmp/scene.xml",
+                        "planner_object_id": "pickup/body",
+                    },
+                    "requested_cleanup_primitive_binding": {
+                        "scene_xml": "/tmp/scene.xml",
+                        "planner_object_id": "pickup/body",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "image_artifacts": {
+                        "initial": "planner_views/initial.png",
+                        "final": "planner_views/final.png",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands = [
+        {
+            "request_id": "proof_001",
+            "object_id": "observed_001",
+            "target_receptacle_id": "sink_01",
+            "run_result": str(proof_dir / "run_result.json"),
+            "report": str(proof_dir / "report.html"),
+        },
+        {
+            "request_id": "proof_002",
+            "object_id": "observed_002",
+            "target_receptacle_id": "shelf_01",
+            "run_result": str(tmp_path / "missing" / "run_result.json"),
+            "report": str(tmp_path / "missing" / "report.html"),
+        },
+    ]
+
+    summary = proof_result_summary_from_commands(commands)
+
+    assert summary["schema"] == "planner_cleanup_proof_result_summary_v1"
+    assert summary["expected_count"] == 2
+    assert summary["result_count"] == 1
+    assert summary["missing_result_count"] == 1
+    assert summary["task_feasibility_blocked_count"] == 1
+    assert summary["view_artifact_count"] == 2
+    result = summary["results"][0]
+    assert result["task_feasibility_status"] == "blocked"
+    assert result["visual_status"] == "views_recorded"
+    assert result["blockers"][0]["code"] == "HouseInvalidForTask"
+    assert result["views"][0]["path"].endswith("planner_views/final.png")
+    assert summary["results"][1]["task_feasibility_status"] == "not_run"
 
 
 class _BindingContract:
