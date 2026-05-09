@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 14 MolmoSpaces real-world-style cleanup harness completed on 2026-05-09; ADR-0003 report visual parity gap closed with the shared Molmo cleanup semantic timeline and RBY1M robot-view timeline; next MolmoSpaces follow-up is larger generated mess sets or model-agent policies against the ADR-0003 public contract.
+stopped_at: Phase 15 MolmoSpaces Generated Mess Set scale opened on 2026-05-09 via hybrid-phase-pipeline; ADR-0005 and source/GSD plans created to close the CONTEXT.md 10-20 hidden object gap while preserving ADR-0003 public/private report views.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
@@ -21,30 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 14 — molmospaces-realworld-cleanup-harness (completed; ADR-0003 visual report parity added; next queued MolmoSpaces work is larger generated mess sets or model-agent policies against the ADR-0003 public contract)
+**Current focus:** Phase 15 — molmospaces-generated-mess-set-scale (active; make the ADR-0003 real-world harness request and score at least 10 hidden generated objects while preserving the Phase 14 visual report surfaces)
 
 ## Current Position
 
-Phase: 14 (molmospaces-realworld-cleanup-harness) — COMPLETE
-Plan: 1 of 1 closed — `14-01` implements ADR-0003's public/private cleanup
-boundary with a real-world-style public contract and deterministic sweep
-baseline.
-Status: `RealWorldCleanupContract` exposes metric-map, room-level fixture hints,
-waypoint observes, and `observed_*` object handles while keeping Generated Mess
-Set, acceptable destination sets, target counts, and private scorer truth out of
-Agent View and non-done trace events. `examples/molmospaces_realworld_cleanup.py`
-and `just harness::molmo-realworld-cleanup` validate the contract on the real
-MolmoSpaces subprocess backend for seeds 1, 2, and 3. The harness can now record
-the same object-level RBY1M FPV/chase/map/verification visual phase sequence
-used by the current-contract bridge report through the shared Molmo cleanup
-semantic timeline underlay while preserving separate Agent View and Private
-Evaluation sections.
-Last activity: 2026-05-09 - Implemented ADR-0003 public/private cleanup harness,
-focused tests/checker/recipes, GSD artifacts, real three-seed MolmoSpaces
-evidence, and ADR-0003 visual report parity evidence for seed 1.
+Phase: 15 (molmospaces-generated-mess-set-scale) — ACTIVE
+Plan: 1 of 1 active — `15-01` implements ADR-0005 by making the real
+MolmoSpaces subprocess path request a configurable hidden Generated Mess Set,
+defaulting ADR-0003 evidence to 10 objects, and enforcing that count in
+checker/report artifacts.
+Status: Planning slice opened. Next implementation step is to thread
+`generated_mess_count` through the worker/backend/harness, derive the private
+success threshold from the actual generated set size, and verify a real
+one-seed visual report with all Phase 14 views and at least 10 generated
+objects.
+Last activity: 2026-05-09 - Created ADR-0005, source plan, and GSD Phase 15 plan
+for the CONTEXT.md Generated Mess Set scale gap.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Remaining MolmoSpaces work is larger generated mess sets, model-agent policy evaluation, or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 is now closing the larger hidden Generated Mess Set gap. Remaining MolmoSpaces work after that is model-agent policy evaluation or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -102,6 +97,12 @@ Progress: [##########] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
+  explicit and configurable. The ADR-0003 real-world harness should use 10
+  hidden generated objects as the default v1 evidence shape, while retaining the
+  five-object synthetic fixture for fast tests and current-contract
+  compatibility. The Scorer must evaluate the whole generated set and derive the
+  success threshold from the actual generated count.
 - **Phase 14 completion (2026-05-09):** ADR-0003 is now implemented as a
   separate real-world-style cleanup harness. The Cleanup Agent sees only
   `metric_map`, room-level `fixture_hints`, waypoint `observe` results, and
@@ -262,11 +263,13 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 14 MolmoSpaces real-world cleanup harness is complete.
-Latest evidence is
-`.planning/phases/14-molmospaces-realworld-cleanup-harness/14-VERIFICATION.md`
-and the real three-seed artifacts under `output/molmo-realworld-cleanup-harness/`.
-Resume file: .planning/phases/14-molmospaces-realworld-cleanup-harness/14-VERIFICATION.md
+Stopped at: Phase 15 MolmoSpaces Generated Mess Set scale planning is complete;
+implementation is next.
+Latest planning artifacts are
+`docs/adr/0005-use-configurable-generated-mess-set-size.md`,
+`docs/plans/molmospaces-generated-mess-set-scale.md`, and
+`.planning/phases/15-molmospaces-generated-mess-set-scale/15-01-generated-mess-set-scale-PLAN.md`.
+Resume file: .planning/phases/15-molmospaces-generated-mess-set-scale/15-01-generated-mess-set-scale-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -274,7 +277,7 @@ Resume file: .planning/phases/14-molmospaces-realworld-cleanup-harness/14-VERIFI
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** 14 (molmospaces-realworld-cleanup-harness) — complete;
-next MolmoSpaces phase should be opened only for larger Generated Mess Set
-coverage, coding-agent/OpenClaw policies against the ADR-0003 contract, or
+**Active Phase:** 15 (molmospaces-generated-mess-set-scale) — active;
+implementation should close the CONTEXT.md 10-20 hidden object gap before
+moving on to coding-agent/OpenClaw policies against the ADR-0003 contract or
 planner-backed RBY1M/Franka manipulation — 2026-05-09T00:00:00+08:00
