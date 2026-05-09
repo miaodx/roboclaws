@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World Agent MCP
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 16
+**Status:** Implemented and verified 2026-05-09 under GSD Phase 16
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0004, ADR-0005, ADR-0006, Phase 15 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -67,3 +67,34 @@ The first executable slice should:
   `--expect-policy realworld_contract_smoke_agent`.
 - The real visual report includes Agent View, Private Evaluation, Score,
   Cleanup Trace, and Robot View Timeline.
+
+## Implementation Result
+
+Phase 16 added a separate `molmo_cleanup_realworld` MCP server for the
+ADR-0003 contract. It reuses `RealWorldCleanupContract` plus the shared cleanup
+report/semantic timeline underlay, but deliberately does not expose the
+current-contract `scene_objects` shortcut.
+
+The deterministic smoke agent drives only the public MCP surface:
+
+`metric_map -> fixture_hints -> navigate_to_waypoint -> observe -> nav/pick/nav/(open)/place -> done`
+
+Real seed-1 evidence:
+
+- `output/molmo-realworld-agent-mcp-harness/seed-1/run_result.json`
+- `contract`: `realworld_cleanup_v1`
+- `mcp_server`: `molmo_cleanup_realworld`
+- `policy`: `realworld_contract_smoke_agent`
+- `agent_driven`: `true`
+- `adr_0003_satisfied`: `true`
+- `generated_mess_count`: 10
+- `mess_restoration_rate`: 0.8
+- `sweep_coverage_rate`: 1.0
+- `semantic_substeps`: 10
+- `robot_view_steps`: 44
+- robot-view PNGs: 176
+
+Residual follow-ups from the original `CONTEXT.md` discussion remain separate:
+direct Codex/Claude/OpenClaw policy dogfood against this stricter MCP surface,
+an advisory model/scorer layer, raw FPV-only perception, and planner-backed
+RBY1M/Franka manipulation.

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 16 MolmoSpaces real-world agent MCP opened on 2026-05-09 via hybrid-phase-pipeline; ADR-0006 and source/GSD plans created to expose the ADR-0003 public contract through MCP without scene_objects.
+stopped_at: Phase 16 MolmoSpaces real-world agent MCP completed on 2026-05-09; next remaining MolmoSpaces gaps are direct model-agent/OpenClaw dogfood on the ADR-0003 MCP surface, advisory scorer/model checks, raw FPV-only perception, and planner-backed manipulation.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 12
-  completed_phases: 10
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 12
+  total_plans: 14
+  completed_plans: 14
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 16 — molmospaces-realworld-agent-mcp (active; expose ADR-0003 public tools through MCP without the current-contract `scene_objects` shortcut)
+**Current focus:** Post Phase 16 MolmoSpaces follow-ups — direct policy dogfood, advisory scoring, raw FPV perception, and planner-backed manipulation are still separate from the completed ADR-0003 MCP smoke.
 
 ## Current Position
 
-Phase: 16 (molmospaces-realworld-agent-mcp) — ACTIVE
-Plan: 1 of 1 active — `16-01` implements ADR-0006 by exposing
+Phase: 16 (molmospaces-realworld-agent-mcp) — COMPLETE
+Plan: 1 of 1 complete — `16-01` implements ADR-0006 by exposing
 `RealWorldCleanupContract` through MCP tools that use Metric Map, room-level
 Fixture Hints, waypoint observations, and Observed Object Handles instead of
 the current-contract global `scene_objects` shortcut.
-Status: Planning slice opened. Next implementation step is to add the
-real-world MCP server/factory, deterministic MCP smoke runner, checker/recipe
-support, and one real visual evidence run.
-Last activity: 2026-05-09 - Created ADR-0006, source plan, and GSD Phase 16 plan
-for the ADR-0003 agent-facing MCP contract.
+Status: Verified with focused tests plus one real MolmoSpaces/RBY1M visual MCP
+smoke at `output/molmo-realworld-agent-mcp-harness/seed-1/`.
+Last activity: 2026-05-09 - Completed Phase 16 implementation and verification:
+real seed 1 produced `adr_0003_satisfied=true`, 10 hidden generated objects,
+10 semantic substeps, 44 robot timeline steps, and 176 robot-view PNGs.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 is opening the ADR-0003 MCP agent surface. Remaining MolmoSpaces work after that is direct model-agent/OpenClaw policy evaluation or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Remaining MolmoSpaces work is direct model-agent/OpenClaw policy evaluation on that stricter surface, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -87,6 +87,8 @@ Progress: [##########] 100%
 | Phase 12 P01 | ~3h | 4 tasks | 15 files |
 | Phase 13 P01 | ~3h | 4 tasks | 14 files |
 | Phase 14 P01 | ~2h | 4 tasks | 15 files |
+| Phase 15 P01 | ~2h | 4 tasks | 8 files |
+| Phase 16 P01 | ~3h | 6 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -101,6 +103,15 @@ Recent decisions affecting current work:
   semantic cleanup tools, but not current-contract `scene_objects`. The first
   slice uses a deterministic MCP smoke agent; direct Codex/Claude/OpenClaw
   dogfood against the stricter surface follows once this MCP contract is stable.
+- **Phase 16 completion (2026-05-09):** The ADR-0003 cleanup contract now has a
+  separate `molmo_cleanup_realworld` MCP server/factory. Its public tool surface
+  excludes `scene_objects`, rejects that tool explicitly, and writes
+  agent-driven real-world artifacts with the shared Agent View, Private
+  Evaluation, Score, Cleanup Trace, and Robot View Timeline report underlay.
+  Real seed 1 evidence restored 8/10 hidden generated objects, swept all public
+  waypoints, recorded no disturbance, and passed the checker with
+  `policy=realworld_contract_smoke_agent`. Direct Codex/Claude/OpenClaw dogfood
+  against this stricter contract remains a follow-up, not a Phase 16 claim.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
@@ -215,6 +226,12 @@ Recent decisions affecting current work:
   — ADR-0003 public/private contract implemented with metric-map, room fixture
   hints, observed handles, deterministic private scoring, and three-seed real
   MolmoSpaces subprocess evidence.
+- Phase 15 completed (2026-05-09): **MolmoSpaces Generated Mess Set scale** —
+  ADR-0005 configurable hidden Generated Mess Set size with a real 10-object
+  MolmoSpaces/RBY1M evidence run.
+- Phase 16 completed (2026-05-09): **MolmoSpaces real-world agent MCP** —
+  ADR-0006 exposes the ADR-0003 public cleanup contract through MCP without the
+  current-contract `scene_objects` shortcut.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -239,9 +256,11 @@ None yet.
   completed the held-object carry visual follow-up, Phase 12 completed
   current-contract Codex/Claude/OpenClaw tool-viability proof, Phase 13
   completed visual agent bridge reporting, and Phase 14 completed ADR-0003
-  public/private cleanup separation. Larger generated mess sets,
-  model-agent policy evaluation on the ADR-0003 contract, and planner-backed
-  manipulation remain separate follow-ups.
+  public/private cleanup separation. Phase 15 completed larger hidden generated
+  mess sets, and Phase 16 completed the ADR-0003 MCP surface. Model-agent policy
+  evaluation on the ADR-0003 MCP contract, advisory scoring/model checks, raw
+  FPV-only perception, and planner-backed manipulation remain separate
+  follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase

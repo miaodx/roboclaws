@@ -67,7 +67,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.14 MolmoSpaces agent bridge visual results** - Phase 13 (completed 2026-05-08; reviewable bridge reports)
 - ✅ **v1.15 MolmoSpaces real-world cleanup harness** - Phase 14 (completed 2026-05-09; ADR-0003 public/private contract and visual parity)
 - ✅ **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (completed 2026-05-09; ADR-0005 configurable hidden generated object count with real 10-object evidence)
-- 📋 **v1.17 MolmoSpaces real-world agent MCP** - Phase 16 (active 2026-05-09; ADR-0006 MCP surface for the ADR-0003 public contract)
+- ✅ **v1.17 MolmoSpaces real-world agent MCP** - Phase 16 (completed 2026-05-09; ADR-0006 MCP surface for the ADR-0003 public contract)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -99,7 +99,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 13: MolmoSpaces agent bridge visual results** - Current-contract agent bridge reports include robot-view images and semantic mid-phase rows. Completed 2026-05-08.
 - [x] **Phase 14: MolmoSpaces real-world cleanup harness** - ADR-0003 public/private contract with Agent View, Private Evaluation, deterministic sweep baseline, and visual parity. Completed 2026-05-09.
 - [x] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set. Completed 2026-05-09.
-- [ ] **Phase 16: MolmoSpaces real-world agent MCP** - ADR-0006 MCP surface for the ADR-0003 public cleanup contract; no global `scene_objects` shortcut.
+- [x] **Phase 16: MolmoSpaces real-world agent MCP** - ADR-0006 MCP surface for the ADR-0003 public cleanup contract; no global `scene_objects` shortcut. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

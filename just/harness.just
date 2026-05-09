@@ -13,6 +13,7 @@
 # - just harness::molmo-agent-bridge  Molmo cleanup MCP bridge smoke + comparison
 # - just harness::molmo-agent-bridge-visual  Molmo cleanup MCP bridge visual smoke + comparison
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
+# - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -271,6 +272,36 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
+      --expect-seeds "${seed_csv}" \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-robot-views \
+      "{{output_dir}}"
+
+# ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
+# contract through MCP tools: metric_map, fixture_hints, waypoint observe, and
+# observed object handles. It intentionally does not expose scene_objects.
+molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp-harness" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    for seed in {{seeds}}; do
+      run_dir="{{output_dir}}/seed-${seed}"
+      .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+        --seed "${seed}" \
+        --backend molmospaces_subprocess \
+        --task "{{task}}" \
+        --generated-mess-count "{{generated_mess_count}}" \
+        --include-robot \
+        --robot-name rby1m \
+        --record-robot-views \
+        --output-dir "${run_dir}"
+    done
+    seed_csv="$(printf '%s' "{{seeds}}" | tr ' ' ',')"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-policy realworld_contract_smoke_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
       --expect-seeds "${seed_csv}" \
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \

@@ -8,6 +8,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "check_molmo_realworld_cleanup_result.py"
+SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_realworld_agent_mcp_smoke.py"
 
 
 def _load_module(path: Path, name: str):
@@ -49,6 +50,23 @@ def test_checker_rejects_too_small_generated_mess_set(tmp_path: Path) -> None:
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=6,
         )
+
+
+def test_checker_accepts_realworld_mcp_smoke_policy(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="realworld_contract_smoke_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+    )
 
 
 def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None:

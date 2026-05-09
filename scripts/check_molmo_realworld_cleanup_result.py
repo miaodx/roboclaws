@@ -23,6 +23,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path, help="run_result.json or a directory of seed-* runs")
     parser.add_argument("--expect-task")
     parser.add_argument("--expect-backend")
+    parser.add_argument("--expect-policy", default="deterministic_sweep_baseline")
+    parser.add_argument("--expect-mcp-server")
     parser.add_argument("--expect-seeds")
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
     parser.add_argument("--require-robot-views", action="store_true")
@@ -43,6 +45,8 @@ def main() -> None:
             path.parent,
             expect_task=args.expect_task,
             expect_backend=args.expect_backend,
+            expect_policy=args.expect_policy,
+            expect_mcp_server=args.expect_mcp_server,
             min_generated_mess_count=args.min_generated_mess_count,
             require_robot_views=args.require_robot_views,
         )
@@ -67,12 +71,15 @@ def _assert_result(
     *,
     expect_task: str | None,
     expect_backend: str | None,
+    expect_policy: str | None = "deterministic_sweep_baseline",
+    expect_mcp_server: str | None = None,
     min_generated_mess_count: int = 1,
     require_robot_views: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
-    assert data.get("policy") == "deterministic_sweep_baseline", data
+    if expect_policy is not None:
+        assert data.get("policy") == expect_policy, data
     assert data.get("semantic_loop_variant") == SEMANTIC_LOOP_VARIANT, data
     assert data.get("policy_uses_private_truth") is False, data
     assert data.get("planner_uses_private_manifest") is False, data
@@ -86,6 +93,8 @@ def _assert_result(
         assert data.get("task_prompt") == expect_task, data
     if expect_backend is not None:
         assert data.get("backend") == expect_backend, data
+    if expect_mcp_server is not None:
+        assert data.get("mcp_server") == expect_mcp_server, data
 
     agent_view = data.get("agent_view") or {}
     _assert_public_agent_view(agent_view)
