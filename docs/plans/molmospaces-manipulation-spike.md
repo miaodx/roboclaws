@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 69 pickup root variant filter completed; next work is upstream task-feasibility handling or richer root-body alias derivation
+**Status:** Phase 70 prior proof evidence merge completed; next work is upstream task-feasibility handling or richer root-body alias derivation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -158,6 +158,12 @@ object-axis runtime aliases with nonzero variants are filtered as
 runtime siblings remain eligible. A dry-run against the older Phase 62 KeyError
 evidence now generates only the two target-side commands and filters the
 object-side non-root variants up front.
+Phase 70 lets the proof-bundle runner consume multiple prior manifests at once.
+The dry-run using Phase 62 KeyError evidence plus Phase 68 carried
+failed-candidate memory generated zero commands while still rendering five
+discovered aliases, seven filtered aliases, and two filtered pairs. The current
+fallback pool is now exhausted without depending on a single chosen prior
+manifest.
 
 ## Why This Exists
 

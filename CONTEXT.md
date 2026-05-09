@@ -324,6 +324,12 @@ The fallback-generation rule that rejects object-axis runtime aliases whose
 variant segment is nonzero because they are known non-root pickup bodies.
 _Avoid_: executing object-side sibling aliases that can be rejected by name
 
+**Prior Proof Evidence Merge**:
+The proof-bundle runner behavior that combines multiple prior proof-bundle
+manifests into one private selection input, preserving discovered aliases,
+filtered aliases, filtered pairs, and proof results together.
+_Avoid_: choosing between alias discovery and failed-candidate memory
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -482,6 +488,8 @@ _Avoid_: full cleanup replacement claim
   of retrying filtered candidates.
 - A **Pickup Root Variant Filter** should apply only to object/pickup aliases;
   target aliases need separate task-feasibility evidence.
+- **Prior Proof Evidence Merge** should combine older alias-discovery evidence
+  with newer failed-candidate memory before generating fallback proof commands.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -582,3 +590,7 @@ _Avoid_: full cleanup replacement claim
   with nonzero variants are filtered as `not_pickup_root_body_alias`, so older
   KeyError evidence no longer generates the object-side non-root commands that
   Phases 65 and 67 proved invalid.
+- Phase 70 closed prior proof evidence merge. The runner can now accept
+  multiple prior proof-bundle manifests and merge runtime alias discovery with
+  carried failed-candidate memory before selection, so Phase 62 KeyError
+  evidence and Phase 68 filtered-pair evidence can be consumed together.

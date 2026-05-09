@@ -410,6 +410,134 @@ def test_runner_discovers_runtime_aliases_from_prior_fallback_keyerrors(
     assert "proof_001_fallback_01" in report
 
 
+def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    request = requests["requests"][0]
+    request["target_receptacle_id"] = "shelf_01"
+    request["planner_probe_args"] = {
+        "--cleanup-object-id": "observed_001",
+        "--cleanup-target-receptacle-id": "shelf_01",
+        "--cleanup-planner-object-id": "book_beef_1_0_8",
+        "--cleanup-planner-target-receptacle-id": "shelf_cafe_1_0_2",
+    }
+    request["binding"] = {
+        "candidate_pickup_names": ["book_beef_1_0_8", "Book|surface|8|79"],
+        "candidate_place_receptacle_names": ["shelf_cafe_1_0_2", "ShelvingUnit|2|3"],
+    }
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}),
+        encoding="utf-8",
+    )
+
+    keyerror_prior = tmp_path / "keyerror_prior" / "proof_bundle_run_manifest.json"
+    keyerror_prior.parent.mkdir()
+    keyerror_prior.write_text(
+        json.dumps(
+            {
+                "proof_request_selection": {
+                    "excluded_requests": [
+                        {
+                            "request_id": "proof_001",
+                            "prior_status": "blocked_capability",
+                            "prior_task_feasibility_status": "blocked",
+                            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ]
+                },
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001_fallback_01",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "cleanup_task_config": {
+                                "planner_object_id": "book_beef_1_0_8",
+                                "planner_target_receptacle_id": "ShelvingUnit|2|3",
+                            },
+                            "blockers": [
+                                {
+                                    "code": "KeyError",
+                                    "message": (
+                                        "\"Invalid name 'ShelvingUnit|2|3'. "
+                                        "Valid names: ['book_beef_1_0_8', "
+                                        "'shelf_cafe_1_0_2', 'shelf_cafe_1_1_2']\""
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    failed_pair_prior = tmp_path / "failed_pair_prior" / "proof_bundle_run_manifest.json"
+    failed_pair_prior.parent.mkdir()
+    failed_pair_prior.write_text(
+        json.dumps(
+            {
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001_fallback_02",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "cleanup_task_config": {
+                                "planner_object_id": "book_beef_1_0_8",
+                                "planner_target_receptacle_id": "shelf_cafe_1_1_2",
+                            },
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=[keyerror_prior, failed_pair_prior],
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=4,
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    fallback = selection["fallback_generation"]
+    assert manifest["command_count"] == 0
+    assert selection["fallback_required"] is True
+    assert selection["prior_result_count"] == 3
+    assert fallback["discovered_alias_count"] == 1
+    assert fallback["filtered_pair_count"] == 1
+    assert fallback["filtered_pairs"][0]["object_alias"] == "book_beef_1_0_8"
+    assert fallback["filtered_pairs"][0]["target_alias"] == "shelf_cafe_1_1_2"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "shelf_cafe_1_1_2" in report
+    assert "prior_task_feasibility_blocked_pair" in report
+
+
 def test_runner_carries_prior_failed_runtime_fallback_candidates(
     tmp_path: Path,
 ) -> None:

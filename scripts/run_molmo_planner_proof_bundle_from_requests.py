@@ -5,6 +5,7 @@ import argparse
 import json
 import subprocess
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -59,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--rerun-cleanup", action="store_true")
     parser.add_argument("--cleanup-output-dir", type=Path)
-    parser.add_argument("--prior-proof-bundle-manifest", type=Path)
+    parser.add_argument("--prior-proof-bundle-manifest", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
     parser.add_argument("--generate-fallback-requests", action="store_true")
     parser.add_argument("--fallback-alias-limit", type=int, default=4)
@@ -123,7 +124,7 @@ def run_from_cleanup_result(
     warmup_rby1m_curobo: bool = False,
     rerun_cleanup: bool = False,
     cleanup_output_dir: Path | None = None,
-    prior_proof_bundle_manifest: Path | None = None,
+    prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
@@ -274,9 +275,25 @@ def _with_source_planner_scene(
     return enriched
 
 
-def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
-    if path is None:
+def _load_prior_proof_result_summary(
+    paths: Path | Sequence[Path] | None,
+) -> dict[str, Any]:
+    manifest_paths = _prior_manifest_paths(paths)
+    if not manifest_paths:
         return {}
+    summaries = [_load_one_prior_proof_result_summary(path) for path in manifest_paths]
+    return _merge_prior_proof_result_summaries(summaries)
+
+
+def _prior_manifest_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
+    if paths is None:
+        return []
+    if isinstance(paths, (str, Path)):
+        return [Path(paths)]
+    return [Path(item) for item in paths]
+
+
+def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     summary = data.get("proof_result_summary")
@@ -289,6 +306,116 @@ def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
         (data.get("proof_request_selection") or {}).get("excluded_requests") or [],
     )
     return prior
+
+
+def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    results_by_id: dict[str, dict[str, Any]] = {}
+    discovered_aliases: list[dict[str, Any]] = []
+    filtered_aliases: list[dict[str, Any]] = []
+    filtered_pairs: list[dict[str, Any]] = []
+    generated_requests: list[dict[str, Any]] = []
+    for summary in summaries:
+        for item in summary.get("results") or []:
+            if not isinstance(item, dict):
+                continue
+            request_id = str(item.get("request_id") or "")
+            if not request_id:
+                continue
+            existing = results_by_id.get(request_id)
+            candidate = dict(item)
+            if existing is None or _prior_result_rank(candidate) >= _prior_result_rank(existing):
+                results_by_id[request_id] = candidate
+        fallback_generation = summary.get("fallback_generation") or {}
+        if not isinstance(fallback_generation, dict):
+            continue
+        discovered_aliases.extend(_dict_items(fallback_generation.get("discovered_aliases")))
+        filtered_aliases.extend(_dict_items(fallback_generation.get("filtered_aliases")))
+        filtered_pairs.extend(_dict_items(fallback_generation.get("filtered_pairs")))
+        generated_requests.extend(_dict_items(fallback_generation.get("generated_requests")))
+    fallback_generation = _merged_fallback_generation(
+        discovered_aliases=discovered_aliases,
+        filtered_aliases=filtered_aliases,
+        filtered_pairs=filtered_pairs,
+        generated_requests=generated_requests,
+    )
+    return {
+        "schema": "merged_prior_planner_proof_result_summary_v1",
+        "result_count": len(results_by_id),
+        "prior_manifest_count": len(summaries),
+        "results": list(results_by_id.values()),
+        "fallback_generation": fallback_generation,
+    }
+
+
+def _prior_result_rank(item: dict[str, Any]) -> tuple[int, int, int, int]:
+    task_status = str(item.get("task_feasibility_status") or "")
+    status = str(item.get("status") or "")
+    blockers = item.get("blockers") or []
+    return (
+        1 if task_status == "blocked" else 0,
+        1 if status not in {"", "not_run"} else 0,
+        1 if item.get("run_result_exists") else 0,
+        len(blockers) if isinstance(blockers, list) else 0,
+    )
+
+
+def _dict_items(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    return [dict(item) for item in raw if isinstance(item, dict)]
+
+
+def _merged_fallback_generation(
+    *,
+    discovered_aliases: list[dict[str, Any]],
+    filtered_aliases: list[dict[str, Any]],
+    filtered_pairs: list[dict[str, Any]],
+    generated_requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    discovered = _dedupe_by_keys(
+        discovered_aliases,
+        ("source_request_id", "axis", "alias"),
+    )
+    aliases = _dedupe_by_keys(
+        filtered_aliases,
+        ("source_request_id", "axis", "alias", "reason"),
+    )
+    pairs = _dedupe_by_keys(
+        filtered_pairs,
+        ("source_request_id", "object_alias", "target_alias", "reason"),
+    )
+    generated = _dedupe_by_keys(generated_requests, ("request_id",))
+    return {
+        "schema": "merged_planner_cleanup_proof_request_fallback_generation_v1",
+        "enabled": any([discovered, aliases, pairs, generated]),
+        "generated_request_count": len(generated),
+        "generated_requests": generated,
+        "discovered_alias_count": len(discovered),
+        "discovered_aliases": discovered,
+        "filtered_alias_count": len(aliases),
+        "filtered_aliases": aliases,
+        "filtered_pair_count": len(pairs),
+        "filtered_pairs": pairs,
+        "evidence_note": (
+            "Merged fallback candidate memory from one or more prior proof-bundle "
+            "manifests. This is private runner evidence and is not exposed to Agent View."
+        ),
+    }
+
+
+def _dedupe_by_keys(
+    items: list[dict[str, Any]],
+    keys: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    deduped = []
+    seen: set[tuple[str, ...]] = set()
+    for item in items:
+        key = tuple(str(item.get(name) or "") for name in keys)
+        if not any(key) or key in seen:
+            continue
+        deduped.append(dict(item))
+        seen.add(key)
+    return deduped
 
 
 def _merged_prior_results(
