@@ -268,16 +268,21 @@ def proof_request_selection_from_summary(
     ready_requests = [
         request for request in proof_requests.get("requests") or [] if request.get("ready")
     ]
-    prior_results = _prior_results_by_request_id(prior_proof_result_summary or {})
+    prior_summary = prior_proof_result_summary or {}
+    prior_results = _prior_results_by_request_id(prior_summary)
     discovered_aliases_by_request = _discovered_runtime_aliases_by_source_request(
         ready_requests,
-        prior_proof_result_summary or {},
+        prior_summary,
+    )
+    prior_candidate_filters_by_request = _prior_fallback_candidate_filters_by_source_request(
+        prior_summary
     )
     selected = []
     excluded = []
     generated = []
     filtered_aliases = []
     discovered_aliases = []
+    filtered_pairs = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
         prior_result = prior_results.get(request_id, {})
@@ -292,10 +297,12 @@ def proof_request_selection_from_summary(
                     prior_result,
                     limit=fallback_alias_limit,
                     discovered_aliases=discovered_aliases_by_request.get(request_id, {}),
+                    prior_candidate_filters=prior_candidate_filters_by_request.get(request_id, {}),
                 )
                 generated.extend(fallback["generated_requests"])
                 filtered_aliases.extend(fallback["filtered_aliases"])
                 discovered_aliases.extend(fallback["discovered_aliases"])
+                filtered_pairs.extend(fallback["filtered_pairs"])
             continue
         selected.append(_selected_request(request, prior_result))
     selected.extend(_selected_request(request, {}) for request in generated)
@@ -321,6 +328,7 @@ def proof_request_selection_from_summary(
             generated_requests=generated,
             filtered_aliases=filtered_aliases,
             discovered_aliases=discovered_aliases,
+            filtered_pairs=filtered_pairs,
             fallback_alias_limit=fallback_alias_limit,
         ),
         "prior_summary_available": bool(prior_proof_result_summary),
@@ -420,6 +428,7 @@ def _fallback_generation(
     generated_requests: list[dict[str, Any]],
     filtered_aliases: list[dict[str, Any]],
     discovered_aliases: list[dict[str, Any]],
+    filtered_pairs: list[dict[str, Any]],
     fallback_alias_limit: int,
 ) -> dict[str, Any]:
     if not enabled and not generated_requests:
@@ -432,6 +441,8 @@ def _fallback_generation(
             "filtered_aliases": [],
             "discovered_alias_count": 0,
             "discovered_aliases": [],
+            "filtered_pair_count": 0,
+            "filtered_pairs": [],
         }
     generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
@@ -448,6 +459,8 @@ def _fallback_generation(
         "filtered_aliases": filtered_aliases,
         "discovered_alias_count": len(discovered_aliases),
         "discovered_aliases": discovered_aliases,
+        "filtered_pair_count": len(filtered_pairs),
+        "filtered_pairs": filtered_pairs,
         "evidence_note": (
             "Private generated fallback proof requests. They preserve cleanup-facing "
             "object and target IDs while trying alternate exact-scene planner aliases."
@@ -461,19 +474,30 @@ def _fallback_requests_for_blocked_request(
     *,
     limit: int,
     discovered_aliases: dict[str, list[dict[str, Any]]] | None = None,
+    prior_candidate_filters: dict[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     if limit <= 0:
-        return {"generated_requests": [], "filtered_aliases": [], "discovered_aliases": []}
+        return {
+            "generated_requests": [],
+            "filtered_aliases": [],
+            "discovered_aliases": [],
+            "filtered_pairs": [],
+        }
     args = request.get("planner_probe_args") or {}
     current_object_alias = _planner_arg(args, "--cleanup-planner-object-id")
     current_target_alias = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
     discovered = discovered_aliases or {}
+    prior_filters = prior_candidate_filters or {}
+    prior_alias_filters = prior_filters.get("aliases") if isinstance(prior_filters, dict) else {}
+    if not isinstance(prior_alias_filters, dict):
+        prior_alias_filters = {}
     pickup_candidates, filtered_pickup_aliases = _executable_candidate_aliases(
         request,
         axis="object",
         candidate_key="candidate_pickup_names",
         current_alias=current_object_alias,
         extra_aliases=_discovered_alias_values(discovered, "object"),
+        prior_filtered_aliases=prior_alias_filters.get("object", {}),
     )
     target_candidates, filtered_target_aliases = _executable_candidate_aliases(
         request,
@@ -481,6 +505,7 @@ def _fallback_requests_for_blocked_request(
         candidate_key="candidate_place_receptacle_names",
         current_alias=current_target_alias,
         extra_aliases=_discovered_alias_values(discovered, "target"),
+        prior_filtered_aliases=prior_alias_filters.get("target", {}),
     )
     filtered_aliases = [
         *filtered_pickup_aliases,
@@ -490,6 +515,9 @@ def _fallback_requests_for_blocked_request(
         *discovered.get("object", []),
         *discovered.get("target", []),
     ]
+    prior_pair_filters = _prior_pair_filter_lookup(prior_filters)
+    filtered_pairs = []
+    seen_filtered_pairs: set[tuple[str, str]] = set()
     generated: list[dict[str, Any]] = []
     seen_pairs: set[tuple[str, str]] = set()
     for object_alias in pickup_candidates:
@@ -499,6 +527,12 @@ def _fallback_requests_for_blocked_request(
                 continue
             seen_pairs.add(pair)
             if pair == (current_object_alias, current_target_alias):
+                continue
+            prior_pair_filter = prior_pair_filters.get(pair)
+            if prior_pair_filter:
+                if pair not in seen_filtered_pairs:
+                    filtered_pairs.append(dict(prior_pair_filter))
+                    seen_filtered_pairs.add(pair)
                 continue
             generated.append(
                 _fallback_request_with_planner_aliases(
@@ -514,11 +548,13 @@ def _fallback_requests_for_blocked_request(
                     "generated_requests": generated,
                     "filtered_aliases": filtered_aliases,
                     "discovered_aliases": flattened_discovered_aliases,
+                    "filtered_pairs": filtered_pairs,
                 }
     return {
         "generated_requests": generated,
         "filtered_aliases": filtered_aliases,
         "discovered_aliases": flattened_discovered_aliases,
+        "filtered_pairs": filtered_pairs,
     }
 
 
@@ -589,6 +625,7 @@ def _executable_candidate_aliases(
     candidate_key: str,
     current_alias: str,
     extra_aliases: list[str] | None = None,
+    prior_filtered_aliases: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[str], list[dict[str, Any]]]:
     source_request_id = str(request.get("request_id") or "")
     candidates = _unique_nonempty_values(
@@ -603,7 +640,12 @@ def _executable_candidate_aliases(
     )
     executable = []
     filtered = []
+    prior_filters = prior_filtered_aliases or {}
     for alias in candidates:
+        prior_filter = prior_filters.get(alias)
+        if prior_filter:
+            filtered.append(dict(prior_filter))
+            continue
         if _is_exact_scene_planner_alias(alias):
             executable.append(alias)
             continue
@@ -648,6 +690,19 @@ def _discovered_runtime_aliases_by_source_request(
     }
     discovered: dict[str, dict[str, list[dict[str, Any]]]] = {}
     seen: set[tuple[str, str, str]] = set()
+    for item in _carried_discovered_aliases(prior_summary):
+        source_request_id = str(item.get("source_request_id") or "")
+        axis = str(item.get("axis") or "")
+        alias = str(item.get("alias") or "")
+        if source_request_id not in request_by_id or axis not in {"object", "target"} or not alias:
+            continue
+        key = (source_request_id, axis, alias)
+        if key in seen:
+            continue
+        seen.add(key)
+        discovered.setdefault(source_request_id, {"object": [], "target": []})[axis].append(
+            dict(item)
+        )
     for result in prior_summary.get("results") or []:
         if not isinstance(result, dict):
             continue
@@ -689,6 +744,107 @@ def _discovered_runtime_aliases_by_source_request(
                     }
                 )
     return discovered
+
+
+def _carried_discovered_aliases(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    fallback_generation = prior_summary.get("fallback_generation") or {}
+    if not isinstance(fallback_generation, dict):
+        return []
+    return [
+        dict(item)
+        for item in fallback_generation.get("discovered_aliases") or []
+        if isinstance(item, dict)
+    ]
+
+
+def _prior_fallback_candidate_filters_by_source_request(
+    prior_summary: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    filters: dict[str, dict[str, Any]] = {}
+    seen_aliases: set[tuple[str, str, str]] = set()
+    seen_pairs: set[tuple[str, str, str]] = set()
+    for result in prior_summary.get("results") or []:
+        if not isinstance(result, dict):
+            continue
+        result_id = str(result.get("request_id") or "")
+        if _FALLBACK_REQUEST_ID_MARKER not in result_id:
+            continue
+        source_request_id = _source_request_id_from_result(result)
+        config = _proof_cleanup_task_config(result)
+        object_alias = str(config.get("planner_object_id") or "")
+        target_alias = str(config.get("planner_target_receptacle_id") or "")
+        blockers = _blockers(result.get("blockers") or [])
+        bucket = filters.setdefault(
+            source_request_id,
+            {"aliases": {"object": {}, "target": {}}, "pairs": []},
+        )
+        aliases = bucket["aliases"]
+        if _has_non_root_body_blocker(blockers) and object_alias:
+            key = (source_request_id, "object", object_alias)
+            if key in seen_aliases:
+                continue
+            aliases["object"][object_alias] = {
+                "source_request_id": source_request_id,
+                "axis": "object",
+                "alias": object_alias,
+                "derived_from": result_id,
+                "reason": "prior_non_root_body_alias",
+                "prior_blockers": blockers,
+                "evidence_note": (
+                    "Filtered before command generation because a prior generated "
+                    "fallback proof reported that this pickup alias is not a root body."
+                ),
+            }
+            seen_aliases.add(key)
+            continue
+        if (
+            object_alias
+            and target_alias
+            and str(result.get("task_feasibility_status") or "") == "blocked"
+        ):
+            key = (source_request_id, object_alias, target_alias)
+            if key in seen_pairs:
+                continue
+            bucket["pairs"].append(
+                {
+                    "source_request_id": source_request_id,
+                    "object_alias": object_alias,
+                    "target_alias": target_alias,
+                    "derived_from": result_id,
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_blockers": blockers,
+                }
+            )
+            seen_pairs.add(key)
+    return filters
+
+
+def _prior_pair_filter_lookup(
+    prior_filters: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    raw = prior_filters.get("pairs") if isinstance(prior_filters, dict) else []
+    if not isinstance(raw, list):
+        return {}
+    pairs = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        object_alias = str(item.get("object_alias") or "")
+        target_alias = str(item.get("target_alias") or "")
+        if object_alias and target_alias:
+            pairs[(object_alias, target_alias)] = dict(item)
+    return pairs
+
+
+def _has_non_root_body_blocker(blockers: list[dict[str, Any]]) -> bool:
+    for blocker in blockers:
+        code = str(blocker.get("code") or "")
+        message = str(blocker.get("message") or "").lower()
+        if code == "AssertionError" and "not a root body" in message:
+            return True
+        if "object is not a root body" in message:
+            return True
+    return False
 
 
 def _source_request_id_from_result(result: dict[str, Any]) -> str:

@@ -748,6 +748,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "generated_request_count": 1,
                 "discovered_alias_count": 1,
                 "filtered_alias_count": 1,
+                "filtered_pair_count": 1,
                 "generated_requests": [
                     {
                         "request_id": "proof_001_fallback_01",
@@ -784,6 +785,16 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "axis": "target",
                         "alias": "Sink|1|2",
                         "reason": "not_exact_scene_runtime_alias",
+                    }
+                ],
+                "filtered_pairs": [
+                    {
+                        "source_request_id": "proof_001",
+                        "object_alias": "pickup/body",
+                        "target_alias": "sink/body_alt",
+                        "derived_from": "proof_001_fallback_02",
+                        "reason": "prior_task_feasibility_blocked_pair",
+                        "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     }
                 ],
             },
@@ -917,6 +928,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Filtered aliases" in html
     assert "Sink|1|2" in html
     assert "not_exact_scene_runtime_alias" in html
+    assert "Filtered Fallback Pairs" in html
+    assert "Filtered pairs" in html
+    assert "pickup/body" in html
+    assert "sink/body_alt" in html
+    assert "prior_task_feasibility_blocked_pair" in html
     assert "fallback_generated" in html
     assert "RBY1M/CuRobo Warmup" in html
     assert "config_import" in html

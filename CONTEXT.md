@@ -302,6 +302,12 @@ from **Fallback Runtime Alias Discovery**, used to separate alias-discovery
 success from root-body validity and upstream task-feasibility blockers.
 _Avoid_: treating valid-looking runtime aliases as viable cleanup primitives
 
+**Fallback Failed Candidate Memory**:
+The proof-bundle runner evidence that carries discovered aliases forward while
+filtering prior non-root object aliases and prior task-feasibility-blocked
+object/target alias pairs before generating new fallback commands.
+_Avoid_: retrying known-bad generated fallback commands
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -449,6 +455,9 @@ _Avoid_: full cleanup replacement claim
   blocked when generated runtime-sibling commands execute but fail with
   `HouseInvalidForTask` or non-root-body blockers before planner-backed proof,
   cleanup binding promotion, or planner views.
+- **Fallback Failed Candidate Memory** should be visible in the **Planner Proof
+  Bundle Runner Report** before another fallback execution, including filtered
+  alias rows and filtered object/target pair rows.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -532,3 +541,8 @@ _Avoid_: full cleanup replacement claim
   sampling, but target-sibling aliases still blocked with `HouseInvalidForTask`
   and object-sibling aliases blocked as non-root bodies; no planner-backed proof,
   cleanup binding promotion, or planner views were produced.
+- Phase 66 closed failed-candidate memory for generated fallbacks. The runner
+  now carries prior discovered aliases forward, filters prior non-root object
+  aliases, filters prior task-feasibility-blocked object/target pairs, renders
+  `Filtered Fallback Pairs`, and dry-runs two remaining commands for the
+  untried book runtime sibling.

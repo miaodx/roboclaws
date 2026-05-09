@@ -281,6 +281,9 @@ def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     summary = data.get("proof_result_summary")
     prior = dict(summary) if isinstance(summary, dict) else {}
+    fallback_generation = (data.get("proof_request_selection") or {}).get("fallback_generation")
+    if isinstance(fallback_generation, dict):
+        prior["fallback_generation"] = dict(fallback_generation)
     prior["results"] = _merged_prior_results(
         prior.get("results") or [],
         (data.get("proof_request_selection") or {}).get("excluded_requests") or [],

@@ -152,6 +152,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
             "generated_request_count": 1,
             "discovered_alias_count": 1,
             "filtered_alias_count": 1,
+            "filtered_pair_count": 1,
             "generated_requests": [
                 {
                     "request_id": "proof_001_fallback_01",
@@ -186,6 +187,16 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                     "axis": "target",
                     "alias": "Sink|1|2",
                     "reason": "not_exact_scene_runtime_alias",
+                }
+            ],
+            "filtered_pairs": [
+                {
+                    "source_request_id": "proof_001",
+                    "object_alias": "pickup/body",
+                    "target_alias": "sink/body_alt",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
         },

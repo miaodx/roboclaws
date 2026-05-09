@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 65 discovered runtime fallback proof execution completed; next work is root-body alias validity and task-feasibility handling
+**Status:** Phase 66 fallback failed-candidate memory completed; next work is local execution of the remaining filtered fallback commands
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -132,6 +132,14 @@ promoted cleanup primitive binding. Target-sibling commands still block with
 `HouseInvalidForTask`, while object-sibling commands fail as non-root bodies.
 The next blocker is root-body alias validity and upstream task feasibility, not
 report generation or fallback command discovery.
+Phase 66 records that failed-candidate memory in the runner itself. Prior
+discovered aliases carry forward from executed bundle manifests, non-root body
+object aliases are filtered before command generation, and exact object/target
+pairs that already hit `HouseInvalidForTask` are filtered as prior
+task-feasibility-blocked pairs. The Phase 66 dry-run against the Phase 65
+manifest generated two remaining commands for the untried book runtime sibling
+and rendered discovered aliases, filtered aliases, filtered pairs, and commands
+in one runner report.
 
 ## Why This Exists
 

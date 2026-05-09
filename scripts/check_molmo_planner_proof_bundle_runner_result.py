@@ -195,6 +195,7 @@ def _assert_proof_request_selection(
         generated = fallback_generation.get("generated_requests") or []
         filtered_aliases = fallback_generation.get("filtered_aliases") or []
         discovered_aliases = fallback_generation.get("discovered_aliases") or []
+        filtered_pairs = fallback_generation.get("filtered_pairs") or []
         assert int(selection.get("generated_fallback_request_count") or 0) == len(generated), (
             selection
         )
@@ -202,6 +203,9 @@ def _assert_proof_request_selection(
             discovered_aliases
         ), fallback_generation
         assert int(fallback_generation.get("filtered_alias_count") or 0) == len(filtered_aliases), (
+            fallback_generation
+        )
+        assert int(fallback_generation.get("filtered_pair_count") or 0) == len(filtered_pairs), (
             fallback_generation
         )
         for item in generated:
@@ -225,6 +229,16 @@ def _assert_proof_request_selection(
                 assert str(item[key]) in report_text, (key, report_text[:500])
         for item in filtered_aliases:
             for key in ("source_request_id", "axis", "alias", "reason"):
+                assert item.get(key), item
+                assert str(item[key]) in report_text, (key, report_text[:500])
+        for item in filtered_pairs:
+            for key in (
+                "source_request_id",
+                "object_alias",
+                "target_alias",
+                "derived_from",
+                "reason",
+            ):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
 
