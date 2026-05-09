@@ -283,6 +283,7 @@ def proof_request_selection_from_summary(
     filtered_aliases = []
     discovered_aliases = []
     filtered_pairs = []
+    normalized_aliases = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
         prior_result = prior_results.get(request_id, {})
@@ -303,6 +304,7 @@ def proof_request_selection_from_summary(
                 filtered_aliases.extend(fallback["filtered_aliases"])
                 discovered_aliases.extend(fallback["discovered_aliases"])
                 filtered_pairs.extend(fallback["filtered_pairs"])
+                normalized_aliases.extend(fallback["normalized_aliases"])
             continue
         selected.append(_selected_request(request, prior_result))
     selected.extend(_selected_request(request, {}) for request in generated)
@@ -329,6 +331,7 @@ def proof_request_selection_from_summary(
             filtered_aliases=filtered_aliases,
             discovered_aliases=discovered_aliases,
             filtered_pairs=filtered_pairs,
+            normalized_aliases=normalized_aliases,
             fallback_alias_limit=fallback_alias_limit,
         ),
         "prior_summary_available": bool(prior_proof_result_summary),
@@ -429,6 +432,7 @@ def _fallback_generation(
     filtered_aliases: list[dict[str, Any]],
     discovered_aliases: list[dict[str, Any]],
     filtered_pairs: list[dict[str, Any]],
+    normalized_aliases: list[dict[str, Any]],
     fallback_alias_limit: int,
 ) -> dict[str, Any]:
     if not enabled and not generated_requests:
@@ -444,6 +448,8 @@ def _fallback_generation(
             "discovered_aliases": [],
             "filtered_pair_count": 0,
             "filtered_pairs": [],
+            "normalized_alias_count": 0,
+            "normalized_aliases": [],
         }
     generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
@@ -456,6 +462,7 @@ def _fallback_generation(
         status=status,
         filtered_aliases=filtered_aliases,
         filtered_pairs=filtered_pairs,
+        normalized_aliases=normalized_aliases,
         unavailable_source_request_count=max(unavailable_count, 0),
     )
     return {
@@ -474,6 +481,8 @@ def _fallback_generation(
         "discovered_aliases": discovered_aliases,
         "filtered_pair_count": len(filtered_pairs),
         "filtered_pairs": filtered_pairs,
+        "normalized_alias_count": len(normalized_aliases),
+        "normalized_aliases": normalized_aliases,
         "exhaustion_blocker_count": len(exhaustion_blockers),
         "exhaustion_blockers": exhaustion_blockers,
         "evidence_note": (
@@ -503,17 +512,24 @@ def _fallback_exhaustion_blockers(
     status: str,
     filtered_aliases: list[dict[str, Any]],
     filtered_pairs: list[dict[str, Any]],
+    normalized_aliases: list[dict[str, Any]],
     unavailable_source_request_count: int,
 ) -> list[dict[str, Any]]:
     if status != "exhausted":
         return []
     blockers = []
+    normalized_object_aliases = {
+        str(item.get("alias") or "")
+        for item in normalized_aliases
+        if isinstance(item, dict) and str(item.get("axis") or "") == "object"
+    }
     non_root_alias_count = sum(
         1
         for item in filtered_aliases
         if str(item.get("axis") or "") == "object"
         and str(item.get("reason") or "")
         in {"prior_non_root_body_alias", "not_pickup_root_body_alias"}
+        and str(item.get("alias") or "") not in normalized_object_aliases
     )
     if non_root_alias_count:
         blockers.append(
@@ -579,6 +595,7 @@ def _fallback_requests_for_blocked_request(
             "filtered_aliases": [],
             "discovered_aliases": [],
             "filtered_pairs": [],
+            "normalized_aliases": [],
         }
     args = request.get("planner_probe_args") or {}
     current_object_alias = _planner_arg(args, "--cleanup-planner-object-id")
@@ -588,7 +605,11 @@ def _fallback_requests_for_blocked_request(
     prior_alias_filters = prior_filters.get("aliases") if isinstance(prior_filters, dict) else {}
     if not isinstance(prior_alias_filters, dict):
         prior_alias_filters = {}
-    pickup_candidates, filtered_pickup_aliases = _executable_candidate_aliases(
+    (
+        pickup_candidates,
+        filtered_pickup_aliases,
+        normalized_pickup_aliases,
+    ) = _executable_candidate_aliases(
         request,
         axis="object",
         candidate_key="candidate_pickup_names",
@@ -596,7 +617,11 @@ def _fallback_requests_for_blocked_request(
         extra_aliases=_discovered_alias_values(discovered, "object"),
         prior_filtered_aliases=prior_alias_filters.get("object", {}),
     )
-    target_candidates, filtered_target_aliases = _executable_candidate_aliases(
+    (
+        target_candidates,
+        filtered_target_aliases,
+        normalized_target_aliases,
+    ) = _executable_candidate_aliases(
         request,
         axis="target",
         candidate_key="candidate_place_receptacle_names",
@@ -607,6 +632,10 @@ def _fallback_requests_for_blocked_request(
     filtered_aliases = [
         *filtered_pickup_aliases,
         *filtered_target_aliases,
+    ]
+    normalized_aliases = [
+        *normalized_pickup_aliases,
+        *normalized_target_aliases,
     ]
     flattened_discovered_aliases = [
         *discovered.get("object", []),
@@ -646,12 +675,14 @@ def _fallback_requests_for_blocked_request(
                     "filtered_aliases": filtered_aliases,
                     "discovered_aliases": flattened_discovered_aliases,
                     "filtered_pairs": filtered_pairs,
+                    "normalized_aliases": normalized_aliases,
                 }
     return {
         "generated_requests": generated,
         "filtered_aliases": filtered_aliases,
         "discovered_aliases": flattened_discovered_aliases,
         "filtered_pairs": filtered_pairs,
+        "normalized_aliases": normalized_aliases,
     }
 
 
@@ -723,7 +754,7 @@ def _executable_candidate_aliases(
     current_alias: str,
     extra_aliases: list[str] | None = None,
     prior_filtered_aliases: dict[str, dict[str, Any]] | None = None,
-) -> tuple[list[str], list[dict[str, Any]]]:
+) -> tuple[list[str], list[dict[str, Any]], list[dict[str, Any]]]:
     source_request_id = str(request.get("request_id") or "")
     candidates = _unique_nonempty_values(
         [
@@ -735,6 +766,27 @@ def _executable_candidate_aliases(
             *(extra_aliases or []),
         ]
     )
+    normalized = []
+    if axis == "object":
+        for alias in list(candidates):
+            root_alias = _runtime_object_root_alias(alias)
+            if not root_alias:
+                continue
+            normalized.append(
+                {
+                    "source_request_id": source_request_id,
+                    "axis": axis,
+                    "alias": alias,
+                    "normalized_alias": root_alias,
+                    "reason": "pickup_root_variant_normalized",
+                    "evidence_note": (
+                        "Normalized a non-root MolmoSpaces runtime pickup alias to "
+                        "the variant-0 root-body alias before command generation."
+                    ),
+                }
+            )
+            if root_alias not in candidates:
+                candidates.append(root_alias)
     executable = []
     filtered = []
     prior_filters = prior_filtered_aliases or {}
@@ -773,7 +825,7 @@ def _executable_candidate_aliases(
                 ),
             }
         )
-    return executable, filtered
+    return executable, filtered, normalized
 
 
 def _is_exact_scene_planner_alias(alias: str) -> bool:
@@ -783,6 +835,13 @@ def _is_exact_scene_planner_alias(alias: str) -> bool:
 def _is_non_root_runtime_object_alias(alias: str) -> bool:
     match = _RUNTIME_ALIAS_RE.match(alias)
     return bool(match and match.group("variant") != "0")
+
+
+def _runtime_object_root_alias(alias: str) -> str:
+    match = _RUNTIME_ALIAS_RE.match(alias)
+    if not match or match.group("variant") == "0":
+        return ""
+    return f"{match.group('prefix')}_{match.group('group')}_0_{match.group('room')}"
 
 
 def _discovered_alias_values(

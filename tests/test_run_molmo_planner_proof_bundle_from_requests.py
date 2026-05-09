@@ -677,7 +677,11 @@ def test_runner_carries_prior_failed_runtime_fallback_candidates(
     assert selection["fallback_generation"]["status"] == "exhausted"
     assert selection["fallback_generation"]["filtered_pair_count"] == 1
     assert selection["fallback_generation"]["filtered_alias_count"] == 4
+    assert selection["fallback_generation"]["normalized_alias_count"] == 2
     report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Normalized Pickup Root Aliases" in report
+    assert "pickup_root_variant_normalized" in report
+    assert "book_beef_1_0_8" in report
     assert "Filtered Fallback Pairs" in report
     assert "prior_task_feasibility_blocked_pair" in report
     assert "prior_non_root_body_alias" in report

@@ -201,6 +201,7 @@ def _assert_proof_request_selection(
         filtered_aliases = fallback_generation.get("filtered_aliases") or []
         discovered_aliases = fallback_generation.get("discovered_aliases") or []
         filtered_pairs = fallback_generation.get("filtered_pairs") or []
+        normalized_aliases = fallback_generation.get("normalized_aliases") or []
         exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
         assert int(selection.get("generated_fallback_request_count") or 0) == len(generated), (
             selection
@@ -214,6 +215,9 @@ def _assert_proof_request_selection(
         assert int(fallback_generation.get("filtered_pair_count") or 0) == len(filtered_pairs), (
             fallback_generation
         )
+        assert int(fallback_generation.get("normalized_alias_count") or 0) == len(
+            normalized_aliases
+        ), fallback_generation
         assert int(fallback_generation.get("exhaustion_blocker_count") or 0) == len(
             exhaustion_blockers
         ), fallback_generation
@@ -259,6 +263,10 @@ def _assert_proof_request_selection(
                 assert str(item[key]) in report_text, (key, report_text[:500])
         for item in exhaustion_blockers:
             for key in ("code", "message"):
+                assert item.get(key), item
+                assert str(item[key]) in report_text, (key, report_text[:500])
+        for item in normalized_aliases:
+            for key in ("alias", "normalized_alias", "reason"):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
 

@@ -773,6 +773,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     filtered_aliases = fallback_generation.get("filtered_aliases") or []
     discovered_aliases = fallback_generation.get("discovered_aliases") or []
     filtered_pairs = fallback_generation.get("filtered_pairs") or []
+    normalized_aliases = fallback_generation.get("normalized_aliases") or []
     exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
     metrics = (
         '<div class="metric-grid">'
@@ -782,6 +783,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
+        f"{_metric('Normalized aliases', len(normalized_aliases))}"
         f"{_metric('Filtered aliases', len(filtered_aliases))}"
         f"{_metric('Filtered pairs', len(filtered_pairs))}"
         f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
@@ -831,6 +833,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     )
     generated_table = _generated_fallback_requests_table(generated)
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
+    normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
     filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
     filtered_pairs_table = _filtered_fallback_pairs_table(filtered_pairs)
     exhaustion_table = _fallback_exhaustion_blockers_table(exhaustion_blockers)
@@ -842,7 +845,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
         f"{selected_table}{excluded_table}{generated_table}{discovered_table}"
-        f"{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+        f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
 
@@ -903,6 +906,30 @@ def _discovered_fallback_aliases_table(discovered_aliases: list[dict[str, Any]])
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Axis</th><th>Alias</th><th>Derived from</th>"
         "<th>Invalid alias</th><th>Reason</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _normalized_fallback_aliases_table(normalized_aliases: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in normalized_aliases:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('axis', '')))}</td>"
+            f"<td>{html.escape(str(item.get('alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('normalized_alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="5">No pickup root aliases normalized.</td></tr>')
+    return (
+        "<h3>Normalized Pickup Root Aliases</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Axis</th><th>Alias</th><th>Normalized alias</th><th>Reason</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

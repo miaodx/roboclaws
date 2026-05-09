@@ -342,6 +342,12 @@ target task-feasibility-blocked pairs, or source requests with no remaining
 candidate.
 _Avoid_: making reviewers infer next work from low-level filtered tables alone
 
+**Pickup Root Alias Normalization**:
+The fallback-generation rule that maps nonzero-variant object runtime aliases
+back to their variant-0 pickup root alias before deciding whether a root-body
+alias source is still missing.
+_Avoid_: treating every non-root runtime sibling as an unresolved alias-source gap
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.

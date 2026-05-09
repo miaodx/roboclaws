@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 72 fallback exhaustion blocker summary completed; next work is upstream task-feasibility handling or richer root-body alias derivation
+**Status:** Phase 73 pickup root alias normalization completed; next work is upstream task-feasibility handling for target-side fallback pairs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -172,6 +172,11 @@ Phase 72 adds the blocker summary for that exhausted state. The runner now
 renders `Fallback Exhaustion Blockers` with stable codes for pickup root-body
 alias gaps, target task-feasibility-blocked pairs, and source requests with no
 remaining generated candidate.
+Phase 73 handles the first object-side alias follow-up by normalizing non-root
+runtime aliases back to their variant-0 pickup root alias. The current dry-run
+shows those root aliases were already known, so the remaining generated
+fallback blocker is target-side task-feasibility rather than a missing pickup
+root alias source.
 
 ## Why This Exists
 

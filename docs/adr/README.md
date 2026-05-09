@@ -62,6 +62,17 @@ one decision per file, sequential numbering, explicit status.
 | [0051](0051-surface-fallback-timeout-stage-evidence.md) | Surface Fallback Timeout Stage Evidence | Accepted |
 | [0052](0052-warm-rby1m-curobo-before-fallback-proofs.md) | Warm RBY1M CuRobo Before Fallback Proofs | Accepted |
 | [0053](0053-run-warmed-generated-fallback-proofs.md) | Run Warmed Generated Fallback Proofs | Accepted |
+| [0054](0054-filter-fallback-aliases-to-exact-scene-runtime-names.md) | Filter Fallback Aliases to Exact-Scene Runtime Names | Accepted |
+| [0055](0055-discover-fallback-runtime-aliases-from-keyerrors.md) | Discover Fallback Runtime Aliases from KeyError Evidence | Accepted |
+| [0056](0056-run-discovered-runtime-fallback-proofs.md) | Run Discovered Runtime Fallback Proofs | Accepted |
+| [0057](0057-remember-failed-fallback-candidates.md) | Remember Failed Fallback Candidates | Accepted |
+| [0058](0058-execute-filtered-fallback-proofs.md) | Execute Filtered Fallback Proofs | Accepted |
+| [0059](0059-carry-forward-filtered-fallback-candidates.md) | Carry Forward Filtered Fallback Candidates | Accepted |
+| [0060](0060-filter-non-root-pickup-runtime-aliases.md) | Filter Non-Root Pickup Runtime Aliases | Accepted |
+| [0061](0061-merge-prior-planner-proof-evidence.md) | Merge Prior Planner Proof Evidence | Accepted |
+| [0062](0062-surface-fallback-exhaustion-status.md) | Surface Fallback Exhaustion Status | Accepted |
+| [0063](0063-summarize-fallback-exhaustion-blockers.md) | Summarize Fallback Exhaustion Blockers | Accepted |
+| [0064](0064-normalize-pickup-root-runtime-aliases.md) | Normalize Pickup Root Runtime Aliases | Accepted |
 
 ## Adding a new ADR
 

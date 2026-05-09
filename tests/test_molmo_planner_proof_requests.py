@@ -421,6 +421,80 @@ def test_proof_request_selection_filters_non_runtime_fallback_aliases() -> None:
     }
 
 
+def test_proof_request_selection_normalizes_non_root_alias_into_generated_request() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "binding": {
+                    "candidate_pickup_names": [
+                        "book_beef_1_1_8",
+                    ],
+                    "candidate_place_receptacle_names": [
+                        "shelf_cafe_1_0_2",
+                    ],
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "shelf_01",
+                    "--cleanup-planner-object-id": "Book|surface|8|79",
+                    "--cleanup-planner-target-receptacle-id": "shelf_cafe_1_0_2",
+                },
+            }
+        ],
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary={
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "task_feasibility_status": "blocked",
+                    "blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ]
+        },
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=4,
+    )
+
+    fallback_generation = selection["fallback_generation"]
+    assert selection["fallback_required"] is False
+    assert fallback_generation["status"] == "generated"
+    assert fallback_generation["generated_request_count"] == 1
+    assert fallback_generation["normalized_aliases"] == [
+        {
+            "source_request_id": "proof_001",
+            "axis": "object",
+            "alias": "book_beef_1_1_8",
+            "normalized_alias": "book_beef_1_0_8",
+            "reason": "pickup_root_variant_normalized",
+            "evidence_note": (
+                "Normalized a non-root MolmoSpaces runtime pickup alias to "
+                "the variant-0 root-body alias before command generation."
+            ),
+        }
+    ]
+    generated = fallback_generation["generated_requests"][0]
+    assert generated["planner_probe_args"]["--cleanup-planner-object-id"] == "book_beef_1_0_8"
+    assert generated["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
+        "shelf_cafe_1_0_2"
+    )
+    assert {
+        (item["axis"], item["alias"], item["reason"])
+        for item in fallback_generation["filtered_aliases"]
+    } == {
+        ("object", "Book|surface|8|79", "not_exact_scene_runtime_alias"),
+        ("object", "book_beef_1_1_8", "not_pickup_root_body_alias"),
+    }
+
+
 def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
@@ -514,6 +588,14 @@ def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror(
     assert selection["generated_fallback_request_count"] == 1
     fallback_generation = selection["fallback_generation"]
     assert fallback_generation["discovered_alias_count"] == 3
+    assert fallback_generation["normalized_alias_count"] == 2
+    assert {
+        (item["alias"], item["normalized_alias"], item["reason"])
+        for item in fallback_generation["normalized_aliases"]
+    } == {
+        ("book_beef_1_1_8", "book_beef_1_0_8", "pickup_root_variant_normalized"),
+        ("book_beef_1_2_8", "book_beef_1_0_8", "pickup_root_variant_normalized"),
+    }
     assert {
         (item["axis"], item["alias"], item["derived_from"])
         for item in fallback_generation["discovered_aliases"]
@@ -644,9 +726,16 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
-        "pickup_root_body_alias_required",
         "target_task_feasibility_blocked_pairs",
         "no_fallback_candidate_available",
+    }
+    assert fallback_generation["normalized_alias_count"] == 2
+    assert {
+        (item["alias"], item["normalized_alias"])
+        for item in fallback_generation["normalized_aliases"]
+    } == {
+        ("book_beef_1_1_8", "book_beef_1_0_8"),
+        ("book_beef_1_2_8", "book_beef_1_0_8"),
     }
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
@@ -791,9 +880,16 @@ def test_proof_request_selection_carries_prior_filtered_candidates() -> None:
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
-        "pickup_root_body_alias_required",
         "target_task_feasibility_blocked_pairs",
         "no_fallback_candidate_available",
+    }
+    assert fallback_generation["normalized_alias_count"] == 2
+    assert {
+        (item["alias"], item["normalized_alias"])
+        for item in fallback_generation["normalized_aliases"]
+    } == {
+        ("book_beef_1_1_8", "book_beef_1_0_8"),
+        ("book_beef_1_2_8", "book_beef_1_0_8"),
     }
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
