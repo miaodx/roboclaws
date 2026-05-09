@@ -134,6 +134,7 @@ def run_from_cleanup_result(
             _run_command(item["command"])
             proof_results.append(Path(item["run_result"]))
     cleanup_command: list[str] = []
+    cleanup_rerun: dict[str, Any] = {}
     if rerun_cleanup:
         if not execute_probes:
             raise ValueError("--rerun-cleanup requires --execute-probes")
@@ -147,12 +148,18 @@ def run_from_cleanup_result(
         )
         _run_command(cleanup_command)
         status = "cleanup_rerun"
+        cleanup_rerun = {
+            "output_dir": str(cleanup_output),
+            "run_result": str(cleanup_output / "run_result.json"),
+            "report": str(cleanup_output / "report.html"),
+        }
     manifest = proof_bundle_run_manifest(
         cleanup_run_result=cleanup_run_result,
         output_dir=output_dir,
         proof_requests=requests,
         commands=commands,
         cleanup_command=cleanup_command,
+        cleanup_rerun=cleanup_rerun,
     )
     manifest["status"] = status
     report_path = output_dir / "report.html"

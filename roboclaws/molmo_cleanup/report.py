@@ -184,6 +184,7 @@ def render_planner_proof_bundle_runner_report(
     report_path = output_dir / "report.html"
     commands = manifest.get("commands") or []
     cleanup_command = manifest.get("cleanup_command") or []
+    cleanup_rerun = manifest.get("cleanup_rerun") or {}
     body = f"""
     <section class="summary">
       <div class="summary-head">
@@ -208,6 +209,7 @@ def render_planner_proof_bundle_runner_report(
     </section>
     {_proof_bundle_commands_section(commands)}
     {_cleanup_rerun_command_section(cleanup_command)}
+    {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -754,6 +756,28 @@ def _cleanup_rerun_command_section(command: list[str]) -> str:
         '<section class="panel"><h2>Cleanup Rerun Command</h2>'
         '<p class="note">This command consumes generated proof run results as a bundle.</p>'
         f"<pre><code>{html.escape(command_text)}</code></pre></section>"
+    )
+
+
+def _cleanup_rerun_artifact_section(cleanup_rerun: dict[str, Any]) -> str:
+    if not cleanup_rerun:
+        return (
+            '<section class="panel"><h2>Cleanup Rerun Artifact</h2>'
+            '<p class="note">No cleanup rerun artifact recorded.</p></section>'
+        )
+    return (
+        '<section class="panel cleanup-rerun-artifact">'
+        "<h2>Cleanup Rerun Artifact</h2>"
+        '<p class="note">Final cleanup rerun outputs produced after proof commands '
+        "have generated strict planner proof run results.</p>"
+        + _path_table(
+            [
+                ("Cleanup rerun output", cleanup_rerun.get("output_dir", "")),
+                ("Cleanup rerun run result", cleanup_rerun.get("run_result", "")),
+                ("Cleanup rerun report", cleanup_rerun.get("report", "")),
+            ]
+        )
+        + "</section>"
     )
 
 

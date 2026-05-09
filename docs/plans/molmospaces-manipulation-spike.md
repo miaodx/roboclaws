@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 49 planner proof bundle runner checker completed on 2026-05-10
+**Status:** Phase 52 planner proof bundle cleanup rerun artifact tracking completed on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -62,7 +62,11 @@ runner so completed ADR-0003 cleanup artifacts can be turned into real bound
 planner proof bundle runs without hand-matching aliases. Phase 47 makes that
 proof-generation handoff visible in the shared cleanup report. Phase 48 adds
 the corresponding visual report to the proof-bundle runner output. Phase 49
-adds a checker for that runner manifest/report pair.
+adds a checker for that runner manifest/report pair. Phase 50 moves the MCP
+smoke demos onto the shared semantic cleanup loop. Phase 51 adds a dry-run
+harness for repeatable proof-bundle runner command generation. Phase 52 names
+the final cleanup rerun artifacts in runner manifests, reports, and checker
+gates.
 
 ## Why This Exists
 

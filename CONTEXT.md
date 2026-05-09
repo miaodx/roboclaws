@@ -238,13 +238,18 @@ _Avoid_: treating proof requests as Cleanup Agent input
 **Planner Proof Bundle Runner Report**:
 The visual `report.html` produced by the local proof-bundle runner to show
 exact probe commands, expected proof artifacts, and optional cleanup rerun
-commands.
+commands and artifacts.
 _Avoid_: treating command evidence as proof success
 
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
 _Avoid_: replacing strict per-proof validation
+
+**Cleanup Rerun Artifact**:
+The final cleanup `run_result.json` and `report.html` produced after a proof
+bundle runner reruns cleanup with generated planner proof outputs.
+_Avoid_: treating artifact existence as planner-backed cleanup success
 
 **Planner-Backed Cleanup Primitive Executor**:
 The strict execution seam behind the shared semantic cleanup loop. It can mark a cleanup subphase as `planner_backed` only after per-call planner execution evidence exists for that exact `nav`, `pick`, `nav`, `open`, or `place` step.
@@ -347,9 +352,9 @@ _Avoid_: full cleanup replacement claim
   report visual parity depends on one cleanup-loop module.
 - A planner proof bundle runner harness should dry-run command generation and
   check the runner report before real local planner probes are executed.
-- Cleanup reruns launched by a proof bundle runner should be named in the runner
-  manifest/report so the final Cleanup Artifact Report is not lost after probe
-  execution.
+- Cleanup reruns launched by a proof bundle runner should be named as
+  **Cleanup Rerun Artifacts** in the runner manifest/report so the final Cleanup
+  Artifact Report is not lost after probe execution.
 
 ## Example Dialogue
 

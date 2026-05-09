@@ -92,7 +92,7 @@ that runner manifest/report pair. Phase 50 removes the remaining hand-written
 MCP smoke cleanup loops so current-contract and ADR-0003 smoke demos reuse the
 shared semantic cleanup loop seam. Phase 51 adds a dry-run harness for the
 planner proof bundle runner so the cleanup-to-proof-command handoff is
-repeatable before local GPU execution. Phase 52 makes cleanup rerun outputs
+repeatable before local GPU execution. Phase 52 made cleanup rerun outputs
 from executed proof-bundle runs first-class manifest/report/checker artifacts.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
@@ -233,6 +233,9 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 47: MolmoSpaces planner proof request report view** - ADR-0038 shared report section that renders private planner proof requests while keeping Agent View clean. Completed 2026-05-10.
 - [x] **Phase 48: MolmoSpaces planner proof bundle runner report** - ADR-0039 visual `report.html` for local proof-bundle runner command manifests. Completed 2026-05-10.
 - [x] **Phase 49: MolmoSpaces planner proof bundle runner checker** - ADR-0040 checker for local proof-bundle runner manifest/report integrity. Completed 2026-05-10.
+- [x] **Phase 50: MolmoSpaces MCP smoke shared semantic loop** - ADR-0041 current-contract and ADR-0003 MCP smoke demos reuse the shared semantic cleanup loop. Completed 2026-05-10.
+- [x] **Phase 51: MolmoSpaces planner proof bundle runner harness** - ADR-0042 dry-run harness and verification recipe for repeatable proof-bundle runner command generation. Completed 2026-05-10.
+- [x] **Phase 52: MolmoSpaces planner proof bundle cleanup rerun artifacts** - ADR-0043 cleanup rerun outputs are first-class runner manifest/report/checker artifacts. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

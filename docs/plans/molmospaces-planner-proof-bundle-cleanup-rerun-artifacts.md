@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Cleanup Rerun Artifacts
 
-**Status:** Planned for GSD Phase 52 on 2026-05-10
+**Status:** Completed in GSD Phase 52 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0039, ADR-0040, ADR-0042, ADR-0043
 **Workflow:** `hybrid-phase-pipeline`
@@ -47,4 +47,9 @@ This phase should:
 
 ## Completion
 
-Pending Phase 52 implementation.
+Completed in Phase 52.
+
+The proof-bundle runner now records final cleanup rerun artifact paths when
+`--rerun-cleanup` is used, renders them in `report.html`, and exposes a checker
+gate that can require those paths to exist. This remains artifact tracking; the
+ADR-0003 cleanup checker still owns planner-backed cleanup success.

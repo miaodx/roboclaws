@@ -17,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("path", type=Path, help="proof_bundle_run_manifest.json or output dir")
     parser.add_argument("--require-proof-outputs", action="store_true")
+    parser.add_argument("--require-cleanup-rerun-output", action="store_true")
     return parser.parse_args()
 
 
@@ -28,6 +29,7 @@ def main() -> None:
         data,
         path.parent,
         require_proof_outputs=args.require_proof_outputs,
+        require_cleanup_rerun_output=args.require_cleanup_rerun_output,
     )
     print(f"molmo-planner-proof-bundle-runner ok: {path}")
 
@@ -37,6 +39,7 @@ def _assert_runner_result(
     base: Path,
     *,
     require_proof_outputs: bool = False,
+    require_cleanup_rerun_output: bool = False,
 ) -> None:
     assert data.get("schema") == PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA, data
     assert data.get("status") in {"dry_run", "probes_executed", "cleanup_rerun"}, data
@@ -57,6 +60,14 @@ def _assert_runner_result(
     if cleanup_command:
         command_text = " ".join(str(part) for part in cleanup_command)
         assert command_text in report_text, command_text
+    cleanup_rerun = data.get("cleanup_rerun") or {}
+    if data.get("status") == "cleanup_rerun" or cleanup_rerun or require_cleanup_rerun_output:
+        _assert_cleanup_rerun(
+            cleanup_rerun,
+            base,
+            report_text,
+            require_outputs=require_cleanup_rerun_output or data.get("status") == "cleanup_rerun",
+        )
 
 
 def _assert_runner_report(report_text: str) -> None:
@@ -104,6 +115,26 @@ def _assert_command(
         proof_report = _resolve_path(base, str(item["report"]))
         assert run_result.is_file(), run_result
         assert proof_report.is_file(), proof_report
+
+
+def _assert_cleanup_rerun(
+    cleanup_rerun: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    require_outputs: bool,
+) -> None:
+    for key in ("output_dir", "run_result", "report"):
+        assert cleanup_rerun.get(key), cleanup_rerun
+        assert str(cleanup_rerun[key]) in report_text, (key, report_text[:500])
+    assert "Cleanup Rerun Artifact" in report_text, report_text[:500]
+    if require_outputs:
+        output_dir = _resolve_path(base, str(cleanup_rerun["output_dir"]))
+        run_result = _resolve_path(base, str(cleanup_rerun["run_result"]))
+        report = _resolve_path(base, str(cleanup_rerun["report"]))
+        assert output_dir.is_dir(), output_dir
+        assert run_result.is_file(), run_result
+        assert report.is_file(), report
 
 
 def _resolve_path(base: Path, value: str) -> Path:

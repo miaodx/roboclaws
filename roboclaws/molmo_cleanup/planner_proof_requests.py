@@ -142,6 +142,7 @@ def proof_bundle_run_manifest(
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
     cleanup_command: list[str] | None = None,
+    cleanup_rerun: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "schema": PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
@@ -152,6 +153,7 @@ def proof_bundle_run_manifest(
         "command_count": len(commands),
         "commands": commands,
         "cleanup_command": cleanup_command or [],
+        "cleanup_rerun": cleanup_rerun or {},
         "evidence_note": (
             "Dry-run manifest for generating bound planner proofs from an ADR-0003 "
             "cleanup artifact. Use --execute-probes in a local RBY1M/CuRobo session."

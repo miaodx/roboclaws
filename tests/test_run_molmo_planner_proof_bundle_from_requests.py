@@ -122,6 +122,71 @@ def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
     assert "config_import" in command
 
 
+def test_runner_records_cleanup_rerun_artifacts_when_rerun_requested(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps(
+            {
+                "seed": 7,
+                "backend": "api_semantic_synthetic",
+                "fixture_hint_mode": "room_only",
+                "perception_mode": "visible_object_detections",
+                "requested_generated_mess_count": 10,
+                "planner_proof_requests": _proof_requests(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands_run: list[list[str]] = []
+
+    def fake_run_command(command: list[str]) -> None:
+        commands_run.append(list(command))
+        output_dir = Path(command[command.index("--output-dir") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "run_result.json").write_text("{}", encoding="utf-8")
+        (output_dir / "report.html").write_text("<h1>report</h1>", encoding="utf-8")
+
+    monkeypatch.setattr(runner, "_run_command", fake_run_command)
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=Path("torch_ext"),
+        rby1m_curobo_memory_profile="low",
+        execute_probes=True,
+        rerun_cleanup=True,
+        cleanup_output_dir=tmp_path / "rerun",
+    )
+
+    manifest = result["manifest"]
+    assert result["status"] == "cleanup_rerun"
+    assert len(commands_run) == 2
+    assert commands_run[-1][:2] == ["python", "cleanup.py"]
+    assert "--planner-proof-run-result" in commands_run[-1]
+    cleanup_rerun = manifest["cleanup_rerun"]
+    assert cleanup_rerun["output_dir"] == str(tmp_path / "rerun")
+    assert cleanup_rerun["run_result"] == str(tmp_path / "rerun" / "run_result.json")
+    assert cleanup_rerun["report"] == str(tmp_path / "rerun" / "report.html")
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Cleanup Rerun Artifact" in report
+    assert str(tmp_path / "rerun" / "run_result.json") in report
+
+
 def test_runner_requires_planner_proof_requests(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_run_result = tmp_path / "run_result.json"
