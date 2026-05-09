@@ -498,13 +498,25 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
         "result_count": sum(1 for item in results if item["run_result_exists"]),
         "planner_backed_count": sum(1 for item in results if item["planner_backed"]),
         "blocked_count": sum(1 for item in results if item["status"] == "blocked_capability"),
+        "timeout_count": sum(1 for item in results if _has_blocker_code(item, "timeout")),
+        "rby1m_config_import_timeout_count": sum(
+            1
+            for item in results
+            if _has_blocker_code(item, "timeout")
+            and item.get("last_worker_stage") == "rby1m_config_import"
+        ),
         "missing_result_count": sum(1 for item in results if not item["run_result_exists"]),
         "cleanup_binding_promoted_count": sum(
             1 for item in results if item["cleanup_binding_promoted"]
         ),
+        "execution_attempted_count": sum(1 for item in results if item["execution_attempted"]),
         "task_feasibility_blocked_count": sum(
             1 for item in results if item["task_feasibility_status"] == "blocked"
         ),
+        "worker_stage_event_count": sum(
+            int(item.get("worker_stage_event_count") or 0) for item in results
+        ),
+        "last_worker_stage_counts": _last_worker_stage_counts(results),
         "view_artifact_count": sum(len(item.get("views") or []) for item in results),
         "results": results,
         "evidence_note": (
@@ -529,10 +541,16 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         "status": "not_run",
         "planner_backed": False,
         "cleanup_binding_promoted": False,
+        "execution_attempted": False,
         "task_feasibility_status": "not_run",
         "visual_status": "not_run",
         "blockers": [],
         "cleanup_binding_blockers": [],
+        "last_worker_stage": "",
+        "worker_stage_event_count": 0,
+        "worker_stage_events": [],
+        "stdout": "",
+        "stderr": "",
         "views": [],
     }
     if not run_result_path.is_file():
@@ -556,6 +574,8 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         return result
     evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
     evidence = evidence if isinstance(evidence, dict) else {}
+    artifacts = data.get("artifacts") if isinstance(data, dict) else {}
+    artifacts = artifacts if isinstance(artifacts, dict) else {}
     blockers = _blockers(evidence.get("blockers") or [])
     cleanup_binding_blockers = _blockers(evidence.get("cleanup_primitive_binding_blockers") or [])
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
@@ -564,11 +584,13 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     cleanup_binding = evidence.get("cleanup_primitive_binding") or {}
     planner_backed = data.get("status") == "planner_backed"
     views = _proof_views(base, evidence)
+    worker_stage_events = _compact_worker_stage_events(evidence.get("worker_stage_events") or [])
     result.update(
         {
             "status": str(data.get("status") or "unknown"),
             "planner_backed": planner_backed,
             "cleanup_binding_promoted": bool(cleanup_binding),
+            "execution_attempted": bool(evidence.get("execution_attempted")),
             "task_feasibility_status": _task_feasibility_status(
                 status=str(data.get("status") or ""),
                 planner_backed=planner_backed,
@@ -580,6 +602,11 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
             "visual_status": "views_recorded" if views else "no_views_recorded",
             "blockers": blockers,
             "cleanup_binding_blockers": cleanup_binding_blockers,
+            "last_worker_stage": str(evidence.get("last_worker_stage") or ""),
+            "worker_stage_event_count": len(worker_stage_events),
+            "worker_stage_events": worker_stage_events,
+            "stdout": _proof_artifact_path(base, artifacts, "stdout"),
+            "stderr": _proof_artifact_path(base, artifacts, "stderr"),
             "cleanup_task_config": cleanup_task_config,
             "requested_cleanup_primitive_binding": requested_binding,
             "sampled_task_binding": sampled_binding,
@@ -588,6 +615,45 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         }
     )
     return result
+
+
+def _has_blocker_code(result: dict[str, Any], code: str) -> bool:
+    blockers = [*(result.get("blockers") or []), *(result.get("cleanup_binding_blockers") or [])]
+    return any(isinstance(item, dict) and str(item.get("code") or "") == code for item in blockers)
+
+
+def _last_worker_stage_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in results:
+        stage = str(item.get("last_worker_stage") or "")
+        if stage:
+            counts[stage] = counts.get(stage, 0) + 1
+    return counts
+
+
+def _compact_worker_stage_events(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    events = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        compact = {}
+        for key in ("elapsed_s", "event", "stage", "embodiment", "probe_mode"):
+            value = item.get(key)
+            if value not in (None, "", []):
+                compact[key] = value
+        if compact:
+            events.append(compact)
+    return events
+
+
+def _proof_artifact_path(base: Path, artifacts: dict[str, Any], key: str) -> str:
+    value = artifacts.get(key)
+    if not value:
+        return ""
+    path = Path(str(value))
+    return str(path if path.is_absolute() else base / path)
 
 
 def _task_feasibility_status(

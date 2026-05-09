@@ -884,10 +884,20 @@ def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
         f"{_metric('Expected', summary.get('expected_count', len(results)))}"
         f"{_metric('Results', summary.get('result_count', 0))}"
         f"{_metric('Planner-backed', summary.get('planner_backed_count', 0))}"
+        f"{_metric('Timeouts', summary.get('timeout_count', 0))}"
+        f"{_metric('Config-import timeouts', summary.get('rby1m_config_import_timeout_count', 0))}"
         f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
+        f"{_metric('Execution attempted', summary.get('execution_attempted_count', 0))}"
         f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
+        f"{_metric('Worker stage events', summary.get('worker_stage_event_count', 0))}"
         f"{_metric('Views', summary.get('view_artifact_count', 0))}"
         "</div>"
+    )
+    stage_counts = _last_worker_stage_counts_text(summary.get("last_worker_stage_counts") or {})
+    stage_counts_html = (
+        f'<p class="note">Last worker stages: {html.escape(stage_counts)}</p>'
+        if stage_counts
+        else ""
     )
     body = (
         "".join(_proof_bundle_result_card(item) for item in results)
@@ -900,7 +910,7 @@ def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
     return (
         '<section class="panel proof-bundle-results">'
         "<h2>Proof Probe Results</h2>"
-        f'<p class="note">{html.escape(str(note))}</p>{metrics}{body}</section>'
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
     )
 
 
@@ -922,6 +932,12 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Status", item.get("status", "")),
         ("Task feasibility", item.get("task_feasibility_status", "")),
         ("Cleanup binding promoted", _yes_no(item.get("cleanup_binding_promoted"))),
+        ("Execution attempted", _yes_no(item.get("execution_attempted"))),
+        ("Last worker stage", item.get("last_worker_stage", "")),
+        ("Worker stage events", item.get("worker_stage_event_count", "")),
+        ("Worker stages", _worker_stage_summary(item.get("worker_stage_events") or [])),
+        ("Probe stdout", item.get("stdout", "")),
+        ("Probe stderr", item.get("stderr", "")),
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
@@ -961,6 +977,32 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
         f"</tr></thead><tbody>{table_rows}</tbody></table></div>{view_html}</article>"
     )
+
+
+def _last_worker_stage_counts_text(counts: dict[str, Any]) -> str:
+    if not isinstance(counts, dict):
+        return ""
+    parts = []
+    for stage, count in sorted(counts.items()):
+        if stage:
+            parts.append(f"{stage}={count}")
+    return ", ".join(parts)
+
+
+def _worker_stage_summary(events: list[dict[str, Any]]) -> str:
+    parts = []
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        event = str(item.get("event") or "")
+        stage = str(item.get("stage") or "")
+        label = " -> ".join(dict.fromkeys(part for part in (event, stage) if part))
+        elapsed = item.get("elapsed_s")
+        if elapsed not in (None, ""):
+            label = f"{label} ({elapsed}s)" if label else f"{elapsed}s"
+        if label:
+            parts.append(label)
+    return "; ".join(parts)
 
 
 def _cleanup_rerun_command_section(command: list[str]) -> str:

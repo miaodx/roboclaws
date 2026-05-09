@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 59 plain semantic report labels completed; next work is timeout-stage diagnostics for generated fallback execution
+**Status:** Phase 60 fallback timeout stage reporting completed; next work is the next local RBY1M/CuRobo retry slice
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -97,6 +97,11 @@ Phase 59 resolves the remaining report-vocabulary drift from the original
 discussion: shared Cleanup Artifact Reports now use `nav`, `pick`, `nav`,
 optional `open`, and `place` as primary labels while keeping
 object/target/surface/inside as secondary role detail.
+Phase 60 makes generated fallback timeout evidence visible in the same
+proof-bundle runner report: the shared proof result summary now carries timeout
+counts, execution-attempted state, last worker stage, compact worker stage
+events, and stdout/stderr paths so local reports show `rby1m_config_import`
+timeouts without opening each per-proof artifact.
 
 ## Why This Exists
 

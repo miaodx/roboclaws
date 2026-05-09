@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 59 MolmoSpaces plain semantic report labels completed on 2026-05-10.
+stopped_at: Phase 60 MolmoSpaces fallback timeout stage reporting completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 52
-  completed_phases: 52
-  total_plans: 55
-  completed_plans: 55
+  total_phases: 53
+  completed_phases: 53
+  total_plans: 56
+  completed_plans: 56
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 59 completed plain semantic report labels; next work is timeout-stage diagnostics for generated fallback execution.
+**Current focus:** Phase 60 completed timeout-stage diagnostics for generated fallback execution; next work is the next local RBY1M/CuRobo retry slice.
 
 ## Current Position
 
-Phase: 59 (molmospaces-plain-semantic-report-labels) - COMPLETE
-Plan: 1 of 1 complete - `59-01` makes plain semantic subphase labels primary in cleanup reports.
+Phase: 60 (molmospaces-fallback-timeout-stage-reporting) - COMPLETE
+Plan: 1 of 1 complete - `60-01` surfaces generated fallback timeout stage evidence in proof-bundle summaries and reports.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -77,19 +77,24 @@ planner view capture.
 Phase 59 made `nav`, `pick`, `nav`, optional `open`, and `place` the primary
 Cleanup Artifact Report labels while preserving object/target/surface/inside
 as secondary role detail.
-Last activity: 2026-05-10 - Completed Phase 59 plain semantic report labels.
+Phase 60 made generated fallback timeout evidence visible in proof-bundle
+result summaries and runner reports by carrying timeout counts,
+execution-attempted state, last worker stage, compact worker stage events, and
+stdout/stderr artifact paths.
+Last activity: 2026-05-10 - Completed Phase 60 fallback timeout stage reporting.
 
 Progress: [##########] 100%
-Next blocker: generated fallback proof requests now execute, but local
-RBY1M/CuRobo fallback execution times out at `rby1m_config_import` before any
-task sampling or cleanup primitive binding can promote.
+Next blocker: generated fallback proof requests now execute and report their
+last worker stage, but local RBY1M/CuRobo fallback execution still times out at
+`rby1m_config_import` before any task sampling or cleanup primitive binding can
+promote.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 59 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 59)
+- Total plans completed: 60 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 60)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -116,8 +121,8 @@ task sampling or cleanup primitive binding can promote.
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 57, 58, 59
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, planner probe diagnostics that promote cleanup binding only on exact request/sample match, private observed-handle to planner-alias binding, bounded opt-in executor wiring for one matching cleanup object, proof-bundle coverage for full synthetic cleanup gate readiness, a shared visual-core checker that rejects stale report shapes, private planner-proof request manifests for repeatable local proof-bundle generation, report visibility for those private proof requests, visual proof-bundle runner command reports, a checker for runner manifest/report integrity, shared-loop reuse in the MCP smoke demos, a dry-run harness for the proof-bundle runner, cleanup-rerun artifact tracking for executed bundle flows, a local execute-rerun gate, exact cleanup-scene proof binding, proof-bundle result summaries, proof request feasibility selection that skips prior infeasible requests before reruns, generated fallback proof requests that turn blocked source requests into private alternate planner-alias commands, and local execution evidence showing those generated fallbacks now time out at RBY1M config import before proof or binding.
+- Last 3 shipped phases: 58, 59, 60
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, planner probe diagnostics that promote cleanup binding only on exact request/sample match, private observed-handle to planner-alias binding, bounded opt-in executor wiring for one matching cleanup object, proof-bundle coverage for full synthetic cleanup gate readiness, a shared visual-core checker that rejects stale report shapes, private planner-proof request manifests for repeatable local proof-bundle generation, report visibility for those private proof requests, visual proof-bundle runner command reports, a checker for runner manifest/report integrity, shared-loop reuse in the MCP smoke demos, a dry-run harness for the proof-bundle runner, cleanup-rerun artifact tracking for executed bundle flows, a local execute-rerun gate, exact cleanup-scene proof binding, proof-bundle result summaries, proof request feasibility selection that skips prior infeasible requests before reruns, generated fallback proof requests that turn blocked source requests into private alternate planner-alias commands, local execution evidence showing those generated fallbacks now time out at RBY1M config import before proof or binding, and bundle-level timeout-stage reporting so those failures remain visible in the shared runner report.
 - Report label note: Phase 59 makes `nav, pick, nav, open?, place` the primary
   Cleanup Artifact Report vocabulary and keeps object/target/surface/inside as
   secondary role detail.

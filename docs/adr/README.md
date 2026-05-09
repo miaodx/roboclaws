@@ -59,6 +59,7 @@ one decision per file, sequential numbering, explicit status.
 | [0048](0048-generate-private-fallback-proof-requests.md) | Generate Private Fallback Proof Requests | Accepted |
 | [0049](0049-run-generated-fallback-proofs-as-local-dev-evidence.md) | Run Generated Fallback Proofs As Local-Dev Evidence | Accepted |
 | [0050](0050-use-plain-semantic-subphase-report-labels.md) | Use Plain Semantic Subphase Report Labels | Accepted |
+| [0051](0051-surface-fallback-timeout-stage-evidence.md) | Surface Fallback Timeout Stage Evidence | Accepted |
 
 ## Adding a new ADR
 

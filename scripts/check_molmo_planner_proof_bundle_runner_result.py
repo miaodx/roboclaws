@@ -199,6 +199,20 @@ def _assert_proof_result_summary(
     assert "Proof Probe Results" in report_text, report_text[:500]
     if require_outputs:
         assert int(summary.get("result_count") or 0) == len(commands), summary
+    timeout_count = sum(1 for item in results if _has_blocker_code(item, "timeout"))
+    assert int(summary.get("timeout_count") or 0) == timeout_count, summary
+    if timeout_count:
+        assert "Timeouts" in report_text, report_text[:500]
+    rby1m_config_import_timeout_count = sum(
+        1
+        for item in results
+        if _has_blocker_code(item, "timeout")
+        and item.get("last_worker_stage") == "rby1m_config_import"
+    )
+    assert (
+        int(summary.get("rby1m_config_import_timeout_count") or 0)
+        == rby1m_config_import_timeout_count
+    ), summary
     for item in results:
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
             assert item.get(key), item
@@ -220,6 +234,18 @@ def _assert_proof_result_summary(
                 assert code in report_text, (code, report_text[:500])
         for view in item.get("views") or []:
             assert str(view.get("path") or "") in report_text, (view, report_text[:500])
+        for key in ("last_worker_stage", "stdout", "stderr"):
+            value = str(item.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
+        worker_stage_events = item.get("worker_stage_events") or []
+        assert int(item.get("worker_stage_event_count") or 0) == len(worker_stage_events), item
+        for event in worker_stage_events:
+            assert isinstance(event, dict), item
+            for key in ("event", "stage"):
+                value = str(event.get(key) or "")
+                if value:
+                    assert value in report_text, (event, report_text[:500])
 
 
 def _assert_cleanup_rerun(
@@ -247,6 +273,13 @@ def _resolve_path(base: Path, value: str) -> Path:
     if path.is_absolute() or path.exists():
         return path
     return base / path
+
+
+def _has_blocker_code(item: dict[str, Any], code: str) -> bool:
+    blockers = [*(item.get("blockers") or []), *(item.get("cleanup_binding_blockers") or [])]
+    return any(
+        isinstance(blocker, dict) and str(blocker.get("code") or "") == code for blocker in blockers
+    )
 
 
 if __name__ == "__main__":

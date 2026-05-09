@@ -792,9 +792,14 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "result_count": 1,
             "planner_backed_count": 0,
             "blocked_count": 1,
+            "timeout_count": 1,
+            "rby1m_config_import_timeout_count": 1,
             "missing_result_count": 0,
             "cleanup_binding_promoted_count": 0,
+            "execution_attempted_count": 0,
             "task_feasibility_blocked_count": 1,
+            "worker_stage_event_count": 2,
+            "last_worker_stage_counts": {"rby1m_config_import": 1},
             "view_artifact_count": 2,
             "results": [
                 {
@@ -808,10 +813,26 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "status": "blocked_capability",
                     "planner_backed": False,
                     "cleanup_binding_promoted": False,
+                    "execution_attempted": False,
                     "task_feasibility_status": "blocked",
                     "visual_status": "views_recorded",
-                    "blockers": [{"code": "HouseInvalidForTask", "message": "robot placement"}],
+                    "blockers": [
+                        {"code": "HouseInvalidForTask", "message": "robot placement"},
+                        {"code": "timeout", "message": "Probe exceeded 1.0s"},
+                    ],
                     "cleanup_binding_blockers": [],
+                    "last_worker_stage": "rby1m_config_import",
+                    "worker_stage_event_count": 2,
+                    "worker_stage_events": [
+                        {"elapsed_s": 0.1, "event": "worker_start", "stage": "worker_start"},
+                        {
+                            "elapsed_s": 3.2,
+                            "event": "rby1m_config_import_start",
+                            "stage": "rby1m_config_import",
+                        },
+                    ],
+                    "stdout": str(tmp_path / "proofs" / "001" / "planner_probe_stdout.txt"),
+                    "stderr": str(tmp_path / "proofs" / "001" / "planner_probe_stderr.txt"),
                     "requested_cleanup_primitive_binding": {
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
@@ -857,6 +878,13 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "fallback_generated" in html
     assert "Task feasibility" in html
     assert "blocked" in html
+    assert "Timeouts" in html
+    assert "Config-import timeouts" in html
+    assert "Last worker stage" in html
+    assert "rby1m_config_import" in html
+    assert "Worker stages" in html
+    assert "planner_probe_stdout.txt" in html
+    assert "planner_probe_stderr.txt" in html
     assert "initial.png" in html
     assert "final.png" in html
     assert "report.html" in html

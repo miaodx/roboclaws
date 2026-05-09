@@ -424,6 +424,75 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
 
 
+def test_proof_result_summary_surfaces_timeout_worker_stage_evidence(
+    tmp_path: Path,
+) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    proof_dir.mkdir(parents=True)
+    (proof_dir / "planner_probe_stdout.txt").write_text("stdout", encoding="utf-8")
+    (proof_dir / "planner_probe_stderr.txt").write_text("stderr", encoding="utf-8")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "artifacts": {
+                    "stdout": "planner_probe_stdout.txt",
+                    "stderr": "planner_probe_stderr.txt",
+                },
+                "manipulation_evidence": {
+                    "execution_attempted": False,
+                    "blockers": [{"code": "timeout", "message": "Probe exceeded 1.0s"}],
+                    "last_worker_stage": "rby1m_config_import",
+                    "worker_stage_events": [
+                        {
+                            "event": "worker_start",
+                            "stage": "worker_start",
+                            "elapsed_s": 0.1,
+                            "runtime_diagnostics": {"large": "omitted from bundle"},
+                        },
+                        {
+                            "event": "rby1m_config_import_start",
+                            "stage": "rby1m_config_import",
+                            "elapsed_s": 3.2,
+                        },
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands = [
+        {
+            "request_id": "proof_001_fallback_01",
+            "object_id": "observed_001",
+            "target_receptacle_id": "sink_01",
+            "run_result": str(proof_dir / "run_result.json"),
+            "report": str(proof_dir / "report.html"),
+        }
+    ]
+
+    summary = proof_result_summary_from_commands(commands)
+
+    assert summary["timeout_count"] == 1
+    assert summary["rby1m_config_import_timeout_count"] == 1
+    assert summary["execution_attempted_count"] == 0
+    assert summary["worker_stage_event_count"] == 2
+    assert summary["last_worker_stage_counts"] == {"rby1m_config_import": 1}
+    result = summary["results"][0]
+    assert result["task_feasibility_status"] == "not_reached"
+    assert result["last_worker_stage"] == "rby1m_config_import"
+    assert result["worker_stage_event_count"] == 2
+    assert result["worker_stage_events"][0] == {
+        "elapsed_s": 0.1,
+        "event": "worker_start",
+        "stage": "worker_start",
+    }
+    assert "runtime_diagnostics" not in result["worker_stage_events"][0]
+    assert result["stdout"].endswith("planner_probe_stdout.txt")
+    assert result["stderr"].endswith("planner_probe_stderr.txt")
+
+
 class _BindingContract:
     backend = SimpleNamespace(
         backend="molmospaces_subprocess",
