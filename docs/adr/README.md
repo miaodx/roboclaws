@@ -14,6 +14,7 @@ one decision per file, sequential numbering, explicit status.
 | [0003](0003-separate-cleanup-agent-view-from-private-evaluation.md) | Separate Cleanup Agent View From Private Evaluation | Accepted |
 | [0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md) | Use Separate MCP Servers For AI2-THOR And Molmo Cleanup | Accepted |
 | [0005](0005-use-configurable-generated-mess-set-size.md) | Use Configurable Generated Mess Set Size | Accepted |
+| [0006](0006-expose-adr-0003-cleanup-contract-through-mcp.md) | Expose ADR-0003 Cleanup Contract Through MCP | Accepted |
 
 ## Adding a new ADR
 
