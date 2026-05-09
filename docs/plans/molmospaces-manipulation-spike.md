@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 61 fallback proof warmup completed; next work is the warmed local RBY1M/CuRobo retry slice
+**Status:** Phase 62 warmed generated fallback execution completed; next work is exact-scene fallback alias validity
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -107,6 +107,12 @@ the proof-bundle runner. When enabled, the runner records the warmup command
 and artifacts, shares an output-local Torch extension cache with proof
 commands, renders the warmup in `report.html`, and validates it through the
 runner checker before the next generated-fallback retry.
+Phase 62 ran that warmed generated fallback bundle locally. Warmup succeeded
+through RBY1M/CuRobo config import, and the generated proofs no longer timed
+out. All four reached task sampling, then failed with `KeyError` invalid
+planner aliases (`ShelvingUnit|2|3`, `Book|surface|8|79`, `Sink|5|1|0`, and
+`Bowl|surface|8|77`). The next blocker is exact-scene fallback alias validity,
+not RBY1M/CuRobo warmup.
 
 ## Why This Exists
 
@@ -944,7 +950,10 @@ completed:
   gsd-plan-phase 61-molmospaces-fallback-proof-warmup
   gsd-execute-phase 61-molmospaces-fallback-proof-warmup
   gsd-verify-work 61-molmospaces-fallback-proof-warmup
+  gsd-plan-phase 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-execute-phase 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-verify-work 62-molmospaces-warmed-generated-fallback-proof-execution
 
 next pipeline candidates:
-  run warmed generated fallback proof execution locally
+  plan exact-scene fallback alias validation
 ```

@@ -123,7 +123,10 @@ runner report, including timeout counts, execution-attempted state, last worker
 stage, compact worker stage events, and stdout/stderr artifact paths. Phase 61
 adds an explicit visible RBY1M/CuRobo warmup step to the proof-bundle runner so
 generated fallback retries can share one output-local Torch extension cache
-between config import and proof commands.
+between config import and proof commands. Phase 62 executes that warmed
+generated fallback bundle locally: warmup gets through config import and all
+four generated proofs reach task sampling, where they now fail on invalid
+exact-scene planner alias names instead of timeout.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -210,6 +213,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.60 MolmoSpaces plain semantic report labels** - Phase 59 (completed 2026-05-10; reports use `nav, pick, nav, open?, place` as primary labels)
 - ✅ **v1.61 MolmoSpaces fallback timeout stage reporting** - Phase 60 (completed 2026-05-10; generated fallback timeout stage evidence appears in proof-bundle summaries and reports)
 - ✅ **v1.62 MolmoSpaces fallback proof warmup** - Phase 61 (completed 2026-05-10; proof-bundle runner can warm RBY1M/CuRobo before generated fallback proof commands)
+- ✅ **v1.63 MolmoSpaces warmed generated fallback proof execution** - Phase 62 (completed 2026-05-10; warmed generated fallbacks reach task sampling but fail on invalid planner aliases)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -287,6 +291,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 59: MolmoSpaces plain semantic report labels** - ADR-0050 makes `nav, pick, nav, open?, place` the primary Cleanup Artifact Report vocabulary while preserving object/target/surface/inside as secondary role detail. Completed 2026-05-10.
 - [x] **Phase 60: MolmoSpaces fallback timeout stage reporting** - ADR-0051 surfaces generated fallback timeout-stage evidence in proof-bundle result summaries, reports, and checker coverage. Completed 2026-05-10.
 - [x] **Phase 61: MolmoSpaces fallback proof warmup** - ADR-0052 adds a visible RBY1M/CuRobo config-import warmup step to proof-bundle runner manifests, reports, and checker coverage. Completed 2026-05-10.
+- [x] **Phase 62: MolmoSpaces warmed generated fallback proof execution** - ADR-0053 records local warmed generated fallback execution. Completed 2026-05-10; warmup gets through config import, and generated proofs now fail at task sampling with invalid planner alias names instead of timeout.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

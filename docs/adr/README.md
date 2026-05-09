@@ -61,6 +61,7 @@ one decision per file, sequential numbering, explicit status.
 | [0050](0050-use-plain-semantic-subphase-report-labels.md) | Use Plain Semantic Subphase Report Labels | Accepted |
 | [0051](0051-surface-fallback-timeout-stage-evidence.md) | Surface Fallback Timeout Stage Evidence | Accepted |
 | [0052](0052-warm-rby1m-curobo-before-fallback-proofs.md) | Warm RBY1M CuRobo Before Fallback Proofs | Accepted |
+| [0053](0053-run-warmed-generated-fallback-proofs.md) | Run Warmed Generated Fallback Proofs | Accepted |
 
 ## Adding a new ADR
 

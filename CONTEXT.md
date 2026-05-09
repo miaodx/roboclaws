@@ -278,6 +278,12 @@ An explicit proof-bundle runner step that runs a visible RBY1M/CuRobo
 same output-local Torch extension cache when no cache is provided.
 _Avoid_: undocumented shell preflight
 
+**Warmed Generated Fallback Proof Execution**:
+Local-dev generated fallback proof execution after **Fallback Proof Warmup**,
+used to distinguish warmup/JIT blockers from exact-scene task-sampling and
+planner-alias validity blockers.
+_Avoid_: treating warmup success as proof success
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -418,6 +424,9 @@ _Avoid_: full cleanup replacement claim
 - A **Fallback Proof Warmup** should be visible in the **Planner Proof Bundle
   Runner Report** before generated fallback proof commands are retried after
   `rby1m_config_import` timeouts.
+- **Warmed Generated Fallback Proof Execution** should still require strict
+  proof outputs and cleanup primitive binding promotion before it can affect
+  planner cleanup bridge readiness.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -493,3 +502,4 @@ _Avoid_: full cleanup replacement claim
 - Phase 59 closed the original semantic-label discussion by making shared Cleanup Artifact Reports use `nav`, `pick`, `nav`, optional `open`, and `place` as primary labels while keeping object/target/surface/inside as secondary role detail.
 - Phase 60 closed the fallback timeout reporting gap by surfacing timeout counts, execution-attempted state, last worker stage, compact worker stage events, and stdout/stderr paths from generated proof outputs in the shared Planner Proof Result Summary and proof-bundle runner report.
 - Phase 61 added a visible fallback proof warmup step to the proof-bundle runner so the next local generated-fallback retry can warm RBY1M/CuRobo `config_import` once, share an output-local Torch extension cache with proof commands, and render/check that warmup in the runner report.
+- Phase 62 executed the warmed generated fallback proof bundle locally. The warmup got through `rby1m_config_import`, and all four generated proofs reached task sampling; they now fail with `KeyError` invalid planner alias names instead of timeout.
