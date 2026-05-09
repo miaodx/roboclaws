@@ -88,7 +88,9 @@ requests, so real multi-proof bundle runs can be generated repeatably. Phase 47
 makes those private proof requests reviewable in the shared cleanup report
 without moving planner aliases into Agent View. Phase 48 adds a visual report
 for the local proof-bundle runner output itself. Phase 49 adds a checker for
-that runner manifest/report pair.
+that runner manifest/report pair. Phase 50 removes the remaining hand-written
+MCP smoke cleanup loops so current-contract and ADR-0003 smoke demos reuse the
+shared semantic cleanup loop seam.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans

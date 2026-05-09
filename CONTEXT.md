@@ -342,6 +342,9 @@ _Avoid_: full cleanup replacement claim
 - A **Planner Proof Request Report View** should render private request evidence in `report.html` when the manifest exists, while Agent View remains planner-alias-free.
 - A **Planner Proof Bundle Runner Report** should accompany dry-run and executed local proof-bundle manifests so command handoffs are reviewable.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
+- MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
+  hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
+  report visual parity depends on one cleanup-loop module.
 
 ## Example Dialogue
 
