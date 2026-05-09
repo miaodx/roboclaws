@@ -46,6 +46,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-realworld-agent-mcp",
         "just harness::molmo-realworld-agent-dogfood-kit",
         "just harness::molmo-realworld-openclaw-dogfood-kit",
+        "just harness::molmo-realworld-openclaw-visual-dogfood-kit",
     )
     for call in expected_calls:
         assert call in text
@@ -69,6 +70,29 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^molmo-realworld-agent-mcp seeds=\"1\"",
         r"^molmo-realworld-agent-dogfood-kit seed=\"7\"",
         r"^molmo-realworld-openclaw-dogfood-kit seed=\"7\"",
+        r"^molmo-realworld-openclaw-visual-dogfood-kit seed=\"7\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
+
+
+def test_openclaw_visual_kit_uses_real_visual_backend_and_checker() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    recipe = re.search(
+        r"^molmo-realworld-openclaw-visual-dogfood-kit[\s\S]*?(?=^# List task files)",
+        text,
+        re.MULTILINE,
+    )
+    assert recipe is not None
+    body = recipe.group(0)
+    for expected in (
+        "--backend molmospaces_subprocess",
+        "--policy openclaw_agent",
+        "--include-robot",
+        "--record-robot-views",
+        "--require-openclaw-minimum",
+        "--require-clean-agent-run",
+        "--require-robot-views",
+    ):
+        assert expected in body

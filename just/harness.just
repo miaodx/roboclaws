@@ -16,6 +16,7 @@
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
 # - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
+# - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -353,6 +354,35 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
       --min-generated-mess-count 5 \
       --require-agent-driven \
       --require-openclaw-minimum \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0010 OpenClaw visual dogfood kit smoke. This does not launch Gateway; it
+# proves OpenClaw-labeled ADR-0003 artifacts still render the real
+# MolmoSpaces/RBY1M Robot View Timeline through the shared report underlay.
+molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-realworld-openclaw-visual-dogfood-kit" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --task "{{task}}" \
+      --policy openclaw_agent \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-policy openclaw_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-agent-driven \
+      --require-openclaw-minimum \
+      --require-clean-agent-run \
+      --require-robot-views \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.
