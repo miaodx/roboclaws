@@ -771,6 +771,11 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         if isinstance(fallback_generation, dict)
         else []
     )
+    filtered_aliases = (
+        fallback_generation.get("filtered_aliases") or []
+        if isinstance(fallback_generation, dict)
+        else []
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
@@ -778,6 +783,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
+        f"{_metric('Filtered aliases', len(filtered_aliases))}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
@@ -822,6 +828,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)
+    filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
     note = selection.get("evidence_note") or (
         "Private proof request selection for local proof-bundle execution."
     )
@@ -829,7 +836,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{generated_table}</section>"
+        f"{selected_table}{excluded_table}{generated_table}{filtered_table}</section>"
     )
 
 
@@ -864,6 +871,29 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
         "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
         "<th>Prior blockers</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _filtered_fallback_aliases_table(filtered_aliases: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in filtered_aliases:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('axis', '')))}</td>"
+            f"<td>{html.escape(str(item.get('alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="4">No fallback aliases filtered.</td></tr>')
+    return (
+        "<h3>Filtered Fallback Aliases</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Axis</th><th>Alias</th><th>Reason</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

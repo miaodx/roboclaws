@@ -284,6 +284,12 @@ used to distinguish warmup/JIT blockers from exact-scene task-sampling and
 planner-alias validity blockers.
 _Avoid_: treating warmup success as proof success
 
+**Exact-Scene Fallback Alias Filter**:
+The proof-bundle runner rule that keeps private alias metadata visible while
+allowing only exact-scene runtime-style aliases to become generated fallback
+proof command inputs.
+_Avoid_: retrying upstream/display aliases that fail task sampling with `KeyError`
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -503,3 +509,4 @@ _Avoid_: full cleanup replacement claim
 - Phase 60 closed the fallback timeout reporting gap by surfacing timeout counts, execution-attempted state, last worker stage, compact worker stage events, and stdout/stderr paths from generated proof outputs in the shared Planner Proof Result Summary and proof-bundle runner report.
 - Phase 61 added a visible fallback proof warmup step to the proof-bundle runner so the next local generated-fallback retry can warm RBY1M/CuRobo `config_import` once, share an output-local Torch extension cache with proof commands, and render/check that warmup in the runner report.
 - Phase 62 executed the warmed generated fallback proof bundle locally. The warmup got through `rby1m_config_import`, and all four generated proofs reached task sampling; they now fail with `KeyError` invalid planner alias names instead of timeout.
+- Phase 63 closed the exact-scene fallback alias validity gap by filtering upstream/display aliases from generated fallback command inputs while rendering the skipped aliases in the runner manifest/report. The current local artifact now has no executable alternate fallback aliases, so the next blocker is runtime alias discovery rather than retrying display IDs.

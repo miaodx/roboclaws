@@ -238,8 +238,8 @@ def test_runner_generates_fallback_requests_from_prior_blocked_aliases(
     requests = _proof_requests()
     request = requests["requests"][0]
     request["binding"] = {
-        "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
-        "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+        "candidate_pickup_names": ["pickup/body", "pickup/alt", "Pickup|surface|1|1"],
+        "candidate_place_receptacle_names": ["sink/body", "sink/alt", "Sink|1|2"],
     }
     cleanup_run_result.write_text(
         json.dumps({"planner_proof_requests": requests}),
@@ -295,9 +295,12 @@ def test_runner_generates_fallback_requests_from_prior_blocked_aliases(
     assert manifest["commands"][0]["request_id"] == "proof_001_fallback_01"
     assert manifest["commands"][0]["object_id"] == "observed_001"
     assert manifest["commands"][0]["target_receptacle_id"] == "sink_01"
-    assert "Sink|1|2" in manifest["commands"][0]["command"]
+    assert "sink/alt" in manifest["commands"][0]["command"]
+    assert "pickup/alt" in manifest["commands"][1]["command"]
+    assert selection["fallback_generation"]["filtered_alias_count"] == 2
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Generated Fallback Requests" in report
+    assert "Filtered Fallback Aliases" in report
     assert "proof_001_fallback_01" in report
     assert "Pickup|surface|1|1" in report
     assert "Sink|1|2" in report

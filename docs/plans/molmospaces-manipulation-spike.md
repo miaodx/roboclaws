@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 62 warmed generated fallback execution completed; next work is exact-scene fallback alias validity
+**Status:** Phase 63 exact-scene fallback alias validation completed; next work is runtime alias discovery for fallback proofs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -113,6 +113,12 @@ out. All four reached task sampling, then failed with `KeyError` invalid
 planner aliases (`ShelvingUnit|2|3`, `Book|surface|8|79`, `Sink|5|1|0`, and
 `Bowl|surface|8|77`). The next blocker is exact-scene fallback alias validity,
 not RBY1M/CuRobo warmup.
+Phase 63 adds that validity gate to fallback generation. The runner now filters
+upstream/display aliases containing `|` before creating executable proof
+commands, renders filtered aliases in `report.html`, and checks that evidence.
+The local dry-run filtered all four previously failing aliases and generated no
+fallback commands, so the next blocker is discovering or deriving additional
+exact-scene runtime aliases instead of retrying display IDs.
 
 ## Why This Exists
 
@@ -953,7 +959,10 @@ completed:
   gsd-plan-phase 62-molmospaces-warmed-generated-fallback-proof-execution
   gsd-execute-phase 62-molmospaces-warmed-generated-fallback-proof-execution
   gsd-verify-work 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-plan-phase 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-execute-phase 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-verify-work 63-molmospaces-exact-scene-fallback-alias-validation
 
 next pipeline candidates:
-  plan exact-scene fallback alias validation
+  plan exact-scene fallback runtime alias discovery
 ```

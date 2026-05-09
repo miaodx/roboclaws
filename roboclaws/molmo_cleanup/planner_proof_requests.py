@@ -267,6 +267,7 @@ def proof_request_selection_from_summary(
     selected = []
     excluded = []
     generated = []
+    filtered_aliases = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
         prior_result = prior_results.get(request_id, {})
@@ -276,13 +277,13 @@ def proof_request_selection_from_summary(
         ):
             excluded.append(_excluded_request(request, prior_result))
             if generate_fallback_requests:
-                generated.extend(
-                    _fallback_requests_for_blocked_request(
-                        request,
-                        prior_result,
-                        limit=fallback_alias_limit,
-                    )
+                fallback = _fallback_requests_for_blocked_request(
+                    request,
+                    prior_result,
+                    limit=fallback_alias_limit,
                 )
+                generated.extend(fallback["generated_requests"])
+                filtered_aliases.extend(fallback["filtered_aliases"])
             continue
         selected.append(_selected_request(request, prior_result))
     selected.extend(_selected_request(request, {}) for request in generated)
@@ -306,6 +307,7 @@ def proof_request_selection_from_summary(
             ready_request_count=len(ready_requests),
             excluded_requests=excluded,
             generated_requests=generated,
+            filtered_aliases=filtered_aliases,
             fallback_alias_limit=fallback_alias_limit,
         ),
         "prior_summary_available": bool(prior_proof_result_summary),
@@ -403,6 +405,7 @@ def _fallback_generation(
     ready_request_count: int,
     excluded_requests: list[dict[str, Any]],
     generated_requests: list[dict[str, Any]],
+    filtered_aliases: list[dict[str, Any]],
     fallback_alias_limit: int,
 ) -> dict[str, Any]:
     if not enabled and not generated_requests:
@@ -411,6 +414,8 @@ def _fallback_generation(
             "enabled": False,
             "generated_request_count": 0,
             "generated_requests": [],
+            "filtered_alias_count": 0,
+            "filtered_aliases": [],
         }
     generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
@@ -423,9 +428,11 @@ def _fallback_generation(
         "unavailable_source_request_count": max(unavailable_count, 0),
         "fallback_alias_limit": max(int(fallback_alias_limit or 0), 0),
         "generated_requests": generated_requests,
+        "filtered_alias_count": len(filtered_aliases),
+        "filtered_aliases": filtered_aliases,
         "evidence_note": (
             "Private generated fallback proof requests. They preserve cleanup-facing "
-            "object and target IDs while trying alternate planner aliases."
+            "object and target IDs while trying alternate exact-scene planner aliases."
         ),
     }
 
@@ -435,22 +442,28 @@ def _fallback_requests_for_blocked_request(
     prior_result: dict[str, Any],
     *,
     limit: int,
-) -> list[dict[str, Any]]:
+) -> dict[str, list[dict[str, Any]]]:
     if limit <= 0:
-        return []
+        return {"generated_requests": [], "filtered_aliases": []}
     args = request.get("planner_probe_args") or {}
     current_object_alias = _planner_arg(args, "--cleanup-planner-object-id")
     current_target_alias = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
-    pickup_candidates = _candidate_aliases(
+    pickup_candidates, filtered_pickup_aliases = _executable_candidate_aliases(
         request,
+        axis="object",
         candidate_key="candidate_pickup_names",
         current_alias=current_object_alias,
     )
-    target_candidates = _candidate_aliases(
+    target_candidates, filtered_target_aliases = _executable_candidate_aliases(
         request,
+        axis="target",
         candidate_key="candidate_place_receptacle_names",
         current_alias=current_target_alias,
     )
+    filtered_aliases = [
+        *filtered_pickup_aliases,
+        *filtered_target_aliases,
+    ]
     generated: list[dict[str, Any]] = []
     seen_pairs: set[tuple[str, str]] = set()
     for object_alias in pickup_candidates:
@@ -471,8 +484,8 @@ def _fallback_requests_for_blocked_request(
                 )
             )
             if len(generated) >= limit:
-                return generated
-    return generated
+                return {"generated_requests": generated, "filtered_aliases": filtered_aliases}
+    return {"generated_requests": generated, "filtered_aliases": filtered_aliases}
 
 
 def _fallback_request_with_planner_aliases(
@@ -533,6 +546,44 @@ def _candidate_aliases(
     if isinstance(backend_binding, dict):
         values.extend(str(item) for item in backend_binding.get(candidate_key) or [])
     return _unique_nonempty_values(values)
+
+
+def _executable_candidate_aliases(
+    request: dict[str, Any],
+    *,
+    axis: str,
+    candidate_key: str,
+    current_alias: str,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    source_request_id = str(request.get("request_id") or "")
+    candidates = _candidate_aliases(
+        request,
+        candidate_key=candidate_key,
+        current_alias=current_alias,
+    )
+    executable = []
+    filtered = []
+    for alias in candidates:
+        if _is_exact_scene_planner_alias(alias):
+            executable.append(alias)
+            continue
+        filtered.append(
+            {
+                "source_request_id": source_request_id,
+                "axis": axis,
+                "alias": alias,
+                "reason": "not_exact_scene_runtime_alias",
+                "evidence_note": (
+                    "Filtered before command generation because upstream/display aliases "
+                    "with '|' fail exact-scene task sampling with KeyError."
+                ),
+            }
+        )
+    return executable, filtered
+
+
+def _is_exact_scene_planner_alias(alias: str) -> bool:
+    return bool(alias) and "|" not in alias
 
 
 def _planner_arg(args: Any, key: str) -> str:

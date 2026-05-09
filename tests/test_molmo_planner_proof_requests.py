@@ -266,11 +266,27 @@ def test_proof_request_selection_generates_fallback_alias_requests(
                 "source_receptacle_id": "counter_01",
                 "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
                 "binding": {
-                    "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
-                    "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+                    "candidate_pickup_names": [
+                        "pickup/body",
+                        "pickup/alt",
+                        "Pickup|surface|1|1",
+                    ],
+                    "candidate_place_receptacle_names": [
+                        "sink/body",
+                        "sink/alt",
+                        "Sink|1|2",
+                    ],
                     "backend_planner_task_binding": {
-                        "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
-                        "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+                        "candidate_pickup_names": [
+                            "pickup/body",
+                            "pickup/alt",
+                            "Pickup|surface|1|1",
+                        ],
+                        "candidate_place_receptacle_names": [
+                            "sink/body",
+                            "sink/alt",
+                            "Sink|1|2",
+                        ],
                     },
                     "requested_cleanup_primitive_binding": {
                         "object_id": "observed_001",
@@ -330,14 +346,73 @@ def test_proof_request_selection_generates_fallback_alias_requests(
     assert generated[0]["target_receptacle_id"] == "sink_01"
     assert generated[0]["fallback_request"]["prior_blockers"][0]["code"] == ("HouseInvalidForTask")
     assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
-        "Sink|1|2"
+        "sink/alt"
     )
-    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == (
-        "Pickup|surface|1|1"
-    )
+    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("pickup/alt")
+    assert selection["fallback_generation"]["filtered_alias_count"] == 2
+    assert {
+        (item["axis"], item["alias"])
+        for item in selection["fallback_generation"]["filtered_aliases"]
+    } == {
+        ("object", "Pickup|surface|1|1"),
+        ("target", "Sink|1|2"),
+    }
     assert [item["request_id"] for item in commands] == selection["selected_request_ids"]
-    assert "Sink|1|2" in commands[0]["command"]
-    assert "Pickup|surface|1|1" in commands[1]["command"]
+    assert "sink/alt" in commands[0]["command"]
+    assert "pickup/alt" in commands[1]["command"]
+
+
+def test_proof_request_selection_filters_non_runtime_fallback_aliases() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "binding": {
+                    "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
+                    "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "sink_01",
+                    "--cleanup-planner-object-id": "pickup/body",
+                    "--cleanup-planner-target-receptacle-id": "sink/body",
+                },
+            }
+        ],
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary={
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "task_feasibility_status": "blocked",
+                    "blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ]
+        },
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+    )
+
+    assert selection["selected_count"] == 0
+    assert selection["generated_fallback_request_count"] == 0
+    assert selection["fallback_required"] is True
+    fallback_generation = selection["fallback_generation"]
+    assert fallback_generation["unavailable_source_request_count"] == 1
+    assert fallback_generation["filtered_alias_count"] == 2
+    assert {
+        (item["axis"], item["alias"], item["reason"])
+        for item in fallback_generation["filtered_aliases"]
+    } == {
+        ("object", "Pickup|surface|1|1", "not_exact_scene_runtime_alias"),
+        ("target", "Sink|1|2", "not_exact_scene_runtime_alias"),
+    }
 
 
 def test_proof_request_selection_keeps_fallback_required_when_no_alias_available() -> None:

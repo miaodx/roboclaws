@@ -746,6 +746,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "schema": "planner_cleanup_proof_request_fallback_generation_v1",
                 "enabled": True,
                 "generated_request_count": 1,
+                "filtered_alias_count": 1,
                 "generated_requests": [
                     {
                         "request_id": "proof_001_fallback_01",
@@ -764,6 +765,14 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                             "reason": "prior_task_feasibility_blocked",
                             "prior_blockers": [{"code": "HouseInvalidForTask"}],
                         },
+                    }
+                ],
+                "filtered_aliases": [
+                    {
+                        "source_request_id": "proof_001",
+                        "axis": "target",
+                        "alias": "Sink|1|2",
+                        "reason": "not_exact_scene_runtime_alias",
                     }
                 ],
             },
@@ -889,6 +898,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Fallback required" in html
     assert "prior_task_feasibility_blocked" in html
     assert "Generated Fallback Requests" in html
+    assert "Filtered Fallback Aliases" in html
+    assert "Filtered aliases" in html
+    assert "Sink|1|2" in html
+    assert "not_exact_scene_runtime_alias" in html
     assert "fallback_generated" in html
     assert "RBY1M/CuRobo Warmup" in html
     assert "config_import" in html
