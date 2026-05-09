@@ -36,6 +36,12 @@ It must be rendered as mitigation evidence, not treated as cleanup success or
 planner-backed readiness.
 _Avoid_: Hidden sampler patch, proof success flag
 
+**Placement Scene Diagnostics**:
+Probe-local report evidence that summarizes public map free space around the
+actual upstream robot-placement target, including valid free-point counts,
+nearest free-point distance, and radius-band counts.
+_Avoid_: hidden planner fix, success proof
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -678,3 +684,7 @@ _Avoid_: full cleanup replacement claim
   report proves the relaxed profile affects the actual upstream
   `place_robot_near` calls, but the exact `Book_23` request still fails after
   17 effective `max_tries=50` placement attempts.
+- Phase 79 added Placement Scene Diagnostics. The warmed local report shows the
+  exact `Book_23` request has low local free space: 2,231 valid free map points
+  in the `[0.0, 1.2]m` annulus, a 0.012326 free-space fraction, no free points
+  within 1.0m, and the nearest free point at 1.111824m.

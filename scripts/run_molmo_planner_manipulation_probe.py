@@ -1503,6 +1503,7 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "hooks": [],
         "robot_placement_attempts": [],
         "place_robot_near_calls": [],
+        "placement_scene_diagnostics": [],
         "asset_failures": [],
         "candidate_removals": [],
     }
@@ -1587,11 +1588,10 @@ def _install_place_robot_near_profile_adapter(
     robot_placement_profile: dict[str, Any],
 ) -> Any:
     overrides = dict(robot_placement_profile.get("place_robot_near_overrides") or {})
-    if not overrides or not robot_placement_profile.get("applied"):
-        return lambda: None
     original = getattr(env, "place_robot_near", None)
     if not callable(original):
         return lambda: None
+    should_apply_overrides = bool(overrides and robot_placement_profile.get("applied"))
 
     def profiled_place_robot_near(*args: Any, **kwargs: Any) -> Any:
         call = {
@@ -1599,9 +1599,18 @@ def _install_place_robot_near_profile_adapter(
             "requested": _place_robot_near_call_values(kwargs),
         }
         effective_kwargs = dict(kwargs)
-        for name, value in overrides.items():
-            effective_kwargs[name] = value
+        if should_apply_overrides:
+            for name, value in overrides.items():
+                effective_kwargs[name] = value
         call["effective"] = _place_robot_near_call_values(effective_kwargs)
+        scene_diagnostic = _place_robot_near_scene_diagnostic(
+            env,
+            call["call_index"],
+            effective_kwargs,
+        )
+        if scene_diagnostic:
+            call["scene_diagnostic"] = scene_diagnostic
+            diagnostics["placement_scene_diagnostics"].append(scene_diagnostic)
         started_at = time.monotonic()
         try:
             result = original(*args, **effective_kwargs)
@@ -1628,6 +1637,136 @@ def _install_place_robot_near_profile_adapter(
         setattr(env, "place_robot_near", original)
 
     return restore
+
+
+def _place_robot_near_scene_diagnostic(
+    env: Any,
+    call_index: int,
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    diagnostic: dict[str, Any] = {
+        "schema": "planner_probe_placement_scene_diagnostic_v1",
+        "call_index": call_index,
+        "target_name": _target_name(kwargs.get("target")),
+        "sampling_radius_range": _diagnostic_json_value(
+            kwargs.get("sampling_radius_range", (0.0, 1.0))
+        ),
+        "robot_safety_radius": _diagnostic_json_value(kwargs.get("robot_safety_radius")),
+    }
+    try:
+        import numpy as np
+    except Exception as exc:  # pragma: no cover - diagnostic only.
+        diagnostic["error"] = f"{type(exc).__name__}: {exc}"
+        return diagnostic
+
+    target_position = _target_position(env, kwargs.get("target"))
+    if target_position is None:
+        diagnostic["error"] = "target_position_unavailable"
+        return diagnostic
+    target_position_array = np.asarray(target_position, dtype=float)
+    diagnostic["target_position"] = _diagnostic_json_value(target_position_array)
+    radius_range = _radius_range(kwargs.get("sampling_radius_range", (0.0, 1.0)))
+    if radius_range is None:
+        diagnostic["error"] = "sampling_radius_range_unavailable"
+        return diagnostic
+    radius_min, radius_max = radius_range
+    diagnostic["sampling_area_m2"] = round(
+        float(np.pi * (radius_max**2 - radius_min**2)),
+        6,
+    )
+    try:
+        thormap = env.get_thormap(
+            agent_radius=float(kwargs.get("robot_safety_radius") or 0.35),
+            px_per_m=200,
+        )
+        free_points = thormap.get_free_points()
+        diagnostic["px_per_m"] = _diagnostic_json_value(getattr(thormap, "px_per_m", ""))
+        diagnostic["total_free_point_count"] = int(len(free_points))
+        if len(free_points) == 0:
+            diagnostic["valid_free_point_count"] = 0
+            diagnostic["valid_neighborhood_fraction"] = 0.0
+            diagnostic["low_free_space"] = True
+            return diagnostic
+        target_dist = np.linalg.norm(free_points[:, :2] - target_position_array[:2], axis=1)
+        valid_mask = (target_dist > radius_min) & (target_dist < radius_max)
+        valid_count = int(valid_mask.sum())
+        sq_m_per_sq_px = 1 / float(getattr(thormap, "px_per_m", 200) ** 2)
+        area = np.pi * (radius_max**2 - radius_min**2)
+        fraction = float(valid_count * sq_m_per_sq_px / area) if area > 0 else 0.0
+        nearest_index = int(np.argmin(target_dist))
+        diagnostic.update(
+            {
+                "valid_free_point_count": valid_count,
+                "valid_neighborhood_fraction": round(fraction, 6),
+                "low_free_space": fraction <= 0.05,
+                "nearest_free_point_distance_m": round(float(target_dist[nearest_index]), 6),
+                "nearest_free_point": _diagnostic_json_value(free_points[nearest_index]),
+                "radius_band_counts": _radius_band_counts(target_dist, radius_max),
+            }
+        )
+    except Exception as exc:  # pragma: no cover - best-effort diagnostics.
+        diagnostic["error"] = f"{type(exc).__name__}: {exc}"
+    return diagnostic
+
+
+def _target_name(target: Any) -> str:
+    if isinstance(target, str):
+        return target
+    name = getattr(target, "name", None)
+    return str(name or "")
+
+
+def _target_position(env: Any, target: Any) -> Any:
+    shape = getattr(target, "shape", None)
+    if shape == (3,):
+        return target
+    if hasattr(target, "position"):
+        return getattr(target, "position")
+    if isinstance(target, str):
+        try:
+            om = env.object_managers[env.current_batch_index]
+            return getattr(om.get_object_by_name(target), "position", None)
+        except Exception:
+            return None
+    return None
+
+
+def _radius_range(value: Any) -> tuple[float, float] | None:
+    try:
+        radius_min, radius_max = value
+        return float(radius_min), float(radius_max)
+    except Exception:
+        return None
+
+
+def _radius_band_counts(target_dist: Any, radius_max: float) -> list[dict[str, Any]]:
+    if radius_max <= 0:
+        return []
+    bands = sorted({0.25, 0.5, 0.75, 1.0, round(radius_max, 6)})
+    rows = []
+    previous = 0.0
+    for radius in bands:
+        if radius > radius_max:
+            continue
+        count = int(((target_dist > previous) & (target_dist <= radius)).sum())
+        rows.append(
+            {
+                "radius_min_m": previous,
+                "radius_max_m": radius,
+                "free_point_count": count,
+            }
+        )
+        previous = radius
+    if previous < radius_max:
+        count = int(((target_dist > previous) & (target_dist <= radius_max)).sum())
+        rows.append(
+            {
+                "radius_min_m": previous,
+                "radius_max_m": radius_max,
+                "free_point_count": count,
+            }
+        )
+    return rows
 
 
 def _place_robot_near_call_values(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -1704,6 +1843,8 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     diagnostics["place_robot_near_call_count"] = len(
         diagnostics.get("place_robot_near_calls") or []
     )
+    scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
+    diagnostics["placement_scene_diagnostic_count"] = len(scene_diagnostics)
     diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
     diagnostics["candidate_removal_count"] = len(diagnostics.get("candidate_removals") or [])
     if failures:
@@ -1711,6 +1852,8 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     place_robot_near_calls = diagnostics.get("place_robot_near_calls") or []
     if place_robot_near_calls:
         diagnostics["last_place_robot_near_call"] = place_robot_near_calls[-1]
+    if scene_diagnostics:
+        diagnostics["last_placement_scene_diagnostic"] = scene_diagnostics[-1]
 
 
 def _diagnostic_json_value(value: Any) -> Any:

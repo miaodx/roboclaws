@@ -108,6 +108,13 @@ def _assert_probe_result(
     task_sampler_failure = evidence.get("task_sampler_failure_diagnostics") or {}
     if task_sampler_failure:
         assert "Task Sampler Failure Diagnostics" in report_text, report_text[:500]
+        if task_sampler_failure.get("placement_scene_diagnostics"):
+            assert "Placement Scene Diagnostics" in report_text, report_text[:500]
+            last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+            for key in ("target_name", "valid_free_point_count"):
+                value = str(last_scene.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
         for key in ("task_sampler_class",):
             value = str(task_sampler_failure.get(key) or "")
             if value:

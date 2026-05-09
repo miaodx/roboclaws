@@ -78,6 +78,7 @@ one decision per file, sequential numbering, explicit status.
 | [0067](0067-preserve-task-sampler-exception-context.md) | Preserve Task Sampler Exception Context | Accepted |
 | [0068](0068-capture-task-sampler-failure-diagnostics.md) | Capture Task Sampler Failure Diagnostics | Accepted |
 | [0069](0069-add-task-sampler-robot-placement-profile.md) | Add Task Sampler Robot Placement Profile | Accepted |
+| [0070](0070-render-placement-scene-diagnostics.md) | Render Placement Scene Diagnostics | Accepted |
 
 ## Adding a new ADR
 

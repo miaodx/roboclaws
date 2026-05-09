@@ -381,6 +381,15 @@ def _assert_proof_result_summary(
                 value = str(task_sampler_failure.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+            last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+            if last_scene:
+                assert "Placement free-space fraction" in report_text, report_text[:500]
+                value = str(last_scene.get("valid_neighborhood_fraction") or "")
+                if value:
+                    assert value in report_text, (
+                        "last_placement_scene_diagnostic",
+                        report_text[:500],
+                    )
             last_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
             value = str(last_failure.get("message") or "")
             if value:

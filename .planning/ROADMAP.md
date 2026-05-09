@@ -175,6 +175,10 @@ Phase 78 adds a visible relaxed task-sampler robot-placement profile and proves
 the actual `place_robot_near` call receives effective `max_tries=50`, radius
 `[0.0, 1.2]`, safety radius `0.15`, and no visibility gate while the exact
 `Book_23` request still remains placement-infeasible.
+Phase 79 adds placement scene diagnostics to the shared planner report. The
+warmed local probe shows exact `Book_23` has low local free space: 2,231 valid
+free map points in the `[0.0, 1.2]m` annulus, free-space fraction `0.012326`,
+zero free points below `1.0m`, and nearest free point distance `1.111824m`.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -278,6 +282,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.77 MolmoSpaces task sampler exception context** - Phase 76 (completed 2026-05-10; worker exceptions preserve exact sampler adapter context)
 - ✅ **v1.78 MolmoSpaces task sampler failure diagnostics** - Phase 77 (completed 2026-05-10; sampler reports robot-placement failures behind `HouseInvalidForTask`)
 - ✅ **v1.79 MolmoSpaces task sampler placement profile** - Phase 78 (completed 2026-05-10; relaxed robot-placement profile records effective `place_robot_near` arguments while `Book_23` remains infeasible)
+- ✅ **v1.80 MolmoSpaces placement scene diagnostics** - Phase 79 (completed 2026-05-10; report shows low free-space metrics around exact `Book_23`)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -372,6 +377,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 76: MolmoSpaces task sampler exception context** - ADR-0067 preserves exact sampler adapter context on worker exceptions before policy execution. Completed 2026-05-10.
 - [x] **Phase 77: MolmoSpaces task sampler failure diagnostics** - ADR-0068 captures robot-placement attempts and asset failures behind upstream task-sampler exceptions. Completed 2026-05-10.
 - [x] **Phase 78: MolmoSpaces task sampler placement profile** - ADR-0069 adds a visible relaxed robot-placement profile and records effective `place_robot_near` arguments. Completed 2026-05-10.
+- [x] **Phase 79: MolmoSpaces placement scene diagnostics** - ADR-0070 renders target-side free-space metrics for upstream robot-placement failures. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

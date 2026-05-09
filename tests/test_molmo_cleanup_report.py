@@ -925,6 +925,12 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "robot_placement_attempt_count": 1,
                         "robot_placement_failure_count": 1,
                         "asset_failure_count": 1,
+                        "last_placement_scene_diagnostic": {
+                            "target_name": "pickup/body",
+                            "valid_free_point_count": 3,
+                            "valid_neighborhood_fraction": 0.000017,
+                            "nearest_free_point_distance_m": 0.42,
+                        },
                         "last_robot_placement_failure": {
                             "pickup_obj_name": "pickup/body",
                             "message": "Failed to place robot near object: pickup/body",
@@ -1002,6 +1008,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Exact sampler adapter target" in html
     assert "Task sampler placement failures" in html
     assert "Task sampler asset failures" in html
+    assert "Placement free-space fraction" in html
+    assert "0.000017" in html
     assert "Failed to place robot near object: pickup/body" in html
     assert "sink/body" in html
     assert "Timeouts" in html
@@ -1423,6 +1431,49 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "result": False,
             }
         ],
+        "placement_scene_diagnostic_count": 1,
+        "placement_scene_diagnostics": [
+            {
+                "schema": "planner_probe_placement_scene_diagnostic_v1",
+                "call_index": 1,
+                "target_name": "pickup/body",
+                "target_position": [1.0, 2.0, 0.5],
+                "sampling_radius_range": [0.0, 1.2],
+                "sampling_area_m2": 4.523893,
+                "robot_safety_radius": 0.15,
+                "px_per_m": 200,
+                "total_free_point_count": 100,
+                "valid_free_point_count": 3,
+                "valid_neighborhood_fraction": 0.000017,
+                "low_free_space": True,
+                "nearest_free_point_distance_m": 0.42,
+                "nearest_free_point": [1.42, 2.0, 0.0],
+                "radius_band_counts": [
+                    {"radius_min_m": 0.0, "radius_max_m": 0.25, "free_point_count": 0},
+                    {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
+                ],
+            }
+        ],
+        "last_placement_scene_diagnostic": {
+            "schema": "planner_probe_placement_scene_diagnostic_v1",
+            "call_index": 1,
+            "target_name": "pickup/body",
+            "target_position": [1.0, 2.0, 0.5],
+            "sampling_radius_range": [0.0, 1.2],
+            "sampling_area_m2": 4.523893,
+            "robot_safety_radius": 0.15,
+            "px_per_m": 200,
+            "total_free_point_count": 100,
+            "valid_free_point_count": 3,
+            "valid_neighborhood_fraction": 0.000017,
+            "low_free_space": True,
+            "nearest_free_point_distance_m": 0.42,
+            "nearest_free_point": [1.42, 2.0, 0.0],
+            "radius_band_counts": [
+                {"radius_min_m": 0.0, "radius_max_m": 0.25, "free_point_count": 0},
+                {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
+            ],
+        },
         "candidate_removals": [{"object_name": "pickup/body"}],
         "last_robot_placement_failure": {
             "pickup_obj_name": "pickup/body",
@@ -1473,6 +1524,10 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Task Sampler Failure Diagnostics" in html
     assert "Placement failures" in html
     assert "Effective max tries" in html
+    assert "Placement Scene Diagnostics" in html
+    assert "Free-space fraction" in html
+    assert "0.000017" in html
+    assert "Nearest free distance" in html
     assert "Failed to place robot near object: pickup/body" in html
     assert "asset-book" in html
     assert "pickup/body" in html

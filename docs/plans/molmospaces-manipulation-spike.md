@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 78 task-sampler robot-placement profile completed; next work is deeper robot placement feasibility for the exact `Book_23` scene location
+**Status:** Phase 79 placement scene diagnostics completed; next work is choosing the mitigation for low free space around exact `Book_23`
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -202,6 +202,10 @@ from requested `max_tries=10` to effective `max_tries=50`, with radius
 `[0.0, 1.2]`, safety radius `0.15`, and visibility disabled. The request still
 blocks with 17 placement failures, so the next blocker is deeper scene-level
 robot placement feasibility for `Book_23`, not hidden sampler defaults.
+Phase 79 adds placement scene diagnostics. The warmed local report now shows
+that exact `Book_23` has low local free space: 2,231 valid free map points in
+the `[0.0, 1.2]m` sampling annulus, a 0.012326 free-space fraction, no free
+points within 1.0m, and a nearest free point 1.111824m away.
 
 ## Why This Exists
 

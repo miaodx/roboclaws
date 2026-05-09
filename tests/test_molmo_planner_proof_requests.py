@@ -1052,6 +1052,11 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
                         "robot_placement_attempt_count": 1,
                         "robot_placement_failure_count": 1,
                         "asset_failure_count": 1,
+                        "last_placement_scene_diagnostic": {
+                            "target_name": "pickup/body",
+                            "valid_free_point_count": 3,
+                            "valid_neighborhood_fraction": 0.000017,
+                        },
                         "last_robot_placement_failure": {
                             "pickup_obj_name": "pickup/body",
                             "message": "Failed to place robot near object: pickup/body",
@@ -1108,6 +1113,12 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
         == 50
     )
     assert result["task_sampler_failure_diagnostics"]["robot_placement_failure_count"] == 1
+    assert (
+        result["task_sampler_failure_diagnostics"]["last_placement_scene_diagnostic"][
+            "valid_free_point_count"
+        ]
+        == 3
+    )
     assert (
         result["task_sampler_failure_diagnostics"]["last_robot_placement_failure"][
             "pickup_obj_name"

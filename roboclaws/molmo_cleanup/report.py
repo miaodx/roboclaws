@@ -163,6 +163,7 @@ def render_planner_manipulation_report(
     {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
     {_planner_probe_task_sampler_failure_section(evidence)}
+    {_planner_probe_placement_scene_diagnostics_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
@@ -1137,6 +1138,7 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
     task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
+    last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1166,6 +1168,15 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         (
             "Task sampler placement failures",
             task_sampler_failure.get("robot_placement_failure_count", ""),
+        ),
+        ("Placement valid free points", last_scene_diagnostic.get("valid_free_point_count", "")),
+        (
+            "Placement free-space fraction",
+            _format_fraction(last_scene_diagnostic.get("valid_neighborhood_fraction", "")),
+        ),
+        (
+            "Placement nearest free distance",
+            last_scene_diagnostic.get("nearest_free_point_distance_m", ""),
         ),
         ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
         ("Task sampler last failure", last_robot_failure.get("message", "")),
@@ -1538,6 +1549,104 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         f'<p class="note">{html.escape(note)}</p>{metrics}{config_table}'
         f"{attempt_table}{supporting_tables}</section>"
     )
+
+
+def _planner_probe_placement_scene_diagnostics_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
+    if not scene_diagnostics:
+        return ""
+    last = diagnostics.get("last_placement_scene_diagnostic") or scene_diagnostics[-1]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Scene diagnostics', _scene_diagnostic_count(diagnostics, scene_diagnostics))}"
+        f"{_metric('Valid free points', last.get('valid_free_point_count', ''))}"
+        f"{_metric('Free-space fraction', _scene_free_space_fraction(last))}"
+        f"{_metric('Low free space', _yes_no(last.get('low_free_space')))}"
+        f"{_metric('Nearest free distance', last.get('nearest_free_point_distance_m', ''))}"
+        "</div>"
+    )
+    rows = [
+        ("Target", last.get("target_name", "")),
+        ("Target position", last.get("target_position", "")),
+        ("Sampling radius range", last.get("sampling_radius_range", "")),
+        ("Sampling area m2", last.get("sampling_area_m2", "")),
+        ("Robot safety radius", last.get("robot_safety_radius", "")),
+        ("px per meter", last.get("px_per_m", "")),
+        ("Total free points", last.get("total_free_point_count", "")),
+        ("Nearest free point", last.get("nearest_free_point", "")),
+        ("Error", last.get("error", "")),
+    ]
+    scene_rows = "".join(
+        _placement_scene_diagnostic_row(item)
+        for item in scene_diagnostics
+        if isinstance(item, dict)
+    )
+    scene_table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Target</th>'
+        "<th>Valid free points</th><th>Free-space fraction</th>"
+        "<th>Nearest free distance</th><th>Low free space</th></tr></thead>"
+        f"<tbody>{scene_rows}</tbody></table></div>"
+        if scene_rows
+        else ""
+    )
+    band_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('radius_min_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('radius_max_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('free_point_count', '')))}</td>"
+        "</tr>"
+        for item in last.get("radius_band_counts") or []
+        if isinstance(item, dict)
+    )
+    band_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Radius min m</th>'
+        "<th>Radius max m</th><th>Free points</th></tr></thead>"
+        f"<tbody>{band_rows}</tbody></table></div>"
+        if band_rows
+        else ""
+    )
+    note = (
+        "Scene diagnostics summarize public map free-space around the actual "
+        "upstream robot-placement target. They explain placement feasibility "
+        "without changing cleanup semantics."
+    )
+    return (
+        '<section class="panel planner-probe-placement-scene-diagnostics">'
+        "<h2>Placement Scene Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{_field_table(rows)}'
+        f"{scene_table}{band_table}</section>"
+    )
+
+
+def _placement_scene_diagnostic_row(item: dict[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(item.get('call_index', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('valid_free_point_count', '')))}</td>"
+        f"<td>{html.escape(str(_scene_free_space_fraction(item)))}</td>"
+        f"<td>{html.escape(str(item.get('nearest_free_point_distance_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('low_free_space', '')))}</td>"
+        "</tr>"
+    )
+
+
+def _scene_diagnostic_count(
+    diagnostics: dict[str, Any],
+    scene_diagnostics: list[dict[str, Any]],
+) -> Any:
+    return diagnostics.get("placement_scene_diagnostic_count", len(scene_diagnostics))
+
+
+def _format_fraction(value: Any) -> Any:
+    if isinstance(value, float):
+        return f"{value:.6f}"
+    return value
+
+
+def _scene_free_space_fraction(item: dict[str, Any]) -> Any:
+    return _format_fraction(item.get("valid_neighborhood_fraction", ""))
 
 
 def _place_robot_near_call_row(item: dict[str, Any]) -> str:
