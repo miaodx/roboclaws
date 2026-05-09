@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 42 observed handle planner binding completed on 2026-05-09
+**Status:** Phase 43 bounded planner cleanup executor planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -51,7 +51,8 @@ sampled planner tasks and integrates target planner-backed primitives into the
 cleanup subphases. Phase 42 completed the first half of that remaining bridge:
 private observed-handle to planner-alias binding without leaking aliases into
 Agent View or relabeling cleanup subphases. The next slice should wire matching
-executor evidence into a bounded shared-loop cleanup attempt.
+executor evidence into a bounded shared-loop cleanup attempt; Phase 43 plans
+that opt-in executor wiring.
 
 ## Why This Exists
 

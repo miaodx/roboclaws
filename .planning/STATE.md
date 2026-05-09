@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 42 MolmoSpaces observed handle planner binding completed on 2026-05-09; next slice should wire matching probe-backed executor evidence into the shared semantic cleanup loop for a bounded cleanup attempt.
+stopped_at: Phase 43 MolmoSpaces bounded planner cleanup executor planned on 2026-05-09; implementation should opt into probe-backed executor wiring for matching bounded cleanup subphases.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 35
+  total_phases: 36
   completed_phases: 35
-  total_plans: 38
+  total_plans: 39
   completed_plans: 38
-  percent: 100
+  percent: 97
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Next MolmoSpaces cleanup slice should wire matching probe-backed executor evidence into the shared semantic cleanup loop for a bounded ADR-0003 cleanup attempt.
+**Current focus:** Phase 43 should wire matching probe-backed executor evidence into the shared semantic cleanup loop for a bounded ADR-0003 cleanup attempt.
 
 ## Current Position
 
-Phase: none active - Phase 42 (molmospaces-observed-handle-planner-binding) is COMPLETE.
-Plan: 1 of 1 complete - `42-01` added observed-handle to planner-alias
-binding while preserving cleanup-facing IDs for executor matching.
+Phase: 43 (molmospaces-bounded-planner-cleanup-executor) - PLANNED
+Plan: 0 of 1 complete - `43-01` should add opt-in probe-backed executor wiring
+for matching bounded cleanup subphases.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -39,11 +39,12 @@ Phase 38 closed the implementation seam before object-specific RBY1M/CuRobo
 cleanup primitive replacement. Phase 39 closed the object/target binding
 hardening slice. Phase 40 closed the adapter slice from bound target proof into
 the executor seam. Phase 41 closed the probe-source binding slice. Phase 42
-closed the observed-handle to planner-alias binding slice.
-Last activity: 2026-05-09 - Completed Phase 42 observed handle planner binding.
+closed the observed-handle to planner-alias binding slice. Phase 43 is the
+bounded executor wiring slice.
+Last activity: 2026-05-09 - Planned Phase 43 bounded planner cleanup executor.
 
-Progress: [##########] 100%
-Phase 42 result: private binding now keeps observed-handle cleanup IDs separate from planner sampled-task aliases.
+Progress: [#########-] 97%
+Phase 43 note: default cleanup must remain `api_semantic`; only matching bound proof may produce planner-backed subphase evidence.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
@@ -520,6 +521,9 @@ Recent decisions affecting current work:
   binding** - `observed_handle_planner_binding_v1` resolves registered observed
   handles to backend planner aliases privately, extends probe binding aliases,
   and keeps promoted cleanup primitive binding keyed by the observed handle.
+- Phase 43 planned (2026-05-09): **MolmoSpaces bounded planner cleanup
+  executor** - add opt-in harness wiring so matching probe-backed proof can
+  drive bounded shared-loop cleanup subphases without changing default cleanup.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -606,17 +610,17 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 42 MolmoSpaces observed handle planner binding completed. The
-next implementation should wire matching probe-backed executor evidence into
-the shared semantic cleanup loop for a bounded ADR-0003 cleanup attempt.
+Stopped at: Phase 43 MolmoSpaces bounded planner cleanup executor planned. The
+next implementation should add opt-in probe-backed executor wiring for matching
+bounded cleanup subphases.
 Latest phase artifacts are
-`docs/adr/0033-bind-observed-handles-to-planner-task-names.md`,
-`docs/plans/molmospaces-observed-handle-planner-binding.md`, and
-`.planning/phases/42-molmospaces-observed-handle-planner-binding/42-01-observed-handle-planner-binding-PLAN.md`.
+`docs/adr/0034-use-probe-backed-executor-for-bounded-cleanup-loop.md`,
+`docs/plans/molmospaces-bounded-planner-cleanup-executor.md`, and
+`.planning/phases/43-molmospaces-bounded-planner-cleanup-executor/43-01-bounded-planner-cleanup-executor-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 until cleanup subphases become planner-backed through the Phase 38 executor.
-Resume file: .planning/phases/42-molmospaces-observed-handle-planner-binding/42-01-observed-handle-planner-binding-PLAN.md
+Resume file: .planning/phases/43-molmospaces-bounded-planner-cleanup-executor/43-01-bounded-planner-cleanup-executor-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -624,6 +628,5 @@ Resume file: .planning/phases/42-molmospaces-observed-handle-planner-binding/42-
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 42 is complete; the next phase should wire the
-probe-backed executor into the shared semantic cleanup loop for a bounded
-ADR-0003 cleanup attempt.
+**Active Phase:** Phase 43 MolmoSpaces bounded planner cleanup executor. Add
+opt-in probe-backed executor wiring for matching bounded cleanup subphases.
