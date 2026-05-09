@@ -153,6 +153,14 @@ _Avoid_: One-pass prompt writing
 An Agent-Driven Cleanup Run that succeeds without stale references, premature termination, skipped semantic completion checks, private-truth use, or manual intervention.
 _Avoid_: Accidental success
 
+**Cleanup Artifact Report**:
+The shared HTML review artifact for MolmoSpaces cleanup demos, backed by one report renderer and one semantic timeline model.
+_Avoid_: Per-demo report clone
+
+**Semantic Cleanup Subphase**:
+A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
+_Avoid_: Raw tool log as visual flow
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -189,6 +197,9 @@ _Avoid_: Accidental success
 - A **Deterministic Sweep Baseline** should run before model-driven policies on the same public contract.
 - A **Deterministic Sweep Baseline** must obey the same public information boundary as any model-driven **Cleanup Agent**.
 - A report may show **Private Evaluation** only after the run, separated from the **Agent View**.
+- A **Cleanup Artifact Report** should reuse the same report renderer across current-contract, ADR-0003, direct-agent, and OpenClaw dogfood runs.
+- A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
+- A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 
 ## Example Dialogue
 
@@ -241,3 +252,4 @@ _Avoid_: Accidental success
 - A **Clean Agent Cleanup Run** for the current-contract bridge requires 5/5 restored targets, `cleanup_status=success`, expected semantic substeps, fridge `open_receptacle` before `place_inside`, no stale-reference errors, no premature `done`, no private-truth policy path, complete artifacts, and no manual intervention beyond launching the agent.
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
+- Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.

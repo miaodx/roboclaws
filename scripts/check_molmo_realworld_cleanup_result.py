@@ -23,12 +23,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path, help="run_result.json or a directory of seed-* runs")
     parser.add_argument("--expect-task")
     parser.add_argument("--expect-backend")
-    parser.add_argument("--expect-policy", default="deterministic_sweep_baseline")
+    parser.add_argument("--expect-policy")
     parser.add_argument("--expect-mcp-server")
     parser.add_argument("--expect-seeds")
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
     parser.add_argument("--require-agent-driven", action="store_true")
     parser.add_argument("--require-clean-agent-run", action="store_true")
+    parser.add_argument("--require-openclaw-minimum", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
     return parser.parse_args()
 
@@ -41,17 +42,23 @@ def main() -> None:
         actual = {int(data["seed"]) for data, _path in run_results}
         assert expected <= actual, (expected, actual)
     assert len(run_results) >= 1, args.path
+    expect_policy = args.expect_policy
+    if expect_policy is None:
+        expect_policy = (
+            "openclaw_agent" if args.require_openclaw_minimum else "deterministic_sweep_baseline"
+        )
     for data, path in run_results:
         _assert_result(
             data,
             path.parent,
             expect_task=args.expect_task,
             expect_backend=args.expect_backend,
-            expect_policy=args.expect_policy,
+            expect_policy=expect_policy,
             expect_mcp_server=args.expect_mcp_server,
             min_generated_mess_count=args.min_generated_mess_count,
             require_agent_driven=args.require_agent_driven,
             require_clean_agent_run=args.require_clean_agent_run,
+            require_openclaw_minimum=args.require_openclaw_minimum,
             require_robot_views=args.require_robot_views,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
@@ -80,6 +87,7 @@ def _assert_result(
     min_generated_mess_count: int = 1,
     require_agent_driven: bool = False,
     require_clean_agent_run: bool = False,
+    require_openclaw_minimum: bool = False,
     require_robot_views: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
@@ -91,10 +99,12 @@ def _assert_result(
     assert data.get("planner_uses_private_manifest") is False, data
     assert data.get("fixture_hint_mode") == "room_only", data
     assert data.get("generated_mess_count", 0) >= min_generated_mess_count, data
-    assert data.get("mess_restoration_rate", 0) >= 0.70, data
-    assert data.get("sweep_coverage_rate", 0) >= 0.90, data
-    assert data.get("disturbance_count", 999) <= 2, data
-    assert data.get("cleanup_status") == "success", data
+    enforce_success = require_clean_agent_run or not require_openclaw_minimum
+    if enforce_success:
+        assert data.get("mess_restoration_rate", 0) >= 0.70, data
+        assert data.get("sweep_coverage_rate", 0) >= 0.90, data
+        assert data.get("disturbance_count", 999) <= 2, data
+        assert data.get("cleanup_status") == "success", data
     if expect_task is not None:
         assert data.get("task_prompt") == expect_task, data
     if expect_backend is not None:
@@ -111,9 +121,10 @@ def _assert_result(
     assert private.get("generated_mess_count") == data.get("generated_mess_count"), data
     assert private.get("generated_mess_count", 0) >= min_generated_mess_count, data
     assert private.get("acceptable_destination_sets"), data
-    for item in data.get("semantic_substeps") or []:
-        phases = [str(step.get("phase")) for step in item.get("steps", [])]
-        assert has_complete_semantic_sequence(phases), (phases, item)
+    if enforce_success:
+        for item in data.get("semantic_substeps") or []:
+            phases = [str(step.get("phase")) for step in item.get("steps", [])]
+            assert has_complete_semantic_sequence(phases), (phases, item)
 
     artifacts = data.get("artifacts") or {}
     for key in (
@@ -131,12 +142,42 @@ def _assert_result(
     assert "Agent View" in report_text, report_text[:500]
     assert "Private Evaluation" in report_text, report_text[:500]
     assert "Score" in report_text, report_text[:500]
-    assert "Semantic Substeps" in report_text, report_text[:500]
+    if enforce_success or data.get("semantic_substeps"):
+        assert "Semantic Substeps" in report_text, report_text[:500]
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    if require_openclaw_minimum:
+        _assert_openclaw_minimum(data)
     if require_clean_agent_run:
         _assert_clean_agent_run(data)
     if require_robot_views:
         _assert_robot_views(data, base)
+
+
+def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
+    assert data.get("policy") == "openclaw_agent", data
+    assert data.get("agent_driven") is True, data
+    assert data.get("mcp_server") == "molmo_cleanup_realworld", data
+    artifacts = data.get("artifacts") or {}
+    assert artifacts.get("trace"), data
+    assert artifacts.get("report"), data
+    counts = data.get("tool_event_counts") or {}
+    public_requests = 0
+    for tool in (
+        "metric_map",
+        "fixture_hints",
+        "navigate_to_waypoint",
+        "observe",
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place",
+        "place_inside",
+        "done",
+    ):
+        public_requests += int(counts.get(f"{tool}:request") or 0)
+    assert public_requests >= 1, (public_requests, counts, data)
+    assert int(counts.get("scene_objects:request") or 0) == 0, (counts, data)
 
 
 def _assert_clean_agent_run(data: dict[str, Any]) -> None:

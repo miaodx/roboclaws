@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World OpenClaw Dogfood
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 18
+**Status:** Completed 2026-05-09 under GSD Phase 18
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0006, ADR-0007, ADR-0008, Phase 17 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -64,3 +64,15 @@ This phase should:
   OpenClaw evidence.
 - Any report produced by a real visual run keeps Agent View, Private
   Evaluation, Score, Cleanup Trace/Semantic Substeps, and Robot View Timeline.
+
+## Completion Evidence
+
+- OpenClaw synthetic Gateway artifact:
+  `output/molmo-realworld-openclaw-gateway-synth-bind-all/run_result.json`
+- Checker passed with both `--require-openclaw-minimum` and
+  `--require-clean-agent-run`.
+- The successful Gateway path required the MCP server to bind
+  `--host 0.0.0.0`; a host-only `127.0.0.1` bind was not reachable from the
+  Gateway container through `host.docker.internal`.
+- Real visual MolmoSpaces/RBY1M Gateway evidence remains a follow-up, not part
+  of this first viability gate.

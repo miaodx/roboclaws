@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 18 MolmoSpaces real-world OpenClaw dogfood opened on 2026-05-09 via hybrid-phase-pipeline; ADR-0008 and source/GSD plans created for Gateway viability on the ADR-0003 MCP surface.
+stopped_at: Phase 18 MolmoSpaces real-world OpenClaw dogfood completed on 2026-05-09; Gateway produced a clean synthetic ADR-0003 MCP run and ADR-0009 now locks shared cleanup report underlay reuse.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 13
   completed_phases: 13
   total_plans: 16
-  completed_plans: 15
+  completed_plans: 16
   percent: 100
 ---
 
@@ -21,21 +21,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 18 — molmospaces-realworld-openclaw-dogfood (active; OpenClaw Gateway viability on the ADR-0003 MCP surface)
+**Current focus:** Phase 18 complete; remaining MolmoSpaces follow-ups are real visual OpenClaw evidence, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.
 
 ## Current Position
 
-Phase: 18 (molmospaces-realworld-openclaw-dogfood) — ACTIVE
-Plan: 1 of 1 active — `18-01` implements ADR-0008 by evaluating OpenClaw
+Phase: 18 (molmospaces-realworld-openclaw-dogfood) — COMPLETE
+Plan: 1 of 1 complete — `18-01` implements ADR-0008 by evaluating OpenClaw
 Gateway against the ADR-0003 `molmo_cleanup_realworld` MCP surface.
-Status: Planning slice opened. Next implementation step is to add an OpenClaw
-minimum viability gate, define the launch path, run a local Gateway attempt,
-and record either checker-validated artifacts or an exact blocker.
-Last activity: 2026-05-09 - Created ADR-0008, source plan, and GSD Phase 18
-plan for OpenClaw dogfood on the ADR-0003 MCP surface.
+Status: OpenClaw Gateway passed the synthetic ADR-0003 minimum gate and clean
+agent run gate with `policy=openclaw_agent`, no `scene_objects`, full waypoint
+sweep, and 5/5 restored hidden generated objects.
+Last activity: 2026-05-09 - Completed Phase 18, added ADR-0009 for the shared
+Molmo cleanup report underlay, and recorded the Gateway bind-address lesson
+(`--host 0.0.0.0` for Docker reachability).
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 is opening OpenClaw Gateway dogfood. Remaining MolmoSpaces work after that is advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Remaining MolmoSpaces work after that is real visual OpenClaw evidence, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -68,8 +69,8 @@ Progress: [##########] 100%
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 12, 13, 14
-- Trend: MolmoSpaces cleanup path now moved from real upstream MolmoSpaces/MuJoCo subprocess proof to reviewable semantic object-level cleanup evidence, carried-object visual consistency, direct agent/OpenClaw tool viability, visual agent bridge reports, and ADR-0003 public/private cleanup boundaries.
+- Last 3 shipped phases: 16, 17, 18
+- Trend: MolmoSpaces cleanup path now moved from ADR-0003 public/private cleanup boundaries to a strict MCP surface, direct coding-agent dogfood, and OpenClaw Gateway viability on the same public contract.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -88,6 +89,7 @@ Progress: [##########] 100%
 | Phase 15 P01 | ~2h | 4 tasks | 8 files |
 | Phase 16 P01 | ~3h | 6 tasks | 10 files |
 | Phase 17 P01 | ~1h | 5 tasks | 10 files |
+| Phase 18 P01 | ~2h | 5 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -130,6 +132,21 @@ Recent decisions affecting current work:
   checker. The first Gateway gate may be minimum tool-use viability rather than
   full clean cleanup success, but it must still use `molmo_cleanup_realworld`,
   avoid `scene_objects`, and produce clear artifacts or an exact blocker.
+- **Phase 18 completion (2026-05-09):** OpenClaw Gateway completed a clean
+  synthetic ADR-0003 MCP cleanup run through `molmo_cleanup_realworld` with
+  `policy=openclaw_agent`, 5/5 restored generated objects, full waypoint sweep,
+  no disturbance, no stale references, and no `scene_objects` trace events.
+  The checker now supports `--require-openclaw-minimum`, and
+  `just verify::molmo-realworld-openclaw-dogfood-kit` guards the OpenClaw
+  minimum artifact shape. The local Gateway attempt surfaced a launch-path
+  requirement: the MCP server must bind `--host 0.0.0.0` for Docker
+  `host.docker.internal` reachability; `127.0.0.1` leaves Gateway with only
+  `session_status`.
+- **ADR-0009 (2026-05-09):** MolmoSpaces cleanup demos now share one
+  **Cleanup Artifact Report** underlay in `roboclaws/molmo_cleanup/report.py`
+  and one semantic display model in `semantic_timeline.py`. Report-facing
+  semantic subphases render as `nav -> pick -> nav -> open? -> place`, while
+  raw traces retain full tool names.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the

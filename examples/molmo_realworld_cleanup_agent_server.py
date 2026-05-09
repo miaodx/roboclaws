@@ -10,6 +10,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[1]
@@ -101,6 +102,11 @@ def print_setup(
     print(f"  {commands['Codex']}")
     print(f"  {commands['Claude Code']}")
     print("\nFor OpenClaw, start the Gateway with the same MCP URL, for example:")
+    if _is_loopback_url(url):
+        print(
+            "  Docker note: restart this server with --host 0.0.0.0 for OpenClaw; "
+            "the Gateway container cannot reach a host-only 127.0.0.1 bind."
+        )
     print(f"  {commands['OpenClaw']}")
     print("\nThen start the agent and use this kickoff:")
     print("  Read skills/molmo-realworld-cleanup/SKILL.md.")
@@ -110,6 +116,11 @@ def print_setup(
     print("  Do not call scene_objects or read private scoring artifacts.")
     print("\nThis server exits when the agent calls roboclaws__done or you press Ctrl-C.\n")
     sys.stdout.flush()
+
+
+def _is_loopback_url(url: str) -> bool:
+    hostname = urlparse(url).hostname
+    return hostname in {"127.0.0.1", "localhost"}
 
 
 def run_molmo_realworld_cleanup_agent_server(

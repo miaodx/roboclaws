@@ -7,6 +7,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.semantic_timeline import display_semantic_subphases
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 _COLORS = {
@@ -81,7 +82,11 @@ def render_cleanup_report(
     after_name = html.escape(after_snapshot.name)
     body = f"""
     <section class="summary">
-      <h1>MolmoSpaces Cleanup Pilot</h1>
+      <div class="summary-head">
+        <p class="eyebrow">Cleanup artifact</p>
+        <h1>MolmoSpaces Cleanup Pilot</h1>
+      </div>
+      {_summary_metrics(run_result, score)}
       <div class="badges">
         {_badge("Scenario", scenario.scenario_id)}
         {_badge("Backend", run_result.get("backend", "unknown"))}
@@ -98,24 +103,29 @@ def render_cleanup_report(
     </section>
     {_current_contract_note(run_result)}
     {_realworld_contract_note(run_result)}
-    <section class="snapshots">
-      <figure>
-        <img src="{before_name}" alt="Before cleanup">
-        <figcaption>Before</figcaption>
-      </figure>
-      <figure>
-        <img src="{after_name}" alt="After cleanup">
-        <figcaption>After</figcaption>
-      </figure>
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Before And After</h2>
+      </div>
+      <div class="snapshots">
+        <figure>
+          <img src="{before_name}" alt="Before cleanup">
+          <figcaption>Before</figcaption>
+        </figure>
+        <figure>
+          <img src="{after_name}" alt="After cleanup">
+          <figcaption>After</figcaption>
+        </figure>
+      </div>
     </section>
-    <section>
+    <section class="panel">
       <h2>Object Moves</h2>
       {_moves_table(moves)}
     </section>
     {_agent_view_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
-    <section>
+    <section class="panel">
       <h2>Score</h2>
       {_score_table(score)}
     </section>
@@ -130,6 +140,39 @@ def _badge(label: str, value: Any) -> str:
         f'<span class="badge">{html.escape(str(label))}: '
         f"<strong>{html.escape(str(value))}</strong></span>"
     )
+
+
+def _summary_metrics(run_result: dict[str, Any], score: dict[str, Any]) -> str:
+    semantic = score.get("semantic_acceptability")
+    semantic_count = ""
+    if isinstance(semantic, dict):
+        semantic_count = f"{semantic.get('accepted_count', 0)}/{semantic.get('total_targets', 0)}"
+    restored_count = f"{score.get('restored_count', 0)}/{score.get('total_targets', 0)}"
+    return (
+        '<div class="metric-grid">'
+        f"{_metric('Status', run_result.get('cleanup_status', 'unknown'))}"
+        f"{_metric('Restored', restored_count)}"
+        f"{_metric('Generated', _generated_mess_summary(run_result))}"
+        f"{_metric('Sweep', _rate_text(run_result.get('sweep_coverage_rate')))}"
+        f"{_metric('Disturbance', run_result.get('disturbance_count', 0))}"
+        f"{_metric('Semantic', semantic_count or 'n/a')}"
+        "</div>"
+    )
+
+
+def _metric(label: str, value: Any) -> str:
+    return (
+        '<div class="metric">'
+        f"<span>{html.escape(str(label))}</span>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        "</div>"
+    )
+
+
+def _rate_text(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{value:.0%}"
+    return "n/a" if value is None else str(value)
 
 
 def _robot_badge(run_result: dict[str, Any]) -> str:
@@ -160,7 +203,7 @@ def _current_contract_note(run_result: dict[str, Any]) -> str:
     )
     if shortcuts:
         note += f" Shortcut(s): {shortcuts}."
-    return f'<section><p class="note">{html.escape(note)}</p></section>'
+    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
 def _realworld_contract_note(run_result: dict[str, Any]) -> str:
@@ -171,7 +214,7 @@ def _realworld_contract_note(run_result: dict[str, Any]) -> str:
         "metric map, room-level fixture hints, and robot-local observed object "
         "handles. Private Evaluation is shown only after the run."
     )
-    return f'<section><p class="note">{html.escape(note)}</p></section>'
+    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
 def _agent_view_section(run_result: dict[str, Any]) -> str:
@@ -197,10 +240,10 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
     observed_table = (
         "<p>No objects observed.</p>"
         if not rows
-        else "<table><thead><tr><th>Observed handle</th><th>Category</th>"
+        else '<div class="table-wrap"><table><thead><tr><th>Observed handle</th><th>Category</th>'
         "<th>Room</th><th>Support estimate</th></tr></thead><tbody>"
         + "".join(rows)
-        + "</tbody></table>"
+        + "</tbody></table></div>"
     )
     summary = (
         f"{len(metric_map.get('rooms') or [])} public rooms, "
@@ -208,7 +251,7 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         f"{len(observed)} observed object handles."
     )
     return (
-        "<section><h2>Agent View</h2>"
+        '<section class="panel agent-view"><h2>Agent View</h2>'
         f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
@@ -232,10 +275,10 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
             "</tr>"
         )
     table = (
-        "<table><thead><tr><th>Generated mess object</th>"
+        '<div class="table-wrap"><table><thead><tr><th>Generated mess object</th>'
         "<th>Acceptable destination set</th></tr></thead><tbody>"
         + "".join(rows)
-        + "</tbody></table>"
+        + "</tbody></table></div>"
     )
     summary = (
         f"Generated mess count {private.get('generated_mess_count', 0)}"
@@ -245,7 +288,7 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
         f"disturbance count {private.get('disturbance_count', 0)}."
     )
     return (
-        "<section><h2>Private Evaluation</h2>"
+        '<section class="panel private-evaluation"><h2>Private Evaluation</h2>'
         f'<p class="note">{html.escape(summary)}</p>{table}</section>'
     )
 
@@ -286,7 +329,7 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
             "</article>"
         )
     return (
-        "<section><h2>Robot View Timeline</h2>"
+        '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
         '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
         "The map and verification panels are report artifacts from public MuJoCo state, "
         "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
@@ -371,42 +414,60 @@ def _moves_table(moves: list[dict[str, Any]]) -> str:
             "</tr>"
         )
     return (
-        "<table><thead><tr><th>#</th><th>Object</th><th>Placed at</th>"
-        "<th>Primitive provenance</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Object</th><th>Placed at</th>'
+        "<th>Primitive provenance</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
 
 
 def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
     if not semantic_substeps:
         return ""
-    rows = []
+    cards = []
     for item in semantic_substeps:
-        phases = " -> ".join(str(step.get("phase", "")) for step in item.get("steps", []))
-        done_step = next(
-            (step for step in item.get("steps", []) if step.get("phase") == "object_done"),
-            {},
+        steps = item.get("steps", [])
+        displayed = display_semantic_subphases(steps)
+        phase_rail = "".join(
+            "<li>"
+            f"<span>{html.escape(step['label'])}</span>"
+            f"<small>{html.escape(step['detail'])}</small>"
+            "</li>"
+            for step in displayed
         )
-        readback = str(done_step.get("location_id") or "")
-        relation = str(done_step.get("location_relation") or "")
-        contained_in = done_step.get("contained_in")
-        if contained_in:
-            readback = f"{readback} ({relation}: {contained_in})"
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
-            f"<td>{html.escape(str(item.get('source_receptacle_id', '')))}</td>"
-            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
-            f"<td>{html.escape(phases)}</td>"
-            f"<td>{html.escape(readback)}</td>"
-            "</tr>"
+        readback = _semantic_readback(steps)
+        cards.append(
+            '<article class="semantic-card">'
+            '<div class="semantic-card-head">'
+            f"<strong>{html.escape(str(item.get('object_id', '')))}</strong>"
+            f"<span>{html.escape(str(item.get('source_receptacle_id', '')))}"
+            " -> "
+            f"{html.escape(str(item.get('target_receptacle_id', '')))}</span>"
+            "</div>"
+            f'<ol class="phase-rail">{phase_rail}</ol>'
+            f'<p class="readback">Readback: {html.escape(readback or "pending")}</p>'
+            "</article>"
         )
     return (
-        "<section><h2>Semantic Substeps</h2>"
-        "<table><thead><tr><th>Object</th><th>From</th><th>To</th>"
-        "<th>Phases</th><th>Readback</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></section>"
+        '<section class="panel semantic-section"><h2>Semantic Substeps</h2>'
+        '<p class="note">Canonical cleanup loop: nav, pick, nav, open when needed, place.</p>'
+        '<div class="semantic-cards">' + "".join(cards) + "</div></section>"
     )
+
+
+def _semantic_readback(steps: list[dict[str, Any]]) -> str:
+    candidates = [
+        step for step in steps if step.get("phase") in {"object_done", "place", "place_inside"}
+    ]
+    if not candidates:
+        return "pending"
+    final_step = candidates[-1]
+    readback = str(final_step.get("location_id") or "")
+    relation = str(final_step.get("location_relation") or "")
+    contained_in = final_step.get("contained_in")
+    if contained_in:
+        return f"{readback} ({relation}: {contained_in})"
+    return readback or "pending"
 
 
 def _score_table(score: dict[str, Any]) -> str:
@@ -426,9 +487,10 @@ def _score_table(score: dict[str, Any]) -> str:
         )
     semantic_summary = _semantic_acceptability_summary(score)
     return (
-        semantic_summary + "<table><thead><tr><th>Object</th><th>Final location</th>"
+        semantic_summary
+        + '<div class="table-wrap"><table><thead><tr><th>Object</th><th>Final location</th>'
         "<th>Exact private match</th><th>Semantic acceptability</th><th>Reason</th>"
-        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
 
 
@@ -472,18 +534,67 @@ def _wrap_html(body: str) -> str:
       margin: 0;
       font-family: system-ui, -apple-system, Segoe UI, sans-serif;
       color: #20242c;
-      background: #f7f8fa;
+      background: #eef2f6;
     }}
-    main {{ max-width: 1120px; margin: 0 auto; padding: 32px 24px 48px; }}
-    h1 {{ font-size: 28px; margin: 0 0 16px; }}
-    h2 {{ font-size: 19px; margin: 28px 0 12px; }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 28px 20px 48px; }}
+    h1 {{ font-size: 30px; margin: 0; letter-spacing: 0; }}
+    h2 {{ font-size: 19px; margin: 0 0 12px; letter-spacing: 0; }}
+    .summary {{
+      background: #20242c;
+      color: #f8fafc;
+      border-radius: 8px;
+      padding: 22px;
+      box-shadow: 0 14px 34px rgba(25, 32, 44, 0.16);
+    }}
+    .summary-head {{ display: flex; justify-content: space-between; gap: 16px; align-items: end; }}
+    .eyebrow {{
+      margin: 0 0 6px;
+      color: #a7d8cf;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }}
+    .metric-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }}
+    .metric {{
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      padding: 12px;
+    }}
+    .metric span {{ display: block; color: #b7c1ce; font-size: 12px; margin-bottom: 4px; }}
+    .metric strong {{ display: block; color: #ffffff; font-size: 19px; }}
+    .panel {{
+      background: #ffffff;
+      border: 1px solid #d8dee8;
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 18px;
+      box-shadow: 0 5px 16px rgba(25, 32, 44, 0.06);
+    }}
+    .note-panel {{ background: #fbfcfd; }}
     .badges {{ display: flex; flex-wrap: wrap; gap: 8px; }}
-    .badge {{ background: #fff; border: 1px solid #d9dde6; border-radius: 6px; padding: 7px 10px; }}
+    .badge {{
+      background: #fff;
+      border: 1px solid #d9dde6;
+      border-radius: 6px;
+      padding: 7px 10px;
+    }}
+    .summary .badge {{
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.18);
+      color: #e9edf4;
+    }}
+    .summary .badge strong {{ color: #ffffff; }}
     .snapshots {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 16px;
-      margin-top: 20px;
     }}
     figure {{
       margin: 0;
@@ -495,10 +606,11 @@ def _wrap_html(body: str) -> str:
     img {{ width: 100%; height: auto; display: block; }}
     figcaption {{ margin-top: 8px; color: #565f70; font-size: 14px; }}
     .note {{ color: #565f70; margin: 0 0 12px; }}
+    .table-wrap {{ overflow-x: auto; border: 1px solid #d9dde6; border-radius: 8px; }}
     .robot-step {{
       background: #fff;
       border: 1px solid #d9dde6;
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 12px;
       margin-bottom: 14px;
     }}
@@ -515,12 +627,56 @@ def _wrap_html(body: str) -> str:
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
-    table {{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dde6; }}
+    .semantic-cards {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }}
+    .semantic-card {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .semantic-card-head {{
+      display: grid;
+      gap: 4px;
+      margin-bottom: 10px;
+    }}
+    .semantic-card-head strong {{
+      overflow-wrap: anywhere;
+      font-size: 14px;
+    }}
+    .semantic-card-head span {{
+      color: #647083;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }}
+    .phase-rail {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(58px, 1fr));
+      gap: 8px;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }}
+    .phase-rail li {{
+      border: 1px solid #bfdcd7;
+      background: #eef8f6;
+      border-radius: 7px;
+      padding: 8px 6px;
+      text-align: center;
+    }}
+    .phase-rail span {{ display: block; font-weight: 750; color: #1f5f58; }}
+    .phase-rail small {{ display: block; margin-top: 2px; color: #687789; }}
+    .readback {{ margin: 10px 0 0; color: #565f70; font-size: 13px; overflow-wrap: anywhere; }}
+    table {{ width: 100%; border-collapse: collapse; background: #fff; }}
     th, td {{
       padding: 9px 10px;
       text-align: left;
       border-bottom: 1px solid #e5e8ee;
       font-size: 14px;
+      overflow-wrap: anywhere;
     }}
     th {{ background: #eef1f5; font-weight: 650; }}
   </style>

@@ -45,6 +45,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-realworld-cleanup",
         "just harness::molmo-realworld-agent-mcp",
         "just harness::molmo-realworld-agent-dogfood-kit",
+        "just harness::molmo-realworld-openclaw-dogfood-kit",
     )
     for call in expected_calls:
         assert call in text
@@ -67,6 +68,7 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^molmo-realworld-cleanup seeds=\"1 2 3\"",
         r"^molmo-realworld-agent-mcp seeds=\"1\"",
         r"^molmo-realworld-agent-dogfood-kit seed=\"7\"",
+        r"^molmo-realworld-openclaw-dogfood-kit seed=\"7\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"

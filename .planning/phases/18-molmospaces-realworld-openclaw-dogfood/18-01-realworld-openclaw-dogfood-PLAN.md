@@ -5,6 +5,12 @@
 Evaluate OpenClaw Gateway against the ADR-0003 `molmo_cleanup_realworld` MCP
 surface without falling back to the current-contract `scene_objects` shortcut.
 
+## Status
+
+Completed 2026-05-09. The synthetic OpenClaw Gateway run passed both the
+minimum viability gate and the clean agent run gate. Real MolmoSpaces/RBY1M
+visual Gateway evidence is deferred as a follow-up local pass.
+
 ## Tasks
 
 1. Add OpenClaw minimum-gate support to the real-world checker. The gate should

@@ -71,6 +71,97 @@ def test_checker_accepts_realworld_mcp_smoke_policy(tmp_path: Path) -> None:
     )
 
 
+def test_checker_accepts_openclaw_minimum_gate(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="openclaw_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_openclaw_minimum=True,
+    )
+
+
+def test_checker_openclaw_minimum_allows_partial_report_without_semantic_section(
+    tmp_path: Path,
+) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
+    result["semantic_substeps"] = []
+    result["mess_restoration_rate"] = 0.0
+    result["sweep_coverage_rate"] = 0.0
+    result["disturbance_count"] = 99
+    result["cleanup_status"] = "incomplete"
+    report_path = tmp_path / "report.html"
+    report_path.write_text(
+        report_path.read_text(encoding="utf-8").replace("Semantic Substeps", "Partial Trace"),
+        encoding="utf-8",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="openclaw_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_openclaw_minimum=True,
+    )
+
+
+def test_checker_rejects_openclaw_minimum_without_public_tool_use(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
+    result["tool_event_counts"] = {}
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            expect_policy="openclaw_agent",
+            expect_mcp_server="molmo_cleanup_realworld",
+            min_generated_mess_count=5,
+            require_agent_driven=True,
+            require_openclaw_minimum=True,
+        )
+
+
+def test_checker_rejects_openclaw_minimum_for_non_openclaw_policy(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            expect_policy=None,
+            expect_mcp_server="molmo_cleanup_realworld",
+            min_generated_mess_count=5,
+            require_agent_driven=True,
+            require_openclaw_minimum=True,
+        )
+
+
 def test_checker_rejects_scene_objects_in_realworld_trace(tmp_path: Path) -> None:
     smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

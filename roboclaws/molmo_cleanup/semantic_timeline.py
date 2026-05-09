@@ -7,6 +7,15 @@ SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place"
 CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT = f"{SEMANTIC_LOOP_VARIANT}-object_done"
 ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"
 
+SEMANTIC_SUBPHASE_LABELS = {
+    "navigate_to_object": ("nav", "object"),
+    "pick": ("pick", "object"),
+    "navigate_to_receptacle": ("nav", "target"),
+    "open_receptacle": ("open", "target"),
+    "place": ("place", "surface"),
+    "place_inside": ("place", "inside"),
+}
+
 
 def record_robot_view_step(
     *,
@@ -206,6 +215,24 @@ def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
         "matches_expected_location": response.get("matches_expected_location"),
         "primitive_provenance": response.get("primitive_provenance"),
     }
+
+
+def display_semantic_subphases(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Return the report-facing cleanup loop labels for raw semantic tool steps."""
+    displayed = []
+    for step in steps:
+        phase = str(step.get("phase") or "")
+        label = SEMANTIC_SUBPHASE_LABELS.get(phase)
+        if label is None:
+            continue
+        displayed.append(
+            {
+                "phase": phase,
+                "label": label[0],
+                "detail": label[1],
+            }
+        )
+    return displayed
 
 
 def cleanup_plan_from_semantic_substeps(

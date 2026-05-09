@@ -17,6 +17,7 @@ one decision per file, sequential numbering, explicit status.
 | [0006](0006-expose-adr-0003-cleanup-contract-through-mcp.md) | Expose ADR-0003 Cleanup Contract Through MCP | Accepted |
 | [0007](0007-dogfood-adr-0003-mcp-with-clean-agent-runs.md) | Dogfood ADR-0003 MCP With Clean Agent Runs | Accepted |
 | [0008](0008-evaluate-openclaw-on-adr-0003-mcp-after-direct-agent-dogfood.md) | Evaluate OpenClaw On ADR-0003 MCP After Direct Agent Dogfood | Accepted |
+| [0009](0009-use-shared-molmo-cleanup-report-underlay.md) | Use Shared Molmo Cleanup Report Underlay | Accepted |
 
 ## Adding a new ADR
 

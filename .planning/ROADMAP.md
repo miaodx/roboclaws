@@ -27,7 +27,7 @@ hidden Generated Mess Set from the historical five-object fixture to the v1
 lower bound of 10 generated objects. Phase 16 exposes the ADR-0003 public
 cleanup contract through MCP without the current-contract `scene_objects`
 shortcut. Phase 17 adds the direct coding-agent dogfood kit and clean-run
-checker for that stricter MCP surface. Phase 18 evaluates OpenClaw Gateway on
+checker for that stricter MCP surface. Phase 18 proves OpenClaw Gateway can use
 the same ADR-0003 MCP contract.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
@@ -71,7 +71,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (completed 2026-05-09; ADR-0005 configurable hidden generated object count with real 10-object evidence)
 - ✅ **v1.17 MolmoSpaces real-world agent MCP** - Phase 16 (completed 2026-05-09; ADR-0006 MCP surface for the ADR-0003 public contract)
 - ✅ **v1.18 MolmoSpaces real-world agent dogfood** - Phase 17 (completed 2026-05-09; direct coding-agent dogfood kit for the ADR-0003 MCP surface)
-- 📋 **v1.19 MolmoSpaces real-world OpenClaw dogfood** - Phase 18 (active 2026-05-09; OpenClaw Gateway viability on the ADR-0003 MCP surface)
+- ✅ **v1.19 MolmoSpaces real-world OpenClaw dogfood** - Phase 18 (completed 2026-05-09; OpenClaw Gateway viability on the ADR-0003 MCP surface)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -105,7 +105,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set. Completed 2026-05-09.
 - [x] **Phase 16: MolmoSpaces real-world agent MCP** - ADR-0006 MCP surface for the ADR-0003 public cleanup contract; no global `scene_objects` shortcut. Completed 2026-05-09.
 - [x] **Phase 17: MolmoSpaces real-world agent dogfood** - ADR-0007 direct coding-agent dogfood kit and clean-run checker for the ADR-0003 MCP surface. Completed 2026-05-09.
-- [ ] **Phase 18: MolmoSpaces real-world OpenClaw dogfood** - ADR-0008 OpenClaw Gateway viability on the ADR-0003 MCP surface.
+- [x] **Phase 18: MolmoSpaces real-world OpenClaw dogfood** - ADR-0008 OpenClaw Gateway viability on the ADR-0003 MCP surface. Completed 2026-05-09 with a synthetic Gateway clean run; real visual Gateway evidence remains a follow-up.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

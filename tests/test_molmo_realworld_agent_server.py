@@ -35,6 +35,7 @@ def test_realworld_agent_server_prints_codex_claude_and_openclaw_setup(
     assert "Molmo real-world cleanup MCP server is ready." in output
     assert "codex mcp add roboclaws --url http://127.0.0.1:18788/mcp" in output
     assert "claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp" in output
+    assert "restart this server with --host 0.0.0.0 for OpenClaw" in output
     assert "ROBOCLAWS_MCP_URL=http://host.docker.internal:18788/mcp" in output
     assert "skills/molmo-realworld-cleanup/SKILL.md" in output
     assert "roboclaws__metric_map" in output
