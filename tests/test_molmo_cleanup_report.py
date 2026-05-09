@@ -908,6 +908,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "planner_object_id": "pickup/body",
                         "planner_target_receptacle_id": "sink/body",
                     },
+                    "cleanup_task_sampler_adapter": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
                     "views": [
                         {
                             "label": "initial",
@@ -971,6 +976,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "torch_extensions" in html
     assert "Task feasibility" in html
     assert "blocked" in html
+    assert "Exact sampler adapter applied" in html
+    assert "Exact sampler adapter class" in html
+    assert "PickAndPlaceTaskSampler" in html
+    assert "Exact sampler adapter target" in html
+    assert "sink/body" in html
     assert "Timeouts" in html
     assert "Config-import timeouts" in html
     assert "Last worker stage" in html
@@ -1314,6 +1324,19 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             },
         },
     }
+    run_result["manipulation_evidence"]["cleanup_task_config"] = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": "/tmp/scene.xml",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+    }
+    run_result["manipulation_evidence"]["cleanup_task_sampler_adapter"] = {
+        "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "planner_target_receptacle_id": "sink/body",
+    }
     run_result["manipulation_evidence"]["sampled_task_binding"] = {
         "schema": "planner_probe_sampled_task_binding_v1",
         "pickup_obj_name": "pickup/body",
@@ -1349,6 +1372,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
     assert "Planner Probe Cleanup Binding" in html
+    assert "Exact task config applied" in html
+    assert "Exact sampler adapter class" in html
+    assert "PickAndPlaceTaskSampler" in html
     assert "pickup/body" in html
     assert "sink/body" in html
     assert "Planner object alias" in html

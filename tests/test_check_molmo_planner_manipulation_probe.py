@@ -197,6 +197,50 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     assert sampler.place_receptacle_name == "sink/body"
 
 
+def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Path) -> None:
+    runner = _load_runner_module()
+    args = SimpleNamespace(
+        cleanup_scene_xml=str(tmp_path / "scene.xml"),
+        cleanup_object_id="observed_001",
+        cleanup_target_receptacle_id="sink_01",
+        cleanup_source_receptacle_id="counter_01",
+        cleanup_planner_object_id="pickup/body",
+        cleanup_planner_target_receptacle_id="sink/body",
+        cleanup_tools="navigate_to_object,pick,navigate_to_receptacle,place",
+    )
+    cleanup_task_config = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": str(tmp_path / "scene.xml"),
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+    }
+    sampler_adapter = {
+        "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+        "applied": True,
+        "task_sampler_class": "FakeSampler",
+        "planner_target_receptacle_id": "sink/body",
+    }
+
+    runner._WORKER_EXCEPTION_CONTEXT.clear()
+    runner._record_worker_exception_context(
+        cleanup_task_config=cleanup_task_config,
+        cleanup_task_sampler_adapter=sampler_adapter,
+        requested_cleanup_primitive_binding={
+            "requested": True,
+            "planner_object_id": "pickup/body",
+            "planner_target_receptacle_id": "sink/body",
+        },
+    )
+    context = runner._worker_exception_probe_context(args)
+
+    assert context["cleanup_task_config"] == cleanup_task_config
+    assert context["cleanup_task_sampler_adapter"] == sampler_adapter
+    assert context["requested_cleanup_primitive_binding"]["planner_target_receptacle_id"] == (
+        "sink/body"
+    )
+
+
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
     checker = _load_checker_module()
     evidence = blocked_planner_probe_evidence(

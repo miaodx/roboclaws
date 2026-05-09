@@ -361,6 +361,12 @@ selection-owned blocker table.
 _Avoid_: splitting the current target-side blocker across source and fallback
 tables that reviewers must reconcile manually
 
+**Task Sampler Exception Context**:
+The planner-probe evidence preserved when exact cleanup task sampling fails
+before policy execution, including exact task config, sampler adapter state,
+requested cleanup binding, worker stage, and blockers.
+_Avoid_: treating `HouseInvalidForTask` as a context-free sampler failure
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -541,6 +547,9 @@ _Avoid_: full cleanup replacement claim
   execution is treated as cleanup primitive evidence. Synthetic cleanup aliases
   may prove report and command shape, but not exact planner-backed cleanup
   replacement.
+- **Task Sampler Exception Context** should be rendered when upstream task
+  sampling raises before policy execution, so target-feasibility blockers show
+  whether the exact sampler adapter was applied before `HouseInvalidForTask`.
 
 ## Example Dialogue
 
@@ -632,3 +641,16 @@ _Avoid_: full cleanup replacement claim
   reports `disabled`, `not_required`, `generated`, or `exhausted`, and the
   proof-bundle runner report/checker make the exhausted no-command state
   explicit.
+- Phase 72 summarized fallback exhaustion blockers, naming root-body alias gaps,
+  target task-feasibility-blocked pairs, and no-candidate source requests in
+  the runner report.
+- Phase 73 normalized non-root pickup runtime aliases back to variant-0 root
+  aliases, proving the current object-side aliases were already derivable.
+- Phase 74 preserved target-feasibility proof links for filtered fallback pairs
+  and prevented colliding generated request IDs from hiding distinct prior
+  attempts.
+- Phase 75 joined source request blockers and generated fallback-pair blockers
+  into one Target Feasibility Blocker Matrix.
+- Phase 76 preserved Task Sampler Exception Context so warmed local
+  `HouseInvalidForTask` reports show the exact sampler adapter was applied
+  before upstream task feasibility failed.

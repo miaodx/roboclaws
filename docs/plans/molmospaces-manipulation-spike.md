@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 75 target-feasibility blocker matrix completed; next work is upstream task-feasibility handling for target-side fallback pairs
+**Status:** Phase 76 task-sampler exception context completed; next work is upstream task-feasibility handling for target-side fallback pairs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -186,6 +186,11 @@ source requests and blocked generated fallback pairs into one table. The latest
 dry-run shows four target blockers: two source requests without prior proof
 links in the available evidence and two fallback pairs linked to Phase 65 proof
 reports with `worker_exception` stage.
+Phase 76 preserves exact task-sampler exception context in planner-probe worker
+failures. A warmed local probe reached `execute_task_sample_start`, failed with
+real `HouseInvalidForTask`, and still carried exact cleanup task config, exact
+sampler adapter state, requested cleanup binding, and worker-stage evidence
+into the report/checker path.
 
 ## Why This Exists
 

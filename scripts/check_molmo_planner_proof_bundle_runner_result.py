@@ -356,6 +356,13 @@ def _assert_proof_result_summary(
             value = str(item.get(key) or "")
             if value:
                 assert value in report_text, (key, report_text[:500])
+        sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+        if sampler_adapter:
+            assert "Exact sampler adapter applied" in report_text, report_text[:500]
+            for key in ("planner_target_receptacle_id", "task_sampler_class"):
+                value = str(sampler_adapter.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
         worker_stage_events = item.get("worker_stage_events") or []
         assert int(item.get("worker_stage_event_count") or 0) == len(worker_stage_events), item
         for event in worker_stage_events:

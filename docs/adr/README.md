@@ -75,6 +75,7 @@ one decision per file, sequential numbering, explicit status.
 | [0064](0064-normalize-pickup-root-runtime-aliases.md) | Normalize Pickup Root Runtime Aliases | Accepted |
 | [0065](0065-preserve-target-feasibility-proof-links.md) | Preserve Target Feasibility Proof Links | Accepted |
 | [0066](0066-render-target-feasibility-blocker-matrix.md) | Render Target Feasibility Blocker Matrix | Accepted |
+| [0067](0067-preserve-task-sampler-exception-context.md) | Preserve Task Sampler Exception Context | Accepted |
 
 ## Adding a new ADR
 

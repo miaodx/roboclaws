@@ -54,6 +54,7 @@ CUROBO_EXTENSION_NAMES = (
 _WORKER_EVENT_STARTED_AT = time.monotonic()
 _WARP_COMPATIBILITY_ADAPTER: dict[str, Any] = {"applied": False}
 _CUDA_MEMORY_SNAPSHOTS: list[dict[str, Any]] = []
+_WORKER_EXCEPTION_CONTEXT: dict[str, Any] = {}
 CUROBO_LOW_MEMORY_PROFILE: dict[str, dict[str, Any]] = {
     "policy": {
         "batch_size": 1,
@@ -385,6 +386,7 @@ def run_probe(
 
 
 def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
+    _WORKER_EXCEPTION_CONTEXT.clear()
     _configure_headless_renderer_env(args)
     _emit_worker_event(
         "worker_start",
@@ -415,7 +417,6 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
     except BaseException as exc:  # noqa: BLE001 - worker must report capability blockers.
         _record_cuda_memory_snapshot("worker_exception")
         final_runtime_diagnostics = _runtime_diagnostics(args)
-        requested_cleanup_binding = _requested_cleanup_primitive_binding(args)
         return {
             "ok": False,
             "exception_type": type(exc).__name__,
@@ -427,8 +428,7 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "initial_runtime_diagnostics": runtime_diagnostics,
             "runtime_diagnostics": final_runtime_diagnostics,
             "cuda_memory_snapshots": list(_CUDA_MEMORY_SNAPSHOTS),
-            "cleanup_task_config": _cleanup_task_config_request_from_args(args),
-            "requested_cleanup_primitive_binding": requested_cleanup_binding,
+            **_worker_exception_probe_context(args),
         }
 
 
@@ -444,6 +444,27 @@ def _emit_worker_event(event: str, **payload: Any) -> None:
         ),
         flush=True,
     )
+
+
+def _record_worker_exception_context(**payload: Any) -> None:
+    for key, value in payload.items():
+        if value:
+            _WORKER_EXCEPTION_CONTEXT[key] = value
+
+
+def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
+    return {
+        "cleanup_task_config": _WORKER_EXCEPTION_CONTEXT.get("cleanup_task_config")
+        or _cleanup_task_config_request_from_args(args),
+        "cleanup_task_sampler_adapter": _WORKER_EXCEPTION_CONTEXT.get(
+            "cleanup_task_sampler_adapter"
+        )
+        or {},
+        "requested_cleanup_primitive_binding": _WORKER_EXCEPTION_CONTEXT.get(
+            "requested_cleanup_primitive_binding"
+        )
+        or _requested_cleanup_primitive_binding(args),
+    }
 
 
 def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
@@ -946,6 +967,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
     config.profile = False
     config.use_wandb = False
     cleanup_task_config = _configure_exact_cleanup_task(config, args)
+    _record_worker_exception_context(cleanup_task_config=cleanup_task_config)
     policy_cls = config.policy_config.policy_cls
     _emit_worker_event(
         "franka_policy_class_ready",
@@ -994,6 +1016,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
     config.use_wandb = False
     config.policy_config.server_urls = []
     cleanup_task_config = _configure_exact_cleanup_task(config, args)
+    _record_worker_exception_context(cleanup_task_config=cleanup_task_config)
     curobo_memory_profile = _apply_rby1m_curobo_memory_profile(config, args)
     _emit_worker_event(
         "rby1m_curobo_memory_profile_ready",
@@ -1066,6 +1089,10 @@ def _execute_policy_probe(
     cleanup_task_sampler_adapter = _apply_exact_cleanup_task_sampler_adapter(
         task_sampler,
         requested_cleanup_binding,
+    )
+    _record_worker_exception_context(
+        cleanup_task_sampler_adapter=cleanup_task_sampler_adapter,
+        requested_cleanup_primitive_binding=requested_cleanup_binding,
     )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
     _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")

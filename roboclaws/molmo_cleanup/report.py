@@ -1130,6 +1130,7 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     requested = item.get("requested_cleanup_primitive_binding") or {}
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
+    sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1146,6 +1147,9 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
+        ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
+        ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
@@ -1293,6 +1297,10 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         (
             "Exact sampler adapter applied",
             _yes_no(cleanup_task_sampler_adapter.get("applied")),
+        ),
+        (
+            "Exact sampler adapter class",
+            cleanup_task_sampler_adapter.get("task_sampler_class", ""),
         ),
         (
             "Exact sampler adapter target",

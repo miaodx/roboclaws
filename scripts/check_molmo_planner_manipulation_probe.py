@@ -97,6 +97,8 @@ def _assert_probe_result(
         or evidence.get("requested_cleanup_primitive_binding")
         or evidence.get("cleanup_primitive_binding")
         or evidence.get("cleanup_primitive_binding_blockers")
+        or evidence.get("cleanup_task_config")
+        or evidence.get("cleanup_task_sampler_adapter")
     ):
         assert "Planner Probe Cleanup Binding" in report_text, report_text[:500]
     if require_curobo_extension_cache:

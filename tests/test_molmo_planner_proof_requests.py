@@ -1032,6 +1032,11 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
                     },
+                    "cleanup_task_sampler_adapter": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
                     "requested_cleanup_primitive_binding": {
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
@@ -1075,6 +1080,8 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert result["task_feasibility_status"] == "blocked"
     assert result["visual_status"] == "views_recorded"
     assert result["blockers"][0]["code"] == "HouseInvalidForTask"
+    assert result["cleanup_task_sampler_adapter"]["applied"] is True
+    assert result["cleanup_task_sampler_adapter"]["planner_target_receptacle_id"] == "sink/body"
     assert result["views"][0]["path"].endswith("planner_views/final.png")
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
 
