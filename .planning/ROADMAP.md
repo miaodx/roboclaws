@@ -94,8 +94,11 @@ shared semantic cleanup loop seam. Phase 51 adds a dry-run harness for the
 planner proof bundle runner so the cleanup-to-proof-command handoff is
 repeatable before local GPU execution. Phase 52 made cleanup rerun outputs
 from executed proof-bundle runs first-class manifest/report/checker artifacts.
-Phase 53 adds the named local-dev gate that executes those bound proof bundles,
-reruns cleanup, and checks the final planner-backed cleanup artifact.
+Phase 53 added the named local-dev gate that executes those bound proof bundles,
+reruns cleanup, and checks the final planner-backed cleanup artifact. Its local
+attempt proved all five RBY1M/CuRobo proofs can execute, but final cleanup
+readiness remains blocked until proof probes can bind to the requested upstream
+sampled tasks.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -238,7 +241,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 50: MolmoSpaces MCP smoke shared semantic loop** - ADR-0041 current-contract and ADR-0003 MCP smoke demos reuse the shared semantic cleanup loop. Completed 2026-05-10.
 - [x] **Phase 51: MolmoSpaces planner proof bundle runner harness** - ADR-0042 dry-run harness and verification recipe for repeatable proof-bundle runner command generation. Completed 2026-05-10.
 - [x] **Phase 52: MolmoSpaces planner proof bundle cleanup rerun artifacts** - ADR-0043 cleanup rerun outputs are first-class runner manifest/report/checker artifacts. Completed 2026-05-10.
-- [ ] **Phase 53: MolmoSpaces planner proof bundle execute rerun** - ADR-0044 local-dev gate for executing proof bundles, rerunning cleanup, and checking final planner-backed cleanup readiness.
+- [x] **Phase 53: MolmoSpaces planner proof bundle execute rerun** - ADR-0044 local-dev gate for executing proof bundles, rerunning cleanup, and checking final planner-backed cleanup readiness. Completed 2026-05-10 with explicit blocker: executed proofs do not yet promote cleanup primitive binding because sampled upstream tasks differ from requested cleanup aliases.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

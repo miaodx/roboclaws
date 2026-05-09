@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Execute Rerun
 
-**Status:** Planned for GSD Phase 53 on 2026-05-10
+**Status:** Completed in GSD Phase 53 on 2026-05-10 with explicit local blocker
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0042, ADR-0043, ADR-0044
 **Workflow:** `hybrid-phase-pipeline`
@@ -50,4 +50,16 @@ This phase should:
 
 ## Completion
 
-Pending Phase 53 implementation.
+Completed in Phase 53.
+
+The local-dev execute-rerun gate now exists and stays separate from the cheap
+dry-run proof-bundle runner gate. The local attempt executed five RBY1M/CuRobo
+proofs successfully and the runner artifact passed with required proof outputs
+and cleanup rerun outputs.
+
+The final strict cleanup checker failed, correctly, because none of the proof
+artifacts promoted cleanup primitive binding. Each proof executed a sampled
+upstream task whose `pickup_obj_name` and `place_receptacle_name` differed from
+the requested cleanup object/target aliases. The final cleanup rerun therefore
+remained `api_semantic`, with cleanup primitive and bridge gates still
+`blocked_capability`.

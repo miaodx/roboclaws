@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 53 planner proof bundle execute-rerun gate planned on 2026-05-10
+**Status:** Phase 53 planner proof bundle execute-rerun gate completed with binding blocker on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -67,7 +67,9 @@ smoke demos onto the shared semantic cleanup loop. Phase 51 adds a dry-run
 harness for repeatable proof-bundle runner command generation. Phase 52 names
 the final cleanup rerun artifacts in runner manifests, reports, and checker
 gates. Phase 53 adds the named local-dev execute-rerun gate for bound proof
-bundles and final cleanup checker readiness.
+bundles and final cleanup checker readiness. The local run executed five
+RBY1M/CuRobo proofs, but final cleanup readiness remains blocked because the
+sampled upstream tasks did not match the requested cleanup aliases.
 
 ## Why This Exists
 
@@ -879,10 +881,9 @@ completed:
   gsd-execute-phase 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
   gsd-verify-work 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
   gsd-plan-phase 53-molmospaces-planner-proof-bundle-execute-rerun
-
-in progress:
   gsd-execute-phase 53-molmospaces-planner-proof-bundle-execute-rerun
+  gsd-verify-work 53-molmospaces-planner-proof-bundle-execute-rerun
 
 next pipeline candidates:
-  run the local proof-bundle execute-rerun gate and inspect final cleanup readiness
+  plan exact upstream sampled-task binding for cleanup proof requests
 ```

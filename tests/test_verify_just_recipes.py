@@ -49,6 +49,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-realworld-openclaw-visual-dogfood-kit",
         "just harness::molmo-realworld-raw-fpv",
         "just harness::molmo-planner-proof-bundle-runner",
+        "just harness::molmo-planner-proof-bundle-execute-rerun",
         "just harness::molmo-planner-manipulation-probe",
     )
     for call in expected_calls:
@@ -78,6 +79,10 @@ def test_harness_exposes_named_execution_rigs() -> None:
         (
             r"^molmo-planner-proof-bundle-runner "
             r"output_dir=\"output/molmo-planner-proof-bundle-runner-harness\""
+        ),
+        (
+            r"^molmo-planner-proof-bundle-execute-rerun "
+            r"output_dir=\"output/molmo-planner-proof-bundle-execute-rerun\""
         ),
         (
             r"^molmo-planner-manipulation-probe "
@@ -175,7 +180,7 @@ def test_planner_proof_bundle_runner_harness_stays_dry_run() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     recipe = re.search(
-        r"^molmo-planner-proof-bundle-runner[\s\S]*?(?=^# ADR-0014)",
+        r"^molmo-planner-proof-bundle-runner[\s\S]*?(?=^# ADR-0044)",
         text,
         re.MULTILINE,
     )
@@ -191,3 +196,28 @@ def test_planner_proof_bundle_runner_harness_stays_dry_run() -> None:
     ):
         assert expected in body
     assert "--execute-probes" not in body
+
+
+def test_planner_proof_bundle_execute_rerun_gate_is_strict_and_local() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    recipe = re.search(
+        r"^molmo-planner-proof-bundle-execute-rerun[\s\S]*?(?=^# ADR-0014)",
+        text,
+        re.MULTILINE,
+    )
+    assert recipe is not None
+    body = recipe.group(0)
+    for expected in (
+        "scripts/run_molmo_planner_proof_bundle_from_requests.py",
+        "--torch-extensions-dir",
+        "--execute-probes",
+        "--rerun-cleanup",
+        "--cleanup-output-dir",
+        "--require-proof-outputs",
+        "--require-cleanup-rerun-output",
+        "--require-planner-proof-attachment",
+        "--require-planner-backed-cleanup-primitives",
+        "--require-planner-cleanup-bridge-ready",
+    ):
+        assert expected in body
