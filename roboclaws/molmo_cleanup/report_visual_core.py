@@ -5,6 +5,7 @@ VISUAL_CORE_SEMANTIC_SECTION = "Semantic Substeps"
 VISUAL_CORE_ROBOT_SECTION = "Robot View Timeline"
 VISUAL_CORE_AGENT_SECTION = "Agent View"
 VISUAL_CORE_PRIVATE_SECTION = "Private Evaluation"
+VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION = "Planner Proof Requests"
 CANONICAL_SEMANTIC_SUBPHASES = ("nav/object", "pick/object", "nav/target")
 CANONICAL_PLACE_SUBPHASES = ("place/surface", "place/inside")
 
@@ -16,6 +17,7 @@ def assert_cleanup_report_visual_core(
     require_robot_timeline: bool = False,
     require_agent_view: bool = False,
     require_private_evaluation: bool = False,
+    require_planner_proof_requests: bool = False,
 ) -> None:
     """Assert the shared Cleanup Artifact Report visual core contract."""
     ordered = [
@@ -39,6 +41,19 @@ def assert_cleanup_report_visual_core(
     if require_private_evaluation:
         assert VISUAL_CORE_PRIVATE_SECTION in report_text, report_text[:500]
         _assert_after(report_text, VISUAL_CORE_PRIVATE_SECTION, VISUAL_CORE_BASE_SECTIONS[2])
+    if require_planner_proof_requests:
+        assert VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION in report_text, report_text[:500]
+        _assert_after(
+            report_text,
+            VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION,
+            VISUAL_CORE_BASE_SECTIONS[2],
+        )
+        if require_agent_view:
+            _assert_after(
+                report_text,
+                VISUAL_CORE_AGENT_SECTION,
+                VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION,
+            )
 
 
 def _assert_sections_in_order(report_text: str, sections: list[str]) -> None:

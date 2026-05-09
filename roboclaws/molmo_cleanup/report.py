@@ -118,6 +118,7 @@ def _cleanup_report_sections(
             _attached_planner_proof_section(run_result),
             _cleanup_primitive_gate_section(run_result),
             _planner_cleanup_bridge_section(run_result),
+            _planner_proof_requests_section(run_result),
             _agent_view_section(run_result),
             _raw_fpv_observations_section(run_result),
             _camera_model_policy_section(run_result),
@@ -598,6 +599,73 @@ def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:
         "<h2>Planner Cleanup Bridge</h2>"
         f'<p class="note">{html.escape(str(note))}</p>'
         f'{metrics}<div class="badges">{badges}</div>{blockers_table}</section>'
+    )
+
+
+def _planner_proof_requests_section(run_result: dict[str, Any]) -> str:
+    manifest = run_result.get("planner_proof_requests") or {}
+    if not manifest:
+        return ""
+    requests = manifest.get("requests") or []
+    rows = "".join(_planner_proof_request_row(request) for request in requests)
+    if rows:
+        table = (
+            '<div class="table-wrap"><table><thead><tr>'
+            "<th>Request</th><th>Status</th><th>Object</th><th>Source</th>"
+            "<th>Target</th><th>Tools</th><th>Planner object</th>"
+            "<th>Planner target</th><th>Blockers</th></tr></thead><tbody>"
+            f"{rows}</tbody></table></div>"
+        )
+    else:
+        table = '<p class="note">No planner proof requests recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requests', manifest.get('request_count', len(requests)))}"
+        f"{_metric('Ready', manifest.get('ready_count', 0))}"
+        f"{_metric('Blocked', len(manifest.get('blockers') or []))}"
+        "</div>"
+    )
+    note = manifest.get("evidence_note") or (
+        "Private post-run handoff for local planner proof generation; not Agent View."
+    )
+    return (
+        '<section class="panel planner-proof-requests">'
+        "<h2>Planner Proof Requests</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f"{metrics}{table}</section>"
+    )
+
+
+def _planner_proof_request_row(request: dict[str, Any]) -> str:
+    binding = request.get("binding") if isinstance(request.get("binding"), dict) else {}
+    probe_args = request.get("planner_probe_args") or {}
+    planner_object = (
+        binding.get("planner_object_id") or probe_args.get("--cleanup-planner-object-id") or ""
+    )
+    planner_target = (
+        binding.get("planner_target_receptacle_id")
+        or probe_args.get("--cleanup-planner-target-receptacle-id")
+        or ""
+    )
+    blockers = ", ".join(
+        str(item.get("code") or item.get("message") or "")
+        for item in request.get("blockers") or []
+        if isinstance(item, dict)
+    )
+    tools = ", ".join(str(item) for item in request.get("tools") or [])
+    status = "ready" if request.get("ready") else "blocked"
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(request.get('request_id', '')))}</td>"
+        f"<td>{html.escape(status)}</td>"
+        f"<td>{html.escape(str(request.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(request.get('source_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(request.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(tools)}</td>"
+        f"<td>{html.escape(str(planner_object))}</td>"
+        f"<td>{html.escape(str(planner_target))}</td>"
+        f"<td>{html.escape(blockers)}</td>"
+        "</tr>"
     )
 
 

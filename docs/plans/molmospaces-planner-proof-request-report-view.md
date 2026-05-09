@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Request Report View
 
-**Status:** Planned for GSD Phase 47
+**Status:** Completed in GSD Phase 47 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0037, ADR-0038, Phase 46 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -50,3 +50,9 @@ This phase should:
 - `uv run ruff format --check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/report_visual_core.py scripts/check_molmo_realworld_cleanup_result.py tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py tests/test_check_molmo_realworld_cleanup_result.py`
 - Existing pre-Phase-47 ADR-0003 artifacts without proof request manifests still pass the checker.
+
+## Completion
+
+Phase 47 shipped the shared report section, visual-core/checker coverage, and
+focused tests for deterministic and MCP ADR-0003 cleanup paths. Existing
+artifacts without request manifests remain checker-compatible.

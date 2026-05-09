@@ -118,6 +118,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
+    assert "Planner Proof Requests" in report_text
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text
     assert '"tool": "scene_objects"' not in trace_text

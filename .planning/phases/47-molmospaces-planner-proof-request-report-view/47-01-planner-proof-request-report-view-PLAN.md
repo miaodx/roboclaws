@@ -8,17 +8,17 @@ Agent View.
 
 ## Status
 
-Planned.
+Completed 2026-05-10.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Add shared report rendering for planner proof requests.
-3. [ ] Add checker coverage that requires the report section when a manifest is
+2. [x] Add shared report rendering for planner proof requests.
+3. [x] Add checker coverage that requires the report section when a manifest is
    present.
-4. [ ] Add renderer/demo/MCP tests for proof request report visibility and
+4. [x] Add renderer/demo/MCP tests for proof request report visibility and
    privacy.
-5. [ ] Run focused verification gates.
+5. [x] Run focused verification gates.
 
 ## Acceptance
 
@@ -34,7 +34,19 @@ Planned.
 
 ## Verification
 
-- Pending.
+- `uv run ruff check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/report_visual_core.py scripts/check_molmo_realworld_cleanup_result.py tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py`
+- `uv run ruff format --check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/report_visual_core.py scripts/check_molmo_realworld_cleanup_result.py tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py tests/test_check_molmo_realworld_cleanup_result.py`
+- `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`
+
+## Completion Notes
+
+- Cleanup reports now render `Planner Proof Requests` when
+  `planner_cleanup_proof_requests_v1` is present.
+- The section appears after planner cleanup bridge evidence and before Agent
+  View, preserving the visual core and public/private boundary.
+- The checker requires the section only for artifacts that include proof
+  requests, so older pre-Phase-47 artifacts remain valid.
 
 ## Risks
 

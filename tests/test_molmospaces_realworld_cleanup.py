@@ -31,6 +31,7 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+    report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
 
     assert result["cleanup_status"] == "success"
     assert result["contract"] == REALWORLD_CONTRACT
@@ -58,6 +59,7 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
+    assert "Planner Proof Requests" in report_text
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert (tmp_path / "agent_view.json").is_file()
