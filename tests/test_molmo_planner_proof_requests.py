@@ -407,6 +407,10 @@ def test_proof_request_selection_filters_non_runtime_fallback_aliases() -> None:
     fallback_generation = selection["fallback_generation"]
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["unavailable_source_request_count"] == 1
+    assert fallback_generation["exhaustion_blocker_count"] == 1
+    assert fallback_generation["exhaustion_blockers"][0]["code"] == (
+        "no_fallback_candidate_available"
+    )
     assert fallback_generation["filtered_alias_count"] == 2
     assert {
         (item["axis"], item["alias"], item["reason"])
@@ -639,6 +643,11 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     assert selection["fallback_required"] is True
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
+    assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
+        "pickup_root_body_alias_required",
+        "target_task_feasibility_blocked_pairs",
+        "no_fallback_candidate_available",
+    }
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
         for item in fallback_generation["filtered_aliases"]
@@ -781,6 +790,11 @@ def test_proof_request_selection_carries_prior_filtered_candidates() -> None:
     assert selection["fallback_required"] is True
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
+    assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
+        "pickup_root_body_alias_required",
+        "target_task_feasibility_blocked_pairs",
+        "no_fallback_candidate_available",
+    }
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
         for item in fallback_generation["filtered_aliases"]
@@ -845,6 +859,10 @@ def test_proof_request_selection_keeps_fallback_required_when_no_alias_available
     assert selection["fallback_required"] is True
     assert selection["fallback_generation"]["status"] == "exhausted"
     assert selection["fallback_generation"]["unavailable_source_request_count"] == 1
+    assert selection["fallback_generation"]["exhaustion_blocker_count"] == 1
+    assert selection["fallback_generation"]["exhaustion_blockers"][0]["code"] == (
+        "no_fallback_candidate_available"
+    )
 
 
 def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Path) -> None:

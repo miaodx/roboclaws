@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 71 fallback exhaustion status completed; next work is upstream task-feasibility handling or richer root-body alias derivation
+**Status:** Phase 72 fallback exhaustion blocker summary completed; next work is upstream task-feasibility handling or richer root-body alias derivation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -168,6 +168,10 @@ Phase 71 makes that exhausted pool explicit in the artifact schema and visual
 report. Generated fallback selection now reports `Fallback status: exhausted`
 when blocked requests remain but every candidate is filtered or unavailable,
 and the runner checker validates the status.
+Phase 72 adds the blocker summary for that exhausted state. The runner now
+renders `Fallback Exhaustion Blockers` with stable codes for pickup root-body
+alias gaps, target task-feasibility-blocked pairs, and source requests with no
+remaining generated candidate.
 
 ## Why This Exists
 

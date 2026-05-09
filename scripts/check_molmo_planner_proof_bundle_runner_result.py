@@ -201,6 +201,7 @@ def _assert_proof_request_selection(
         filtered_aliases = fallback_generation.get("filtered_aliases") or []
         discovered_aliases = fallback_generation.get("discovered_aliases") or []
         filtered_pairs = fallback_generation.get("filtered_pairs") or []
+        exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
         assert int(selection.get("generated_fallback_request_count") or 0) == len(generated), (
             selection
         )
@@ -213,11 +214,16 @@ def _assert_proof_request_selection(
         assert int(fallback_generation.get("filtered_pair_count") or 0) == len(filtered_pairs), (
             fallback_generation
         )
+        assert int(fallback_generation.get("exhaustion_blocker_count") or 0) == len(
+            exhaustion_blockers
+        ), fallback_generation
         if fallback_status == "generated":
             assert generated, fallback_generation
         if fallback_status == "exhausted":
             assert not generated, fallback_generation
             assert selection.get("fallback_required") is True, selection
+            assert exhaustion_blockers, fallback_generation
+            assert "Fallback Exhaustion Blockers" in report_text, report_text[:500]
         for item in generated:
             fallback = item.get("fallback_request") or {}
             for key in ("request_id", "object_id", "target_receptacle_id"):
@@ -249,6 +255,10 @@ def _assert_proof_request_selection(
                 "derived_from",
                 "reason",
             ):
+                assert item.get(key), item
+                assert str(item[key]) in report_text, (key, report_text[:500])
+        for item in exhaustion_blockers:
+            for key in ("code", "message"):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
 

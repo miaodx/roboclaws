@@ -447,13 +447,20 @@ def _fallback_generation(
         }
     generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
     unavailable_count = len(excluded_requests) - len(generated_source_ids)
+    status = _fallback_generation_status(
+        enabled=enabled,
+        excluded_request_count=len(excluded_requests),
+        generated_request_count=len(generated_requests),
+    )
+    exhaustion_blockers = _fallback_exhaustion_blockers(
+        status=status,
+        filtered_aliases=filtered_aliases,
+        filtered_pairs=filtered_pairs,
+        unavailable_source_request_count=max(unavailable_count, 0),
+    )
     return {
         "schema": PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA,
-        "status": _fallback_generation_status(
-            enabled=enabled,
-            excluded_request_count=len(excluded_requests),
-            generated_request_count=len(generated_requests),
-        ),
+        "status": status,
         "enabled": enabled,
         "ready_request_count": ready_request_count,
         "excluded_request_count": len(excluded_requests),
@@ -467,6 +474,8 @@ def _fallback_generation(
         "discovered_aliases": discovered_aliases,
         "filtered_pair_count": len(filtered_pairs),
         "filtered_pairs": filtered_pairs,
+        "exhaustion_blocker_count": len(exhaustion_blockers),
+        "exhaustion_blockers": exhaustion_blockers,
         "evidence_note": (
             "Private generated fallback proof requests. They preserve cleanup-facing "
             "object and target IDs while trying alternate exact-scene planner aliases."
@@ -487,6 +496,73 @@ def _fallback_generation_status(
     if excluded_request_count > 0:
         return "exhausted"
     return "not_required"
+
+
+def _fallback_exhaustion_blockers(
+    *,
+    status: str,
+    filtered_aliases: list[dict[str, Any]],
+    filtered_pairs: list[dict[str, Any]],
+    unavailable_source_request_count: int,
+) -> list[dict[str, Any]]:
+    if status != "exhausted":
+        return []
+    blockers = []
+    non_root_alias_count = sum(
+        1
+        for item in filtered_aliases
+        if str(item.get("axis") or "") == "object"
+        and str(item.get("reason") or "")
+        in {"prior_non_root_body_alias", "not_pickup_root_body_alias"}
+    )
+    if non_root_alias_count:
+        blockers.append(
+            {
+                "code": "pickup_root_body_alias_required",
+                "count": non_root_alias_count,
+                "message": (
+                    "Known object-side runtime fallback aliases are filtered as "
+                    "non-root pickup bodies; a richer pickup root-body alias source "
+                    "is required before more object-side commands can be generated."
+                ),
+            }
+        )
+    task_feasibility_pair_count = sum(
+        1
+        for item in filtered_pairs
+        if str(item.get("reason") or "") == "prior_task_feasibility_blocked_pair"
+    )
+    if task_feasibility_pair_count:
+        blockers.append(
+            {
+                "code": "target_task_feasibility_blocked_pairs",
+                "count": task_feasibility_pair_count,
+                "message": (
+                    "Known object/target fallback alias pairs are already "
+                    "task-feasibility blocked by the upstream sampler."
+                ),
+            }
+        )
+    if unavailable_source_request_count:
+        blockers.append(
+            {
+                "code": "no_fallback_candidate_available",
+                "count": unavailable_source_request_count,
+                "message": (
+                    "Excluded source requests have no remaining generated fallback "
+                    "candidate after alias and pair filters are applied."
+                ),
+            }
+        )
+    if not blockers:
+        blockers.append(
+            {
+                "code": "fallback_candidate_pool_exhausted",
+                "count": 0,
+                "message": "No generated fallback commands remain for the current evidence pool.",
+            }
+        )
+    return blockers
 
 
 def _fallback_requests_for_blocked_request(

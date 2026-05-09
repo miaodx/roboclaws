@@ -773,6 +773,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     filtered_aliases = fallback_generation.get("filtered_aliases") or []
     discovered_aliases = fallback_generation.get("discovered_aliases") or []
     filtered_pairs = fallback_generation.get("filtered_pairs") or []
+    exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
@@ -784,6 +785,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Filtered aliases', len(filtered_aliases))}"
         f"{_metric('Filtered pairs', len(filtered_pairs))}"
         f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
+        f"{_metric('Exhaustion blockers', len(exhaustion_blockers))}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
@@ -831,6 +833,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
     filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
     filtered_pairs_table = _filtered_fallback_pairs_table(filtered_pairs)
+    exhaustion_table = _fallback_exhaustion_blockers_table(exhaustion_blockers)
     note = selection.get("evidence_note") or (
         "Private proof request selection for local proof-bundle execution."
     )
@@ -839,7 +842,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
         f"{selected_table}{excluded_table}{generated_table}{discovered_table}"
-        f"{filtered_table}{filtered_pairs_table}</section>"
+        f"{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
 
@@ -949,6 +952,28 @@ def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior blockers</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _fallback_exhaustion_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('code', '')))}</td>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('message', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="3">No fallback exhaustion blockers recorded.</td></tr>')
+    return (
+        "<h3>Fallback Exhaustion Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Blocker</th><th>Evidence count</th><th>Message</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

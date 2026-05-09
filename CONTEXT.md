@@ -335,6 +335,13 @@ The proof-bundle runner report classification that says whether generated
 fallback selection is `disabled`, `not_required`, `generated`, or `exhausted`.
 _Avoid_: inferring exhausted candidate pools from empty command tables alone
 
+**Fallback Exhaustion Blocker Summary**:
+The proof-bundle runner report evidence that names why an exhausted generated
+fallback pool has no remaining commands, such as pickup root-body alias gaps,
+target task-feasibility-blocked pairs, or source requests with no remaining
+candidate.
+_Avoid_: making reviewers infer next work from low-level filtered tables alone
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.

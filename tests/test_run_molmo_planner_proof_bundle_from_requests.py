@@ -530,6 +530,10 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert selection["fallback_required"] is True
     assert selection["prior_result_count"] == 3
     assert fallback["status"] == "exhausted"
+    assert {item["code"] for item in fallback["exhaustion_blockers"]} == {
+        "target_task_feasibility_blocked_pairs",
+        "no_fallback_candidate_available",
+    }
     assert fallback["discovered_alias_count"] == 1
     assert fallback["filtered_pair_count"] == 1
     assert fallback["filtered_pairs"][0]["object_alias"] == "book_beef_1_0_8"
@@ -537,6 +541,9 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Fallback status" in report
     assert "exhausted" in report
+    assert "Fallback Exhaustion Blockers" in report
+    assert "target_task_feasibility_blocked_pairs" in report
+    assert "no_fallback_candidate_available" in report
     assert "shelf_cafe_1_1_2" in report
     assert "prior_task_feasibility_blocked_pair" in report
 

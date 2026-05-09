@@ -153,6 +153,9 @@ Phase 70 lets the runner merge multiple prior proof-bundle manifests so older
 runtime alias discovery and newer failed-candidate memory are selected together.
 Phase 71 surfaces fallback exhaustion status so no-command generated fallback
 runs are visible as exhausted in the runner report and checker.
+Phase 72 summarizes why those exhausted fallback pools have no remaining
+commands, naming pickup root-body alias gaps, target task-feasibility-blocked
+pairs, and unavailable source requests directly in the runner report.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -249,6 +252,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.70 MolmoSpaces pickup root variant filter** - Phase 69 (completed 2026-05-10; object-side nonzero runtime variants are filtered before proof command generation)
 - ✅ **v1.71 MolmoSpaces prior proof evidence merge** - Phase 70 (completed 2026-05-10; multiple prior proof-bundle manifests merge alias discovery and failed-candidate memory before selection)
 - ✅ **v1.72 MolmoSpaces fallback exhaustion status** - Phase 71 (completed 2026-05-10; generated fallback selection reports exhausted no-command states in manifests and reports)
+- ✅ **v1.73 MolmoSpaces fallback exhaustion blockers** - Phase 72 (completed 2026-05-10; exhausted fallback reports name root-body alias, task-feasibility pair, and no-candidate blockers)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -336,6 +340,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 69: MolmoSpaces pickup root variant filter** - ADR-0060 filters object-side runtime aliases with nonzero variants before generating fallback proof commands. Completed 2026-05-10.
 - [x] **Phase 70: MolmoSpaces prior proof evidence merge** - ADR-0061 lets the proof-bundle runner merge multiple prior manifests so alias discovery and failed-candidate memory are consumed together. Completed 2026-05-10.
 - [x] **Phase 71: MolmoSpaces fallback exhaustion status** - ADR-0062 renders and checks generated fallback status, including exhausted no-command states. Completed 2026-05-10.
+- [x] **Phase 72: MolmoSpaces fallback exhaustion blockers** - ADR-0063 renders and checks blocker summaries for exhausted generated fallback pools. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
