@@ -357,6 +357,17 @@ def _assert_proof_result_summary(
             if value:
                 assert value in report_text, (key, report_text[:500])
         sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+        robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
+        if robot_placement_profile:
+            assert "Robot placement profile" in report_text, report_text[:500]
+            for key in ("profile",):
+                value = str(robot_placement_profile.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+            overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
+            max_tries = str(overrides.get("max_tries") or "")
+            if max_tries:
+                assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
         if sampler_adapter:
             assert "Exact sampler adapter applied" in report_text, report_text[:500]
             for key in ("planner_target_receptacle_id", "task_sampler_class"):

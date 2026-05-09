@@ -52,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         choices=("none", "low"),
         default="low",
     )
+    parser.add_argument(
+        "--task-sampler-robot-placement-profile",
+        choices=("none", "relaxed"),
+        default="none",
+    )
     parser.add_argument("--execute-probes", action="store_true")
     parser.add_argument(
         "--warmup-rby1m-curobo",
@@ -84,6 +89,7 @@ def main() -> None:
         renderer_device_id=args.renderer_device_id,
         torch_extensions_dir=args.torch_extensions_dir,
         rby1m_curobo_memory_profile=args.rby1m_curobo_memory_profile,
+        task_sampler_robot_placement_profile=args.task_sampler_robot_placement_profile,
         execute_probes=args.execute_probes,
         warmup_rby1m_curobo=args.warmup_rby1m_curobo,
         rerun_cleanup=args.rerun_cleanup,
@@ -120,6 +126,7 @@ def run_from_cleanup_result(
     renderer_device_id: int,
     torch_extensions_dir: Path | None,
     rby1m_curobo_memory_profile: str,
+    task_sampler_robot_placement_profile: str = "none",
     execute_probes: bool = False,
     warmup_rby1m_curobo: bool = False,
     rerun_cleanup: bool = False,
@@ -176,6 +183,7 @@ def run_from_cleanup_result(
         renderer_device_id=renderer_device_id,
         torch_extensions_dir=effective_torch_extensions_dir,
         rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         request_selection=proof_request_selection,
     )
     proof_results: list[Path] = []

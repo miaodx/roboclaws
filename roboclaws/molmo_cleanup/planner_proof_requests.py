@@ -117,6 +117,7 @@ def build_probe_commands(
     renderer_device_id: int = 0,
     torch_extensions_dir: Path | None = None,
     rby1m_curobo_memory_profile: str = "low",
+    task_sampler_robot_placement_profile: str = "none",
     request_selection: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     commands = []
@@ -144,6 +145,13 @@ def build_probe_commands(
             "--timeout-s",
             str(timeout_s),
         ]
+        if task_sampler_robot_placement_profile != "none":
+            command.extend(
+                [
+                    "--task-sampler-robot-placement-profile",
+                    task_sampler_robot_placement_profile,
+                ]
+            )
         if molmospaces_python is not None:
             command.extend(["--python-executable", str(molmospaces_python)])
         if molmospaces_root is not None:
@@ -1380,6 +1388,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     blockers = _blockers(evidence.get("blockers") or [])
     cleanup_binding_blockers = _blockers(evidence.get("cleanup_primitive_binding_blockers") or [])
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    task_sampler_robot_placement_profile = (
+        evidence.get("task_sampler_robot_placement_profile") or {}
+    )
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
     task_sampler_failure_diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
     requested_binding = evidence.get("requested_cleanup_primitive_binding") or {}
@@ -1411,6 +1422,7 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
             "stdout": _proof_artifact_path(base, artifacts, "stdout"),
             "stderr": _proof_artifact_path(base, artifacts, "stderr"),
             "cleanup_task_config": cleanup_task_config,
+            "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
             "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
             "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
             "requested_cleanup_primitive_binding": requested_binding,

@@ -161,6 +161,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_cleanup_binding_section(evidence)}
+    {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
     {_planner_probe_task_sampler_failure_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
@@ -1131,6 +1132,8 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     requested = item.get("requested_cleanup_primitive_binding") or {}
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
+    robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
+    robot_placement_overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
     task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
@@ -1150,6 +1153,9 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Robot placement profile", robot_placement_profile.get("profile", "")),
+        ("Robot placement profile applied", _yes_no(robot_placement_profile.get("applied"))),
+        ("place_robot_near max tries", robot_placement_overrides.get("max_tries", "")),
         ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
         ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
         ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
@@ -1381,6 +1387,61 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     )
 
 
+def _planner_probe_task_sampler_robot_placement_profile_section(evidence: dict[str, Any]) -> str:
+    profile = evidence.get("task_sampler_robot_placement_profile") or {}
+    if not profile:
+        return ""
+    before = profile.get("before") or {}
+    after = profile.get("after") or {}
+    overrides = profile.get("applied_overrides") or {}
+    place_overrides = profile.get("place_robot_near_overrides") or {}
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Profile', profile.get('profile', 'none'))}"
+        f"{_metric('Requested', _yes_no(profile.get('requested')))}"
+        f"{_metric('Applied', _yes_no(profile.get('applied')))}"
+        f"{_metric('place_robot_near max tries', place_overrides.get('max_tries', ''))}"
+        "</div>"
+    )
+    rows = [
+        ("Base pose radius before", before.get("base_pose_sampling_radius_range", "")),
+        ("Base pose radius after", after.get("base_pose_sampling_radius_range", "")),
+        ("Robot safety radius before", before.get("robot_safety_radius", "")),
+        ("Robot safety radius after", after.get("robot_safety_radius", "")),
+        ("Visibility check before", _yes_no(before.get("check_robot_placement_visibility"))),
+        ("Visibility check after", _yes_no(after.get("check_robot_placement_visibility"))),
+        ("Max placement attempts before", before.get("max_robot_placement_attempts", "")),
+        ("Max placement attempts after", after.get("max_robot_placement_attempts", "")),
+        ("Applied config overrides", overrides),
+        ("place_robot_near overrides", place_overrides),
+    ]
+    blockers = profile.get("blockers") or []
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    blocker_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th><th>Message</th></tr>'
+        f"</thead><tbody>{blocker_rows}</tbody></table></div>"
+        if blocker_rows
+        else ""
+    )
+    note = profile.get("evidence_note") or (
+        "Task sampler robot-placement profiles are probe-local mitigations. They do "
+        "not change the cleanup contract or count as planner-backed proof by themselves."
+    )
+    return (
+        '<section class="panel planner-probe-task-sampler-placement-profile">'
+        "<h2>Task Sampler Robot Placement Profile</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{_field_table(rows)}'
+        f"{blocker_table}</section>"
+    )
+
+
 def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str:
     diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
     if not diagnostics:
@@ -1388,6 +1449,7 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
     attempts = diagnostics.get("robot_placement_attempts") or []
     asset_failures = diagnostics.get("asset_failures") or []
     candidate_removals = diagnostics.get("candidate_removals") or []
+    place_robot_near_calls = diagnostics.get("place_robot_near_calls") or []
     config = diagnostics.get("robot_placement_config") or {}
     metrics = (
         '<div class="metric-grid">'
@@ -1404,6 +1466,10 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         ("Robot safety radius", config.get("robot_safety_radius", "")),
         ("Visibility check", _yes_no(config.get("check_robot_placement_visibility"))),
         ("Max robot placement attempts", config.get("max_robot_placement_attempts", "")),
+        (
+            "place_robot_near overrides",
+            diagnostics.get("place_robot_near_overrides") or "",
+        ),
     ]
     config_table = _field_table(config_rows)
     attempt_rows = "".join(
@@ -1438,7 +1504,19 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         for item in candidate_removals
         if isinstance(item, dict)
     )
+    call_rows = "".join(
+        _place_robot_near_call_row(item)
+        for item in place_robot_near_calls
+        if isinstance(item, dict)
+    )
     supporting_tables = ""
+    if call_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>#</th>'
+            "<th>Requested max tries</th><th>Effective max tries</th>"
+            "<th>Effective safety radius</th><th>Effective visibility</th><th>Result</th>"
+            f"</tr></thead><tbody>{call_rows}</tbody></table></div>"
+        )
     if asset_rows:
         supporting_tables += (
             '<div class="table-wrap"><table><thead><tr><th>Asset UID</th>'
@@ -1459,6 +1537,21 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         "<h2>Task Sampler Failure Diagnostics</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}{config_table}'
         f"{attempt_table}{supporting_tables}</section>"
+    )
+
+
+def _place_robot_near_call_row(item: dict[str, Any]) -> str:
+    requested = item.get("requested") or {}
+    effective = item.get("effective") or {}
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(item.get('call_index', '')))}</td>"
+        f"<td>{html.escape(str(requested.get('max_tries', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('max_tries', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('robot_safety_radius', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('check_camera_visibility', '')))}</td>"
+        f"<td>{html.escape(str(item.get('result', '')))}</td>"
+        "</tr>"
     )
 
 

@@ -29,6 +29,13 @@ _Avoid_: Oracle fixture map
 A public fixture pose used as an easier fallback when room-level hints make cleanup too unreliable.
 _Avoid_: Default landmark truth
 
+**Task Sampler Robot Placement Profile**:
+A probe-local set of placement-search overrides used to test whether an
+upstream MolmoSpaces sampled task is blocked by robot base-placement strictness.
+It must be rendered as mitigation evidence, not treated as cleanup success or
+planner-backed readiness.
+_Avoid_: Hidden sampler patch, proof success flag
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -667,3 +674,7 @@ _Avoid_: full cleanup replacement claim
   shows the current exact book/shelf task fails through repeated robot
   placement attempts for `Book_23`, not missing alias or sampler-adapter
   context.
+- Phase 78 added the Task Sampler Robot Placement Profile. The warmed local
+  report proves the relaxed profile affects the actual upstream
+  `place_robot_near` calls, but the exact `Book_23` request still fails after
+  17 effective `max_tries=50` placement attempts.

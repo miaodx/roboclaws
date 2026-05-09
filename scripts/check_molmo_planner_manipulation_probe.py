@@ -92,6 +92,19 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    robot_placement_profile = evidence.get("task_sampler_robot_placement_profile") or {}
+    if robot_placement_profile:
+        assert "Task Sampler Robot Placement Profile" in report_text, report_text[:500]
+        profile = str(robot_placement_profile.get("profile") or "")
+        if profile:
+            assert profile in report_text, (
+                "task_sampler_robot_placement_profile",
+                report_text[:500],
+            )
+        overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
+        max_tries = str(overrides.get("max_tries") or "")
+        if max_tries:
+            assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
     task_sampler_failure = evidence.get("task_sampler_failure_diagnostics") or {}
     if task_sampler_failure:
         assert "Task Sampler Failure Diagnostics" in report_text, report_text[:500]

@@ -119,6 +119,7 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
         molmospaces_python=None,
         molmospaces_root=None,
         torch_extensions_dir=Path("torch_ext"),
+        task_sampler_robot_placement_profile="relaxed",
     )
 
     assert len(commands) == 1
@@ -130,6 +131,8 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "pickup/body" in command
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
+    assert "--task-sampler-robot-placement-profile" in command
+    assert "relaxed" in command
     assert commands[0]["run_result"].endswith("run_result.json")
 
 
@@ -1032,6 +1035,12 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
                     },
+                    "task_sampler_robot_placement_profile": {
+                        "profile": "relaxed",
+                        "requested": True,
+                        "applied": True,
+                        "place_robot_near_overrides": {"max_tries": 50},
+                    },
                     "cleanup_task_sampler_adapter": {
                         "applied": True,
                         "task_sampler_class": "PickAndPlaceTaskSampler",
@@ -1093,6 +1102,11 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert result["blockers"][0]["code"] == "HouseInvalidForTask"
     assert result["cleanup_task_sampler_adapter"]["applied"] is True
     assert result["cleanup_task_sampler_adapter"]["planner_target_receptacle_id"] == "sink/body"
+    assert result["task_sampler_robot_placement_profile"]["profile"] == "relaxed"
+    assert (
+        result["task_sampler_robot_placement_profile"]["place_robot_near_overrides"]["max_tries"]
+        == 50
+    )
     assert result["task_sampler_failure_diagnostics"]["robot_placement_failure_count"] == 1
     assert (
         result["task_sampler_failure_diagnostics"]["last_robot_placement_failure"][

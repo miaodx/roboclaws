@@ -77,6 +77,7 @@ one decision per file, sequential numbering, explicit status.
 | [0066](0066-render-target-feasibility-blocker-matrix.md) | Render Target Feasibility Blocker Matrix | Accepted |
 | [0067](0067-preserve-task-sampler-exception-context.md) | Preserve Task Sampler Exception Context | Accepted |
 | [0068](0068-capture-task-sampler-failure-diagnostics.md) | Capture Task Sampler Failure Diagnostics | Accepted |
+| [0069](0069-add-task-sampler-robot-placement-profile.md) | Add Task Sampler Robot Placement Profile | Accepted |
 
 ## Adding a new ADR
 

@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 77 task-sampler failure diagnostics completed; next work is robot-placement feasibility mitigation for the exact book/shelf target-side blocker
+**Status:** Phase 78 task-sampler robot-placement profile completed; next work is deeper robot placement feasibility for the exact `Book_23` scene location
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -196,6 +196,12 @@ warmed local report renders `Task Sampler Failure Diagnostics` with 17
 robot-placement attempts, 17 asset failures for `Book_23`, and repeated
 `RobotPlacementError` for
 `book_be4d759484637aeb579b28e6a954b18d_1_0_8`.
+Phase 78 adds a visible task-sampler robot-placement profile. The warmed local
+report proves the relaxed profile changed the actual `place_robot_near` calls
+from requested `max_tries=10` to effective `max_tries=50`, with radius
+`[0.0, 1.2]`, safety radius `0.15`, and visibility disabled. The request still
+blocks with 17 placement failures, so the next blocker is deeper scene-level
+robot placement feasibility for `Book_23`, not hidden sampler defaults.
 
 ## Why This Exists
 

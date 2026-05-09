@@ -908,6 +908,12 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "planner_object_id": "pickup/body",
                         "planner_target_receptacle_id": "sink/body",
                     },
+                    "task_sampler_robot_placement_profile": {
+                        "profile": "relaxed",
+                        "requested": True,
+                        "applied": True,
+                        "place_robot_near_overrides": {"max_tries": 50},
+                    },
                     "cleanup_task_sampler_adapter": {
                         "applied": True,
                         "task_sampler_class": "PickAndPlaceTaskSampler",
@@ -987,6 +993,9 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "torch_extensions" in html
     assert "Task feasibility" in html
     assert "blocked" in html
+    assert "Robot placement profile" in html
+    assert "relaxed" in html
+    assert "place_robot_near max tries" in html
     assert "Exact sampler adapter applied" in html
     assert "Exact sampler adapter class" in html
     assert "PickAndPlaceTaskSampler" in html
@@ -1345,6 +1354,26 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "planner_object_id": "pickup/body",
         "planner_target_receptacle_id": "sink/body",
     }
+    run_result["manipulation_evidence"]["task_sampler_robot_placement_profile"] = {
+        "schema": "planner_probe_task_sampler_robot_placement_profile_v1",
+        "profile": "relaxed",
+        "requested": True,
+        "applied": True,
+        "before": {
+            "base_pose_sampling_radius_range": [0.0, 0.7],
+            "robot_safety_radius": 0.35,
+            "check_robot_placement_visibility": True,
+            "max_robot_placement_attempts": 10,
+        },
+        "after": {
+            "base_pose_sampling_radius_range": [0.0, 1.2],
+            "robot_safety_radius": 0.15,
+            "check_robot_placement_visibility": False,
+            "max_robot_placement_attempts": 50,
+        },
+        "applied_overrides": {"robot_safety_radius": 0.15},
+        "place_robot_near_overrides": {"max_tries": 50},
+    }
     run_result["manipulation_evidence"]["cleanup_task_sampler_adapter"] = {
         "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
         "applied": True,
@@ -1380,6 +1409,18 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             {
                 "asset_uid": "asset-book",
                 "reason": "robot placement failed",
+            }
+        ],
+        "place_robot_near_calls": [
+            {
+                "call_index": 1,
+                "requested": {"max_tries": 10},
+                "effective": {
+                    "max_tries": 50,
+                    "robot_safety_radius": 0.15,
+                    "check_camera_visibility": False,
+                },
+                "result": False,
             }
         ],
         "candidate_removals": [{"object_name": "pickup/body"}],
@@ -1423,11 +1464,15 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
     assert "Planner Probe Cleanup Binding" in html
+    assert "Task Sampler Robot Placement Profile" in html
+    assert "relaxed" in html
+    assert "place_robot_near max tries" in html
     assert "Exact task config applied" in html
     assert "Exact sampler adapter class" in html
     assert "PickAndPlaceTaskSampler" in html
     assert "Task Sampler Failure Diagnostics" in html
     assert "Placement failures" in html
+    assert "Effective max tries" in html
     assert "Failed to place robot near object: pickup/body" in html
     assert "asset-book" in html
     assert "pickup/body" in html

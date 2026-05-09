@@ -57,6 +57,7 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
         renderer_device_id=0,
         torch_extensions_dir=Path("torch_ext"),
         rby1m_curobo_memory_profile="low",
+        task_sampler_robot_placement_profile="relaxed",
     )
 
     manifest = result["manifest"]
@@ -76,6 +77,8 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "sink/body" in command
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
+    assert "--task-sampler-robot-placement-profile" in command
+    assert "relaxed" in command
     assert manifest["commands"][0]["report"].endswith("report.html")
     assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
     assert manifest["proof_result_summary"]["expected_count"] == 1

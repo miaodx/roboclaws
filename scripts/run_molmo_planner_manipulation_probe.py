@@ -68,6 +68,20 @@ CUROBO_LOW_MEMORY_PROFILE: dict[str, dict[str, Any]] = {
         "enable_finetune_trajopt": False,
     },
 }
+TASK_SAMPLER_RELAXED_ROBOT_PLACEMENT_PROFILE: dict[str, dict[str, Any]] = {
+    "task_sampler_config": {
+        "base_pose_sampling_radius_range": (0.0, 1.2),
+        "robot_safety_radius": 0.15,
+        "check_robot_placement_visibility": False,
+        "max_robot_placement_attempts": 50,
+    },
+    "place_robot_near_overrides": {
+        "max_tries": 50,
+        "sampling_radius_range": (0.0, 1.2),
+        "robot_safety_radius": 0.15,
+        "check_camera_visibility": False,
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -115,6 +129,16 @@ def parse_args() -> argparse.Namespace:
         choices=("none", "low"),
         default="none",
         help="Probe-local RBY1M/CuRobo memory profile. Default leaves upstream settings unchanged.",
+    )
+    parser.add_argument(
+        "--task-sampler-robot-placement-profile",
+        choices=("none", "relaxed"),
+        default="none",
+        help=(
+            "Probe-local task-sampler robot placement profile. The relaxed profile "
+            "widens sampling, lowers safety radius, disables visibility gating, and "
+            "overrides the actual place_robot_near max_tries call."
+        ),
     )
     parser.add_argument("--curobo-policy-batch-size", type=int, default=None)
     parser.add_argument("--curobo-max-batch-plan-attempts", type=int, default=None)
@@ -199,6 +223,7 @@ def main() -> None:
         renderer_device_id=args.renderer_device_id,
         torch_extensions_dir=args.torch_extensions_dir,
         rby1m_curobo_memory_profile=args.rby1m_curobo_memory_profile,
+        task_sampler_robot_placement_profile=args.task_sampler_robot_placement_profile,
         curobo_policy_batch_size=args.curobo_policy_batch_size,
         curobo_max_batch_plan_attempts=args.curobo_max_batch_plan_attempts,
         curobo_num_trajopt_seeds=args.curobo_num_trajopt_seeds,
@@ -236,6 +261,7 @@ def run_probe(
     renderer_device_id: int,
     torch_extensions_dir: Path | None,
     rby1m_curobo_memory_profile: str,
+    task_sampler_robot_placement_profile: str,
     curobo_policy_batch_size: int | None,
     curobo_max_batch_plan_attempts: int | None,
     curobo_num_trajopt_seeds: int | None,
@@ -308,6 +334,8 @@ def run_probe(
         str(steps),
         "--rby1m-curobo-memory-profile",
         rby1m_curobo_memory_profile,
+        "--task-sampler-robot-placement-profile",
+        task_sampler_robot_placement_profile,
     ]
     if torch_extensions_dir is not None:
         command.extend(["--torch-extensions-dir", str(torch_extensions_dir)])
@@ -456,6 +484,10 @@ def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "cleanup_task_config": _WORKER_EXCEPTION_CONTEXT.get("cleanup_task_config")
         or _cleanup_task_config_request_from_args(args),
+        "task_sampler_robot_placement_profile": _WORKER_EXCEPTION_CONTEXT.get(
+            "task_sampler_robot_placement_profile"
+        )
+        or _task_sampler_robot_placement_profile_request_from_args(args),
         "cleanup_task_sampler_adapter": _WORKER_EXCEPTION_CONTEXT.get(
             "cleanup_task_sampler_adapter"
         )
@@ -865,6 +897,95 @@ def _curobo_memory_profile_request(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _task_sampler_robot_placement_profile_request_from_args(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    profile = str(getattr(args, "task_sampler_robot_placement_profile", "none") or "none")
+    defaults = _task_sampler_robot_placement_profile_defaults(profile)
+    return {
+        "schema": "planner_probe_task_sampler_robot_placement_profile_v1",
+        "profile": profile,
+        "requested": profile != "none",
+        "applied": False,
+        "profile_defaults": _diagnostic_json_value(defaults),
+        "applied_overrides": {},
+        "place_robot_near_overrides": _diagnostic_json_value(
+            defaults.get("place_robot_near_overrides") or {}
+        ),
+        "evidence_note": (
+            "Probe-local robot-placement profile request. It is not a cleanup "
+            "contract change and does not promote planner-backed readiness by itself."
+        ),
+    }
+
+
+def _apply_task_sampler_robot_placement_profile(
+    config: Any,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    request = _task_sampler_robot_placement_profile_request_from_args(args)
+    sampler_config = getattr(config, "task_sampler_config", None)
+    before = _task_sampler_robot_placement_config_from_config(sampler_config)
+    profile = request["profile"]
+    defaults = _task_sampler_robot_placement_profile_defaults(profile)
+    config_overrides = dict(defaults.get("task_sampler_config") or {})
+    applied_overrides: dict[str, Any] = {}
+    if sampler_config is not None:
+        for name, value in config_overrides.items():
+            if hasattr(sampler_config, name):
+                setattr(sampler_config, name, value)
+                applied_overrides[name] = value
+    after = _task_sampler_robot_placement_config_from_config(sampler_config)
+    result = {
+        **request,
+        "applied": bool(applied_overrides or defaults.get("place_robot_near_overrides")),
+        "applied_overrides": _diagnostic_json_value(applied_overrides),
+        "place_robot_near_overrides": _diagnostic_json_value(
+            defaults.get("place_robot_near_overrides") or {}
+        ),
+        "before": before,
+        "after": after,
+        "evidence_note": (
+            "Probe-local task-sampler robot-placement mitigation. Config fields are "
+            "mutated before task-sampler construction and place_robot_near call "
+            "arguments are overridden inside the diagnostics adapter so upstream "
+            "hardcoded max_tries values remain visible."
+        ),
+    }
+    if profile != "none" and sampler_config is None:
+        result["blockers"] = [
+            {
+                "code": "task_sampler_config_missing",
+                "message": "Cannot apply task-sampler robot-placement profile without config.",
+            }
+        ]
+    return result
+
+
+def _task_sampler_robot_placement_profile_defaults(profile: str) -> dict[str, Any]:
+    if profile == "relaxed":
+        return TASK_SAMPLER_RELAXED_ROBOT_PLACEMENT_PROFILE
+    return {"task_sampler_config": {}, "place_robot_near_overrides": {}}
+
+
+def _task_sampler_robot_placement_config_from_config(sampler_config: Any) -> dict[str, Any]:
+    if sampler_config is None:
+        return {}
+    return {
+        field: _diagnostic_json_value(getattr(sampler_config, field))
+        for field in (
+            "base_pose_sampling_radius_range",
+            "robot_safety_radius",
+            "check_robot_placement_visibility",
+            "robot_object_z_offset",
+            "robot_object_z_offset_random_min",
+            "robot_object_z_offset_random_max",
+            "max_robot_placement_attempts",
+        )
+        if hasattr(sampler_config, field)
+    }
+
+
 def _explicit_curobo_memory_overrides(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
     policy: dict[str, Any] = {}
     planner: dict[str, Any] = {}
@@ -971,7 +1092,14 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
     config.profile = False
     config.use_wandb = False
     cleanup_task_config = _configure_exact_cleanup_task(config, args)
-    _record_worker_exception_context(cleanup_task_config=cleanup_task_config)
+    task_sampler_robot_placement_profile = _apply_task_sampler_robot_placement_profile(
+        config,
+        args,
+    )
+    _record_worker_exception_context(
+        cleanup_task_config=cleanup_task_config,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
+    )
     policy_cls = config.policy_config.policy_cls
     _emit_worker_event(
         "franka_policy_class_ready",
@@ -989,6 +1117,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
         "planner_class_available": True,
         "execution_attempted": False,
         "cleanup_task_config": cleanup_task_config,
+        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
     }
     if args.probe_mode == "execute":
         payload.update(
@@ -1001,6 +1130,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
                     renderer_device_id=args.renderer_device_id,
                 ),
                 requested_cleanup_binding=_requested_cleanup_primitive_binding(args),
+                task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
             )
         )
     return payload
@@ -1020,8 +1150,20 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
     config.use_wandb = False
     config.policy_config.server_urls = []
     cleanup_task_config = _configure_exact_cleanup_task(config, args)
-    _record_worker_exception_context(cleanup_task_config=cleanup_task_config)
+    task_sampler_robot_placement_profile = _apply_task_sampler_robot_placement_profile(
+        config,
+        args,
+    )
+    _record_worker_exception_context(
+        cleanup_task_config=cleanup_task_config,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
+    )
     curobo_memory_profile = _apply_rby1m_curobo_memory_profile(config, args)
+    _emit_worker_event(
+        "task_sampler_robot_placement_profile_ready",
+        stage="task_sampler_robot_placement_profile",
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
+    )
     _emit_worker_event(
         "rby1m_curobo_memory_profile_ready",
         stage="rby1m_curobo_memory_profile",
@@ -1045,6 +1187,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         "execution_attempted": False,
         "curobo_memory_profile": curobo_memory_profile,
         "cleanup_task_config": cleanup_task_config,
+        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
     }
     if args.probe_mode == "execute":
         _emit_worker_event("rby1m_execute_probe_start", stage="rby1m_execute")
@@ -1058,6 +1201,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
                     renderer_device_id=args.renderer_device_id,
                 ),
                 requested_cleanup_binding=_requested_cleanup_primitive_binding(args),
+                task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
             )
         )
         _emit_worker_event(
@@ -1077,6 +1221,7 @@ def _execute_policy_probe(
     *,
     renderer_device_id: int | None,
     requested_cleanup_binding: dict[str, Any],
+    task_sampler_robot_placement_profile: dict[str, Any],
 ) -> dict[str, Any]:
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
@@ -1094,10 +1239,14 @@ def _execute_policy_probe(
         task_sampler,
         requested_cleanup_binding,
     )
-    task_sampler_failure_diagnostics = _apply_task_sampler_failure_diagnostics_adapter(task_sampler)
+    task_sampler_failure_diagnostics = _apply_task_sampler_failure_diagnostics_adapter(
+        task_sampler,
+        task_sampler_robot_placement_profile,
+    )
     _record_worker_exception_context(
         cleanup_task_sampler_adapter=cleanup_task_sampler_adapter,
         requested_cleanup_primitive_binding=requested_cleanup_binding,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         task_sampler_failure_diagnostics=task_sampler_failure_diagnostics,
     )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
@@ -1174,6 +1323,7 @@ def _execute_policy_probe(
         "image_artifacts": image_artifacts,
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
         "renderer_adapter": renderer_adapter,
+        "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
         "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
         "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
         "sampled_task_binding": sampled_task_binding,
@@ -1335,14 +1485,24 @@ def _apply_exact_cleanup_task_sampler_adapter(
     }
 
 
-def _apply_task_sampler_failure_diagnostics_adapter(task_sampler: Any) -> dict[str, Any]:
+def _apply_task_sampler_failure_diagnostics_adapter(
+    task_sampler: Any,
+    robot_placement_profile: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    profile = robot_placement_profile or {}
     diagnostics: dict[str, Any] = {
         "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
         "applied": False,
         "task_sampler_class": type(task_sampler).__name__,
         "robot_placement_config": _task_sampler_robot_placement_config(task_sampler),
+        "robot_placement_profile": {
+            "profile": profile.get("profile", "none"),
+            "applied": bool(profile.get("applied")),
+        },
+        "place_robot_near_overrides": dict(profile.get("place_robot_near_overrides") or {}),
         "hooks": [],
         "robot_placement_attempts": [],
+        "place_robot_near_calls": [],
         "asset_failures": [],
         "candidate_removals": [],
     }
@@ -1352,6 +1512,11 @@ def _apply_task_sampler_failure_diagnostics_adapter(task_sampler: Any) -> dict[s
         def recording_sample_and_place_robot(self: Any, env: Any) -> Any:
             attempt = _task_sampler_robot_placement_attempt(self, env, diagnostics)
             started_at = time.monotonic()
+            restore_place_robot_near = _install_place_robot_near_profile_adapter(
+                env,
+                diagnostics,
+                profile,
+            )
             try:
                 result = sample_and_place_robot(env)
             except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
@@ -1367,6 +1532,7 @@ def _apply_task_sampler_failure_diagnostics_adapter(task_sampler: Any) -> dict[s
                 attempt["result"] = "placed"
                 return result
             finally:
+                restore_place_robot_near()
                 attempt["elapsed_s"] = round(time.monotonic() - started_at, 6)
                 diagnostics["robot_placement_attempts"].append(attempt)
                 _refresh_task_sampler_failure_diagnostics(diagnostics)
@@ -1413,6 +1579,74 @@ def _apply_task_sampler_failure_diagnostics_adapter(task_sampler: Any) -> dict[s
     diagnostics["applied"] = bool(diagnostics["hooks"])
     _refresh_task_sampler_failure_diagnostics(diagnostics)
     return diagnostics
+
+
+def _install_place_robot_near_profile_adapter(
+    env: Any,
+    diagnostics: dict[str, Any],
+    robot_placement_profile: dict[str, Any],
+) -> Any:
+    overrides = dict(robot_placement_profile.get("place_robot_near_overrides") or {})
+    if not overrides or not robot_placement_profile.get("applied"):
+        return lambda: None
+    original = getattr(env, "place_robot_near", None)
+    if not callable(original):
+        return lambda: None
+
+    def profiled_place_robot_near(*args: Any, **kwargs: Any) -> Any:
+        call = {
+            "call_index": len(diagnostics.get("place_robot_near_calls") or []) + 1,
+            "requested": _place_robot_near_call_values(kwargs),
+        }
+        effective_kwargs = dict(kwargs)
+        for name, value in overrides.items():
+            effective_kwargs[name] = value
+        call["effective"] = _place_robot_near_call_values(effective_kwargs)
+        started_at = time.monotonic()
+        try:
+            result = original(*args, **effective_kwargs)
+        except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+            call.update(
+                {
+                    "result": "exception",
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                }
+            )
+            raise
+        else:
+            call["result"] = _diagnostic_json_value(result)
+            return result
+        finally:
+            call["elapsed_s"] = round(time.monotonic() - started_at, 6)
+            diagnostics["place_robot_near_calls"].append(call)
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+    setattr(env, "place_robot_near", profiled_place_robot_near)
+
+    def restore() -> None:
+        setattr(env, "place_robot_near", original)
+
+    return restore
+
+
+def _place_robot_near_call_values(kwargs: dict[str, Any]) -> dict[str, Any]:
+    values = {}
+    for field in (
+        "max_tries",
+        "sampling_radius_range",
+        "robot_safety_radius",
+        "preserve_z",
+        "face_target",
+        "check_camera_visibility",
+    ):
+        if field in kwargs:
+            values[field] = _diagnostic_json_value(kwargs[field])
+    target = kwargs.get("target")
+    target_name = getattr(target, "name", None)
+    if target_name:
+        values["target_name"] = str(target_name)
+    return values
 
 
 def _task_sampler_robot_placement_config(task_sampler: Any) -> dict[str, Any]:
@@ -1467,10 +1701,16 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     failures = [item for item in attempts if item.get("result") == "failed"]
     diagnostics["robot_placement_attempt_count"] = len(attempts)
     diagnostics["robot_placement_failure_count"] = len(failures)
+    diagnostics["place_robot_near_call_count"] = len(
+        diagnostics.get("place_robot_near_calls") or []
+    )
     diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
     diagnostics["candidate_removal_count"] = len(diagnostics.get("candidate_removals") or [])
     if failures:
         diagnostics["last_robot_placement_failure"] = failures[-1]
+    place_robot_near_calls = diagnostics.get("place_robot_near_calls") or []
+    if place_robot_near_calls:
+        diagnostics["last_place_robot_near_call"] = place_robot_near_calls[-1]
 
 
 def _diagnostic_json_value(value: Any) -> Any:
@@ -1752,6 +1992,14 @@ def _write_probe_result(
         evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
     if worker_payload.get("cleanup_task_config"):
         evidence["cleanup_task_config"] = worker_payload["cleanup_task_config"]
+    task_sampler_robot_placement_profile = worker_payload.get(
+        "task_sampler_robot_placement_profile"
+    )
+    if task_sampler_robot_placement_profile and (
+        task_sampler_robot_placement_profile.get("requested")
+        or task_sampler_robot_placement_profile.get("applied")
+    ):
+        evidence["task_sampler_robot_placement_profile"] = task_sampler_robot_placement_profile
     if worker_payload.get("cleanup_task_sampler_adapter"):
         evidence["cleanup_task_sampler_adapter"] = worker_payload["cleanup_task_sampler_adapter"]
     if worker_payload.get("task_sampler_failure_diagnostics"):
