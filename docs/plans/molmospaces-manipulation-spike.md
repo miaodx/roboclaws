@@ -875,9 +875,8 @@ completed:
   gsd-execute-phase 51-molmospaces-planner-proof-bundle-runner-harness
   gsd-verify-work 51-molmospaces-planner-proof-bundle-runner-harness
   gsd-plan-phase 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
-
-in progress:
   gsd-execute-phase 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
+  gsd-verify-work 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
 
 next pipeline candidates:
   plan actual planner-backed cleanup-loop primitive replacement after proof-bundle handoff
