@@ -8,15 +8,15 @@ subphase vocabulary.
 
 ## Status
 
-Planned 2026-05-10.
+Completed 2026-05-10.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Refactor current-contract MCP smoke to call `run_semantic_cleanup_loop`.
-3. [ ] Refactor ADR-0003 MCP smoke to call `run_semantic_cleanup_loop`.
-4. [ ] Add focused tests that prove both smoke scripts use the shared loop seam.
-5. [ ] Run focused verification gates.
+2. [x] Refactor current-contract MCP smoke to call `run_semantic_cleanup_loop`.
+3. [x] Refactor ADR-0003 MCP smoke to call `run_semantic_cleanup_loop`.
+4. [x] Add focused tests that prove both smoke scripts use the shared loop seam.
+5. [x] Run focused verification gates.
 
 ## Acceptance
 
@@ -34,6 +34,17 @@ Planned 2026-05-10.
 - `uv run ruff check scripts/run_molmo_agent_bridge_smoke.py scripts/run_molmo_realworld_agent_mcp_smoke.py tests/test_molmo_mcp_smoke_shared_semantic_loop.py`
 - `uv run ruff format --check scripts/run_molmo_agent_bridge_smoke.py scripts/run_molmo_realworld_agent_mcp_smoke.py tests/test_molmo_mcp_smoke_shared_semantic_loop.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_mcp_smoke_shared_semantic_loop.py tests/test_molmo_semantic_cleanup_loop.py tests/test_verify_just_recipes.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_agent_bridge_result.py tests/test_check_molmo_realworld_cleanup_result.py`
+
+## Completion Notes
+
+- `scripts/run_molmo_agent_bridge_smoke.py` now builds cleanup targets from the
+  public current-contract plan and executes them through `run_semantic_cleanup_loop`
+  with `include_object_done=True`.
+- `scripts/run_molmo_realworld_agent_mcp_smoke.py` now uses the same loop with
+  ADR-0003 fixture-style requests and no `object_done`.
+- `tests/test_molmo_mcp_smoke_shared_semantic_loop.py` monkeypatches the loop seam
+  to catch future hand-written smoke-loop regressions.
 
 ## Risks
 

@@ -23,6 +23,9 @@ from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
     make_molmo_realworld_cleanup_mcp,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+    run_semantic_cleanup_loop,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -139,19 +142,52 @@ def _drive_public_sweep(server: Any, *, policy: str) -> None:
 
 def _clean_handle(server: Any, *, handle: str, fixture: dict[str, Any]) -> None:
     fixture_id = str(fixture["fixture_id"])
-    server.call_tool("navigate_to_object", object_id=handle)
-    server.call_tool("pick", object_id=handle)
-    server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)
-    if _requires_inside_place(fixture):
-        server.call_tool("open_receptacle", fixture_id=fixture_id)
-        server.call_tool("place_inside", fixture_id=fixture_id)
-    else:
-        server.call_tool("place", fixture_id=fixture_id)
+    run_semantic_cleanup_loop(
+        targets=[
+            {
+                "object_id": handle,
+                "target_receptacle_id": fixture_id,
+                "target_receptacle": fixture,
+            }
+        ],
+        contract=_RealWorldMcpLoop(server),
+        call_tool=_invoke_shared_loop_tool,
+        target_request_key="fixture_id",
+        include_object_done=False,
+        include_object_id_in_receptacle_request=False,
+        include_object_id_in_target_requests=False,
+    )
 
 
-def _requires_inside_place(fixture: dict[str, Any]) -> bool:
-    text = f"{fixture.get('category', '')} {fixture.get('name', '')}".lower()
-    return "fridge" in text or "refrigerator" in text
+def _invoke_shared_loop_tool(
+    _tool: str,
+    _request: dict[str, Any],
+    fn: Any,
+) -> dict[str, Any]:
+    return fn()
+
+
+class _RealWorldMcpLoop:
+    def __init__(self, server: Any) -> None:
+        self._server = server
+
+    def navigate_to_object(self, object_id: str) -> dict[str, Any]:
+        return self._server.call_tool("navigate_to_object", object_id=object_id)
+
+    def pick(self, object_id: str) -> dict[str, Any]:
+        return self._server.call_tool("pick", object_id=object_id)
+
+    def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("navigate_to_receptacle", fixture_id=receptacle_id)
+
+    def open_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("open_receptacle", fixture_id=receptacle_id)
+
+    def place(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("place", fixture_id=receptacle_id)
+
+    def place_inside(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("place_inside", fixture_id=receptacle_id)
 
 
 def main(argv: list[str] | None = None) -> int:

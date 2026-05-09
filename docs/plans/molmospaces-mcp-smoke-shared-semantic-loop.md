@@ -1,6 +1,6 @@
 # MolmoSpaces MCP Smoke Shared Semantic Loop
 
-**Status:** Planned for GSD Phase 50 on 2026-05-10
+**Status:** Completed in GSD Phase 50 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0027, ADR-0036, ADR-0041, user visual-parity review
 **Workflow:** `hybrid-phase-pipeline`
@@ -50,4 +50,7 @@ This phase should:
 
 ## Completion
 
-Pending Phase 50 implementation.
+Phase 50 refactored the current-contract MCP bridge smoke and ADR-0003 MCP smoke
+to reuse `run_semantic_cleanup_loop`. Focused tests now monkeypatch that seam and
+assert the current-contract smoke keeps `object_done`, while the ADR-0003 smoke
+keeps fixture-style target requests and no `object_done`.

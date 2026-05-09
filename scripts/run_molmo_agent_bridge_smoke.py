@@ -16,6 +16,9 @@ from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noq
 from roboclaws.molmo_cleanup.mcp_server import make_molmo_cleanup_mcp  # noqa: E402
 from roboclaws.molmo_cleanup.policy import build_public_cleanup_plan  # noqa: E402
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+    run_semantic_cleanup_loop,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -92,18 +95,7 @@ def run_smoke(
         actions = build_public_cleanup_plan(task_prompt=task, scene_payload=scene_objects)[
             :restore_count
         ]
-        for action in actions:
-            object_id = action.object_id
-            receptacle_id = action.receptacle_id
-            server.call_tool("navigate_to_object", object_id=object_id)
-            server.call_tool("pick", object_id=object_id)
-            server.call_tool("navigate_to_receptacle", receptacle_id=receptacle_id)
-            if _requires_inside_place(scene_objects, receptacle_id):
-                server.call_tool("open_receptacle", receptacle_id=receptacle_id)
-                server.call_tool("place_inside", receptacle_id=receptacle_id)
-            else:
-                server.call_tool("place", receptacle_id=receptacle_id)
-            server.call_tool("object_done", object_id=object_id, receptacle_id=receptacle_id)
+        _run_current_contract_cleanup_loop(server, scene_objects, actions)
         done = server.call_tool("done", reason=f"{policy} cleanup complete")
     finally:
         server.close()
@@ -112,17 +104,73 @@ def run_smoke(
     return json.loads(run_result_path.read_text(encoding="utf-8"))
 
 
-def _requires_inside_place(scene_objects: dict[str, Any], receptacle_id: str) -> bool:
-    receptacle = next(
-        (
-            item
-            for item in scene_objects.get("receptacles", [])
-            if item.get("receptacle_id") == receptacle_id
-        ),
-        {},
+def _run_current_contract_cleanup_loop(
+    server: Any,
+    scene_objects: dict[str, Any],
+    actions: list[Any],
+) -> None:
+    receptacles = _receptacles_by_id(scene_objects)
+    targets = [
+        {
+            "object_id": action.object_id,
+            "target_receptacle_id": action.receptacle_id,
+            "target_receptacle": receptacles.get(action.receptacle_id, {}),
+        }
+        for action in actions
+    ]
+    run_semantic_cleanup_loop(
+        targets=targets,
+        contract=_CurrentContractMcpLoop(server),
+        call_tool=_invoke_shared_loop_tool,
+        receptacles_by_id=receptacles,
+        include_object_done=True,
     )
-    name = str(receptacle.get("name", "")).lower()
-    return "fridge" in name or "refrigerator" in name
+
+
+def _receptacles_by_id(scene_objects: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(item["receptacle_id"]): dict(item)
+        for item in scene_objects.get("receptacles", [])
+        if item.get("receptacle_id")
+    }
+
+
+def _invoke_shared_loop_tool(
+    _tool: str,
+    _request: dict[str, Any],
+    fn: Any,
+) -> dict[str, Any]:
+    return fn()
+
+
+class _CurrentContractMcpLoop:
+    def __init__(self, server: Any) -> None:
+        self._server = server
+
+    def navigate_to_object(self, object_id: str) -> dict[str, Any]:
+        return self._server.call_tool("navigate_to_object", object_id=object_id)
+
+    def pick(self, object_id: str) -> dict[str, Any]:
+        return self._server.call_tool("pick", object_id=object_id)
+
+    def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("navigate_to_receptacle", receptacle_id=receptacle_id)
+
+    def open_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("open_receptacle", receptacle_id=receptacle_id)
+
+    def place(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("place", receptacle_id=receptacle_id)
+
+    def place_inside(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("place_inside", receptacle_id=receptacle_id)
+
+    def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool(
+            "object_done",
+            object_id=object_id,
+            receptacle_id=receptacle_id,
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

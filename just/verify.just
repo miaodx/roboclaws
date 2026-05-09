@@ -134,6 +134,7 @@ molmo-agent-bridge:
       tests/test_molmo_cleanup_semantic_acceptability.py \
       tests/test_molmo_cleanup_agent_server.py \
       tests/test_check_molmo_agent_bridge_result.py \
+      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
       tests/test_molmo_cleanup_report.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-agent-bridge
@@ -174,6 +175,7 @@ molmo-realworld-agent-mcp generated_mess_count="10":
     {{standalone_pytest}} -q \
       tests/test_molmo_realworld_mcp_server.py \
       tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-realworld-agent-mcp "1" "output/molmo-realworld-agent-mcp-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 

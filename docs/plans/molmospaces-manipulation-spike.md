@@ -865,9 +865,8 @@ completed:
   gsd-execute-phase 37-molmospaces-planner-cleanup-bridge-readiness
   gsd-verify-work 37-molmospaces-planner-cleanup-bridge-readiness
   gsd-plan-phase 50-molmospaces-mcp-smoke-shared-semantic-loop
-
-in progress:
   gsd-execute-phase 50-molmospaces-mcp-smoke-shared-semantic-loop
+  gsd-verify-work 50-molmospaces-mcp-smoke-shared-semantic-loop
 
 next pipeline candidates:
   run the proof-bundle runner harness after smoke-loop reuse is verified
