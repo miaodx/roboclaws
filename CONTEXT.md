@@ -42,6 +42,12 @@ actual upstream robot-placement target, including valid free-point counts,
 nearest free-point distance, and radius-band counts.
 _Avoid_: hidden planner fix, success proof
 
+**Wide Placement Profile**:
+A probe-local robot-placement mitigation profile that extends placement search
+to `[0.0, 2.0]m` and raises the effective upstream `place_robot_near` budget to
+100 tries. It is evidence for task-feasibility diagnosis, not cleanup success.
+_Avoid_: production placement policy, readiness proof
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -688,3 +694,7 @@ _Avoid_: full cleanup replacement claim
   exact `Book_23` request has low local free space: 2,231 valid free map points
   in the `[0.0, 1.2]m` annulus, a 0.012326 free-space fraction, no free points
   within 1.0m, and the nearest free point at 1.111824m.
+- Phase 80 added the Wide Placement Profile. The warmed local report shows the
+  exact `Book_23` request now clears robot placement with 17/17 successful
+  `place_robot_near` calls at effective `max_tries=100`, but still ends in
+  `HouseInvalidForTask` after downstream candidate removals.

@@ -375,6 +375,28 @@ def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_c
     assert call["effective"]["check_camera_visibility"] is False
 
 
+def test_runner_wide_task_sampler_profile_extends_radius_and_max_tries() -> None:
+    runner = _load_runner_module()
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 0.7)
+        robot_safety_radius = 0.35
+        check_robot_placement_visibility = True
+        max_robot_placement_attempts = 10
+
+    config = SimpleNamespace(task_sampler_config=FakeSamplerConfig())
+    args = SimpleNamespace(task_sampler_robot_placement_profile="wide")
+
+    profile = runner._apply_task_sampler_robot_placement_profile(config, args)
+
+    assert profile["applied"] is True
+    assert profile["profile"] == "wide"
+    assert profile["after"]["base_pose_sampling_radius_range"] == [0.0, 2.0]
+    assert profile["after"]["max_robot_placement_attempts"] == 100
+    assert profile["place_robot_near_overrides"]["max_tries"] == 100
+    assert profile["place_robot_near_overrides"]["sampling_radius_range"] == [0.0, 2.0]
+
+
 def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() -> None:
     import numpy as np
 

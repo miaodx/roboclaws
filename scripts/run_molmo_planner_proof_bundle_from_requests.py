@@ -54,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task-sampler-robot-placement-profile",
-        choices=("none", "relaxed"),
+        choices=("none", "relaxed", "wide"),
         default="none",
     )
     parser.add_argument("--execute-probes", action="store_true")

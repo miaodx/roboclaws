@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 79 placement scene diagnostics completed; next work is choosing the mitigation for low free space around exact `Book_23`
+**Status:** Phase 80 wide placement profile completed; next work is post-placement candidate rejection diagnostics for exact `Book_23`
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -206,6 +206,10 @@ Phase 79 adds placement scene diagnostics. The warmed local report now shows
 that exact `Book_23` has low local free space: 2,231 valid free map points in
 the `[0.0, 1.2]m` sampling annulus, a 0.012326 free-space fraction, no free
 points within 1.0m, and a nearest free point 1.111824m away.
+Phase 80 adds a wide placement profile using radius `[0.0, 2.0]` and effective
+`place_robot_near(max_tries=100)`. The warmed local report shows robot
+placement now succeeds on all 17 attempts with zero placement failures, but the
+task still ends in `HouseInvalidForTask` after downstream candidate removals.
 
 ## Why This Exists
 

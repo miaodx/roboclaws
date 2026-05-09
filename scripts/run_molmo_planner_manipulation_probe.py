@@ -82,6 +82,20 @@ TASK_SAMPLER_RELAXED_ROBOT_PLACEMENT_PROFILE: dict[str, dict[str, Any]] = {
         "check_camera_visibility": False,
     },
 }
+TASK_SAMPLER_WIDE_ROBOT_PLACEMENT_PROFILE: dict[str, dict[str, Any]] = {
+    "task_sampler_config": {
+        "base_pose_sampling_radius_range": (0.0, 2.0),
+        "robot_safety_radius": 0.15,
+        "check_robot_placement_visibility": False,
+        "max_robot_placement_attempts": 100,
+    },
+    "place_robot_near_overrides": {
+        "max_tries": 100,
+        "sampling_radius_range": (0.0, 2.0),
+        "robot_safety_radius": 0.15,
+        "check_camera_visibility": False,
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -132,12 +146,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--task-sampler-robot-placement-profile",
-        choices=("none", "relaxed"),
+        choices=("none", "relaxed", "wide"),
         default="none",
         help=(
-            "Probe-local task-sampler robot placement profile. The relaxed profile "
-            "widens sampling, lowers safety radius, disables visibility gating, and "
-            "overrides the actual place_robot_near max_tries call."
+            "Probe-local task-sampler robot placement profile. Non-default profiles "
+            "widen sampling, lower safety radius, disable visibility gating, and "
+            "override the actual place_robot_near max_tries call."
         ),
     )
     parser.add_argument("--curobo-policy-batch-size", type=int, default=None)
@@ -965,6 +979,8 @@ def _apply_task_sampler_robot_placement_profile(
 def _task_sampler_robot_placement_profile_defaults(profile: str) -> dict[str, Any]:
     if profile == "relaxed":
         return TASK_SAMPLER_RELAXED_ROBOT_PLACEMENT_PROFILE
+    if profile == "wide":
+        return TASK_SAMPLER_WIDE_ROBOT_PLACEMENT_PROFILE
     return {"task_sampler_config": {}, "place_robot_near_overrides": {}}
 
 
