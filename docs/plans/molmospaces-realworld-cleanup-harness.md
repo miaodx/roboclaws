@@ -1,10 +1,48 @@
 # MolmoSpaces Real-World-Style Cleanup Harness
 
-**Status:** Draft
+**Status:** Implemented 2026-05-09 under GSD Phase 14
 **Created:** 2026-05-08
 **Source:** `grill-with-docs` discussion, `CONTEXT.md`, ADR-0003
-**Workflow intent:** Source planning doc first; ingest into GSD only after this
-shape is accepted as the next executable phase.
+**Workflow result:** Source planning doc accepted for execution via the
+`hybrid-phase-pipeline` route, then implemented under
+`.planning/phases/14-molmospaces-realworld-cleanup-harness/`.
+
+## Implementation Result
+
+Implemented under GSD Phase 14:
+`.planning/phases/14-molmospaces-realworld-cleanup-harness/`.
+
+Shipped ADR-0003 harness artifacts:
+
+- `roboclaws/molmo_cleanup/realworld_contract.py`
+- `roboclaws/molmo_cleanup/semantic_timeline.py`
+- `examples/molmospaces_realworld_cleanup.py`
+- `scripts/check_molmo_realworld_cleanup_result.py`
+- `just harness::molmo-realworld-cleanup`
+- `just verify::molmo-realworld-cleanup`
+
+Local evidence from 2026-05-09:
+
+| Gate | Artifact | Result |
+| --- | --- | --- |
+| Focused synthetic tests | `tests/test_molmo_realworld_contract.py`, `tests/test_molmospaces_realworld_cleanup.py`, `tests/test_check_molmo_realworld_cleanup_result.py` | 20 focused Molmo tests passed with related report/current-contract regressions. |
+| Real MolmoSpaces three-seed harness | `output/molmo-realworld-cleanup-harness/seed-{1,2,3}/run_result.json` | Checker passed all 3 runs with `contract=realworld_cleanup_v1`, `policy_uses_private_truth=false`, `fixture_hint_mode=room_only`, `mess_restoration_rate=0.8`, `sweep_coverage_rate=1.0`, and `disturbance_count=0`. |
+| Visual report parity | `output/molmo-realworld-cleanup-harness/seed-1/report.html` | Seed 1 now includes the shared `Robot View Timeline` visual report surface: 23 robot timeline steps and 92 FPV/chase/map/verification PNGs. Object rows use the same semantic shape as the bridge report: `navigate_to_object -> pick -> navigate_to_receptacle -> open_receptacle? -> place/place_inside`, while preserving the separated `Agent View` and `Private Evaluation` sections. |
+
+This first implementation slice keeps `generated_mess_count=5`, inherited from
+the existing fixed MolmoSpaces target selector, rather than expanding to 10-20
+objects. The ADR-0003 boundary is nevertheless implemented: the Agent View no
+longer receives the Generated Mess Set, hidden target count, acceptable
+destination sets, `is_misplaced` labels, or a global movable-object inventory.
+The private scorer data appears only in post-run `private_evaluation` artifacts
+and the report's Private Evaluation section.
+
+Architecture note: current-contract bridge artifacts and ADR-0003 harness
+artifacts intentionally keep separate public contracts, but share the same
+semantic timeline/report underlay in `roboclaws/molmo_cleanup/semantic_timeline.py`.
+That keeps the bridge's `object_done` readback extension separate from
+ADR-0003's observed-handle contract without maintaining two report-phase
+implementations.
 
 ## Problem
 

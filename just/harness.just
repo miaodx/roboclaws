@@ -12,6 +12,7 @@
 # - just harness::molmo-robot-visual  real MolmoSpaces/RBY1M visual artifact
 # - just harness::molmo-agent-bridge  Molmo cleanup MCP bridge smoke + comparison
 # - just harness::molmo-agent-bridge-visual  Molmo cleanup MCP bridge visual smoke + comparison
+# - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -242,6 +243,35 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --require-semantic-acceptability \
       --compare-rule-result "{{rule_dir}}/run_result.json" \
       "{{output_dir}}/run_result.json"
+
+# ADR-0003 real-world-style cleanup harness. The default runs the real
+# MolmoSpaces subprocess backend over three mess seeds, with the agent limited
+# to metric map, room-level fixture hints, and robot-local observed handles.
+# It also records RBY1M robot views so report.html has the same review surface
+# as the current-contract visual bridge report.
+molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup-harness" task="帮我收拾这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    for seed in {{seeds}}; do
+      run_dir="{{output_dir}}/seed-${seed}"
+      .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+        --seed "${seed}" \
+        --backend molmospaces_subprocess \
+        --task "{{task}}" \
+        --fixture-hint-mode room_only \
+        --include-robot \
+        --robot-name rby1m \
+        --record-robot-views \
+        --output-dir "${run_dir}"
+    done
+    seed_csv="$(printf '%s' "{{seeds}}" | tr ' ' ',')"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-seeds "${seed_csv}" \
+      --require-robot-views \
+      "{{output_dir}}"
 
 # List task files available under harness/tasks/.
 list-tasks:

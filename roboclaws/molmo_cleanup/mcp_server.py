@@ -31,6 +31,16 @@ from roboclaws.molmo_cleanup.scenario import (
 from roboclaws.molmo_cleanup.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+    ROBOT_VIEW_VARIANT,
+    cleanup_plan_from_semantic_substeps,
+    primitive_provenance_counts,
+    record_robot_view_step,
+    robot_view_capture_for_tool,
+    semantic_diagnostics,
+    semantic_substeps,
+)
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 __all__ = ["MolmoCleanupMCPServer", "make_molmo_cleanup_mcp"]
@@ -41,9 +51,8 @@ STARTUP_TIMEOUT_S = 2.0
 CURRENT_CONTRACT = "current_contract"
 MCP_SERVER_NAME = "molmo_cleanup"
 GLOBAL_SCENE_OBJECTS_SHORTCUT = "global_scene_objects"
-SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place-object_done"
+SEMANTIC_LOOP_VARIANT = CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT
 AGENT_POLICIES = {"codex_agent", "claude_code_agent", "openclaw_agent", "manual_agent"}
-ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"
 
 
 def make_molmo_cleanup_mcp(
@@ -282,15 +291,15 @@ class MolmoCleanupMCPServer:
         after_snapshot = self._write_snapshot("after.png", title="After cleanup")
         self._record_robot_view("after", label_suffix="after")
         trace_events = self._read_trace_events()
-        semantic_substeps = _semantic_substeps(trace_events, self._receptacles_by_id())
-        cleanup_plan = _cleanup_plan_from_semantic_substeps(semantic_substeps)
+        substeps = semantic_substeps(trace_events, self._receptacles_by_id())
+        cleanup_plan = cleanup_plan_from_semantic_substeps(substeps)
         annotated_score = annotate_score_with_semantic_acceptability(
             done_response["score"],
             self.scenario,
         )
         done_response = {**done_response, "score": annotated_score}
-        diagnostics = _bridge_diagnostics(trace_events, semantic_substeps, done_response)
-        primitive_counts = _primitive_provenance_counts(trace_events)
+        diagnostics = semantic_diagnostics(trace_events, substeps, done_response)
+        primitive_counts = primitive_provenance_counts(trace_events)
         run_result = {
             "backend": _backend_name(self.contract.backend),
             "scenario_id": self.scenario.scenario_id,
@@ -317,7 +326,7 @@ class MolmoCleanupMCPServer:
             "mcp_server": MCP_SERVER_NAME,
             "cleanup_plan": cleanup_plan,
             "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
-            "semantic_substeps": semantic_substeps,
+            "semantic_substeps": substeps,
             "score": done_response["score"],
             "final_locations": done_response["final_locations"],
             "final_containment": done_response.get("final_containment", {}),
@@ -438,7 +447,7 @@ class MolmoCleanupMCPServer:
     ) -> None:
         if not self.record_robot_views or not response.get("ok"):
             return
-        capture = _robot_view_capture_for_tool(tool, request, response)
+        capture = robot_view_capture_for_tool(tool, request, response)
         if capture is None:
             return
         self._record_robot_view(
@@ -463,29 +472,16 @@ class MolmoCleanupMCPServer:
         writer = getattr(self.contract.backend, "write_robot_views", None)
         if not callable(writer):
             raise RuntimeError("robot view capture requires backend.write_robot_views")
-        label = f"{self._robot_view_index:04d}_{label_suffix}"
-        self._robot_view_index += 1
-        result = writer(
-            self.run_dir / "robot_views",
-            label=label,
+        self._robot_view_index = record_robot_view_step(
+            steps=self.robot_view_steps,
+            backend=self.contract.backend,
+            output_dir=self.run_dir,
+            index=self._robot_view_index,
+            action=action,
+            label_suffix=label_suffix,
             focus_object_id=focus_object_id,
             focus_receptacle_id=focus_receptacle_id,
-        )
-        if not result.get("ok"):
-            raise RuntimeError(f"robot view capture failed: {result}")
-        self.robot_view_steps.append(
-            {
-                "label": label,
-                "action": action,
-                "robot_pose": result.get("robot_pose"),
-                "robot_trajectory_count": len(result.get("robot_trajectory", [])),
-                "view_variant": result.get("view_variant"),
-                "view_provenance": result.get("view_provenance"),
-                "focus": result.get("focus"),
-                "semantic_phase": semantic_phase,
-                "room_outline_count": result.get("room_outline_count"),
-                "views": _relative_view_paths(self.run_dir, result["views"]),
-            }
+            semantic_phase=semantic_phase,
         )
 
     def _write_tool_request(self, tool: str, request: dict[str, Any]) -> None:
@@ -573,100 +569,6 @@ def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> N
         run_result["robot_name"] = robot.get("robot_name")
 
 
-def _robot_view_capture_for_tool(
-    tool: str,
-    request: dict[str, Any],
-    response: dict[str, Any],
-) -> dict[str, str | None] | None:
-    if tool == "observe":
-        return {
-            "action": "observe",
-            "label_suffix": "observe",
-            "focus_object_id": None,
-            "focus_receptacle_id": None,
-            "semantic_phase": None,
-        }
-    if tool == "scene_objects":
-        return {
-            "action": "scene_objects",
-            "label_suffix": "scene_objects",
-            "focus_object_id": None,
-            "focus_receptacle_id": None,
-            "semantic_phase": None,
-        }
-    if tool == "navigate_to_object":
-        object_id = _optional_str(response.get("object_id") or request.get("object_id"))
-        return {
-            "action": f"navigate_to_object {object_id}",
-            "label_suffix": _label_suffix("navigate_object", object_id),
-            "focus_object_id": object_id,
-            "focus_receptacle_id": _optional_str(
-                response.get("source_receptacle_id") or response.get("location_id")
-            ),
-            "semantic_phase": "navigate_to_object",
-        }
-    if tool == "pick":
-        object_id = _optional_str(response.get("object_id") or request.get("object_id"))
-        return {
-            "action": f"pick {object_id}",
-            "label_suffix": _label_suffix("pick", object_id),
-            "focus_object_id": object_id,
-            "focus_receptacle_id": _optional_str(
-                response.get("previous_location_id") or response.get("source_receptacle_id")
-            ),
-            "semantic_phase": "pick",
-        }
-    if tool == "navigate_to_receptacle":
-        object_id = _optional_str(response.get("object_id"))
-        receptacle_id = _optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
-        return {
-            "action": f"navigate_to_receptacle {receptacle_id}",
-            "label_suffix": _label_suffix("navigate_receptacle", receptacle_id),
-            "focus_object_id": object_id,
-            "focus_receptacle_id": receptacle_id,
-            "semantic_phase": "navigate_to_receptacle",
-        }
-    if tool == "open_receptacle":
-        object_id = _optional_str(response.get("object_id"))
-        receptacle_id = _optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
-        return {
-            "action": f"open_receptacle {receptacle_id}",
-            "label_suffix": _label_suffix("open_receptacle", receptacle_id),
-            "focus_object_id": object_id,
-            "focus_receptacle_id": receptacle_id,
-            "semantic_phase": "open_receptacle",
-        }
-    if tool in {"place", "place_inside"}:
-        object_id = _optional_str(response.get("object_id"))
-        receptacle_id = _optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
-        return {
-            "action": f"{tool} {object_id}",
-            "label_suffix": _label_suffix(tool, object_id),
-            "focus_object_id": object_id,
-            "focus_receptacle_id": receptacle_id,
-            "semantic_phase": tool,
-        }
-    return None
-
-
-def _label_suffix(prefix: str, value: str | None) -> str:
-    if not value:
-        return prefix
-    safe_value = "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)
-    return f"{prefix}_{safe_value}"
-
-
-def _relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:
-    relative = {}
-    for key, value in views.items():
-        path = Path(value)
-        try:
-            relative[key] = str(path.relative_to(output_dir))
-        except ValueError:
-            relative[key] = str(path)
-    return relative
-
-
 def _startup_probe_host(host: str) -> str:
     return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
 
@@ -677,181 +579,3 @@ def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
             return True
     except OSError:
         return False
-
-
-def _semantic_substeps(
-    trace_events: list[dict[str, Any]],
-    receptacles_by_id: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    steps_by_object: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    active_object_id: str | None = None
-
-    for event in trace_events:
-        if event.get("event") != "response":
-            continue
-        tool = str(event.get("tool", ""))
-        if tool not in {
-            "navigate_to_object",
-            "pick",
-            "navigate_to_receptacle",
-            "open_receptacle",
-            "place",
-            "place_inside",
-            "object_done",
-        }:
-            continue
-        response = event.get("response")
-        if not isinstance(response, dict):
-            continue
-        object_id = response.get("object_id") or active_object_id
-        if tool == "navigate_to_object" and response.get("object_id"):
-            object_id = str(response["object_id"])
-            active_object_id = object_id
-        elif tool == "pick" and response.get("ok") and response.get("object_id"):
-            object_id = str(response["object_id"])
-            active_object_id = object_id
-        elif tool in {"place", "place_inside"} and response.get("ok"):
-            active_object_id = None
-        elif tool == "object_done" and response.get("object_id"):
-            object_id = str(response["object_id"])
-
-        if not object_id:
-            continue
-        object_id = str(object_id)
-        if object_id not in steps_by_object:
-            order.append(object_id)
-            steps_by_object[object_id] = {
-                "object_id": object_id,
-                "source_receptacle_id": "",
-                "target_receptacle_id": "",
-                "target_receptacle_category": "",
-                "steps": [],
-            }
-        item = steps_by_object[object_id]
-        if response.get("source_receptacle_id"):
-            item["source_receptacle_id"] = str(response["source_receptacle_id"])
-        if response.get("receptacle_id"):
-            target_id = str(response["receptacle_id"])
-            item["target_receptacle_id"] = target_id
-            item["target_receptacle_category"] = _receptacle_category(receptacles_by_id, target_id)
-        item["steps"].append(_semantic_step(tool, response))
-
-    return [steps_by_object[object_id] for object_id in order]
-
-
-def _semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "phase": phase,
-        "tool": response.get("tool"),
-        "ok": response.get("ok"),
-        "status": response.get("status"),
-        "error_reason": response.get("error_reason"),
-        "object_id": response.get("object_id"),
-        "receptacle_id": response.get("receptacle_id"),
-        "source_receptacle_id": response.get("source_receptacle_id"),
-        "location_id": response.get("location_id"),
-        "contained_in": response.get("contained_in"),
-        "location_relation": response.get("location_relation"),
-        "opened": response.get("opened"),
-        "matches_expected_location": response.get("matches_expected_location"),
-        "primitive_provenance": response.get("primitive_provenance"),
-    }
-
-
-def _receptacle_category(receptacles_by_id: dict[str, dict[str, Any]], receptacle_id: str) -> str:
-    receptacle = receptacles_by_id.get(receptacle_id, {})
-    category = str(receptacle.get("category", ""))
-    if category:
-        return category
-    name = str(receptacle.get("name", "")).lower()
-    if "fridge" in name or "refrigerator" in name or "fridge" in receptacle_id.lower():
-        return "Fridge"
-    return ""
-
-
-def _cleanup_plan_from_semantic_substeps(
-    semantic_substeps: list[dict[str, Any]],
-) -> list[dict[str, str]]:
-    plan = []
-    for item in semantic_substeps:
-        target = str(item.get("target_receptacle_id") or "")
-        if not target:
-            continue
-        plan.append(
-            {
-                "object_id": str(item["object_id"]),
-                "receptacle_id": target,
-                "reason": "external agent selected semantic cleanup target",
-            }
-        )
-    return plan
-
-
-def _bridge_diagnostics(
-    trace_events: list[dict[str, Any]],
-    semantic_substeps: list[dict[str, Any]],
-    done_response: dict[str, Any],
-) -> dict[str, Any]:
-    stale_reference_errors = 0
-    attempted_semantic_substeps = 0
-    object_done_count = 0
-    fridge_inside_sequence_ok = True
-    complete_objects = 0
-    for item in semantic_substeps:
-        phases = [str(step.get("phase")) for step in item.get("steps", [])]
-        attempted_semantic_substeps += len(phases)
-        if "object_done" in phases:
-            object_done_count += 1
-        if _has_complete_semantic_sequence(phases):
-            complete_objects += 1
-        if item.get("target_receptacle_category") == "Fridge":
-            fridge_inside_sequence_ok = fridge_inside_sequence_ok and _fridge_sequence_ok(phases)
-
-    for event in trace_events:
-        response = event.get("response")
-        if (
-            event.get("event") == "response"
-            and isinstance(response, dict)
-            and response.get("error_reason") == "stale_reference"
-        ):
-            stale_reference_errors += 1
-    score = done_response.get("score", {})
-    return {
-        "stale_reference_errors": stale_reference_errors,
-        "premature_done": int(score.get("restored_count", 0)) < int(score.get("total_targets", 0)),
-        "object_done_count": object_done_count,
-        "attempted_semantic_substeps": attempted_semantic_substeps,
-        "complete_semantic_substep_objects": complete_objects,
-        "fridge_inside_sequence_ok": fridge_inside_sequence_ok,
-    }
-
-
-def _has_complete_semantic_sequence(phases: list[str]) -> bool:
-    if phases[:3] != ["navigate_to_object", "pick", "navigate_to_receptacle"]:
-        return False
-    if phases[-1:] != ["object_done"]:
-        return False
-    return "place" in phases or "place_inside" in phases
-
-
-def _fridge_sequence_ok(phases: list[str]) -> bool:
-    try:
-        open_index = phases.index("open_receptacle")
-        place_index = phases.index("place_inside")
-    except ValueError:
-        return False
-    return open_index < place_index
-
-
-def _primitive_provenance_counts(trace_events: list[dict[str, Any]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for event in trace_events:
-        response = event.get("response")
-        if event.get("event") != "response" or not isinstance(response, dict):
-            continue
-        provenance = response.get("primitive_provenance")
-        if not provenance:
-            continue
-        counts[str(provenance)] = counts.get(str(provenance), 0) + 1
-    return counts

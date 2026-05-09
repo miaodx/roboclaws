@@ -42,6 +42,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-robot-visual",
         "just harness::molmo-agent-bridge",
         "just harness::molmo-agent-bridge-visual",
+        "just harness::molmo-realworld-cleanup",
     )
     for call in expected_calls:
         assert call in text
@@ -61,6 +62,7 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^molmo-robot-visual seed=\"7\"",
         r"^molmo-agent-bridge seed=\"7\"",
         r"^molmo-agent-bridge-visual seed=\"7\"",
+        r"^molmo-realworld-cleanup seeds=\"1 2 3\"",
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"

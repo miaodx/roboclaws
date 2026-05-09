@@ -17,6 +17,7 @@
 # - just verify::molmo-robot-visual    real MolmoSpaces/RBY1M visual proof
 # - just verify::molmo-agent-bridge    current-contract Molmo MCP bridge proof
 # - just verify::molmo-agent-bridge-visual  current-contract MCP bridge visual proof
+# - just verify::molmo-realworld-cleanup  ADR-0003 public/private cleanup proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -145,6 +146,19 @@ molmo-agent-bridge-visual:
       tests/test_molmo_cleanup_subprocess_backend.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-agent-bridge-visual
+
+# ADR-0003 public/private cleanup gate. Requires the isolated Python 3.11
+# MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
+molmo-realworld-cleanup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_contract.py \
+      tests/test_molmospaces_realworld_cleanup.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-cleanup
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

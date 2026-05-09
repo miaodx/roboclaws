@@ -96,6 +96,7 @@ def render_cleanup_report(
       </div>
     </section>
     {_current_contract_note(run_result)}
+    {_realworld_contract_note(run_result)}
     <section class="snapshots">
       <figure>
         <img src="{before_name}" alt="Before cleanup">
@@ -110,12 +111,14 @@ def render_cleanup_report(
       <h2>Object Moves</h2>
       {_moves_table(moves)}
     </section>
+    {_agent_view_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
     <section>
       <h2>Score</h2>
       {_score_table(score)}
     </section>
+    {_private_evaluation_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -147,6 +150,92 @@ def _current_contract_note(run_result: dict[str, Any]) -> str:
     if shortcuts:
         note += f" Shortcut(s): {shortcuts}."
     return f'<section><p class="note">{html.escape(note)}</p></section>'
+
+
+def _realworld_contract_note(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    note = (
+        "ADR-0003 real-world-style cleanup run. The Agent View is limited to "
+        "metric map, room-level fixture hints, and robot-local observed object "
+        "handles. Private Evaluation is shown only after the run."
+    )
+    return f'<section><p class="note">{html.escape(note)}</p></section>'
+
+
+def _agent_view_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    agent_view = run_result.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    observed = agent_view.get("observed_objects") or []
+    waypoints = metric_map.get("inspection_waypoints") or []
+    rooms = fixture_hints.get("rooms") or []
+    rows = []
+    for item in observed:
+        support = item.get("support_estimate") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
+            f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+            "</tr>"
+        )
+    observed_table = (
+        "<p>No objects observed.</p>"
+        if not rows
+        else "<table><thead><tr><th>Observed handle</th><th>Category</th>"
+        "<th>Room</th><th>Support estimate</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+    summary = (
+        f"{len(metric_map.get('rooms') or [])} public rooms, "
+        f"{len(rooms)} fixture-hint room rows, {len(waypoints)} inspection waypoints, "
+        f"{len(observed)} observed object handles."
+    )
+    return (
+        "<section><h2>Agent View</h2>"
+        f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
+        "acceptable destination sets, is_misplaced labels, or global movable-object "
+        "inventory are present here.</p>"
+        f"{observed_table}</section>"
+    )
+
+
+def _private_evaluation_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    private = run_result.get("private_evaluation") or {}
+    targets = private.get("generated_mess_set") or []
+    destinations = private.get("acceptable_destination_sets") or {}
+    rows = []
+    for object_id in targets:
+        destination_text = ", ".join(str(item) for item in destinations.get(object_id, []))
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(object_id))}</td>"
+            f"<td>{html.escape(destination_text)}</td>"
+            "</tr>"
+        )
+    table = (
+        "<table><thead><tr><th>Generated mess object</th>"
+        "<th>Acceptable destination set</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+    summary = (
+        f"Generated mess count {private.get('generated_mess_count', 0)}; "
+        f"mess restoration rate {private.get('mess_restoration_rate', 0)}; "
+        f"sweep coverage rate {private.get('sweep_coverage_rate', 0)}; "
+        f"disturbance count {private.get('disturbance_count', 0)}."
+    )
+    return (
+        "<section><h2>Private Evaluation</h2>"
+        f'<p class="note">{html.escape(summary)}</p>{table}</section>'
+    )
 
 
 def _robot_timeline(steps: list[dict[str, Any]]) -> str:
