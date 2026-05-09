@@ -12,6 +12,7 @@ import platform
 import signal
 import subprocess
 import sys
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,7 @@ from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
 
 DEFAULT_MOLMOSPACES_ROOT = Path("/tmp/roboclaws-molmospaces-spike/molmospaces")
 PROBE_TASK = "pick_and_place"
+_WORKER_EVENT_STARTED_AT = time.monotonic()
 
 
 def parse_args() -> argparse.Namespace:
@@ -179,7 +181,7 @@ def run_probe(
         )
         stdout_path.write_text(completed.stdout, encoding="utf-8")
         stderr_path.write_text(completed.stderr, encoding="utf-8")
-        worker_payload = _parse_last_json_object(completed.stdout)
+        worker_payload = _worker_payload_from_stdout(completed.stdout)
         blockers = _blockers_from_completed(completed.returncode, worker_payload)
         return _write_probe_result(
             output_dir=output_dir,
@@ -197,7 +199,7 @@ def run_probe(
         stderr_text = _process_output_text(exc.stderr)
         stdout_path.write_text(stdout_text, encoding="utf-8")
         stderr_path.write_text(stderr_text, encoding="utf-8")
-        worker_payload = _parse_last_json_object(stdout_text)
+        worker_payload = _worker_payload_from_stdout(stdout_text)
         return _write_probe_result(
             output_dir=output_dir,
             stdout_path=stdout_path,
@@ -213,16 +215,17 @@ def run_probe(
 
 def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
     _configure_headless_renderer_env(args)
+    _emit_worker_event(
+        "worker_start",
+        stage="worker_start",
+        embodiment=args.embodiment,
+        probe_mode=args.probe_mode,
+    )
     runtime_diagnostics = _runtime_diagnostics(args)
-    print(
-        json.dumps(
-            {
-                "event": "runtime_diagnostics",
-                "runtime_diagnostics": runtime_diagnostics,
-            },
-            sort_keys=True,
-        ),
-        flush=True,
+    _emit_worker_event(
+        "runtime_diagnostics",
+        stage="runtime_diagnostics",
+        runtime_diagnostics=runtime_diagnostics,
     )
     try:
         if args.embodiment == "franka":
@@ -241,6 +244,20 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "execution_attempted": args.probe_mode == "execute",
             "runtime_diagnostics": runtime_diagnostics,
         }
+
+
+def _emit_worker_event(event: str, **payload: Any) -> None:
+    print(
+        json.dumps(
+            {
+                "event": event,
+                "elapsed_s": round(time.monotonic() - _WORKER_EVENT_STARTED_AT, 6),
+                **payload,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
 
 
 def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
@@ -314,13 +331,22 @@ def _torch_diagnostics() -> dict[str, Any]:
 
 
 def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
+    _emit_worker_event("franka_config_import_start", stage="franka_config_import")
     from mlspaces_tests.data_generation.config import FrankaPickAndPlaceDroidTestConfig
 
+    _emit_worker_event("franka_config_import_done", stage="franka_config_import")
+    _emit_worker_event("franka_config_construct_start", stage="franka_config_construct")
     config = FrankaPickAndPlaceDroidTestConfig()
     config.use_passive_viewer = False
     config.profile = False
     config.use_wandb = False
     policy_cls = config.policy_config.policy_cls
+    _emit_worker_event(
+        "franka_policy_class_ready",
+        stage="franka_policy_class",
+        upstream_policy_class=policy_cls.__name__,
+        upstream_policy_module=policy_cls.__module__,
+    )
     payload: dict[str, Any] = {
         "embodiment": "franka",
         "task": PROBE_TASK,
@@ -347,16 +373,25 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
+    _emit_worker_event("rby1m_config_import_start", stage="rby1m_config_import")
     from molmo_spaces.data_generation.config.object_manipulation_datagen_configs import (
         RBY1PickAndPlaceDataGenConfig,
     )
 
+    _emit_worker_event("rby1m_config_import_done", stage="rby1m_config_import")
+    _emit_worker_event("rby1m_config_construct_start", stage="rby1m_config_construct")
     config = RBY1PickAndPlaceDataGenConfig()
     config.use_passive_viewer = False
     config.profile = False
     config.use_wandb = False
     config.policy_config.server_urls = []
     policy_cls = config.policy_config.policy_cls
+    _emit_worker_event(
+        "rby1m_policy_class_ready",
+        stage="rby1m_policy_class",
+        upstream_policy_class=policy_cls.__name__,
+        upstream_policy_module=policy_cls.__module__,
+    )
     payload: dict[str, Any] = {
         "embodiment": "rby1m",
         "task": PROBE_TASK,
@@ -368,6 +403,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         "execution_attempted": False,
     }
     if args.probe_mode == "execute":
+        _emit_worker_event("rby1m_execute_probe_start", stage="rby1m_execute")
         payload.update(
             _execute_policy_probe(
                 config,
@@ -378,6 +414,13 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
                     renderer_device_id=args.renderer_device_id,
                 ),
             )
+        )
+        _emit_worker_event(
+            "rby1m_execute_probe_done",
+            stage="rby1m_execute",
+            execution_attempted=payload.get("execution_attempted"),
+            steps_executed=payload.get("steps_executed"),
+            max_abs_qpos_delta=payload.get("max_abs_qpos_delta"),
         )
     return payload
 
@@ -392,19 +435,39 @@ def _execute_policy_probe(
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
 
+    _emit_worker_event("execute_renderer_adapter_start", stage="execute_renderer_adapter")
     renderer_adapter = _apply_headless_renderer_adapter(renderer_device_id)
+    _emit_worker_event(
+        "execute_renderer_adapter_ready",
+        stage="execute_renderer_adapter",
+        renderer_adapter=renderer_adapter,
+    )
+    _emit_worker_event("execute_task_sampler_construct_start", stage="execute_task_sampler")
     task_sampler = config.task_sampler_config.task_sampler_class(config)
+    _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
+    _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")
     task_sampler.reset()
+    _emit_worker_event("execute_task_sampler_reset_done", stage="execute_task_sampler_reset")
+    _emit_worker_event("execute_task_sample_start", stage="execute_task_sample")
     task = task_sampler.sample_task()
+    _emit_worker_event("execute_task_sample_done", stage="execute_task_sample")
+    _emit_worker_event("execute_task_reset_start", stage="execute_task_reset")
     task.reset()
+    _emit_worker_event("execute_task_reset_done", stage="execute_task_reset")
+    _emit_worker_event("execute_policy_construct_start", stage="execute_policy_construct")
     policy = config.policy_config.policy_cls(config, task)
+    _emit_worker_event("execute_policy_construct_done", stage="execute_policy_construct")
+    _emit_worker_event("execute_policy_reset_start", stage="execute_policy_reset")
     policy.reset()
+    _emit_worker_event("execute_policy_reset_done", stage="execute_policy_reset")
+    _emit_worker_event("execute_policy_run_start", stage="execute_policy_run", steps=steps)
     initial_qpos, final_qpos, initial_obs, final_obs = run_task_for_steps_with_observations(
         task,
         policy,
         num_steps=steps,
         profiler=None,
     )
+    _emit_worker_event("execute_policy_run_done", stage="execute_policy_run", steps=steps)
     views_dir = output_dir / "planner_views"
     image_artifacts = {}
     initial = _write_first_camera_image(initial_obs, views_dir, "initial")
@@ -413,11 +476,19 @@ def _execute_policy_probe(
         image_artifacts["initial"] = str(initial.relative_to(output_dir))
     if final:
         image_artifacts["final"] = str(final.relative_to(output_dir))
+    max_abs_qpos_delta = float(np.max(np.abs(final_qpos - initial_qpos)))
+    _emit_worker_event(
+        "execute_probe_evidence_ready",
+        stage="execute_probe_evidence",
+        steps_executed=steps,
+        max_abs_qpos_delta=max_abs_qpos_delta,
+        image_artifacts=image_artifacts,
+    )
     return {
         "execution_attempted": True,
         "steps_requested": steps,
         "steps_executed": steps,
-        "max_abs_qpos_delta": float(np.max(np.abs(final_qpos - initial_qpos))),
+        "max_abs_qpos_delta": max_abs_qpos_delta,
         "image_artifacts": image_artifacts,
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
         "renderer_adapter": renderer_adapter,
@@ -552,6 +623,10 @@ def _write_probe_result(
     evidence["worker_payload"] = worker_payload
     if worker_payload.get("runtime_diagnostics"):
         evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
+    worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
+    if worker_stage_events:
+        evidence["worker_stage_events"] = worker_stage_events
+        evidence["last_worker_stage"] = worker_payload.get("last_worker_stage")
     run_result = {
         "artifact_kind": "molmo_planner_backed_manipulation_probe",
         "contract": MANIPULATION_PROBE_CONTRACT,
@@ -626,15 +701,43 @@ def _default_blockers(worker_payload: dict[str, Any], probe_mode: str) -> list[d
     ]
 
 
-def _parse_last_json_object(stdout: str) -> dict[str, Any] | None:
-    for line in reversed(stdout.splitlines()):
+def _worker_payload_from_stdout(stdout: str) -> dict[str, Any] | None:
+    json_objects = _parse_stdout_json_objects(stdout)
+    if not json_objects:
+        return None
+    final_payload = next((item for item in reversed(json_objects) if "ok" in item), None)
+    payload: dict[str, Any] = dict(final_payload or {})
+    worker_events = [item for item in json_objects if item.get("event")]
+    runtime_diagnostics = next(
+        (
+            item.get("runtime_diagnostics")
+            for item in reversed(worker_events)
+            if item.get("event") == "runtime_diagnostics"
+        ),
+        None,
+    )
+    if runtime_diagnostics and "runtime_diagnostics" not in payload:
+        payload["runtime_diagnostics"] = runtime_diagnostics
+    if worker_events:
+        payload["worker_stage_events"] = worker_events
+        last_stage = str(worker_events[-1].get("stage") or worker_events[-1].get("event") or "")
+        payload["last_worker_stage"] = last_stage
+    return payload or None
+
+
+def _parse_stdout_json_objects(stdout: str) -> list[dict[str, Any]]:
+    objects = []
+    for line in stdout.splitlines():
         line = line.strip()
         if not line.startswith("{"):
             continue
-        payload = json.loads(line)
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         if isinstance(payload, dict):
-            return payload
-    return None
+            objects.append(payload)
+    return objects
 
 
 def _process_output_text(value: str | bytes | None) -> str:

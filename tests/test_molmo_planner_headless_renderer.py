@@ -111,14 +111,13 @@ def test_process_output_text_handles_timeout_bytes() -> None:
     assert "\ufffd" in probe._process_output_text(b"\xff")
 
 
-def test_parse_last_json_object_preserves_timeout_diagnostics() -> None:
+def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
     probe = _load_probe_module()
 
-    payload = probe._parse_last_json_object(
+    payload = probe._worker_payload_from_stdout(
         'log line\n{"event": "runtime_diagnostics", "runtime_diagnostics": {"renderer": true}}\n'
     )
 
-    assert payload == {
-        "event": "runtime_diagnostics",
-        "runtime_diagnostics": {"renderer": True},
-    }
+    assert payload["runtime_diagnostics"] == {"renderer": True}
+    assert payload["last_worker_stage"] == "runtime_diagnostics"
+    assert payload["worker_stage_events"][0]["event"] == "runtime_diagnostics"

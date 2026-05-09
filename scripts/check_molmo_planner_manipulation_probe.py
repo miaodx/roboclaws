@@ -69,6 +69,9 @@ def _assert_probe_result(
     assert "Manipulation Provenance" in report_text, report_text[:500]
     if evidence.get("runtime_diagnostics"):
         assert "Runtime Diagnostics" in report_text, report_text[:500]
+    if evidence.get("worker_stage_events"):
+        assert evidence.get("last_worker_stage"), evidence
+        assert "Worker Stage Timeline" in report_text, report_text[:500]
     if accept_rby1m_curobo_blocked or require_rby1m_curobo_ready:
         _assert_rby1m_curobo_gate(
             data,

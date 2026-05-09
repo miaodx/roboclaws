@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 31 RBY1M CuRobo warmup readiness planned on 2026-05-09
+**Status:** Phase 31 RBY1M CuRobo warmup readiness completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -26,9 +26,9 @@ RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
 before execution. Phase 29 closes the camera-only model-policy cleanup follow-up.
 Phase 30 consolidated the shared Cleanup Artifact Report presentation so the
 visual core keeps the same review shape across current-contract and ADR-0003
-artifacts while still showing all contract-specific evidence. Phase 31 adds
-staged RBY1M/CuRobo warmup-readiness evidence before retrying target-robot
-planner execution.
+artifacts while still showing all contract-specific evidence. Phase 31 closed
+staged RBY1M/CuRobo warmup-readiness evidence; the local target runtime still
+times out at `rby1m_config_import`, so target execute-mode proof remains gated.
 
 ## Why This Exists
 
@@ -803,9 +803,17 @@ completed:
   gsd-plan-phase 28-molmospaces-rby1m-curobo-runtime-gate
   gsd-execute-phase 28-molmospaces-rby1m-curobo-runtime-gate
   gsd-verify-work 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-plan-phase 29-molmospaces-camera-model-policy-cleanup
+  gsd-execute-phase 29-molmospaces-camera-model-policy-cleanup
+  gsd-verify-work 29-molmospaces-camera-model-policy-cleanup
+  gsd-plan-phase 30-molmospaces-report-underlay-consolidation
+  gsd-execute-phase 30-molmospaces-report-underlay-consolidation
+  gsd-verify-work 30-molmospaces-report-underlay-consolidation
+  gsd-plan-phase 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-execute-phase 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-verify-work 31-molmospaces-rby1m-curobo-warmup-readiness
 
 next pipeline candidates:
-  plan RBY1M/CuRobo runtime enablement if strict target execution is required locally
   plan actual planner-backed cleanup-loop primitive replacement
-  plan camera-only model-policy cleanup
+  plan RBY1M/CuRobo runtime enablement after config import can finish locally
 ```

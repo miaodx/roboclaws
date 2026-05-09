@@ -158,6 +158,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
+    {_planner_probe_worker_stages_section(evidence)}
     {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
@@ -500,6 +501,59 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(summary)}</p>'
         f'<p class="note">{html.escape(torch_summary)}</p>{module_table}</section>'
     )
+
+
+def _planner_probe_worker_stages_section(evidence: dict[str, Any]) -> str:
+    events = evidence.get("worker_stage_events") or []
+    if not events:
+        return ""
+    rows = []
+    for item in events:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('elapsed_s', '')))}</td>"
+            f"<td>{html.escape(str(item.get('event', '')))}</td>"
+            f"<td>{html.escape(str(item.get('stage', '')))}</td>"
+            f"<td>{html.escape(_worker_stage_detail(item))}</td>"
+            "</tr>"
+        )
+    last_stage = evidence.get("last_worker_stage") or events[-1].get("stage")
+    note = (
+        "Worker stage events are emitted before expensive RBY1M/CuRobo warmup "
+        "and execution steps, so timeout artifacts preserve the last observed stage."
+    )
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Events', len(events))}"
+        f"{_metric('Last stage', last_stage or 'unknown')}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Elapsed s</th>'
+        "<th>Event</th><th>Stage</th><th>Detail</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel"><h2>Worker Stage Timeline</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
+
+
+def _worker_stage_detail(item: dict[str, Any]) -> str:
+    details = []
+    for key in (
+        "embodiment",
+        "probe_mode",
+        "upstream_policy_class",
+        "steps",
+        "steps_executed",
+        "max_abs_qpos_delta",
+    ):
+        value = item.get(key)
+        if value not in (None, ""):
+            details.append(f"{key}={value}")
+    return "; ".join(details)
 
 
 def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:

@@ -49,8 +49,10 @@ unblocked camera-only model-policy gap by deriving observed handles from public
 raw FPV observations while reusing the ADR-0003 semantic cleanup/report
 underlay. Phase 30 consolidated the shared Cleanup Artifact Report presentation
 so current-contract and ADR-0003 artifacts keep one visual core while rendering
-their contract-specific evidence. Phase 31 adds staged RBY1M/CuRobo
-warmup-readiness evidence before retrying target-robot planner execution.
+their contract-specific evidence. Phase 31 closes staged RBY1M/CuRobo
+warmup-readiness evidence: the local target runtime still times out at
+`rby1m_config_import` during CuRobo warmup, so target execute-mode proof remains
+gated.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -106,7 +108,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.29 MolmoSpaces RBY1M CuRobo runtime gate** - Phase 28 (completed 2026-05-09; target-robot runtime readiness gate before cleanup primitive replacement)
 - ✅ **v1.30 MolmoSpaces camera model policy cleanup** - Phase 29 (completed 2026-05-09; camera-derived model-policy cleanup over the ADR-0003 shared underlay)
 - ✅ **v1.31 MolmoSpaces report underlay consolidation** - Phase 30 (completed 2026-05-09; canonical report visual core and semantic subphase labels)
-- 📋 **v1.32 MolmoSpaces RBY1M CuRobo warmup readiness** - Phase 31 (planned 2026-05-09; staged warmup/JIT evidence before target execute-mode retry)
+- ✅ **v1.32 MolmoSpaces RBY1M CuRobo warmup readiness** - Phase 31 (completed 2026-05-09; staged warmup/JIT evidence before target execute-mode retry)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -153,7 +155,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 28: MolmoSpaces RBY1M CuRobo runtime gate** - ADR-0019 target-robot runtime readiness gate before planner-backed cleanup primitive replacement. Completed 2026-05-09.
 - [x] **Phase 29: MolmoSpaces camera model policy cleanup** - ADR-0020 camera-derived model-policy cleanup over public raw FPV observations and the shared ADR-0003 report underlay. Completed 2026-05-09.
 - [x] **Phase 30: MolmoSpaces report underlay consolidation** - ADR-0021 canonical report visual core and semantic subphase labels across MolmoSpaces cleanup demos. Completed 2026-05-09.
-- [ ] **Phase 31: MolmoSpaces RBY1M CuRobo warmup readiness** - ADR-0022 staged worker evidence for RBY1M/CuRobo JIT/config warmup before target execute-mode retry. Planned 2026-05-09.
+- [x] **Phase 31: MolmoSpaces RBY1M CuRobo warmup readiness** - ADR-0022 staged worker evidence for RBY1M/CuRobo JIT/config warmup before target execute-mode retry. Completed 2026-05-09; the local artifact remains blocked at `rby1m_config_import`.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

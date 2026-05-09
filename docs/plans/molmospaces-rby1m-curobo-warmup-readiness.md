@@ -1,6 +1,6 @@
 # MolmoSpaces RBY1M CuRobo Warmup Readiness
 
-**Status:** Planned under GSD Phase 31 on 2026-05-09
+**Status:** Completed under GSD Phase 31 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0019, ADR-0022, Phase 28 evidence, Phase 30 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -70,5 +70,26 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py`
 - `CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-warmup --embodiment rby1m --probe-mode config_import --steps 2 --timeout-s 300`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked output/molmo-planner-rby1m-curobo-warmup/run_result.json`
-- If config import succeeds: rerun execute mode and require
-  `--require-rby1m-curobo-ready`.
+- Strict readiness rejected the artifact with
+  `--require-rby1m-curobo-ready`, as intended.
+
+## Completion Evidence
+
+Phase 31 completed as blocked-capability evidence, not as target runtime
+readiness.
+
+The 300-second local RBY1M/CuRobo warmup run records:
+
+- `status=blocked_capability`;
+- CuRobo importable and CUDA Torch available;
+- `last_worker_stage=rby1m_config_import`;
+- worker stage events for `worker_start`, `runtime_diagnostics`, and
+  `rby1m_config_import_start`;
+- `execution_attempted=false`;
+- RBY1M/CuRobo gate blockers: `timeout`, `rby1m_execution_not_attempted`, and
+  `rby1m_planner_not_backed`;
+- a `Worker Stage Timeline` section in
+  `output/molmo-planner-rby1m-curobo-warmup/report.html`.
+
+Because config import did not finish, execute mode was not attempted and actual
+planner-backed cleanup primitive replacement remains gated.

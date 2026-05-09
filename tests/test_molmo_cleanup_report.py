@@ -700,6 +700,21 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "molmo_spaces": {"available": True, "version": "0.1.0"},
         },
     }
+    run_result["manipulation_evidence"]["worker_stage_events"] = [
+        {
+            "event": "worker_start",
+            "stage": "worker_start",
+            "elapsed_s": 0.01,
+            "embodiment": "rby1m",
+            "probe_mode": "config_import",
+        },
+        {
+            "event": "rby1m_config_import_start",
+            "stage": "rby1m_config_import",
+            "elapsed_s": 0.02,
+        },
+    ]
+    run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
@@ -708,8 +723,11 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "Worker Stage Timeline" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
+    assert "rby1m_config_import_start" in html
+    assert "rby1m_config_import" in html
     assert "faulthandler=True" in html
     assert "renderer_adapter=True" in html
     assert "MUJOCO_GL=egl" in html
