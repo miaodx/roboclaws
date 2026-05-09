@@ -18,7 +18,7 @@ Completed 2026-05-09.
    artifacts.
 3. [x] Render the gate in the shared planner probe report.
 4. [x] Add checker modes:
-   - accept explicit blocked-capability evidence for missing CuRobo/current
+   - accept explicit blocked-capability evidence for CuRobo/current
      RBY1M blockers;
    - require strict RBY1M/CuRobo readiness for future cleanup primitive
      replacement.
@@ -30,15 +30,18 @@ Planner probe artifacts now include `rby1m_curobo_gate`, and the shared planner
 probe report renders `RBY1M CuRobo Gate`. The checker can accept current
 missing-CuRobo evidence explicitly or require strict RBY1M/CuRobo readiness.
 
-The local RBY1M probe remains blocked because CuRobo is missing. This is the
-expected honest state: standalone Franka proof remains useful planner evidence,
-but it does not satisfy target RBY1M/CuRobo readiness.
+The local RBY1M probe remains blocked. After installing the pinned CuRobo extra
+and CUDA PyTorch into the isolated MolmoSpaces runtime, CuRobo is importable,
+but the RBY1M config-import probe still times out during CuRobo CUDA-extension
+JIT warmup before planner execution can be attempted. This is the expected
+honest state: standalone Franka proof remains useful planner evidence, but it
+does not satisfy target RBY1M/CuRobo readiness.
 
 ## Verification
 
 - `uv run ruff check` / `uv run ruff format --check` on changed Python files.
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_rby1m_curobo_gate.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py`
-- `.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-gate --embodiment rby1m --probe-mode config_import --steps 2 --timeout-s 120`
+- `CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-gate --embodiment rby1m --probe-mode config_import --steps 2 --timeout-s 60`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked output/molmo-planner-rby1m-curobo-gate/run_result.json`
 - Strict gate should reject the same artifact with
   `--require-rby1m-curobo-ready` unless the local runtime genuinely has RBY1M
@@ -48,11 +51,11 @@ Evidence:
 
 - Artifact: `output/molmo-planner-rby1m-curobo-gate/report.html`.
 - Result: `output/molmo-planner-rby1m-curobo-gate/run_result.json`.
-- Gate result: `status=blocked_capability`, `embodiment=rby1m`,
-  `curobo_available=false`, `execution_attempted=false`.
-- Strict rejection blockers include `ModuleNotFoundError`,
-  `curobo_unavailable`, `rby1m_execution_not_attempted`, and
-  `rby1m_planner_not_backed`.
+- Gate result after local CuRobo/CUDA PyTorch install:
+  `status=blocked_capability`, `embodiment=rby1m`, `curobo_available=true`,
+  `execution_attempted=false`.
+- Strict rejection blockers include `timeout`,
+  `rby1m_execution_not_attempted`, and `rby1m_planner_not_backed`.
 
 ## Risks
 

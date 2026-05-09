@@ -423,11 +423,21 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
         f"renderer_adapter={diagnostics.get('renderer_adapter_enabled', False)}; "
         f"renderer_device={diagnostics.get('renderer_device_id', '')}; "
         f"MUJOCO_GL={diagnostics.get('mujoco_gl_env', '')}; "
-        f"PYOPENGL_PLATFORM={diagnostics.get('pyopengl_platform_env', '')}"
+        f"PYOPENGL_PLATFORM={diagnostics.get('pyopengl_platform_env', '')}; "
+        f"CUDA_HOME={diagnostics.get('cuda_home_env', '')}; "
+        f"TORCH_CUDA_ARCH_LIST={diagnostics.get('torch_cuda_arch_list_env', '')}"
+    )
+    torch_info = diagnostics.get("torch") or {}
+    torch_summary = (
+        f"torch={torch_info.get('version', '')}; "
+        f"torch_cuda={torch_info.get('cuda_version', '')}; "
+        f"torch_cuda_available={torch_info.get('cuda_available', False)}; "
+        f"torch_cuda_home={torch_info.get('cpp_extension_cuda_home', '')}"
     )
     return (
         '<section class="panel"><h2>Runtime Diagnostics</h2>'
-        f'<p class="note">{html.escape(summary)}</p>{module_table}</section>'
+        f'<p class="note">{html.escape(summary)}</p>'
+        f'<p class="note">{html.escape(torch_summary)}</p>{module_table}</section>'
     )
 
 

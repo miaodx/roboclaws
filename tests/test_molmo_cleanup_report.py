@@ -426,6 +426,15 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "renderer_device_id": 0,
         "mujoco_gl_env": "egl",
         "pyopengl_platform_env": "egl",
+        "cuda_home_env": "/usr/local/cuda",
+        "torch_cuda_arch_list_env": "8.9",
+        "torch": {
+            "available": True,
+            "version": "2.7.1+cu128",
+            "cuda_version": "12.8",
+            "cuda_available": True,
+            "cpp_extension_cuda_home": "/usr/local/cuda",
+        },
         "modules": {
             "curobo": {"available": False, "version": None},
             "molmo_spaces": {"available": True, "version": "0.1.0"},
@@ -444,6 +453,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "faulthandler=True" in html
     assert "renderer_adapter=True" in html
     assert "MUJOCO_GL=egl" in html
+    assert "CUDA_HOME=/usr/local/cuda" in html
+    assert "torch_cuda_available=True" in html
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html

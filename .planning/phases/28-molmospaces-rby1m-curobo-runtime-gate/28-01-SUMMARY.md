@@ -18,12 +18,15 @@ Completed: 2026-05-09
   `output/molmo-planner-rby1m-curobo-gate/run_result.json`
 - Current gate state:
   `status=blocked_capability`, `embodiment=rby1m`,
-  `curobo_available=false`, `execution_attempted=false`.
+  `curobo_available=true`, `execution_attempted=false`.
+- Local follow-up installed the pinned CuRobo extra and CUDA PyTorch in the
+  isolated MolmoSpaces runtime, but config import still times out during CuRobo
+  CUDA-extension JIT warmup before planner execution starts.
 - Strict RBY1M/CuRobo readiness rejects the current artifact.
 
 ## Follow-Ups
 
-- Install/enable CuRobo in the MolmoSpaces runtime if the local workstation is
+- Resolve the CuRobo JIT/config-import timeout if the local workstation is
   expected to prove RBY1M planner execution.
 - After RBY1M/CuRobo readiness passes, replace cleanup-loop `api_semantic`
   subphases with real planner-backed primitives.

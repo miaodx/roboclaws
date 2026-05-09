@@ -8,7 +8,7 @@ Date: 2026-05-09
 uv run ruff check roboclaws/molmo_cleanup/rby1m_curobo_gate.py scripts/run_molmo_planner_manipulation_probe.py scripts/check_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py tests/test_molmo_rby1m_curobo_gate.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py
 uv run ruff format --check roboclaws/molmo_cleanup/rby1m_curobo_gate.py scripts/run_molmo_planner_manipulation_probe.py scripts/check_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py tests/test_molmo_rby1m_curobo_gate.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py
 ./scripts/run_pytest_standalone.sh -q tests/test_molmo_rby1m_curobo_gate.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py
-.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-gate --embodiment rby1m --probe-mode config_import --steps 2 --timeout-s 120
+CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-gate --embodiment rby1m --probe-mode config_import --steps 2 --timeout-s 60
 .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked output/molmo-planner-rby1m-curobo-gate/run_result.json
 ```
 
@@ -18,8 +18,9 @@ Strict rejection check:
 .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --require-rby1m-curobo-ready output/molmo-planner-rby1m-curobo-gate/run_result.json
 ```
 
-The strict command rejects the current artifact as expected because CuRobo is
-not available and RBY1M planner execution was not attempted.
+The strict command rejects the current artifact as expected because the RBY1M
+probe times out during CuRobo CUDA-extension JIT warmup before planner
+execution is attempted.
 
 ## Artifact Review
 
@@ -29,10 +30,11 @@ not available and RBY1M planner execution was not attempted.
   `blocked_capability`.
 - `output/molmo-planner-rby1m-curobo-gate/run_result.json` contains
   `rby1m_curobo_gate` with `status=blocked_capability`,
-  `embodiment=rby1m`, `curobo_available=false`, and blockers for missing
-  CuRobo / unattempted execution.
+  `embodiment=rby1m`, `curobo_available=true`, and blockers for timeout /
+  unattempted execution.
 
 ## Verdict
 
 Phase 28 satisfies the target-runtime gate requirement. It does not satisfy
-actual RBY1M planner execution; that requires CuRobo/runtime enablement first.
+actual RBY1M planner execution; that requires resolving the CuRobo JIT/config
+import timeout first.

@@ -276,6 +276,9 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "python_faulthandler_env": os.environ.get("PYTHONFAULTHANDLER", ""),
         "mujoco_gl_env": os.environ.get("MUJOCO_GL", ""),
         "pyopengl_platform_env": os.environ.get("PYOPENGL_PLATFORM", ""),
+        "cuda_home_env": os.environ.get("CUDA_HOME", ""),
+        "torch_cuda_arch_list_env": os.environ.get("TORCH_CUDA_ARCH_LIST", ""),
+        "torch": _torch_diagnostics(),
         "renderer_adapter_enabled": renderer_device_id is not None,
         "renderer_device_id": renderer_device_id,
     }
@@ -286,6 +289,28 @@ def _package_version(package_name: str) -> str | None:
         return importlib.metadata.version(package_name)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def _torch_diagnostics() -> dict[str, Any]:
+    if importlib.util.find_spec("torch") is None:
+        return {"available": False}
+    try:
+        import torch
+        from torch.utils import cpp_extension
+
+        return {
+            "available": True,
+            "version": getattr(torch, "__version__", None),
+            "cuda_version": getattr(torch.version, "cuda", None),
+            "cuda_available": bool(torch.cuda.is_available()),
+            "cpp_extension_cuda_home": cpp_extension.CUDA_HOME,
+        }
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return {
+            "available": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
 
 
 def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:

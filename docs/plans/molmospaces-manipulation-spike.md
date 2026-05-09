@@ -22,7 +22,8 @@ now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts
 and expose a per-subphase cleanup primitive gate. Current cleanup-loop
 subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
 gate before actual planner-backed cleanup primitive replacement. Current local
-RBY1M planner execution remains blocked by missing CuRobo. Camera-only
+RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
+before execution. Camera-only
 model-policy cleanup remains a separate follow-up.
 
 ## Why This Exists

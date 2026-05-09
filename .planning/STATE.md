@@ -30,7 +30,8 @@ Plan: 1 of 1 complete — `28-01` added a target-robot runtime gate for
 RBY1M/CuRobo readiness before cleanup primitive replacement.
 Status: Phase 28 makes RBY1M/CuRobo readiness explicit so Franka standalone
 proof cannot satisfy the target cleanup primitive runtime precondition. Current
-local evidence is explicit `blocked_capability` because CuRobo is missing.
+local evidence is explicit `blocked_capability` because the RBY1M config-import
+probe times out during CuRobo CUDA-extension JIT warmup.
 Last activity: 2026-05-09 - Completed Phase 28 RBY1M CuRobo runtime gate.
 
 Progress: [##########] 100%
@@ -279,7 +280,7 @@ Recent decisions affecting current work:
   reject Franka strict proof as RBY1M/CuRobo readiness.
 - **Phase 28 completion (2026-05-09):** Planner probe artifacts now include
   `rby1m_curobo_gate`, and reports render `RBY1M CuRobo Gate`. The checker
-  accepts current RBY1M missing-CuRobo evidence only with
+  accepts current RBY1M blocked evidence only with
   `--accept-rby1m-curobo-blocked` and rejects it with
   `--require-rby1m-curobo-ready`.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
@@ -424,7 +425,8 @@ Recent decisions affecting current work:
   cleanup primitive replacement.
 - Phase 28 completed (2026-05-09): **MolmoSpaces RBY1M CuRobo runtime gate** —
   ADR-0019 renders and checker-gates RBY1M/CuRobo readiness; current local
-  evidence remains blocked because CuRobo is missing.
+  evidence remains blocked because CuRobo JIT/config import times out before
+  planner execution.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -464,7 +466,7 @@ None yet.
   model-policy cleanup, RBY1M CuRobo setup, and actual planner-backed
   cleanup-loop primitive replacement remain separate follow-ups. Phase 28
   completed the RBY1M/CuRobo readiness boundary, which is currently blocked by
-  missing CuRobo.
+  CuRobo JIT/config-import timeout before planner execution.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
