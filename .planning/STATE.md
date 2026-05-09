@@ -584,6 +584,8 @@ Resume file: .planning/phases/33-molmospaces-rby1m-warp-compatibility/33-01-rby1
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None for cleanup primitive replacement. Phase 33 completed
-with blocked target execute-mode evidence; the next phase should address CUDA
-memory headroom before any cleanup primitive replacement work.
+**Active Phase:** Phase 36 MolmoSpaces shared semantic cleanup loop. Phase 35
+completed strict standalone RBY1M/CuRobo target proof under the visible
+low-memory profile; before attaching planner-backed primitives to ADR-0003
+cleanup, Phase 36 consolidates duplicated object cleanup loops into one shared
+`nav -> pick -> nav -> open? -> place` driver.

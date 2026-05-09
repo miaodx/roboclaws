@@ -832,8 +832,14 @@ completed:
   gsd-plan-phase 33-molmospaces-rby1m-warp-compatibility
   gsd-execute-phase 33-molmospaces-rby1m-warp-compatibility
   gsd-verify-work 33-molmospaces-rby1m-warp-compatibility
+  gsd-plan-phase 34-molmospaces-rby1m-cuda-memory-headroom
+  gsd-execute-phase 34-molmospaces-rby1m-cuda-memory-headroom
+  gsd-verify-work 34-molmospaces-rby1m-cuda-memory-headroom
+  gsd-plan-phase 35-molmospaces-rby1m-curobo-memory-profile
+  gsd-execute-phase 35-molmospaces-rby1m-curobo-memory-profile
+  gsd-verify-work 35-molmospaces-rby1m-curobo-memory-profile
 
 next pipeline candidates:
-  plan RBY1M/CuRobo GPU memory headroom
-  plan actual planner-backed cleanup-loop primitive replacement after target execute-mode readiness
+  plan shared semantic cleanup loop architecture
+  plan actual planner-backed cleanup-loop primitive replacement after shared-loop integration
 ```

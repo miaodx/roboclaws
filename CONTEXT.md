@@ -210,6 +210,10 @@ _Avoid_: traceback-only OOM diagnosis
 Recorded probe-local CuRobo policy and planner memory-related overrides, including requested profile, effective batch/seed/attempt/timestep settings, and whether collision avoidance remains enabled.
 _Avoid_: hidden planner tuning
 
+**Shared Semantic Cleanup Loop**:
+The package-level execution path for the object cleanup sequence `nav, pick, nav, open?, place`, reused by MolmoSpaces cleanup demos before planner-backed primitives are attached.
+_Avoid_: per-demo hand-rolled cleanup loop
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -251,6 +255,7 @@ _Avoid_: hidden planner tuning
 - A **Cleanup Artifact Report** should keep the **Report Visual Core** in a stable order even when new ADR-0003 evidence panels are added.
 - A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
+- A **Shared Semantic Cleanup Loop** should be the default object-level execution path for MolmoSpaces cleanup demos, with contract-specific perception and scoring layered around it.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
 - Advisory scoring/model checks should render in the shared **Cleanup Artifact Report** without changing deterministic scoring fields.
@@ -269,6 +274,7 @@ _Avoid_: hidden planner tuning
 - **CUDA Memory Headroom Evidence** should be recorded before tuning RBY1M/CuRobo planner memory settings or treating a target execute-mode OOM as a generic failure.
 - **Warp Compatibility Evidence** should be visible before a shimmed target planner probe can be used as readiness evidence.
 - **CuRobo Memory Profile Evidence** should be visible before a tuned RBY1M/CuRobo planner probe is used to assess target runtime readiness.
+- A **Shared Semantic Cleanup Loop** should be in place before replacing cleanup primitives, so planner-backed `nav`, `pick`, `open`, and `place` implementations have one integration point.
 
 ## Example Dialogue
 
@@ -322,4 +328,4 @@ _Avoid_: hidden planner tuning
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Phase 27 closed the per-subphase cleanup primitive gate. Phase 28 closed the RBY1M/CuRobo runtime gate; actual RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout before execution. Phase 29 closed the camera-only model-policy cleanup follow-up with shared-underlay synthetic and real MolmoSpaces/RBY1M visual artifacts. Phase 30 closed the report visual-core consolidation so future evidence panels cannot create another visual implementation. Phase 31 closed staged RBY1M/CuRobo warmup-readiness evidence; the 300-second local run still timed out at `rby1m_config_import`, so actual planner-backed cleanup-loop primitive replacement remains gated on target execute-mode readiness. Phase 32 closed isolated CuRobo extension-cache evidence; config import now succeeds from an output-local cache, but execute mode blocks at `AttributeError: module 'warp' has no attribute 'torch'`. Phase 33 closed visible probe-local Warp compatibility; execute mode now reaches `execute_policy_run` and blocks on CUDA memory.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Phase 27 closed the per-subphase cleanup primitive gate. Phase 28 closed the RBY1M/CuRobo runtime gate; actual RBY1M planner execution remained blocked by CuRobo JIT/config-import timeout before execution. Phase 29 closed the camera-only model-policy cleanup follow-up with shared-underlay synthetic and real MolmoSpaces/RBY1M visual artifacts. Phase 30 closed the report visual-core consolidation so future evidence panels cannot create another visual implementation. Phase 31 closed staged RBY1M/CuRobo warmup-readiness evidence. Phase 32 closed isolated CuRobo extension-cache evidence. Phase 33 closed visible probe-local Warp compatibility. Phase 34 captured CUDA memory headroom for the target execute-mode OOM. Phase 35 closed visible low-memory RBY1M/CuRobo profile retry evidence and produced strict standalone target planner-backed proof. Phase 36 should close the duplicated cleanup-loop architecture before planner-backed primitive replacement is attached to ADR-0003 cleanup.
