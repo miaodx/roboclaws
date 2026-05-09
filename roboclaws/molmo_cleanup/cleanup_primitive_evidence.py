@@ -15,6 +15,14 @@ from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
 
 CLEANUP_PRIMITIVE_GATE_SCHEMA = "planner_backed_cleanup_primitives_v1"
 CLEANUP_PRIMITIVE_REQUIRED_PHASES = frozenset(SEMANTIC_SUBPHASE_LABELS)
+TARGET_BOUND_PHASES = frozenset(
+    {
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place",
+        "place_inside",
+    }
+)
 
 
 def cleanup_primitive_evidence_from_substeps(
@@ -32,13 +40,23 @@ def cleanup_primitive_evidence_from_substeps(
             if phase not in CLEANUP_PRIMITIVE_REQUIRED_PHASES:
                 continue
             label, detail = SEMANTIC_SUBPHASE_LABELS[phase]
+            expected_object_id = str(item.get("object_id") or step.get("object_id") or "")
+            expected_target_receptacle_id = _expected_target_receptacle_id(item, step, phase)
             provenance = str(step.get("primitive_provenance") or "missing")
             planner_backed = provenance == PLANNER_BACKED_PROVENANCE
             status = str(step.get("status") or "unknown")
             planner_primitive_evidence = _planner_primitive_evidence(step)
+            binding_blockers = _planner_binding_blockers(
+                planner_primitive_evidence,
+                phase=phase,
+                expected_object_id=expected_object_id,
+                expected_target_receptacle_id=expected_target_receptacle_id,
+            )
             strict_primitive_evidence = _strict_planner_primitive_evidence(
                 planner_primitive_evidence,
                 phase=phase,
+                expected_object_id=expected_object_id,
+                expected_target_receptacle_id=expected_target_receptacle_id,
             )
             strict_proof_eligible = planner_backed and status == "ok" and strict_primitive_evidence
             row = {
@@ -51,6 +69,22 @@ def cleanup_primitive_evidence_from_substeps(
                 "planner_backed": planner_backed,
                 "strict_proof_eligible": strict_proof_eligible,
                 "planner_primitive_evidence": planner_primitive_evidence,
+                "expected_object_id": expected_object_id,
+                "expected_target_receptacle_id": expected_target_receptacle_id,
+                "object_id_matches": _evidence_value_matches(
+                    planner_primitive_evidence,
+                    "object_id",
+                    expected_object_id,
+                ),
+                "target_receptacle_id_matches": (
+                    _evidence_value_matches(
+                        planner_primitive_evidence,
+                        "target_receptacle_id",
+                        expected_target_receptacle_id,
+                    )
+                    if phase in TARGET_BOUND_PHASES
+                    else True
+                ),
                 "state_mutation": step.get("state_mutation"),
                 "state_sync_provenance": step.get("state_sync_provenance"),
             }
@@ -83,6 +117,8 @@ def cleanup_primitive_evidence_from_substeps(
                         ),
                     }
                 )
+            elif binding_blockers:
+                blockers.extend(binding_blockers)
             elif not strict_primitive_evidence:
                 blockers.append(
                     {
@@ -152,6 +188,12 @@ def validate_cleanup_primitive_evidence(
                 assert _strict_planner_primitive_evidence(
                     _planner_primitive_evidence(step),
                     phase=str(step.get("phase") or ""),
+                    expected_object_id=str(item.get("object_id") or ""),
+                    expected_target_receptacle_id=_expected_target_receptacle_id(
+                        item,
+                        step,
+                        str(step.get("phase") or ""),
+                    ),
                 ), step
         return
     if accept_blocked_capability:
@@ -174,6 +216,8 @@ def _strict_planner_primitive_evidence(
     evidence: Mapping[str, Any],
     *,
     phase: str,
+    expected_object_id: str = "",
+    expected_target_receptacle_id: str = "",
 ) -> bool:
     payload = evidence.get("evidence") or {}
     return (
@@ -186,4 +230,77 @@ def _strict_planner_primitive_evidence(
         and isinstance(payload, Mapping)
         and bool(payload)
         and not evidence.get("blockers")
+        and not _planner_binding_blockers(
+            evidence,
+            phase=phase,
+            expected_object_id=expected_object_id,
+            expected_target_receptacle_id=expected_target_receptacle_id,
+        )
     )
+
+
+def _planner_binding_blockers(
+    evidence: Mapping[str, Any],
+    *,
+    phase: str,
+    expected_object_id: str,
+    expected_target_receptacle_id: str,
+) -> list[dict[str, str]]:
+    if not evidence:
+        return []
+    blockers = []
+    evidence_object_id = str(evidence.get("object_id") or "")
+    if expected_object_id and evidence_object_id != expected_object_id:
+        blockers.append(
+            {
+                "code": "cleanup_subphase_planner_object_mismatch",
+                "object_id": expected_object_id,
+                "phase": phase,
+                "message": (
+                    f"{phase} planner evidence object_id={evidence_object_id} does not "
+                    f"match semantic object_id={expected_object_id}."
+                ),
+            }
+        )
+    if phase in TARGET_BOUND_PHASES:
+        evidence_target_id = str(evidence.get("target_receptacle_id") or "")
+        if expected_target_receptacle_id and evidence_target_id != expected_target_receptacle_id:
+            blockers.append(
+                {
+                    "code": "cleanup_subphase_planner_target_mismatch",
+                    "object_id": expected_object_id,
+                    "phase": phase,
+                    "target_receptacle_id": expected_target_receptacle_id,
+                    "message": (
+                        f"{phase} planner evidence target_receptacle_id={evidence_target_id} "
+                        f"does not match semantic target_receptacle_id="
+                        f"{expected_target_receptacle_id}."
+                    ),
+                }
+            )
+    return blockers
+
+
+def _expected_target_receptacle_id(
+    item: Mapping[str, Any],
+    step: Mapping[str, Any],
+    phase: str,
+) -> str:
+    if phase not in TARGET_BOUND_PHASES:
+        return ""
+    return str(
+        step.get("receptacle_id")
+        or item.get("target_receptacle_id")
+        or item.get("receptacle_id")
+        or ""
+    )
+
+
+def _evidence_value_matches(
+    evidence: Mapping[str, Any],
+    key: str,
+    expected: str,
+) -> bool:
+    if not expected:
+        return True
+    return bool(evidence) and str(evidence.get(key) or "") == expected

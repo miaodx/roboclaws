@@ -414,6 +414,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
             label = _display_subphase_from_evidence(step)
             planner_evidence = step.get("planner_primitive_evidence") or {}
             planner_evidence_summary = _planner_primitive_evidence_summary(planner_evidence)
+            binding_summary = _planner_primitive_binding_summary(step)
             rows.append(
                 "<tr>"
                 f"<td>{object_id}</td>"
@@ -421,6 +422,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
                 f"<td>{html.escape(str(step.get('phase', '')))}</td>"
                 f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
                 f"<td>{html.escape(planner_evidence_summary)}</td>"
+                f"<td>{html.escape(binding_summary)}</td>"
                 f"<td>{html.escape(str(step.get('state_sync_provenance') or ''))}</td>"
                 f"<td>{html.escape(str(step.get('state_mutation') or ''))}</td>"
                 "</tr>"
@@ -428,9 +430,8 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
         "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
-        "<th>Planner evidence</th><th>State sync</th><th>State mutation</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></div>"
+        "<th>Planner evidence</th><th>Binding</th><th>State sync</th>"
+        "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     metrics = (
         '<div class="metric-grid">'
@@ -468,6 +469,23 @@ def _planner_primitive_evidence_summary(evidence: Any) -> str:
     if run_id:
         return f"{executor} {status} {run_id}"
     return f"{executor} {status}"
+
+
+def _planner_primitive_binding_summary(step: dict[str, Any]) -> str:
+    if not step.get("planner_primitive_evidence"):
+        return ""
+    object_match = step.get("object_id_matches")
+    target_match = step.get("target_receptacle_id_matches")
+    if object_match is True and target_match is True:
+        return "object+target"
+    if object_match is True:
+        return "object"
+    failures = []
+    if object_match is False:
+        failures.append("object mismatch")
+    if target_match is False:
+        failures.append("target mismatch")
+    return ", ".join(failures)
 
 
 def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:

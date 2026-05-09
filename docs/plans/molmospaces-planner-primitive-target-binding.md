@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Primitive Target Binding
 
-**Status:** Planned for GSD Phase 39 on 2026-05-09
+**Status:** Completed GSD Phase 39 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0029, ADR-0030
 **Workflow:** `hybrid-phase-pipeline`
@@ -51,3 +51,22 @@ This phase should:
 - Focused executor/gate/bridge tests.
 - Ruff check/format on changed files.
 - Current ADR-0003 real visual artifact checker remains accepted as blocked.
+
+## Completion Result
+
+Phase 39 tightened the cleanup primitive gate so strict planner-backed
+subphases must carry evidence for the exact semantic cleanup object. Target-side
+subphases also require evidence for the same target receptacle. Mismatches now
+produce explicit object or target blockers.
+
+The Cleanup Primitive Gate report table now includes a binding column, so future
+artifacts show whether planner evidence is object-bound, target-bound, or
+mismatched. Current ADR-0003 artifacts remain correctly blocked because they
+still use `api_semantic` cleanup primitives.
+
+## Verification Evidence
+
+- `uv run ruff check roboclaws/molmo_cleanup/cleanup_primitive_evidence.py roboclaws/molmo_cleanup/report.py tests/test_molmo_cleanup_primitive_evidence.py tests/test_molmo_planner_cleanup_bridge.py tests/test_molmo_planner_primitive_executor.py tests/test_molmo_cleanup_report.py`
+- `uv run ruff format --check roboclaws/molmo_cleanup/cleanup_primitive_evidence.py roboclaws/molmo_cleanup/report.py tests/test_molmo_cleanup_primitive_evidence.py tests/test_molmo_planner_cleanup_bridge.py tests/test_molmo_planner_primitive_executor.py tests/test_molmo_cleanup_report.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_primitive_evidence.py tests/test_molmo_planner_cleanup_bridge.py tests/test_molmo_planner_primitive_executor.py tests/test_molmo_cleanup_report.py tests/test_molmo_semantic_cleanup_loop.py`
+- `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`

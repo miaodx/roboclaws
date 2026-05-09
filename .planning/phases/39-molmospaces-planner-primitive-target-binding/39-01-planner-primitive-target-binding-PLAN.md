@@ -8,17 +8,17 @@ subphases, the target receptacle.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Tighten cleanup primitive evidence validation for object binding.
-3. [ ] Tighten target-side validation for receptacle binding.
-4. [ ] Add focused tests for matching evidence, object mismatch, and target
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
+2. [x] Tighten cleanup primitive evidence validation for object binding.
+3. [x] Tighten target-side validation for receptacle binding.
+4. [x] Add focused tests for matching evidence, object mismatch, and target
    mismatch.
-5. [ ] Re-run focused executor/gate/bridge/report tests.
-6. [ ] Re-run the current real visual artifact checker in blocked mode.
+5. [x] Re-run focused executor/gate/bridge/report tests.
+6. [x] Re-run the current real visual artifact checker in blocked mode.
 
 ## Acceptance
 
@@ -33,11 +33,11 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` on changed Python/tests.
-- `uv run ruff format --check` on changed Python/tests.
-- `./scripts/run_pytest_standalone.sh -q` on focused target-binding,
+- Passed `uv run ruff check` on changed Python/tests.
+- Passed `uv run ruff format --check` on changed Python/tests.
+- Passed `./scripts/run_pytest_standalone.sh -q` on focused target-binding,
   executor, primitive-gate, bridge, and report tests.
-- Real visual artifact checker against
+- Passed real visual artifact checker against
   `output/molmospaces-planner-cleanup-bridge-readiness/run_result.json` with
   bridge accepted as blocked.
 
