@@ -19,6 +19,7 @@ one decision per file, sequential numbering, explicit status.
 | [0008](0008-evaluate-openclaw-on-adr-0003-mcp-after-direct-agent-dogfood.md) | Evaluate OpenClaw On ADR-0003 MCP After Direct Agent Dogfood | Accepted |
 | [0009](0009-use-shared-molmo-cleanup-report-underlay.md) | Use Shared Molmo Cleanup Report Underlay | Accepted |
 | [0010](0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md) | Require Real Visual OpenClaw Evidence For ADR-0003 Cleanup | Accepted |
+| [0011](0011-enforce-semantic-loop-for-adr-0003-openclaw-clean-policy.md) | Enforce Semantic Loop For ADR-0003 OpenClaw Clean Policy | Accepted |
 
 ## Adding a new ADR
 

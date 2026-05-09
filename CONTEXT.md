@@ -201,6 +201,7 @@ _Avoid_: Raw tool log as visual flow
 - A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
+- Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
 
 ## Example Dialogue
 
@@ -254,4 +255,4 @@ _Avoid_: Raw tool log as visual flow
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. The remaining OpenClaw visual gap is clean-policy behavior, not report/view availability.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 targets the remaining clean-policy behavior gap by enforcing the public semantic loop.

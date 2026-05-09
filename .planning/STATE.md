@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 19 MolmoSpaces real-world OpenClaw visual evidence completed on 2026-05-09; real RBY1M visual report evidence now exists for OpenClaw-labeled and live Gateway ADR-0003 runs.
+stopped_at: Phase 20 MolmoSpaces real-world OpenClaw clean policy opened on 2026-05-09; ADR-0011 and source/GSD plans created for executable semantic-loop ordering on the ADR-0003 MCP surface.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 14
+  total_phases: 15
   completed_phases: 14
-  total_plans: 17
+  total_plans: 18
   completed_plans: 17
-  percent: 100
+  percent: 93
 ---
 
 # Project State
@@ -21,24 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 19 complete; remaining MolmoSpaces follow-ups are live OpenClaw clean-policy hardening, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.
+**Current focus:** Phase 20 — molmospaces-realworld-openclaw-clean-policy (active; executable semantic-loop ordering for clean ADR-0003 OpenClaw policy evidence)
 
 ## Current Position
 
-Phase: 19 (molmospaces-realworld-openclaw-visual-evidence) — COMPLETE
-Plan: 1 of 1 complete — `19-01` implements ADR-0010 by running OpenClaw Gateway
-against the ADR-0003 `molmo_cleanup_realworld` MCP surface on the real
-MolmoSpaces/RBY1M visual backend.
-Status: The deterministic visual kit passed the strict clean visual gate with
-176 robot-view PNGs. A live OpenClaw Gateway run passed the minimum visual gate
-with 48 robot-view PNGs, full waypoint sweep, no `scene_objects`, and a report
-containing Agent View, Private Evaluation, Score, Semantic Substeps, and Robot
-View Timeline. The live run did not pass clean cleanup success.
-Last activity: 2026-05-09 - Completed Phase 19, added ADR-0010 visual evidence
-gates, and recorded the live Gateway minimum-only policy result.
+Phase: 20 (molmospaces-realworld-openclaw-clean-policy) — ACTIVE
+Plan: 1 of 1 active — `20-01` implements ADR-0011 by enforcing the public
+semantic cleanup loop in `molmo_cleanup_realworld`.
+Status: Planning slice opened. Next implementation step is to reject skipped
+`pick`, `place`, and fridge `place_inside` calls with public
+`semantic_order` guidance, then update diagnostics/checkers/skills so clean
+OpenClaw evidence cannot hide missing `nav -> pick -> nav -> open? -> place`
+subphases.
+Last activity: 2026-05-09 - Created ADR-0011, source plan, and GSD Phase 20
+plan for executable semantic-loop ordering on the ADR-0003 MCP surface.
 
-Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Remaining MolmoSpaces work after that is live OpenClaw clean-policy hardening, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
+Progress: [#########-] 93%
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 is hardening the clean-policy semantic loop. Remaining MolmoSpaces work after that is advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -165,6 +164,12 @@ Recent decisions affecting current work:
   the model skipped `navigate_to_object`/`navigate_to_receptacle` and chose
   weak destinations, so future OpenClaw hardening should target semantic-loop
   obedience and destination choice.
+- **Phase 20 planning (2026-05-09):** ADR-0011 makes the semantic cleanup loop
+  executable in the ADR-0003 MCP contract. `pick` should require
+  `navigate_to_object`, `place` should require `navigate_to_receptacle`, and
+  fridge-like `place_inside` should require `open_receptacle`. Clean
+  OpenClaw evidence should reject semantic-order errors rather than relying on
+  prompt-only obedience.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
