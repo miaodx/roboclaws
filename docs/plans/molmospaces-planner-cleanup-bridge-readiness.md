@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Cleanup Bridge Readiness
 
-**Status:** Planned for GSD Phase 37 on 2026-05-09
+**Status:** Completed under GSD Phase 37 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0018, ADR-0019, ADR-0026, ADR-0027, ADR-0028
 **Workflow:** `hybrid-phase-pipeline`
@@ -56,3 +56,34 @@ This phase should:
   readiness.
 - Focused realworld cleanup generation with the Phase 35 target proof attached.
 - Ruff check/format on changed files.
+
+## Completion Result
+
+Phase 37 added `planner_cleanup_bridge_evidence` to ADR-0003 cleanup artifacts
+when a strict planner proof is attached. The bridge evidence joins:
+
+- the attached planner proof's target-runtime status;
+- the cleanup primitive gate's per-subphase provenance.
+
+The generated artifact
+`output/molmospaces-planner-cleanup-bridge-readiness/report.html` includes all
+canonical visual sections: before/after snapshots, semantic substeps, robot
+view timeline with FPV/chase/map/verification views, attached planner initial
+and final images, cleanup primitive gate, and planner cleanup bridge panel.
+
+The bridge status is intentionally `blocked_capability`: the attached Phase 35
+RBY1M/CuRobo proof is target-ready, but the cleanup subphases still carry
+`primitive_provenance=api_semantic`.
+
+## Verification
+
+- `uv run ruff check roboclaws/molmo_cleanup/planner_cleanup_bridge.py roboclaws/molmo_cleanup/report.py examples/molmospaces_realworld_cleanup.py scripts/check_molmo_realworld_cleanup_result.py tests/test_molmo_planner_cleanup_bridge.py tests/test_check_molmo_realworld_cleanup_result.py`
+  passed.
+- `uv run ruff format --check roboclaws/molmo_cleanup/planner_cleanup_bridge.py roboclaws/molmo_cleanup/report.py examples/molmospaces_realworld_cleanup.py scripts/check_molmo_realworld_cleanup_result.py tests/test_molmo_planner_cleanup_bridge.py tests/test_check_molmo_realworld_cleanup_result.py`
+  passed.
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_cleanup_bridge.py tests/test_check_molmo_realworld_cleanup_result.py tests/test_molmo_cleanup_report.py`
+  passed with 33 tests.
+- Generated:
+  `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmospaces-planner-cleanup-bridge-readiness --backend molmospaces_subprocess --include-robot --record-robot-views --generated-mess-count 10 --planner-proof-run-result output/molmo-planner-rby1m-curobo-memory-profile-execute/run_result.json`.
+- Checked:
+  `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`.

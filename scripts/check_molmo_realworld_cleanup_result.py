@@ -10,6 +10,9 @@ from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
+from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
+    validate_planner_cleanup_bridge_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     validate_planner_proof_attachment,
 )
@@ -48,6 +51,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
     parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
+    parser.add_argument("--accept-blocked-planner-cleanup-bridge", action="store_true")
+    parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     return parser.parse_args()
 
 
@@ -91,6 +96,8 @@ def main() -> None:
             require_planner_backed_cleanup_primitives=(
                 args.require_planner_backed_cleanup_primitives
             ),
+            accept_blocked_planner_cleanup_bridge=(args.accept_blocked_planner_cleanup_bridge),
+            require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -126,6 +133,8 @@ def _assert_result(
     require_planner_proof_attachment: bool = False,
     accept_blocked_planner_cleanup_primitives: bool = False,
     require_planner_backed_cleanup_primitives: bool = False,
+    accept_blocked_planner_cleanup_bridge: bool = False,
+    require_planner_cleanup_bridge_ready: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -204,6 +213,13 @@ def _assert_result(
             report_text,
             accept_blocked=accept_blocked_planner_cleanup_primitives,
             require_planner_backed=require_planner_backed_cleanup_primitives,
+        )
+    if accept_blocked_planner_cleanup_bridge or require_planner_cleanup_bridge_ready:
+        _assert_planner_cleanup_bridge(
+            data,
+            report_text,
+            accept_blocked=accept_blocked_planner_cleanup_bridge,
+            require_ready=require_planner_cleanup_bridge_ready,
         )
 
 
@@ -469,6 +485,24 @@ def _assert_cleanup_primitive_gate(
     assert "pick/object" in report_text, report_text[:500]
     assert "nav/target" in report_text, report_text[:500]
     if require_planner_backed:
+        assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
+
+
+def _assert_planner_cleanup_bridge(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    accept_blocked: bool = False,
+    require_ready: bool = False,
+) -> None:
+    evidence = data.get("planner_cleanup_bridge_evidence") or {}
+    validate_planner_cleanup_bridge_evidence(
+        evidence,
+        accept_blocked_capability=accept_blocked,
+        require_ready=require_ready,
+    )
+    assert "Planner Cleanup Bridge" in report_text, report_text[:500]
+    if require_ready:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
 
 

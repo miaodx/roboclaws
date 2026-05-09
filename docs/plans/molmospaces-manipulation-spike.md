@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 35 RBY1M CuRobo memory profile completed on 2026-05-09
+**Status:** Phase 37 planner cleanup bridge readiness completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -17,13 +17,8 @@ synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 -> Phase 22 raw FPV-only perception evidence -> Phase 23 planner-backed
 manipulation provenance/proof gate -> Phase 24 planner runtime diagnostics ->
 Phase 25 planner headless renderer -> Phase 26 cleanup planner proof
-attachment -> Phase 27 cleanup planner-backed primitive gate. Cleanup reports
-now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts
-and expose a per-subphase cleanup primitive gate. Current cleanup-loop
-subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
-gate before actual planner-backed cleanup primitive replacement. Current local
-RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
-before execution. Phase 29 closes the camera-only model-policy cleanup follow-up.
+attachment -> Phase 27 cleanup planner-backed primitive gate -> Phase 28
+RBY1M CuRobo target-runtime gate -> Phase 29 camera-only model-policy cleanup.
 Phase 30 consolidated the shared Cleanup Artifact Report presentation so the
 visual core keeps the same review shape across current-contract and ADR-0003
 artifacts while still showing all contract-specific evidence. Phase 31 closed
@@ -41,8 +36,11 @@ about 9.1 GiB free at `execute_policy_run_start` and about 284.7 MiB free at
 the OOM exception. Phase 35 adds a visible probe-local low-memory CuRobo
 profile before retrying target execute mode again. That retry passes strict
 standalone RBY1M/CuRobo planner-backed proof with nonzero robot-state movement;
-cleanup-loop primitives remain `api_semantic` until a follow-up replacement
-slice integrates target planner-backed primitives into the cleanup subphases.
+Phase 36 moves current-contract and ADR-0003 cleanup demos through one shared
+semantic cleanup loop; Phase 37 adds bridge-readiness evidence that joins the
+target proof with cleanup primitive provenance. Cleanup-loop primitives remain
+`api_semantic` until a follow-up replacement slice integrates target
+planner-backed primitives into the cleanup subphases.
 
 ## Why This Exists
 
@@ -841,8 +839,10 @@ completed:
   gsd-plan-phase 36-molmospaces-shared-semantic-cleanup-loop
   gsd-execute-phase 36-molmospaces-shared-semantic-cleanup-loop
   gsd-verify-work 36-molmospaces-shared-semantic-cleanup-loop
+  gsd-plan-phase 37-molmospaces-planner-cleanup-bridge-readiness
+  gsd-execute-phase 37-molmospaces-planner-cleanup-bridge-readiness
+  gsd-verify-work 37-molmospaces-planner-cleanup-bridge-readiness
 
 next pipeline candidates:
-  plan planner cleanup bridge readiness evidence
   plan actual planner-backed cleanup-loop primitive replacement after shared-loop integration
 ```

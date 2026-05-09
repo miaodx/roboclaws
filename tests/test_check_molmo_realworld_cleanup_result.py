@@ -317,6 +317,67 @@ def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
     )
 
 
+def test_checker_accepts_blocked_planner_cleanup_bridge(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+    )
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    bridge = result["planner_cleanup_bridge_evidence"]
+    assert bridge["status"] == "blocked_capability"
+    assert bridge["target_runtime_ready"] is True
+    assert bridge["cleanup_primitives_ready"] is False
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_planner_proof_attachment=True,
+        accept_blocked_planner_cleanup_primitives=True,
+        accept_blocked_planner_cleanup_bridge=True,
+    )
+
+
+def test_checker_rejects_current_cleanup_when_bridge_ready_required(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+    )
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            cleanup_dir,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_cleanup_bridge_ready=True,
+        )
+
+
 def test_checker_accepts_blocked_cleanup_primitive_gate(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -549,7 +610,13 @@ def _robot_step(action: str) -> dict[str, object]:
     }
 
 
-def _write_strict_planner_proof(base: Path) -> Path:
+def _write_strict_planner_proof(
+    base: Path,
+    *,
+    embodiment: str = "franka",
+    upstream_policy_class: str = "PickAndPlacePlannerPolicy",
+    curobo_available: bool = False,
+) -> Path:
     base.mkdir(parents=True)
     views = base / "planner_views"
     views.mkdir()
@@ -557,10 +624,10 @@ def _write_strict_planner_proof(base: Path) -> Path:
     (views / "final_wrist_camera.png").write_bytes(b"final")
     evidence = planner_backed_probe_evidence(
         backend="molmospaces_subprocess",
-        embodiment="franka",
+        embodiment=embodiment,
         task="pick_and_place",
         probe_mode="execute",
-        upstream_policy_class="PickAndPlacePlannerPolicy",
+        upstream_policy_class=upstream_policy_class,
         steps_requested=2,
         steps_executed=2,
         max_abs_qpos_delta=0.01,
@@ -569,7 +636,10 @@ def _write_strict_planner_proof(base: Path) -> Path:
             "final": "planner_views/final_wrist_camera.png",
         },
     )
-    evidence["runtime_diagnostics"] = {"renderer_adapter_enabled": True}
+    evidence["runtime_diagnostics"] = {
+        "renderer_adapter_enabled": True,
+        "modules": {"curobo": {"available": curobo_available}},
+    }
     path = base / "run_result.json"
     path.write_text(
         json.dumps(

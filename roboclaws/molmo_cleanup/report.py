@@ -117,6 +117,7 @@ def _cleanup_report_sections(
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
             _cleanup_primitive_gate_section(run_result),
+            _planner_cleanup_bridge_section(run_result),
             _agent_view_section(run_result),
             _raw_fpv_observations_section(run_result),
             _camera_model_policy_section(run_result),
@@ -448,6 +449,57 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
         "<h2>Cleanup Primitive Gate</h2>"
         f'<p class="note">{html.escape(str(note))}</p>'
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
+    )
+
+
+def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("planner_cleanup_bridge_evidence") or {}
+    if not evidence:
+        return ""
+    target = evidence.get("target_runtime") or {}
+    cleanup = evidence.get("cleanup_primitives") or {}
+    blockers = evidence.get("blockers") or []
+    blocker_rows = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(str(item.get('code', '')))}</td>"
+            f"<td>{html.escape(str(item.get('message', '')))}</td>"
+            "</tr>"
+        )
+        for item in blockers
+    )
+    if blocker_rows:
+        blockers_table = (
+            '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+            "<th>Message</th></tr></thead><tbody>"
+            f"{blocker_rows}</tbody></table></div>"
+        )
+    else:
+        blockers_table = '<p class="note">No bridge blockers recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', evidence.get('status', 'unknown'))}"
+        f"{_metric('Target proof', target.get('embodiment', 'missing'))}"
+        f"{_metric('Cleanup gate', cleanup.get('status', 'missing'))}"
+        f"{_metric('Subphases', cleanup.get('subphase_count', 0))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Target RBY1M/CuRobo ready", evidence.get("target_runtime_ready", False)),
+            _badge("Cleanup primitives ready", evidence.get("cleanup_primitives_ready", False)),
+            _badge("Bridge ready", evidence.get("planner_backed", False)),
+        )
+    )
+    note = evidence.get("evidence_note") or (
+        "Planner cleanup bridge readiness joins target runtime proof with cleanup subphase "
+        "primitive provenance."
+    )
+    return (
+        '<section class="panel planner-cleanup-bridge">'
+        "<h2>Planner Cleanup Bridge</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{blockers_table}</section>'
     )
 
 

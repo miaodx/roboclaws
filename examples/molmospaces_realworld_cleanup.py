@@ -22,6 +22,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
 )
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
+    planner_cleanup_bridge_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
@@ -372,6 +375,10 @@ def run_realworld_cleanup(
         run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
             proof_run_result_path=planner_proof_run_result,
             cleanup_run_dir=output_dir,
+        )
+        run_result["planner_cleanup_bridge_evidence"] = planner_cleanup_bridge_evidence(
+            planner_proof_attachment=run_result["planner_backed_manipulation_proof"],
+            cleanup_primitive_evidence=cleanup_primitive_evidence,
         )
         run_result["artifacts"]["planner_proof_views"] = str(output_dir / "planner_proof")
 
