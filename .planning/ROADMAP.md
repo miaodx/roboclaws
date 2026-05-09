@@ -133,7 +133,10 @@ alternate aliases after filtering, so the next blocker is runtime alias
 discovery. Phase 64 mines prior fallback `KeyError` valid-name lists for
 same-family runtime aliases, renders that discovery in the runner report, and
 turns it into four new generated fallback proof commands ready for local
-execution.
+execution. Phase 65 executes those discovered runtime-sibling fallback commands
+locally with RBY1M/CuRobo warmup; they reach task sampling with no config-import
+timeouts, but target-sibling aliases still fail `HouseInvalidForTask` and
+object-sibling aliases fail as non-root bodies before proof, binding, or views.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -223,6 +226,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.63 MolmoSpaces warmed generated fallback proof execution** - Phase 62 (completed 2026-05-10; warmed generated fallbacks reach task sampling but fail on invalid planner aliases)
 - ✅ **v1.64 MolmoSpaces exact-scene fallback alias validation** - Phase 63 (completed 2026-05-10; generated fallback commands filter display aliases and report skipped candidates)
 - ✅ **v1.65 MolmoSpaces fallback runtime alias discovery** - Phase 64 (completed 2026-05-10; prior KeyError valid-name lists generate runtime-sibling fallback commands)
+- ✅ **v1.66 MolmoSpaces discovered runtime fallback proof execution** - Phase 65 (completed 2026-05-10; discovered runtime-sibling commands execute locally but block on task feasibility or non-root bodies)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -302,7 +306,8 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 61: MolmoSpaces fallback proof warmup** - ADR-0052 adds a visible RBY1M/CuRobo config-import warmup step to proof-bundle runner manifests, reports, and checker coverage. Completed 2026-05-10.
 - [x] **Phase 62: MolmoSpaces warmed generated fallback proof execution** - ADR-0053 records local warmed generated fallback execution. Completed 2026-05-10; warmup gets through config import, and generated proofs now fail at task sampling with invalid planner alias names instead of timeout.
 - [x] **Phase 63: MolmoSpaces exact-scene fallback alias validation** - ADR-0054 filters upstream/display aliases out of generated fallback proof commands while preserving skipped-alias evidence in runner manifests, reports, and checker coverage. Completed 2026-05-10.
-- [x] **Phase 64: MolmoSpaces fallback runtime alias discovery** - ADR-0055 derives same-family runtime aliases from prior fallback KeyError valid-name lists and renders discovered aliases in proof-bundle runner reports. Completed 2026-05-10; local execution of discovered runtime-sibling commands remains next.
+- [x] **Phase 64: MolmoSpaces fallback runtime alias discovery** - ADR-0055 derives same-family runtime aliases from prior fallback KeyError valid-name lists and renders discovered aliases in proof-bundle runner reports. Completed 2026-05-10; local execution followed in Phase 65.
+- [x] **Phase 65: MolmoSpaces discovered runtime fallback proof execution** - ADR-0056 executes discovered runtime-sibling fallback commands locally with RBY1M/CuRobo warmup. Completed 2026-05-10; all four commands reach task sampling, but none promote cleanup binding or emit planner views.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

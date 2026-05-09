@@ -296,6 +296,12 @@ valid-name lists for same-family runtime aliases and turns them into bounded
 generated fallback proof commands.
 _Avoid_: treating discovered command candidates as planner-backed proof
 
+**Discovered Runtime Fallback Proof Execution**:
+Local-dev proof-bundle execution of runtime-sibling fallback commands generated
+from **Fallback Runtime Alias Discovery**, used to separate alias-discovery
+success from root-body validity and upstream task-feasibility blockers.
+_Avoid_: treating valid-looking runtime aliases as viable cleanup primitives
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -439,6 +445,10 @@ _Avoid_: full cleanup replacement claim
 - **Warmed Generated Fallback Proof Execution** should still require strict
   proof outputs and cleanup primitive binding promotion before it can affect
   planner cleanup bridge readiness.
+- **Discovered Runtime Fallback Proof Execution** should keep cleanup readiness
+  blocked when generated runtime-sibling commands execute but fail with
+  `HouseInvalidForTask` or non-root-body blockers before planner-backed proof,
+  cleanup binding promotion, or planner views.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -517,3 +527,8 @@ _Avoid_: full cleanup replacement claim
 - Phase 62 executed the warmed generated fallback proof bundle locally. The warmup got through `rby1m_config_import`, and all four generated proofs reached task sampling; they now fail with `KeyError` invalid planner alias names instead of timeout.
 - Phase 63 closed the exact-scene fallback alias validity gap by filtering upstream/display aliases from generated fallback command inputs while rendering the skipped aliases in the runner manifest/report. The current local artifact now has no executable alternate fallback aliases, so the next blocker is runtime alias discovery rather than retrying display IDs.
 - Phase 64 closed runtime alias discovery by mining Phase 62 `KeyError` valid-name lists for same-family exact-scene aliases. The dry-run generated four runtime-sibling fallback commands and rendered discovered aliases, filtered aliases, fallback rows, and commands in the proof-bundle runner report.
+- Phase 65 executed those discovered runtime-sibling fallback commands locally
+  with RBY1M/CuRobo warmup. The proofs no longer timed out and reached task
+  sampling, but target-sibling aliases still blocked with `HouseInvalidForTask`
+  and object-sibling aliases blocked as non-root bodies; no planner-backed proof,
+  cleanup binding promotion, or planner views were produced.

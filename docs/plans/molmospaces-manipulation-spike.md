@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 64 fallback runtime alias discovery completed; next work is local execution of discovered runtime-sibling fallback proofs
+**Status:** Phase 65 discovered runtime fallback proof execution completed; next work is root-body alias validity and task-feasibility handling
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -125,6 +125,13 @@ runtime aliases, filtered display aliases, generated fallback request rows, and
 commands in one proof-bundle artifact. The Phase 64 dry-run generated four new
 fallback commands from five discovered runtime aliases, so the next local-dev
 slice is executing those commands.
+Phase 65 executed those discovered runtime-sibling fallback commands locally
+with RBY1M/CuRobo warmup. Warmup succeeded and all four proofs reached task
+sampling with no config-import timeouts, but none became planner-backed or
+promoted cleanup primitive binding. Target-sibling commands still block with
+`HouseInvalidForTask`, while object-sibling commands fail as non-root bodies.
+The next blocker is root-body alias validity and upstream task feasibility, not
+report generation or fallback command discovery.
 
 ## Why This Exists
 
