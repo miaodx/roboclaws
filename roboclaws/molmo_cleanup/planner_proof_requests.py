@@ -1009,20 +1009,76 @@ def _prior_fallback_candidate_filters_by_source_request(
             and str(result.get("task_feasibility_status") or "") == "blocked"
         ):
             key = (source_request_id, object_alias, target_alias)
-            if key in seen_pairs:
-                continue
-            bucket["pairs"].append(
-                {
-                    "source_request_id": source_request_id,
-                    "object_alias": object_alias,
-                    "target_alias": target_alias,
-                    "derived_from": result_id,
-                    "reason": "prior_task_feasibility_blocked_pair",
-                    "prior_blockers": blockers,
-                }
+            pair_filter = _task_feasibility_pair_filter(
+                source_request_id=source_request_id,
+                object_alias=object_alias,
+                target_alias=target_alias,
+                derived_from=result_id,
+                blockers=blockers,
+                result=result,
             )
+            if key in seen_pairs:
+                _enrich_existing_pair_filter(bucket["pairs"], key, pair_filter)
+                continue
+            bucket["pairs"].append(pair_filter)
             seen_pairs.add(key)
     return filters
+
+
+def _task_feasibility_pair_filter(
+    *,
+    source_request_id: str,
+    object_alias: str,
+    target_alias: str,
+    derived_from: str,
+    blockers: list[dict[str, Any]],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "source_request_id": source_request_id,
+        "object_alias": object_alias,
+        "target_alias": target_alias,
+        "derived_from": derived_from,
+        "reason": "prior_task_feasibility_blocked_pair",
+        "prior_status": str(result.get("status") or ""),
+        "prior_task_feasibility_status": str(result.get("task_feasibility_status") or ""),
+        "prior_blockers": blockers,
+        "prior_run_result": str(result.get("run_result") or ""),
+        "prior_report": str(result.get("report") or ""),
+        "prior_stdout": str(result.get("stdout") or ""),
+        "prior_stderr": str(result.get("stderr") or ""),
+        "last_worker_stage": str(result.get("last_worker_stage") or ""),
+        "execution_attempted": bool(result.get("execution_attempted")),
+    }
+
+
+def _enrich_existing_pair_filter(
+    pairs: list[dict[str, Any]],
+    key: tuple[str, str, str],
+    candidate: dict[str, Any],
+) -> None:
+    for item in pairs:
+        if (
+            str(item.get("source_request_id") or ""),
+            str(item.get("object_alias") or ""),
+            str(item.get("target_alias") or ""),
+        ) != key:
+            continue
+        for field in (
+            "prior_status",
+            "prior_task_feasibility_status",
+            "prior_run_result",
+            "prior_report",
+            "prior_stdout",
+            "prior_stderr",
+            "last_worker_stage",
+            "execution_attempted",
+        ):
+            if candidate.get(field) and not item.get(field):
+                item[field] = candidate[field]
+        if candidate.get("prior_blockers") and not item.get("prior_blockers"):
+            item["prior_blockers"] = candidate["prior_blockers"]
+        return
 
 
 def _carried_filtered_aliases(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:

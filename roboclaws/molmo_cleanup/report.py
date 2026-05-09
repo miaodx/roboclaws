@@ -969,16 +969,20 @@ def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('target_alias', '')))}</td>"
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="6">No fallback alias pairs filtered.</td></tr>')
+        rows.append('<tr><td colspan="9">No fallback alias pairs filtered.</td></tr>')
     return (
         "<h3>Filtered Fallback Pairs</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
-        "<th>Derived from</th><th>Reason</th><th>Prior blockers</th>"
+        "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
+        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

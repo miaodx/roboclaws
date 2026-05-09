@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 73 pickup root alias normalization completed; next work is upstream task-feasibility handling for target-side fallback pairs
+**Status:** Phase 74 target-feasibility proof links completed; next work is upstream task-feasibility handling for target-side fallback pairs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -177,6 +177,10 @@ runtime aliases back to their variant-0 pickup root alias. The current dry-run
 shows those root aliases were already known, so the remaining generated
 fallback blocker is target-side task-feasibility rather than a missing pickup
 root alias source.
+Phase 74 makes that remaining target-side blocker reviewable. Filtered fallback
+pairs now carry the exact prior proof report/run-result paths and worker stage,
+and prior fallback attempts merge by request ID plus planner aliases so
+different runs do not overwrite distinct proof attempts.
 
 ## Why This Exists
 

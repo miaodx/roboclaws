@@ -486,9 +486,13 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
                     "schema": "planner_cleanup_proof_result_summary_v1",
                     "results": [
                         {
-                            "request_id": "proof_001_fallback_02",
+                            "request_id": "proof_001_fallback_01",
                             "status": "blocked_capability",
                             "task_feasibility_status": "blocked",
+                            "execution_attempted": True,
+                            "last_worker_stage": "worker_exception",
+                            "run_result": str(tmp_path / "prior-proof" / "run_result.json"),
+                            "report": str(tmp_path / "prior-proof" / "report.html"),
                             "cleanup_task_config": {
                                 "planner_object_id": "book_beef_1_0_8",
                                 "planner_target_receptacle_id": "shelf_cafe_1_1_2",
@@ -528,7 +532,7 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     fallback = selection["fallback_generation"]
     assert manifest["command_count"] == 0
     assert selection["fallback_required"] is True
-    assert selection["prior_result_count"] == 3
+    assert selection["prior_result_count"] == 2
     assert fallback["status"] == "exhausted"
     assert {item["code"] for item in fallback["exhaustion_blockers"]} == {
         "target_task_feasibility_blocked_pairs",
@@ -538,6 +542,10 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert fallback["filtered_pair_count"] == 1
     assert fallback["filtered_pairs"][0]["object_alias"] == "book_beef_1_0_8"
     assert fallback["filtered_pairs"][0]["target_alias"] == "shelf_cafe_1_1_2"
+    assert fallback["filtered_pairs"][0]["prior_report"] == str(
+        tmp_path / "prior-proof" / "report.html"
+    )
+    assert fallback["filtered_pairs"][0]["last_worker_stage"] == "worker_exception"
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Fallback status" in report
     assert "exhausted" in report
@@ -546,6 +554,8 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert "no_fallback_candidate_available" in report
     assert "shelf_cafe_1_1_2" in report
     assert "prior_task_feasibility_blocked_pair" in report
+    assert str(tmp_path / "prior-proof" / "report.html") in report
+    assert "worker_exception" in report
 
 
 def test_runner_carries_prior_failed_runtime_fallback_candidates(

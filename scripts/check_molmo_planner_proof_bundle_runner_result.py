@@ -261,6 +261,9 @@ def _assert_proof_request_selection(
             ):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
+            for key in ("prior_report", "last_worker_stage"):
+                if item.get(key):
+                    assert str(item[key]) in report_text, (key, report_text[:500])
         for item in exhaustion_blockers:
             for key in ("code", "message"):
                 assert item.get(key), item

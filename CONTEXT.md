@@ -348,6 +348,12 @@ back to their variant-0 pickup root alias before deciding whether a root-body
 alias source is still missing.
 _Avoid_: treating every non-root runtime sibling as an unresolved alias-source gap
 
+**Target Feasibility Proof Link**:
+The filtered fallback pair evidence that points from a target-side
+task-feasibility block to the exact prior proof report, run result, worker
+stage, and blockers that established it.
+_Avoid_: filtered pair rows that require manual archaeology through output dirs
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.

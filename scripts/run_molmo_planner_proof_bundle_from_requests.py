@@ -309,10 +309,11 @@ def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
 
 
 def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
-    results_by_id: dict[str, dict[str, Any]] = {}
+    results_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
     discovered_aliases: list[dict[str, Any]] = []
     filtered_aliases: list[dict[str, Any]] = []
     filtered_pairs: list[dict[str, Any]] = []
+    normalized_aliases: list[dict[str, Any]] = []
     generated_requests: list[dict[str, Any]] = []
     for summary in summaries:
         for item in summary.get("results") or []:
@@ -321,30 +322,48 @@ def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict
             request_id = str(item.get("request_id") or "")
             if not request_id:
                 continue
-            existing = results_by_id.get(request_id)
+            key = _prior_result_merge_key(item)
+            existing = results_by_key.get(key)
             candidate = dict(item)
             if existing is None or _prior_result_rank(candidate) >= _prior_result_rank(existing):
-                results_by_id[request_id] = candidate
+                results_by_key[key] = candidate
         fallback_generation = summary.get("fallback_generation") or {}
         if not isinstance(fallback_generation, dict):
             continue
         discovered_aliases.extend(_dict_items(fallback_generation.get("discovered_aliases")))
         filtered_aliases.extend(_dict_items(fallback_generation.get("filtered_aliases")))
         filtered_pairs.extend(_dict_items(fallback_generation.get("filtered_pairs")))
+        normalized_aliases.extend(_dict_items(fallback_generation.get("normalized_aliases")))
         generated_requests.extend(_dict_items(fallback_generation.get("generated_requests")))
     fallback_generation = _merged_fallback_generation(
         discovered_aliases=discovered_aliases,
         filtered_aliases=filtered_aliases,
         filtered_pairs=filtered_pairs,
+        normalized_aliases=normalized_aliases,
         generated_requests=generated_requests,
     )
     return {
         "schema": "merged_prior_planner_proof_result_summary_v1",
-        "result_count": len(results_by_id),
+        "result_count": len(results_by_key),
         "prior_manifest_count": len(summaries),
-        "results": list(results_by_id.values()),
+        "results": list(results_by_key.values()),
         "fallback_generation": fallback_generation,
     }
+
+
+def _prior_result_merge_key(item: dict[str, Any]) -> tuple[str, str, str]:
+    request_id = str(item.get("request_id") or "")
+    if "_fallback_" not in request_id:
+        return (request_id, "", "")
+    config = item.get("cleanup_task_config")
+    if not isinstance(config, dict):
+        config = item.get("requested_cleanup_primitive_binding")
+    config = config if isinstance(config, dict) else {}
+    object_alias = str(config.get("planner_object_id") or "")
+    target_alias = str(config.get("planner_target_receptacle_id") or "")
+    if object_alias or target_alias:
+        return (request_id, object_alias, target_alias)
+    return (request_id, "", "")
 
 
 def _prior_result_rank(item: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -370,6 +389,7 @@ def _merged_fallback_generation(
     discovered_aliases: list[dict[str, Any]],
     filtered_aliases: list[dict[str, Any]],
     filtered_pairs: list[dict[str, Any]],
+    normalized_aliases: list[dict[str, Any]],
     generated_requests: list[dict[str, Any]],
 ) -> dict[str, Any]:
     discovered = _dedupe_by_keys(
@@ -384,10 +404,14 @@ def _merged_fallback_generation(
         filtered_pairs,
         ("source_request_id", "object_alias", "target_alias", "reason"),
     )
+    normalized = _dedupe_by_keys(
+        normalized_aliases,
+        ("source_request_id", "axis", "alias", "normalized_alias"),
+    )
     generated = _dedupe_by_keys(generated_requests, ("request_id",))
     return {
         "schema": "merged_planner_cleanup_proof_request_fallback_generation_v1",
-        "enabled": any([discovered, aliases, pairs, generated]),
+        "enabled": any([discovered, aliases, pairs, normalized, generated]),
         "generated_request_count": len(generated),
         "generated_requests": generated,
         "discovered_alias_count": len(discovered),
@@ -396,6 +420,8 @@ def _merged_fallback_generation(
         "filtered_aliases": aliases,
         "filtered_pair_count": len(pairs),
         "filtered_pairs": pairs,
+        "normalized_alias_count": len(normalized),
+        "normalized_aliases": normalized,
         "evidence_note": (
             "Merged fallback candidate memory from one or more prior proof-bundle "
             "manifests. This is private runner evidence and is not exposed to Agent View."

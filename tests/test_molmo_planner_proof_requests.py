@@ -747,16 +747,32 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
         ("object", "book_beef_1_2_8", "not_pickup_root_body_alias", ""),
     }
     assert fallback_generation["filtered_pair_count"] == 1
-    assert fallback_generation["filtered_pairs"] == [
-        {
-            "source_request_id": "proof_001",
-            "object_alias": "book_beef_1_0_8",
-            "target_alias": "shelf_cafe_1_1_2",
-            "derived_from": "proof_001_fallback_01",
-            "reason": "prior_task_feasibility_blocked_pair",
-            "prior_blockers": [{"code": "HouseInvalidForTask"}],
-        }
-    ]
+    filtered_pair = fallback_generation["filtered_pairs"][0]
+    assert {
+        key: filtered_pair[key]
+        for key in (
+            "source_request_id",
+            "object_alias",
+            "target_alias",
+            "derived_from",
+            "reason",
+            "prior_status",
+            "prior_task_feasibility_status",
+            "last_worker_stage",
+            "execution_attempted",
+        )
+    } == {
+        "source_request_id": "proof_001",
+        "object_alias": "book_beef_1_0_8",
+        "target_alias": "shelf_cafe_1_1_2",
+        "derived_from": "proof_001_fallback_01",
+        "reason": "prior_task_feasibility_blocked_pair",
+        "prior_status": "blocked_capability",
+        "prior_task_feasibility_status": "blocked",
+        "last_worker_stage": "",
+        "execution_attempted": False,
+    }
+    assert filtered_pair["prior_blockers"] == [{"code": "HouseInvalidForTask"}]
 
 
 def test_proof_request_selection_carries_prior_filtered_candidates() -> None:
