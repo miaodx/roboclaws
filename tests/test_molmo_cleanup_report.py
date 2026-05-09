@@ -200,3 +200,73 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
+
+
+def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    fpv = tmp_path / "robot_views" / "raw.fpv.png"
+    fpv.parent.mkdir()
+    fpv.write_bytes(b"placeholder")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "failed",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "agent_view": {
+            "perception_mode": "raw_fpv_only",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "raw_fpv_only",
+                    "structured_detections_available": False,
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "perception_mode": "raw_fpv_only",
+                "structured_detections_available": False,
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Agent View" in html
+    assert "Raw FPV Observations" in html
+    assert "raw_fpv_001" in html
+    assert "robot_views/raw.fpv.png" in html
+    assert "support estimates" in html

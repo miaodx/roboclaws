@@ -123,6 +123,7 @@ def render_cleanup_report(
       {_moves_table(moves)}
     </section>
     {_agent_view_section(run_result)}
+    {_raw_fpv_observations_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
     <section class="panel">
@@ -225,31 +226,41 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
     metric_map = agent_view.get("metric_map") or {}
     fixture_hints = agent_view.get("fixture_hints") or {}
     observed = agent_view.get("observed_objects") or []
+    raw_observations = agent_view.get("raw_fpv_observations") or []
     waypoints = metric_map.get("inspection_waypoints") or []
     rooms = fixture_hints.get("rooms") or []
-    rows = []
-    for item in observed:
-        support = item.get("support_estimate") or {}
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
-            f"<td>{html.escape(str(item.get('category', '')))}</td>"
-            f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
-            f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
-            "</tr>"
+    mode = agent_view.get("perception_mode", "visible_object_detections")
+    if mode == "raw_fpv_only":
+        observed_table = (
+            '<p class="note">Raw FPV-only mode is active. Structured movable-object '
+            "detections, categories, support estimates, target labels, and generated "
+            "mess truth are not present in Agent View.</p>"
         )
-    observed_table = (
-        "<p>No objects observed.</p>"
-        if not rows
-        else '<div class="table-wrap"><table><thead><tr><th>Observed handle</th><th>Category</th>'
-        "<th>Room</th><th>Support estimate</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></div>"
-    )
+    else:
+        rows = []
+        for item in observed:
+            support = item.get("support_estimate") or {}
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('category', '')))}</td>"
+                f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
+                f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+                "</tr>"
+            )
+        if not rows:
+            observed_table = "<p>No objects observed.</p>"
+        else:
+            observed_table = (
+                '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
+                "<th>Category</th><th>Room</th><th>Support estimate</th></tr></thead>"
+                "<tbody>" + "".join(rows) + "</tbody></table></div>"
+            )
     summary = (
         f"{len(metric_map.get('rooms') or [])} public rooms, "
         f"{len(rooms)} fixture-hint room rows, {len(waypoints)} inspection waypoints, "
-        f"{len(observed)} observed object handles."
+        f"{len(observed)} observed object handles, "
+        f"{len(raw_observations)} raw FPV observations."
     )
     return (
         '<section class="panel agent-view"><h2>Agent View</h2>'
@@ -257,6 +268,38 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
         f"{observed_table}</section>"
+    )
+
+
+def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    observations = run_result.get("raw_fpv_observations") or (
+        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+    )
+    if not observations:
+        return ""
+    cards = []
+    for item in observations:
+        artifacts = item.get("image_artifacts") or {}
+        fpv_path = artifacts.get("fpv") or item.get("fpv_image")
+        cards.append(
+            '<article class="raw-fpv-card">'
+            "<div>"
+            f"<h3>{html.escape(str(item.get('observation_id', 'observation')))}</h3>"
+            f'<p class="pose">room={html.escape(str(item.get("room_id", "")))} '
+            f"waypoint={html.escape(str(item.get('waypoint_id', '')))}</p>"
+            f'<p class="note">{html.escape(str(item.get("artifact_status", "")))}</p>'
+            "</div>"
+            f"{_view_figure(fpv_path, 'FPV')}"
+            "</article>"
+        )
+    return (
+        '<section class="panel raw-fpv-section"><h2>Raw FPV Observations</h2>'
+        '<p class="note">Camera-only perception evidence: these rows provide FPV image '
+        "artifacts without structured movable-object detections, categories, support "
+        "estimates, target labels, or generated mess truth.</p>"
+        '<div class="raw-fpv-grid">' + "".join(cards) + "</div></section>"
     )
 
 
@@ -662,6 +705,19 @@ def _wrap_html(body: str) -> str:
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
+    .raw-fpv-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }}
+    .raw-fpv-card {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .raw-fpv-card h3 {{ margin: 0 0 4px; font-size: 15px; }}
+    .raw-fpv-card figure {{ margin-top: 10px; }}
     .semantic-cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

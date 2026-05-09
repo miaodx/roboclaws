@@ -9,7 +9,9 @@ and shared report underlay.
 
 ## Status
 
-Planned 2026-05-09. Implementation has not started.
+Completed 2026-05-09. ADR-0013 raw FPV-only observation evidence mode is
+implemented, checker-gated, and verified through the real MolmoSpaces/RBY1M
+harness.
 
 ## Tasks
 

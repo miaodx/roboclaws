@@ -19,7 +19,9 @@ from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noq
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
+    RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
 )
 from roboclaws.molmo_cleanup.report import (  # noqa: E402
@@ -60,6 +62,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("room_only", "exact_fixtures"),
         default="room_only",
     )
+    parser.add_argument(
+        "--perception-mode",
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -74,6 +81,7 @@ def run_realworld_cleanup(
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     fixture_hint_mode: str = "room_only",
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
@@ -107,6 +115,7 @@ def run_realworld_cleanup(
         base_contract,
         task_prompt=task_prompt,
         fixture_hint_mode=fixture_hint_mode,
+        perception_mode=perception_mode,
     )
     trace_events: list[dict[str, Any]] = []
     started_at = time.time()
@@ -152,7 +161,23 @@ def run_realworld_cleanup(
             {"waypoint_id": waypoint_id},
             lambda selected=waypoint_id: contract.navigate_to_waypoint(selected),
         )
-        observation = _call_tool(trace_events, started_at, "observe", {}, contract.observe)
+        observation = _call_tool(
+            trace_events,
+            started_at,
+            "observe",
+            {},
+            contract.observe,
+            postprocess=lambda response: _attach_raw_fpv_robot_view(
+                response=response,
+                contract=contract,
+                base_contract=base_contract,
+                robot_view_steps=robot_view_steps,
+                output_dir=output_dir,
+                view_index_ref=[view_index],
+                record_robot_views=record_robot_views,
+            ),
+        )
+        view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
         for detection in observation.get("visible_object_detections", []):
             handle = str(detection["object_id"])
             if handle in handled_handles:
@@ -260,6 +285,7 @@ def run_realworld_cleanup(
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
         "fixture_hint_mode": fixture_hint_mode,
+        "perception_mode": perception_mode,
         "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": private_evaluation["generated_mess_count"],
         "mess_restoration_rate": done["score"]["mess_restoration_rate"],
@@ -268,6 +294,7 @@ def run_realworld_cleanup(
         "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
         "semantic_substeps": substeps,
         "agent_view": agent_view,
+        "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "agent_memory": agent_memory,
         "private_evaluation": private_evaluation,
         "advisory_evaluation": advisory_evaluation,
@@ -498,11 +525,68 @@ def _call_tool(
     tool: str,
     request: dict[str, Any],
     fn: Any,
+    *,
+    postprocess: Any | None = None,
 ) -> dict[str, Any]:
     events.append(_trace_event(started_at, tool=tool, event="request", request=request))
     response = fn()
+    if postprocess is not None:
+        response = postprocess(response)
     events.append(_trace_event(started_at, tool=tool, event="response", response=response))
     return response
+
+
+def _attach_raw_fpv_robot_view(
+    *,
+    response: dict[str, Any],
+    contract: RealWorldCleanupContract,
+    base_contract: MolmoCleanupToolContract,
+    robot_view_steps: list[dict[str, Any]],
+    output_dir: Path,
+    view_index_ref: list[int],
+    record_robot_views: bool,
+) -> dict[str, Any]:
+    if (
+        contract.perception_mode != RAW_FPV_ONLY_MODE
+        or not record_robot_views
+        or not response.get("ok")
+    ):
+        return response
+    raw = response.get("raw_fpv_observation")
+    if not isinstance(raw, dict):
+        return response
+    observation_id = str(raw.get("observation_id", ""))
+    if not observation_id:
+        return response
+    view_index_ref[0] = record_robot_view_step(
+        steps=robot_view_steps,
+        backend=base_contract.backend,
+        output_dir=output_dir,
+        index=view_index_ref[0],
+        label_suffix=observation_id,
+        action=f"observe {observation_id}",
+    )
+    step = robot_view_steps[-1]
+    attached = contract.attach_raw_fpv_observation_artifact(
+        observation_id,
+        views=step.get("views") or {},
+        robot_view_label=str(step.get("label", "")),
+    )
+    if attached is None:
+        return response
+    updated = dict(response)
+    updated["raw_fpv_observation"] = attached
+    return updated
+
+
+def _view_index_after_raw_fpv(steps: list[dict[str, Any]], fallback_index: int) -> int:
+    if not steps:
+        return fallback_index
+    try:
+        label = str(steps[-1].get("label", ""))
+        return max(fallback_index, int(label.split("_", 1)[0]) + 1)
+    except (TypeError, ValueError):
+        return fallback_index
 
 
 def _trace_event(started_at: float, *, tool: str, event: str, **payload: Any) -> dict[str, Any]:
@@ -524,6 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         task_prompt=args.task,
         backend=args.backend,
         fixture_hint_mode=args.fixture_hint_mode,
+        perception_mode=args.perception_mode,
         include_robot=args.include_robot,
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,

@@ -15,6 +15,8 @@ if __package__ in {None, ""}:
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
+    RAW_FPV_ONLY_MODE,
+    VISIBLE_OBJECT_DETECTIONS_MODE,
     infer_target_fixture_for_detection,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
@@ -43,6 +45,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--perception-mode",
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -57,6 +64,7 @@ def run_smoke(
     policy: str = "realworld_contract_smoke_agent",
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
@@ -94,6 +102,7 @@ def run_smoke(
         agent_driven=True,
         task_prompt=task,
         fixture_hint_mode="room_only",
+        perception_mode=perception_mode,
         record_robot_views=record_robot_views,
     )
     try:
@@ -154,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         policy=args.policy,
         backend=args.backend,
         generated_mess_count=args.generated_mess_count,
+        perception_mode=args.perception_mode,
         include_robot=args.include_robot,
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,

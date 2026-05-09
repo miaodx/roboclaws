@@ -22,6 +22,7 @@
 # - just verify::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit proof
 # - just verify::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit proof
 # - just verify::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0010 OpenClaw visual report proof
+# - just verify::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -210,6 +211,19 @@ molmo-realworld-openclaw-visual-dogfood-kit generated_mess_count="10":
       tests/test_molmo_cleanup_report.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-realworld-openclaw-visual-dogfood-kit "7" "output/molmo-realworld-openclaw-visual-dogfood-kit" "帮我收拾这个房间" "{{generated_mess_count}}"
+
+# ADR-0013 raw FPV-only observation gate. Requires the isolated Python 3.11
+# MolmoSpaces runtime and local robot assets for the harness evidence.
+molmo-realworld-raw-fpv generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_contract.py \
+      tests/test_molmo_realworld_mcp_server.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-raw-fpv "7" "output/molmo-realworld-raw-fpv-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

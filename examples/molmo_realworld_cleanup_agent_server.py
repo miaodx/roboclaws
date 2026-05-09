@@ -18,7 +18,11 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
-from roboclaws.molmo_cleanup.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
+from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+    DEFAULT_REALWORLD_TASK,
+    RAW_FPV_ONLY_MODE,
+    VISIBLE_OBJECT_DETECTIONS_MODE,
+)
 from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
     DEFAULT_HOST,
     DEFAULT_PORT,
@@ -53,6 +57,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--perception-mode",
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -87,6 +96,7 @@ def print_setup(
     policy: str,
     *,
     backend: str = SYNTHETIC_BACKEND,
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
 ) -> None:
     commands = client_setup_commands(url)
@@ -97,6 +107,7 @@ def print_setup(
     print("Contract      : realworld_cleanup_v1")
     print(f"MCP server    : {MCP_SERVER_NAME}")
     print(f"Backend       : {backend}")
+    print(f"Perception    : {perception_mode}")
     print(f"Visual report : {'enabled' if record_robot_views else 'disabled'}")
     print("\nIn another terminal from this repo, run one of:")
     print(f"  {commands['Codex']}")
@@ -112,7 +123,13 @@ def print_setup(
     print("  Read skills/molmo-realworld-cleanup/SKILL.md.")
     print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
     print("  Sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe.")
-    print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")
+    if perception_mode == RAW_FPV_ONLY_MODE:
+        print("  Raw FPV mode returns camera observations, not observed_* detections.")
+        print(
+            "  Sweep waypoints, inspect the FPV artifacts, and call done when evidence is recorded."
+        )
+    else:
+        print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")
     print("  The server rejects skipped semantic phases; follow required_tool if returned.")
     print("  Do not call scene_objects or read private scoring artifacts.")
     print("\nThis server exits when the agent calls roboclaws__done or you press Ctrl-C.\n")
@@ -134,6 +151,7 @@ def run_molmo_realworld_cleanup_agent_server(
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
@@ -178,6 +196,7 @@ def run_molmo_realworld_cleanup_agent_server(
             policy=policy,
             task_prompt=task_prompt,
             fixture_hint_mode="room_only",
+            perception_mode=perception_mode,
             record_robot_views=record_robot_views,
         )
         server.run_in_thread()
@@ -188,6 +207,7 @@ def run_molmo_realworld_cleanup_agent_server(
                 url,
                 policy,
                 backend=backend,
+                perception_mode=perception_mode,
                 record_robot_views=record_robot_views,
             )
         while not server.done_event.wait(poll_interval_s):
@@ -234,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             task_prompt=args.task,
             backend=args.backend,
             generated_mess_count=args.generated_mess_count,
+            perception_mode=args.perception_mode,
             include_robot=args.include_robot,
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,

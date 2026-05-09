@@ -17,6 +17,7 @@
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
 # - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
 # - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
+# - just harness::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation evidence
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -388,6 +389,32 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --require-clean-agent-run \
       --require-robot-views \
       --require-advisory-scoring \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0013 raw FPV-only evidence harness. This intentionally proves perception
+# boundary and report artifacts, not camera-only cleanup success.
+molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harness" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --task "{{task}}" \
+      --fixture-hint-mode room_only \
+      --perception-mode raw_fpv_only \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-robot-views \
+      --require-advisory-scoring \
+      --require-raw-fpv-observations \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

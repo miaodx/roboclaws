@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World Raw FPV Perception
 
-**Status:** Planned 2026-05-09 under GSD Phase 22
+**Status:** Completed 2026-05-09 under GSD Phase 22
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0009, ADR-0013, Phase 21 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -73,3 +73,17 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_realworld_contract.py tests/test_molmo_realworld_mcp_server.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_realworld_cleanup_result.py tests/test_verify_just_recipes.py`
 - `ruff check` and `ruff format --check` on changed Python files.
 - `just verify::molmo-realworld-raw-fpv`
+
+## Completion Evidence
+
+- Added `perception_mode=raw_fpv_only` to the ADR-0003 deterministic and MCP
+  paths while preserving `visible_object_detections` as the default.
+- Raw mode `observe` responses and `agent_view` rows contain no structured
+  movable-object detections, categories, support estimates, target labels, or
+  private scoring truth.
+- The shared report renders `Raw FPV Observations` and still includes the Robot
+  View Timeline, Agent View, Advisory Review, and Private Evaluation sections.
+- The checker supports `--require-raw-fpv-observations`.
+- `just verify::molmo-realworld-raw-fpv` passed against the real
+  MolmoSpaces/RBY1M backend with 14 raw FPV observations and 16 robot-view
+  steps.
