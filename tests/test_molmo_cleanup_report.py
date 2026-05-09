@@ -826,6 +826,27 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             },
         },
     }
+    run_result["manipulation_evidence"]["sampled_task_binding"] = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "pickup/body",
+        "place_receptacle_name": "sink/body",
+        "place_target_name": "sink/body",
+    }
+    run_result["manipulation_evidence"]["requested_cleanup_primitive_binding"] = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "requested": True,
+        "object_id": "pickup/body",
+        "target_receptacle_id": "sink/body",
+        "source_receptacle_id": "counter/body",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
+    run_result["manipulation_evidence"]["cleanup_primitive_binding"] = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "pickup/body",
+        "target_receptacle_id": "sink/body",
+        "source_receptacle_id": "counter/body",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -835,6 +856,10 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "Planner Probe Cleanup Binding" in html
+    assert "pickup/body" in html
+    assert "sink/body" in html
+    assert "navigate_to_receptacle" in html
     assert "CUDA Memory Headroom" in html
     assert "CuRobo Memory Profile" in html
     assert "CuRobo Extension Cache" in html

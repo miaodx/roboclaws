@@ -59,6 +59,8 @@ now record the sampled upstream pickup/place task binding and promote
 `planner_probe_cleanup_primitive_binding_v1` only when requested object,
 target, and tool coverage match that sampled task. Generic probe runs remain
 target runtime proof only, and mismatched requests emit explicit blockers.
+Planner probe `report.html` artifacts now render this evidence in a dedicated
+Planner Probe Cleanup Binding section.
 
 This closes the probe-source binding gap from ADR-0032. It does not yet force
 the upstream sampler to choose an ADR-0003 observed object handle, and it does
@@ -70,4 +72,5 @@ primitive execution.
 - `uv run ruff check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
 - `uv run ruff format --check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py`
 - `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`

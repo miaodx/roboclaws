@@ -35,6 +35,7 @@ Completed 2026-05-09.
 - Passed: `uv run ruff check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
 - Passed: `uv run ruff format --check scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_headless_renderer.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`
 - Passed: `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_planner_proof_attachment.py`
+- Passed: `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py`
 - Passed: real visual artifact checker against
   `output/molmospaces-planner-cleanup-bridge-readiness/run_result.json` with
   bridge accepted as blocked.
@@ -53,4 +54,5 @@ and tool fields. Execute-mode evidence includes `sampled_task_binding`,
 `requested_cleanup_primitive_binding`, `cleanup_primitive_binding`, and
 `cleanup_primitive_binding_blockers` when applicable. Promotion remains strict:
 no request means no cleanup primitive binding, and sampled-task mismatches stay
-blocked.
+blocked. Planner probe `report.html` artifacts render this evidence in a
+dedicated Planner Probe Cleanup Binding section.

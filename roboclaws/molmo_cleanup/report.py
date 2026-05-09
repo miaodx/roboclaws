@@ -158,6 +158,7 @@ def render_planner_manipulation_report(
     </section>
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
+    {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
@@ -549,6 +550,71 @@ def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
         f"{_view_figure(artifacts.get('initial'), 'Initial')}"
         f"{_view_figure(artifacts.get('final'), 'Final')}"
         "</div></section>"
+    )
+
+
+def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
+    sampled = evidence.get("sampled_task_binding") or {}
+    requested = evidence.get("requested_cleanup_primitive_binding") or {}
+    promoted = evidence.get("cleanup_primitive_binding") or {}
+    blockers = evidence.get("cleanup_primitive_binding_blockers") or []
+    if not (sampled or requested or promoted or blockers):
+        return ""
+    rows = [
+        ("Sampled pickup", sampled.get("pickup_obj_name", "")),
+        (
+            "Sampled target",
+            sampled.get("place_receptacle_name") or sampled.get("place_target_name") or "",
+        ),
+        ("Requested object", requested.get("object_id", "")),
+        ("Requested target", requested.get("target_receptacle_id", "")),
+        ("Requested source", requested.get("source_receptacle_id", "")),
+        ("Requested tools", ", ".join(str(item) for item in requested.get("tools") or [])),
+        ("Promoted object", promoted.get("object_id", "")),
+        ("Promoted target", promoted.get("target_receptacle_id", "")),
+        ("Promoted tools", ", ".join(str(item) for item in promoted.get("tools") or [])),
+    ]
+    binding_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value
+    )
+    if not binding_rows:
+        binding_rows = '<tr><td colspan="2">No cleanup binding values recorded.</td></tr>'
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+    )
+    if blocker_rows:
+        blocker_table = (
+            '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+            f"<th>Message</th></tr></thead><tbody>{blocker_rows}</tbody></table></div>"
+        )
+    else:
+        blocker_table = '<p class="note">No cleanup binding blockers recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requested', _yes_no(requested.get('requested')))}"
+        f"{_metric('Promoted', _yes_no(bool(promoted)))}"
+        f"{_metric('Blockers', len(blockers))}"
+        "</div>"
+    )
+    note = (
+        "Planner probe cleanup binding joins a requested cleanup primitive to the "
+        "sampled upstream pickup/place task. Exact match is required before this "
+        "can feed cleanup primitive executor evidence."
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{binding_rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel planner-probe-cleanup-binding">'
+        "<h2>Planner Probe Cleanup Binding</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{table}{blocker_table}</section>'
     )
 
 
