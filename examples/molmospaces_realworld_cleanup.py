@@ -39,11 +39,15 @@ from roboclaws.molmo_cleanup.report import (  # noqa: E402
     write_trace_jsonl,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+    run_semantic_cleanup_loop,
+)
 from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
     primitive_provenance_counts,
     record_robot_view_step,
+    robot_view_capture_for_tool,
     semantic_substeps,
 )
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
@@ -440,142 +444,60 @@ def _clean_visible_object(
 ) -> int:
     handle = str(detection["object_id"])
     target_fixture_id = str(target_fixture["fixture_id"])
-    support = detection.get("support_estimate") or {}
-    focus_object_id = _internal_object_id(contract, handle)
-    source_fixture_id = support.get("fixture_id")
 
-    navigate_object = _call_tool(
-        trace_events,
-        started_at,
-        "navigate_to_object",
-        {"object_id": handle},
-        lambda selected=handle: contract.navigate_to_object(selected),
-    )
-    if record_robot_views:
+    def record_loop_robot_view(
+        tool: str,
+        request: dict[str, Any],
+        response: dict[str, Any],
+    ) -> None:
+        nonlocal view_index
+        if not record_robot_views or not response.get("ok"):
+            return
+        capture = robot_view_capture_for_tool(
+            tool,
+            request,
+            response,
+            object_id_transform=lambda value: (
+                _internal_object_id(contract, value) if value is not None else None
+            ),
+        )
+        if capture is None:
+            return
         view_index = record_robot_view_step(
             steps=robot_view_steps,
             backend=base_contract.backend,
             output_dir=output_dir,
             index=view_index,
-            label_suffix=f"navigate_object_{handle}",
-            action=f"navigate_to_object {handle}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=str(source_fixture_id) if source_fixture_id else None,
-            semantic_phase="navigate_to_object",
+            action=str(capture["action"]),
+            label_suffix=str(capture["label_suffix"]),
+            focus_object_id=capture.get("focus_object_id"),
+            focus_receptacle_id=capture.get("focus_receptacle_id"),
+            semantic_phase=capture.get("semantic_phase"),
         )
-    if not navigate_object.get("ok"):
-        return view_index
 
-    pick = _call_tool(
-        trace_events,
-        started_at,
-        "pick",
-        {"object_id": handle},
-        lambda selected=handle: contract.pick(selected),
+    run_semantic_cleanup_loop(
+        targets=[
+            {
+                "object_id": handle,
+                "target_receptacle_id": target_fixture_id,
+                "target_receptacle": target_fixture,
+            }
+        ],
+        contract=contract,
+        call_tool=lambda tool, request, fn: _call_tool(
+            trace_events,
+            started_at,
+            tool,
+            request,
+            fn,
+        ),
+        record_tool_view=record_loop_robot_view,
+        target_request_key="fixture_id",
+        include_object_id_in_receptacle_request=False,
+        include_object_id_in_target_requests=False,
     )
-    if record_robot_views:
-        view_index = record_robot_view_step(
-            steps=robot_view_steps,
-            backend=base_contract.backend,
-            output_dir=output_dir,
-            index=view_index,
-            label_suffix=f"pick_{handle}",
-            action=f"pick {handle}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=str(source_fixture_id) if source_fixture_id else None,
-            semantic_phase="pick",
-        )
-    if not pick.get("ok"):
-        return view_index
-
-    navigate_receptacle = _call_tool(
-        trace_events,
-        started_at,
-        "navigate_to_receptacle",
-        {"receptacle_id": target_fixture_id},
-        lambda selected=target_fixture_id: contract.navigate_to_receptacle(selected),
-    )
-    if record_robot_views:
-        view_index = record_robot_view_step(
-            steps=robot_view_steps,
-            backend=base_contract.backend,
-            output_dir=output_dir,
-            index=view_index,
-            label_suffix=f"navigate_receptacle_{target_fixture_id}",
-            action=f"navigate_to_receptacle {target_fixture_id}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=target_fixture_id,
-            semantic_phase="navigate_to_receptacle",
-        )
-    if not navigate_receptacle.get("ok"):
-        return view_index
-
-    if _requires_inside_place(target_fixture):
-        _call_tool(
-            trace_events,
-            started_at,
-            "open_receptacle",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.open_receptacle(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"open_receptacle_{target_fixture_id}",
-                action=f"open_receptacle {target_fixture_id}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="open_receptacle",
-            )
-        _call_tool(
-            trace_events,
-            started_at,
-            "place_inside",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.place_inside(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"place_inside_{handle}",
-                action=f"place_inside {handle}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="place_inside",
-            )
-    else:
-        _call_tool(
-            trace_events,
-            started_at,
-            "place",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.place(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"place_{handle}",
-                action=f"place {handle}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="place",
-            )
 
     return view_index
-
-
-def _requires_inside_place(fixture: dict[str, Any]) -> bool:
-    text = f"{fixture.get('category', '')} {fixture.get('name', '')}".lower()
-    return "fridge" in text or "refrigerator" in text
 
 
 def _write_snapshot(

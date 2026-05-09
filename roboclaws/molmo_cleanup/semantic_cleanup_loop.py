@@ -1,0 +1,269 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+
+ToolCall = Callable[[str, dict[str, Any], Callable[[], dict[str, Any]]], dict[str, Any]]
+ToolViewRecorder = Callable[[str, dict[str, Any], dict[str, Any]], None]
+
+
+@dataclass(frozen=True)
+class SemanticCleanupLoopResult:
+    attempted_objects: int
+    completed_objects: int
+    failed_objects: tuple[dict[str, Any], ...]
+
+
+def run_semantic_cleanup_loop(
+    *,
+    targets: Sequence[Mapping[str, Any]],
+    contract: Any,
+    call_tool: ToolCall,
+    receptacles_by_id: Mapping[str, Mapping[str, Any]] | None = None,
+    record_tool_view: ToolViewRecorder | None = None,
+    include_object_done: bool = False,
+    target_request_key: str = "receptacle_id",
+    include_object_id_in_receptacle_request: bool = True,
+    include_object_id_in_target_requests: bool = True,
+) -> SemanticCleanupLoopResult:
+    """Run the canonical object cleanup loop over already-selected targets."""
+    completed = 0
+    failed: list[dict[str, Any]] = []
+    receptacles = receptacles_by_id or {}
+
+    for target in targets:
+        object_id = _required_target_value(target, "object_id")
+        target_receptacle_id = _target_receptacle_id(target)
+        source_receptacle_id = _optional_target_value(target, "source_receptacle_id")
+
+        ok, failed_step = _run_one_object(
+            target=target,
+            contract=contract,
+            call_tool=call_tool,
+            record_tool_view=record_tool_view,
+            receptacles_by_id=receptacles,
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            source_receptacle_id=source_receptacle_id,
+            include_object_done=include_object_done,
+            target_request_key=target_request_key,
+            include_object_id_in_receptacle_request=include_object_id_in_receptacle_request,
+            include_object_id_in_target_requests=include_object_id_in_target_requests,
+        )
+        if ok:
+            completed += 1
+        else:
+            failed.append(
+                {
+                    "object_id": object_id,
+                    "target_receptacle_id": target_receptacle_id,
+                    **failed_step,
+                }
+            )
+
+    return SemanticCleanupLoopResult(
+        attempted_objects=len(targets),
+        completed_objects=completed,
+        failed_objects=tuple(failed),
+    )
+
+
+def _run_one_object(
+    *,
+    target: Mapping[str, Any],
+    contract: Any,
+    call_tool: ToolCall,
+    record_tool_view: ToolViewRecorder | None,
+    receptacles_by_id: Mapping[str, Mapping[str, Any]],
+    object_id: str,
+    target_receptacle_id: str,
+    source_receptacle_id: str,
+    include_object_done: bool,
+    target_request_key: str,
+    include_object_id_in_receptacle_request: bool,
+    include_object_id_in_target_requests: bool,
+) -> tuple[bool, dict[str, Any]]:
+    navigate_object_request = {"object_id": object_id}
+    if source_receptacle_id:
+        navigate_object_request["source_receptacle_id"] = source_receptacle_id
+    response = _invoke(
+        call_tool,
+        record_tool_view,
+        "navigate_to_object",
+        navigate_object_request,
+        lambda: contract.navigate_to_object(object_id),
+    )
+    if not response.get("ok"):
+        return False, _failed_step("navigate_to_object", response)
+
+    pick_request = {"object_id": object_id}
+    response = _invoke(
+        call_tool,
+        record_tool_view,
+        "pick",
+        pick_request,
+        lambda: contract.pick(object_id),
+    )
+    if not response.get("ok"):
+        return False, _failed_step("pick", response)
+
+    navigate_receptacle_request = {"receptacle_id": target_receptacle_id}
+    if include_object_id_in_receptacle_request:
+        navigate_receptacle_request["object_id"] = object_id
+    response = _invoke(
+        call_tool,
+        record_tool_view,
+        "navigate_to_receptacle",
+        navigate_receptacle_request,
+        lambda: contract.navigate_to_receptacle(target_receptacle_id),
+    )
+    if not response.get("ok"):
+        return False, _failed_step("navigate_to_receptacle", response)
+
+    target_receptacle = _target_receptacle(target, receptacles_by_id, target_receptacle_id)
+    if _requires_inside_place(target, target_receptacle, target_receptacle_id):
+        open_request = _target_request(
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            target_request_key=target_request_key,
+            include_object_id=include_object_id_in_target_requests,
+        )
+        response = _invoke(
+            call_tool,
+            record_tool_view,
+            "open_receptacle",
+            open_request,
+            lambda: contract.open_receptacle(target_receptacle_id),
+        )
+        if not response.get("ok"):
+            return False, _failed_step("open_receptacle", response)
+        place_tool = "place_inside"
+    else:
+        place_tool = "place"
+
+    place_request = _target_request(
+        object_id=object_id,
+        target_receptacle_id=target_receptacle_id,
+        target_request_key=target_request_key,
+        include_object_id=include_object_id_in_target_requests,
+    )
+    if place_tool == "place_inside":
+        response = _invoke(
+            call_tool,
+            record_tool_view,
+            place_tool,
+            place_request,
+            lambda: contract.place_inside(target_receptacle_id),
+        )
+    else:
+        response = _invoke(
+            call_tool,
+            record_tool_view,
+            place_tool,
+            place_request,
+            lambda: contract.place(target_receptacle_id),
+        )
+    if not response.get("ok"):
+        return False, _failed_step(place_tool, response)
+
+    if include_object_done:
+        response = _invoke(
+            call_tool,
+            record_tool_view,
+            "object_done",
+            {"object_id": object_id, "receptacle_id": target_receptacle_id},
+            lambda: contract.object_done(object_id, target_receptacle_id),
+        )
+        if not response.get("ok"):
+            return False, _failed_step("object_done", response)
+
+    return True, {}
+
+
+def _invoke(
+    call_tool: ToolCall,
+    record_tool_view: ToolViewRecorder | None,
+    tool: str,
+    request: dict[str, Any],
+    fn: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    response = call_tool(tool, request, fn)
+    if record_tool_view is not None:
+        record_tool_view(tool, request, response)
+    return response
+
+
+def _target_request(
+    *,
+    object_id: str,
+    target_receptacle_id: str,
+    target_request_key: str,
+    include_object_id: bool,
+) -> dict[str, Any]:
+    request = {target_request_key: target_receptacle_id}
+    if include_object_id:
+        request["object_id"] = object_id
+    return request
+
+
+def _failed_step(tool: str, response: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "failed_tool": tool,
+        "status": str(response.get("status") or "error"),
+        "error_reason": str(response.get("error_reason") or ""),
+    }
+
+
+def _target_receptacle(
+    target: Mapping[str, Any],
+    receptacles_by_id: Mapping[str, Mapping[str, Any]],
+    target_receptacle_id: str,
+) -> Mapping[str, Any]:
+    raw = target.get("target_receptacle") or target.get("receptacle")
+    if isinstance(raw, Mapping):
+        return raw
+    return receptacles_by_id.get(target_receptacle_id, {})
+
+
+def _requires_inside_place(
+    target: Mapping[str, Any],
+    receptacle: Mapping[str, Any],
+    receptacle_id: str,
+) -> bool:
+    if "requires_inside_place" in target:
+        return bool(target["requires_inside_place"])
+    if "place_inside" in target:
+        return bool(target["place_inside"])
+    text = " ".join(
+        str(value)
+        for value in (
+            receptacle.get("category"),
+            receptacle.get("name"),
+            receptacle.get("receptacle_id"),
+            receptacle.get("fixture_id"),
+            receptacle_id,
+        )
+        if value is not None
+    ).lower()
+    return "fridge" in text or "refrigerator" in text
+
+
+def _target_receptacle_id(target: Mapping[str, Any]) -> str:
+    for key in ("target_receptacle_id", "receptacle_id", "fixture_id", "to_fixture_id"):
+        value = target.get(key)
+        if value:
+            return str(value)
+    raise ValueError(f"cleanup target lacks a receptacle id: {target}")
+
+
+def _required_target_value(target: Mapping[str, Any], key: str) -> str:
+    value = target.get(key)
+    if not value:
+        raise ValueError(f"cleanup target lacks {key}: {target}")
+    return str(value)
+
+
+def _optional_target_value(target: Mapping[str, Any], key: str) -> str:
+    value = target.get(key)
+    return "" if value is None else str(value)

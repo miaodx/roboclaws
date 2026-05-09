@@ -8,20 +8,20 @@ place` architecture before planner-backed primitive replacement begins.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. [ ] Add ADR/source-plan documentation and update roadmap/state/context
+1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. [ ] Add a shared semantic cleanup loop driver with callback-based trace and
+2. [x] Add a shared semantic cleanup loop driver with callback-based trace and
    robot-view hooks.
-3. [ ] Refactor `examples/molmospaces_cleanup_demo.py` to use the shared
+3. [x] Refactor `examples/molmospaces_cleanup_demo.py` to use the shared
    driver while keeping `object_done` readback.
-4. [ ] Refactor `examples/molmospaces_realworld_cleanup.py` to use the shared
+4. [x] Refactor `examples/molmospaces_realworld_cleanup.py` to use the shared
    driver while preserving ADR-0003 public fixture requests.
-5. [ ] Add focused tests and rerun existing cleanup demo/report checks.
-6. [ ] Generate lightweight artifacts for both demo paths and record evidence.
+5. [x] Add focused tests and rerun existing cleanup demo/report checks.
+6. [x] Generate lightweight artifacts for both demo paths and record evidence.
 
 ## Acceptance
 
@@ -35,11 +35,33 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` on changed Python files.
-- `uv run ruff format --check` on changed Python files.
-- `./scripts/run_pytest_standalone.sh -q` on focused cleanup-loop/demo/report
-  tests.
-- Synthetic current-contract and ADR-0003 artifact generation.
+- `uv run ruff check roboclaws/molmo_cleanup/semantic_cleanup_loop.py roboclaws/molmo_cleanup/semantic_timeline.py examples/molmospaces_cleanup_demo.py examples/molmospaces_realworld_cleanup.py tests/test_molmo_semantic_cleanup_loop.py`
+  passed.
+- `uv run ruff format --check roboclaws/molmo_cleanup/semantic_cleanup_loop.py roboclaws/molmo_cleanup/semantic_timeline.py examples/molmospaces_cleanup_demo.py examples/molmospaces_realworld_cleanup.py tests/test_molmo_semantic_cleanup_loop.py`
+  passed.
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_semantic_cleanup_loop.py tests/test_molmo_cleanup_demo.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_cleanup_report.py tests/test_molmo_cleanup_primitive_evidence.py`
+  passed with 19 tests.
+- `output/molmospaces-shared-semantic-loop-current/run_result.json` records
+  `cleanup_status=success`, `primitive_provenance=api_semantic`, and
+  `semantic_loop_variant=navigate-pick-navigate-open-place-object_done`.
+- `output/molmospaces-shared-semantic-loop-realworld/run_result.json` records
+  `cleanup_status=success`, `primitive_provenance=api_semantic`,
+  `semantic_loop_variant=navigate-pick-navigate-open-place`, and
+  `cleanup_primitive_evidence.status=blocked_capability`.
+- The realworld checker passed in accepted blocked-capability mode:
+  `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --accept-blocked-planner-cleanup-primitives output/molmospaces-shared-semantic-loop-realworld/run_result.json`.
+
+## Evidence
+
+- `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` owns the shared object
+  cleanup chain.
+- `robot_view_capture_for_tool` now supports caller-supplied object-id
+  translation for ADR-0003 observed handles.
+- Current-contract and ADR-0003 demos both call `run_semantic_cleanup_loop`.
+- Fridge targets still render `navigate_to_object -> pick ->
+  navigate_to_receptacle -> open_receptacle -> place_inside`.
+- Existing cleanup primitives remain `api_semantic`; Phase 36 is architecture
+  consolidation, not planner-backed primitive replacement.
 
 ## Risks
 

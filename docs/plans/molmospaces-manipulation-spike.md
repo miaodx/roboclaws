@@ -838,8 +838,10 @@ completed:
   gsd-plan-phase 35-molmospaces-rby1m-curobo-memory-profile
   gsd-execute-phase 35-molmospaces-rby1m-curobo-memory-profile
   gsd-verify-work 35-molmospaces-rby1m-curobo-memory-profile
+  gsd-plan-phase 36-molmospaces-shared-semantic-cleanup-loop
+  gsd-execute-phase 36-molmospaces-shared-semantic-cleanup-loop
+  gsd-verify-work 36-molmospaces-shared-semantic-cleanup-loop
 
 next pipeline candidates:
-  plan shared semantic cleanup loop architecture
   plan actual planner-backed cleanup-loop primitive replacement after shared-loop integration
 ```

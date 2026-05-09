@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -62,7 +63,10 @@ def robot_view_capture_for_tool(
     tool: str,
     request: dict[str, Any],
     response: dict[str, Any],
+    *,
+    object_id_transform: Callable[[str | None], str | None] | None = None,
 ) -> dict[str, str | None] | None:
+    transform_object_id = object_id_transform or _identity_optional_str
     if tool == "observe":
         return {
             "action": "observe",
@@ -84,7 +88,7 @@ def robot_view_capture_for_tool(
         return {
             "action": f"navigate_to_object {object_id}",
             "label_suffix": label_suffix("navigate_object", object_id),
-            "focus_object_id": object_id,
+            "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": optional_str(
                 response.get("source_receptacle_id") or response.get("location_id")
             ),
@@ -95,7 +99,7 @@ def robot_view_capture_for_tool(
         return {
             "action": f"pick {object_id}",
             "label_suffix": label_suffix("pick", object_id),
-            "focus_object_id": object_id,
+            "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": optional_str(
                 response.get("previous_location_id") or response.get("source_receptacle_id")
             ),
@@ -107,7 +111,7 @@ def robot_view_capture_for_tool(
         return {
             "action": f"navigate_to_receptacle {receptacle_id}",
             "label_suffix": label_suffix("navigate_receptacle", receptacle_id),
-            "focus_object_id": object_id,
+            "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": receptacle_id,
             "semantic_phase": "navigate_to_receptacle",
         }
@@ -117,7 +121,7 @@ def robot_view_capture_for_tool(
         return {
             "action": f"open_receptacle {receptacle_id}",
             "label_suffix": label_suffix("open_receptacle", receptacle_id),
-            "focus_object_id": object_id,
+            "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": receptacle_id,
             "semantic_phase": "open_receptacle",
         }
@@ -127,7 +131,7 @@ def robot_view_capture_for_tool(
         return {
             "action": f"{tool} {object_id}",
             "label_suffix": label_suffix(tool, object_id),
-            "focus_object_id": object_id,
+            "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": receptacle_id,
             "semantic_phase": tool,
         }
@@ -364,6 +368,10 @@ def label_suffix(prefix: str, value: str | None) -> str:
 
 def optional_str(value: Any) -> str | None:
     return None if value is None else str(value)
+
+
+def _identity_optional_str(value: str | None) -> str | None:
+    return value
 
 
 def relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:
