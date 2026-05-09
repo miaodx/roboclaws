@@ -8,7 +8,7 @@ real planner blocker after renderer setup.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
@@ -21,10 +21,16 @@ Planned 2026-05-09.
 
 ## Verification
 
-- `uv run ruff check` / `uv run ruff format --check` on changed Python files.
+- `uv run ruff check` / `uv run ruff format --check` passed on changed Python
+  files.
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_headless_renderer.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py`
-- `.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-manipulation-probe-headless --probe-mode execute --embodiment franka --steps 2 --timeout-s 180`
+  passed with `13 passed`.
+- `.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-manipulation-probe-headless --probe-mode execute --embodiment franka --steps 2 --timeout-s 420`
+  produced `status=planner_backed`.
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --require-planner-backed output/molmo-planner-manipulation-probe-headless/run_result.json`
+  passed.
+- `just verify::molmo-planner-manipulation-probe` still passed for the default
+  blocked-capability config-import gate.
 
 ## Risks
 

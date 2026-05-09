@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Headless Renderer
 
-**Status:** Planned under GSD Phase 25
+**Status:** Completed under GSD Phase 25
 **Created:** 2026-05-09
 **Source:** ADR-0015, ADR-0016, Phase 24 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -52,5 +52,26 @@ This phase should:
 
 - `uv run ruff check` / `uv run ruff format --check` on changed Python files.
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_headless_renderer.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py`
-- `.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-manipulation-probe-headless --probe-mode execute --embodiment franka --steps 2 --timeout-s 180`
+- `.venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-manipulation-probe-headless --probe-mode execute --embodiment franka --steps 2 --timeout-s 420`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --require-planner-backed output/molmo-planner-manipulation-probe-headless/run_result.json`
+
+## Completion Evidence
+
+Completed 2026-05-09.
+
+- Focused pytest passed with `13 passed`.
+- `uv run ruff check` and `uv run ruff format --check` passed on changed
+  Python files.
+- The headless Franka execute probe produced
+  `output/molmo-planner-manipulation-probe-headless/run_result.json` with
+  `status=planner_backed`, `strict_proof_eligible=true`, `steps_executed=2`,
+  and `max_abs_qpos_delta=0.01846538091255523`.
+- The strict checker passed:
+  `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --require-planner-backed output/molmo-planner-manipulation-probe-headless/run_result.json`.
+- The shared report renders planner proof views and diagnostics at
+  `output/molmo-planner-manipulation-probe-headless/report.html`.
+- `just verify::molmo-planner-manipulation-probe` still passes for the default
+  accepted blocked-capability config-import gate.
+
+This closes the standalone Franka strict planner-backed proof gate. Cleanup-loop
+integration remains a separate phase.

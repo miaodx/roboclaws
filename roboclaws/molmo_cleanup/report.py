@@ -324,7 +324,11 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
     summary = (
         f"python={diagnostics.get('python_version', '')}; "
         f"executable={diagnostics.get('python_executable', '')}; "
-        f"faulthandler={diagnostics.get('faulthandler_enabled', False)}"
+        f"faulthandler={diagnostics.get('faulthandler_enabled', False)}; "
+        f"renderer_adapter={diagnostics.get('renderer_adapter_enabled', False)}; "
+        f"renderer_device={diagnostics.get('renderer_device_id', '')}; "
+        f"MUJOCO_GL={diagnostics.get('mujoco_gl_env', '')}; "
+        f"PYOPENGL_PLATFORM={diagnostics.get('pyopengl_platform_env', '')}"
     )
     return (
         '<section class="panel"><h2>Runtime Diagnostics</h2>'

@@ -4,8 +4,9 @@
 
 PASS for the Phase 24 diagnostics goal.
 
-Strict planner-backed cleanup execution remains blocked and is intentionally not
-claimed by this phase.
+Strict planner-backed cleanup execution was intentionally not claimed by this
+phase. Follow-up Phase 25 later produced a passing standalone Franka strict
+planner proof; cleanup-loop integration remains separate.
 
 ## Commands Run
 

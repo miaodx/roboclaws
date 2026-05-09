@@ -30,6 +30,8 @@ Completed 2026-05-09.
 - RBY1M config-import probe produced accepted `blocked_capability` evidence
   with `ModuleNotFoundError: No module named 'curobo'` and
   `runtime_diagnostics.modules.curobo.available=false`.
+- Follow-up Phase 25 later produced a passing standalone Franka strict planner
+  proof; cleanup-loop integration remains separate.
 
 ## Risks
 

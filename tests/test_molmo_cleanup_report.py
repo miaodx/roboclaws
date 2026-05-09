@@ -318,6 +318,10 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "python_executable": "/tmp/molmospaces/.venv/bin/python",
         "python_version": "3.11.8",
         "faulthandler_enabled": True,
+        "renderer_adapter_enabled": True,
+        "renderer_device_id": 0,
+        "mujoco_gl_env": "egl",
+        "pyopengl_platform_env": "egl",
         "modules": {
             "curobo": {"available": False, "version": None},
             "molmo_spaces": {"available": True, "version": "0.1.0"},
@@ -333,4 +337,6 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
     assert "faulthandler=True" in html
+    assert "renderer_adapter=True" in html
+    assert "MUJOCO_GL=egl" in html
     assert "curobo" in html

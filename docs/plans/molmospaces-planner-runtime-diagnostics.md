@@ -68,5 +68,6 @@ Completed 2026-05-09.
   `output/molmo-planner-manipulation-probe-rby1m/run_result.json` with
   `curobo.available=false`.
 
-Strict planner-backed cleanup execution remains separate until a probe passes
-the ADR-0014 `--require-planner-backed` gate.
+Follow-up note: Phase 25 produced a passing standalone Franka
+`--require-planner-backed` probe. Planner-backed cleanup-loop integration still
+remains separate.

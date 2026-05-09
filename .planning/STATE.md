@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 25 MolmoSpaces planner headless renderer planned on 2026-05-09; strict planner-backed cleanup execution remains gated on `--require-planner-backed` evidence.
+stopped_at: Phase 25 MolmoSpaces planner headless renderer completed on 2026-05-09; standalone Franka strict planner proof passes, cleanup-loop integration remains separate.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 20
-  completed_phases: 19
+  completed_phases: 20
   total_plans: 23
-  completed_plans: 22
-  percent: 96
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -21,29 +21,30 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 25 planner headless renderer for the strict Franka planner proof gate.
+**Current focus:** Phase 25 planner headless renderer completed; next planner-backed work is cleanup-loop integration.
 
 ## Current Position
 
-Phase: 25 (molmospaces-planner-headless-renderer) — PLANNED
-Plan: 1 of 1 planned — `25-01` adds a probe-local EGL renderer adapter for
+Phase: 25 (molmospaces-planner-headless-renderer) — COMPLETE
+Plan: 1 of 1 complete — `25-01` adds a probe-local EGL renderer adapter for
 headless Franka execute-mode planner proof.
-Status: Phase 24 made strict-proof blockers actionable. Follow-up experiments
-showed default Franka execute mode still `SIGSEGV`s in `glfw.create_window`;
-EGL env vars avoid the segfault path but hit an upstream MolmoSpaces CGL import
-bug on Linux. Phase 25 should localize a renderer-device override to the worker
-probe and then rerun the strict `--require-planner-backed` gate.
-Last activity: 2026-05-09 - Planned Phase 25 planner headless renderer after
-Phase 24 diagnostics identified renderer setup as the next strict-proof blocker.
+Status: Phase 25 localized a renderer-device override to the worker probe and
+the headless Franka execute-mode artifact now passes
+`--require-planner-backed`. Standalone planner-backed manipulation proof is
+closed for Franka; actual planner-backed cleanup-loop integration remains a
+separate follow-up. RBY1M remains blocked by missing CuRobo.
+Last activity: 2026-05-09 - Completed Phase 25 planner headless renderer and
+recorded strict Franka proof evidence at
+`output/molmo-planner-manipulation-probe-headless/run_result.json`.
 
-Progress: [#########.] 96%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 targets the headless renderer blocker before strict planner proof can pass.)
+Progress: [##########] 100%
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 24)
+- Total plans completed: 32 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 25)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -70,8 +71,8 @@ Progress: [#########.] 96%
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 22, 23, 24
-- Trend: MolmoSpaces cleanup path now moved from raw FPV-only perception evidence to strict planner-backed manipulation provenance and runtime diagnostics for the remaining strict-proof blockers.
+- Last 3 shipped phases: 23, 24, 25
+- Trend: MolmoSpaces cleanup path now moved from strict planner-backed manipulation provenance to runtime diagnostics and a passing standalone Franka planner proof.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -97,6 +98,7 @@ Progress: [#########.] 96%
 | Phase 22 P01 | ~1h | 5 tasks | 15 files |
 | Phase 23 P01 | ~1h | 5 tasks | 11 files |
 | Phase 24 P01 | ~1h | 5 tasks | 12 files |
+| Phase 25 P01 | ~1h | 5 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -239,6 +241,14 @@ Recent decisions affecting current work:
   Phase 25 should patch the MolmoSpaces renderer constructor only inside the
   worker process to pass `device_id=0`, record that override in diagnostics,
   and keep `--require-planner-backed` strict.
+- **Phase 25 completion (2026-05-09):** The planner probe now sets EGL env vars
+  for execute-mode workers and patches both MolmoSpaces renderer call sites
+  (`env.env.MjOpenGLRenderer` and `utils.scene_maps.MjOpenGLRenderer`) inside
+  the worker process. The strict Franka headless artifact passed
+  `--require-planner-backed` with `status=planner_backed`,
+  `steps_executed=2`, `max_abs_qpos_delta=0.01846538091255523`, and initial/
+  final wrist-camera views. This closes standalone Franka planner proof but not
+  ADR-0003 cleanup-loop integration.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
@@ -366,9 +376,9 @@ Recent decisions affecting current work:
   ADR-0015 adds faulthandler-backed stderr crash evidence, dependency
   availability diagnostics, and shared-underlay Runtime Diagnostics reports for
   strict planner probe blockers.
-- Phase 25 planned (2026-05-09): **MolmoSpaces planner headless renderer** —
+- Phase 25 completed (2026-05-09): **MolmoSpaces planner headless renderer** —
   ADR-0016 localizes an EGL renderer-device override to the standalone planner
-  probe worker before attempting strict Franka planner proof.
+  probe worker and produces a passing strict Franka planner proof.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -401,9 +411,9 @@ None yet.
   advisory scoring/model checks, Phase 22 completed raw FPV-only perception
   evidence, Phase 23 completed planner-backed provenance/proof gating, and
   Phase 24 completed runtime diagnostics for strict planner blockers. Phase 25
-  is planned to address the headless renderer blocker for strict Franka proof.
-  Camera-only model-policy cleanup and actual planner-backed cleanup execution
-  remain separate follow-ups.
+  completed standalone strict Franka planner proof with a headless renderer
+  adapter. Camera-only model-policy cleanup, RBY1M CuRobo setup, and actual
+  planner-backed cleanup-loop integration remain separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -436,14 +446,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 25 MolmoSpaces planner headless renderer planned; actual
-planner-backed cleanup execution remains blocked until the strict
-`--require-planner-backed` probe passes.
+Stopped at: Phase 25 MolmoSpaces planner headless renderer completed; the
+standalone Franka strict planner proof passes, and cleanup-loop integration is
+the next planner-backed follow-up.
 Latest planning artifacts are
 `docs/adr/0016-use-probe-local-egl-renderer-adapter-for-headless-planner-proof.md`,
 `docs/plans/molmospaces-planner-headless-renderer.md`, and
 `.planning/phases/25-molmospaces-planner-headless-renderer/25-01-planner-headless-renderer-PLAN.md`.
-Resume file: .planning/phases/25-molmospaces-planner-headless-renderer/25-01-planner-headless-renderer-PLAN.md
+Resume file: .planning/phases/25-molmospaces-planner-headless-renderer/25-VERIFICATION.md
 
 ## Dual-Stack Workflow
 
@@ -451,7 +461,7 @@ Resume file: .planning/phases/25-molmospaces-planner-headless-renderer/25-01-pla
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** 25 (molmospaces-planner-headless-renderer) — planned;
-implementation should add a worker-local EGL renderer adapter for Franka
-execute-mode probe proof, then rerun the strict planner gate —
+**Active Phase:** 25 (molmospaces-planner-headless-renderer) — complete;
+next planner-backed work should plan cleanup-loop integration using the passing
+standalone Franka proof and keeping RBY1M CuRobo setup separate —
 2026-05-09T00:00:00+08:00

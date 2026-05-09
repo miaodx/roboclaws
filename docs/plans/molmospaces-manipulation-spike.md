@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 25 planner headless renderer planned on 2026-05-09
+**Status:** Phase 25 planner headless renderer completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -16,8 +16,8 @@ synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 -> Phase 20 clean-policy semantic-loop hardening -> Phase 21 advisory scoring
 -> Phase 22 raw FPV-only perception evidence -> Phase 23 planner-backed
 manipulation provenance/proof gate -> Phase 24 planner runtime diagnostics ->
-Phase 25 planner headless renderer. Real planner-backed cleanup execution
-remains gated on a strict planner probe.
+Phase 25 planner headless renderer. Standalone Franka strict planner proof now
+passes; real planner-backed cleanup-loop integration remains a follow-up.
 
 ## Why This Exists
 

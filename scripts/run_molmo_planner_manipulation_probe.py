@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import faulthandler
+import importlib
 import importlib.metadata
 import importlib.util
 import json
@@ -58,6 +59,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--probe-mode", choices=("config_import", "execute"), default="config_import"
     )
+    parser.add_argument(
+        "--renderer-device-id",
+        type=int,
+        default=int(os.environ.get("ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID", "0")),
+        help=(
+            "EGL renderer device id for execute-mode probes. Use a negative value to "
+            "disable the probe-local headless renderer adapter."
+        ),
+    )
     parser.add_argument("--steps", type=int, default=2)
     parser.add_argument("--timeout-s", type=float, default=180.0)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
@@ -80,6 +90,7 @@ def main() -> None:
         molmospaces_root=args.molmospaces_root,
         embodiment=args.embodiment,
         probe_mode=args.probe_mode,
+        renderer_device_id=args.renderer_device_id,
         steps=args.steps,
         timeout_s=args.timeout_s,
     )
@@ -100,6 +111,7 @@ def run_probe(
     molmospaces_root: Path,
     embodiment: str,
     probe_mode: str,
+    renderer_device_id: int,
     steps: int,
     timeout_s: float,
 ) -> dict[str, Any]:
@@ -130,6 +142,14 @@ def run_probe(
     env = os.environ.copy()
     env["PYTHONPATH"] = _prepend_pythonpath(molmospaces_root, env.get("PYTHONPATH"))
     env["PYTHONFAULTHANDLER"] = "1"
+    worker_renderer_device_id = _renderer_device_id_for_probe(
+        probe_mode=probe_mode,
+        renderer_device_id=renderer_device_id,
+    )
+    if worker_renderer_device_id is not None:
+        env["MUJOCO_GL"] = "egl"
+        env["PYOPENGL_PLATFORM"] = "egl"
+        env["ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID"] = str(worker_renderer_device_id)
     command = [
         str(python_executable),
         str(Path(__file__).resolve()),
@@ -140,6 +160,8 @@ def run_probe(
         embodiment,
         "--probe-mode",
         probe_mode,
+        "--renderer-device-id",
+        str(renderer_device_id),
         "--steps",
         str(steps),
     ]
@@ -168,8 +190,11 @@ def run_probe(
             blockers=blockers,
         )
     except subprocess.TimeoutExpired as exc:
-        stdout_path.write_text(exc.stdout or "", encoding="utf-8")
-        stderr_path.write_text(exc.stderr or "", encoding="utf-8")
+        stdout_text = _process_output_text(exc.stdout)
+        stderr_text = _process_output_text(exc.stderr)
+        stdout_path.write_text(stdout_text, encoding="utf-8")
+        stderr_path.write_text(stderr_text, encoding="utf-8")
+        worker_payload = _parse_last_json_object(stdout_text)
         return _write_probe_result(
             output_dir=output_dir,
             stdout_path=stdout_path,
@@ -177,13 +202,14 @@ def run_probe(
             embodiment=embodiment,
             probe_mode=probe_mode,
             steps=steps,
-            worker_payload=None,
+            worker_payload=worker_payload,
             returncode=124,
             blockers=[{"code": "timeout", "message": f"Probe exceeded {timeout_s:.1f}s"}],
         )
 
 
 def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
+    _configure_headless_renderer_env(args)
     runtime_diagnostics = _runtime_diagnostics(args)
     print(
         json.dumps(
@@ -232,6 +258,10 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
             "available": spec is not None,
             "version": _package_version(package_name),
         }
+    renderer_device_id = _renderer_device_id_for_probe(
+        probe_mode=args.probe_mode,
+        renderer_device_id=args.renderer_device_id,
+    )
     return {
         "python_executable": sys.executable,
         "python_version": sys.version.split()[0],
@@ -241,6 +271,10 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "modules": modules,
         "faulthandler_enabled": faulthandler.is_enabled(),
         "python_faulthandler_env": os.environ.get("PYTHONFAULTHANDLER", ""),
+        "mujoco_gl_env": os.environ.get("MUJOCO_GL", ""),
+        "pyopengl_platform_env": os.environ.get("PYOPENGL_PLATFORM", ""),
+        "renderer_adapter_enabled": renderer_device_id is not None,
+        "renderer_device_id": renderer_device_id,
     }
 
 
@@ -270,7 +304,17 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
         "execution_attempted": False,
     }
     if args.probe_mode == "execute":
-        payload.update(_execute_policy_probe(config, args.output_dir, args.steps))
+        payload.update(
+            _execute_policy_probe(
+                config,
+                args.output_dir,
+                args.steps,
+                renderer_device_id=_renderer_device_id_for_probe(
+                    probe_mode=args.probe_mode,
+                    renderer_device_id=args.renderer_device_id,
+                ),
+            )
+        )
     return payload
 
 
@@ -296,14 +340,31 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         "execution_attempted": False,
     }
     if args.probe_mode == "execute":
-        payload.update(_execute_policy_probe(config, args.output_dir, args.steps))
+        payload.update(
+            _execute_policy_probe(
+                config,
+                args.output_dir,
+                args.steps,
+                renderer_device_id=_renderer_device_id_for_probe(
+                    probe_mode=args.probe_mode,
+                    renderer_device_id=args.renderer_device_id,
+                ),
+            )
+        )
     return payload
 
 
-def _execute_policy_probe(config: Any, output_dir: Path, steps: int) -> dict[str, Any]:
+def _execute_policy_probe(
+    config: Any,
+    output_dir: Path,
+    steps: int,
+    *,
+    renderer_device_id: int | None,
+) -> dict[str, Any]:
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
 
+    renderer_adapter = _apply_headless_renderer_adapter(renderer_device_id)
     task_sampler = config.task_sampler_config.task_sampler_class(config)
     task_sampler.reset()
     task = task_sampler.sample_task()
@@ -331,7 +392,70 @@ def _execute_policy_probe(config: Any, output_dir: Path, steps: int) -> dict[str
         "max_abs_qpos_delta": float(np.max(np.abs(final_qpos - initial_qpos))),
         "image_artifacts": image_artifacts,
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
+        "renderer_adapter": renderer_adapter,
     }
+
+
+def _renderer_device_id_for_probe(
+    *,
+    probe_mode: str,
+    renderer_device_id: int,
+) -> int | None:
+    if probe_mode != "execute" or renderer_device_id < 0:
+        return None
+    return renderer_device_id
+
+
+def _configure_headless_renderer_env(args: argparse.Namespace) -> None:
+    renderer_device_id = _renderer_device_id_for_probe(
+        probe_mode=args.probe_mode,
+        renderer_device_id=args.renderer_device_id,
+    )
+    if renderer_device_id is None:
+        return
+    os.environ["MUJOCO_GL"] = "egl"
+    os.environ["PYOPENGL_PLATFORM"] = "egl"
+    os.environ["ROBOCLAWS_MOLMOSPACES_RENDERER_DEVICE_ID"] = str(renderer_device_id)
+
+
+def _apply_headless_renderer_adapter(renderer_device_id: int | None) -> dict[str, Any]:
+    if renderer_device_id is None:
+        return {"enabled": False}
+    targets = []
+    already_patched = []
+    for module_name in (
+        "molmo_spaces.env.env",
+        "molmo_spaces.utils.scene_maps",
+    ):
+        module = importlib.import_module(module_name)
+        if not hasattr(module, "MjOpenGLRenderer"):
+            continue
+        targets.append(f"{module_name}.MjOpenGLRenderer")
+        module_already_patched = bool(
+            getattr(module.MjOpenGLRenderer, "_roboclaws_renderer_adapter", False)
+        )
+        already_patched.append(module_already_patched)
+        if not module_already_patched:
+            _patch_renderer_constructor(module, renderer_device_id)
+    return {
+        "enabled": True,
+        "device_id": renderer_device_id,
+        "targets": targets,
+        "already_patched": all(already_patched) if already_patched else False,
+    }
+
+
+def _patch_renderer_constructor(env_module: Any, renderer_device_id: int) -> None:
+    renderer_cls = env_module.MjOpenGLRenderer
+
+    def renderer_with_device(*args: Any, **kwargs: Any) -> Any:
+        if kwargs.get("device_id") is None:
+            kwargs["device_id"] = renderer_device_id
+        return renderer_cls(*args, **kwargs)
+
+    renderer_with_device._roboclaws_renderer_adapter = True  # type: ignore[attr-defined]
+    renderer_with_device._roboclaws_renderer_device_id = renderer_device_id  # type: ignore[attr-defined]
+    env_module.MjOpenGLRenderer = renderer_with_device
 
 
 def _write_first_camera_image(
@@ -482,6 +606,14 @@ def _parse_last_json_object(stdout: str) -> dict[str, Any] | None:
         if isinstance(payload, dict):
             return payload
     return None
+
+
+def _process_output_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _prepend_pythonpath(path: Path, existing: str | None) -> str:

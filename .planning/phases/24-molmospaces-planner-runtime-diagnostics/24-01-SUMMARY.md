@@ -44,6 +44,9 @@ Completed 2026-05-09.
 
 ## Boundary
 
-This phase does not claim planner-backed cleanup execution. The strict proof
-gate from ADR-0014 still requires a passing `--require-planner-backed` probe
+This phase did not claim planner-backed cleanup execution. The strict proof
+gate from ADR-0014 still required a passing `--require-planner-backed` probe
 with real planner execution, nonzero robot-state movement, and no blockers.
+
+Follow-up: Phase 25 later produced a passing standalone Franka strict planner
+proof. Cleanup-loop integration remains separate.
