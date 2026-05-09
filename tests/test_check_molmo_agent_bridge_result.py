@@ -161,10 +161,16 @@ def _add_visual_bridge_fields(path: Path) -> None:
     robot_views = base / "robot_views"
     robot_views.mkdir()
     report = base / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
+    report_text = report.read_text(encoding="utf-8")
+    robot_timeline = (
+        '\n<section class="panel robot-timeline"><h2>Robot View Timeline</h2></section>'
     )
+    score_marker = '<section class="panel">\n      <h2>Score</h2>'
+    if score_marker in report_text:
+        report_text = report_text.replace(score_marker, robot_timeline + "\n" + score_marker)
+    else:
+        report_text += robot_timeline
+    report.write_text(report_text, encoding="utf-8")
     actions = [
         ("before", None, None, None),
         ("navigate_to_object mug_01", "mug_01", "sink_01", "target_facing_base_yaw"),

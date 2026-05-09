@@ -80,6 +80,9 @@ executor. Phase 43 wires that executor into the shared semantic cleanup loop
 for a bounded object/subphase attempt before any full multi-object replacement
 claim. Phase 44 broadens that path to proof bundles so a full cleanup artifact
 can select one bound proof per cleaned object before claiming bridge readiness.
+Phase 45 tightens the shared report architecture by making current-contract and
+ADR-0003 checkers enforce one visual-core contract and by removing the remaining
+duplicated ADR-0003 MCP robot-view semantic mapping.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -149,6 +152,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.43 MolmoSpaces observed handle planner binding** - Phase 42 (completed 2026-05-09; private observed-handle to planner sampled-task alias binding)
 - ✅ **v1.44 MolmoSpaces bounded planner cleanup executor** - Phase 43 (completed 2026-05-09; opt-in probe-backed executor wiring for bounded cleanup subphases)
 - ✅ **v1.45 MolmoSpaces planner proof bundle cleanup** - Phase 44 (completed 2026-05-10; one bound proof per cleaned object for bridge-ready full cleanup artifacts)
+- ✅ **v1.46 MolmoSpaces report visual core contract** - Phase 45 (completed 2026-05-10; shared visual-core checks and MCP robot-view semantic reuse)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -209,6 +213,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 42: MolmoSpaces observed handle planner binding** - ADR-0033 private mapping from ADR-0003 observed handles to planner sampled-task aliases while preserving cleanup-facing IDs for executor matching. Completed 2026-05-09.
 - [x] **Phase 43: MolmoSpaces bounded planner cleanup executor** - ADR-0034 opt-in wiring that lets a matching probe-backed proof drive bounded shared-loop cleanup subphases. Completed 2026-05-09; default and mismatched-proof runs remain `api_semantic`, and full multi-object planner-backed cleanup remains a follow-up.
 - [x] **Phase 44: MolmoSpaces planner proof bundle cleanup** - ADR-0035 multiple bound proof attachments selected per observed handle/target so a full cleanup artifact can pass the existing planner primitive and bridge gates. Completed 2026-05-10; this proves artifact proof coverage, not live generation of every proof.
+- [x] **Phase 45: MolmoSpaces report visual core contract** - ADR-0036 shared report visual-core checker plus ADR-0003 MCP robot-view semantic mapping reuse. Completed 2026-05-10; stale ignored reports now fail until regenerated with the shared visual core.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

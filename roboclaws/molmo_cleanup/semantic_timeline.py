@@ -107,7 +107,7 @@ def robot_view_capture_for_tool(
         }
     if tool == "navigate_to_receptacle":
         object_id = optional_str(response.get("object_id"))
-        receptacle_id = optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
+        receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
             "action": f"navigate_to_receptacle {receptacle_id}",
             "label_suffix": label_suffix("navigate_receptacle", receptacle_id),
@@ -117,7 +117,7 @@ def robot_view_capture_for_tool(
         }
     if tool == "open_receptacle":
         object_id = optional_str(response.get("object_id"))
-        receptacle_id = optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
+        receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
             "action": f"open_receptacle {receptacle_id}",
             "label_suffix": label_suffix("open_receptacle", receptacle_id),
@@ -127,7 +127,7 @@ def robot_view_capture_for_tool(
         }
     if tool in {"place", "place_inside"}:
         object_id = optional_str(response.get("object_id"))
-        receptacle_id = optional_str(response.get("receptacle_id") or request.get("receptacle_id"))
+        receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
             "action": f"{tool} {object_id}",
             "label_suffix": label_suffix(tool, object_id),
@@ -372,6 +372,22 @@ def label_suffix(prefix: str, value: str | None) -> str:
 
 def optional_str(value: Any) -> str | None:
     return None if value is None else str(value)
+
+
+def response_or_request_id(
+    response: dict[str, Any],
+    request: dict[str, Any],
+    *keys: str,
+) -> str | None:
+    for key in keys:
+        value = response.get(key)
+        if value:
+            return str(value)
+    for key in keys:
+        value = request.get(key)
+        if value:
+            return str(value)
+    return None
 
 
 def _identity_optional_str(value: str | None) -> str | None:

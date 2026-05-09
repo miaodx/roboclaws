@@ -248,11 +248,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     for name in ("raw.fpv.png", "raw.chase.png", "raw.map.png", "raw.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     result["artifacts"]["robot_views"] = str(robot_views)
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     for item in result["raw_fpv_observations"]:
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
     for item in result["agent_view"]["raw_fpv_observations"]:
@@ -657,11 +653,7 @@ def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None
     robot_views.mkdir()
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
@@ -693,11 +685,7 @@ def test_checker_openclaw_minimum_robot_views_allows_partial_visual_actions(
     robot_views.mkdir()
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
@@ -793,6 +781,19 @@ def _cleanup_binding(
             *target_tools,
         ],
     }
+
+
+def _insert_robot_timeline_before_score(report: Path) -> None:
+    report_text = report.read_text(encoding="utf-8")
+    robot_timeline = (
+        '\n<section class="panel robot-timeline"><h2>Robot View Timeline</h2></section>'
+    )
+    score_marker = '<section class="panel">\n      <h2>Score</h2>'
+    if score_marker in report_text:
+        report_text = report_text.replace(score_marker, robot_timeline + "\n" + score_marker)
+    else:
+        report_text += robot_timeline
+    report.write_text(report_text, encoding="utf-8")
 
 
 def _write_strict_planner_proof(

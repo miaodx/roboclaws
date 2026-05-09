@@ -165,6 +165,12 @@ _Avoid_: Per-demo report clone
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture
 
+**Report Visual Core Contract**:
+The package-level validation contract that current-contract and ADR-0003
+checkers use to enforce one Cleanup Artifact Report section order and one
+semantic subphase display vocabulary.
+_Avoid_: Per-checker report string smoke test
+
 **Semantic Cleanup Subphase**:
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow

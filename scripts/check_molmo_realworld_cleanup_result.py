@@ -29,6 +29,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
+from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
     SEMANTIC_LOOP_VARIANT,
     has_complete_semantic_sequence,
@@ -198,6 +199,13 @@ def _assert_result(
     if enforce_success or data.get("semantic_substeps"):
         assert "Semantic Substeps" in report_text, report_text[:500]
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    assert_cleanup_report_visual_core(
+        report_text,
+        require_semantic_subphases=enforce_success or bool(data.get("semantic_substeps")),
+        require_robot_timeline=require_robot_views,
+        require_agent_view=True,
+        require_private_evaluation=True,
+    )
     if require_openclaw_minimum:
         _assert_openclaw_minimum(data)
     if require_clean_agent_run:
