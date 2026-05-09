@@ -25,6 +25,13 @@ from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noq
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
     planner_cleanup_bridge_evidence,
 )
+from roboclaws.molmo_cleanup.planner_primitive_executor import (  # noqa: E402
+    PlannerBackedCleanupContractAdapter,
+)
+from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (  # noqa: E402
+    ProbeBackedCleanupPrimitiveExecutor,
+    cleanup_primitive_binding_from_attachment,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
@@ -88,6 +95,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
     parser.add_argument("--planner-proof-run-result", type=Path)
+    parser.add_argument(
+        "--use-planner-proof-for-cleanup-primitives",
+        action="store_true",
+        help=(
+            "Opt in to using attached bound planner proof as cleanup primitive executor "
+            "evidence when it matches the current observed handle and target."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -104,6 +119,7 @@ def run_realworld_cleanup(
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
     planner_proof_run_result: Path | None = None,
+    use_planner_proof_for_cleanup_primitives: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -114,6 +130,10 @@ def run_realworld_cleanup(
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    if use_planner_proof_for_cleanup_primitives and planner_proof_run_result is None:
+        raise ValueError(
+            "use_planner_proof_for_cleanup_primitives requires planner_proof_run_result"
+        )
 
     backend_instance: Any | None = None
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -135,6 +155,18 @@ def run_realworld_cleanup(
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
     )
+    planner_proof_attachment: dict[str, Any] | None = None
+    planner_cleanup_executor: ProbeBackedCleanupPrimitiveExecutor | None = None
+    if planner_proof_run_result is not None:
+        planner_proof_attachment = attach_planner_proof(
+            proof_run_result_path=planner_proof_run_result,
+            cleanup_run_dir=output_dir,
+        )
+        if use_planner_proof_for_cleanup_primitives:
+            planner_cleanup_executor = ProbeBackedCleanupPrimitiveExecutor(
+                planner_proof_attachment,
+                executor_name="probe_backed_realworld_cleanup_executor",
+            )
     trace_events: list[dict[str, Any]] = []
     started_at = time.time()
 
@@ -238,6 +270,7 @@ def run_realworld_cleanup(
                 output_dir=output_dir,
                 view_index=view_index,
                 record_robot_views=record_robot_views,
+                planner_cleanup_executor=planner_cleanup_executor,
             )
             handled_handles.add(handle)
             agent_memory["decisions"].append(
@@ -324,6 +357,7 @@ def run_realworld_cleanup(
         "agent_driven": False,
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
+        "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
         "requested_generated_mess_count": generated_mess_count,
@@ -371,11 +405,8 @@ def run_realworld_cleanup(
         run_result["view_variant"] = ROBOT_VIEW_VARIANT
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
-    if planner_proof_run_result is not None:
-        run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
-            proof_run_result_path=planner_proof_run_result,
-            cleanup_run_dir=output_dir,
-        )
+    if planner_proof_attachment is not None:
+        run_result["planner_backed_manipulation_proof"] = planner_proof_attachment
         run_result["planner_cleanup_bridge_evidence"] = planner_cleanup_bridge_evidence(
             planner_proof_attachment=run_result["planner_backed_manipulation_proof"],
             cleanup_primitive_evidence=cleanup_primitive_evidence,
@@ -448,6 +479,7 @@ def _clean_visible_object(
     output_dir: Path,
     view_index: int,
     record_robot_views: bool,
+    planner_cleanup_executor: ProbeBackedCleanupPrimitiveExecutor | None = None,
 ) -> int:
     handle = str(detection["object_id"])
     target_fixture_id = str(target_fixture["fixture_id"])
@@ -482,6 +514,13 @@ def _clean_visible_object(
             semantic_phase=capture.get("semantic_phase"),
         )
 
+    loop_contract = _cleanup_loop_contract_for_target(
+        contract=contract,
+        planner_cleanup_executor=planner_cleanup_executor,
+        object_id=handle,
+        target_receptacle_id=target_fixture_id,
+    )
+
     run_semantic_cleanup_loop(
         targets=[
             {
@@ -490,7 +529,7 @@ def _clean_visible_object(
                 "target_receptacle": target_fixture,
             }
         ],
-        contract=contract,
+        contract=loop_contract,
         call_tool=lambda tool, request, fn: _call_tool(
             trace_events,
             started_at,
@@ -527,6 +566,39 @@ def _write_snapshot(
 
 def _internal_object_id(contract: RealWorldCleanupContract, handle: str) -> str | None:
     return contract._internal_object_id(handle)
+
+
+def _cleanup_loop_contract_for_target(
+    *,
+    contract: RealWorldCleanupContract,
+    planner_cleanup_executor: ProbeBackedCleanupPrimitiveExecutor | None,
+    object_id: str,
+    target_receptacle_id: str,
+) -> Any:
+    if planner_cleanup_executor is None:
+        return contract
+    binding = cleanup_primitive_binding_from_attachment(
+        planner_cleanup_executor.planner_proof_attachment
+    )
+    if _cleanup_binding_matches_target(binding, object_id, target_receptacle_id):
+        return PlannerBackedCleanupContractAdapter(
+            contract,
+            executor=planner_cleanup_executor,
+            executor_name="probe_backed_realworld_cleanup_executor",
+        )
+    return contract
+
+
+def _cleanup_binding_matches_target(
+    binding: dict[str, Any],
+    object_id: str,
+    target_receptacle_id: str,
+) -> bool:
+    return (
+        bool(binding)
+        and str(binding.get("object_id") or "") == object_id
+        and str(binding.get("target_receptacle_id") or "") == target_receptacle_id
+    )
 
 
 def _call_tool(
@@ -624,6 +696,7 @@ def main(argv: list[str] | None = None) -> int:
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
         planner_proof_run_result=args.planner_proof_run_result,
+        use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

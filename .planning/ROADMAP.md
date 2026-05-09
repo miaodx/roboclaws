@@ -146,7 +146,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.41 MolmoSpaces probe-backed cleanup primitive executor** - Phase 40 (completed 2026-05-09; adapter from bound RBY1M/CuRobo proof to primitive executor evidence)
 - ✅ **v1.42 MolmoSpaces planner probe cleanup binding** - Phase 41 (completed 2026-05-09; sampled-task binding diagnostics and exact-match cleanup binding promotion)
 - ✅ **v1.43 MolmoSpaces observed handle planner binding** - Phase 42 (completed 2026-05-09; private observed-handle to planner sampled-task alias binding)
-- 📋 **v1.44 MolmoSpaces bounded planner cleanup executor** - Phase 43 (planned 2026-05-09; opt-in probe-backed executor wiring for bounded cleanup subphases)
+- ✅ **v1.44 MolmoSpaces bounded planner cleanup executor** - Phase 43 (completed 2026-05-09; opt-in probe-backed executor wiring for bounded cleanup subphases)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -205,7 +205,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 40: MolmoSpaces probe-backed cleanup primitive executor** - ADR-0031 adapter that converts only bound target RBY1M/CuRobo proof into cleanup primitive executor evidence. Completed 2026-05-09.
 - [x] **Phase 41: MolmoSpaces planner probe cleanup binding** - ADR-0032 sampled-task binding diagnostics and exact-match cleanup primitive binding promotion in planner probe artifacts. Completed 2026-05-09.
 - [x] **Phase 42: MolmoSpaces observed handle planner binding** - ADR-0033 private mapping from ADR-0003 observed handles to planner sampled-task aliases while preserving cleanup-facing IDs for executor matching. Completed 2026-05-09.
-- [ ] **Phase 43: MolmoSpaces bounded planner cleanup executor** - ADR-0034 opt-in wiring that lets a matching probe-backed proof drive bounded shared-loop cleanup subphases. Planned 2026-05-09.
+- [x] **Phase 43: MolmoSpaces bounded planner cleanup executor** - ADR-0034 opt-in wiring that lets a matching probe-backed proof drive bounded shared-loop cleanup subphases. Completed 2026-05-09; default and mismatched-proof runs remain `api_semantic`, and full multi-object planner-backed cleanup remains a follow-up.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

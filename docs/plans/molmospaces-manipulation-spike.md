@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 43 bounded planner cleanup executor planned on 2026-05-09
+**Status:** Phase 43 bounded planner cleanup executor completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -50,9 +50,9 @@ real object-specific executor maps ADR-0003 observed handles to upstream
 sampled planner tasks and integrates target planner-backed primitives into the
 cleanup subphases. Phase 42 completed the first half of that remaining bridge:
 private observed-handle to planner-alias binding without leaking aliases into
-Agent View or relabeling cleanup subphases. The next slice should wire matching
-executor evidence into a bounded shared-loop cleanup attempt; Phase 43 plans
-that opt-in executor wiring.
+Agent View or relabeling cleanup subphases. Phase 43 wires matching
+probe-backed executor evidence into a bounded shared-loop cleanup attempt while
+leaving default and mismatched-proof cleanup on the normal semantic path.
 
 ## Why This Exists
 

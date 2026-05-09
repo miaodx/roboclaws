@@ -1,6 +1,6 @@
 # MolmoSpaces Bounded Planner Cleanup Executor
 
-**Status:** Planned for GSD Phase 43 on 2026-05-09
+**Status:** Completed in GSD Phase 43 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0031, ADR-0032, ADR-0033, ADR-0034
 **Workflow:** `hybrid-phase-pipeline`
@@ -50,8 +50,19 @@ This phase should:
 
 ## Verification Plan
 
-- Unit tests around `run_realworld_cleanup(..., use_planner_proof_for_cleanup_primitives=True)`.
-- Checker coverage requiring planner-backed cleanup primitives on a bounded
-  one-object attempt.
-- Ruff check/format on changed files.
+- Passed focused tests around
+  `run_realworld_cleanup(..., use_planner_proof_for_cleanup_primitives=True)`
+  for matching proof and mismatched-proof fallback.
+- Matching bound proof now produces planner-backed evidence for the matching
+  bounded object while leaving the rest of the run `api_semantic`.
+- Ruff check/format passed on changed Python/test files.
 - Existing blocked real visual artifact checker remains valid.
+
+## Completion Notes
+
+The implementation deliberately does not claim full multi-object planner-backed
+cleanup. It proves the shared loop has one executor wiring point: when attached
+proof binding matches the observed handle and target fixture, that object's
+`nav`, `pick`, `nav`, `open?`, and `place` subphases can be backed by
+probe-derived planner primitive evidence. Default runs and mismatched proof
+remain normal semantic cleanup.
