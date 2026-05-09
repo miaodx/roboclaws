@@ -15,6 +15,9 @@ if __package__ in {None, ""}:
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation  # noqa: E402
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
+from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
+    api_semantic_manipulation_evidence,
+)
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
@@ -266,6 +269,7 @@ def run_realworld_cleanup(
     )
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
 
+    primitive_summary = primitive_provenance_counts(trace_events)
     run_result = {
         "backend": backend,
         "scenario_id": scenario.scenario_id,
@@ -278,7 +282,11 @@ def run_realworld_cleanup(
         "cleanup_status": done["cleanup_status"],
         "completion_status": done["score"]["completion_status"],
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
-        "primitive_provenance_summary": primitive_provenance_counts(trace_events),
+        "primitive_provenance_summary": primitive_summary,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend=backend,
+            primitive_summary=primitive_summary,
+        ),
         "policy": DETERMINISTIC_SWEEP_POLICY,
         "planner": DETERMINISTIC_SWEEP_POLICY,
         "agent_driven": False,

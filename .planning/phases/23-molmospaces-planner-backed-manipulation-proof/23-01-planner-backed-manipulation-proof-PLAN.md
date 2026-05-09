@@ -8,7 +8,9 @@ with real RBY1M/Franka planner execution.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09. ADR-0014 planner-backed manipulation provenance/proof
+gate is implemented, checker-gated, and verified through the default
+blocked-capability probe.
 
 ## Tasks
 

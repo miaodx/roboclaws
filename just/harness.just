@@ -18,6 +18,7 @@
 # - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
 # - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
 # - just harness::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation evidence
+# - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -415,6 +416,23 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --require-robot-views \
       --require-advisory-scoring \
       --require-raw-fpv-observations \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0014 planner-backed manipulation proof gate. The default is a safe
+# config-import probe that records blocked-capability evidence; use
+# --probe-mode execute plus the strict checker when local planner execution is
+# ready to be accepted as real manipulation proof.
+molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-probe-harness" embodiment="franka" probe_mode="config_import" steps="2":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py \
+      --output-dir "{{output_dir}}" \
+      --embodiment "{{embodiment}}" \
+      --probe-mode "{{probe_mode}}" \
+      --steps "{{steps}}"
+    .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py \
+      --accept-blocked-capability \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

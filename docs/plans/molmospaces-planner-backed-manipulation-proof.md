@@ -1,6 +1,6 @@
 # MolmoSpaces Planner-Backed Manipulation Proof Gate
 
-**Status:** Planned under GSD Phase 23
+**Status:** Completed 2026-05-09 under GSD Phase 23
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0009, ADR-0014, Phase 22 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -74,3 +74,19 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_molmo_manipulation_provenance.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_verify_just_recipes.py`
 - `ruff check` and `ruff format --check` on changed Python files.
 - `just verify::molmo-planner-manipulation-probe`
+
+## Completion Evidence
+
+- Existing cleanup artifacts now include `manipulation_evidence` that labels
+  current cleanup effects as `api_semantic` and not strict planner proof.
+- The shared cleanup report renderer now renders `Manipulation Provenance` and
+  the standalone planner probe report.
+- `scripts/run_molmo_planner_manipulation_probe.py` writes a probe
+  `run_result.json`, stdout/stderr artifacts, and `report.html`.
+- `scripts/check_molmo_planner_manipulation_probe.py` accepts
+  blocked-capability evidence only with `--accept-blocked-capability` and
+  rejects `api_semantic` for `--require-planner-backed`.
+- `just verify::molmo-planner-manipulation-probe` passed and produced an
+  explicit blocked-capability artifact: planner class
+  `PickAndPlacePlannerPolicy` is available, but execution proof was not
+  attempted by the default safe gate.

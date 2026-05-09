@@ -103,6 +103,7 @@ def render_cleanup_report(
     </section>
     {_current_contract_note(run_result)}
     {_realworld_contract_note(run_result)}
+    {_manipulation_provenance_section(run_result)}
     <section class="panel">
       <div class="section-heading">
         <h2>Before And After</h2>
@@ -132,6 +133,44 @@ def render_cleanup_report(
     </section>
     {_advisory_review_section(run_result)}
     {_private_evaluation_section(run_result)}
+    """
+    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    return report_path
+
+
+def render_planner_manipulation_report(
+    *,
+    run_dir: Path,
+    run_result: dict[str, Any],
+) -> Path:
+    """Write a shared-underlay report for planner-backed manipulation probes."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    report_path = run_dir / "report.html"
+    evidence = run_result.get("manipulation_evidence") or {}
+    body = f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Manipulation artifact</p>
+        <h1>Planner-Backed Manipulation Probe</h1>
+      </div>
+      <div class="metric-grid">
+        {_metric("Status", run_result.get("status", "unknown"))}
+        {_metric("Embodiment", evidence.get("embodiment", "unknown"))}
+        {_metric("Policy", evidence.get("upstream_policy_class", "unknown"))}
+        {_metric("Qpos delta", evidence.get("max_abs_qpos_delta", "n/a"))}
+      </div>
+      <div class="badges">
+        {_badge("Contract", run_result.get("contract", "unknown"))}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Probe mode", evidence.get("probe_mode", "unknown"))}
+        {_badge("Provenance", evidence.get("primitive_provenance", "unknown"))}
+        {_badge("Planner backed", evidence.get("planner_backed", False))}
+      </div>
+    </section>
+    {_manipulation_provenance_section(run_result)}
+    {_planner_probe_views_section(evidence)}
+    {_planner_probe_blockers_section(evidence)}
+    {_planner_probe_artifacts_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -217,6 +256,85 @@ def _realworld_contract_note(run_result: dict[str, Any]) -> str:
         "handles. Private Evaluation is shown only after the run."
     )
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
+
+
+def _manipulation_provenance_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("manipulation_evidence") or {}
+    if not evidence:
+        return ""
+    blockers = evidence.get("blockers") or []
+    summary = evidence.get("evidence_note") or ""
+    badges = "".join(
+        (
+            _badge("Status", evidence.get("status", "unknown")),
+            _badge("Primitive", evidence.get("primitive_provenance", "unknown")),
+            _badge("Planner backed", evidence.get("planner_backed", False)),
+            _badge("Strict proof", evidence.get("strict_proof_eligible", False)),
+            _badge("API semantic edits", evidence.get("api_semantic_state_edits", "unknown")),
+        )
+    )
+    requirements = evidence.get("strict_proof_requirements") or []
+    requirements_list = "".join(f"<li>{html.escape(str(item))}</li>" for item in requirements)
+    blocker_text = ""
+    if blockers:
+        blocker_text = f'<p class="note">Capability blocker count: {len(blockers)}.</p>'
+    return (
+        '<section class="panel manipulation-provenance">'
+        "<h2>Manipulation Provenance</h2>"
+        f'<p class="note">{html.escape(str(summary))}</p>'
+        f'<div class="badges">{badges}</div>'
+        f"{blocker_text}"
+        f'<ul class="requirements">{requirements_list}</ul>'
+        "</section>"
+    )
+
+
+def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
+    artifacts = evidence.get("image_artifacts") or {}
+    if not artifacts:
+        return ""
+    return (
+        '<section class="panel"><h2>Planner Probe Views</h2>'
+        '<div class="views">'
+        f"{_view_figure(artifacts.get('initial'), 'Initial')}"
+        f"{_view_figure(artifacts.get('final'), 'Final')}"
+        "</div></section>"
+    )
+
+
+def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:
+    blockers = evidence.get("blockers") or []
+    if not blockers:
+        return ""
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', 'blocked')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel"><h2>Capability Blockers</h2>'
+        '<div class="table-wrap"><table><thead><tr><th>Code</th><th>Message</th>'
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div></section>"
+    )
+
+
+def _planner_probe_artifacts_section(run_result: dict[str, Any]) -> str:
+    artifacts = run_result.get("artifacts") or {}
+    rows = []
+    for key in ("stdout", "stderr"):
+        value = artifacts.get(key)
+        if value:
+            rows.append(f"<tr><td>{html.escape(key)}</td><td>{html.escape(str(value))}</td></tr>")
+    if not rows:
+        return ""
+    return (
+        '<section class="panel"><h2>Probe Artifacts</h2>'
+        '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div></section>"
+    )
 
 
 def _agent_view_section(run_result: dict[str, Any]) -> str:

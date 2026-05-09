@@ -48,6 +48,7 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
         "just harness::molmo-realworld-openclaw-dogfood-kit",
         "just harness::molmo-realworld-openclaw-visual-dogfood-kit",
         "just harness::molmo-realworld-raw-fpv",
+        "just harness::molmo-planner-manipulation-probe",
     )
     for call in expected_calls:
         assert call in text
@@ -73,6 +74,10 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^molmo-realworld-openclaw-dogfood-kit seed=\"7\"",
         r"^molmo-realworld-openclaw-visual-dogfood-kit seed=\"7\"",
         r"^molmo-realworld-raw-fpv seed=\"7\"",
+        (
+            r"^molmo-planner-manipulation-probe "
+            r"output_dir=\"output/molmo-planner-manipulation-probe-harness\""
+        ),
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
@@ -138,5 +143,24 @@ def test_raw_fpv_harness_uses_raw_mode_and_checker() -> None:
         "--record-robot-views",
         "--require-robot-views",
         "--require-raw-fpv-observations",
+    ):
+        assert expected in body
+
+
+def test_planner_manipulation_probe_accepts_only_explicit_blocked_gate() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    recipe = re.search(
+        r"^molmo-planner-manipulation-probe[\s\S]*?(?=^# List task files)",
+        text,
+        re.MULTILINE,
+    )
+    assert recipe is not None
+    body = recipe.group(0)
+    for expected in (
+        "scripts/run_molmo_planner_manipulation_probe.py",
+        "--probe-mode",
+        "scripts/check_molmo_planner_manipulation_probe.py",
+        "--accept-blocked-capability",
     ):
         assert expected in body

@@ -13,6 +13,9 @@ from mcp.server.fastmcp import FastMCP
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.manipulation_provenance import (
+    api_semantic_manipulation_evidence,
+)
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
     DEFAULT_REALWORLD_TASK,
@@ -344,6 +347,10 @@ class RealWorldMolmoCleanupMCPServer:
             "completion_status": done_response["score"]["completion_status"],
             "primitive_provenance": API_SEMANTIC_PROVENANCE,
             "primitive_provenance_summary": primitive_counts,
+            "manipulation_evidence": api_semantic_manipulation_evidence(
+                backend=_backend_name(self.base_contract.backend),
+                primitive_summary=primitive_counts,
+            ),
             "policy": self.policy,
             "planner": self.policy,
             "agent_driven": self.agent_driven,

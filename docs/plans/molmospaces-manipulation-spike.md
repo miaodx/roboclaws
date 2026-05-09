@@ -773,8 +773,9 @@ completed:
   gsd-execute-phase 10-molmospaces-semantic-substeps
   gsd-verify-work 10-molmospaces-semantic-substeps
   gsd-plan-phase 23-molmospaces-planner-backed-manipulation-proof
+  gsd-execute-phase 23-molmospaces-planner-backed-manipulation-proof
+  gsd-verify-work 23-molmospaces-planner-backed-manipulation-proof
 
 next pipeline candidates:
-  execute/verify 23-molmospaces-planner-backed-manipulation-proof
   real RBY1M/Franka planner-backed cleanup execution after the proof gate passes
 ```

@@ -4,7 +4,15 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
+from roboclaws.molmo_cleanup.manipulation_provenance import (
+    api_semantic_manipulation_evidence,
+    blocked_planner_probe_evidence,
+)
+from roboclaws.molmo_cleanup.report import (
+    render_cleanup_report,
+    render_planner_manipulation_report,
+    write_state_snapshot,
+)
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
 
@@ -24,6 +32,10 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     run_result = {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend="api_semantic_synthetic",
+            primitive_summary={API_SEMANTIC_PROVENANCE: 1},
+        ),
         "score": score.to_dict(),
         "advisory_evaluation": build_advisory_evaluation(
             score=score.to_dict(),
@@ -55,6 +67,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     html = report_path.read_text(encoding="utf-8")
     assert "MolmoSpaces Cleanup Pilot" in html
     assert "api_semantic" in html
+    assert "Manipulation Provenance" in html
+    assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
     assert "Semantic acceptability" in html
     assert "Advisory Review" in html
@@ -270,3 +284,41 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "raw_fpv_001" in html
     assert "robot_views/raw.fpv.png" in html
     assert "support estimates" in html
+
+
+def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) -> None:
+    stdout = tmp_path / "planner_probe_stdout.txt"
+    stderr = tmp_path / "planner_probe_stderr.txt"
+    stdout.write_text("{}", encoding="utf-8")
+    stderr.write_text("", encoding="utf-8")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": blocked_planner_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="franka",
+            task="pick_and_place",
+            probe_mode="config_import",
+            blockers=[
+                {
+                    "code": "execution_not_attempted",
+                    "message": "Planner execution was not attempted.",
+                }
+            ],
+            upstream_policy_class="PickAndPlacePlannerPolicy",
+        ),
+        "artifacts": {
+            "stdout": str(stdout),
+            "stderr": str(stderr),
+        },
+    }
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+    html = report_path.read_text(encoding="utf-8")
+
+    assert "Planner-Backed Manipulation Probe" in html
+    assert "Manipulation Provenance" in html
+    assert "Capability Blockers" in html
+    assert "PickAndPlacePlannerPolicy" in html

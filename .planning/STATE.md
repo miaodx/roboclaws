@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 23 planner-backed manipulation provenance/proof gate.
+**Current focus:** Phase 23 complete; strict planner-backed cleanup execution remains separate until a real planner probe passes `--require-planner-backed`.
 
 ## Current Position
 
@@ -33,11 +33,11 @@ Status: ADR-0003 deterministic and MCP artifacts now support
 FPV image artifacts from the shared robot-view underlay, and render a Raw FPV
 Observations report panel. The checker can require raw-FPV evidence without
 claiming camera-only cleanup success.
-Last activity: 2026-05-09 - Completed Phase 22 raw FPV-only perception evidence
-slice and recorded verification evidence.
+Last activity: 2026-05-09 - Completed Phase 23 planner-backed manipulation
+provenance/proof gate and recorded blocked-capability verification evidence.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 is the active planner-backed manipulation provenance/proof gate.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate.)
 
 ## Performance Metrics
 
@@ -210,6 +210,14 @@ Recent decisions affecting current work:
   report rendering, a standalone MolmoSpaces planner probe, and a checker that
   accepts blocked-capability evidence only when explicit while requiring real
   planner execution evidence for the strict proof gate.
+- **Phase 23 completion (2026-05-09):** Current-contract and ADR-0003 cleanup
+  artifacts now include `manipulation_evidence` that makes `api_semantic`
+  execution explicit. The shared report underlay renders `Manipulation
+  Provenance`, and the standalone planner probe/checker path can record
+  blocked-capability evidence without satisfying strict planner proof. The
+  default `just verify::molmo-planner-manipulation-probe` gate passed with
+  `PickAndPlacePlannerPolicy` import evidence and
+  `status=blocked_capability`.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
