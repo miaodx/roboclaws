@@ -2,14 +2,19 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 11 held-object carry visuals shipped and verified on 2026-05-08
+**Status:** Phase 19 real visual OpenClaw evidence is active as of 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
 Phase 6 scaffold -> Phase 7 prompt-driven public cleanup -> Phase 8 real
 MolmoSpaces/MuJoCo subprocess cleanup -> Phase 9 RBY1M visual plausibility ->
 Phase 10 semantic cleanup substeps -> Phase 11 held-object carry visuals.
-OpenClaw and real planner-backed manipulation remain deferred.
+Phase 12 current-contract agent bridge -> Phase 13 bridge visual reports ->
+Phase 14 ADR-0003 public/private cleanup -> Phase 15 Generated Mess Set scale
+-> Phase 16 ADR-0003 MCP -> Phase 17 direct-agent dogfood -> Phase 18
+synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence.
+Raw FPV-only perception, advisory model scoring, and real planner-backed
+manipulation remain deferred.
 
 ## Why This Exists
 
