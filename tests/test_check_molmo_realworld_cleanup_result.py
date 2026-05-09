@@ -185,6 +185,27 @@ def test_checker_rejects_scene_objects_in_realworld_trace(tmp_path: Path) -> Non
         )
 
 
+def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+    result["agent_bridge"]["semantic_order_errors"] = 1
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            expect_policy="realworld_contract_smoke_agent",
+            expect_mcp_server="molmo_cleanup_realworld",
+            min_generated_mess_count=5,
+            require_agent_driven=True,
+            require_clean_agent_run=True,
+        )
+
+
 def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

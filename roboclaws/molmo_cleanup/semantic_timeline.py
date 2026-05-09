@@ -259,6 +259,7 @@ def semantic_diagnostics(
     done_response: dict[str, Any],
 ) -> dict[str, Any]:
     stale_reference_errors = 0
+    semantic_order_errors = 0
     attempted_semantic_substeps = 0
     object_done_count = 0
     fridge_inside_sequence_ok = True
@@ -281,9 +282,16 @@ def semantic_diagnostics(
             and response.get("error_reason") == "stale_reference"
         ):
             stale_reference_errors += 1
+        if (
+            event.get("event") == "response"
+            and isinstance(response, dict)
+            and response.get("error_reason") == "semantic_order"
+        ):
+            semantic_order_errors += 1
     score = done_response.get("score", {})
     return {
         "stale_reference_errors": stale_reference_errors,
+        "semantic_order_errors": semantic_order_errors,
         "premature_done": int(score.get("restored_count", 0)) < int(score.get("total_targets", 0)),
         "object_done_count": object_done_count,
         "attempted_semantic_substeps": attempted_semantic_substeps,

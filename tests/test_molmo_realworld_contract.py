@@ -39,13 +39,68 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
 
     assert target_fixture is not None
+    navigated_object = contract.navigate_to_object(detection["object_id"])
     picked = contract.pick(detection["object_id"])
+    navigated_target = contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))
     placed = contract.place(str(target_fixture["fixture_id"]))
 
+    assert navigated_object["ok"] is True
     assert picked["ok"] is True
     assert picked["object_id"].startswith("observed_")
+    assert navigated_target["ok"] is True
     assert placed["ok"] is True
     assert placed["fixture_id"] == "sink_01"
+
+
+def test_realworld_contract_rejects_skipped_semantic_phases_without_private_truth() -> None:
+    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    fixture_hints = contract.fixture_hints()
+    detection = _first_detection_by_category(contract, "dish")
+    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert target_fixture is not None
+
+    skipped_pick = contract.pick(detection["object_id"])
+    assert skipped_pick["ok"] is False
+    assert skipped_pick["error_reason"] == "semantic_order"
+    assert skipped_pick["required_tool"] == "navigate_to_object"
+    assert skipped_pick["object_id"] == detection["object_id"]
+    _assert_no_forbidden_keys(skipped_pick)
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+
+    skipped_place = contract.place(str(target_fixture["fixture_id"]))
+    assert skipped_place["ok"] is False
+    assert skipped_place["error_reason"] == "semantic_order"
+    assert skipped_place["required_tool"] == "navigate_to_receptacle"
+    assert skipped_place["fixture_id"] == target_fixture["fixture_id"]
+    _assert_no_forbidden_keys(skipped_place)
+
+    assert contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))["ok"] is True
+    assert contract.place(str(target_fixture["fixture_id"]))["ok"] is True
+
+
+def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
+    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    fixture_hints = contract.fixture_hints()
+    detection = _first_detection_by_category(contract, "food")
+    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert target_fixture is not None
+    fixture_id = str(target_fixture["fixture_id"])
+
+    assert fixture_id == "fridge_01"
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
+
+    skipped_open = contract.place_inside(fixture_id)
+    assert skipped_open["ok"] is False
+    assert skipped_open["error_reason"] == "semantic_order"
+    assert skipped_open["required_tool"] == "open_receptacle"
+    _assert_no_forbidden_keys(skipped_open)
+
+    assert contract.open_receptacle(fixture_id)["ok"] is True
+    assert contract.place_inside(fixture_id)["ok"] is True
 
 
 def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:

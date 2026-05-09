@@ -21,6 +21,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 3. Clean plausible misplaced objects. Use only observed object handles:
    `roboclaws__navigate_to_object(object_id)`, `roboclaws__pick(object_id)`,
    `roboclaws__navigate_to_receptacle(fixture_id)`, then place it.
+   The server rejects skipped semantic phases: if you call `pick` before
+   `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
+   calling the `required_tool` named in the error response.
 4. If the fixture affordances/name indicate a fridge or refrigerator, call
    `roboclaws__open_receptacle(fixture_id)` before
    `roboclaws__place_inside(fixture_id)`. Otherwise call

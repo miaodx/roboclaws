@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World OpenClaw Clean Policy Hardening
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 20
+**Status:** Completed 2026-05-09 under GSD Phase 20
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0006, ADR-0008, ADR-0009, ADR-0010, Phase 19 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -80,3 +80,20 @@ This phase should:
 - Optional local visual/OpenClaw rerun if time allows:
   `just verify::molmo-realworld-openclaw-visual-dogfood-kit` and a live Gateway
   attempt against the hardened server.
+
+## Completion Evidence
+
+- `pick`, `place`, `place_inside`, and fridge `open_receptacle` ordering are now
+  enforced in `RealWorldCleanupContract`.
+- Focused tests passed:
+  `tests/test_molmo_realworld_contract.py`,
+  `tests/test_molmo_realworld_mcp_server.py`, and
+  `tests/test_check_molmo_realworld_cleanup_result.py`.
+- `just verify::molmo-realworld-agent-dogfood-kit` passed with
+  `semantic_order_errors=0`.
+- `just verify::molmo-realworld-openclaw-dogfood-kit` passed with
+  `policy=openclaw_agent`, `cleanup_status=success`, and
+  `semantic_order_errors=0`.
+- Existing real visual OpenClaw artifact
+  `output/molmo-realworld-openclaw-visual-dogfood-kit/run_result.json` passed
+  the strict clean visual checker after the hardening.

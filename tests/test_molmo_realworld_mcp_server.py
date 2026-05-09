@@ -58,6 +58,37 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert "target_receptacle_id" not in json.dumps(observation)
 
 
+def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        detection = None
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            observation = server.call_tool("observe")
+            detections = observation.get("visible_object_detections", [])
+            if detections:
+                detection = detections[0]
+                break
+        assert detection is not None
+
+        skipped = server.call_tool("pick", object_id=detection["object_id"])
+    finally:
+        server.close()
+
+    assert skipped["ok"] is False
+    assert skipped["error_reason"] == "semantic_order"
+    assert skipped["required_tool"] == "navigate_to_object"
+    assert "generated_mess_set" not in json.dumps(skipped)
+    assert "target_receptacle_id" not in json.dumps(skipped)
+
+
 def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     smoke = _load_smoke_module()
 
@@ -79,6 +110,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["tool_event_counts"]["observe:request"] >= 1
     assert run_result["agent_bridge"]["premature_done"] is False
     assert run_result["agent_bridge"]["premature_done_source"] == "sweep_coverage_rate"
+    assert run_result["agent_bridge"]["semantic_order_errors"] == 0
     assert run_result["agent_view"]["observed_objects"]
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text

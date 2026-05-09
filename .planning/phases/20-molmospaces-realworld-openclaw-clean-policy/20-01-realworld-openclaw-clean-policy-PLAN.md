@@ -9,7 +9,9 @@ shape that the shared report underlay expects.
 
 ## Status
 
-Active 2026-05-09.
+Completed 2026-05-09. The ADR-0003 real-world MCP contract now rejects skipped
+semantic phases with public `semantic_order` guidance, and the strict clean
+checker rejects nonzero semantic-order errors.
 
 ## Tasks
 

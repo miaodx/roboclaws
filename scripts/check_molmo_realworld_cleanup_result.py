@@ -198,6 +198,7 @@ def _assert_clean_agent_run(data: dict[str, Any]) -> None:
         assert int(counts.get(f"{tool}:request") or 0) >= 1, (tool, counts, data)
     diagnostics = data.get("agent_bridge") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
+    assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
     assert int(diagnostics.get("complete_semantic_substep_objects") or 0) >= int(
