@@ -55,6 +55,14 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    warmup = data.get("warmup") or {}
+    if warmup:
+        _assert_warmup(
+            warmup,
+            base,
+            report_text,
+            require_outputs=require_proof_outputs,
+        )
     proof_request_selection = data.get("proof_request_selection") or {}
     if proof_request_selection:
         _assert_proof_request_selection(proof_request_selection, commands, report_text)
@@ -96,6 +104,33 @@ def _assert_runner_report(report_text: str) -> None:
         "Cleanup Rerun Command",
     ):
         assert heading in report_text, (heading, report_text[:500])
+
+
+def _assert_warmup(
+    warmup: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    require_outputs: bool,
+) -> None:
+    for key in ("output_dir", "run_result", "report", "command"):
+        assert warmup.get(key), warmup
+    command = warmup.get("command") or []
+    assert isinstance(command, list) and command, warmup
+    assert "--output-dir" in command, command
+    assert "--probe-mode" in command, command
+    assert "config_import" in command, command
+    assert "--torch-extensions-dir" in command, command
+    command_text = " ".join(str(part) for part in command)
+    assert "RBY1M/CuRobo Warmup" in report_text, report_text[:500]
+    assert command_text in report_text, command_text
+    for key in ("output_dir", "run_result", "report"):
+        assert str(warmup[key]) in report_text, (key, report_text[:500])
+    if require_outputs:
+        run_result = _resolve_path(base, str(warmup["run_result"]))
+        proof_report = _resolve_path(base, str(warmup["report"]))
+        assert run_result.is_file(), run_result
+        assert proof_report.is_file(), proof_report
 
 
 def _assert_command(

@@ -303,6 +303,124 @@ def test_runner_generates_fallback_requests_from_prior_blocked_aliases(
     assert "Sink|1|2" in report
 
 
+def test_runner_can_add_visible_warmup_with_output_local_cache(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "bundle"
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=output_dir,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        warmup_rby1m_curobo=True,
+    )
+
+    manifest = result["manifest"]
+    warmup = manifest["warmup"]
+    shared_cache = str(output_dir / "torch_extensions")
+    assert warmup["run_result"].endswith("rby1m_curobo_warmup/run_result.json")
+    assert "--probe-mode" in warmup["command"]
+    assert "config_import" in warmup["command"]
+    assert "--torch-extensions-dir" in warmup["command"]
+    assert shared_cache in warmup["command"]
+    proof_command = manifest["commands"][0]["command"]
+    assert "--torch-extensions-dir" in proof_command
+    assert shared_cache in proof_command
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "RBY1M/CuRobo Warmup" in report
+    assert "rby1m_curobo_warmup/run_result.json" in report
+    assert "config_import" in report
+
+
+def test_runner_executes_warmup_before_proof_commands(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    commands_run: list[list[str]] = []
+
+    def fake_run_command(command: list[str]) -> None:
+        commands_run.append(list(command))
+        output_dir = Path(command[command.index("--output-dir") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if "--cleanup-object-id" in command:
+            (output_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "status": "planner_backed",
+                        "manipulation_evidence": {
+                            "execution_attempted": True,
+                            "cleanup_primitive_binding": {
+                                "object_id": "observed_001",
+                                "target_receptacle_id": "sink_01",
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+        else:
+            (output_dir / "run_result.json").write_text(
+                json.dumps({"status": "blocked_capability"}),
+                encoding="utf-8",
+            )
+        (output_dir / "report.html").write_text("<h1>report</h1>", encoding="utf-8")
+
+    monkeypatch.setattr(runner, "_run_command", fake_run_command)
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        execute_probes=True,
+        warmup_rby1m_curobo=True,
+    )
+
+    assert result["status"] == "probes_executed"
+    assert len(commands_run) == 2
+    assert "--probe-mode" in commands_run[0]
+    assert "config_import" in commands_run[0]
+    assert "--cleanup-object-id" not in commands_run[0]
+    assert "--cleanup-object-id" in commands_run[1]
+    shared_cache = str(tmp_path / "bundle" / "torch_extensions")
+    assert shared_cache in commands_run[0]
+    assert shared_cache in commands_run[1]
+    assert result["manifest"]["proof_result_summary"]["planner_backed_count"] == 1
+
+
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_dir = tmp_path / "cleanup"

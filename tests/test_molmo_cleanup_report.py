@@ -768,6 +768,20 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 ],
             },
         },
+        "warmup": {
+            "kind": "rby1m_curobo_config_import",
+            "output_dir": str(tmp_path / "warmup"),
+            "run_result": str(tmp_path / "warmup" / "run_result.json"),
+            "report": str(tmp_path / "warmup" / "report.html"),
+            "command": [
+                "python",
+                "probe.py",
+                "--probe-mode",
+                "config_import",
+                "--torch-extensions-dir",
+                str(tmp_path / "torch_extensions"),
+            ],
+        },
         "command_count": 1,
         "commands": [
             {
@@ -876,6 +890,9 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "prior_task_feasibility_blocked" in html
     assert "Generated Fallback Requests" in html
     assert "fallback_generated" in html
+    assert "RBY1M/CuRobo Warmup" in html
+    assert "config_import" in html
+    assert "torch_extensions" in html
     assert "Task feasibility" in html
     assert "blocked" in html
     assert "Timeouts" in html

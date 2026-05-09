@@ -219,6 +219,7 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {_proof_bundle_warmup_section(manifest.get("warmup") or {})}
     {_proof_bundle_commands_section(commands)}
     {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
     {_cleanup_rerun_command_section(cleanup_command)}
@@ -864,6 +865,29 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
         "<th>Prior blockers</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _proof_bundle_warmup_section(warmup: dict[str, Any]) -> str:
+    if not warmup:
+        return ""
+    command = " ".join(str(part) for part in warmup.get("command") or [])
+    note = warmup.get("evidence_note") or (
+        "Optional local-dev warmup before proof commands. Strict per-proof "
+        "checkers remain authoritative."
+    )
+    return (
+        '<section class="panel proof-bundle-warmup">'
+        "<h2>RBY1M/CuRobo Warmup</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        + _path_table(
+            [
+                ("Warmup output", warmup.get("output_dir", "")),
+                ("Warmup run result", warmup.get("run_result", "")),
+                ("Warmup report", warmup.get("report", "")),
+            ]
+        )
+        + f"<pre><code>{html.escape(command)}</code></pre></section>"
     )
 
 

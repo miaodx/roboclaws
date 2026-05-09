@@ -164,12 +164,65 @@ def build_probe_commands(
     return commands
 
 
+def build_probe_warmup_command(
+    *,
+    output_dir: Path,
+    runner_python: Path,
+    probe_script: Path,
+    molmospaces_python: Path | None = None,
+    molmospaces_root: Path | None = None,
+    embodiment: str = "rby1m",
+    timeout_s: float = 600.0,
+    renderer_device_id: int = 0,
+    torch_extensions_dir: Path | None = None,
+    rby1m_curobo_memory_profile: str = "low",
+) -> dict[str, Any]:
+    """Build a visible config-import warmup command for local proof-bundle runs."""
+    warmup_dir = output_dir / "rby1m_curobo_warmup"
+    command = [
+        str(runner_python),
+        str(probe_script),
+        "--output-dir",
+        str(warmup_dir),
+        "--embodiment",
+        embodiment,
+        "--probe-mode",
+        "config_import",
+        "--renderer-device-id",
+        str(renderer_device_id),
+        "--rby1m-curobo-memory-profile",
+        rby1m_curobo_memory_profile,
+        "--steps",
+        "1",
+        "--timeout-s",
+        str(timeout_s),
+    ]
+    if molmospaces_python is not None:
+        command.extend(["--python-executable", str(molmospaces_python)])
+    if molmospaces_root is not None:
+        command.extend(["--molmospaces-root", str(molmospaces_root)])
+    if torch_extensions_dir is not None:
+        command.extend(["--torch-extensions-dir", str(torch_extensions_dir)])
+    return {
+        "kind": "rby1m_curobo_config_import",
+        "output_dir": str(warmup_dir),
+        "run_result": str(warmup_dir / "run_result.json"),
+        "report": str(warmup_dir / "report.html"),
+        "command": command,
+        "evidence_note": (
+            "Optional local-dev warmup before proof commands. This is runtime "
+            "readiness evidence only; strict per-proof validation remains authoritative."
+        ),
+    }
+
+
 def proof_bundle_run_manifest(
     *,
     cleanup_run_result: Path,
     output_dir: Path,
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
+    warmup: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
@@ -184,6 +237,7 @@ def proof_bundle_run_manifest(
         "planner_scene": proof_requests.get("planner_scene") or {},
         "proof_request_selection": proof_request_selection
         or proof_request_selection_from_summary(proof_requests),
+        "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,
         "proof_result_summary": proof_result_summary

@@ -218,6 +218,46 @@ def test_checker_requires_timeout_stage_evidence_in_report(tmp_path: Path) -> No
     checker._assert_runner_result(manifest, tmp_path, require_proof_outputs=True)
 
 
+def test_checker_accepts_visible_warmup_artifact(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    warmup_dir = tmp_path / "rby1m_curobo_warmup"
+    manifest["warmup"] = {
+        "kind": "rby1m_curobo_config_import",
+        "output_dir": str(warmup_dir),
+        "run_result": str(warmup_dir / "run_result.json"),
+        "report": str(warmup_dir / "report.html"),
+        "command": [
+            "python",
+            "probe.py",
+            "--output-dir",
+            str(warmup_dir),
+            "--probe-mode",
+            "config_import",
+            "--torch-extensions-dir",
+            str(tmp_path / "torch_extensions"),
+        ],
+    }
+    _write_manifest_and_report(tmp_path, manifest)
+
+    checker._assert_runner_result(manifest, tmp_path)
+
+    with pytest.raises(AssertionError):
+        checker._assert_runner_result(manifest, tmp_path, require_proof_outputs=True)
+
+    warmup_dir.mkdir()
+    (warmup_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    (warmup_dir / "report.html").write_text("<h1>warmup</h1>", encoding="utf-8")
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    proof_dir.mkdir(parents=True, exist_ok=True)
+    (proof_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    _write_manifest_and_report(tmp_path, manifest)
+
+    checker._assert_runner_result(manifest, tmp_path, require_proof_outputs=True)
+
+
 def test_checker_requires_cleanup_rerun_outputs_for_cleanup_rerun_status(
     tmp_path: Path,
 ) -> None:

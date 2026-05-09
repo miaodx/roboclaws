@@ -17,6 +17,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_cleanup_rerun_command,
     build_probe_commands,
+    build_probe_warmup_command,
     proof_bundle_run_manifest,
     proof_request_selection_from_summary,
 )
@@ -51,6 +52,11 @@ def parse_args() -> argparse.Namespace:
         default="low",
     )
     parser.add_argument("--execute-probes", action="store_true")
+    parser.add_argument(
+        "--warmup-rby1m-curobo",
+        action="store_true",
+        help="Run a visible config-import warmup before proof commands.",
+    )
     parser.add_argument("--rerun-cleanup", action="store_true")
     parser.add_argument("--cleanup-output-dir", type=Path)
     parser.add_argument("--prior-proof-bundle-manifest", type=Path)
@@ -78,6 +84,7 @@ def main() -> None:
         torch_extensions_dir=args.torch_extensions_dir,
         rby1m_curobo_memory_profile=args.rby1m_curobo_memory_profile,
         execute_probes=args.execute_probes,
+        warmup_rby1m_curobo=args.warmup_rby1m_curobo,
         rerun_cleanup=args.rerun_cleanup,
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
@@ -113,6 +120,7 @@ def run_from_cleanup_result(
     torch_extensions_dir: Path | None,
     rby1m_curobo_memory_profile: str,
     execute_probes: bool = False,
+    warmup_rby1m_curobo: bool = False,
     rerun_cleanup: bool = False,
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | None = None,
@@ -132,6 +140,27 @@ def run_from_cleanup_result(
         generate_fallback_requests=generate_fallback_requests,
         fallback_alias_limit=fallback_alias_limit,
     )
+    effective_torch_extensions_dir = _effective_torch_extensions_dir(
+        output_dir=output_dir,
+        torch_extensions_dir=torch_extensions_dir,
+        warmup_rby1m_curobo=warmup_rby1m_curobo,
+    )
+    warmup = (
+        build_probe_warmup_command(
+            output_dir=output_dir,
+            runner_python=runner_python,
+            probe_script=probe_script,
+            molmospaces_python=molmospaces_python,
+            molmospaces_root=molmospaces_root,
+            embodiment=embodiment,
+            timeout_s=timeout_s,
+            renderer_device_id=renderer_device_id,
+            torch_extensions_dir=effective_torch_extensions_dir,
+            rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
+        )
+        if warmup_rby1m_curobo
+        else {}
+    )
     commands = build_probe_commands(
         manifest=requests,
         output_dir=output_dir,
@@ -144,7 +173,7 @@ def run_from_cleanup_result(
         steps=steps,
         timeout_s=timeout_s,
         renderer_device_id=renderer_device_id,
-        torch_extensions_dir=torch_extensions_dir,
+        torch_extensions_dir=effective_torch_extensions_dir,
         rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
         request_selection=proof_request_selection,
     )
@@ -152,6 +181,8 @@ def run_from_cleanup_result(
     status = "dry_run"
     if execute_probes:
         status = "probes_executed"
+        if warmup:
+            _run_command(warmup["command"])
         for item in commands:
             _run_command(item["command"])
             proof_results.append(Path(item["run_result"]))
@@ -180,6 +211,7 @@ def run_from_cleanup_result(
         output_dir=output_dir,
         proof_requests=requests,
         commands=commands,
+        warmup=warmup,
         proof_request_selection=proof_request_selection,
         cleanup_command=cleanup_command,
         cleanup_rerun=cleanup_rerun,
@@ -249,6 +281,19 @@ def _load_prior_proof_result_summary(path: Path | None) -> dict[str, Any]:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
     summary = data.get("proof_result_summary")
     return dict(summary) if isinstance(summary, dict) else {}
+
+
+def _effective_torch_extensions_dir(
+    *,
+    output_dir: Path,
+    torch_extensions_dir: Path | None,
+    warmup_rby1m_curobo: bool,
+) -> Path | None:
+    if torch_extensions_dir is not None:
+        return torch_extensions_dir
+    if warmup_rby1m_curobo:
+        return output_dir / "torch_extensions"
+    return None
 
 
 def _run_command(command: list[str]) -> None:

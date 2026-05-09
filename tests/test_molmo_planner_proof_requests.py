@@ -10,6 +10,7 @@ from roboclaws.molmo_cleanup.planner_observed_binding import (
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_probe_commands,
+    build_probe_warmup_command,
     planner_proof_requests_from_substeps,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
@@ -130,6 +131,35 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
     assert commands[0]["run_result"].endswith("run_result.json")
+
+
+def test_build_probe_warmup_command_uses_config_import_and_shared_cache(
+    tmp_path: Path,
+) -> None:
+    warmup = build_probe_warmup_command(
+        output_dir=tmp_path,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        molmospaces_python=Path("molmo-python"),
+        molmospaces_root=Path("molmospaces"),
+        torch_extensions_dir=Path("torch_ext"),
+        timeout_s=900.0,
+    )
+
+    command = warmup["command"]
+    assert warmup["kind"] == "rby1m_curobo_config_import"
+    assert warmup["run_result"].endswith("rby1m_curobo_warmup/run_result.json")
+    assert command[:2] == ["python", "probe.py"]
+    assert "--probe-mode" in command
+    assert "config_import" in command
+    assert "--python-executable" in command
+    assert "molmo-python" in command
+    assert "--molmospaces-root" in command
+    assert "molmospaces" in command
+    assert "--torch-extensions-dir" in command
+    assert "torch_ext" in command
+    assert "--timeout-s" in command
+    assert "900.0" in command
 
 
 def test_proof_request_selection_excludes_prior_task_feasibility_blocked(

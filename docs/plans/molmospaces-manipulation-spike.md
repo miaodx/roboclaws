@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 60 fallback timeout stage reporting completed; next work is the next local RBY1M/CuRobo retry slice
+**Status:** Phase 61 fallback proof warmup completed; next work is the warmed local RBY1M/CuRobo retry slice
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -102,6 +102,11 @@ proof-bundle runner report: the shared proof result summary now carries timeout
 counts, execution-attempted state, last worker stage, compact worker stage
 events, and stdout/stderr paths so local reports show `rby1m_config_import`
 timeouts without opening each per-proof artifact.
+Phase 61 adds an explicit visible RBY1M/CuRobo `config_import` warmup step to
+the proof-bundle runner. When enabled, the runner records the warmup command
+and artifacts, shares an output-local Torch extension cache with proof
+commands, renders the warmup in `report.html`, and validates it through the
+runner checker before the next generated-fallback retry.
 
 ## Why This Exists
 
@@ -933,7 +938,13 @@ completed:
   gsd-plan-phase 59-molmospaces-plain-semantic-report-labels
   gsd-execute-phase 59-molmospaces-plain-semantic-report-labels
   gsd-verify-work 59-molmospaces-plain-semantic-report-labels
+  gsd-plan-phase 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-execute-phase 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-verify-work 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-plan-phase 61-molmospaces-fallback-proof-warmup
+  gsd-execute-phase 61-molmospaces-fallback-proof-warmup
+  gsd-verify-work 61-molmospaces-fallback-proof-warmup
 
 next pipeline candidates:
-  plan generated fallback execution timeout diagnostics
+  run warmed generated fallback proof execution locally
 ```
