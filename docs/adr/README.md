@@ -58,6 +58,7 @@ one decision per file, sequential numbering, explicit status.
 | [0047](0047-select-proof-requests-by-task-feasibility.md) | Select Proof Requests By Task Feasibility | Accepted |
 | [0048](0048-generate-private-fallback-proof-requests.md) | Generate Private Fallback Proof Requests | Accepted |
 | [0049](0049-run-generated-fallback-proofs-as-local-dev-evidence.md) | Run Generated Fallback Proofs As Local-Dev Evidence | Accepted |
+| [0050](0050-use-plain-semantic-subphase-report-labels.md) | Use Plain Semantic Subphase Report Labels | Accepted |
 
 ## Adding a new ADR
 

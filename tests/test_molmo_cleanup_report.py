@@ -107,7 +107,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
     assert "Cleanup Primitive Gate" in html
-    assert "nav/object" in html
+    assert "<td>nav</td>" in html
+    assert "<td>object</td>" in html
     assert "mujoco_freejoint_qpos" in html
     assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
@@ -242,7 +243,7 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "<span>nav</span><small>target</small>" in html
     assert "<span>place</span><small>surface</small>" in html
     assert "Subphase" in html
-    assert "nav/target" in html
+    assert "Role" in html
     assert "object_done" not in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
@@ -584,7 +585,8 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
     ]
     positions = [html.index(heading) for heading in ordered_headings]
     assert positions == sorted(positions)
-    assert "place/surface" in html
+    assert "<td>place</td>" in html
+    assert "<td>surface</td>" in html
 
 
 def test_cleanup_report_renders_planner_proof_requests_before_agent_view(

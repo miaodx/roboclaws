@@ -6,8 +6,8 @@ VISUAL_CORE_ROBOT_SECTION = "Robot View Timeline"
 VISUAL_CORE_AGENT_SECTION = "Agent View"
 VISUAL_CORE_PRIVATE_SECTION = "Private Evaluation"
 VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION = "Planner Proof Requests"
-CANONICAL_SEMANTIC_SUBPHASES = ("nav/object", "pick/object", "nav/target")
-CANONICAL_PLACE_SUBPHASES = ("place/surface", "place/inside")
+CANONICAL_SEMANTIC_SUBPHASES = (("nav", "object"), ("pick", "object"), ("nav", "target"))
+CANONICAL_PLACE_SUBPHASES = (("place", "surface"), ("place", "inside"))
 
 
 def assert_cleanup_report_visual_core(
@@ -67,9 +67,11 @@ def _assert_sections_in_order(report_text: str, sections: list[str]) -> None:
 
 def _assert_semantic_subphases(report_text: str) -> None:
     assert "phase-rail" in report_text, report_text[:500]
-    for subphase in CANONICAL_SEMANTIC_SUBPHASES:
-        assert _has_subphase(report_text, subphase), (subphase, report_text[:500])
-    assert any(_has_subphase(report_text, subphase) for subphase in CANONICAL_PLACE_SUBPHASES), (
+    for label, detail in CANONICAL_SEMANTIC_SUBPHASES:
+        assert _has_subphase(report_text, label, detail), ((label, detail), report_text[:500])
+    assert any(
+        _has_subphase(report_text, label, detail) for label, detail in CANONICAL_PLACE_SUBPHASES
+    ), (
         CANONICAL_PLACE_SUBPHASES,
         report_text[:500],
     )
@@ -90,8 +92,5 @@ def _section_index(report_text: str, section: str) -> int:
     return report_text.find(section)
 
 
-def _has_subphase(report_text: str, subphase: str) -> bool:
-    if subphase in report_text:
-        return True
-    label, detail = subphase.split("/", 1)
+def _has_subphase(report_text: str, label: str, detail: str) -> bool:
     return f"<span>{label}</span><small>{detail}</small>" in report_text

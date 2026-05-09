@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 58 generated fallback proof execution completed; next work is timeout-stage diagnostics for generated fallback execution
+**Status:** Phase 59 plain semantic report labels completed; next work is timeout-stage diagnostics for generated fallback execution
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -93,6 +93,10 @@ passed with required proof outputs, but all four probes reported
 `blocked_capability` with `timeout` at `rby1m_config_import`; no fallback reached
 task sampling, planner-backed proof, cleanup binding promotion, or planner view
 capture.
+Phase 59 resolves the remaining report-vocabulary drift from the original
+discussion: shared Cleanup Artifact Reports now use `nav`, `pick`, `nav`,
+optional `open`, and `place` as primary labels while keeping
+object/target/surface/inside as secondary role detail.
 
 ## Why This Exists
 
@@ -921,6 +925,9 @@ completed:
   gsd-plan-phase 58-molmospaces-generated-fallback-proof-execution
   gsd-execute-phase 58-molmospaces-generated-fallback-proof-execution
   gsd-verify-work 58-molmospaces-generated-fallback-proof-execution
+  gsd-plan-phase 59-molmospaces-plain-semantic-report-labels
+  gsd-execute-phase 59-molmospaces-plain-semantic-report-labels
+  gsd-verify-work 59-molmospaces-plain-semantic-report-labels
 
 next pipeline candidates:
   plan generated fallback execution timeout diagnostics

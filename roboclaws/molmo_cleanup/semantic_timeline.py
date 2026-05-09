@@ -236,7 +236,7 @@ def display_semantic_subphase(phase: Any) -> dict[str, str] | None:
         "phase": phase_name,
         "label": label[0],
         "detail": label[1],
-        "text": f"{label[0]}/{label[1]}",
+        "text": label[0],
     }
 
 

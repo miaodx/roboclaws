@@ -114,7 +114,10 @@ object/target IDs while making alternate exact-scene probe commands visible in
 the runner report. Phase 58 executes generated fallback proof requests as
 local-dev evidence: the checker passes with required proof outputs, but all
 four generated probes time out at `rby1m_config_import` before task sampling,
-planner-backed proof, cleanup binding promotion, or planner views.
+planner-backed proof, cleanup binding promotion, or planner views. Phase 59
+aligns the shared Cleanup Artifact Report vocabulary with the original
+semantic subphase discussion by making `nav`, `pick`, `nav`, optional `open`,
+and `place` the primary labels while keeping role detail secondary.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -198,6 +201,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.57 MolmoSpaces proof request feasibility selection** - Phase 56 (completed 2026-05-10; prior infeasible requests can be excluded and fallback-required state is reported)
 - ✅ **v1.58 MolmoSpaces proof request fallback generation** - Phase 57 (completed 2026-05-10; blocked requests can generate private alternate planner-alias proof commands)
 - ✅ **v1.59 MolmoSpaces generated fallback proof execution** - Phase 58 (completed 2026-05-10; generated fallback requests execute locally but time out at RBY1M config import before proof/binding)
+- ✅ **v1.60 MolmoSpaces plain semantic report labels** - Phase 59 (completed 2026-05-10; reports use `nav, pick, nav, open?, place` as primary labels)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -272,6 +276,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 56: MolmoSpaces proof request feasibility selection** - ADR-0047 proof-bundle runner can consume a prior result summary, skip requests already known task-feasibility blocked, and report fallback-required state. Completed 2026-05-10; fallback generation closed in Phase 57.
 - [x] **Phase 57: MolmoSpaces proof request fallback generation** - ADR-0048 proof-bundle runner can generate private alternate planner-alias proof requests from prior task-feasibility-blocked source requests while keeping cleanup-facing IDs stable. Completed 2026-05-10; local execution of generated fallback requests remains next.
 - [x] **Phase 58: MolmoSpaces generated fallback proof execution** - ADR-0049 generated fallback proof requests execute as local-dev evidence. Completed 2026-05-10; four generated probes produced required proof outputs but all timed out at `rby1m_config_import`, so planner-backed cleanup readiness remains blocked.
+- [x] **Phase 59: MolmoSpaces plain semantic report labels** - ADR-0050 makes `nav, pick, nav, open?, place` the primary Cleanup Artifact Report vocabulary while preserving object/target/surface/inside as secondary role detail. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

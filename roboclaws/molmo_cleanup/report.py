@@ -8,6 +8,7 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    display_semantic_subphase,
     display_semantic_subphases,
     semantic_subphase_text,
 )
@@ -535,6 +536,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
                 "<tr>"
                 f"<td>{object_id}</td>"
                 f"<td>{html.escape(str(label))}</td>"
+                f"<td>{html.escape(str(step.get('detail', '')))}</td>"
                 f"<td>{html.escape(str(step.get('phase', '')))}</td>"
                 f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
                 f"<td>{html.escape(planner_evidence_summary)}</td>"
@@ -545,7 +547,8 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
             )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
-        "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
+        "<th>Display subphase</th><th>Subphase role</th><th>Raw phase</th>"
+        "<th>Primitive provenance</th>"
         "<th>Planner evidence</th><th>Binding</th><th>State sync</th>"
         "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
@@ -1538,9 +1541,8 @@ def _execution_gate_label(gate: dict[str, Any]) -> str:
 
 def _display_subphase_from_evidence(step: dict[str, Any]) -> str:
     label = step.get("label")
-    detail = step.get("detail")
-    if label and detail:
-        return f"{label}/{detail}"
+    if label:
+        return str(label)
     return semantic_subphase_text(step.get("phase"))
 
 
@@ -1843,10 +1845,13 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
 def _semantic_phase_summary(semantic_phase: Any) -> str:
     if not semantic_phase:
         return ""
-    displayed = semantic_subphase_text(semantic_phase)
     raw = str(semantic_phase)
-    badges = _badge("Subphase", displayed)
-    if displayed != raw:
+    displayed = display_semantic_subphase(semantic_phase)
+    if displayed is None:
+        badges = _badge("Subphase", raw)
+    else:
+        badges = _badge("Subphase", displayed["label"])
+        badges += _badge("Role", displayed["detail"])
         badges += _badge("Raw phase", raw)
     return '<div class="semantic-badges">' + badges + "</div>"
 

@@ -11,7 +11,10 @@ def test_visual_core_contract_accepts_canonical_cleanup_order() -> None:
     <h2>Before And After</h2>
     <h2>Object Moves</h2>
     <section><h2>Semantic Substeps</h2><ol class="phase-rail">
-      <li>nav/object</li><li>pick/object</li><li>nav/target</li><li>place/surface</li>
+      <li><span>nav</span><small>object</small></li>
+      <li><span>pick</span><small>object</small></li>
+      <li><span>nav</span><small>target</small></li>
+      <li><span>place</span><small>surface</small></li>
     </ol></section>
     <section><h2>Robot View Timeline</h2></section>
     <h2>Score</h2>

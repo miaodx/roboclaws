@@ -524,9 +524,8 @@ def _assert_cleanup_primitive_gate(
         require_planner_backed=require_planner_backed,
     )
     assert "Cleanup Primitive Gate" in report_text, report_text[:500]
-    assert "nav/object" in report_text, report_text[:500]
-    assert "pick/object" in report_text, report_text[:500]
-    assert "nav/target" in report_text, report_text[:500]
+    assert "Display subphase" in report_text, report_text[:500]
+    assert "Subphase role" in report_text, report_text[:500]
     if require_planner_backed:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
 
