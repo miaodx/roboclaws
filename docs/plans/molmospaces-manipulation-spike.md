@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 81 post-placement rejection diagnostics completed; next work is grasp-feasible candidate selection/prefiltering for exact-scene proof requests
+**Status:** Phase 82 grasp-feasibility blocker classification completed; next work is selecting or generating grasp-feasible exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -214,6 +214,10 @@ Phase 81 captures that downstream rejection path. The warmed local report
 renders `Post-Placement Candidate Rejections` with 17 grasp-failure reports and
 15 candidate-removal calls after successful robot placement for the exact book
 alias.
+Phase 82 carries that evidence into proof-result summaries and proof-bundle
+runner reports as `task_feasibility_blocker_kind=grasp_feasibility` with
+`17 grasp failures; 15 candidate-removal calls`, so future selection can filter
+grasp-infeasible exact aliases without parsing nested diagnostics.
 
 ## Why This Exists
 

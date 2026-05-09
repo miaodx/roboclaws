@@ -53,6 +53,11 @@ Probe-local report evidence for task-sampler rejection after robot placement
 succeeds, including grasp-failure counts and candidate-removal calls.
 _Avoid_: robot placement failure, planner execution failure
 
+**Grasp-Feasibility Blocker**:
+A proof-result classification for exact-scene requests that clear robot
+placement but fail through post-placement grasp/candidate rejection.
+_Avoid_: generic task-feasibility blocker
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -707,3 +712,6 @@ _Avoid_: full cleanup replacement claim
   shows the exact `Book_23` request records 17 grasp-failure reports and 15
   candidate-removal calls after placement succeeds, so the remaining blocker is
   grasp/candidate feasibility rather than robot base placement.
+- Phase 82 added Grasp-Feasibility Blocker classification. Proof-result
+  summaries now classify the Phase 81 artifact as `grasp_feasibility` with
+  `17 grasp failures; 15 candidate-removal calls`.

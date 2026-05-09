@@ -1322,6 +1322,11 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
         "task_feasibility_blocked_count": sum(
             1 for item in results if item["task_feasibility_status"] == "blocked"
         ),
+        "grasp_feasibility_blocked_count": sum(
+            1
+            for item in results
+            if item.get("task_feasibility_blocker_kind") == "grasp_feasibility"
+        ),
         "worker_stage_event_count": sum(
             int(item.get("worker_stage_event_count") or 0) for item in results
         ),
@@ -1393,6 +1398,10 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     )
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
     task_sampler_failure_diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    task_feasibility_blocker_kind = _task_feasibility_blocker_kind(
+        blockers,
+        task_sampler_failure_diagnostics,
+    )
     requested_binding = evidence.get("requested_cleanup_primitive_binding") or {}
     sampled_binding = evidence.get("sampled_task_binding") or {}
     cleanup_binding = evidence.get("cleanup_primitive_binding") or {}
@@ -1412,6 +1421,11 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
                 blockers=blockers,
                 cleanup_binding_blockers=cleanup_binding_blockers,
                 execution_attempted=bool(evidence.get("execution_attempted")),
+            ),
+            "task_feasibility_blocker_kind": task_feasibility_blocker_kind,
+            "task_feasibility_blocker_summary": _task_feasibility_blocker_summary(
+                task_feasibility_blocker_kind,
+                task_sampler_failure_diagnostics,
             ),
             "visual_status": "views_recorded" if views else "no_views_recorded",
             "blockers": blockers,
@@ -1495,6 +1509,43 @@ def _task_feasibility_status(
     if status == "blocked_capability":
         return "blocked"
     return "unknown"
+
+
+def _task_feasibility_blocker_kind(
+    blockers: list[dict[str, Any]],
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> str:
+    robot_placement_failures = int(
+        task_sampler_failure_diagnostics.get("robot_placement_failure_count") or 0
+    )
+    grasp_failures = int(task_sampler_failure_diagnostics.get("grasp_failure_count") or 0)
+    if robot_placement_failures:
+        return "robot_placement"
+    if grasp_failures:
+        return "grasp_feasibility"
+    codes = {str(item.get("code") or "") for item in blockers}
+    if "HouseInvalidForTask" in codes:
+        return "task_sampling"
+    return ""
+
+
+def _task_feasibility_blocker_summary(
+    blocker_kind: str,
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> str:
+    if blocker_kind == "robot_placement":
+        return (
+            f"{int(task_sampler_failure_diagnostics.get('robot_placement_failure_count') or 0)} "
+            "robot-placement failures"
+        )
+    if blocker_kind == "grasp_feasibility":
+        return (
+            f"{int(task_sampler_failure_diagnostics.get('grasp_failure_count') or 0)} "
+            "grasp failures; "
+            f"{int(task_sampler_failure_diagnostics.get('candidate_removal_count') or 0)} "
+            "candidate-removal calls"
+        )
+    return ""
 
 
 def _proof_views(base: Path, evidence: dict[str, Any]) -> list[dict[str, str]]:

@@ -1098,6 +1098,7 @@ def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
         f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
         f"{_metric('Execution attempted', summary.get('execution_attempted_count', 0))}"
         f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
+        f"{_metric('Grasp-feasible blocked', summary.get('grasp_feasibility_blocked_count', 0))}"
         f"{_metric('Worker stage events', summary.get('worker_stage_event_count', 0))}"
         f"{_metric('Views', summary.get('view_artifact_count', 0))}"
         "</div>"
@@ -1147,6 +1148,8 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Target", item.get("target_receptacle_id", "")),
         ("Status", item.get("status", "")),
         ("Task feasibility", item.get("task_feasibility_status", "")),
+        ("Task feasibility blocker", item.get("task_feasibility_blocker_kind", "")),
+        ("Task feasibility detail", item.get("task_feasibility_blocker_summary", "")),
         ("Cleanup binding promoted", _yes_no(item.get("cleanup_binding_promoted"))),
         ("Execution attempted", _yes_no(item.get("execution_attempted"))),
         ("Last worker stage", item.get("last_worker_stage", "")),

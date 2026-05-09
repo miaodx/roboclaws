@@ -868,6 +868,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "cleanup_binding_promoted_count": 0,
             "execution_attempted_count": 0,
             "task_feasibility_blocked_count": 1,
+            "grasp_feasibility_blocked_count": 1,
             "worker_stage_event_count": 2,
             "last_worker_stage_counts": {"rby1m_config_import": 1},
             "view_artifact_count": 2,
@@ -885,6 +886,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "cleanup_binding_promoted": False,
                     "execution_attempted": False,
                     "task_feasibility_status": "blocked",
+                    "task_feasibility_blocker_kind": "grasp_feasibility",
+                    "task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
                     "visual_status": "views_recorded",
                     "blockers": [
                         {"code": "HouseInvalidForTask", "message": "robot placement"},
@@ -1011,6 +1016,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "torch_extensions" in html
     assert "Task feasibility" in html
     assert "blocked" in html
+    assert "Grasp-feasible blocked" in html
+    assert "Task feasibility blocker" in html
+    assert "grasp_feasibility" in html
+    assert "3 grasp failures; 1 candidate-removal calls" in html
     assert "Robot placement profile" in html
     assert "relaxed" in html
     assert "place_robot_near max tries" in html

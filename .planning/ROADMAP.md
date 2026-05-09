@@ -186,6 +186,10 @@ after downstream candidate removals.
 Phase 81 captures that downstream path: the wide-profile exact `Book_23` probe
 records 17 grasp-failure reports and 15 candidate-removal calls after robot
 placement succeeds, leaving grasp/candidate feasibility as the active blocker.
+Phase 82 classifies that downstream blocker in proof-result summaries and
+proof-bundle runner reports as `grasp_feasibility`, with compact detail
+`17 grasp failures; 15 candidate-removal calls`, so selection can consume the
+evidence without scraping planner-probe report tables.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -292,6 +296,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.80 MolmoSpaces placement scene diagnostics** - Phase 79 (completed 2026-05-10; report shows low free-space metrics around exact `Book_23`)
 - ✅ **v1.81 MolmoSpaces wide placement profile** - Phase 80 (completed 2026-05-10; wide profile clears robot placement and exposes downstream candidate removal blocker)
 - ✅ **v1.82 MolmoSpaces post-placement rejection diagnostics** - Phase 81 (completed 2026-05-10; report shows grasp-failure and candidate-removal evidence after placement succeeds)
+- ✅ **v1.83 MolmoSpaces grasp-feasibility classification** - Phase 82 (completed 2026-05-10; proof summaries classify post-placement grasp/candidate rejection as `grasp_feasibility`)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -389,6 +394,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 79: MolmoSpaces placement scene diagnostics** - ADR-0070 renders target-side free-space metrics for upstream robot-placement failures. Completed 2026-05-10.
 - [x] **Phase 80: MolmoSpaces wide placement profile** - ADR-0071 widens exact-scene robot placement and shows the blocker moved to downstream candidate rejection. Completed 2026-05-10.
 - [x] **Phase 81: MolmoSpaces post-placement rejection diagnostics** - ADR-0072 renders grasp-failure and candidate-removal evidence after robot placement succeeds. Completed 2026-05-10.
+- [x] **Phase 82: MolmoSpaces grasp-feasibility classification** - ADR-0073 classifies post-placement grasp/candidate rejection in proof summaries and runner reports. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

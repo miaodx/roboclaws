@@ -81,6 +81,7 @@ one decision per file, sequential numbering, explicit status.
 | [0070](0070-render-placement-scene-diagnostics.md) | Render Placement Scene Diagnostics | Accepted |
 | [0071](0071-add-wide-placement-profile-retry.md) | Add Wide Placement Profile Retry | Accepted |
 | [0072](0072-capture-post-placement-candidate-rejections.md) | Capture Post-Placement Candidate Rejections | Accepted |
+| [0073](0073-classify-grasp-feasibility-blockers.md) | Classify Grasp-Feasibility Blockers | Accepted |
 
 ## Adding a new ADR
 

@@ -1111,6 +1111,8 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["view_artifact_count"] == 2
     result = summary["results"][0]
     assert result["task_feasibility_status"] == "blocked"
+    assert result["task_feasibility_blocker_kind"] == "robot_placement"
+    assert result["task_feasibility_blocker_summary"] == "1 robot-placement failures"
     assert result["visual_status"] == "views_recorded"
     assert result["blockers"][0]["code"] == "HouseInvalidForTask"
     assert result["cleanup_task_sampler_adapter"]["applied"] is True
@@ -1136,6 +1138,61 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     )
     assert result["views"][0]["path"].endswith("planner_views/final.png")
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
+
+
+def test_proof_result_summary_classifies_grasp_feasibility_blocker(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_shelf_01"
+    proof_dir.mkdir(parents=True)
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "manipulation_evidence": {
+                    "execution_attempted": True,
+                    "blockers": [
+                        {
+                            "code": "HouseInvalidForTask",
+                            "message": "House invalid for tasks due to physics constraints",
+                        }
+                    ],
+                    "task_sampler_failure_diagnostics": {
+                        "applied": True,
+                        "robot_placement_attempt_count": 17,
+                        "robot_placement_failure_count": 0,
+                        "grasp_failure_count": 17,
+                        "candidate_removal_count": 15,
+                        "grasp_failures": [
+                            {
+                                "object_name": "book/body",
+                                "count_after": 17,
+                                "removed_candidate": False,
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands = [
+        {
+            "request_id": "proof_001",
+            "object_id": "observed_001",
+            "target_receptacle_id": "shelf_01",
+            "run_result": str(proof_dir / "run_result.json"),
+            "report": str(proof_dir / "report.html"),
+        }
+    ]
+
+    summary = proof_result_summary_from_commands(commands)
+
+    assert summary["grasp_feasibility_blocked_count"] == 1
+    result = summary["results"][0]
+    assert result["task_feasibility_status"] == "blocked"
+    assert result["task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert result["task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
 
 
 def test_proof_result_summary_surfaces_timeout_worker_stage_evidence(

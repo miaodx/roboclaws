@@ -356,6 +356,16 @@ def _assert_proof_result_summary(
             value = str(item.get(key) or "")
             if value:
                 assert value in report_text, (key, report_text[:500])
+        blocker_kind = str(item.get("task_feasibility_blocker_kind") or "")
+        if blocker_kind:
+            assert "Task feasibility blocker" in report_text, report_text[:500]
+            assert blocker_kind in report_text, ("task_feasibility_blocker_kind", report_text[:500])
+        blocker_summary = str(item.get("task_feasibility_blocker_summary") or "")
+        if blocker_summary:
+            assert blocker_summary in report_text, (
+                "task_feasibility_blocker_summary",
+                report_text[:500],
+            )
         sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
         robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
         if robot_placement_profile:
