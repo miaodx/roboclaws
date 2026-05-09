@@ -38,7 +38,9 @@ Phase 22 starts the raw FPV-only perception branch with an evidence mode that
 records camera observations without structured movable-object detections. Phase
 23 adds a planner-backed manipulation provenance/proof gate so semantic cleanup
 state edits cannot be confused with real RBY1M/Franka planner execution. Phase
-24 adds runtime diagnostics for strict planner probe blockers.
+24 adds runtime diagnostics for strict planner probe blockers. Phase 25 closes
+standalone Franka planner proof with a probe-local headless renderer adapter;
+cleanup-loop integration remains a follow-up.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -110,9 +112,9 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
-- [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; real RBY1M/Franka planner-backed manipulation remains deferred.
+- [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; cleanup-loop primitives remain `api_semantic` even after the later Phase 25 standalone Franka proof.
 - [x] **Phase 7: MolmoSpaces prompt-driven cleanup demo** - Prompt `帮我整理这个房间` drives a public-only cleanup policy through the cleanup tool loop, without private-manifest planner access. Completed 2026-05-07; primitive execution remains `api_semantic`.
-- [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic` because planner-backed RBY1M/Franka pick/place is still unproven.
+- [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic`; later Phase 25 proves standalone Franka planner execution but not cleanup-loop integration.
 - [x] **Phase 9: MolmoSpaces FPV room plausibility** - Target-facing RBY1M FPV and same-room visual gates for focused manipulation steps. Completed 2026-05-08.
 - [x] **Phase 10: MolmoSpaces semantic substeps** - Object-level cleanup substeps, fridge open/place-inside semantics, and report timeline improvements. Completed 2026-05-08.
 - [x] **Phase 11: MolmoSpaces held-object carry visuals** - Held objects visually travel with RBY1M during semantic cleanup navigation. Completed 2026-05-08.
