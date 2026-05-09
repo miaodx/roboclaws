@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World Advisory Scoring
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 21
+**Status:** Completed 2026-05-09 under GSD Phase 21
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0009, ADR-0012, Phase 20 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -65,3 +65,15 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_advisory_scoring.py tests/test_molmo_cleanup_report.py tests/test_molmospaces_realworld_cleanup.py tests/test_molmo_realworld_mcp_server.py tests/test_check_molmo_realworld_cleanup_result.py`
 - `ruff check` and `ruff format --check` on changed Python files.
 - `just verify::molmo-realworld-agent-dogfood-kit`
+
+## Completion Evidence
+
+- Added `roboclaws/molmo_cleanup/advisory_scoring.py` with schema
+  `advisory_cleanup_scoring_v1`.
+- ADR-0003 deterministic and MCP finalization write
+  `advisory_evaluation.json` and include `run_result["advisory_evaluation"]`.
+- The shared report renders `Advisory Review` when advisory output is present.
+- The checker supports `--require-advisory-scoring`, and ADR-0003 harness
+  recipes require it for new artifacts.
+- Focused tests, ruff, `just verify::molmo-realworld-agent-dogfood-kit`, and
+  `just verify::molmo-realworld-openclaw-dogfood-kit` passed.

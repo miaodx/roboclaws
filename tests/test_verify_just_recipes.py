@@ -94,5 +94,25 @@ def test_openclaw_visual_kit_uses_real_visual_backend_and_checker() -> None:
         "--require-openclaw-minimum",
         "--require-clean-agent-run",
         "--require-robot-views",
+        "--require-advisory-scoring",
     ):
         assert expected in body
+
+
+def test_realworld_gates_require_advisory_scoring() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    for recipe_name in (
+        "molmo-realworld-cleanup",
+        "molmo-realworld-agent-mcp",
+        "molmo-realworld-agent-dogfood-kit",
+        "molmo-realworld-openclaw-dogfood-kit",
+        "molmo-realworld-openclaw-visual-dogfood-kit",
+    ):
+        recipe = re.search(
+            rf"^{recipe_name}[\s\S]*?(?=^# |\Z)",
+            text,
+            re.MULTILINE,
+        )
+        assert recipe is not None, recipe_name
+        assert "--require-advisory-scoring" in recipe.group(0), recipe_name

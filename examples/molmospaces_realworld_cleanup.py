@@ -13,6 +13,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation  # noqa: E402
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
@@ -226,9 +227,17 @@ def run_realworld_cleanup(
     agent_view = contract.agent_view_payload()
     private_evaluation = contract.private_evaluation_payload(done["score"])
     private_evaluation["requested_generated_mess_count"] = generated_mess_count
+    advisory_evaluation = build_advisory_evaluation(
+        score=done["score"],
+        scenario_id=scenario.scenario_id,
+    )
     agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
     private_evaluation_path.write_text(
         json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
+    )
+    advisory_evaluation_path = output_dir / "advisory_evaluation.json"
+    advisory_evaluation_path.write_text(
+        json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
     )
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
 
@@ -261,6 +270,7 @@ def run_realworld_cleanup(
         "agent_view": agent_view,
         "agent_memory": agent_memory,
         "private_evaluation": private_evaluation,
+        "advisory_evaluation": advisory_evaluation,
         "score": done["score"],
         "final_locations": done["final_locations"],
         "final_containment": done.get("final_containment", {}),
@@ -268,6 +278,7 @@ def run_realworld_cleanup(
         "artifacts": {
             "agent_view": str(agent_view_path),
             "private_evaluation": str(private_evaluation_path),
+            "advisory_evaluation": str(advisory_evaluation_path),
             "trace": str(trace_path),
             "before_snapshot": str(before_snapshot),
             "after_snapshot": str(after_snapshot),

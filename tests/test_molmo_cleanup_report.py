@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
@@ -24,6 +25,10 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
         "score": score.to_dict(),
+        "advisory_evaluation": build_advisory_evaluation(
+            score=score.to_dict(),
+            scenario_id=scenario.scenario_id,
+        ),
     }
     trace_events = [
         {
@@ -52,6 +57,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "api_semantic" in html
     assert "mug_01" in html
     assert "Semantic acceptability" in html
+    assert "Advisory Review" in html
+    assert "authoritative=false" in html
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()

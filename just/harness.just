@@ -278,6 +278,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       --expect-seeds "${seed_csv}" \
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
+      --require-advisory-scoring \
       "{{output_dir}}"
 
 # ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
@@ -308,6 +309,7 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
       --expect-seeds "${seed_csv}" \
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
+      --require-advisory-scoring \
       "{{output_dir}}"
 
 # ADR-0003 direct-agent dogfood kit smoke. This does not launch Codex/Claude;
@@ -331,6 +333,7 @@ molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-ag
       --min-generated-mess-count 5 \
       --require-agent-driven \
       --require-clean-agent-run \
+      --require-advisory-scoring \
       "{{output_dir}}/run_result.json"
 
 # ADR-0003 OpenClaw dogfood kit smoke. This does not launch Gateway; it proves
@@ -354,6 +357,7 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
       --min-generated-mess-count 5 \
       --require-agent-driven \
       --require-openclaw-minimum \
+      --require-advisory-scoring \
       "{{output_dir}}/run_result.json"
 
 # ADR-0010 OpenClaw visual dogfood kit smoke. This does not launch Gateway; it
@@ -383,6 +387,7 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --require-openclaw-minimum \
       --require-clean-agent-run \
       --require-robot-views \
+      --require-advisory-scoring \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

@@ -129,6 +129,7 @@ def render_cleanup_report(
       <h2>Score</h2>
       {_score_table(score)}
     </section>
+    {_advisory_review_section(run_result)}
     {_private_evaluation_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
@@ -290,6 +291,40 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
     return (
         '<section class="panel private-evaluation"><h2>Private Evaluation</h2>'
         f'<p class="note">{html.escape(summary)}</p>{table}</section>'
+    )
+
+
+def _advisory_review_section(run_result: dict[str, Any]) -> str:
+    advisory = run_result.get("advisory_evaluation") or {}
+    if not advisory:
+        return ""
+    rows = []
+    for item in advisory.get("object_reviews") or []:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('actual_location_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('advisory_verdict', '')))}</td>"
+            f"<td>{html.escape(str(item.get('rationale', '')))}</td>"
+            "</tr>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Final location</th><th>Advisory verdict</th><th>Rationale</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    counts = advisory.get("counts") or {}
+    summary = (
+        f"{advisory.get('overall_verdict', 'unknown')} from "
+        f"{advisory.get('evaluator', 'unknown')}; "
+        f"authoritative={str(advisory.get('authoritative')).lower()}; "
+        f"reviewed {counts.get('total_reviewed', 0)} objects."
+    )
+    note = advisory.get("non_authoritative_note") or advisory.get("summary") or ""
+    return (
+        '<section class="panel advisory-review"><h2>Advisory Review</h2>'
+        f'<p class="note">{html.escape(summary)}</p>'
+        f'<p class="note">{html.escape(str(note))}</p>{table}</section>'
     )
 
 

@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-clean-agent-run", action="store_true")
     parser.add_argument("--require-openclaw-minimum", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
+    parser.add_argument("--require-advisory-scoring", action="store_true")
     return parser.parse_args()
 
 
@@ -60,6 +61,7 @@ def main() -> None:
             require_clean_agent_run=args.require_clean_agent_run,
             require_openclaw_minimum=args.require_openclaw_minimum,
             require_robot_views=args.require_robot_views,
+            require_advisory_scoring=args.require_advisory_scoring,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -89,6 +91,7 @@ def _assert_result(
     require_clean_agent_run: bool = False,
     require_openclaw_minimum: bool = False,
     require_robot_views: bool = False,
+    require_advisory_scoring: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -151,6 +154,8 @@ def _assert_result(
         _assert_clean_agent_run(data)
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
+    if require_advisory_scoring:
+        _assert_advisory_scoring(data, base, report_text)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -273,6 +278,23 @@ def _assert_robot_views(
         ):
             assert "open_receptacle" in focused_actions, data
             assert "place_inside" in focused_actions, data
+
+
+def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:
+    advisory = data.get("advisory_evaluation") or {}
+    assert advisory, data
+    assert advisory.get("schema_version") == "advisory_cleanup_scoring_v1", advisory
+    assert advisory.get("authoritative") is False, advisory
+    assert advisory.get("status") == "ok", advisory
+    assert advisory.get("object_reviews"), advisory
+    counts = advisory.get("counts") or {}
+    assert int(counts.get("total_reviewed") or 0) == len(advisory["object_reviews"]), advisory
+    artifacts = data.get("artifacts") or {}
+    advisory_path = _resolve_path(base, artifacts.get("advisory_evaluation", ""))
+    assert advisory_path.is_file(), advisory_path
+    loaded = json.loads(advisory_path.read_text(encoding="utf-8"))
+    assert loaded.get("authoritative") is False, loaded
+    assert "Advisory Review" in report_text, report_text[:500]
 
 
 def _is_focused_robot_action(action: str) -> bool:

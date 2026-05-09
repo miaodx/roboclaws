@@ -8,7 +8,9 @@ while keeping deterministic scoring as the only pass/fail source.
 
 ## Status
 
-Active 2026-05-09.
+Completed 2026-05-09. ADR-0003 artifacts now include optional
+non-authoritative advisory scoring, the checker can require it, and the shared
+report renders an `Advisory Review` panel.
 
 ## Tasks
 

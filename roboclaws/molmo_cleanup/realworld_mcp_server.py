@@ -11,6 +11,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
@@ -306,11 +307,19 @@ class RealWorldMolmoCleanupMCPServer:
             private_evaluation["generated_mess_count"],
         )
         private_evaluation["requested_generated_mess_count"] = requested_count
+        advisory_evaluation = build_advisory_evaluation(
+            score=done_response["score"],
+            scenario_id=self.scenario.scenario_id,
+        )
         agent_view_path = self.run_dir / "agent_view.json"
         private_evaluation_path = self.run_dir / "private_evaluation.json"
+        advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
         agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
         private_evaluation_path.write_text(
             json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
+        )
+        advisory_evaluation_path.write_text(
+            json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
         )
 
         run_result = {
@@ -343,6 +352,7 @@ class RealWorldMolmoCleanupMCPServer:
             "cleanup_plan": cleanup_plan,
             "agent_view": agent_view,
             "private_evaluation": private_evaluation,
+            "advisory_evaluation": advisory_evaluation,
             "score": done_response["score"],
             "final_locations": done_response["final_locations"],
             "final_containment": done_response.get("final_containment", {}),
@@ -352,6 +362,7 @@ class RealWorldMolmoCleanupMCPServer:
             "artifacts": {
                 "agent_view": str(agent_view_path),
                 "private_evaluation": str(private_evaluation_path),
+                "advisory_evaluation": str(advisory_evaluation_path),
                 "trace": str(self.trace_path),
                 "before_snapshot": str(self._before_snapshot),
                 "after_snapshot": str(after_snapshot),
