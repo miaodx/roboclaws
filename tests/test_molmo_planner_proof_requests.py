@@ -505,7 +505,7 @@ def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror(
     )
 
     assert selection["fallback_required"] is False
-    assert selection["generated_fallback_request_count"] == 2
+    assert selection["generated_fallback_request_count"] == 1
     fallback_generation = selection["fallback_generation"]
     assert fallback_generation["discovered_alias_count"] == 3
     assert {
@@ -520,7 +520,16 @@ def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror(
     assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
         "shelf_cafe_1_1_2"
     )
-    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("book_beef_1_1_8")
+    assert generated[0]["planner_probe_args"]["--cleanup-planner-object-id"] == ("book_beef_1_0_8")
+    assert {
+        (item["axis"], item["alias"], item["reason"])
+        for item in fallback_generation["filtered_aliases"]
+    } == {
+        ("object", "Book|surface|8|79", "not_exact_scene_runtime_alias"),
+        ("target", "ShelvingUnit|2|3", "not_exact_scene_runtime_alias"),
+        ("object", "book_beef_1_1_8", "not_pickup_root_body_alias"),
+        ("object", "book_beef_1_2_8", "not_pickup_root_body_alias"),
+    }
 
 
 def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> None:
@@ -624,19 +633,9 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     )
 
     fallback_generation = selection["fallback_generation"]
-    assert selection["selected_request_ids"] == [
-        "proof_001_fallback_01",
-        "proof_001_fallback_02",
-    ]
-    generated = fallback_generation["generated_requests"]
-    assert generated[0]["planner_probe_args"]["--cleanup-planner-object-id"] == ("book_beef_1_2_8")
-    assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
-        "shelf_cafe_1_0_2"
-    )
-    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("book_beef_1_2_8")
-    assert generated[1]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
-        "shelf_cafe_1_1_2"
-    )
+    assert selection["selected_request_ids"] == []
+    assert selection["fallback_required"] is True
+    assert fallback_generation["generated_request_count"] == 0
     assert {
         (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
         for item in fallback_generation["filtered_aliases"]
@@ -644,6 +643,7 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
         ("object", "Book|surface|8|79", "not_exact_scene_runtime_alias", ""),
         ("target", "ShelvingUnit|2|3", "not_exact_scene_runtime_alias", ""),
         ("object", "book_beef_1_1_8", "prior_non_root_body_alias", "proof_001_fallback_02"),
+        ("object", "book_beef_1_2_8", "not_pickup_root_body_alias", ""),
     }
     assert fallback_generation["filtered_pair_count"] == 1
     assert fallback_generation["filtered_pairs"] == [

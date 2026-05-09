@@ -319,6 +319,11 @@ fallback aliases and filtered fallback pairs as active filters in later
 selection passes.
 _Avoid_: using the latest manifest while forgetting earlier filtered evidence
 
+**Pickup Root Variant Filter**:
+The fallback-generation rule that rejects object-axis runtime aliases whose
+variant segment is nonzero because they are known non-root pickup bodies.
+_Avoid_: executing object-side sibling aliases that can be rejected by name
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -475,6 +480,8 @@ _Avoid_: full cleanup replacement claim
 - **Fallback Filter Carry-Forward** should preserve an exhausted fallback pool
   across manifests so the next slice works on root-body alias derivation instead
   of retrying filtered candidates.
+- A **Pickup Root Variant Filter** should apply only to object/pickup aliases;
+  target aliases need separate task-feasibility evidence.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -571,3 +578,7 @@ _Avoid_: full cleanup replacement claim
   filtered aliases and pairs as active filters, so the Phase 67 manifest dry-run
   generates zero commands and marks both source requests unavailable until
   pickup root-body aliases are derived or validated.
+- Phase 69 added the pickup root variant filter. Object-axis runtime siblings
+  with nonzero variants are filtered as `not_pickup_root_body_alias`, so older
+  KeyError evidence no longer generates the object-side non-root commands that
+  Phases 65 and 67 proved invalid.

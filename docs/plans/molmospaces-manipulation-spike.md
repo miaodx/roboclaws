@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 68 fallback filter carry-forward completed; next work is pickup root-body alias derivation or validation
+**Status:** Phase 69 pickup root variant filter completed; next work is upstream task-feasibility handling or richer root-body alias derivation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -152,6 +152,12 @@ Phase 67 manifest generated zero commands, rendered seven filtered aliases and
 two filtered pairs, and makes the next blocker explicit: the current fallback
 candidate pool is exhausted until pickup root-body aliases can be derived or
 validated from a better source.
+Phase 69 bakes the first root-body validity rule into fallback generation:
+object-axis runtime aliases with nonzero variants are filtered as
+`not_pickup_root_body_alias` before command generation, while target-axis
+runtime siblings remain eligible. A dry-run against the older Phase 62 KeyError
+evidence now generates only the two target-side commands and filters the
+object-side non-root variants up front.
 
 ## Why This Exists
 

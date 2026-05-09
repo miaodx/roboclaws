@@ -534,15 +534,15 @@ def test_runner_carries_prior_failed_runtime_fallback_candidates(
 
     manifest = result["manifest"]
     selection = manifest["proof_request_selection"]
-    assert manifest["command_count"] == 2
+    assert manifest["command_count"] == 0
+    assert selection["fallback_required"] is True
     assert selection["fallback_generation"]["filtered_pair_count"] == 1
-    assert selection["fallback_generation"]["filtered_alias_count"] == 3
-    assert "book_beef_1_2_8" in manifest["commands"][0]["command"]
-    assert "book_beef_1_1_8" not in manifest["commands"][0]["command"]
+    assert selection["fallback_generation"]["filtered_alias_count"] == 4
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Filtered Fallback Pairs" in report
     assert "prior_task_feasibility_blocked_pair" in report
     assert "prior_non_root_body_alias" in report
+    assert "not_pickup_root_body_alias" in report
 
 
 def test_runner_can_add_visible_warmup_with_output_local_cache(tmp_path: Path) -> None:

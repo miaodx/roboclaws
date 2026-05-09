@@ -646,6 +646,21 @@ def _executable_candidate_aliases(
         if prior_filter:
             filtered.append(dict(prior_filter))
             continue
+        if axis == "object" and _is_non_root_runtime_object_alias(alias):
+            filtered.append(
+                {
+                    "source_request_id": source_request_id,
+                    "axis": axis,
+                    "alias": alias,
+                    "reason": "not_pickup_root_body_alias",
+                    "evidence_note": (
+                        "Filtered before command generation because pickup aliases "
+                        "matching the MolmoSpaces runtime pattern must use variant 0 "
+                        "to refer to a root body."
+                    ),
+                }
+            )
+            continue
         if _is_exact_scene_planner_alias(alias):
             executable.append(alias)
             continue
@@ -666,6 +681,11 @@ def _executable_candidate_aliases(
 
 def _is_exact_scene_planner_alias(alias: str) -> bool:
     return bool(alias) and "|" not in alias
+
+
+def _is_non_root_runtime_object_alias(alias: str) -> bool:
+    match = _RUNTIME_ALIAS_RE.match(alias)
+    return bool(match and match.group("variant") != "0")
 
 
 def _discovered_alias_values(
