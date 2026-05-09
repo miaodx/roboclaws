@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 17 MolmoSpaces real-world agent dogfood opened on 2026-05-09 via hybrid-phase-pipeline; ADR-0007 and source/GSD plans created for direct coding-agent dogfood on the ADR-0003 MCP surface.
+stopped_at: Phase 17 MolmoSpaces real-world agent dogfood completed on 2026-05-09; next remaining MolmoSpaces gaps are OpenClaw dogfood on the ADR-0003 MCP surface, advisory scorer/model checks, raw FPV-only perception, and planner-backed manipulation.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 12
-  completed_phases: 12
+  total_phases: 13
+  completed_phases: 13
   total_plans: 15
-  completed_plans: 14
+  completed_plans: 15
   percent: 100
 ---
 
@@ -21,22 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 17 — molmospaces-realworld-agent-dogfood (active; direct coding-agent dogfood kit and clean-run checker for the ADR-0003 MCP surface)
+**Current focus:** Post Phase 17 MolmoSpaces follow-ups — OpenClaw policy dogfood, advisory scoring, raw FPV perception, and planner-backed manipulation are still separate from the completed direct-agent dogfood kit.
 
 ## Current Position
 
-Phase: 17 (molmospaces-realworld-agent-dogfood) — ACTIVE
-Plan: 1 of 1 active — `17-01` implements ADR-0007 by adding a direct
+Phase: 17 (molmospaces-realworld-agent-dogfood) — COMPLETE
+Plan: 1 of 1 complete — `17-01` implements ADR-0007 by adding a direct
 coding-agent dogfood kit, real-world cleanup skill, and clean-run checker for
 the ADR-0003 MCP surface.
-Status: Planning slice opened. Next implementation step is to add the
-real-world dogfood skill/server entrypoint, checker flags, focused tests,
-recipes, and local evidence where feasible.
-Last activity: 2026-05-09 - Created ADR-0007, source plan, and GSD Phase 17
-plan for the direct coding-agent dogfood slice.
+Status: Verified with focused tests, the synthetic dogfood kit harness, a clean
+Claude Code direct-agent run, and the stricter checker against Phase 16 real
+visual evidence.
+Last activity: 2026-05-09 - Completed Phase 17 implementation and verification:
+Claude Code produced a clean ADR-0003 synthetic run with 5/5 restored, full
+sweep coverage, no disturbance, and zero `scene_objects` events. Codex was
+attempted but blocked by non-interactive MCP approval/sandbox behavior.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 is opening direct coding-agent dogfood on that stricter surface. Remaining MolmoSpaces work after that is OpenClaw policy dogfood, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Remaining MolmoSpaces work is OpenClaw policy dogfood, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -88,6 +90,7 @@ Progress: [##########] 100%
 | Phase 14 P01 | ~2h | 4 tasks | 15 files |
 | Phase 15 P01 | ~2h | 4 tasks | 8 files |
 | Phase 16 P01 | ~3h | 6 tasks | 10 files |
+| Phase 17 P01 | ~1h | 5 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -116,6 +119,15 @@ Recent decisions affecting current work:
   real-world cleanup skill, direct server entrypoint, checker assertions, and
   focused recipes for clean ADR-0003 agent artifacts before attempting OpenClaw
   Gateway dogfood.
+- **Phase 17 completion (2026-05-09):** Direct coding-agent dogfood on
+  `molmo_cleanup_realworld` is now possible and checker-gated. The new
+  `skills/molmo-realworld-cleanup/SKILL.md` teaches the public ADR-0003 loop,
+  `examples/molmo_realworld_cleanup_agent_server.py` starts the direct agent
+  server, and `scripts/check_molmo_realworld_cleanup_result.py` can enforce a
+  clean agent run with no `scene_objects` trace events. Claude Code produced a
+  clean synthetic direct-agent artifact (`policy=claude_code_agent`, 5/5
+  restored, full sweep, no disturbance). Codex was attempted but blocked by
+  non-interactive MCP call cancellation and a local bwrap sandbox error.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
@@ -236,6 +248,9 @@ Recent decisions affecting current work:
 - Phase 16 completed (2026-05-09): **MolmoSpaces real-world agent MCP** —
   ADR-0006 exposes the ADR-0003 public cleanup contract through MCP without the
   current-contract `scene_objects` shortcut.
+- Phase 17 completed (2026-05-09): **MolmoSpaces real-world agent dogfood** —
+  ADR-0007 adds the direct coding-agent skill/server/checker kit for the
+  ADR-0003 MCP surface and validates a clean Claude Code synthetic run.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -261,7 +276,8 @@ None yet.
   current-contract Codex/Claude/OpenClaw tool-viability proof, Phase 13
   completed visual agent bridge reporting, and Phase 14 completed ADR-0003
   public/private cleanup separation. Phase 15 completed larger hidden generated
-  mess sets, and Phase 16 completed the ADR-0003 MCP surface. Model-agent policy
+  mess sets, Phase 16 completed the ADR-0003 MCP surface, and Phase 17
+  completed direct coding-agent dogfood on that surface. OpenClaw policy
   evaluation on the ADR-0003 MCP contract, advisory scoring/model checks, raw
   FPV-only perception, and planner-backed manipulation remain separate
   follow-ups.

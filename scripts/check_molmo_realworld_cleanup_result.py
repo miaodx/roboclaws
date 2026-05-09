@@ -27,6 +27,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-mcp-server")
     parser.add_argument("--expect-seeds")
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
+    parser.add_argument("--require-agent-driven", action="store_true")
+    parser.add_argument("--require-clean-agent-run", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
     return parser.parse_args()
 
@@ -48,6 +50,8 @@ def main() -> None:
             expect_policy=args.expect_policy,
             expect_mcp_server=args.expect_mcp_server,
             min_generated_mess_count=args.min_generated_mess_count,
+            require_agent_driven=args.require_agent_driven,
+            require_clean_agent_run=args.require_clean_agent_run,
             require_robot_views=args.require_robot_views,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
@@ -74,6 +78,8 @@ def _assert_result(
     expect_policy: str | None = "deterministic_sweep_baseline",
     expect_mcp_server: str | None = None,
     min_generated_mess_count: int = 1,
+    require_agent_driven: bool = False,
+    require_clean_agent_run: bool = False,
     require_robot_views: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
@@ -95,6 +101,8 @@ def _assert_result(
         assert data.get("backend") == expect_backend, data
     if expect_mcp_server is not None:
         assert data.get("mcp_server") == expect_mcp_server, data
+    if require_agent_driven:
+        assert data.get("agent_driven") is True, data
 
     agent_view = data.get("agent_view") or {}
     _assert_public_agent_view(agent_view)
@@ -122,9 +130,38 @@ def _assert_result(
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     assert "Agent View" in report_text, report_text[:500]
     assert "Private Evaluation" in report_text, report_text[:500]
+    assert "Score" in report_text, report_text[:500]
+    assert "Semantic Substeps" in report_text, report_text[:500]
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    if require_clean_agent_run:
+        _assert_clean_agent_run(data)
     if require_robot_views:
         _assert_robot_views(data, base)
+
+
+def _assert_clean_agent_run(data: dict[str, Any]) -> None:
+    assert data.get("agent_driven") is True, data
+    assert data.get("mcp_server") == "molmo_cleanup_realworld", data
+    counts = data.get("tool_event_counts") or {}
+    for tool in (
+        "metric_map",
+        "fixture_hints",
+        "navigate_to_waypoint",
+        "observe",
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "place",
+        "done",
+    ):
+        assert int(counts.get(f"{tool}:request") or 0) >= 1, (tool, counts, data)
+    diagnostics = data.get("agent_bridge") or {}
+    assert diagnostics.get("stale_reference_errors") == 0, data
+    assert diagnostics.get("premature_done") is False, data
+    assert diagnostics.get("fridge_inside_sequence_ok") is True, data
+    assert int(diagnostics.get("complete_semantic_substep_objects") or 0) >= int(
+        data.get("generated_mess_count") or 0
+    ), data
 
 
 def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
@@ -147,6 +184,7 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
 def _assert_trace_is_public(trace_path: Path) -> None:
     for line in trace_path.read_text(encoding="utf-8").splitlines():
         payload = json.loads(line)
+        assert payload.get("tool") != "scene_objects", payload
         if payload.get("tool") == "done":
             continue
         _assert_no_forbidden_keys(payload)

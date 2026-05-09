@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World Agent Dogfood
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 17
+**Status:** Implemented and verified 2026-05-09 under GSD Phase 17
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0006, ADR-0007, Phase 16 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -67,3 +67,36 @@ stable.
 - Real visual report evidence must retain Agent View, Private Evaluation,
   Score, Cleanup Trace, and Robot View Timeline when robot-view capture is
   enabled.
+
+## Implementation Result
+
+Phase 17 added the direct-agent dogfood kit for the ADR-0003 MCP surface:
+
+- `skills/molmo-realworld-cleanup/SKILL.md`;
+- `examples/molmo_realworld_cleanup_agent_server.py`;
+- clean agent-run checker flags on
+  `scripts/check_molmo_realworld_cleanup_result.py`;
+- `just harness::molmo-realworld-agent-dogfood-kit`;
+- `just verify::molmo-realworld-agent-dogfood-kit`.
+
+Local evidence:
+
+- Kit gate:
+  `output/molmo-realworld-agent-dogfood-kit/run_result.json`
+  passed with `policy=realworld_contract_smoke_agent`, no `scene_objects`, and
+  5/5 synthetic generated objects restored.
+- Claude Code direct dogfood:
+  `output/molmo-realworld-agent-dogfood-claude-synth/run_result.json`
+  passed the clean agent-run checker with `policy=claude_code_agent`,
+  `agent_driven=true`, 5/5 restored, full sweep coverage, no disturbance, and
+  no `scene_objects`.
+- Codex direct dogfood was attempted twice but did not count as acceptance:
+  Codex listed the MCP tools, then cancelled the first required
+  `metric_map` tool call; the read-only sandbox also failed to read the skill
+  with `bwrap: loopback: Failed RTM_NEWADDR`.
+- Real visual report shape was revalidated by running the stricter checker
+  against `output/molmo-realworld-agent-mcp-harness/seed-1/run_result.json`
+  with `--require-clean-agent-run --require-robot-views`.
+
+OpenClaw Gateway dogfood against `molmo_cleanup_realworld` remains the next
+separate follow-up.
