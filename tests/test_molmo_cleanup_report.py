@@ -286,6 +286,70 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "support estimates" in html
 
 
+def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    proof_dir = tmp_path / "planner_proof"
+    proof_dir.mkdir()
+    (proof_dir / "initial.png").write_bytes(b"initial")
+    (proof_dir / "final.png").write_bytes(b"final")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend="api_semantic_synthetic",
+            primitive_summary={API_SEMANTIC_PROVENANCE: 1},
+        ),
+        "score": score.to_dict(),
+        "planner_backed_manipulation_proof": {
+            "schema": "planner_backed_cleanup_attachment_v1",
+            "status": "planner_backed",
+            "primitive_provenance": "planner_backed",
+            "planner_backed": True,
+            "strict_proof_eligible": True,
+            "embodiment": "franka",
+            "steps_executed": 2,
+            "max_abs_qpos_delta": 0.01,
+            "runtime_diagnostics": {"renderer_adapter_enabled": True},
+            "image_artifacts": {
+                "initial": "planner_proof/initial.png",
+                "final": "planner_proof/final.png",
+            },
+        },
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Attached Planner-Backed Proof" in html
+    assert "Planner Initial" in html
+    assert "Planner Final" in html
+    assert "Cleanup object moves" in html
+    assert "api_semantic" in html
+    assert "planner_proof/initial.png" in html
+    assert "planner_proof/final.png" in html
+
+
 def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) -> None:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"

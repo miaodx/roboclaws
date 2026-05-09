@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 26 cleanup planner proof attachment planned on 2026-05-09
+**Status:** Phase 26 cleanup planner proof attachment completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -17,8 +17,9 @@ synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 -> Phase 22 raw FPV-only perception evidence -> Phase 23 planner-backed
 manipulation provenance/proof gate -> Phase 24 planner runtime diagnostics ->
 Phase 25 planner headless renderer -> Phase 26 cleanup planner proof
-attachment. Standalone Franka strict planner proof now passes; real
-planner-backed cleanup-loop primitive integration remains a follow-up.
+attachment. Cleanup reports now render the strict standalone Franka proof beside
+ADR-0003 cleanup artifacts; real planner-backed cleanup-loop primitive
+integration remains a follow-up.
 
 ## Why This Exists
 
@@ -778,6 +779,15 @@ completed:
   gsd-plan-phase 23-molmospaces-planner-backed-manipulation-proof
   gsd-execute-phase 23-molmospaces-planner-backed-manipulation-proof
   gsd-verify-work 23-molmospaces-planner-backed-manipulation-proof
+  gsd-plan-phase 24-molmospaces-planner-runtime-diagnostics
+  gsd-execute-phase 24-molmospaces-planner-runtime-diagnostics
+  gsd-verify-work 24-molmospaces-planner-runtime-diagnostics
+  gsd-plan-phase 25-molmospaces-planner-headless-renderer
+  gsd-execute-phase 25-molmospaces-planner-headless-renderer
+  gsd-verify-work 25-molmospaces-planner-headless-renderer
+  gsd-plan-phase 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-execute-phase 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-verify-work 26-molmospaces-cleanup-planner-proof-attachment
 
 next pipeline candidates:
   real RBY1M/Franka planner-backed cleanup execution after the proof gate passes

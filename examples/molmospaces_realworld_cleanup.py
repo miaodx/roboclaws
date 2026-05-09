@@ -19,6 +19,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
 )
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
@@ -74,6 +75,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument("--planner-proof-run-result", type=Path)
     return parser.parse_args(argv)
 
 
@@ -89,6 +91,7 @@ def run_realworld_cleanup(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
+    planner_proof_run_result: Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -336,6 +339,12 @@ def run_realworld_cleanup(
         run_result["view_variant"] = ROBOT_VIEW_VARIANT
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
+    if planner_proof_run_result is not None:
+        run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
+            proof_run_result_path=planner_proof_run_result,
+            cleanup_run_dir=output_dir,
+        )
+        run_result["artifacts"]["planner_proof_views"] = str(output_dir / "planner_proof")
 
     report_path = render_cleanup_report(
         run_dir=output_dir,
@@ -621,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
+        planner_proof_run_result=args.planner_proof_run_result,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

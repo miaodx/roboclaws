@@ -104,6 +104,7 @@ def render_cleanup_report(
     {_current_contract_note(run_result)}
     {_realworld_contract_note(run_result)}
     {_manipulation_provenance_section(run_result)}
+    {_attached_planner_proof_section(run_result)}
     <section class="panel">
       <div class="section-heading">
         <h2>Before And After</h2>
@@ -287,6 +288,48 @@ def _manipulation_provenance_section(run_result: dict[str, Any]) -> str:
         f"{blocker_text}"
         f'<ul class="requirements">{requirements_list}</ul>'
         "</section>"
+    )
+
+
+def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
+    proof = run_result.get("planner_backed_manipulation_proof") or {}
+    if not proof:
+        return ""
+    diagnostics = proof.get("runtime_diagnostics") or {}
+    images = proof.get("image_artifacts") or {}
+    note = (
+        proof.get("evidence_note")
+        or "Strict standalone planner-backed manipulation proof attached for review."
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', proof.get('status', 'unknown'))}"
+        f"{_metric('Embodiment', proof.get('embodiment', 'unknown'))}"
+        f"{_metric('Steps', proof.get('steps_executed', 'n/a'))}"
+        f"{_metric('Qpos delta', proof.get('max_abs_qpos_delta', 'n/a'))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Strict proof", proof.get("strict_proof_eligible", False)),
+            _badge("Planner backed", proof.get("planner_backed", False)),
+            _badge("Cleanup primitive", run_result.get("primitive_provenance", "unknown")),
+            _badge("Renderer adapter", diagnostics.get("renderer_adapter_enabled", False)),
+        )
+    )
+    views = (
+        '<div class="views">'
+        f"{_view_figure(images.get('initial'), 'Planner Initial')}"
+        f"{_view_figure(images.get('final'), 'Planner Final')}"
+        "</div>"
+    )
+    return (
+        '<section class="panel attached-planner-proof">'
+        "<h2>Attached Planner-Backed Proof</h2>"
+        f'<p class="note">{html.escape(str(note))} Cleanup object moves in this '
+        f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
+        "</p>"
+        f'{metrics}<div class="badges">{badges}</div>{views}</section>'
     )
 
 

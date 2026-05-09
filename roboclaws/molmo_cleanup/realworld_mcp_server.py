@@ -17,6 +17,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.realworld_contract import (
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
@@ -65,6 +66,7 @@ def make_molmo_realworld_cleanup_mcp(
     fixture_hint_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
+    planner_proof_run_result: Path | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
         run_dir=run_dir,
@@ -79,6 +81,7 @@ def make_molmo_realworld_cleanup_mcp(
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
+        planner_proof_run_result=planner_proof_run_result,
     )
 
 
@@ -100,6 +103,7 @@ class RealWorldMolmoCleanupMCPServer:
         fixture_hint_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
+        planner_proof_run_result: Path | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -124,6 +128,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
+        self.planner_proof_run_result = planner_proof_run_result
         if self.record_robot_views and not callable(
             getattr(self.base_contract.backend, "write_robot_views", None)
         ):
@@ -391,6 +396,12 @@ class RealWorldMolmoCleanupMCPServer:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT
             run_result["robot_view_steps"] = self.robot_view_steps
             run_result["artifacts"]["robot_views"] = str(self.run_dir / "robot_views")
+        if self.planner_proof_run_result is not None:
+            run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
+                proof_run_result_path=self.planner_proof_run_result,
+                cleanup_run_dir=self.run_dir,
+            )
+            run_result["artifacts"]["planner_proof_views"] = str(self.run_dir / "planner_proof")
         report_path = render_cleanup_report(
             run_dir=self.run_dir,
             scenario=self.scenario,

@@ -8,17 +8,31 @@ execution.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
-1. Add ADR/source-plan documentation and update roadmap/state/context references.
-2. Add a proof-attachment helper that validates strict planner probe artifacts
+- [x] Add ADR/source-plan documentation and update roadmap/state/context references.
+- [x] Add a proof-attachment helper that validates strict planner probe artifacts
    and copies proof images into the cleanup run directory.
-3. Add cleanup harness and MCP-server support for optional proof attachment.
-4. Render `Attached Planner-Backed Proof` in the shared cleanup report.
-5. Add checker/tests and generate a local cleanup report with attached proof
+- [x] Add cleanup harness and MCP-server support for optional proof attachment.
+- [x] Render `Attached Planner-Backed Proof` in the shared cleanup report.
+- [x] Add checker/tests and generate a local cleanup report with attached proof
    views.
+
+## Outcome
+
+The ADR-0003 cleanup harness and MCP server can now attach a strict standalone
+Franka planner probe result. The attachment validator rejects non-strict proof,
+copies proof images into the cleanup artifact, renders the proof beside the
+shared cleanup report, and keeps cleanup-loop object-move provenance as
+`api_semantic`.
+
+Local evidence:
+
+- `output/molmo-realworld-cleanup-planner-proof/run_result.json`
+- `output/molmo-realworld-cleanup-planner-proof/report.html`
+- `output/molmo-realworld-cleanup-planner-proof/planner_proof/`
 
 ## Verification
 
@@ -26,6 +40,8 @@ Planned 2026-05-09.
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_proof_attachment.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_realworld_cleanup_result.py`
 - `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmo-realworld-cleanup-planner-proof --backend molmospaces_subprocess --include-robot --record-robot-views --planner-proof-run-result output/molmo-planner-manipulation-probe-headless/run_result.json`
 - `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --require-robot-views --require-advisory-scoring --require-planner-proof-attachment output/molmo-realworld-cleanup-planner-proof/run_result.json`
+
+All verification commands passed on 2026-05-09.
 
 ## Risks
 

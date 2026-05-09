@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.planner_proof_attachment import (
+    validate_planner_proof_attachment,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     forbidden_agent_view_keys,
@@ -33,6 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-robot-views", action="store_true")
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
+    parser.add_argument("--require-planner-proof-attachment", action="store_true")
     return parser.parse_args()
 
 
@@ -64,6 +69,7 @@ def main() -> None:
             require_robot_views=args.require_robot_views,
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
+            require_planner_proof_attachment=args.require_planner_proof_attachment,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -95,6 +101,7 @@ def _assert_result(
     require_robot_views: bool = False,
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
+    require_planner_proof_attachment: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -163,6 +170,8 @@ def _assert_result(
         _assert_advisory_scoring(data, base, report_text)
     if require_raw_fpv_observations:
         _assert_raw_fpv_observations(data, base, report_text)
+    if require_planner_proof_attachment:
+        _assert_planner_proof_attachment(data, base, report_text)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -346,6 +355,26 @@ def _assert_raw_fpv_observations(
             fpv_path = _resolve_path(robot_views_dir.parent, str(fpv))
         assert fpv_path.is_file(), (fpv_path, item)
         assert fpv_path.stat().st_size > 0, (fpv_path, item)
+
+
+def _assert_planner_proof_attachment(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+) -> None:
+    assert data.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, data
+    evidence = data.get("manipulation_evidence") or {}
+    assert evidence.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, evidence
+    attachment = data.get("planner_backed_manipulation_proof") or {}
+    validate_planner_proof_attachment(attachment)
+    for value in (attachment.get("image_artifacts") or {}).values():
+        path = _resolve_path(base, str(value))
+        assert path.is_file(), path
+        assert path.stat().st_size > 0, path
+    assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
+    assert "Planner Initial" in report_text, report_text[:500]
+    assert "Planner Final" in report_text, report_text[:500]
+    assert "Cleanup object moves" in report_text, report_text[:500]
 
 
 def _is_focused_robot_action(action: str) -> bool:

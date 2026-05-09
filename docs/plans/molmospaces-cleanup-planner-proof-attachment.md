@@ -1,6 +1,6 @@
 # MolmoSpaces Cleanup Planner Proof Attachment
 
-**Status:** Planned under GSD Phase 26
+**Status:** Completed under GSD Phase 26
 **Created:** 2026-05-09
 **Source:** ADR-0014, ADR-0016, ADR-0017, Phase 25 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -47,3 +47,20 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_planner_proof_attachment.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_realworld_cleanup_result.py`
 - `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmo-realworld-cleanup-planner-proof --backend molmospaces_subprocess --include-robot --record-robot-views --planner-proof-run-result output/molmo-planner-manipulation-probe-headless/run_result.json`
 - `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --require-robot-views --require-advisory-scoring --require-planner-proof-attachment output/molmo-realworld-cleanup-planner-proof/run_result.json`
+
+## Completion Evidence
+
+Completed 2026-05-09.
+
+- Helper: `roboclaws/molmo_cleanup/planner_proof_attachment.py`
+- Report artifact:
+  `output/molmo-realworld-cleanup-planner-proof/report.html`
+- Result artifact:
+  `output/molmo-realworld-cleanup-planner-proof/run_result.json`
+- Attached proof views:
+  `output/molmo-realworld-cleanup-planner-proof/planner_proof/`
+- Verification report:
+  `.planning/phases/26-molmospaces-cleanup-planner-proof-attachment/26-VERIFICATION.md`
+
+The artifact keeps cleanup object moves as `api_semantic` while rendering the
+strict standalone Franka proof as separate attached evidence.
