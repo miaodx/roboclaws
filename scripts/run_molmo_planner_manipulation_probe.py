@@ -1521,6 +1521,7 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "place_robot_near_calls": [],
         "placement_scene_diagnostics": [],
         "asset_failures": [],
+        "grasp_failures": [],
         "candidate_removals": [],
     }
     sample_and_place_robot = getattr(task_sampler, "_sample_and_place_robot", None)
@@ -1579,6 +1580,43 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         )
         diagnostics["hooks"].append("report_asset_failure")
 
+    report_grasp_failure = getattr(task_sampler, "report_grasp_failure", None)
+    if callable(report_grasp_failure):
+
+        def recording_report_grasp_failure(
+            self: Any,
+            obj_name: Any,
+            max_failures: int = 2,
+        ) -> Any:
+            before_candidates = _candidate_object_count(self)
+            before_count = _grasp_failure_count(self, obj_name)
+            result = report_grasp_failure(obj_name, max_failures)
+            after_candidates = _candidate_object_count(self)
+            after_count = _grasp_failure_count(self, obj_name)
+            diagnostics["grasp_failures"].append(
+                {
+                    "object_name": str(obj_name or ""),
+                    "count_before": before_count,
+                    "count_after": after_count,
+                    "max_failures": int(max_failures),
+                    "candidate_count_before": before_candidates,
+                    "candidate_count_after": after_candidates,
+                    "removed_candidate": (
+                        before_candidates is not None
+                        and after_candidates is not None
+                        and after_candidates < before_candidates
+                    ),
+                }
+            )
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+            return result
+
+        task_sampler.report_grasp_failure = MethodType(  # noqa: SLF001
+            recording_report_grasp_failure,
+            task_sampler,
+        )
+        diagnostics["hooks"].append("report_grasp_failure")
+
     remove_candidate_object = getattr(task_sampler, "_remove_candidate_object", None)
     if callable(remove_candidate_object):
 
@@ -1596,6 +1634,19 @@ def _apply_task_sampler_failure_diagnostics_adapter(
     diagnostics["applied"] = bool(diagnostics["hooks"])
     _refresh_task_sampler_failure_diagnostics(diagnostics)
     return diagnostics
+
+
+def _candidate_object_count(task_sampler: Any) -> int | None:
+    candidate_objects = getattr(task_sampler, "candidate_objects", None)
+    try:
+        return len(candidate_objects) if candidate_objects is not None else None
+    except TypeError:
+        return None
+
+
+def _grasp_failure_count(task_sampler: Any, obj_name: Any) -> int:
+    counts = getattr(task_sampler, "_grasp_failure_counts", None) or {}
+    return int(counts.get(obj_name, 0))
 
 
 def _install_place_robot_near_profile_adapter(
@@ -1862,6 +1913,7 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
     diagnostics["placement_scene_diagnostic_count"] = len(scene_diagnostics)
     diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
+    diagnostics["grasp_failure_count"] = len(diagnostics.get("grasp_failures") or [])
     diagnostics["candidate_removal_count"] = len(diagnostics.get("candidate_removals") or [])
     if failures:
         diagnostics["last_robot_placement_failure"] = failures[-1]

@@ -48,6 +48,11 @@ to `[0.0, 2.0]m` and raises the effective upstream `place_robot_near` budget to
 100 tries. It is evidence for task-feasibility diagnosis, not cleanup success.
 _Avoid_: production placement policy, readiness proof
 
+**Post-Placement Candidate Rejections**:
+Probe-local report evidence for task-sampler rejection after robot placement
+succeeds, including grasp-failure counts and candidate-removal calls.
+_Avoid_: robot placement failure, planner execution failure
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -698,3 +703,7 @@ _Avoid_: full cleanup replacement claim
   exact `Book_23` request now clears robot placement with 17/17 successful
   `place_robot_near` calls at effective `max_tries=100`, but still ends in
   `HouseInvalidForTask` after downstream candidate removals.
+- Phase 81 added Post-Placement Candidate Rejections. The warmed local report
+  shows the exact `Book_23` request records 17 grasp-failure reports and 15
+  candidate-removal calls after placement succeeds, so the remaining blocker is
+  grasp/candidate feasibility rather than robot base placement.

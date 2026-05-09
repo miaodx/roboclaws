@@ -925,6 +925,18 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "robot_placement_attempt_count": 1,
                         "robot_placement_failure_count": 1,
                         "asset_failure_count": 1,
+                        "grasp_failure_count": 3,
+                        "grasp_failures": [
+                            {
+                                "object_name": "pickup/body",
+                                "count_before": 2,
+                                "count_after": 3,
+                                "max_failures": 2,
+                                "candidate_count_before": 1,
+                                "candidate_count_after": 0,
+                                "removed_candidate": True,
+                            }
+                        ],
                         "last_placement_scene_diagnostic": {
                             "target_name": "pickup/body",
                             "valid_free_point_count": 3,
@@ -1008,6 +1020,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Exact sampler adapter target" in html
     assert "Task sampler placement failures" in html
     assert "Task sampler asset failures" in html
+    assert "Post-placement grasp failures" in html
     assert "Placement free-space fraction" in html
     assert "0.000017" in html
     assert "Failed to place robot near object: pickup/body" in html
@@ -1419,6 +1432,18 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "reason": "robot placement failed",
             }
         ],
+        "grasp_failure_count": 1,
+        "grasp_failures": [
+            {
+                "object_name": "pickup/body",
+                "count_before": 2,
+                "count_after": 3,
+                "max_failures": 2,
+                "candidate_count_before": 1,
+                "candidate_count_after": 0,
+                "removed_candidate": True,
+            }
+        ],
         "place_robot_near_calls": [
             {
                 "call_index": 1,
@@ -1524,6 +1549,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Task Sampler Failure Diagnostics" in html
     assert "Placement failures" in html
     assert "Effective max tries" in html
+    assert "Post-Placement Candidate Rejections" in html
+    assert "Removed by grasp threshold" in html
     assert "Placement Scene Diagnostics" in html
     assert "Free-space fraction" in html
     assert "0.000017" in html

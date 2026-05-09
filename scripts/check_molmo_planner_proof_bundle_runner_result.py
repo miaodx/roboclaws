@@ -381,6 +381,12 @@ def _assert_proof_result_summary(
                 value = str(task_sampler_failure.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+            grasp_failures = task_sampler_failure.get("grasp_failures") or []
+            if grasp_failures:
+                assert "Post-placement grasp failures" in report_text, report_text[:500]
+                value = str(task_sampler_failure.get("grasp_failure_count") or "")
+                if value:
+                    assert value in report_text, ("grasp_failure_count", report_text[:500])
             last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
             if last_scene:
                 assert "Placement free-space fraction" in report_text, report_text[:500]

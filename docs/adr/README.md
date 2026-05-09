@@ -80,6 +80,7 @@ one decision per file, sequential numbering, explicit status.
 | [0069](0069-add-task-sampler-robot-placement-profile.md) | Add Task Sampler Robot Placement Profile | Accepted |
 | [0070](0070-render-placement-scene-diagnostics.md) | Render Placement Scene Diagnostics | Accepted |
 | [0071](0071-add-wide-placement-profile-retry.md) | Add Wide Placement Profile Retry | Accepted |
+| [0072](0072-capture-post-placement-candidate-rejections.md) | Capture Post-Placement Candidate Rejections | Accepted |
 
 ## Adding a new ADR
 

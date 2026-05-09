@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 80 wide placement profile completed; next work is post-placement candidate rejection diagnostics for exact `Book_23`
+**Status:** Phase 81 post-placement rejection diagnostics completed; next work is grasp-feasible candidate selection/prefiltering for exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -210,6 +210,10 @@ Phase 80 adds a wide placement profile using radius `[0.0, 2.0]` and effective
 `place_robot_near(max_tries=100)`. The warmed local report shows robot
 placement now succeeds on all 17 attempts with zero placement failures, but the
 task still ends in `HouseInvalidForTask` after downstream candidate removals.
+Phase 81 captures that downstream rejection path. The warmed local report
+renders `Post-Placement Candidate Rejections` with 17 grasp-failure reports and
+15 candidate-removal calls after successful robot placement for the exact book
+alias.
 
 ## Why This Exists
 

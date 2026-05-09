@@ -56,6 +56,7 @@ def _write_report_files(
     curobo_memory_profile: bool = False,
     task_sampler_robot_placement_profile: bool = False,
     placement_scene_diagnostics: bool = False,
+    post_placement_rejections: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -85,6 +86,11 @@ def _write_report_files(
         body += (
             "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
             "Placement Scene Diagnostics\nbook/body\n12\n0.012\n"
+        )
+    if post_placement_rejections:
+        body += (
+            "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
+            "Post-Placement Candidate Rejections\nbook/body\n3\n"
         )
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
@@ -462,6 +468,37 @@ def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() 
     assert scene["nearest_free_point_distance_m"] == 0.1
     assert scene["radius_band_counts"][0]["free_point_count"] == 2
     assert diagnostics["place_robot_near_calls"][0]["scene_diagnostic"] == scene
+
+
+def test_runner_records_post_placement_grasp_rejections() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        candidate_objects = [SimpleNamespace(name="book/body")]
+
+        def __init__(self) -> None:
+            self._grasp_failure_counts: dict[str, int] = {}
+
+        def _sample_and_place_robot(self, env):
+            return None
+
+        def report_grasp_failure(self, obj_name, max_failures=2):
+            self._grasp_failure_counts[obj_name] = self._grasp_failure_counts.get(obj_name, 0) + 1
+            if self._grasp_failure_counts[obj_name] > max_failures:
+                self.candidate_objects = []
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    sampler.report_grasp_failure("book/body", max_failures=2)
+    sampler.report_grasp_failure("book/body", max_failures=2)
+    sampler.report_grasp_failure("book/body", max_failures=2)
+
+    assert diagnostics["grasp_failure_count"] == 3
+    assert diagnostics["grasp_failures"][-1]["object_name"] == "book/body"
+    assert diagnostics["grasp_failures"][-1]["count_after"] == 3
+    assert diagnostics["grasp_failures"][-1]["removed_candidate"] is True
+    assert diagnostics["grasp_failures"][-1]["candidate_count_after"] == 0
 
 
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
@@ -1056,6 +1093,68 @@ def test_checker_requires_placement_scene_diagnostics_report(tmp_path: Path) -> 
         rby1m_gate=True,
         diagnostics=True,
         placement_scene_diagnostics=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+        )
+
+
+def test_checker_requires_post_placement_rejection_report(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "candidate removed"}],
+        execution_attempted=True,
+    )
+    evidence["task_sampler_failure_diagnostics"] = {
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "robot_placement_attempts": [],
+        "grasp_failure_count": 3,
+        "grasp_failures": [
+            {
+                "object_name": "book/body",
+                "count_before": 2,
+                "count_after": 3,
+                "max_failures": 2,
+                "candidate_count_before": 1,
+                "candidate_count_after": 0,
+                "removed_candidate": True,
+            }
+        ],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            post_placement_rejections=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        post_placement_rejections=False,
     )
     with pytest.raises(AssertionError):
         checker._assert_probe_result(

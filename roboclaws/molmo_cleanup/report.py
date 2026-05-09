@@ -163,6 +163,7 @@ def render_planner_manipulation_report(
     {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
     {_planner_probe_task_sampler_failure_section(evidence)}
+    {_planner_probe_post_placement_rejection_section(evidence)}
     {_planner_probe_placement_scene_diagnostics_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
@@ -1139,6 +1140,7 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
     last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+    grasp_failures = task_sampler_failure.get("grasp_failures") or []
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1179,6 +1181,8 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
             last_scene_diagnostic.get("nearest_free_point_distance_m", ""),
         ),
         ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
+        ("Post-placement grasp failures", task_sampler_failure.get("grasp_failure_count", "")),
+        ("Post-placement rejection rows", len(grasp_failures)),
         ("Task sampler last failure", last_robot_failure.get("message", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
@@ -1616,6 +1620,52 @@ def _planner_probe_placement_scene_diagnostics_section(evidence: dict[str, Any])
         "<h2>Placement Scene Diagnostics</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}{_field_table(rows)}'
         f"{scene_table}{band_table}</section>"
+    )
+
+
+def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    grasp_failures = diagnostics.get("grasp_failures") or []
+    if not grasp_failures:
+        return ""
+    removed = [
+        item for item in grasp_failures if isinstance(item, dict) and item.get("removed_candidate")
+    ]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Grasp failures', diagnostics.get('grasp_failure_count', len(grasp_failures)))}"
+        f"{_metric('Candidate removals', diagnostics.get('candidate_removal_count', 0))}"
+        f"{_metric('Removed by grasp threshold', len(removed))}"
+        "</div>"
+    )
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('max_failures', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('removed_candidate', '')))}</td>"
+        "</tr>"
+        for item in grasp_failures
+        if isinstance(item, dict)
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Count before</th><th>Count after</th><th>Max failures</th>"
+        "<th>Candidates before</th><th>Candidates after</th><th>Removed</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+    )
+    note = (
+        "Post-placement candidate rejection diagnostics explain failures after "
+        "robot placement succeeds, such as grasp-feasibility thresholds removing "
+        "the sampled object from the candidate pool."
+    )
+    return (
+        '<section class="panel planner-probe-post-placement-rejections">'
+        "<h2>Post-Placement Candidate Rejections</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{table}</section>'
     )
 
 
