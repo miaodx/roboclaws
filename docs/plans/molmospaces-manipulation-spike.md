@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 49 planner proof bundle runner checker in progress on 2026-05-10
+**Status:** Phase 49 planner proof bundle runner checker completed on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD

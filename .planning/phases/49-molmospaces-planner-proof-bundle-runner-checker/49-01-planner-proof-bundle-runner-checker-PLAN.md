@@ -7,14 +7,14 @@ handoffs are gateable before local planner proof execution.
 
 ## Status
 
-Planned.
+Completed 2026-05-10.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Add checker script for runner manifest/report artifacts.
-3. [ ] Add tests for valid artifacts and failure modes.
-4. [ ] Run focused verification gates.
+2. [x] Add checker script for runner manifest/report artifacts.
+3. [x] Add tests for valid artifacts and failure modes.
+4. [x] Run focused verification gates.
 
 ## Acceptance
 
@@ -27,7 +27,18 @@ Planned.
 
 ## Verification
 
-- Pending.
+- `uv run ruff check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py`
+- `uv run ruff format --check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_proof_bundle_runner_result.py`
+
+## Completion Notes
+
+- Added `scripts/check_molmo_planner_proof_bundle_runner_result.py`.
+- The checker accepts a bundle output directory or direct manifest path.
+- It validates schema, status, counts, command metadata, report sections, and
+  optional expected proof output existence.
+- Focused tests cover the valid artifact plus missing report, missing command
+  metadata, and required-proof-output failure modes.
 
 ## Risks
 

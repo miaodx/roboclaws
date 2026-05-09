@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Runner Checker
 
-**Status:** Planned for GSD Phase 49
+**Status:** Completed in GSD Phase 49 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0039, ADR-0040, Phase 48 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -45,3 +45,9 @@ This phase should:
 - `uv run ruff check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py`
 - `uv run ruff format --check scripts/check_molmo_planner_proof_bundle_runner_result.py tests/test_check_molmo_planner_proof_bundle_runner_result.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_proof_bundle_runner_result.py`
+
+## Completion
+
+Phase 49 shipped the proof-bundle runner checker and tests for valid artifacts,
+missing reports, missing command metadata, and optional expected proof output
+existence.
