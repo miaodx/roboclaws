@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 27 cleanup planner-backed primitive gate planned on 2026-05-09
+**Status:** Phase 27 cleanup planner-backed primitive gate completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -18,9 +18,11 @@ synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 manipulation provenance/proof gate -> Phase 24 planner runtime diagnostics ->
 Phase 25 planner headless renderer -> Phase 26 cleanup planner proof
 attachment -> Phase 27 cleanup planner-backed primitive gate. Cleanup reports
-now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts;
-the next slice gates per-subphase cleanup primitive provenance before real
-planner-backed cleanup-loop primitive integration.
+now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts
+and expose a per-subphase cleanup primitive gate. Current cleanup-loop
+subphases remain `api_semantic`; actual planner-backed cleanup primitive
+replacement, RBY1M CuRobo enablement, and camera-only model-policy cleanup are
+separate follow-ups.
 
 ## Why This Exists
 
@@ -789,7 +791,12 @@ completed:
   gsd-plan-phase 26-molmospaces-cleanup-planner-proof-attachment
   gsd-execute-phase 26-molmospaces-cleanup-planner-proof-attachment
   gsd-verify-work 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-plan-phase 27-molmospaces-cleanup-planner-backed-primitives
+  gsd-execute-phase 27-molmospaces-cleanup-planner-backed-primitives
+  gsd-verify-work 27-molmospaces-cleanup-planner-backed-primitives
 
 next pipeline candidates:
-  gsd-plan-phase 27-molmospaces-cleanup-planner-backed-primitives
+  plan actual planner-backed cleanup-loop primitive replacement
+  plan RBY1M/CuRobo runtime enablement
+  plan camera-only model-policy cleanup
 ```

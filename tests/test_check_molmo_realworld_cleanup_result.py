@@ -316,6 +316,42 @@ def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
     )
 
 
+def test_checker_accepts_blocked_cleanup_primitive_gate(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        accept_blocked_planner_cleanup_primitives=True,
+    )
+    assert result["cleanup_primitive_evidence"]["status"] == "blocked_capability"
+
+
+def test_checker_rejects_current_cleanup_when_planner_primitives_required(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_backed_cleanup_primitives=True,
+        )
+
+
 def test_checker_rejects_missing_required_planner_proof(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+    validate_cleanup_primitive_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     validate_planner_proof_attachment,
 )
@@ -38,6 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
+    parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
+    parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
     return parser.parse_args()
 
 
@@ -70,6 +75,12 @@ def main() -> None:
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_planner_proof_attachment=args.require_planner_proof_attachment,
+            accept_blocked_planner_cleanup_primitives=(
+                args.accept_blocked_planner_cleanup_primitives
+            ),
+            require_planner_backed_cleanup_primitives=(
+                args.require_planner_backed_cleanup_primitives
+            ),
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -102,6 +113,8 @@ def _assert_result(
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
     require_planner_proof_attachment: bool = False,
+    accept_blocked_planner_cleanup_primitives: bool = False,
+    require_planner_backed_cleanup_primitives: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -172,6 +185,13 @@ def _assert_result(
         _assert_raw_fpv_observations(data, base, report_text)
     if require_planner_proof_attachment:
         _assert_planner_proof_attachment(data, base, report_text)
+    if accept_blocked_planner_cleanup_primitives or require_planner_backed_cleanup_primitives:
+        _assert_cleanup_primitive_gate(
+            data,
+            report_text,
+            accept_blocked=accept_blocked_planner_cleanup_primitives,
+            require_planner_backed=require_planner_backed_cleanup_primitives,
+        )
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -375,6 +395,27 @@ def _assert_planner_proof_attachment(
     assert "Planner Initial" in report_text, report_text[:500]
     assert "Planner Final" in report_text, report_text[:500]
     assert "Cleanup object moves" in report_text, report_text[:500]
+
+
+def _assert_cleanup_primitive_gate(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    accept_blocked: bool = False,
+    require_planner_backed: bool = False,
+) -> None:
+    evidence = data.get("cleanup_primitive_evidence") or {}
+    validate_cleanup_primitive_evidence(
+        evidence,
+        accept_blocked_capability=accept_blocked,
+        require_planner_backed=require_planner_backed,
+    )
+    assert "Cleanup Primitive Gate" in report_text, report_text[:500]
+    assert "nav/object" in report_text, report_text[:500]
+    assert "pick/object" in report_text, report_text[:500]
+    assert "nav/target" in report_text, report_text[:500]
+    if require_planner_backed:
+        assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
 
 
 def _is_focused_robot_action(action: str) -> bool:

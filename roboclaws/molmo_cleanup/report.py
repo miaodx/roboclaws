@@ -105,6 +105,7 @@ def render_cleanup_report(
     {_realworld_contract_note(run_result)}
     {_manipulation_provenance_section(run_result)}
     {_attached_planner_proof_section(run_result)}
+    {_cleanup_primitive_gate_section(run_result)}
     <section class="panel">
       <div class="section-heading">
         <h2>Before And After</h2>
@@ -330,6 +331,56 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
         "</p>"
         f'{metrics}<div class="badges">{badges}</div>{views}</section>'
+    )
+
+
+def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("cleanup_primitive_evidence") or {}
+    if not evidence:
+        return ""
+    objects = evidence.get("objects") or []
+    rows = []
+    for item in objects:
+        object_id = html.escape(str(item.get("object_id", "")))
+        for step in item.get("subphases") or []:
+            label = f"{step.get('label', '')}/{step.get('detail', '')}"
+            rows.append(
+                "<tr>"
+                f"<td>{object_id}</td>"
+                f"<td>{html.escape(str(label))}</td>"
+                f"<td>{html.escape(str(step.get('phase', '')))}</td>"
+                f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
+                f"<td>{html.escape(str(step.get('state_mutation') or ''))}</td>"
+                "</tr>"
+            )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
+        "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', evidence.get('status', 'unknown'))}"
+        f"{_metric('Objects', evidence.get('object_count', 0))}"
+        f"{_metric('Subphases', evidence.get('subphase_count', 0))}"
+        f"{_metric('Blockers', len(evidence.get('blockers') or []))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Planner-backed cleanup", evidence.get("planner_backed", False)),
+            _badge("Strict proof", evidence.get("strict_proof_eligible", False)),
+        )
+    )
+    note = evidence.get("evidence_note") or (
+        "Strict cleanup primitive proof requires every displayed cleanup subphase "
+        "to be planner_backed."
+    )
+    return (
+        '<section class="panel cleanup-primitive-gate">'
+        "<h2>Cleanup Primitive Gate</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
 
 

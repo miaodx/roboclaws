@@ -15,6 +15,9 @@ if __package__ in {None, ""}:
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation  # noqa: E402
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
+from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (  # noqa: E402
+    cleanup_primitive_evidence_from_substeps,
+)
 from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
 )
@@ -271,6 +274,7 @@ def run_realworld_cleanup(
         json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
     )
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
+    cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
 
     primitive_summary = primitive_provenance_counts(trace_events)
     run_result = {
@@ -304,6 +308,7 @@ def run_realworld_cleanup(
         "disturbance_count": done["score"]["disturbance_count"],
         "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
         "semantic_substeps": substeps,
+        "cleanup_primitive_evidence": cleanup_primitive_evidence,
         "agent_view": agent_view,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "agent_memory": agent_memory,

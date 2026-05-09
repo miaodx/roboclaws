@@ -13,6 +13,9 @@ from mcp.server.fastmcp import FastMCP
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+    cleanup_primitive_evidence_from_substeps,
+)
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
@@ -311,6 +314,7 @@ class RealWorldMolmoCleanupMCPServer:
         self._record_robot_view("after", label_suffix="after")
         trace_events = self._read_trace_events()
         substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
+        cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
         cleanup_plan = cleanup_plan_from_semantic_substeps(substeps)
         diagnostics = semantic_diagnostics(trace_events, substeps, done_response)
         diagnostics["premature_done"] = done_response["score"].get("sweep_coverage_rate", 0) < 0.90
@@ -371,6 +375,7 @@ class RealWorldMolmoCleanupMCPServer:
             "disturbance_count": done_response["score"]["disturbance_count"],
             "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
             "semantic_substeps": substeps,
+            "cleanup_primitive_evidence": cleanup_primitive_evidence,
             "cleanup_plan": cleanup_plan,
             "agent_view": agent_view,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),

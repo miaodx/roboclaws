@@ -4,6 +4,9 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+    cleanup_primitive_evidence_from_substeps,
+)
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
@@ -54,6 +57,37 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
             },
         }
     ]
+    run_result["cleanup_primitive_evidence"] = cleanup_primitive_evidence_from_substeps(
+        [
+            {
+                "object_id": "mug_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {
+                        "phase": "navigate_to_object",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "pick",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "navigate_to_receptacle",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "place",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                        "state_mutation": "mujoco_freejoint_qpos",
+                    },
+                ],
+            }
+        ]
+    )
 
     report_path = render_cleanup_report(
         run_dir=tmp_path,
@@ -68,6 +102,9 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "MolmoSpaces Cleanup Pilot" in html
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
+    assert "Cleanup Primitive Gate" in html
+    assert "nav/object" in html
+    assert "mujoco_freejoint_qpos" in html
     assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
     assert "Semantic acceptability" in html

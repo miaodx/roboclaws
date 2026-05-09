@@ -1,6 +1,6 @@
 # MolmoSpaces Cleanup Planner-Backed Primitives
 
-**Status:** Planned under GSD Phase 27
+**Status:** Completed under GSD Phase 27 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0014, ADR-0016, ADR-0017, ADR-0018
 **Workflow:** `hybrid-phase-pipeline`
@@ -48,11 +48,27 @@ This phase should:
 - Checker support for strict required and explicit blocked-capability modes.
 - Local artifact showing the gate against the existing visual cleanup report.
 
+## Completion Result
+
+Phase 27 implemented the gate without changing cleanup-loop primitive behavior.
+Generated cleanup artifacts now include `cleanup_primitive_evidence`, and the
+shared report renders `Cleanup Primitive Gate` beside the existing visual views
+and attached planner proof.
+
+The local artifact
+`output/molmo-realworld-cleanup-primitive-gate/report.html` shows the gate for a
+MolmoSpaces/RBY1M cleanup run with robot views and an attached strict Franka
+planner proof. Its cleanup primitive evidence is intentionally
+`blocked_capability` because the actual cleanup subphases remain
+`api_semantic`. The strict checker mode rejects the same artifact until those
+subphases are replaced by real planner-backed execution.
+
 ## Verification
 
 - `uv run ruff check` / `uv run ruff format --check` on changed Python files.
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_primitive_evidence.py tests/test_molmo_cleanup_report.py tests/test_check_molmo_realworld_cleanup_result.py`
-- Generate a MolmoSpaces cleanup artifact with robot views and attached proof.
+- Generate a MolmoSpaces cleanup artifact with robot views and attached proof:
+  `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmo-realworld-cleanup-primitive-gate --backend molmospaces_subprocess --include-robot --record-robot-views --generated-mess-count 2 --planner-proof-run-result output/molmo-planner-manipulation-probe-headless/run_result.json`
 - Run the checker in accepted blocked-capability mode and confirm the strict
   planner-backed primitive requirement rejects current `api_semantic`
   primitives.
