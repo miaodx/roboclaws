@@ -695,6 +695,31 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "cuda_available": True,
             "cpp_extension_cuda_home": "/usr/local/cuda",
         },
+        "cuda_visible_devices_env": "0",
+        "pytorch_cuda_alloc_conf_env": "expandable_segments:True",
+        "cuda_memory": {
+            "available": True,
+            "device_count": 1,
+            "current_device_index": 0,
+            "devices": [
+                {
+                    "index": 0,
+                    "name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+                    "total_memory_bytes": 12884901888,
+                    "compute_capability": "8.9",
+                }
+            ],
+            "current_snapshot": {
+                "stage": "runtime_diagnostics",
+                "elapsed_s": 0.02,
+                "device_index": 0,
+                "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+                "free_bytes": 298844160,
+                "total_bytes": 12455405158,
+                "torch_allocated_bytes": 10458234880,
+                "torch_reserved_bytes": 11408506880,
+            },
+        },
         "modules": {
             "curobo": {"available": False, "version": None},
             "molmo_spaces": {"available": True, "version": "0.1.0"},
@@ -743,6 +768,28 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "elapsed_s": 0.02,
         },
     ]
+    run_result["manipulation_evidence"]["cuda_memory_snapshots"] = [
+        {
+            "stage": "execute_policy_construct_before",
+            "elapsed_s": 10.2,
+            "device_index": 0,
+            "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+            "free_bytes": 2147483648,
+            "total_bytes": 12884901888,
+            "torch_allocated_bytes": 1073741824,
+            "torch_reserved_bytes": 2147483648,
+        },
+        {
+            "stage": "execute_policy_run_start",
+            "elapsed_s": 24.5,
+            "device_index": 0,
+            "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+            "free_bytes": 298844160,
+            "total_bytes": 12455405158,
+            "torch_allocated_bytes": 10458234880,
+            "torch_reserved_bytes": 11408506880,
+        },
+    ]
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -752,6 +799,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "CUDA Memory Headroom" in html
     assert "CuRobo Extension Cache" in html
     assert "lbfgs_step_cu" in html
     assert "Warp Compatibility" in html
@@ -766,6 +814,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "MUJOCO_GL=egl" in html
     assert "CUDA_HOME=/usr/local/cuda" in html
     assert "torch_cuda_available=True" in html
+    assert "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" in html
+    assert "execute_policy_run_start" in html
+    assert "10.6 GiB" in html
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html

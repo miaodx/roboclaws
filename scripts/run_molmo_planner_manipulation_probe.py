@@ -50,6 +50,7 @@ CUROBO_EXTENSION_NAMES = (
 )
 _WORKER_EVENT_STARTED_AT = time.monotonic()
 _WARP_COMPATIBILITY_ADAPTER: dict[str, Any] = {"applied": False}
+_CUDA_MEMORY_SNAPSHOTS: list[dict[str, Any]] = []
 
 
 def parse_args() -> argparse.Namespace:
@@ -254,18 +255,22 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
         stage="runtime_diagnostics",
         runtime_diagnostics=runtime_diagnostics,
     )
+    _record_cuda_memory_snapshot("worker_runtime_diagnostics")
     try:
         if args.embodiment == "franka":
             payload = _probe_franka(args)
         else:
             payload = _probe_rby1m(args)
+        _record_cuda_memory_snapshot("worker_success")
         return {
             "ok": True,
             "initial_runtime_diagnostics": runtime_diagnostics,
             "runtime_diagnostics": _runtime_diagnostics(args),
+            "cuda_memory_snapshots": list(_CUDA_MEMORY_SNAPSHOTS),
             **payload,
         }
     except BaseException as exc:  # noqa: BLE001 - worker must report capability blockers.
+        _record_cuda_memory_snapshot("worker_exception")
         final_runtime_diagnostics = _runtime_diagnostics(args)
         return {
             "ok": False,
@@ -277,6 +282,7 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "execution_attempted": args.probe_mode == "execute",
             "initial_runtime_diagnostics": runtime_diagnostics,
             "runtime_diagnostics": final_runtime_diagnostics,
+            "cuda_memory_snapshots": list(_CUDA_MEMORY_SNAPSHOTS),
         }
 
 
@@ -329,8 +335,11 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "pyopengl_platform_env": os.environ.get("PYOPENGL_PLATFORM", ""),
         "cuda_home_env": os.environ.get("CUDA_HOME", ""),
         "torch_cuda_arch_list_env": os.environ.get("TORCH_CUDA_ARCH_LIST", ""),
+        "cuda_visible_devices_env": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+        "pytorch_cuda_alloc_conf_env": os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
         "torch_extensions_dir_env": os.environ.get("TORCH_EXTENSIONS_DIR", ""),
         "torch": _torch_diagnostics(),
+        "cuda_memory": _cuda_memory_diagnostics(),
         "curobo_extension_cache": _curobo_extension_cache_diagnostics(),
         "warp_compatibility": _warp_compatibility_diagnostics(),
         "renderer_adapter_enabled": renderer_device_id is not None,
@@ -365,6 +374,188 @@ def _torch_diagnostics() -> dict[str, Any]:
             "error_type": type(exc).__name__,
             "error": str(exc),
         }
+
+
+def _cuda_memory_diagnostics() -> dict[str, Any]:
+    if importlib.util.find_spec("torch") is None:
+        return {
+            "available": False,
+            "torch_available": False,
+            "cuda_visible_devices_env": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+            "pytorch_cuda_alloc_conf_env": os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
+        }
+    try:
+        import torch
+
+        return _cuda_memory_diagnostics_from_torch(torch)
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return {
+            "available": False,
+            "torch_available": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "cuda_visible_devices_env": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+            "pytorch_cuda_alloc_conf_env": os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
+        }
+
+
+def _cuda_memory_diagnostics_from_torch(torch_module: Any) -> dict[str, Any]:
+    cuda = getattr(torch_module, "cuda", None)
+    available = bool(cuda and cuda.is_available())
+    diagnostics: dict[str, Any] = {
+        "available": available,
+        "torch_available": True,
+        "cuda_visible_devices_env": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+        "pytorch_cuda_alloc_conf_env": os.environ.get("PYTORCH_CUDA_ALLOC_CONF", ""),
+        "device_count": _cuda_device_count(cuda),
+    }
+    if not available:
+        return diagnostics
+    diagnostics["current_device_index"] = _cuda_current_device(cuda)
+    diagnostics["devices"] = [
+        _cuda_device_entry(cuda, index) for index in range(int(diagnostics["device_count"] or 0))
+    ]
+    diagnostics["current_snapshot"] = _cuda_memory_snapshot_from_torch(
+        torch_module,
+        "runtime_diagnostics",
+    )
+    return diagnostics
+
+
+def _record_cuda_memory_snapshot(stage: str) -> dict[str, Any]:
+    snapshot = _cuda_memory_snapshot(stage)
+    _CUDA_MEMORY_SNAPSHOTS.append(snapshot)
+    _emit_worker_event("cuda_memory_snapshot", stage=stage, cuda_memory=snapshot)
+    return snapshot
+
+
+def _cuda_memory_snapshot(stage: str) -> dict[str, Any]:
+    if importlib.util.find_spec("torch") is None:
+        return {
+            "stage": stage,
+            "elapsed_s": round(time.monotonic() - _WORKER_EVENT_STARTED_AT, 6),
+            "available": False,
+            "torch_available": False,
+        }
+    try:
+        import torch
+
+        return _cuda_memory_snapshot_from_torch(torch, stage)
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return {
+            "stage": stage,
+            "elapsed_s": round(time.monotonic() - _WORKER_EVENT_STARTED_AT, 6),
+            "available": False,
+            "torch_available": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+
+
+def _cuda_memory_snapshot_from_torch(torch_module: Any, stage: str) -> dict[str, Any]:
+    cuda = getattr(torch_module, "cuda", None)
+    snapshot: dict[str, Any] = {
+        "stage": stage,
+        "elapsed_s": round(time.monotonic() - _WORKER_EVENT_STARTED_AT, 6),
+        "torch_available": True,
+        "available": bool(cuda and cuda.is_available()),
+    }
+    if not snapshot["available"]:
+        return snapshot
+    device_index = _cuda_current_device(cuda)
+    snapshot["device_index"] = device_index
+    device_entry = _cuda_device_entry(cuda, device_index)
+    snapshot["device_name"] = device_entry.get("name")
+    snapshot["device_total_memory_bytes"] = device_entry.get("total_memory_bytes")
+    free_bytes, total_bytes = _cuda_mem_get_info(cuda, device_index)
+    if free_bytes is not None:
+        snapshot["free_bytes"] = free_bytes
+    if total_bytes is not None:
+        snapshot["total_bytes"] = total_bytes
+        if free_bytes is not None:
+            snapshot["used_bytes"] = total_bytes - free_bytes
+            snapshot["free_fraction"] = round(free_bytes / total_bytes, 6) if total_bytes else None
+    snapshot["torch_allocated_bytes"] = _cuda_memory_metric(
+        cuda,
+        "memory_allocated",
+        device_index,
+    )
+    snapshot["torch_reserved_bytes"] = _cuda_memory_metric(
+        cuda,
+        "memory_reserved",
+        device_index,
+    )
+    snapshot["torch_max_allocated_bytes"] = _cuda_memory_metric(
+        cuda,
+        "max_memory_allocated",
+        device_index,
+    )
+    snapshot["torch_max_reserved_bytes"] = _cuda_memory_metric(
+        cuda,
+        "max_memory_reserved",
+        device_index,
+    )
+    return snapshot
+
+
+def _cuda_device_count(cuda: Any) -> int:
+    if not cuda or not hasattr(cuda, "device_count"):
+        return 0
+    try:
+        return int(cuda.device_count())
+    except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return 0
+
+
+def _cuda_current_device(cuda: Any) -> int:
+    try:
+        return int(cuda.current_device())
+    except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return 0
+
+
+def _cuda_device_entry(cuda: Any, index: int) -> dict[str, Any]:
+    entry: dict[str, Any] = {"index": index}
+    try:
+        props = cuda.get_device_properties(index)
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        entry.update({"error_type": type(exc).__name__, "error": str(exc)})
+        return entry
+    entry["name"] = getattr(props, "name", "")
+    entry["total_memory_bytes"] = getattr(props, "total_memory", None)
+    major = getattr(props, "major", None)
+    minor = getattr(props, "minor", None)
+    if major is not None and minor is not None:
+        entry["compute_capability"] = f"{major}.{minor}"
+    return entry
+
+
+def _cuda_mem_get_info(cuda: Any, device_index: int) -> tuple[int | None, int | None]:
+    try:
+        free_bytes, total_bytes = cuda.mem_get_info(device_index)
+    except TypeError:
+        try:
+            free_bytes, total_bytes = cuda.mem_get_info()
+        except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+            return None, None
+    except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return None, None
+    return int(free_bytes), int(total_bytes)
+
+
+def _cuda_memory_metric(cuda: Any, name: str, device_index: int) -> int | None:
+    metric = getattr(cuda, name, None)
+    if not callable(metric):
+        return None
+    try:
+        return int(metric(device_index))
+    except TypeError:
+        try:
+            return int(metric())
+        except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+            return None
+    except BaseException:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return None
 
 
 def _curobo_extension_cache_diagnostics() -> dict[str, Any]:
@@ -620,12 +811,17 @@ def _execute_policy_probe(
         stage="execute_warp_adapter",
         warp_adapter=warp_adapter,
     )
+    _record_cuda_memory_snapshot("execute_policy_construct_before")
     _emit_worker_event("execute_policy_construct_start", stage="execute_policy_construct")
     policy = config.policy_config.policy_cls(config, task)
+    _record_cuda_memory_snapshot("execute_policy_construct_after")
     _emit_worker_event("execute_policy_construct_done", stage="execute_policy_construct")
+    _record_cuda_memory_snapshot("execute_policy_reset_before")
     _emit_worker_event("execute_policy_reset_start", stage="execute_policy_reset")
     policy.reset()
+    _record_cuda_memory_snapshot("execute_policy_reset_after")
     _emit_worker_event("execute_policy_reset_done", stage="execute_policy_reset")
+    _record_cuda_memory_snapshot("execute_policy_run_start")
     _emit_worker_event("execute_policy_run_start", stage="execute_policy_run", steps=steps)
     initial_qpos, final_qpos, initial_obs, final_obs = run_task_for_steps_with_observations(
         task,
@@ -633,6 +829,7 @@ def _execute_policy_probe(
         num_steps=steps,
         profiler=None,
     )
+    _record_cuda_memory_snapshot("execute_policy_run_done")
     _emit_worker_event("execute_policy_run_done", stage="execute_policy_run", steps=steps)
     views_dir = output_dir / "planner_views"
     image_artifacts = {}
@@ -789,6 +986,8 @@ def _write_probe_result(
     evidence["worker_payload"] = worker_payload
     if worker_payload.get("runtime_diagnostics"):
         evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
+    if worker_payload.get("cuda_memory_snapshots"):
+        evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
     worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
     if worker_stage_events:
         evidence["worker_stage_events"] = worker_stage_events
@@ -888,6 +1087,13 @@ def _worker_payload_from_stdout(stdout: str) -> dict[str, Any] | None:
         payload["worker_stage_events"] = worker_events
         last_stage = str(worker_events[-1].get("stage") or worker_events[-1].get("event") or "")
         payload["last_worker_stage"] = last_stage
+        memory_snapshots = [
+            item["cuda_memory"]
+            for item in worker_events
+            if item.get("event") == "cuda_memory_snapshot" and item.get("cuda_memory")
+        ]
+        if memory_snapshots and "cuda_memory_snapshots" not in payload:
+            payload["cuda_memory_snapshots"] = memory_snapshots
     return payload or None
 
 

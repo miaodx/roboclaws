@@ -158,6 +158,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
+    {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_extension_cache_section(evidence)}
     {_planner_probe_warp_compatibility_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
@@ -505,6 +506,108 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
     )
 
 
+def _planner_probe_cuda_memory_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    cuda = diagnostics.get("cuda_memory") or {}
+    snapshots = _planner_probe_cuda_memory_snapshots(evidence)
+    if not cuda and not snapshots:
+        return ""
+    current = cuda.get("current_snapshot") or (snapshots[-1] if snapshots else {})
+    free_memory = _memory_pair(current.get("free_bytes"), current.get("total_bytes"))
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('CUDA', 'available' if cuda.get('available') else 'missing')}"
+        f"{_metric('Device count', cuda.get('device_count', 0))}"
+        f"{_metric('Current device', _cuda_device_label(current, cuda))}"
+        f"{_metric('Free memory', free_memory)}"
+        f"{_metric('Torch allocated', _format_bytes(current.get('torch_allocated_bytes')))}"
+        f"{_metric('Torch reserved', _format_bytes(current.get('torch_reserved_bytes')))}"
+        "</div>"
+    )
+    env_note = (
+        f"CUDA_VISIBLE_DEVICES={diagnostics.get('cuda_visible_devices_env', '')}; "
+        f"PYTORCH_CUDA_ALLOC_CONF={diagnostics.get('pytorch_cuda_alloc_conf_env', '')}"
+    )
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('elapsed_s', '')))}</td>"
+        f"<td>{html.escape(str(item.get('stage', '')))}</td>"
+        f"<td>{html.escape(_cuda_device_label(item, cuda))}</td>"
+        f"<td>{html.escape(_memory_pair(item.get('free_bytes'), item.get('total_bytes')))}</td>"
+        f"<td>{html.escape(_format_bytes(item.get('torch_allocated_bytes')))}</td>"
+        f"<td>{html.escape(_format_bytes(item.get('torch_reserved_bytes')))}</td>"
+        f"<td>{html.escape(str(item.get('error') or item.get('error_type') or ''))}</td>"
+        "</tr>"
+        for item in snapshots
+    )
+    if not rows:
+        rows = '<tr><td colspan="7">No stage snapshots recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Elapsed s</th><th>Stage</th>'
+        "<th>Device</th><th>Free / total</th><th>Torch allocated</th>"
+        "<th>Torch reserved</th><th>Error</th></tr></thead><tbody>"
+        + rows
+        + "</tbody></table></div>"
+    )
+    note = (
+        "CUDA memory headroom is runtime evidence only. OOM-blocked artifacts "
+        "still do not satisfy strict planner-backed cleanup readiness."
+    )
+    return (
+        '<section class="panel"><h2>CUDA Memory Headroom</h2>'
+        f'<p class="note">{html.escape(note)}</p>'
+        f'<p class="note">{html.escape(env_note)}</p>{metrics}{table}</section>'
+    )
+
+
+def _planner_probe_cuda_memory_snapshots(evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    snapshots = list(evidence.get("cuda_memory_snapshots") or [])
+    if snapshots:
+        return snapshots
+    return [
+        item["cuda_memory"]
+        for item in evidence.get("worker_stage_events") or []
+        if item.get("event") == "cuda_memory_snapshot" and item.get("cuda_memory")
+    ]
+
+
+def _cuda_device_label(snapshot: dict[str, Any], diagnostics: dict[str, Any]) -> str:
+    device_name = snapshot.get("device_name")
+    if not device_name:
+        devices = diagnostics.get("devices") or []
+        current_index = snapshot.get("device_index", diagnostics.get("current_device_index"))
+        device = next((item for item in devices if item.get("index") == current_index), {})
+        device_name = device.get("name")
+    device_index = snapshot.get("device_index", diagnostics.get("current_device_index", ""))
+    if device_name:
+        return f"{device_index}: {device_name}"
+    return str(device_index)
+
+
+def _memory_pair(free_bytes: Any, total_bytes: Any) -> str:
+    if free_bytes is None and total_bytes is None:
+        return "unknown"
+    return f"{_format_bytes(free_bytes)} / {_format_bytes(total_bytes)}"
+
+
+def _format_bytes(value: Any) -> str:
+    if value in (None, ""):
+        return "unknown"
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    unit = units[0]
+    for unit in units:
+        if abs(amount) < 1024.0 or unit == units[-1]:
+            break
+        amount /= 1024.0
+    if unit == "B":
+        return str(int(amount))
+    return f"{amount:.1f} {unit}"
+
+
 def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:
     diagnostics = evidence.get("runtime_diagnostics") or {}
     cache = diagnostics.get("curobo_extension_cache") or {}
@@ -656,6 +759,10 @@ def _worker_stage_detail(item: dict[str, Any]) -> str:
         value = item.get(key)
         if value not in (None, ""):
             details.append(f"{key}={value}")
+    cuda_memory = item.get("cuda_memory")
+    if isinstance(cuda_memory, dict):
+        details.append(f"cuda_free={_format_bytes(cuda_memory.get('free_bytes'))}")
+        details.append(f"torch_reserved={_format_bytes(cuda_memory.get('torch_reserved_bytes'))}")
     return "; ".join(details)
 
 

@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-rby1m-curobo-ready", action="store_true")
     parser.add_argument("--require-curobo-extension-cache", action="store_true")
     parser.add_argument("--require-warp-compatibility", action="store_true")
+    parser.add_argument("--require-cuda-memory", action="store_true")
     return parser.parse_args()
 
 
@@ -45,6 +46,7 @@ def main() -> None:
         require_rby1m_curobo_ready=args.require_rby1m_curobo_ready,
         require_curobo_extension_cache=args.require_curobo_extension_cache,
         require_warp_compatibility=args.require_warp_compatibility,
+        require_cuda_memory=args.require_cuda_memory,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -59,6 +61,7 @@ def _assert_probe_result(
     require_rby1m_curobo_ready: bool = False,
     require_curobo_extension_cache: bool = False,
     require_warp_compatibility: bool = False,
+    require_cuda_memory: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -81,6 +84,9 @@ def _assert_probe_result(
         warp = (evidence.get("runtime_diagnostics") or {}).get("warp_compatibility") or {}
         if warp:
             assert "Warp Compatibility" in report_text, report_text[:500]
+        cuda_memory = (evidence.get("runtime_diagnostics") or {}).get("cuda_memory") or {}
+        if cuda_memory:
+            assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}
@@ -91,6 +97,12 @@ def _assert_probe_result(
         warp = diagnostics.get("warp_compatibility") or {}
         assert warp, diagnostics
         assert "Warp Compatibility" in report_text, report_text[:500]
+    if require_cuda_memory:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        cuda_memory = diagnostics.get("cuda_memory") or {}
+        snapshots = evidence.get("cuda_memory_snapshots") or []
+        assert cuda_memory or snapshots, diagnostics
+        assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]

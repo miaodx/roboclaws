@@ -50,6 +50,7 @@ def _write_report_files(
     worker_stages: bool = False,
     curobo_cache: bool = False,
     warp_compatibility: bool = False,
+    cuda_memory: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -67,6 +68,8 @@ def _write_report_files(
         body += "CuRobo Extension Cache\n"
     if warp_compatibility:
         body += "Warp Compatibility\n"
+    if cuda_memory:
+        body += "CUDA Memory Headroom\n"
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
     report.write_text(body, encoding="utf-8")
@@ -398,6 +401,82 @@ def test_checker_requires_warp_compatibility_report_when_requested(
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
             require_warp_compatibility=True,
+        )
+
+
+def test_checker_requires_cuda_memory_report_when_requested(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "OutOfMemoryError", "message": "CUDA out of memory"}],
+        execution_attempted=True,
+    )
+    evidence["runtime_diagnostics"] = {
+        "cuda_memory": {
+            "available": True,
+            "device_count": 1,
+            "current_device_index": 0,
+            "current_snapshot": {
+                "stage": "runtime_diagnostics",
+                "device_index": 0,
+                "device_name": "Fake GPU",
+                "free_bytes": 268435456,
+                "total_bytes": 1073741824,
+                "torch_allocated_bytes": 536870912,
+                "torch_reserved_bytes": 805306368,
+            },
+        }
+    }
+    evidence["cuda_memory_snapshots"] = [
+        {
+            "stage": "execute_policy_run_start",
+            "device_index": 0,
+            "device_name": "Fake GPU",
+            "free_bytes": 268435456,
+            "total_bytes": 1073741824,
+            "torch_allocated_bytes": 536870912,
+            "torch_reserved_bytes": 805306368,
+        }
+    ]
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            diagnostics=True,
+            rby1m_gate=True,
+            cuda_memory=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+        require_cuda_memory=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        diagnostics=True,
+        rby1m_gate=True,
+        cuda_memory=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+            require_cuda_memory=True,
         )
 
 

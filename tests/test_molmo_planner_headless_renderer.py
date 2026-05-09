@@ -102,6 +102,78 @@ def test_runtime_diagnostics_records_renderer_override(monkeypatch) -> None:
     assert diagnostics["pyopengl_platform_env"] == "egl"
 
 
+def test_cuda_memory_diagnostics_from_torch_records_headroom(monkeypatch) -> None:
+    probe = _load_probe_module()
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+    class FakeCuda:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def device_count() -> int:
+            return 1
+
+        @staticmethod
+        def current_device() -> int:
+            return 0
+
+        @staticmethod
+        def get_device_properties(index: int) -> SimpleNamespace:
+            assert index == 0
+            return SimpleNamespace(
+                name="Fake GPU",
+                total_memory=1024,
+                major=8,
+                minor=9,
+            )
+
+        @staticmethod
+        def mem_get_info(index: int) -> tuple[int, int]:
+            assert index == 0
+            return 256, 1024
+
+        @staticmethod
+        def memory_allocated(index: int) -> int:
+            assert index == 0
+            return 512
+
+        @staticmethod
+        def memory_reserved(index: int) -> int:
+            assert index == 0
+            return 768
+
+        @staticmethod
+        def max_memory_allocated(index: int) -> int:
+            assert index == 0
+            return 640
+
+        @staticmethod
+        def max_memory_reserved(index: int) -> int:
+            assert index == 0
+            return 896
+
+    fake_torch = SimpleNamespace(
+        cuda=FakeCuda(),
+        version=SimpleNamespace(cuda="12.8"),
+    )
+
+    diagnostics = probe._cuda_memory_diagnostics_from_torch(fake_torch)
+    snapshot = probe._cuda_memory_snapshot_from_torch(fake_torch, "execute_policy_run_start")
+
+    assert diagnostics["available"] is True
+    assert diagnostics["device_count"] == 1
+    assert diagnostics["devices"][0]["compute_capability"] == "8.9"
+    assert diagnostics["cuda_visible_devices_env"] == "0"
+    assert diagnostics["pytorch_cuda_alloc_conf_env"] == "expandable_segments:True"
+    assert diagnostics["current_snapshot"]["free_bytes"] == 256
+    assert snapshot["stage"] == "execute_policy_run_start"
+    assert snapshot["free_bytes"] == 256
+    assert snapshot["torch_reserved_bytes"] == 768
+
+
 def test_process_output_text_handles_timeout_bytes() -> None:
     probe = _load_probe_module()
 
