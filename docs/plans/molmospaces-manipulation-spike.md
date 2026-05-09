@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 41 planner probe cleanup binding completed on 2026-05-09
+**Status:** Phase 42 observed handle planner binding planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -48,7 +48,9 @@ sampled-task binding and promote cleanup primitive binding only on exact
 request/sample match. Cleanup-loop primitives remain `api_semantic` until a
 real object-specific executor maps ADR-0003 observed handles to upstream
 sampled planner tasks and integrates target planner-backed primitives into the
-cleanup subphases.
+cleanup subphases. Phase 42 plans the first half of that remaining bridge:
+private observed-handle to planner-alias binding without leaking aliases into
+Agent View or relabeling cleanup subphases.
 
 ## Why This Exists
 
