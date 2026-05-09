@@ -51,6 +51,19 @@ CUROBO_EXTENSION_NAMES = (
 _WORKER_EVENT_STARTED_AT = time.monotonic()
 _WARP_COMPATIBILITY_ADAPTER: dict[str, Any] = {"applied": False}
 _CUDA_MEMORY_SNAPSHOTS: list[dict[str, Any]] = []
+CUROBO_LOW_MEMORY_PROFILE: dict[str, dict[str, Any]] = {
+    "policy": {
+        "batch_size": 1,
+        "max_batch_plan_attempts": 1,
+    },
+    "planner": {
+        "num_trajopt_seeds": 1,
+        "num_ik_seeds": 16,
+        "max_attempts": 1,
+        "trajopt_tsteps": 24,
+        "enable_finetune_trajopt": False,
+    },
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,6 +106,19 @@ def parse_args() -> argparse.Namespace:
             "disable the probe-local headless renderer adapter."
         ),
     )
+    parser.add_argument(
+        "--rby1m-curobo-memory-profile",
+        choices=("none", "low"),
+        default="none",
+        help="Probe-local RBY1M/CuRobo memory profile. Default leaves upstream settings unchanged.",
+    )
+    parser.add_argument("--curobo-policy-batch-size", type=int, default=None)
+    parser.add_argument("--curobo-max-batch-plan-attempts", type=int, default=None)
+    parser.add_argument("--curobo-num-trajopt-seeds", type=int, default=None)
+    parser.add_argument("--curobo-num-ik-seeds", type=int, default=None)
+    parser.add_argument("--curobo-max-attempts", type=int, default=None)
+    parser.add_argument("--curobo-trajopt-tsteps", type=int, default=None)
+    parser.add_argument("--curobo-disable-finetune-trajopt", action="store_true")
     parser.add_argument("--steps", type=int, default=2)
     parser.add_argument("--timeout-s", type=float, default=180.0)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
@@ -117,6 +143,14 @@ def main() -> None:
         probe_mode=args.probe_mode,
         renderer_device_id=args.renderer_device_id,
         torch_extensions_dir=args.torch_extensions_dir,
+        rby1m_curobo_memory_profile=args.rby1m_curobo_memory_profile,
+        curobo_policy_batch_size=args.curobo_policy_batch_size,
+        curobo_max_batch_plan_attempts=args.curobo_max_batch_plan_attempts,
+        curobo_num_trajopt_seeds=args.curobo_num_trajopt_seeds,
+        curobo_num_ik_seeds=args.curobo_num_ik_seeds,
+        curobo_max_attempts=args.curobo_max_attempts,
+        curobo_trajopt_tsteps=args.curobo_trajopt_tsteps,
+        curobo_disable_finetune_trajopt=args.curobo_disable_finetune_trajopt,
         steps=args.steps,
         timeout_s=args.timeout_s,
     )
@@ -139,6 +173,14 @@ def run_probe(
     probe_mode: str,
     renderer_device_id: int,
     torch_extensions_dir: Path | None,
+    rby1m_curobo_memory_profile: str,
+    curobo_policy_batch_size: int | None,
+    curobo_max_batch_plan_attempts: int | None,
+    curobo_num_trajopt_seeds: int | None,
+    curobo_num_ik_seeds: int | None,
+    curobo_max_attempts: int | None,
+    curobo_trajopt_tsteps: int | None,
+    curobo_disable_finetune_trajopt: bool,
     steps: int,
     timeout_s: float,
 ) -> dict[str, Any]:
@@ -195,9 +237,23 @@ def run_probe(
         str(renderer_device_id),
         "--steps",
         str(steps),
+        "--rby1m-curobo-memory-profile",
+        rby1m_curobo_memory_profile,
     ]
     if torch_extensions_dir is not None:
         command.extend(["--torch-extensions-dir", str(torch_extensions_dir)])
+    _append_optional_int_arg(command, "--curobo-policy-batch-size", curobo_policy_batch_size)
+    _append_optional_int_arg(
+        command,
+        "--curobo-max-batch-plan-attempts",
+        curobo_max_batch_plan_attempts,
+    )
+    _append_optional_int_arg(command, "--curobo-num-trajopt-seeds", curobo_num_trajopt_seeds)
+    _append_optional_int_arg(command, "--curobo-num-ik-seeds", curobo_num_ik_seeds)
+    _append_optional_int_arg(command, "--curobo-max-attempts", curobo_max_attempts)
+    _append_optional_int_arg(command, "--curobo-trajopt-tsteps", curobo_trajopt_tsteps)
+    if curobo_disable_finetune_trajopt:
+        command.append("--curobo-disable-finetune-trajopt")
     try:
         completed = subprocess.run(
             command,
@@ -344,6 +400,7 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "warp_compatibility": _warp_compatibility_diagnostics(),
         "renderer_adapter_enabled": renderer_device_id is not None,
         "renderer_device_id": renderer_device_id,
+        "curobo_memory_profile_request": _curobo_memory_profile_request(args),
     }
 
 
@@ -680,6 +737,114 @@ def _apply_warp_torch_adapter_to_module(wp_module: Any) -> dict[str, Any]:
     }
 
 
+def _curobo_memory_profile_request(args: argparse.Namespace) -> dict[str, Any]:
+    explicit = _explicit_curobo_memory_overrides(args)
+    profile = getattr(args, "rby1m_curobo_memory_profile", "none")
+    return {
+        "profile": profile,
+        "profile_defaults": (
+            CUROBO_LOW_MEMORY_PROFILE if profile == "low" else {"policy": {}, "planner": {}}
+        ),
+        "explicit_overrides": explicit,
+        "requested": profile != "none" or bool(explicit["policy"]) or bool(explicit["planner"]),
+    }
+
+
+def _explicit_curobo_memory_overrides(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
+    policy: dict[str, Any] = {}
+    planner: dict[str, Any] = {}
+    if getattr(args, "curobo_policy_batch_size", None) is not None:
+        policy["batch_size"] = args.curobo_policy_batch_size
+    if getattr(args, "curobo_max_batch_plan_attempts", None) is not None:
+        policy["max_batch_plan_attempts"] = args.curobo_max_batch_plan_attempts
+    if getattr(args, "curobo_num_trajopt_seeds", None) is not None:
+        planner["num_trajopt_seeds"] = args.curobo_num_trajopt_seeds
+    if getattr(args, "curobo_num_ik_seeds", None) is not None:
+        planner["num_ik_seeds"] = args.curobo_num_ik_seeds
+    if getattr(args, "curobo_max_attempts", None) is not None:
+        planner["max_attempts"] = args.curobo_max_attempts
+    if getattr(args, "curobo_trajopt_tsteps", None) is not None:
+        planner["trajopt_tsteps"] = args.curobo_trajopt_tsteps
+    if getattr(args, "curobo_disable_finetune_trajopt", False):
+        planner["enable_finetune_trajopt"] = False
+    return {"policy": policy, "planner": planner}
+
+
+def _apply_rby1m_curobo_memory_profile(config: Any, args: argparse.Namespace) -> dict[str, Any]:
+    request = _curobo_memory_profile_request(args)
+    before = _rby1m_curobo_memory_profile_values(config)
+    overrides = _merged_curobo_memory_overrides(args)
+    policy_config = config.policy_config
+    for name, value in overrides["policy"].items():
+        setattr(policy_config, name, value)
+    for planner_config in _rby1m_curobo_planner_configs(policy_config).values():
+        for name, value in overrides["planner"].items():
+            setattr(planner_config, name, value)
+    after = _rby1m_curobo_memory_profile_values(config)
+    return {
+        "schema": "rby1m_curobo_memory_profile_v1",
+        "profile": args.rby1m_curobo_memory_profile,
+        "requested": request["requested"],
+        "applied": bool(overrides["policy"] or overrides["planner"]),
+        "request": request,
+        "applied_overrides": overrides,
+        "before": before,
+        "after": after,
+    }
+
+
+def _merged_curobo_memory_overrides(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
+    policy: dict[str, Any] = {}
+    planner: dict[str, Any] = {}
+    if getattr(args, "rby1m_curobo_memory_profile", "none") == "low":
+        policy.update(CUROBO_LOW_MEMORY_PROFILE["policy"])
+        planner.update(CUROBO_LOW_MEMORY_PROFILE["planner"])
+    explicit = _explicit_curobo_memory_overrides(args)
+    policy.update(explicit["policy"])
+    planner.update(explicit["planner"])
+    return {"policy": policy, "planner": planner}
+
+
+def _rby1m_curobo_memory_profile_values(config: Any) -> dict[str, Any]:
+    policy_config = config.policy_config
+    return {
+        "policy": {
+            "batch_size": getattr(policy_config, "batch_size", None),
+            "max_batch_plan_attempts": getattr(policy_config, "max_batch_plan_attempts", None),
+            "enable_collision_avoidance": getattr(
+                policy_config,
+                "enable_collision_avoidance",
+                None,
+            ),
+        },
+        "planners": {
+            name: _curobo_planner_memory_values(planner_config)
+            for name, planner_config in _rby1m_curobo_planner_configs(policy_config).items()
+        },
+    }
+
+
+def _rby1m_curobo_planner_configs(policy_config: Any) -> dict[str, Any]:
+    return {
+        name: planner_config
+        for name, planner_config in {
+            "left": getattr(policy_config, "left_curobo_planner_config", None),
+            "right": getattr(policy_config, "right_curobo_planner_config", None),
+        }.items()
+        if planner_config is not None
+    }
+
+
+def _curobo_planner_memory_values(planner_config: Any) -> dict[str, Any]:
+    return {
+        "num_trajopt_seeds": getattr(planner_config, "num_trajopt_seeds", None),
+        "num_ik_seeds": getattr(planner_config, "num_ik_seeds", None),
+        "max_attempts": getattr(planner_config, "max_attempts", None),
+        "trajopt_tsteps": getattr(planner_config, "trajopt_tsteps", None),
+        "enable_finetune_trajopt": getattr(planner_config, "enable_finetune_trajopt", None),
+    }
+
+
 def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
     _emit_worker_event("franka_config_import_start", stage="franka_config_import")
     from mlspaces_tests.data_generation.config import FrankaPickAndPlaceDroidTestConfig
@@ -735,6 +900,12 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
     config.profile = False
     config.use_wandb = False
     config.policy_config.server_urls = []
+    curobo_memory_profile = _apply_rby1m_curobo_memory_profile(config, args)
+    _emit_worker_event(
+        "rby1m_curobo_memory_profile_ready",
+        stage="rby1m_curobo_memory_profile",
+        curobo_memory_profile=curobo_memory_profile,
+    )
     policy_cls = config.policy_config.policy_cls
     _emit_worker_event(
         "rby1m_policy_class_ready",
@@ -751,6 +922,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         "policy_type": config.policy_config.policy_type,
         "planner_class_available": True,
         "execution_attempted": False,
+        "curobo_memory_profile": curobo_memory_profile,
     }
     if args.probe_mode == "execute":
         _emit_worker_event("rby1m_execute_probe_start", stage="rby1m_execute")
@@ -988,6 +1160,8 @@ def _write_probe_result(
         evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
     if worker_payload.get("cuda_memory_snapshots"):
         evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
+    if worker_payload.get("curobo_memory_profile"):
+        evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
     worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
     if worker_stage_events:
         evidence["worker_stage_events"] = worker_stage_events
@@ -1118,6 +1292,11 @@ def _process_output_text(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="replace")
     return value
+
+
+def _append_optional_int_arg(command: list[str], name: str, value: int | None) -> None:
+    if value is not None:
+        command.extend([name, str(value)])
 
 
 def _prepend_pythonpath(path: Path, existing: str | None) -> str:

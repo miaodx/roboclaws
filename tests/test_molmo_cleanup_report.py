@@ -790,6 +790,42 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "torch_reserved_bytes": 11408506880,
         },
     ]
+    run_result["manipulation_evidence"]["curobo_memory_profile"] = {
+        "profile": "low",
+        "applied": True,
+        "before": {
+            "policy": {
+                "batch_size": 4,
+                "max_batch_plan_attempts": 4,
+                "enable_collision_avoidance": True,
+            },
+            "planners": {
+                "left": {
+                    "num_trajopt_seeds": 12,
+                    "num_ik_seeds": 128,
+                    "max_attempts": 15,
+                    "trajopt_tsteps": 48,
+                    "enable_finetune_trajopt": True,
+                }
+            },
+        },
+        "after": {
+            "policy": {
+                "batch_size": 1,
+                "max_batch_plan_attempts": 1,
+                "enable_collision_avoidance": True,
+            },
+            "planners": {
+                "left": {
+                    "num_trajopt_seeds": 1,
+                    "num_ik_seeds": 16,
+                    "max_attempts": 1,
+                    "trajopt_tsteps": 24,
+                    "enable_finetune_trajopt": False,
+                }
+            },
+        },
+    }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -800,6 +836,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
     assert "CUDA Memory Headroom" in html
+    assert "CuRobo Memory Profile" in html
     assert "CuRobo Extension Cache" in html
     assert "lbfgs_step_cu" in html
     assert "Warp Compatibility" in html
@@ -816,6 +853,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "torch_cuda_available=True" in html
     assert "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" in html
     assert "execute_policy_run_start" in html
+    assert "num_ik_seeds" in html
+    assert "Collision avoidance" in html
     assert "10.6 GiB" in html
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html

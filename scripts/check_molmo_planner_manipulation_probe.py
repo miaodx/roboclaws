@@ -30,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-curobo-extension-cache", action="store_true")
     parser.add_argument("--require-warp-compatibility", action="store_true")
     parser.add_argument("--require-cuda-memory", action="store_true")
+    parser.add_argument("--require-curobo-memory-profile", action="store_true")
     return parser.parse_args()
 
 
@@ -47,6 +48,7 @@ def main() -> None:
         require_curobo_extension_cache=args.require_curobo_extension_cache,
         require_warp_compatibility=args.require_warp_compatibility,
         require_cuda_memory=args.require_cuda_memory,
+        require_curobo_memory_profile=args.require_curobo_memory_profile,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -62,6 +64,7 @@ def _assert_probe_result(
     require_curobo_extension_cache: bool = False,
     require_warp_compatibility: bool = False,
     require_cuda_memory: bool = False,
+    require_curobo_memory_profile: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -87,6 +90,8 @@ def _assert_probe_result(
         cuda_memory = (evidence.get("runtime_diagnostics") or {}).get("cuda_memory") or {}
         if cuda_memory:
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
+    if evidence.get("curobo_memory_profile"):
+        assert "CuRobo Memory Profile" in report_text, report_text[:500]
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}
@@ -103,6 +108,11 @@ def _assert_probe_result(
         snapshots = evidence.get("cuda_memory_snapshots") or []
         assert cuda_memory or snapshots, diagnostics
         assert "CUDA Memory Headroom" in report_text, report_text[:500]
+    if require_curobo_memory_profile:
+        profile = evidence.get("curobo_memory_profile") or {}
+        assert profile, evidence
+        assert profile.get("applied") is True, profile
+        assert "CuRobo Memory Profile" in report_text, report_text[:500]
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]

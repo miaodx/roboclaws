@@ -159,6 +159,7 @@ def render_planner_manipulation_report(
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
+    {_planner_probe_curobo_memory_profile_section(evidence)}
     {_planner_probe_curobo_extension_cache_section(evidence)}
     {_planner_probe_warp_compatibility_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
@@ -606,6 +607,81 @@ def _format_bytes(value: Any) -> str:
     if unit == "B":
         return str(int(amount))
     return f"{amount:.1f} {unit}"
+
+
+def _planner_probe_curobo_memory_profile_section(evidence: dict[str, Any]) -> str:
+    profile = evidence.get("curobo_memory_profile") or {}
+    if not profile:
+        return ""
+    after = profile.get("after") or {}
+    policy = after.get("policy") or {}
+    planners = after.get("planners") or {}
+    first_planner = next(iter(planners.values()), {})
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Profile', profile.get('profile', 'unknown'))}"
+        f"{_metric('Applied', _yes_no(profile.get('applied')))}"
+        f"{_metric('Batch size', policy.get('batch_size', 'unknown'))}"
+        f"{_metric('Max batches', policy.get('max_batch_plan_attempts', 'unknown'))}"
+        f"{_metric('Collision avoidance', _yes_no(policy.get('enable_collision_avoidance')))}"
+        f"{_metric('Trajopt seeds', first_planner.get('num_trajopt_seeds', 'unknown'))}"
+        "</div>"
+    )
+    before = profile.get("before") or {}
+    rows = _curobo_profile_rows(
+        "policy",
+        before.get("policy") or {},
+        policy,
+        ("batch_size", "max_batch_plan_attempts", "enable_collision_avoidance"),
+    )
+    before_planners = before.get("planners") or {}
+    for planner_name, planner_after in sorted(planners.items()):
+        rows.extend(
+            _curobo_profile_rows(
+                f"{planner_name}_planner",
+                before_planners.get(planner_name) or {},
+                planner_after,
+                (
+                    "num_trajopt_seeds",
+                    "num_ik_seeds",
+                    "max_attempts",
+                    "trajopt_tsteps",
+                    "enable_finetune_trajopt",
+                ),
+            )
+        )
+    table_rows = "".join(rows) or '<tr><td colspan="4">No profile values recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Scope</th><th>Setting</th>'
+        f"<th>Before</th><th>After</th></tr></thead><tbody>{table_rows}</tbody></table></div>"
+    )
+    note = (
+        "CuRobo memory profile is probe-local runtime evidence. Tuning state is "
+        "visible before target readiness or cleanup primitive replacement is considered."
+    )
+    return (
+        '<section class="panel"><h2>CuRobo Memory Profile</h2>'
+        f'<p class="note">{html.escape(note)}</p>{metrics}{table}</section>'
+    )
+
+
+def _curobo_profile_rows(
+    scope: str,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    keys: tuple[str, ...],
+) -> list[str]:
+    rows = []
+    for key in keys:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(scope)}</td>"
+            f"<td>{html.escape(key)}</td>"
+            f"<td>{html.escape(str(before.get(key, '')))}</td>"
+            f"<td>{html.escape(str(after.get(key, '')))}</td>"
+            "</tr>"
+        )
+    return rows
 
 
 def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:

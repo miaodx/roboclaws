@@ -51,6 +51,7 @@ def _write_report_files(
     curobo_cache: bool = False,
     warp_compatibility: bool = False,
     cuda_memory: bool = False,
+    curobo_memory_profile: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -70,6 +71,8 @@ def _write_report_files(
         body += "Warp Compatibility\n"
     if cuda_memory:
         body += "CUDA Memory Headroom\n"
+    if curobo_memory_profile:
+        body += "CuRobo Memory Profile\n"
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
     report.write_text(body, encoding="utf-8")
@@ -477,6 +480,75 @@ def test_checker_requires_cuda_memory_report_when_requested(tmp_path: Path) -> N
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
             require_cuda_memory=True,
+        )
+
+
+def test_checker_requires_curobo_memory_profile_report_when_requested(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "OutOfMemoryError", "message": "CUDA out of memory"}],
+        execution_attempted=True,
+    )
+    evidence["curobo_memory_profile"] = {
+        "profile": "low",
+        "applied": True,
+        "after": {
+            "policy": {
+                "batch_size": 1,
+                "max_batch_plan_attempts": 1,
+                "enable_collision_avoidance": True,
+            },
+            "planners": {
+                "left": {
+                    "num_trajopt_seeds": 1,
+                    "num_ik_seeds": 16,
+                    "max_attempts": 1,
+                    "trajopt_tsteps": 24,
+                    "enable_finetune_trajopt": False,
+                }
+            },
+        },
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            curobo_memory_profile=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+        require_curobo_memory_profile=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        curobo_memory_profile=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+            require_curobo_memory_profile=True,
         )
 
 

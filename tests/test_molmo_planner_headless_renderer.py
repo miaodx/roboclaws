@@ -174,6 +174,55 @@ def test_cuda_memory_diagnostics_from_torch_records_headroom(monkeypatch) -> Non
     assert snapshot["torch_reserved_bytes"] == 768
 
 
+def test_rby1m_curobo_low_memory_profile_records_overrides() -> None:
+    probe = _load_probe_module()
+    left = SimpleNamespace(
+        num_trajopt_seeds=12,
+        num_ik_seeds=128,
+        max_attempts=15,
+        trajopt_tsteps=48,
+        enable_finetune_trajopt=True,
+    )
+    right = SimpleNamespace(
+        num_trajopt_seeds=12,
+        num_ik_seeds=128,
+        max_attempts=15,
+        trajopt_tsteps=48,
+        enable_finetune_trajopt=True,
+    )
+    config = SimpleNamespace(
+        policy_config=SimpleNamespace(
+            batch_size=4,
+            max_batch_plan_attempts=4,
+            enable_collision_avoidance=True,
+            left_curobo_planner_config=left,
+            right_curobo_planner_config=right,
+        )
+    )
+    args = Namespace(
+        rby1m_curobo_memory_profile="low",
+        curobo_policy_batch_size=None,
+        curobo_max_batch_plan_attempts=None,
+        curobo_num_trajopt_seeds=None,
+        curobo_num_ik_seeds=None,
+        curobo_max_attempts=None,
+        curobo_trajopt_tsteps=None,
+        curobo_disable_finetune_trajopt=False,
+    )
+
+    profile = probe._apply_rby1m_curobo_memory_profile(config, args)
+
+    assert profile["applied"] is True
+    assert profile["profile"] == "low"
+    assert profile["before"]["policy"]["batch_size"] == 4
+    assert profile["after"]["policy"]["batch_size"] == 1
+    assert profile["after"]["policy"]["enable_collision_avoidance"] is True
+    assert profile["after"]["planners"]["left"]["num_trajopt_seeds"] == 1
+    assert profile["after"]["planners"]["left"]["num_ik_seeds"] == 16
+    assert profile["after"]["planners"]["left"]["enable_finetune_trajopt"] is False
+    assert right.trajopt_tsteps == 24
+
+
 def test_process_output_text_handles_timeout_bytes() -> None:
     probe = _load_probe_module()
 

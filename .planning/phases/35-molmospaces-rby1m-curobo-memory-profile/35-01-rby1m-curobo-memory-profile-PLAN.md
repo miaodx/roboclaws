@@ -8,16 +8,16 @@ blocked on planner tuning or hardware.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. [ ] Add probe CLI/profile support for RBY1M CuRobo low-memory settings.
-3. [ ] Record requested/effective profile settings in runtime evidence.
-4. [ ] Render/checker/test `CuRobo Memory Profile` report evidence.
-5. [ ] Rerun local RBY1M/CuRobo execute mode with the low-memory profile and
+2. [x] Add probe CLI/profile support for RBY1M CuRobo low-memory settings.
+3. [x] Record requested/effective profile settings in runtime evidence.
+4. [x] Render/checker/test `CuRobo Memory Profile` report evidence.
+5. [x] Rerun local RBY1M/CuRobo execute mode with the low-memory profile and
    record whether the blocker changes or strict target proof passes.
 
 ## Acceptance
@@ -40,7 +40,24 @@ Planned 2026-05-09.
 
 ## Evidence
 
-Pending implementation.
+- `uv run ruff check scripts/run_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py scripts/check_molmo_planner_manipulation_probe.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed.
+- `uv run ruff format --check scripts/run_molmo_planner_manipulation_probe.py roboclaws/molmo_cleanup/report.py scripts/check_molmo_planner_manipulation_probe.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed.
+- `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
+  passed with 28 tests.
+- `output/molmo-planner-rby1m-curobo-memory-profile-execute/run_result.json`
+  records `status=planner_backed`, `steps_executed=2`, and
+  `max_abs_qpos_delta=0.04167305757535879`.
+- The strict checker passed with `--require-planner-backed`,
+  `--require-rby1m-curobo-ready`, `--require-curobo-extension-cache`,
+  `--require-warp-compatibility`, `--require-cuda-memory`, and
+  `--require-curobo-memory-profile`.
+- The artifact renders `Planner Probe Views`, `CUDA Memory Headroom`,
+  `CuRobo Memory Profile`, `Warp Compatibility`, `CuRobo Extension Cache`, and
+  `RBY1M CuRobo Gate`.
+- The low-memory profile kept `enable_collision_avoidance=true` while reducing
+  policy batch/attempt counts and planner seed/timestep counts.
 
 ## Risks
 

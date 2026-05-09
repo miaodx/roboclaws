@@ -1,6 +1,6 @@
 # MolmoSpaces RBY1M CuRobo Memory Profile
 
-**Status:** Planned for GSD Phase 35 on 2026-05-09
+**Status:** Completed under GSD Phase 35 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0019, ADR-0025, ADR-0026, Phase 34 evidence
 **Workflow:** `hybrid-phase-pipeline`
@@ -70,3 +70,40 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
 - `CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-curobo-memory-profile-execute --embodiment rby1m --probe-mode execute --torch-extensions-dir output/molmo-planner-rby1m-curobo-cache-isolation/torch_extensions --renderer-device-id 0 --rby1m-curobo-memory-profile low --steps 2 --timeout-s 600`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked --require-curobo-extension-cache --require-warp-compatibility --require-cuda-memory --require-curobo-memory-profile output/molmo-planner-rby1m-curobo-memory-profile-execute/run_result.json`
+
+## Completion Evidence
+
+Phase 35 completed as a strict target RBY1M/CuRobo standalone proof with visible
+low-memory tuning.
+
+The execute artifact records:
+
+- `status=planner_backed`;
+- `rby1m_curobo_gate.rby1m_curobo_ready=true`;
+- upstream policy class `CuroboPickAndPlacePlannerPolicy`;
+- 2 executed steps;
+- `max_abs_qpos_delta=0.04167305757535879`;
+- initial and final head-camera PNGs under `planner_views/`;
+- `CuRobo Memory Profile`, `CUDA Memory Headroom`, `Warp Compatibility`,
+  `CuRobo Extension Cache`, and `RBY1M CuRobo Gate` report sections.
+
+The low-memory profile is visible and keeps collision avoidance enabled:
+
+- policy `batch_size`: `4 -> 1`;
+- policy `max_batch_plan_attempts`: `4 -> 1`;
+- policy `enable_collision_avoidance`: `true -> true`;
+- planner `num_trajopt_seeds`: `12 -> 1`;
+- planner `num_ik_seeds`: `128 -> 16`;
+- planner `max_attempts`: `15 -> 1`;
+- planner `trajopt_tsteps`: `48 -> 24`;
+- planner `enable_finetune_trajopt`: `true -> false`.
+
+The memory profile changed the outcome from OOM to planner-backed execution:
+
+- `execute_policy_run_start`: about 9.2 GiB free, 1.1 GiB PyTorch reserved;
+- `execute_policy_run_done`: about 9.2 GiB free, 1.1 GiB PyTorch reserved;
+- no capability blockers were recorded.
+
+This proves standalone target RBY1M/CuRobo planner-backed manipulation under a
+visible low-memory profile. It does not yet replace the ADR-0003 cleanup loop's
+own `api_semantic` primitives; that remains the next implementation slice.

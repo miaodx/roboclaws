@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 35 MolmoSpaces RBY1M CuRobo memory profile planned on 2026-05-09; target execute-mode proof remains gated on CuRobo trajectory-planning CUDA OOM.
+stopped_at: Phase 35 MolmoSpaces RBY1M CuRobo memory profile completed on 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof now passes under a visible low-memory profile.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 30
-  completed_phases: 29
+  completed_phases: 30
   total_plans: 33
-  completed_plans: 32
-  percent: 97
+  completed_plans: 33
+  percent: 100
 ---
 
 # Project State
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** RBY1M/CuRobo execute mode now reaches policy run; Phase 35 adds a visible low-memory CuRobo profile before deciding the tuning/hardware path.
+**Current focus:** RBY1M/CuRobo execute mode now has strict standalone planner-backed proof under a visible low-memory profile; the next slice can start cleanup-loop primitive replacement.
 
 ## Current Position
 
-Phase: 35 (molmospaces-rby1m-curobo-memory-profile) — PLANNED
-Plan: 1 of 1 active — `35-01` will add a probe-local low-memory CuRobo
+Phase: 35 (molmospaces-rby1m-curobo-memory-profile) — COMPLETE
+Plan: 1 of 1 complete — `35-01` added a probe-local low-memory CuRobo
 profile, report/checker coverage, and a local execute retry.
 Status: Phase 33 closed the Warp compatibility evidence slice. RBY1M execute
 mode now reaches `execute_policy_construct_done`, `execute_policy_reset_done`,
@@ -34,20 +34,21 @@ and `execute_policy_run_start`. Phase 34 shows the next blocker is CUDA memory
 growth during CuRobo trajectory planning: about 9.1 GiB free at policy run
 start, then about 284.7 MiB free at the OOM exception with about 9.7 GiB
 allocated and 9.9 GiB reserved by PyTorch. Phase 35 will retry with a visible
-low-memory profile before any cleanup primitive replacement. Actual
-planner-backed cleanup primitive replacement remains gated until execute-mode
-RBY1M/CuRobo proof passes.
-Last activity: 2026-05-09 - Planned Phase 35 RBY1M CuRobo memory profile.
+low-memory profile before any cleanup primitive replacement. That retry now
+passes strict standalone RBY1M/CuRobo planner-backed proof with 2 executed
+steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability blockers.
+Actual planner-backed cleanup primitive replacement remains a follow-up slice.
+Last activity: 2026-05-09 - Completed Phase 35 RBY1M CuRobo memory profile.
 
-Progress: [#########-] 97%
-Phase 35 note: low-memory CuRobo profile is the next target-runtime retry slice.
+Progress: [##########] 100%
+Phase 35 note: target standalone planner proof passes under a visible low-memory CuRobo profile.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 41 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 34)
+- Total plans completed: 42 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 35)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -74,8 +75,8 @@ Phase 35 note: low-memory CuRobo profile is the next target-runtime retry slice.
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 32, 33, 34
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, and measured CUDA memory headroom evidence showing the target path now blocks inside CuRobo trajectory planning.
+- Last 3 shipped phases: 33, 34, 35
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, and strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -111,7 +112,7 @@ Phase 35 note: low-memory CuRobo profile is the next target-runtime retry slice.
 | Phase 32 P01 | ~1h | 5 tasks | 10 files |
 | Phase 33 P01 | ~1h | 5 tasks | 10 files |
 | Phase 34 P01 | ~1h | 5 tasks | 6 files |
-| Phase 35 P01 | in progress | 5 tasks | pending |
+| Phase 35 P01 | ~1h | 5 tasks | 6 files |
 
 ## Accumulated Context
 

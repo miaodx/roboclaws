@@ -61,7 +61,8 @@ CUDA memory headroom as first-class planner probe evidence before tuning or
 primitive replacement; the latest target retry shows the OOM occurs during
 CuRobo trajectory planning after PyTorch reservation grows to about 9.9 GiB.
 Phase 35 adds a visible probe-local low-memory CuRobo profile for the next
-target execute retry.
+target execute retry; that retry now passes strict standalone RBY1M/CuRobo
+planner-backed proof with nonzero robot-state movement.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -121,7 +122,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.33 MolmoSpaces RBY1M CuRobo cache isolation** - Phase 32 (completed 2026-05-09; isolated Torch extension cache evidence before target execute-mode retry)
 - ✅ **v1.34 MolmoSpaces RBY1M Warp compatibility** - Phase 33 (completed 2026-05-09; probe-local Warp API adapter before target execute-mode retry)
 - ✅ **v1.35 MolmoSpaces RBY1M CUDA memory headroom** - Phase 34 (completed 2026-05-09; stage-local CUDA memory evidence for target execute-mode OOM)
-- 📋 **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (planned 2026-05-09; visible low-memory CuRobo retry profile)
+- ✅ **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (completed 2026-05-09; visible low-memory CuRobo retry profile and strict target proof)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -172,7 +173,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 32: MolmoSpaces RBY1M CuRobo cache isolation** - ADR-0023 isolated Torch extension cache evidence for RBY1M/CuRobo warmup retries. Completed 2026-05-09; config import succeeds, execute mode blocks at `warp.torch`.
 - [x] **Phase 33: MolmoSpaces RBY1M Warp compatibility** - ADR-0024 probe-local Warp API adapter and visible compatibility evidence before target execute-mode retry. Completed 2026-05-09; execute mode reaches `execute_policy_run` and blocks on CUDA OOM.
 - [x] **Phase 34: MolmoSpaces RBY1M CUDA memory headroom** - ADR-0025 stage-local CUDA/PyTorch memory evidence for target execute-mode OOM before planner memory tuning or cleanup primitive replacement. Completed 2026-05-09; execute mode still blocks inside CuRobo trajectory planning before robot-state movement.
-- [ ] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM.
+- [x] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM. Completed 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof passes under the visible low-memory profile.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

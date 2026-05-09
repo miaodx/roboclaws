@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 35 RBY1M CuRobo memory profile planned on 2026-05-09
+**Status:** Phase 35 RBY1M CuRobo memory profile completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -39,7 +39,10 @@ records CUDA memory headroom as first-class report evidence before any planner
 memory tuning or primitive replacement work; the latest target retry shows
 about 9.1 GiB free at `execute_policy_run_start` and about 284.7 MiB free at
 the OOM exception. Phase 35 adds a visible probe-local low-memory CuRobo
-profile before retrying target execute mode again.
+profile before retrying target execute mode again. That retry passes strict
+standalone RBY1M/CuRobo planner-backed proof with nonzero robot-state movement;
+cleanup-loop primitives remain `api_semantic` until a follow-up replacement
+slice integrates target planner-backed primitives into the cleanup subphases.
 
 ## Why This Exists
 
