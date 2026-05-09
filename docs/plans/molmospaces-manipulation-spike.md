@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 53 planner proof bundle execute-rerun gate completed with binding blocker on 2026-05-10
+**Status:** Phase 54 exact cleanup-scene proof binding completed with upstream RBY1M task-feasibility blocker on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -69,7 +69,12 @@ the final cleanup rerun artifacts in runner manifests, reports, and checker
 gates. Phase 53 adds the named local-dev execute-rerun gate for bound proof
 bundles and final cleanup checker readiness. The local run executed five
 RBY1M/CuRobo proofs, but final cleanup readiness remains blocked because the
-sampled upstream tasks did not match the requested cleanup aliases.
+sampled upstream tasks did not match the requested cleanup aliases. Phase 54
+binds generated proof probes to the real cleanup scene XML and requested
+planner aliases from a `molmospaces_subprocess` cleanup artifact. Local
+exact-scene probes now reach upstream task sampling for the requested cleanup
+objects, and the remaining blocker has narrowed to `HouseInvalidForTask` /
+RBY1M robot placement infeasibility before sampled binding can promote.
 
 ## Why This Exists
 
@@ -883,7 +888,10 @@ completed:
   gsd-plan-phase 53-molmospaces-planner-proof-bundle-execute-rerun
   gsd-execute-phase 53-molmospaces-planner-proof-bundle-execute-rerun
   gsd-verify-work 53-molmospaces-planner-proof-bundle-execute-rerun
+  gsd-plan-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-execute-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-verify-work 54-molmospaces-bind-proof-probes-to-cleanup-scene
 
 next pipeline candidates:
-  plan exact upstream sampled-task binding for cleanup proof requests
+  plan RBY1M cleanup-scene task feasibility/fallback selection for proof requests
 ```

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
@@ -54,6 +55,7 @@ def test_planner_proof_requests_preserve_bound_probe_args(tmp_path: Path) -> Non
     assert request["binding"]["schema"] == OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA
     assert request["planner_probe_args"]["--cleanup-object-id"] == "observed_001"
     assert request["planner_probe_args"]["--cleanup-planner-object-id"] == "pickup/body"
+    assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
     assert (tmp_path / "planner_proof_requests.json").is_file()
 
 
@@ -97,6 +99,12 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
                 "planner_probe_args": {},
             },
         ],
+        "planner_scene": {
+            "schema": "planner_cleanup_proof_scene_v1",
+            "available": True,
+            "scene_xml": "/tmp/molmospaces-scene.xml",
+            "backend": "molmospaces_subprocess",
+        },
     }
 
     commands = build_probe_commands(
@@ -116,10 +124,17 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "observed_001" in command
     assert "--cleanup-planner-object-id" in command
     assert "pickup/body" in command
+    assert "--cleanup-scene-xml" in command
+    assert "/tmp/molmospaces-scene.xml" in command
     assert commands[0]["run_result"].endswith("run_result.json")
 
 
 class _BindingContract:
+    backend = SimpleNamespace(
+        backend="molmospaces_subprocess",
+        scene_xml="/tmp/molmospaces-scene.xml",
+    )
+
     def planner_observed_handle_binding(
         self,
         object_id: str,

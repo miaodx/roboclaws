@@ -184,14 +184,39 @@ def run_from_cleanup_result(
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:
     inline = source_run.get("planner_proof_requests")
     if isinstance(inline, dict) and inline.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA:
-        return inline
+        return _with_source_planner_scene(inline, source_run)
     artifacts = source_run.get("artifacts") or {}
     request_path = _resolve_path(base, str(artifacts.get("planner_proof_requests") or ""))
     if request_path.is_file():
         data = json.loads(request_path.read_text(encoding="utf-8"))
         assert data.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, data
-        return data
+        return _with_source_planner_scene(data, source_run)
     raise ValueError("cleanup run_result does not include planner proof requests")
+
+
+def _with_source_planner_scene(
+    requests: dict[str, Any],
+    source_run: dict[str, Any],
+) -> dict[str, Any]:
+    planner_scene = requests.get("planner_scene") or {}
+    if planner_scene.get("scene_xml"):
+        return requests
+    runtime = source_run.get("molmospaces_runtime") or {}
+    scene_xml = str(runtime.get("scene_xml") or "")
+    if not scene_xml:
+        return requests
+    enriched = dict(requests)
+    enriched["planner_scene"] = {
+        "schema": "planner_cleanup_proof_scene_v1",
+        "available": True,
+        "scene_xml": scene_xml,
+        "backend": str(source_run.get("backend") or ""),
+        "evidence_note": (
+            "Real MolmoSpaces cleanup scene inferred from source run_result for "
+            "backward-compatible proof-bundle command generation."
+        ),
+    }
+    return enriched
 
 
 def _run_command(command: list[str]) -> None:

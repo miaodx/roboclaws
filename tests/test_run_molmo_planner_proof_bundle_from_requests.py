@@ -72,7 +72,10 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "observed_001" in command
     assert "--cleanup-planner-target-receptacle-id" in command
     assert "sink/body" in command
+    assert "--cleanup-scene-xml" in command
+    assert "/tmp/molmospaces-scene.xml" in command
     assert manifest["commands"][0]["report"].endswith("report.html")
+    assert manifest["planner_scene"]["scene_xml"] == "/tmp/molmospaces-scene.xml"
     assert Path(result["manifest_path"]).is_file()
     assert Path(result["report_path"]).is_file()
     report = Path(result["report_path"]).read_text(encoding="utf-8")
@@ -82,6 +85,7 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "observed_001" in report
     assert "--cleanup-object-id" in report
     assert "sink/body" in report
+    assert "/tmp/molmospaces-scene.xml" in report
 
 
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
@@ -120,6 +124,46 @@ def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
     assert "franka" in command
     assert "--probe-mode" in command
     assert "config_import" in command
+
+
+def test_runner_enriches_legacy_requests_with_source_scene(tmp_path: Path) -> None:
+    runner = _load_module()
+    requests = dict(_proof_requests())
+    requests.pop("planner_scene", None)
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps(
+            {
+                "backend": "molmospaces_subprocess",
+                "molmospaces_runtime": {"scene_xml": "/tmp/source-scene.xml"},
+                "planner_proof_requests": requests,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+    )
+
+    command = result["manifest"]["commands"][0]["command"]
+    assert result["manifest"]["planner_scene"]["scene_xml"] == "/tmp/source-scene.xml"
+    assert "--cleanup-scene-xml" in command
+    assert "/tmp/source-scene.xml" in command
 
 
 def test_runner_records_cleanup_rerun_artifacts_when_rerun_requested(
@@ -255,6 +299,12 @@ def _proof_requests() -> dict[str, object]:
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
         "request_count": 1,
         "ready_count": 1,
+        "planner_scene": {
+            "schema": "planner_cleanup_proof_scene_v1",
+            "available": True,
+            "scene_xml": "/tmp/molmospaces-scene.xml",
+            "backend": "molmospaces_subprocess",
+        },
         "agent_view_exposed": False,
         "blockers": [],
         "requests": [

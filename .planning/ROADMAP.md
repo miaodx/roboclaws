@@ -98,7 +98,10 @@ Phase 53 added the named local-dev gate that executes those bound proof bundles,
 reruns cleanup, and checks the final planner-backed cleanup artifact. Its local
 attempt proved all five RBY1M/CuRobo proofs can execute, but final cleanup
 readiness remains blocked until proof probes can bind to the requested upstream
-sampled tasks.
+sampled tasks. Phase 54 binds those probes to the real cleanup scene XML and
+requested planner aliases emitted by a `molmospaces_subprocess` cleanup run,
+narrowing the blocker from random task mismatch to upstream RBY1M
+cleanup-scene task feasibility and robot placement.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -173,6 +176,11 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.48 MolmoSpaces planner proof request report view** - Phase 47 (completed 2026-05-10; private proof request report section)
 - ✅ **v1.49 MolmoSpaces planner proof bundle runner report** - Phase 48 (completed 2026-05-10; visual command report for local proof generation)
 - ✅ **v1.50 MolmoSpaces planner proof bundle runner checker** - Phase 49 (completed 2026-05-10; gate runner manifest/report integrity)
+- ✅ **v1.51 MolmoSpaces MCP smoke shared semantic loop** - Phase 50 (completed 2026-05-10; MCP smoke demos reuse the shared semantic cleanup loop)
+- ✅ **v1.52 MolmoSpaces planner proof bundle runner harness** - Phase 51 (completed 2026-05-10; dry-run harness for proof-bundle runner command generation)
+- ✅ **v1.53 MolmoSpaces planner proof bundle cleanup rerun artifacts** - Phase 52 (completed 2026-05-10; cleanup rerun outputs tracked in runner manifests/reports/checkers)
+- ✅ **v1.54 MolmoSpaces planner proof bundle execute rerun** - Phase 53 (completed 2026-05-10; local-dev execute-rerun gate exposed sampled-task mismatch blocker)
+- ✅ **v1.55 MolmoSpaces bind proof probes to cleanup scene** - Phase 54 (completed 2026-05-10; exact cleanup-scene binding exposed RBY1M task-feasibility blocker)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -242,6 +250,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 51: MolmoSpaces planner proof bundle runner harness** - ADR-0042 dry-run harness and verification recipe for repeatable proof-bundle runner command generation. Completed 2026-05-10.
 - [x] **Phase 52: MolmoSpaces planner proof bundle cleanup rerun artifacts** - ADR-0043 cleanup rerun outputs are first-class runner manifest/report/checker artifacts. Completed 2026-05-10.
 - [x] **Phase 53: MolmoSpaces planner proof bundle execute rerun** - ADR-0044 local-dev gate for executing proof bundles, rerunning cleanup, and checking final planner-backed cleanup readiness. Completed 2026-05-10 with explicit blocker: executed proofs do not yet promote cleanup primitive binding because sampled upstream tasks differ from requested cleanup aliases.
+- [x] **Phase 54: MolmoSpaces bind proof probes to cleanup scene** - ADR-0045 proof-bundle commands carry the real cleanup scene XML and requested planner aliases into exact-scene probe sampling. Completed 2026-05-10 with explicit blocker: upstream RBY1M task sampling rejects the real cleanup objects with `HouseInvalidForTask` / robot placement infeasibility.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

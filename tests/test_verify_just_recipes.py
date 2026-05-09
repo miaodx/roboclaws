@@ -209,6 +209,10 @@ def test_planner_proof_bundle_execute_rerun_gate_is_strict_and_local() -> None:
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
+        "examples/molmospaces_realworld_cleanup.py",
+        "--backend molmospaces_subprocess",
+        "--include-robot",
+        "--record-robot-views",
         "scripts/run_molmo_planner_proof_bundle_from_requests.py",
         "--torch-extensions-dir",
         "--execute-probes",
@@ -216,6 +220,7 @@ def test_planner_proof_bundle_execute_rerun_gate_is_strict_and_local() -> None:
         "--cleanup-output-dir",
         "--require-proof-outputs",
         "--require-cleanup-rerun-output",
+        "--require-robot-views",
         "--require-planner-proof-attachment",
         "--require-planner-backed-cleanup-primitives",
         "--require-planner-cleanup-bridge-ready",

@@ -205,7 +205,17 @@ def render_planner_proof_bundle_runner_report(
     <section class="panel">
       <h2>Source Cleanup Artifact</h2>
       <p class="note">{html.escape(str(manifest.get("evidence_note", "")))}</p>
-      {_path_table([("Cleanup run result", manifest.get("cleanup_run_result", ""))])}
+      {
+        _path_table(
+            [
+                ("Cleanup run result", manifest.get("cleanup_run_result", "")),
+                (
+                    "Planner scene XML",
+                    (manifest.get("planner_scene") or {}).get("scene_xml", ""),
+                ),
+            ]
+        )
+    }
     </section>
     {_proof_bundle_commands_section(commands)}
     {_cleanup_rerun_command_section(cleanup_command)}
@@ -810,9 +820,28 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     requested = evidence.get("requested_cleanup_primitive_binding") or {}
     promoted = evidence.get("cleanup_primitive_binding") or {}
     blockers = evidence.get("cleanup_primitive_binding_blockers") or []
-    if not (sampled or requested or promoted or blockers):
+    cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+    if not (
+        sampled
+        or requested
+        or promoted
+        or blockers
+        or cleanup_task_config
+        or cleanup_task_sampler_adapter
+    ):
         return ""
     rows = [
+        ("Cleanup scene XML", cleanup_task_config.get("scene_xml", "")),
+        ("Exact task config applied", _yes_no(cleanup_task_config.get("applied"))),
+        (
+            "Exact sampler adapter applied",
+            _yes_no(cleanup_task_sampler_adapter.get("applied")),
+        ),
+        (
+            "Exact sampler adapter target",
+            cleanup_task_sampler_adapter.get("planner_target_receptacle_id", ""),
+        ),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
         (
             "Sampled target",
@@ -821,6 +850,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         ("Requested object", requested.get("object_id", "")),
         ("Requested target", requested.get("target_receptacle_id", "")),
         ("Requested source", requested.get("source_receptacle_id", "")),
+        ("Requested scene XML", requested.get("scene_xml", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Requested tools", ", ".join(str(item) for item in requested.get("tools") or [])),

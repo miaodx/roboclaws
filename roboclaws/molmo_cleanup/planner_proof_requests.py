@@ -49,6 +49,7 @@ def planner_proof_requests_from_substeps(
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
         "request_count": len(requests),
         "ready_count": ready_count,
+        "planner_scene": _planner_scene(contract),
         "requests": requests,
         "agent_view_exposed": False,
         "blockers": blockers,
@@ -119,6 +120,9 @@ def build_probe_commands(
             command.extend(["--molmospaces-root", str(molmospaces_root)])
         if torch_extensions_dir is not None:
             command.extend(["--torch-extensions-dir", str(torch_extensions_dir)])
+        scene_xml = str((manifest.get("planner_scene") or {}).get("scene_xml") or "")
+        if scene_xml:
+            command.extend(["--cleanup-scene-xml", scene_xml])
         for flag, value in sorted((request.get("planner_probe_args") or {}).items()):
             command.extend([str(flag), str(value)])
         commands.append(
@@ -150,6 +154,7 @@ def proof_bundle_run_manifest(
         "output_dir": str(output_dir),
         "proof_request_count": int(proof_requests.get("request_count") or 0),
         "ready_request_count": int(proof_requests.get("ready_count") or 0),
+        "planner_scene": proof_requests.get("planner_scene") or {},
         "command_count": len(commands),
         "commands": commands,
         "cleanup_command": cleanup_command or [],
@@ -228,6 +233,27 @@ def _planner_binding(
             tools=tools,
         )
     )
+
+
+def _planner_scene(contract: Any) -> dict[str, Any]:
+    backend = getattr(contract, "backend", None)
+    scene_xml = str(getattr(backend, "scene_xml", "") or "")
+    if not scene_xml:
+        return {
+            "schema": "planner_cleanup_proof_scene_v1",
+            "available": False,
+            "scene_xml": "",
+            "backend": str(getattr(backend, "backend", "") or ""),
+        }
+    return {
+        "schema": "planner_cleanup_proof_scene_v1",
+        "available": True,
+        "scene_xml": scene_xml,
+        "backend": str(getattr(backend, "backend", "") or ""),
+        "evidence_note": (
+            "Real MolmoSpaces cleanup scene used to sample exact planner proof tasks."
+        ),
+    }
 
 
 def _cleanup_tools(steps: list[dict[str, Any]]) -> list[str]:

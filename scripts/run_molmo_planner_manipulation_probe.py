@@ -15,7 +15,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 from typing import Any
 
 if __package__ in {None, ""}:
@@ -160,6 +160,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--cleanup-scene-xml",
+        default="",
+        help=(
+            "Optional MolmoSpaces scene XML for exact cleanup proof probes. When set, "
+            "the worker samples the planner task from the same scene that produced the "
+            "cleanup artifact."
+        ),
+    )
+    parser.add_argument(
         "--cleanup-tools",
         default="",
         help="Comma-separated cleanup tools covered by the requested binding.",
@@ -201,6 +210,7 @@ def main() -> None:
         cleanup_source_receptacle_id=args.cleanup_source_receptacle_id,
         cleanup_planner_object_id=args.cleanup_planner_object_id,
         cleanup_planner_target_receptacle_id=args.cleanup_planner_target_receptacle_id,
+        cleanup_scene_xml=args.cleanup_scene_xml,
         cleanup_tools=args.cleanup_tools,
         steps=args.steps,
         timeout_s=args.timeout_s,
@@ -237,6 +247,7 @@ def run_probe(
     cleanup_source_receptacle_id: str,
     cleanup_planner_object_id: str,
     cleanup_planner_target_receptacle_id: str,
+    cleanup_scene_xml: str,
     cleanup_tools: str,
     steps: int,
     timeout_s: float,
@@ -328,6 +339,7 @@ def run_probe(
         "--cleanup-planner-target-receptacle-id",
         cleanup_planner_target_receptacle_id,
     )
+    _append_optional_str_arg(command, "--cleanup-scene-xml", cleanup_scene_xml)
     _append_optional_str_arg(command, "--cleanup-tools", cleanup_tools)
     try:
         completed = subprocess.run(
@@ -403,6 +415,7 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
     except BaseException as exc:  # noqa: BLE001 - worker must report capability blockers.
         _record_cuda_memory_snapshot("worker_exception")
         final_runtime_diagnostics = _runtime_diagnostics(args)
+        requested_cleanup_binding = _requested_cleanup_primitive_binding(args)
         return {
             "ok": False,
             "exception_type": type(exc).__name__,
@@ -414,6 +427,8 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "initial_runtime_diagnostics": runtime_diagnostics,
             "runtime_diagnostics": final_runtime_diagnostics,
             "cuda_memory_snapshots": list(_CUDA_MEMORY_SNAPSHOTS),
+            "cleanup_task_config": _cleanup_task_config_request_from_args(args),
+            "requested_cleanup_primitive_binding": requested_cleanup_binding,
         }
 
 
@@ -930,6 +945,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
     config.use_passive_viewer = False
     config.profile = False
     config.use_wandb = False
+    cleanup_task_config = _configure_exact_cleanup_task(config, args)
     policy_cls = config.policy_config.policy_cls
     _emit_worker_event(
         "franka_policy_class_ready",
@@ -946,6 +962,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
         "policy_type": config.policy_config.policy_type,
         "planner_class_available": True,
         "execution_attempted": False,
+        "cleanup_task_config": cleanup_task_config,
     }
     if args.probe_mode == "execute":
         payload.update(
@@ -976,6 +993,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
     config.profile = False
     config.use_wandb = False
     config.policy_config.server_urls = []
+    cleanup_task_config = _configure_exact_cleanup_task(config, args)
     curobo_memory_profile = _apply_rby1m_curobo_memory_profile(config, args)
     _emit_worker_event(
         "rby1m_curobo_memory_profile_ready",
@@ -999,6 +1017,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         "planner_class_available": True,
         "execution_attempted": False,
         "curobo_memory_profile": curobo_memory_profile,
+        "cleanup_task_config": cleanup_task_config,
     }
     if args.probe_mode == "execute":
         _emit_worker_event("rby1m_execute_probe_start", stage="rby1m_execute")
@@ -1044,12 +1063,17 @@ def _execute_policy_probe(
     )
     _emit_worker_event("execute_task_sampler_construct_start", stage="execute_task_sampler")
     task_sampler = config.task_sampler_config.task_sampler_class(config)
+    cleanup_task_sampler_adapter = _apply_exact_cleanup_task_sampler_adapter(
+        task_sampler,
+        requested_cleanup_binding,
+    )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
     _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")
     task_sampler.reset()
     _emit_worker_event("execute_task_sampler_reset_done", stage="execute_task_sampler_reset")
     _emit_worker_event("execute_task_sample_start", stage="execute_task_sample")
-    task = task_sampler.sample_task()
+    sample_variant = "base" if requested_cleanup_binding.get("scene_xml") else "ceiling"
+    task = task_sampler.sample_task(variant=sample_variant)
     sampled_task_binding = _sampled_task_binding(task)
     cleanup_binding_result = _cleanup_primitive_binding_from_sampled_task(
         requested_cleanup_binding,
@@ -1117,10 +1141,163 @@ def _execute_policy_probe(
         "image_artifacts": image_artifacts,
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
         "renderer_adapter": renderer_adapter,
+        "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
         "sampled_task_binding": sampled_task_binding,
         "requested_cleanup_primitive_binding": requested_cleanup_binding,
         "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
         "cleanup_primitive_binding_blockers": cleanup_binding_result.get("blockers", []),
+    }
+
+
+def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict[str, Any]:
+    requested = _requested_cleanup_primitive_binding(args)
+    scene_xml = str(getattr(args, "cleanup_scene_xml", "") or "")
+    planner_object_id = str(requested.get("planner_object_id") or "")
+    planner_target_id = str(requested.get("planner_target_receptacle_id") or "")
+    applied = False
+    blockers = []
+    if scene_xml:
+        scene_path = Path(scene_xml)
+        if scene_path.is_file():
+            config.scene_dataset = str(scene_path)
+            config.data_split = "val"
+            config.task_sampler_config.house_inds = [0]
+            config.task_sampler_config.samples_per_house = 1
+            config.task_sampler_config.max_tasks = 1
+            applied = True
+        else:
+            blockers.append(
+                {
+                    "code": "cleanup_scene_xml_missing",
+                    "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
+                }
+            )
+    task_config = getattr(config, "task_config", None)
+    if planner_object_id and task_config is not None:
+        task_config.pickup_obj_name = planner_object_id
+        if hasattr(config.task_sampler_config, "pickup_obj_name"):
+            config.task_sampler_config.pickup_obj_name = planner_object_id
+        applied = True
+    if planner_target_id and task_config is not None:
+        if hasattr(task_config, "place_receptacle_name"):
+            task_config.place_receptacle_name = planner_target_id
+        if hasattr(task_config, "place_target_name"):
+            task_config.place_target_name = planner_target_id
+        if hasattr(config.task_sampler_config, "place_target_name"):
+            config.task_sampler_config.place_target_name = planner_target_id
+        applied = True
+    for attr in ("task_config_preset_exp", "task_config_preset_scn"):
+        if hasattr(config, attr):
+            setattr(config, attr, None)
+    return {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": applied,
+        "scene_xml": scene_xml,
+        "planner_object_id": planner_object_id,
+        "planner_target_receptacle_id": planner_target_id,
+        "blockers": blockers,
+        "evidence_note": (
+            "Probe-local config override for sampling a planner task from the cleanup "
+            "artifact scene with requested cleanup object/target aliases."
+        ),
+    }
+
+
+def _cleanup_task_config_request_from_args(args: argparse.Namespace) -> dict[str, Any]:
+    requested = _requested_cleanup_primitive_binding(args)
+    scene_xml = str(getattr(args, "cleanup_scene_xml", "") or "")
+    blockers = []
+    if scene_xml and not Path(scene_xml).is_file():
+        blockers.append(
+            {
+                "code": "cleanup_scene_xml_missing",
+                "message": f"Requested cleanup scene XML does not exist: {scene_xml}",
+            }
+        )
+    return {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": bool(
+            scene_xml
+            or requested.get("planner_object_id")
+            or requested.get("planner_target_receptacle_id")
+        ),
+        "scene_xml": scene_xml,
+        "planner_object_id": str(requested.get("planner_object_id") or ""),
+        "planner_target_receptacle_id": str(requested.get("planner_target_receptacle_id") or ""),
+        "blockers": blockers,
+        "evidence_note": (
+            "Probe-local config request for sampling a planner task from the cleanup "
+            "artifact scene with requested cleanup object/target aliases."
+        ),
+    }
+
+
+def _apply_exact_cleanup_task_sampler_adapter(
+    task_sampler: Any,
+    requested_cleanup_binding: dict[str, Any],
+) -> dict[str, Any]:
+    planner_target_id = str(
+        requested_cleanup_binding.get("planner_target_receptacle_id")
+        or requested_cleanup_binding.get("target_receptacle_id")
+        or ""
+    )
+    if not planner_target_id:
+        return {
+            "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+            "applied": False,
+            "reason": "no_requested_planner_target",
+        }
+    if not (
+        hasattr(task_sampler, "_get_place_target_candidates")
+        and hasattr(task_sampler, "_prepare_place_target")
+    ):
+        return {
+            "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+            "applied": False,
+            "reason": "task_sampler_has_no_place_target_hooks",
+            "task_sampler_class": type(task_sampler).__name__,
+            "planner_target_receptacle_id": planner_target_id,
+        }
+
+    def exact_place_target_candidates(
+        self: Any,
+        env: Any,
+        pickup_obj_name: str,
+        supporting_geom_id: int,
+    ) -> list[str]:
+        return [planner_target_id]
+
+    def exact_prepare_place_target(
+        self: Any,
+        env: Any,
+        place_target_name: str,
+        pickup_obj_name: str,
+        pickup_obj_pos: Any,
+        supporting_geom_id: int,
+    ) -> bool:
+        om = env.object_managers[env.current_batch_index]
+        om.get_object_by_name(planner_target_id)
+        self.place_receptacle_name = planner_target_id
+        return True
+
+    task_sampler._get_place_target_candidates = MethodType(  # noqa: SLF001
+        exact_place_target_candidates,
+        task_sampler,
+    )
+    task_sampler._prepare_place_target = MethodType(  # noqa: SLF001
+        exact_prepare_place_target,
+        task_sampler,
+    )
+    return {
+        "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+        "applied": True,
+        "task_sampler_class": type(task_sampler).__name__,
+        "planner_target_receptacle_id": planner_target_id,
+        "hooks": ["_get_place_target_candidates", "_prepare_place_target"],
+        "evidence_note": (
+            "Probe-local adapter makes the upstream pick-and-place sampler use the "
+            "cleanup request's target object instead of an unrelated generated receptacle."
+        ),
     }
 
 
@@ -1167,6 +1344,7 @@ def _requested_cleanup_primitive_binding(args: argparse.Namespace) -> dict[str, 
         "object_id": object_id,
         "target_receptacle_id": target_receptacle_id,
         "source_receptacle_id": source_receptacle_id,
+        "scene_xml": str(getattr(args, "cleanup_scene_xml", "") or ""),
         "planner_object_id": planner_object_id,
         "planner_target_receptacle_id": planner_target_receptacle_id,
         "tools": tools,
@@ -1387,6 +1565,10 @@ def _write_probe_result(
         evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
     if worker_payload.get("curobo_memory_profile"):
         evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
+    if worker_payload.get("cleanup_task_config"):
+        evidence["cleanup_task_config"] = worker_payload["cleanup_task_config"]
+    if worker_payload.get("cleanup_task_sampler_adapter"):
+        evidence["cleanup_task_sampler_adapter"] = worker_payload["cleanup_task_sampler_adapter"]
     if worker_payload.get("sampled_task_binding"):
         evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
     if worker_payload.get("requested_cleanup_primitive_binding"):
