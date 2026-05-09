@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 30 MolmoSpaces report underlay consolidation completed on 2026-05-09; remaining major follow-up is actual planner-backed cleanup primitive replacement after RBY1M/CuRobo readiness.
+stopped_at: Phase 31 MolmoSpaces RBY1M CuRobo warmup readiness planned on 2026-05-09; remaining major follow-up is actual planner-backed cleanup primitive replacement after RBY1M/CuRobo readiness.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 25
+  total_phases: 26
   completed_phases: 25
-  total_plans: 28
+  total_plans: 29
   completed_plans: 28
-  percent: 100
+  percent: 97
 ---
 
 # Project State
@@ -21,30 +21,28 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 30 complete; next candidate is actual planner-backed cleanup primitive replacement after RBY1M/CuRobo readiness.
+**Current focus:** Phase 31 adds staged RBY1M/CuRobo warmup-readiness evidence before retrying target execute-mode proof.
 
 ## Current Position
 
-Phase: 30 (molmospaces-report-underlay-consolidation) — COMPLETE
-Plan: 1 of 1 complete — `30-01` keeps one shared report visual core across
-current-contract and ADR-0003 MolmoSpaces cleanup artifacts.
-Status: Phase 30 closes the report architecture gap surfaced after Phase 29:
-the shared renderer now owns canonical section assembly and semantic display
-labels, so newer evidence panels do not create a different visual
-implementation. The RBY1M/CuRobo planner path remains blocked by CuRobo
-JIT/config-import timeout, so actual planner-backed cleanup primitive
-replacement remains gated.
-Last activity: 2026-05-09 - Completed Phase 30 report underlay consolidation.
+Phase: 31 (molmospaces-rby1m-curobo-warmup-readiness) — PLANNED
+Plan: 0 of 1 complete — `31-01` will turn the RBY1M/CuRobo timeout into
+staged worker evidence and retry the target runtime with a longer timeout.
+Status: Phase 31 addresses the current blocker after Phase 30: the RBY1M/CuRobo
+gate sees CuRobo and CUDA Torch, but config import times out during CUDA
+extension JIT before planner execution. Actual planner-backed cleanup primitive
+replacement remains gated until execute-mode RBY1M/CuRobo proof passes.
+Last activity: 2026-05-09 - Planned Phase 31 RBY1M CuRobo warmup readiness.
 
-Progress: [##########] 100%
-Phase 30 note: consolidated the shared MolmoSpaces report visual core.
+Progress: [#########-] 97%
+Phase 31 note: add staged RBY1M/CuRobo warmup-readiness evidence before retrying execution.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 37 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 30)
+- Total plans completed: 37 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 30; Phase 31 planned)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -72,7 +70,7 @@ Phase 30 note: consolidated the shared MolmoSpaces report visual core.
 **Recent Trend:**
 
 - Last 3 shipped phases: 28, 29, 30
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, and one canonical report visual core shared across the demos.
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, and an active RBY1M/CuRobo warmup-readiness slice.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -452,6 +450,9 @@ Recent decisions affecting current work:
   Timeline, and Cleanup Primitive Gate all reuse the shared `nav/object`,
   `pick/object`, `nav/target`, `open/target`, `place/surface`, and
   `place/inside` labels.
+- Phase 31 planned (2026-05-09): **MolmoSpaces RBY1M CuRobo warmup
+  readiness** — ADR-0022 records staged worker evidence for RBY1M/CuRobo
+  config/JIT warmup before retrying target execute-mode proof.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -490,9 +491,10 @@ None yet.
   per-subphase primitive gate before actual primitive replacement. Phase 28
   completed the RBY1M/CuRobo readiness boundary, which is currently blocked by
   CuRobo JIT/config-import timeout before planner execution. Phase 29 completed
-  camera-only model-policy cleanup, and Phase 30 consolidated the shared report
-  visual core; actual planner-backed cleanup-loop primitive replacement remains
-  gated on RBY1M/CuRobo readiness.
+  camera-only model-policy cleanup, Phase 30 consolidated the shared report
+  visual core, and Phase 31 is planned to add staged RBY1M/CuRobo warmup
+  evidence before retrying target execute-mode proof; actual planner-backed
+  cleanup-loop primitive replacement remains gated on RBY1M/CuRobo readiness.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -525,15 +527,15 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 30 MolmoSpaces report underlay consolidation complete;
-the next implementation should either enable/prove RBY1M CuRobo execution or
-start actual planner-backed cleanup primitive replacement once that target
-runtime passes.
+Stopped at: Phase 31 MolmoSpaces RBY1M CuRobo warmup readiness planned;
+the next implementation should add staged worker evidence and rerun the target
+runtime gate before attempting actual planner-backed cleanup primitive
+replacement.
 Latest phase artifacts are
-`docs/adr/0021-use-canonical-cleanup-report-presentation.md`,
-`docs/plans/molmospaces-report-underlay-consolidation.md`, and
-`.planning/phases/30-molmospaces-report-underlay-consolidation/30-01-report-underlay-consolidation-PLAN.md`.
-Resume file: .planning/phases/30-molmospaces-report-underlay-consolidation/30-01-report-underlay-consolidation-PLAN.md
+`docs/adr/0022-capture-rby1m-curobo-warmup-readiness.md`,
+`docs/plans/molmospaces-rby1m-curobo-warmup-readiness.md`, and
+`.planning/phases/31-molmospaces-rby1m-curobo-warmup-readiness/31-01-rby1m-curobo-warmup-readiness-PLAN.md`.
+Resume file: .planning/phases/31-molmospaces-rby1m-curobo-warmup-readiness/31-01-rby1m-curobo-warmup-readiness-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -541,6 +543,6 @@ Resume file: .planning/phases/30-molmospaces-report-underlay-consolidation/30-01
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** none. Phase 30 is complete; the next phase should target
-RBY1M/CuRobo runtime enablement or actual planner-backed cleanup primitive
-replacement.
+**Active Phase:** Phase 31 RBY1M CuRobo warmup readiness is planned; implement
+staged worker evidence, then rerun RBY1M/CuRobo config-import and execute-mode
+gates.
