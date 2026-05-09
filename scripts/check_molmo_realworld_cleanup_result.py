@@ -16,6 +16,11 @@ from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     validate_planner_proof_attachment,
 )
+from roboclaws.molmo_cleanup.planner_proof_bundle import (
+    PLANNER_PROOF_BUNDLE_SCHEMA,
+    planner_proof_attachments,
+    validate_planner_proof_bundle,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -330,11 +335,24 @@ def _assert_trace_is_public(trace_path: Path) -> None:
         assert payload.get("tool") != "scene_objects", payload
         if payload.get("tool") == "done":
             continue
-        _assert_no_forbidden_keys(payload)
-        response = payload.get("response")
+        public_payload = _without_internal_proof_evidence(payload)
+        _assert_no_forbidden_keys(public_payload)
+        response = public_payload.get("response")
         if isinstance(response, dict):
             assert "objects" not in response, response
             assert "scene_objects" not in response, response
+
+
+def _without_internal_proof_evidence(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: _without_internal_proof_evidence(value)
+            for key, value in payload.items()
+            if key != "planner_primitive_evidence"
+        }
+    if isinstance(payload, list):
+        return [_without_internal_proof_evidence(value) for value in payload]
+    return payload
 
 
 def _assert_robot_views(
@@ -452,19 +470,33 @@ def _assert_planner_proof_attachment(
     base: Path,
     report_text: str,
 ) -> None:
-    assert data.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, data
+    assert data.get("primitive_provenance") in {
+        API_SEMANTIC_PROVENANCE,
+        "planner_backed",
+    }, data
     evidence = data.get("manipulation_evidence") or {}
-    assert evidence.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, evidence
+    assert evidence.get("primitive_provenance") in {
+        API_SEMANTIC_PROVENANCE,
+        "planner_backed",
+    }, evidence
     attachment = data.get("planner_backed_manipulation_proof") or {}
-    validate_planner_proof_attachment(attachment)
-    for value in (attachment.get("image_artifacts") or {}).values():
-        path = _resolve_path(base, str(value))
-        assert path.is_file(), path
-        assert path.stat().st_size > 0, path
-    assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
+    if attachment.get("schema") == PLANNER_PROOF_BUNDLE_SCHEMA:
+        validate_planner_proof_bundle(attachment)
+        proof_attachments = planner_proof_attachments(attachment)
+        assert "Attached Planner-Backed Proofs" in report_text, report_text[:500]
+    else:
+        validate_planner_proof_attachment(attachment)
+        proof_attachments = [attachment]
+        assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
+    for proof in proof_attachments:
+        for value in (proof.get("image_artifacts") or {}).values():
+            path = _resolve_path(base, str(value))
+            assert path.is_file(), path
+            assert path.stat().st_size > 0, path
     assert "Planner Initial" in report_text, report_text[:500]
     assert "Planner Final" in report_text, report_text[:500]
-    assert "Cleanup object moves" in report_text, report_text[:500]
+    if attachment.get("schema") != PLANNER_PROOF_BUNDLE_SCHEMA:
+        assert "Cleanup object moves" in report_text, report_text[:500]
 
 
 def _assert_cleanup_primitive_gate(

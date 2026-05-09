@@ -17,6 +17,7 @@ def attach_planner_proof(
     *,
     proof_run_result_path: Path,
     cleanup_run_dir: Path,
+    attachment_id: str | None = None,
 ) -> dict[str, Any]:
     """Validate and copy a strict planner proof into a cleanup run directory."""
     proof_path = Path(proof_run_result_path)
@@ -26,11 +27,13 @@ def attach_planner_proof(
         proof_base=proof_path.parent,
         cleanup_run_dir=cleanup_run_dir,
         image_artifacts=evidence.get("image_artifacts") or {},
+        attachment_id=attachment_id,
     )
     runtime = evidence.get("runtime_diagnostics") or {}
     worker_payload = evidence.get("worker_payload") or {}
     attachment = {
         "schema": PLANNER_PROOF_ATTACHMENT_SCHEMA,
+        "proof_id": attachment_id or "",
         "source_run_result": str(proof_path),
         "contract": proof.get("contract"),
         "status": PLANNER_BACKED_PROVENANCE,
@@ -104,9 +107,12 @@ def _copy_proof_images(
     proof_base: Path,
     cleanup_run_dir: Path,
     image_artifacts: dict[str, str],
+    attachment_id: str | None = None,
 ) -> dict[str, str]:
     copied: dict[str, str] = {}
     destination_dir = cleanup_run_dir / "planner_proof"
+    if attachment_id:
+        destination_dir = destination_dir / attachment_id
     destination_dir.mkdir(parents=True, exist_ok=True)
     for key in ("initial", "final"):
         value = image_artifacts.get(key)

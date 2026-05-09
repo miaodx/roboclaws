@@ -15,6 +15,12 @@ from roboclaws.molmo_cleanup.planner_proof_attachment import (
     attach_planner_proof,
     validate_planner_proof_attachment,
 )
+from roboclaws.molmo_cleanup.planner_proof_bundle import (
+    PLANNER_PROOF_BUNDLE_SCHEMA,
+    attach_planner_proof_bundle,
+    planner_proof_attachment_for_target,
+    validate_planner_proof_bundle,
+)
 
 
 def test_attach_planner_proof_validates_and_copies_strict_images(tmp_path: Path) -> None:
@@ -65,6 +71,49 @@ def test_attach_planner_proof_preserves_cleanup_primitive_binding(tmp_path: Path
     )
 
     assert attachment["cleanup_primitive_binding"] == binding
+
+
+def test_attach_planner_proof_bundle_keeps_distinct_bound_proofs(tmp_path: Path) -> None:
+    first_binding = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "observed_001",
+        "target_receptacle_id": "sink_01",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
+    second_binding = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "observed_002",
+        "target_receptacle_id": "toy_bin_01",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
+    proof_paths = [
+        _write_strict_planner_proof(tmp_path / "proof-1", cleanup_binding=first_binding),
+        _write_strict_planner_proof(tmp_path / "proof-2", cleanup_binding=second_binding),
+    ]
+    cleanup_dir = tmp_path / "cleanup"
+
+    bundle = attach_planner_proof_bundle(
+        proof_run_result_paths=proof_paths,
+        cleanup_run_dir=cleanup_dir,
+    )
+
+    validate_planner_proof_bundle(bundle)
+    assert bundle["schema"] == PLANNER_PROOF_BUNDLE_SCHEMA
+    assert bundle["proof_count"] == 2
+    attachments = bundle["attachments"]
+    assert attachments[0]["proof_id"] == "proof_001"
+    assert attachments[1]["proof_id"] == "proof_002"
+    assert attachments[0]["cleanup_primitive_binding"] == first_binding
+    assert attachments[1]["cleanup_primitive_binding"] == second_binding
+    assert attachments[0]["image_artifacts"]["initial"].startswith("planner_proof/proof_001/")
+    assert attachments[1]["image_artifacts"]["initial"].startswith("planner_proof/proof_002/")
+    matched = planner_proof_attachment_for_target(
+        bundle,
+        object_id="observed_002",
+        target_receptacle_id="toy_bin_01",
+    )
+    assert matched is not None
+    assert matched["proof_id"] == "proof_002"
 
 
 def _write_strict_planner_proof(

@@ -67,6 +67,39 @@ def test_bridge_accepts_target_and_cleanup_primitives_ready() -> None:
     assert evidence["blockers"] == []
 
 
+def test_bridge_accepts_target_proof_bundle_and_cleanup_primitives_ready() -> None:
+    evidence = planner_cleanup_bridge_evidence(
+        planner_proof_attachment={
+            "schema": "planner_backed_cleanup_proof_bundle_v1",
+            "status": "planner_backed",
+            "primitive_provenance": "planner_backed",
+            "planner_backed": True,
+            "strict_proof_eligible": True,
+            "proof_count": 2,
+            "attachments": [_attachment(), _attachment()],
+        },
+        cleanup_primitive_evidence=cleanup_primitive_evidence_from_substeps(
+            [
+                {
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "steps": [
+                        _step("navigate_to_object", "planner_backed"),
+                        _step("pick", "planner_backed"),
+                        _step("navigate_to_receptacle", "planner_backed"),
+                        _step("place", "planner_backed"),
+                    ],
+                }
+            ]
+        ),
+    )
+
+    validate_planner_cleanup_bridge_evidence(evidence, require_ready=True)
+    assert evidence["target_runtime"]["schema"] == "planner_backed_cleanup_proof_bundle_v1"
+    assert evidence["target_runtime"]["proof_count"] == 2
+    assert evidence["status"] == "planner_backed"
+
+
 def test_bridge_rejects_franka_proof_as_target_ready() -> None:
     evidence = planner_cleanup_bridge_evidence(
         planner_proof_attachment=_attachment(

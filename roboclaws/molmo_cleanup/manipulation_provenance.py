@@ -34,6 +34,32 @@ def api_semantic_manipulation_evidence(
     }
 
 
+def planner_backed_cleanup_manipulation_evidence(
+    *,
+    backend: str,
+    primitive_summary: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Describe cleanup primitives backed by planner evidence with semantic sync."""
+    summary = dict(primitive_summary or {})
+    return {
+        "schema": MANIPULATION_PROVENANCE_SCHEMA,
+        "status": PLANNER_BACKED_PROVENANCE,
+        "primitive_provenance": PLANNER_BACKED_PROVENANCE,
+        "planner_backed": True,
+        "strict_proof_eligible": True,
+        "api_semantic_state_edits": False,
+        "api_semantic_state_sync": True,
+        "backend": backend,
+        "primitive_provenance_summary": summary,
+        "evidence_note": (
+            "Cleanup-loop primitives emitted planner-backed per-call evidence. "
+            "Semantic backend state sync remains recorded separately from the "
+            "planner primitive proof."
+        ),
+        "strict_proof_requirements": planner_backed_proof_requirements(),
+    }
+
+
 def blocked_planner_probe_evidence(
     *,
     backend: str,

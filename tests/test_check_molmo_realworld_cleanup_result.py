@@ -446,6 +446,53 @@ def test_realworld_cleanup_mismatched_probe_binding_keeps_semantic_path(
     assert result["planner_cleanup_bridge_evidence"]["cleanup_primitives_ready"] is False
 
 
+def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_paths = [
+        _write_strict_planner_proof(
+            tmp_path / f"proof-{binding['object_id']}",
+            embodiment="rby1m",
+            upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+            curobo_available=True,
+            cleanup_binding=binding,
+        )
+        for binding in _seed7_cleanup_bindings()
+    ]
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_results=proof_paths,
+        use_planner_proof_for_cleanup_primitives=True,
+    )
+
+    assert result["cleanup_status"] == "success"
+    assert result["primitive_provenance"] == "planner_backed"
+    assert result["cleanup_primitive_evidence"]["status"] == "planner_backed"
+    assert result["planner_cleanup_bridge_evidence"]["status"] == "planner_backed"
+    assert result["planner_backed_manipulation_proof"]["schema"] == (
+        "planner_backed_cleanup_proof_bundle_v1"
+    )
+    assert result["planner_backed_manipulation_proof"]["proof_count"] == 5
+    report = (cleanup_dir / "report.html").read_text(encoding="utf-8")
+    assert "Attached Planner-Backed Proofs" in report
+    assert "proof_001 Planner Initial" in report
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_planner_proof_attachment=True,
+        require_planner_backed_cleanup_primitives=True,
+        require_planner_cleanup_bridge_ready=True,
+    )
+
+
 def test_checker_rejects_current_cleanup_when_bridge_ready_required(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -703,6 +750,48 @@ def _robot_step(action: str) -> dict[str, object]:
             "fpv_visibility": {"status": "ok"},
             "visibility": {"status": "ok"},
         },
+    }
+
+
+def _seed7_cleanup_bindings() -> list[dict[str, object]]:
+    return [
+        _cleanup_binding("observed_001", "coffee_table_01", "toy_bin_01", ["place"]),
+        _cleanup_binding("observed_002", "sofa_01", "sink_01", ["place"]),
+        _cleanup_binding(
+            "observed_003",
+            "armchair_01",
+            "laundry_hamper_01",
+            ["place"],
+        ),
+        _cleanup_binding("observed_005", "floor_01", "bookshelf_01", ["place"]),
+        _cleanup_binding(
+            "observed_006",
+            "desk_01",
+            "fridge_01",
+            ["open_receptacle", "place_inside"],
+        ),
+    ]
+
+
+def _cleanup_binding(
+    object_id: str,
+    source_receptacle_id: str,
+    target_receptacle_id: str,
+    target_tools: list[str],
+) -> dict[str, object]:
+    return {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "source_receptacle_id": source_receptacle_id,
+        "planner_object_id": f"{object_id}/body",
+        "planner_target_receptacle_id": f"{target_receptacle_id}/body",
+        "tools": [
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            *target_tools,
+        ],
     }
 
 

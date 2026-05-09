@@ -9,6 +9,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     PLANNER_PROOF_ATTACHMENT_SCHEMA,
 )
+from roboclaws.molmo_cleanup.planner_proof_bundle import (
+    PLANNER_PROOF_BUNDLE_SCHEMA,
+    planner_proof_attachments,
+)
 
 PLANNER_CLEANUP_BRIDGE_SCHEMA = "planner_cleanup_bridge_v1"
 
@@ -101,6 +105,28 @@ def validate_planner_cleanup_bridge_evidence(
 
 
 def _target_runtime_evidence(attachment: dict[str, Any]) -> dict[str, Any]:
+    if attachment.get("schema") == PLANNER_PROOF_BUNDLE_SCHEMA:
+        proof_items = [
+            _single_target_runtime_evidence(item) for item in planner_proof_attachments(attachment)
+        ]
+        ready = bool(proof_items) and all(item["rby1m_curobo_ready"] for item in proof_items)
+        return {
+            "attached": bool(proof_items),
+            "schema": PLANNER_PROOF_BUNDLE_SCHEMA,
+            "planner_backed": attachment.get("planner_backed") is True,
+            "embodiment": "proof_bundle",
+            "probe_mode": "execute",
+            "task": "multi_proof_cleanup",
+            "upstream_policy_class": "proof_bundle",
+            "curobo_available": ready,
+            "rby1m_curobo_ready": ready,
+            "proof_count": len(proof_items),
+            "proofs": proof_items,
+        }
+    return _single_target_runtime_evidence(attachment)
+
+
+def _single_target_runtime_evidence(attachment: dict[str, Any]) -> dict[str, Any]:
     runtime = attachment.get("runtime_diagnostics") or {}
     modules = runtime.get("modules") or {}
     curobo = modules.get("curobo") or {}
@@ -117,6 +143,7 @@ def _target_runtime_evidence(attachment: dict[str, Any]) -> dict[str, Any]:
     )
     return {
         "attached": bool(attachment),
+        "schema": attachment.get("schema"),
         "planner_backed": attachment.get("planner_backed") is True,
         "embodiment": attachment.get("embodiment"),
         "probe_mode": attachment.get("probe_mode"),

@@ -365,6 +365,8 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
     proof = run_result.get("planner_backed_manipulation_proof") or {}
     if not proof:
         return ""
+    if proof.get("schema") == "planner_backed_cleanup_proof_bundle_v1":
+        return _attached_planner_proof_bundle_section(run_result, proof)
     diagnostics = proof.get("runtime_diagnostics") or {}
     images = proof.get("image_artifacts") or {}
     note = (
@@ -400,6 +402,65 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
         "</p>"
         f'{metrics}<div class="badges">{badges}</div>{views}</section>'
+    )
+
+
+def _attached_planner_proof_bundle_section(
+    run_result: dict[str, Any],
+    bundle: dict[str, Any],
+) -> str:
+    attachments = [item for item in bundle.get("attachments") or [] if isinstance(item, dict)]
+    if not attachments:
+        return ""
+    note = (
+        bundle.get("evidence_note")
+        or "Multiple strict standalone planner-backed manipulation proofs attached."
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', bundle.get('status', 'unknown'))}"
+        f"{_metric('Proofs', bundle.get('proof_count', len(attachments)))}"
+        f"{_metric('Cleanup primitive', run_result.get('primitive_provenance', 'unknown'))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Strict proof bundle", bundle.get("strict_proof_eligible", False)),
+            _badge("Planner backed", bundle.get("planner_backed", False)),
+        )
+    )
+    rows = []
+    views = []
+    for attachment in attachments:
+        proof_id = str(attachment.get("proof_id") or "proof")
+        binding = attachment.get("cleanup_primitive_binding") or {}
+        images = attachment.get("image_artifacts") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(proof_id)}</td>"
+            f"<td>{html.escape(str(binding.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(binding.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(attachment.get('embodiment', 'unknown')))}</td>"
+            f"<td>{html.escape(str(attachment.get('steps_executed', 'n/a')))}</td>"
+            "</tr>"
+        )
+        views.append(
+            '<div class="proof-view-pair">'
+            f"{_view_figure(images.get('initial'), f'{proof_id} Planner Initial')}"
+            f"{_view_figure(images.get('final'), f'{proof_id} Planner Final')}"
+            "</div>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Proof</th><th>Object</th>'
+        "<th>Target</th><th>Embodiment</th><th>Steps</th></tr></thead><tbody>"
+        f"{''.join(rows)}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel attached-planner-proof">'
+        "<h2>Attached Planner-Backed Proofs</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}'
+        f'<div class="views">{"".join(views)}</div></section>'
     )
 
 

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 44 MolmoSpaces planner proof bundle cleanup planned on 2026-05-10; implementation should select one bound proof per cleaned object before claiming bridge readiness.
+stopped_at: Phase 44 MolmoSpaces planner proof bundle cleanup completed on 2026-05-10; next planner-backed cleanup work should produce or rerun real multi-proof artifacts.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
   total_phases: 37
-  completed_phases: 36
+  completed_phases: 37
   total_plans: 40
-  completed_plans: 39
-  percent: 98
+  completed_plans: 40
+  percent: 100
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 44 should broaden bounded probe-backed executor wiring to proof bundles with one matching proof per cleaned object.
+**Current focus:** Phase 44 completed proof-bundle coverage. The next planner-backed cleanup slice should produce or rerun real multi-proof artifacts rather than only synthetic proof-bundle coverage.
 
 ## Current Position
 
-Phase: 44 (molmospaces-planner-proof-bundle-cleanup) - PLANNED
-Plan: 0 of 1 complete - `44-01` should add multiple bound proof attachments
-and select the matching proof per cleanup object.
+Phase: 44 (molmospaces-planner-proof-bundle-cleanup) - COMPLETE
+Plan: 1 of 1 complete - `44-01` added multiple bound proof attachments and
+selects the matching proof per cleanup object.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -40,18 +40,18 @@ cleanup primitive replacement. Phase 39 closed the object/target binding
 hardening slice. Phase 40 closed the adapter slice from bound target proof into
 the executor seam. Phase 41 closed the probe-source binding slice. Phase 42
 closed the observed-handle to planner-alias binding slice. Phase 43 closed the
-bounded executor wiring slice. Phase 44 is the proof-bundle coverage slice.
-Last activity: 2026-05-10 - Planned Phase 44 planner proof bundle cleanup.
+bounded executor wiring slice. Phase 44 closed the proof-bundle coverage slice.
+Last activity: 2026-05-10 - Completed Phase 44 planner proof bundle cleanup.
 
-Progress: [#########-] 98%
-Phase 44 note: full bridge readiness should require proof coverage for every cleaned object/subphase; partial bundles must stay bridge-blocked.
+Progress: [##########] 100%
+Phase 44 note: full bridge readiness now requires proof coverage for every cleaned object/subphase; partial bundles stay bridge-blocked.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 43 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 43); Phase 44 is planned.
+- Total plans completed: 44 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 44)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -78,8 +78,8 @@ Phase 44 note: full bridge readiness should require proof coverage for every cle
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 41, 42, 43
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, planner probe diagnostics that promote cleanup binding only on exact request/sample match, private observed-handle to planner-alias binding, and bounded opt-in executor wiring for one matching cleanup object.
+- Last 3 shipped phases: 42, 43, 44
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, planner probe diagnostics that promote cleanup binding only on exact request/sample match, private observed-handle to planner-alias binding, bounded opt-in executor wiring for one matching cleanup object, and proof-bundle coverage for full synthetic cleanup gate readiness.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -533,6 +533,11 @@ Recent decisions affecting current work:
   add proof-bundle attachment/selection so a full cleanup artifact can require
   one matching bound proof per cleaned object before the planner cleanup bridge
   reports ready.
+- Phase 44 completed (2026-05-10): **MolmoSpaces planner proof bundle
+  cleanup** - `planner_backed_cleanup_proof_bundle_v1` attaches multiple
+  strict bound proofs, the ADR-0003 harness selects the matching proof per
+  observed handle/target, and the synthetic seed-7 full cleanup passes the
+  existing planner primitive and bridge-ready checker gates.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -584,10 +589,9 @@ None yet.
   evidence, Phase 38 added the strict primitive executor seam, Phase 39 bound
   primitive evidence to exact cleanup object/target, Phase 40 added the
   probe-backed executor adapter, Phase 41 made the probe emit exact-match
-  cleanup binding, Phase 42 split observed handles from planner aliases, and
-  Phase 43 wired matching proof into a bounded shared-loop cleanup attempt.
-  Phase 44 is planned to require proof coverage for every cleaned
-  object/subphase instead of a single bound observed handle.
+  cleanup binding, Phase 42 split observed handles from planner aliases, Phase
+  43 wired matching proof into a bounded shared-loop cleanup attempt, and Phase
+  44 added proof-bundle coverage for every cleaned object/subphase.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -620,17 +624,16 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 44 MolmoSpaces planner proof bundle cleanup planned. The next
-implementation should add proof-bundle attachment/selection and full-coverage
-checker/report evidence.
+Stopped at: Phase 44 MolmoSpaces planner proof bundle cleanup completed. The
+next implementation should produce or rerun real multi-proof artifacts using
+the bundle path.
 Latest phase artifacts are
 `docs/adr/0035-use-bound-planner-proof-bundles-for-cleanup-coverage.md`,
 `docs/plans/molmospaces-planner-proof-bundle-cleanup.md`, and
 `.planning/phases/44-molmospaces-planner-proof-bundle-cleanup/44-01-planner-proof-bundle-cleanup-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
-for full cleanup because only the bounded matching object can currently become
-planner-backed.
+for full cleanup because it predates proof-bundle coverage.
 Resume file: .planning/phases/44-molmospaces-planner-proof-bundle-cleanup/44-01-planner-proof-bundle-cleanup-PLAN.md
 
 ## Dual-Stack Workflow
@@ -639,6 +642,6 @@ Resume file: .planning/phases/44-molmospaces-planner-proof-bundle-cleanup/44-01-
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** Phase 44 MolmoSpaces planner proof bundle cleanup. Add
-multiple proof attachment/selection while preserving default and single-proof
-behavior.
+**Active Phase:** None. Phase 44 MolmoSpaces planner proof bundle cleanup is
+complete; next work should plan real multi-proof artifact generation or a local
+rerun using the new repeated-proof path.

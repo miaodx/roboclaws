@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Cleanup
 
-**Status:** Planned for GSD Phase 44 on 2026-05-10
+**Status:** Completed in GSD Phase 44 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0034, ADR-0035
 **Workflow:** `hybrid-phase-pipeline`
@@ -50,10 +50,19 @@ This phase should:
 
 ## Verification Plan
 
-- Unit tests for proof bundle attachment and validation.
-- Focused harness/checker tests proving full synthetic cleanup gate readiness
-  when every cleaned object has a matching bound proof.
-- Regression tests proving partial/mismatched bundles do not overclaim.
-- Report tests showing multiple proof views in the shared report underlay.
-- Ruff check/format on changed Python/tests.
+- Passed unit tests for proof bundle attachment and validation.
+- Passed focused harness/checker tests proving full synthetic cleanup gate
+  readiness when every cleaned object has a matching bound proof.
+- Existing single-proof and mismatched-proof tests continue to prove fallback
+  behavior does not overclaim.
+- Report tests show multiple proof views in the shared report underlay.
+- Ruff check/format passed on changed Python/tests.
 - Existing real visual artifact checker remains valid.
+
+## Completion Notes
+
+The new proof bundle is an artifact coverage mechanism, not a planner proof
+generator. It lets a cleanup run attach and select one already-strict bound
+proof per observed handle/target. The bridge becomes ready only when the
+cleanup primitive gate is fully planner-backed and the attached proof bundle is
+strict target-runtime evidence.
