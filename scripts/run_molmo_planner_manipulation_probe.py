@@ -15,6 +15,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 if __package__ in {None, ""}:
@@ -48,6 +49,7 @@ CUROBO_EXTENSION_NAMES = (
     "line_search_cu",
 )
 _WORKER_EVENT_STARTED_AT = time.monotonic()
+_WARP_COMPATIBILITY_ADAPTER: dict[str, Any] = {"applied": False}
 
 
 def parse_args() -> argparse.Namespace:
@@ -330,6 +332,7 @@ def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
         "torch_extensions_dir_env": os.environ.get("TORCH_EXTENSIONS_DIR", ""),
         "torch": _torch_diagnostics(),
         "curobo_extension_cache": _curobo_extension_cache_diagnostics(),
+        "warp_compatibility": _warp_compatibility_diagnostics(),
         "renderer_adapter_enabled": renderer_device_id is not None,
         "renderer_device_id": renderer_device_id,
     }
@@ -409,6 +412,80 @@ def _curobo_extension_cache_entry(name: str, build_dir: Path) -> dict[str, Any]:
         "so_exists": (build_dir / f"{name}.so").is_file(),
         "lock_exists": (build_dir / "lock").exists(),
         "files": files,
+    }
+
+
+def _warp_compatibility_diagnostics() -> dict[str, Any]:
+    if importlib.util.find_spec("warp") is None:
+        return {"available": False, "adapter": dict(_WARP_COMPATIBILITY_ADAPTER)}
+    try:
+        import warp as wp
+
+        return _warp_compatibility_from_module(wp, _WARP_COMPATIBILITY_ADAPTER)
+    except BaseException as exc:  # noqa: BLE001 - diagnostics should not fail the probe.
+        return {
+            "available": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "adapter": dict(_WARP_COMPATIBILITY_ADAPTER),
+        }
+
+
+def _warp_compatibility_from_module(
+    wp_module: Any, adapter: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    return {
+        "available": True,
+        "version": getattr(wp_module, "__version__", None),
+        "has_torch_attr": hasattr(wp_module, "torch"),
+        "has_device_from_torch": hasattr(wp_module, "device_from_torch"),
+        "has_from_torch": hasattr(wp_module, "from_torch"),
+        "has_stream_from_torch": hasattr(wp_module, "stream_from_torch"),
+        "adapter": dict(adapter or {}),
+    }
+
+
+def _apply_warp_torch_adapter() -> dict[str, Any]:
+    try:
+        import warp as wp
+    except BaseException as exc:  # noqa: BLE001 - adapter should report failures.
+        adapter = {
+            "available": False,
+            "applied": False,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        _WARP_COMPATIBILITY_ADAPTER.clear()
+        _WARP_COMPATIBILITY_ADAPTER.update(adapter)
+        return adapter
+    adapter = _apply_warp_torch_adapter_to_module(wp)
+    _WARP_COMPATIBILITY_ADAPTER.clear()
+    _WARP_COMPATIBILITY_ADAPTER.update(adapter)
+    return adapter
+
+
+def _apply_warp_torch_adapter_to_module(wp_module: Any) -> dict[str, Any]:
+    if hasattr(wp_module, "torch"):
+        return {
+            "available": True,
+            "applied": False,
+            "reason": "warp.torch already available",
+        }
+    if not hasattr(wp_module, "device_from_torch"):
+        return {
+            "available": True,
+            "applied": False,
+            "reason": "warp.device_from_torch unavailable",
+        }
+    setattr(
+        wp_module,
+        "torch",
+        SimpleNamespace(device_from_torch=getattr(wp_module, "device_from_torch")),
+    )
+    return {
+        "available": True,
+        "applied": True,
+        "provided": ["warp.torch.device_from_torch"],
     }
 
 
@@ -536,6 +613,13 @@ def _execute_policy_probe(
     _emit_worker_event("execute_task_reset_start", stage="execute_task_reset")
     task.reset()
     _emit_worker_event("execute_task_reset_done", stage="execute_task_reset")
+    _emit_worker_event("execute_warp_adapter_start", stage="execute_warp_adapter")
+    warp_adapter = _apply_warp_torch_adapter()
+    _emit_worker_event(
+        "execute_warp_adapter_ready",
+        stage="execute_warp_adapter",
+        warp_adapter=warp_adapter,
+    )
     _emit_worker_event("execute_policy_construct_start", stage="execute_policy_construct")
     policy = config.policy_config.policy_cls(config, task)
     _emit_worker_event("execute_policy_construct_done", stage="execute_policy_construct")

@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--accept-rby1m-curobo-blocked", action="store_true")
     parser.add_argument("--require-rby1m-curobo-ready", action="store_true")
     parser.add_argument("--require-curobo-extension-cache", action="store_true")
+    parser.add_argument("--require-warp-compatibility", action="store_true")
     return parser.parse_args()
 
 
@@ -43,6 +44,7 @@ def main() -> None:
         accept_rby1m_curobo_blocked=args.accept_rby1m_curobo_blocked,
         require_rby1m_curobo_ready=args.require_rby1m_curobo_ready,
         require_curobo_extension_cache=args.require_curobo_extension_cache,
+        require_warp_compatibility=args.require_warp_compatibility,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -56,6 +58,7 @@ def _assert_probe_result(
     accept_rby1m_curobo_blocked: bool = False,
     require_rby1m_curobo_ready: bool = False,
     require_curobo_extension_cache: bool = False,
+    require_warp_compatibility: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -75,11 +78,19 @@ def _assert_probe_result(
         cache = (evidence.get("runtime_diagnostics") or {}).get("curobo_extension_cache") or {}
         if cache.get("extensions"):
             assert "CuRobo Extension Cache" in report_text, report_text[:500]
+        warp = (evidence.get("runtime_diagnostics") or {}).get("warp_compatibility") or {}
+        if warp:
+            assert "Warp Compatibility" in report_text, report_text[:500]
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}
         assert cache.get("extensions"), diagnostics
         assert "CuRobo Extension Cache" in report_text, report_text[:500]
+    if require_warp_compatibility:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        warp = diagnostics.get("warp_compatibility") or {}
+        assert warp, diagnostics
+        assert "Warp Compatibility" in report_text, report_text[:500]
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]

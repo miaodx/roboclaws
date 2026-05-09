@@ -716,6 +716,18 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 },
             },
         },
+        "warp_compatibility": {
+            "available": True,
+            "version": "1.13.0",
+            "has_torch_attr": True,
+            "has_device_from_torch": True,
+            "has_from_torch": True,
+            "has_stream_from_torch": True,
+            "adapter": {
+                "applied": True,
+                "provided": ["warp.torch.device_from_torch"],
+            },
+        },
     }
     run_result["manipulation_evidence"]["worker_stage_events"] = [
         {
@@ -742,6 +754,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Runtime Diagnostics" in html
     assert "CuRobo Extension Cache" in html
     assert "lbfgs_step_cu" in html
+    assert "Warp Compatibility" in html
+    assert "Adapter applied" in html
     assert "Worker Stage Timeline" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html

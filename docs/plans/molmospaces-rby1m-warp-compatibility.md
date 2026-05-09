@@ -1,6 +1,6 @@
 # MolmoSpaces RBY1M Warp Compatibility
 
-**Status:** Planned under GSD Phase 33 on 2026-05-09
+**Status:** Completed under GSD Phase 33 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0019, ADR-0023, ADR-0024, Phase 32 evidence
 **Workflow:** `hybrid-phase-pipeline`
@@ -70,4 +70,25 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_cleanup_report.py tests/test_molmo_planner_headless_renderer.py`
 - `CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST=8.9 .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py --output-dir output/molmo-planner-rby1m-warp-compatibility-execute --embodiment rby1m --probe-mode execute --torch-extensions-dir output/molmo-planner-rby1m-curobo-cache-isolation/torch_extensions --renderer-device-id 0 --steps 2 --timeout-s 600`
 - `.venv/bin/python scripts/check_molmo_planner_manipulation_probe.py --accept-blocked-capability --accept-rby1m-curobo-blocked --require-curobo-extension-cache --require-warp-compatibility output/molmo-planner-rby1m-warp-compatibility-execute/run_result.json`
-- If execute succeeds: require `--require-rby1m-curobo-ready`.
+- Strict readiness rejected the artifact with `--require-rby1m-curobo-ready`,
+  as intended.
+
+## Completion Evidence
+
+Phase 33 completed as Warp compatibility and blocked execute evidence, not as
+target runtime readiness.
+
+The execute artifact records:
+
+- `warp_compatibility.adapter.applied=true`;
+- `warp.torch.device_from_torch` provided by the probe-local adapter;
+- 5/5 known CuRobo extension `.so` files present with 0 locks;
+- worker stages through `execute_policy_construct_done`,
+  `execute_policy_reset_done`, and `execute_policy_run_start`;
+- report sections for `Warp Compatibility`, `CuRobo Extension Cache`,
+  `Worker Stage Timeline`, and `RBY1M CuRobo Gate`;
+- blocker `OutOfMemoryError` during `execute_policy_run`, with GPU 0 reporting
+  only about 285 MiB free.
+
+Because execute mode did not produce planner-backed robot-state movement,
+actual planner-backed cleanup primitive replacement remains gated.

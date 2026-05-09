@@ -49,6 +49,7 @@ def _write_report_files(
     rby1m_gate: bool = False,
     worker_stages: bool = False,
     curobo_cache: bool = False,
+    warp_compatibility: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -64,6 +65,8 @@ def _write_report_files(
         body += "Worker Stage Timeline\n"
     if curobo_cache:
         body += "CuRobo Extension Cache\n"
+    if warp_compatibility:
+        body += "Warp Compatibility\n"
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
     report.write_text(body, encoding="utf-8")
@@ -332,6 +335,69 @@ def test_checker_requires_curobo_extension_cache_report_when_requested(
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
             require_curobo_extension_cache=True,
+        )
+
+
+def test_checker_requires_warp_compatibility_report_when_requested(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "AttributeError", "message": "module warp has no torch"}],
+        execution_attempted=True,
+    )
+    evidence["runtime_diagnostics"] = {
+        "warp_compatibility": {
+            "available": True,
+            "version": "1.13.0",
+            "has_torch_attr": True,
+            "has_device_from_torch": True,
+            "adapter": {
+                "applied": True,
+                "provided": ["warp.torch.device_from_torch"],
+            },
+        }
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            diagnostics=True,
+            rby1m_gate=True,
+            warp_compatibility=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+        require_warp_compatibility=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        diagnostics=True,
+        rby1m_gate=True,
+        warp_compatibility=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+            require_warp_compatibility=True,
         )
 
 

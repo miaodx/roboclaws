@@ -159,6 +159,7 @@ def render_planner_manipulation_report(
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_curobo_extension_cache_section(evidence)}
+    {_planner_probe_warp_compatibility_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
     {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
@@ -560,6 +561,49 @@ def _curobo_cache_file_detail(files: list[dict[str, Any]]) -> str:
 
 def _yes_no(value: Any) -> str:
     return "yes" if bool(value) else "no"
+
+
+def _planner_probe_warp_compatibility_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    warp = diagnostics.get("warp_compatibility") or {}
+    if not warp:
+        return ""
+    adapter = warp.get("adapter") or {}
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Warp', 'available' if warp.get('available') else 'missing')}"
+        f"{_metric('Version', warp.get('version') or 'unknown')}"
+        f"{_metric('warp.torch', _yes_no(warp.get('has_torch_attr')))}"
+        f"{_metric('Adapter applied', _yes_no(adapter.get('applied')))}"
+        "</div>"
+    )
+    rows = [
+        ("has_device_from_torch", warp.get("has_device_from_torch")),
+        ("has_from_torch", warp.get("has_from_torch")),
+        ("has_stream_from_torch", warp.get("has_stream_from_torch")),
+        ("adapter_reason", adapter.get("reason", "")),
+        ("adapter_provided", ", ".join(adapter.get("provided") or [])),
+    ]
+    table_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(name))}</td>"
+        f"<td>{html.escape(_yes_no(value) if isinstance(value, bool) else str(value))}</td>"
+        "</tr>"
+        for name, value in rows
+        if value not in (None, "", [])
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Signal</th><th>Value</th>'
+        "</tr></thead><tbody>" + table_rows + "</tbody></table></div>"
+    )
+    note = (
+        "Warp compatibility is probe-local runtime evidence. It makes any "
+        "adapter visible before strict RBY1M/CuRobo readiness is considered."
+    )
+    return (
+        '<section class="panel"><h2>Warp Compatibility</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
 
 
 def _planner_probe_worker_stages_section(evidence: dict[str, Any]) -> str:

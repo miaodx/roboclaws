@@ -141,3 +141,25 @@ def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) ->
         "lbfgs_step_cu.so",
         "lock",
     }
+
+
+def test_warp_torch_adapter_adds_minimal_namespace() -> None:
+    probe = _load_probe_module()
+
+    def device_from_torch(value: object) -> object:
+        return value
+
+    fake_warp = SimpleNamespace(
+        __version__="1.13.0",
+        device_from_torch=device_from_torch,
+        from_torch=lambda value: value,
+        stream_from_torch=lambda value: value,
+    )
+
+    adapter = probe._apply_warp_torch_adapter_to_module(fake_warp)
+    diagnostics = probe._warp_compatibility_from_module(fake_warp, adapter)
+
+    assert adapter["applied"] is True
+    assert fake_warp.torch.device_from_torch("cuda:0") == "cuda:0"
+    assert diagnostics["has_torch_attr"] is True
+    assert diagnostics["adapter"]["provided"] == ["warp.torch.device_from_torch"]
