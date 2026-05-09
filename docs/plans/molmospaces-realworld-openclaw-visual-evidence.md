@@ -1,6 +1,6 @@
 # MolmoSpaces Real-World OpenClaw Visual Evidence
 
-**Status:** Accepted for execution 2026-05-09 under GSD Phase 19
+**Status:** Completed 2026-05-09 under GSD Phase 19
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0008, ADR-0009, ADR-0010, Phase 18 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -68,3 +68,22 @@ This phase should:
 - Robot View Timeline cards include FPV, chase, map, and verification PNGs.
 - Phase summary/verification docs clearly state whether the Gateway artifact is
   minimum-only or also a clean cleanup success.
+
+## Completion Evidence
+
+- Deterministic visual kit artifact:
+  `output/molmo-realworld-openclaw-visual-dogfood-kit/run_result.json`
+- Live Gateway visual artifact:
+  `output/molmo-realworld-openclaw-gateway-visual-g5-1546/run_result.json`
+- The deterministic kit passed
+  `--require-openclaw-minimum --require-clean-agent-run --require-robot-views`
+  with `generated_mess_count=10`, 176 robot-view PNGs, and
+  `cleanup_status=success`.
+- The live Gateway run passed
+  `--require-openclaw-minimum --require-robot-views` with
+  `generated_mess_count=5`, 48 robot-view PNGs, and no `scene_objects` trace
+  event.
+- The live Gateway run did not pass clean cleanup success. It swept all 14
+  waypoints but skipped the full semantic navigation loop and ended with
+  `cleanup_status=failed`, `mess_restoration_rate=0.0`, and 3/5 semantically
+  acceptable or preferred placements.

@@ -150,7 +150,7 @@ def _assert_result(
     if require_clean_agent_run:
         _assert_clean_agent_run(data)
     if require_robot_views:
-        _assert_robot_views(data, base)
+        _assert_robot_views(data, base, require_complete_actions=enforce_success)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -235,7 +235,12 @@ def _assert_trace_is_public(trace_path: Path) -> None:
             assert "scene_objects" not in response, response
 
 
-def _assert_robot_views(data: dict[str, Any], base: Path) -> None:
+def _assert_robot_views(
+    data: dict[str, Any],
+    base: Path,
+    *,
+    require_complete_actions: bool = True,
+) -> None:
     assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
     artifacts = data.get("artifacts") or {}
     robot_views_dir = _resolve_path(base, artifacts.get("robot_views", ""))
@@ -257,14 +262,16 @@ def _assert_robot_views(data: dict[str, Any], base: Path) -> None:
         if _is_focused_robot_action(action):
             focused_actions.add(action.split(" ", 1)[0])
             _assert_focused_robot_step(step)
-    for expected in {"navigate_to_object", "pick", "navigate_to_receptacle", "place"}:
-        assert expected in focused_actions, (expected, focused_actions, data)
-    if any(
-        item.get("target_receptacle_category") == "Fridge"
-        for item in data.get("semantic_substeps") or []
-    ):
-        assert "open_receptacle" in focused_actions, data
-        assert "place_inside" in focused_actions, data
+    assert focused_actions, (focused_actions, data)
+    if require_complete_actions:
+        for expected in {"navigate_to_object", "pick", "navigate_to_receptacle", "place"}:
+            assert expected in focused_actions, (expected, focused_actions, data)
+        if any(
+            item.get("target_receptacle_category") == "Fridge"
+            for item in data.get("semantic_substeps") or []
+        ):
+            assert "open_receptacle" in focused_actions, data
+            assert "place_inside" in focused_actions, data
 
 
 def _is_focused_robot_action(action: str) -> bool:

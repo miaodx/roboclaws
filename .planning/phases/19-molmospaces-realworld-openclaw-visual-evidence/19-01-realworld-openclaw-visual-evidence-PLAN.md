@@ -7,6 +7,13 @@ Produce reviewable OpenClaw Gateway evidence for the ADR-0003
 backend, so the report includes Agent View, Private Evaluation, Score, Semantic
 Substeps, and Robot View Timeline.
 
+## Status
+
+Completed 2026-05-09. The deterministic OpenClaw-labeled visual kit passed the
+strict clean visual gate, and a live OpenClaw Gateway run passed the minimum
+visual evidence gate with Robot View Timeline artifacts. The live policy did not
+pass clean cleanup success.
+
 ## Tasks
 
 1. Add a focused visual OpenClaw dogfood-kit recipe. It should run the

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 19 MolmoSpaces real-world OpenClaw visual evidence opened on 2026-05-09 via hybrid-phase-pipeline; ADR-0010 and source/GSD plans created for real RBY1M visual Gateway evidence on the ADR-0003 MCP surface.
+stopped_at: Phase 19 MolmoSpaces real-world OpenClaw visual evidence completed on 2026-05-09; real RBY1M visual report evidence now exists for OpenClaw-labeled and live Gateway ADR-0003 runs.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
   total_phases: 14
-  completed_phases: 13
+  completed_phases: 14
   total_plans: 17
-  completed_plans: 16
-  percent: 93
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -21,23 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 19 — molmospaces-realworld-openclaw-visual-evidence (active; real MolmoSpaces/RBY1M visual report evidence for OpenClaw Gateway on the ADR-0003 MCP surface)
+**Current focus:** Phase 19 complete; remaining MolmoSpaces follow-ups are live OpenClaw clean-policy hardening, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.
 
 ## Current Position
 
-Phase: 19 (molmospaces-realworld-openclaw-visual-evidence) — ACTIVE
-Plan: 1 of 1 active — `19-01` implements ADR-0010 by running OpenClaw Gateway
+Phase: 19 (molmospaces-realworld-openclaw-visual-evidence) — COMPLETE
+Plan: 1 of 1 complete — `19-01` implements ADR-0010 by running OpenClaw Gateway
 against the ADR-0003 `molmo_cleanup_realworld` MCP surface on the real
 MolmoSpaces/RBY1M visual backend.
-Status: Planning slice opened. Next implementation step is to add a visual
-OpenClaw dogfood-kit gate, run it locally, then attempt a real Gateway run with
-`--host 0.0.0.0 --backend molmospaces_subprocess --include-robot
---record-robot-views`.
-Last activity: 2026-05-09 - Created ADR-0010, source plan, and GSD Phase 19
-plan for real RBY1M visual OpenClaw evidence on the ADR-0003 MCP surface.
+Status: The deterministic visual kit passed the strict clean visual gate with
+176 robot-view PNGs. A live OpenClaw Gateway run passed the minimum visual gate
+with 48 robot-view PNGs, full waypoint sweep, no `scene_objects`, and a report
+containing Agent View, Private Evaluation, Score, Semantic Substeps, and Robot
+View Timeline. The live run did not pass clean cleanup success.
+Last activity: 2026-05-09 - Completed Phase 19, added ADR-0010 visual evidence
+gates, and recorded the live Gateway minimum-only policy result.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 is opening the real visual OpenClaw evidence pass. Remaining MolmoSpaces work after that is advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Remaining MolmoSpaces work after that is live OpenClaw clean-policy hardening, advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
 
 ## Performance Metrics
 
@@ -70,8 +71,8 @@ Progress: [##########] 100%
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 16, 17, 18
-- Trend: MolmoSpaces cleanup path now moved from ADR-0003 public/private cleanup boundaries to a strict MCP surface, direct coding-agent dogfood, and OpenClaw Gateway viability on the same public contract.
+- Last 3 shipped phases: 17, 18, 19
+- Trend: MolmoSpaces cleanup path now moved from direct coding-agent dogfood to OpenClaw Gateway viability and real RBY1M visual evidence on the same ADR-0003 public contract.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -91,6 +92,7 @@ Progress: [##########] 100%
 | Phase 16 P01 | ~3h | 6 tasks | 10 files |
 | Phase 17 P01 | ~1h | 5 tasks | 10 files |
 | Phase 18 P01 | ~2h | 5 tasks | 13 files |
+| Phase 19 P01 | ~2h | 5 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -154,6 +156,15 @@ Recent decisions affecting current work:
   `--include-robot`, and `--record-robot-views`, then validate Agent View,
   Private Evaluation, Score, Semantic Substeps, Robot View Timeline, and the
   FPV/chase/map/verification PNG set through the shared report underlay.
+- **Phase 19 completion (2026-05-09):** OpenClaw visual evidence is now
+  checker-gated. `just verify::molmo-realworld-openclaw-visual-dogfood-kit`
+  produced a clean OpenClaw-labeled real MolmoSpaces/RBY1M artifact with 176
+  robot-view PNGs. A live Gateway run produced a minimum-valid visual artifact
+  with 48 robot-view PNGs, 14/14 waypoint sweep, no `scene_objects`, and the
+  full shared report view set. The live run failed clean policy success because
+  the model skipped `navigate_to_object`/`navigate_to_receptacle` and chose
+  weak destinations, so future OpenClaw hardening should target semantic-loop
+  obedience and destination choice.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the

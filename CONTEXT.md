@@ -254,4 +254,4 @@ _Avoid_: Raw tool log as visual flow
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 18 closed OpenClaw synthetic Gateway viability; the next OpenClaw evidence gap is a real MolmoSpaces/RBY1M visual Gateway artifact with the full shared report view set.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. The remaining OpenClaw visual gap is clean-policy behavior, not report/view availability.
