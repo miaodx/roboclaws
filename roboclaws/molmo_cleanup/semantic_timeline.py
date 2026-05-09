@@ -218,21 +218,35 @@ def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def display_semantic_subphase(phase: Any) -> dict[str, str] | None:
+    """Return the report-facing label for one raw semantic tool phase."""
+    phase_name = str(phase or "")
+    label = SEMANTIC_SUBPHASE_LABELS.get(phase_name)
+    if label is None:
+        return None
+    return {
+        "phase": phase_name,
+        "label": label[0],
+        "detail": label[1],
+        "text": f"{label[0]}/{label[1]}",
+    }
+
+
+def semantic_subphase_text(phase: Any) -> str:
+    """Return a compact report label, falling back to the raw phase name."""
+    displayed = display_semantic_subphase(phase)
+    if displayed is not None:
+        return displayed["text"]
+    return str(phase or "")
+
+
 def display_semantic_subphases(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
     """Return the report-facing cleanup loop labels for raw semantic tool steps."""
     displayed = []
     for step in steps:
-        phase = str(step.get("phase") or "")
-        label = SEMANTIC_SUBPHASE_LABELS.get(phase)
-        if label is None:
-            continue
-        displayed.append(
-            {
-                "phase": phase,
-                "label": label[0],
-                "detail": label[1],
-            }
-        )
+        item = display_semantic_subphase(step.get("phase"))
+        if item is not None:
+            displayed.append(item)
     return displayed
 
 

@@ -240,6 +240,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "<span>pick</span><small>object</small>" in html
     assert "<span>nav</span><small>target</small>" in html
     assert "<span>place</span><small>surface</small>" in html
+    assert "Subphase" in html
+    assert "nav/target" in html
     assert "object_done" not in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
@@ -416,6 +418,172 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
     assert "observed_001" in html
     assert "raw_fpv_001" in html
     assert "Raw FPV Observations" in html
+
+
+def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    final_locations = scenario.object_locations()
+    final_locations.update({"mug_01": "sink_01"})
+    score = score_cleanup(final_locations, scenario.private_manifest).to_dict()
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(scenario, final_locations, tmp_path / "after.png", title="After")
+    semantic_substeps = [
+        {
+            "object_id": "observed_001",
+            "source_receptacle_id": "table_01",
+            "target_receptacle_id": "sink_01",
+            "steps": [
+                {"phase": "navigate_to_object", "primitive_provenance": API_SEMANTIC_PROVENANCE},
+                {"phase": "pick", "primitive_provenance": API_SEMANTIC_PROVENANCE},
+                {
+                    "phase": "navigate_to_receptacle",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+                {
+                    "phase": "place",
+                    "location_id": "sink_01",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+            ],
+        }
+    ]
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "backend": "api_semantic_synthetic",
+        "cleanup_status": score["status"],
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "policy": "camera_model_policy_baseline",
+        "score": score,
+        "semantic_substeps": semantic_substeps,
+        "cleanup_primitive_evidence": cleanup_primitive_evidence_from_substeps(semantic_substeps),
+        "agent_view": {
+            "perception_mode": "camera_model_policy",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [
+                {
+                    "object_id": "observed_001",
+                    "category": "dish",
+                    "support_estimate": {"fixture_id": "table_01"},
+                    "source_observation_id": "raw_fpv_001",
+                    "model_provenance": "simulated_camera_model",
+                }
+            ],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+            "camera_model_policy_evidence": {
+                "enabled": True,
+                "event_count": 1,
+                "candidate_count": 1,
+                "model_provenance": "simulated_camera_model",
+                "private_truth_included": False,
+                "events": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "room_id": "kitchen",
+                        "model_provenance": "simulated_camera_model",
+                        "candidate_count": 1,
+                        "registered_observed_handles": ["observed_001"],
+                    }
+                ],
+            },
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+        "camera_model_policy_evidence": {
+            "enabled": True,
+            "event_count": 1,
+            "candidate_count": 1,
+            "model_provenance": "simulated_camera_model",
+            "private_truth_included": False,
+            "events": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "model_provenance": "simulated_camera_model",
+                    "candidate_count": 1,
+                    "registered_observed_handles": ["observed_001"],
+                }
+            ],
+        },
+        "advisory_evaluation": build_advisory_evaluation(
+            score=score,
+            scenario_id=scenario.scenario_id,
+        ),
+        "private_evaluation": {
+            "generated_mess_count": 1,
+            "generated_mess_set": ["mug_01"],
+            "acceptable_destination_sets": {"mug_01": ["sink_01"]},
+            "mess_restoration_rate": 1.0,
+            "sweep_coverage_rate": 1.0,
+            "disturbance_count": 0,
+        },
+    }
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[
+            {
+                "tool": "place",
+                "event": "response",
+                "response": {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+            }
+        ],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "place observed_001",
+                "semantic_phase": "place",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/place.fpv.png"},
+                "focus": {},
+            }
+        ],
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    ordered_headings = [
+        "<h2>Before And After</h2>",
+        "<h2>Object Moves</h2>",
+        "<h2>Semantic Substeps</h2>",
+        "<h2>Robot View Timeline</h2>",
+        "<h2>Score</h2>",
+        "<h2>Cleanup Primitive Gate</h2>",
+        "<h2>Agent View</h2>",
+        "<h2>Raw FPV Observations</h2>",
+        "<h2>Camera Model Policy</h2>",
+        "<h2>Advisory Review</h2>",
+        "<h2>Private Evaluation</h2>",
+    ]
+    positions = [html.index(heading) for heading in ordered_headings]
+    assert positions == sorted(positions)
+    assert "place/surface" in html
 
 
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:

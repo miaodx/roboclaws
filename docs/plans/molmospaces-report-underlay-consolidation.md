@@ -1,6 +1,6 @@
 # MolmoSpaces Report Underlay Consolidation
 
-**Status:** Planned under GSD Phase 30 on 2026-05-09
+**Status:** Completed under GSD Phase 30 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0009, ADR-0021, Phase 29 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -77,3 +77,23 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py`
 - `.venv/bin/python examples/molmospaces_realworld_cleanup.py --output-dir output/molmo-realworld-report-underlay --perception-mode camera_model_policy --generated-mess-count 2`
 - `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --require-camera-model-policy --accept-blocked-planner-cleanup-primitives output/molmo-realworld-report-underlay/run_result.json`
+
+## Completion Evidence
+
+- `render_cleanup_report` now uses one canonical section sequence rather than
+  inline section assembly.
+- The shared visual core appears before ADR-0003 evidence panels when data is
+  present: Before And After, Object Moves, Semantic Substeps, Robot View
+  Timeline, then Score.
+- `semantic_timeline.py` owns the compact report-facing subphase labels, and
+  the report reuses them in Semantic Substeps, Robot View Timeline, and Cleanup
+  Primitive Gate.
+- Synthetic artifact:
+  `output/molmo-realworld-report-underlay/report.html`.
+- Real MolmoSpaces/RBY1M visual artifact:
+  `output/molmo-realworld-report-underlay-visual/report.html`.
+- The real visual artifact passed
+  `--require-camera-model-policy --require-robot-views --accept-blocked-planner-cleanup-primitives`
+  with 2/2 restored targets, 24 robot-view timeline steps, 14 raw FPV
+  observations, and semantic labels including `nav/target` and
+  `place/surface`.

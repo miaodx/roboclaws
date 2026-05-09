@@ -7,7 +7,10 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from roboclaws.molmo_cleanup.semantic_timeline import display_semantic_subphases
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    display_semantic_subphases,
+    semantic_subphase_text,
+)
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 _COLORS = {
@@ -75,70 +78,52 @@ def render_cleanup_report(
     """Write a self-contained cleanup `report.html`."""
     run_dir.mkdir(parents=True, exist_ok=True)
     report_path = run_dir / "report.html"
-    moves = _extract_moves(trace_events)
-    score = run_result["score"]
-    restored_summary = f"{score['restored_count']}/{score['total_targets']}"
-    before_name = html.escape(before_snapshot.name)
-    after_name = html.escape(after_snapshot.name)
-    body = f"""
-    <section class="summary">
-      <div class="summary-head">
-        <p class="eyebrow">Cleanup artifact</p>
-        <h1>MolmoSpaces Cleanup Pilot</h1>
-      </div>
-      {_summary_metrics(run_result, score)}
-      <div class="badges">
-        {_badge("Scenario", scenario.scenario_id)}
-        {_badge("Backend", run_result.get("backend", "unknown"))}
-        {_badge("Contract", run_result.get("contract", "legacy"))}
-        {_badge("Status", run_result["cleanup_status"])}
-        {_badge("Restored", restored_summary)}
-        {_badge("Generated mess", _generated_mess_summary(run_result))}
-        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
-        {_badge("Agent driven", run_result.get("agent_driven", False))}
-        {_badge("Provenance", run_result["primitive_provenance"])}
-        {_badge("MCP server", run_result.get("mcp_server", "none"))}
-        {_robot_badge(run_result)}
-      </div>
-    </section>
-    {_current_contract_note(run_result)}
-    {_realworld_contract_note(run_result)}
-    {_manipulation_provenance_section(run_result)}
-    {_attached_planner_proof_section(run_result)}
-    {_cleanup_primitive_gate_section(run_result)}
-    <section class="panel">
-      <div class="section-heading">
-        <h2>Before And After</h2>
-      </div>
-      <div class="snapshots">
-        <figure>
-          <img src="{before_name}" alt="Before cleanup">
-          <figcaption>Before</figcaption>
-        </figure>
-        <figure>
-          <img src="{after_name}" alt="After cleanup">
-          <figcaption>After</figcaption>
-        </figure>
-      </div>
-    </section>
-    <section class="panel">
-      <h2>Object Moves</h2>
-      {_moves_table(moves)}
-    </section>
-    {_agent_view_section(run_result)}
-    {_raw_fpv_observations_section(run_result)}
-    {_camera_model_policy_section(run_result)}
-    {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
-    {_robot_timeline(robot_view_steps or [])}
-    <section class="panel">
-      <h2>Score</h2>
-      {_score_table(score)}
-    </section>
-    {_advisory_review_section(run_result)}
-    {_private_evaluation_section(run_result)}
-    """
+    body = "\n".join(
+        _cleanup_report_sections(
+            scenario=scenario,
+            run_result=run_result,
+            trace_events=trace_events,
+            before_snapshot=before_snapshot,
+            after_snapshot=after_snapshot,
+            robot_view_steps=robot_view_steps or [],
+        )
+    )
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
+
+
+def _cleanup_report_sections(
+    *,
+    scenario: CleanupScenario,
+    run_result: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    before_snapshot: Path,
+    after_snapshot: Path,
+    robot_view_steps: list[dict[str, Any]],
+) -> list[str]:
+    """Return the canonical Cleanup Artifact Report section sequence."""
+    moves = _extract_moves(trace_events)
+    score = run_result["score"]
+    return _present_sections(
+        [
+            _cleanup_summary_section(scenario=scenario, run_result=run_result, score=score),
+            _current_contract_note(run_result),
+            _realworld_contract_note(run_result),
+            _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
+            _object_moves_section(moves),
+            _semantic_steps_table(run_result.get("semantic_substeps") or []),
+            _robot_timeline(robot_view_steps),
+            _score_section(score),
+            _manipulation_provenance_section(run_result),
+            _attached_planner_proof_section(run_result),
+            _cleanup_primitive_gate_section(run_result),
+            _agent_view_section(run_result),
+            _raw_fpv_observations_section(run_result),
+            _camera_model_policy_section(run_result),
+            _advisory_review_section(run_result),
+            _private_evaluation_section(run_result),
+        ]
+    )
 
 
 def render_planner_manipulation_report(
@@ -179,6 +164,81 @@ def render_planner_manipulation_report(
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
+
+
+def _present_sections(sections: list[str]) -> list[str]:
+    return [section for section in sections if section]
+
+
+def _cleanup_summary_section(
+    *,
+    scenario: CleanupScenario,
+    run_result: dict[str, Any],
+    score: dict[str, Any],
+) -> str:
+    restored_summary = f"{score['restored_count']}/{score['total_targets']}"
+    return f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Cleanup artifact</p>
+        <h1>MolmoSpaces Cleanup Pilot</h1>
+      </div>
+      {_summary_metrics(run_result, score)}
+      <div class="badges">
+        {_badge("Scenario", scenario.scenario_id)}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Contract", run_result.get("contract", "legacy"))}
+        {_badge("Status", run_result["cleanup_status"])}
+        {_badge("Restored", restored_summary)}
+        {_badge("Generated mess", _generated_mess_summary(run_result))}
+        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+        {_badge("Agent driven", run_result.get("agent_driven", False))}
+        {_badge("Provenance", run_result["primitive_provenance"])}
+        {_badge("MCP server", run_result.get("mcp_server", "none"))}
+        {_robot_badge(run_result)}
+      </div>
+    </section>
+    """
+
+
+def _before_after_section(*, before_snapshot: Path, after_snapshot: Path) -> str:
+    before_name = html.escape(before_snapshot.name)
+    after_name = html.escape(after_snapshot.name)
+    return f"""
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Before And After</h2>
+      </div>
+      <div class="snapshots">
+        <figure>
+          <img src="{before_name}" alt="Before cleanup">
+          <figcaption>Before</figcaption>
+        </figure>
+        <figure>
+          <img src="{after_name}" alt="After cleanup">
+          <figcaption>After</figcaption>
+        </figure>
+      </div>
+    </section>
+    """
+
+
+def _object_moves_section(moves: list[dict[str, Any]]) -> str:
+    return f"""
+    <section class="panel">
+      <h2>Object Moves</h2>
+      {_moves_table(moves)}
+    </section>
+    """
+
+
+def _score_section(score: dict[str, Any]) -> str:
+    return f"""
+    <section class="panel">
+      <h2>Score</h2>
+      {_score_table(score)}
+    </section>
+    """
 
 
 def _badge(label: str, value: Any) -> str:
@@ -345,7 +405,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
     for item in objects:
         object_id = html.escape(str(item.get("object_id", "")))
         for step in item.get("subphases") or []:
-            label = f"{step.get('label', '')}/{step.get('detail', '')}"
+            label = _display_subphase_from_evidence(step)
             rows.append(
                 "<tr>"
                 f"<td>{object_id}</td>"
@@ -488,6 +548,14 @@ def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:
 
 def _execution_gate_label(gate: dict[str, Any]) -> str:
     return "attempted" if gate.get("execution_attempted") else "not attempted"
+
+
+def _display_subphase_from_evidence(step: dict[str, Any]) -> str:
+    label = step.get("label")
+    detail = step.get("detail")
+    if label and detail:
+        return f"{label}/{detail}"
+    return semantic_subphase_text(step.get("phase"))
 
 
 def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:
@@ -789,7 +857,12 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
 def _semantic_phase_summary(semantic_phase: Any) -> str:
     if not semantic_phase:
         return ""
-    return '<div class="semantic-badges">' + _badge("Semantic phase", semantic_phase) + "</div>"
+    displayed = semantic_subphase_text(semantic_phase)
+    raw = str(semantic_phase)
+    badges = _badge("Subphase", displayed)
+    if displayed != raw:
+        badges += _badge("Raw phase", raw)
+    return '<div class="semantic-badges">' + badges + "</div>"
 
 
 def _focus_summary(focus: dict[str, Any]) -> str:

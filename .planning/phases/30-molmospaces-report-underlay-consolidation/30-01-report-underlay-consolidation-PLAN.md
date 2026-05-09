@@ -8,18 +8,18 @@ review rhythm while still rendering their contract-specific evidence.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context
    references.
-2. [ ] Refactor `render_cleanup_report` to assemble sections through a shared
+2. [x] Refactor `render_cleanup_report` to assemble sections through a shared
    canonical sequence.
-3. [ ] Centralize semantic subphase display labels and reuse them across
+3. [x] Centralize semantic subphase display labels and reuse them across
    Semantic Substeps, Robot View Timeline, and Cleanup Primitive Gate.
-4. [ ] Add regression tests for visual-core section order and semantic labels.
-5. [ ] Generate and checker-gate a report artifact proving the consolidated
+4. [x] Add regression tests for visual-core section order and semantic labels.
+5. [x] Generate and checker-gate a report artifact proving the consolidated
    underlay.
 
 ## Acceptance
@@ -38,6 +38,21 @@ Planned 2026-05-09.
 - `uv run ruff format --check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/semantic_timeline.py tests/test_molmo_cleanup_report.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py`
 - Synthetic camera-model report artifact plus realworld checker.
+
+Evidence:
+
+- `render_cleanup_report` now assembles sections through one canonical
+  Cleanup Artifact Report sequence.
+- `semantic_timeline.py` provides shared `nav/object`, `pick/object`,
+  `nav/target`, `open/target`, `place/surface`, and `place/inside` display
+  labels reused by report sections.
+- `output/molmo-realworld-report-underlay/run_result.json` passed
+  `--require-camera-model-policy --accept-blocked-planner-cleanup-primitives`.
+- `output/molmo-realworld-report-underlay-visual/run_result.json` passed
+  `--require-camera-model-policy --require-robot-views --accept-blocked-planner-cleanup-primitives`
+  with 2/2 restored targets, 24 robot-view timeline steps, 14 raw FPV
+  observations, and the visual core ordered before audit sections.
+- Focused ruff and 41 focused pytest tests passed.
 
 ## Risks
 
