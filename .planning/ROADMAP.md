@@ -160,7 +160,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.46 MolmoSpaces report visual core contract** - Phase 45 (completed 2026-05-10; shared visual-core checks and MCP robot-view semantic reuse)
 - ✅ **v1.47 MolmoSpaces planner proof request manifest** - Phase 46 (completed 2026-05-10; private proof request manifest and local bundle runner)
 - ✅ **v1.48 MolmoSpaces planner proof request report view** - Phase 47 (completed 2026-05-10; private proof request report section)
-- 🚧 **v1.49 MolmoSpaces planner proof bundle runner report** - Phase 48 (in progress 2026-05-10; visual command report for local proof generation)
+- ✅ **v1.49 MolmoSpaces planner proof bundle runner report** - Phase 48 (completed 2026-05-10; visual command report for local proof generation)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -224,7 +224,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 45: MolmoSpaces report visual core contract** - ADR-0036 shared report visual-core checker plus ADR-0003 MCP robot-view semantic mapping reuse. Completed 2026-05-10; stale ignored reports now fail until regenerated with the shared visual core.
 - [x] **Phase 46: MolmoSpaces planner proof request manifest** - ADR-0037 private manifest and local runner that turn completed ADR-0003 cleanup artifacts into executable bound planner proof requests. Completed 2026-05-10.
 - [x] **Phase 47: MolmoSpaces planner proof request report view** - ADR-0038 shared report section that renders private planner proof requests while keeping Agent View clean. Completed 2026-05-10.
-- [ ] **Phase 48: MolmoSpaces planner proof bundle runner report** - ADR-0039 visual `report.html` for local proof-bundle runner command manifests. In progress 2026-05-10.
+- [x] **Phase 48: MolmoSpaces planner proof bundle runner report** - ADR-0039 visual `report.html` for local proof-bundle runner command manifests. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

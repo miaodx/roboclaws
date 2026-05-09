@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Proof Bundle Runner Report
 
-**Status:** Planned for GSD Phase 48
+**Status:** Completed in GSD Phase 48 on 2026-05-10
 **Created:** 2026-05-10
 **Source:** CONTEXT.md, ADR-0037, ADR-0038, ADR-0039, Phase 47 state
 **Workflow:** `hybrid-phase-pipeline`
@@ -45,3 +45,9 @@ This phase should:
 - `uv run ruff check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_proof_requests.py scripts/run_molmo_planner_proof_bundle_from_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
 - `uv run ruff format --check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_proof_requests.py scripts/run_molmo_planner_proof_bundle_from_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
 - `./scripts/run_pytest_standalone.sh -q tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
+
+## Completion
+
+Phase 48 shipped the proof-bundle runner report, expected proof report paths in
+command metadata, runner API/CLI report-path output, and dry-run tests that do
+not invoke real RBY1M/CuRobo execution.

@@ -7,16 +7,16 @@ alongside its JSON command manifest.
 
 ## Status
 
-Planned.
+Completed 2026-05-10.
 
 ## Tasks
 
 1. [x] Add ADR/source-plan documentation and update roadmap/state/context.
-2. [ ] Add shared report rendering for proof bundle runner manifests.
-3. [ ] Add expected proof report paths to generated command metadata.
-4. [ ] Make the runner write and return the report path.
-5. [ ] Add dry-run tests for the report and API/CLI payload.
-6. [ ] Run focused verification gates.
+2. [x] Add shared report rendering for proof bundle runner manifests.
+3. [x] Add expected proof report paths to generated command metadata.
+4. [x] Make the runner write and return the report path.
+5. [x] Add dry-run tests for the report and API/CLI payload.
+6. [x] Run focused verification gates.
 
 ## Acceptance
 
@@ -30,7 +30,17 @@ Planned.
 
 ## Verification
 
-- Pending.
+- `uv run ruff check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_proof_requests.py scripts/run_molmo_planner_proof_bundle_from_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
+- `uv run ruff format --check roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_proof_requests.py scripts/run_molmo_planner_proof_bundle_from_requests.py tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_run_molmo_planner_proof_bundle_from_requests.py tests/test_molmo_cleanup_report.py`
+
+## Completion Notes
+
+- `build_probe_commands` now records expected proof `report.html` paths.
+- `run_molmo_planner_proof_bundle_from_requests.py` writes and returns
+  `report.html` alongside `proof_bundle_run_manifest.json`.
+- The runner CLI prints both manifest and report paths.
+- The new report is explicit command evidence, not proof success.
 
 ## Risks
 

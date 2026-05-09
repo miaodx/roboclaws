@@ -174,6 +174,45 @@ def render_planner_manipulation_report(
     return report_path
 
 
+def render_planner_proof_bundle_runner_report(
+    *,
+    output_dir: Path,
+    manifest: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for proof-bundle runner command manifests."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    commands = manifest.get("commands") or []
+    cleanup_command = manifest.get("cleanup_command") or []
+    body = f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Proof bundle runner artifact</p>
+        <h1>Planner Proof Bundle Runner</h1>
+      </div>
+      <div class="metric-grid">
+        {_metric("Status", manifest.get("status", "unknown"))}
+        {_metric("Proof requests", manifest.get("proof_request_count", 0))}
+        {_metric("Ready requests", manifest.get("ready_request_count", 0))}
+        {_metric("Commands", manifest.get("command_count", len(commands)))}
+      </div>
+      <div class="badges">
+        {_badge("Schema", manifest.get("schema", "unknown"))}
+        {_badge("Output dir", manifest.get("output_dir", output_dir))}
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Source Cleanup Artifact</h2>
+      <p class="note">{html.escape(str(manifest.get("evidence_note", "")))}</p>
+      {_path_table([("Cleanup run result", manifest.get("cleanup_run_result", ""))])}
+    </section>
+    {_proof_bundle_commands_section(commands)}
+    {_cleanup_rerun_command_section(cleanup_command)}
+    """
+    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    return report_path
+
+
 def _present_sections(sections: list[str]) -> list[str]:
     return [section for section in sections if section]
 
@@ -666,6 +705,66 @@ def _planner_proof_request_row(request: dict[str, Any]) -> str:
         f"<td>{html.escape(str(planner_target))}</td>"
         f"<td>{html.escape(blockers)}</td>"
         "</tr>"
+    )
+
+
+def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
+    if not commands:
+        return (
+            '<section class="panel"><h2>Proof Probe Commands</h2>'
+            '<p class="note">No ready proof requests produced probe commands.</p></section>'
+        )
+    rows = []
+    for index, item in enumerate(commands, start=1):
+        command = " ".join(str(part) for part in item.get("command") or [])
+        rows.append(
+            "<tr>"
+            f"<td>{index}</td>"
+            f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('run_result', '')))}</td>"
+            f"<td>{html.escape(str(item.get('report', '')))}</td>"
+            f"<td><code>{html.escape(command)}</code></td>"
+            "</tr>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Request</th>'
+        "<th>Object</th><th>Target</th><th>Proof run result</th><th>Proof report</th>"
+        "<th>Command</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel proof-bundle-commands">'
+        "<h2>Proof Probe Commands</h2>"
+        '<p class="note">Command evidence only. A command row is not planner proof until '
+        "the referenced proof artifact passes the strict planner probe checker.</p>"
+        f"{table}</section>"
+    )
+
+
+def _cleanup_rerun_command_section(command: list[str]) -> str:
+    if not command:
+        return (
+            '<section class="panel"><h2>Cleanup Rerun Command</h2>'
+            '<p class="note">No cleanup rerun command recorded. Use --rerun-cleanup with '
+            "--execute-probes to record one.</p></section>"
+        )
+    command_text = " ".join(str(part) for part in command)
+    return (
+        '<section class="panel"><h2>Cleanup Rerun Command</h2>'
+        '<p class="note">This command consumes generated proof run results as a bundle.</p>'
+        f"<pre><code>{html.escape(command_text)}</code></pre></section>"
+    )
+
+
+def _path_table(rows: list[tuple[str, Any]]) -> str:
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
+        "</tr></thead><tbody>" + table_rows + "</tbody></table></div>"
     )
 
 

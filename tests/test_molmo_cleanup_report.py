@@ -17,6 +17,7 @@ from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
 from roboclaws.molmo_cleanup.report import (
     render_cleanup_report,
     render_planner_manipulation_report,
+    render_planner_proof_bundle_runner_report,
     write_state_snapshot,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
@@ -700,6 +701,53 @@ def test_cleanup_report_renders_planner_proof_requests_before_agent_view(
     agent_view_html = html[html.index("<h2>Agent View</h2>") :]
     assert "pickup/body" not in agent_view_html
     assert "sink/body" not in agent_view_html
+
+
+def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> None:
+    manifest = {
+        "schema": "planner_cleanup_proof_bundle_run_manifest_v1",
+        "status": "dry_run",
+        "cleanup_run_result": str(tmp_path / "cleanup" / "run_result.json"),
+        "output_dir": str(tmp_path),
+        "proof_request_count": 1,
+        "ready_request_count": 1,
+        "command_count": 1,
+        "commands": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
+                "report": str(tmp_path / "proofs" / "001" / "report.html"),
+                "command": [
+                    "python",
+                    "probe.py",
+                    "--cleanup-object-id",
+                    "observed_001",
+                    "--cleanup-planner-target-receptacle-id",
+                    "sink/body",
+                ],
+            }
+        ],
+        "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
+    }
+
+    report_path = render_planner_proof_bundle_runner_report(
+        output_dir=tmp_path,
+        manifest=manifest,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Planner Proof Bundle Runner" in html
+    assert "Source Cleanup Artifact" in html
+    assert "Proof Probe Commands" in html
+    assert "Cleanup Rerun Command" in html
+    assert "dry_run" in html
+    assert "proof_001" in html
+    assert "observed_001" in html
+    assert "sink/body" in html
+    assert "report.html" in html
+    assert "--planner-proof-run-result" in html
 
 
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:

@@ -19,6 +19,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_probe_commands,
     proof_bundle_run_manifest,
 )
+from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -75,7 +76,15 @@ def main() -> None:
         rerun_cleanup=args.rerun_cleanup,
         cleanup_output_dir=args.cleanup_output_dir,
     )
-    print(json.dumps({"manifest": str(result["manifest_path"]), "status": result["status"]}))
+    print(
+        json.dumps(
+            {
+                "manifest": str(result["manifest_path"]),
+                "report": str(result["report_path"]),
+                "status": result["status"],
+            }
+        )
+    )
 
 
 def run_from_cleanup_result(
@@ -146,12 +155,23 @@ def run_from_cleanup_result(
         cleanup_command=cleanup_command,
     )
     manifest["status"] = status
+    report_path = output_dir / "report.html"
+    manifest["report"] = str(report_path)
     manifest_path = output_dir / "proof_bundle_run_manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    return {"status": status, "manifest_path": manifest_path, "manifest": manifest}
+    report_path = render_planner_proof_bundle_runner_report(
+        output_dir=output_dir,
+        manifest=manifest,
+    )
+    return {
+        "status": status,
+        "manifest_path": manifest_path,
+        "report_path": report_path,
+        "manifest": manifest,
+    }
 
 
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:

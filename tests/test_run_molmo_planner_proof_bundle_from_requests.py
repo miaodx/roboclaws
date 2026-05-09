@@ -24,7 +24,7 @@ def _load_module():
     return module
 
 
-def test_runner_writes_dry_run_manifest_from_inline_requests(tmp_path: Path) -> None:
+def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
     cleanup_run_result.parent.mkdir()
@@ -62,6 +62,7 @@ def test_runner_writes_dry_run_manifest_from_inline_requests(tmp_path: Path) -> 
     manifest = result["manifest"]
     assert result["status"] == "dry_run"
     assert manifest["schema"] == "planner_cleanup_proof_bundle_run_manifest_v1"
+    assert manifest["report"].endswith("report.html")
     assert manifest["proof_request_count"] == 1
     assert manifest["ready_request_count"] == 1
     assert manifest["command_count"] == 1
@@ -71,7 +72,16 @@ def test_runner_writes_dry_run_manifest_from_inline_requests(tmp_path: Path) -> 
     assert "observed_001" in command
     assert "--cleanup-planner-target-receptacle-id" in command
     assert "sink/body" in command
+    assert manifest["commands"][0]["report"].endswith("report.html")
     assert Path(result["manifest_path"]).is_file()
+    assert Path(result["report_path"]).is_file()
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Planner Proof Bundle Runner" in report
+    assert "Proof Probe Commands" in report
+    assert "Cleanup Rerun Command" in report
+    assert "observed_001" in report
+    assert "--cleanup-object-id" in report
+    assert "sink/body" in report
 
 
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
@@ -134,6 +144,45 @@ def test_runner_requires_planner_proof_requests(tmp_path: Path) -> None:
             torch_extensions_dir=None,
             rby1m_curobo_memory_profile="low",
         )
+
+
+def test_runner_cli_prints_manifest_report_and_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "bundle"
+    monkeypatch.setattr(
+        runner.sys,
+        "argv",
+        [
+            "run_molmo_planner_proof_bundle_from_requests.py",
+            str(cleanup_run_result),
+            "--output-dir",
+            str(output_dir),
+            "--runner-python",
+            "python",
+            "--probe-script",
+            "probe.py",
+            "--cleanup-script",
+            "cleanup.py",
+        ],
+    )
+
+    runner.main()
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "dry_run"
+    assert payload["manifest"].endswith("proof_bundle_run_manifest.json")
+    assert payload["report"].endswith("report.html")
+    assert (output_dir / "report.html").is_file()
 
 
 def _proof_requests() -> dict[str, object]:

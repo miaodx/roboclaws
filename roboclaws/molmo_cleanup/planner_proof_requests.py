@@ -128,6 +128,7 @@ def build_probe_commands(
                 "target_receptacle_id": request.get("target_receptacle_id"),
                 "output_dir": str(proof_dir),
                 "run_result": str(proof_dir / "run_result.json"),
+                "report": str(proof_dir / "report.html"),
                 "command": command,
             }
         )
