@@ -658,6 +658,146 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     ]
 
 
+def test_proof_request_selection_carries_prior_filtered_candidates() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "binding": {
+                    "candidate_pickup_names": [
+                        "book_beef_1_0_8",
+                        "Book|surface|8|79",
+                    ],
+                    "candidate_place_receptacle_names": [
+                        "shelf_cafe_1_0_2",
+                        "ShelvingUnit|2|3",
+                    ],
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "shelf_01",
+                    "--cleanup-planner-object-id": "book_beef_1_0_8",
+                    "--cleanup-planner-target-receptacle-id": "shelf_cafe_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "fallback_generation": {
+            "discovered_aliases": [
+                {
+                    "source_request_id": "proof_001",
+                    "axis": "object",
+                    "alias": "book_beef_1_1_8",
+                    "derived_from": "proof_001_fallback_02",
+                    "invalid_alias": "Book|surface|8|79",
+                    "reason": "valid_name_sibling_from_prior_keyerror",
+                },
+                {
+                    "source_request_id": "proof_001",
+                    "axis": "object",
+                    "alias": "book_beef_1_2_8",
+                    "derived_from": "proof_001_fallback_02",
+                    "invalid_alias": "Book|surface|8|79",
+                    "reason": "valid_name_sibling_from_prior_keyerror",
+                },
+                {
+                    "source_request_id": "proof_001",
+                    "axis": "target",
+                    "alias": "shelf_cafe_1_1_2",
+                    "derived_from": "proof_001_fallback_01",
+                    "invalid_alias": "ShelvingUnit|2|3",
+                    "reason": "valid_name_sibling_from_prior_keyerror",
+                },
+            ],
+            "filtered_aliases": [
+                {
+                    "source_request_id": "proof_001",
+                    "axis": "object",
+                    "alias": "book_beef_1_1_8",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_non_root_body_alias",
+                    "prior_blockers": [
+                        {
+                            "code": "AssertionError",
+                            "message": "Object is not a root body",
+                        }
+                    ],
+                }
+            ],
+            "filtered_pairs": [
+                {
+                    "source_request_id": "proof_001",
+                    "object_alias": "book_beef_1_0_8",
+                    "target_alias": "shelf_cafe_1_1_2",
+                    "derived_from": "proof_001_fallback_01",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ],
+        },
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            },
+            {
+                "request_id": "proof_001_fallback_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "book_beef_1_2_8",
+                    "planner_target_receptacle_id": "shelf_cafe_1_0_2",
+                },
+                "blockers": [
+                    {
+                        "code": "AssertionError",
+                        "message": "Object is not a root body",
+                    }
+                ],
+            },
+        ],
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=4,
+    )
+
+    fallback_generation = selection["fallback_generation"]
+    assert selection["selected_request_ids"] == []
+    assert selection["fallback_required"] is True
+    assert fallback_generation["generated_request_count"] == 0
+    assert {
+        (item["axis"], item["alias"], item["reason"], item.get("derived_from", ""))
+        for item in fallback_generation["filtered_aliases"]
+    } == {
+        ("object", "Book|surface|8|79", "not_exact_scene_runtime_alias", ""),
+        ("target", "ShelvingUnit|2|3", "not_exact_scene_runtime_alias", ""),
+        ("object", "book_beef_1_1_8", "prior_non_root_body_alias", "proof_001_fallback_02"),
+        ("object", "book_beef_1_2_8", "prior_non_root_body_alias", "proof_001_fallback_01"),
+    }
+    assert fallback_generation["filtered_pairs"] == [
+        {
+            "source_request_id": "proof_001",
+            "object_alias": "book_beef_1_0_8",
+            "target_alias": "shelf_cafe_1_1_2",
+            "derived_from": "proof_001_fallback_01",
+            "reason": "prior_task_feasibility_blocked_pair",
+            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+        }
+    ]
+
+
 def test_proof_request_selection_keeps_fallback_required_when_no_alias_available() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,

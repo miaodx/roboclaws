@@ -313,6 +313,12 @@ Local-dev execution of generated fallback commands after **Fallback Failed
 Candidate Memory** has removed known bad aliases and alias pairs.
 _Avoid_: treating a filtered retry as proof success before strict outputs pass
 
+**Fallback Filter Carry-Forward**:
+The proof-bundle runner behavior that treats previously rendered filtered
+fallback aliases and filtered fallback pairs as active filters in later
+selection passes.
+_Avoid_: using the latest manifest while forgetting earlier filtered evidence
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -466,6 +472,9 @@ _Avoid_: full cleanup replacement claim
 - **Filtered Fallback Proof Execution** should still require planner-backed
   proof, cleanup binding promotion, and planner views before changing cleanup
   readiness.
+- **Fallback Filter Carry-Forward** should preserve an exhausted fallback pool
+  across manifests so the next slice works on root-body alias derivation instead
+  of retrying filtered candidates.
 - A **Planner Proof Bundle Runner Checker** should validate manifest/report consistency before local proof-bundle execution is treated as ready to run.
 - MCP smoke demos should call the **Shared Semantic Cleanup Loop** instead of
   hand-rolling `nav`, `pick`, `nav`, optional `open`, and `place` sequences, so
@@ -558,3 +567,7 @@ _Avoid_: full cleanup replacement claim
   task sampling without timeout, but the remaining book runtime sibling also
   failed as a non-root body; no proof became planner-backed, promoted cleanup
   binding, or produced planner views.
+- Phase 68 closed fallback filter carry-forward. The runner now treats prior
+  filtered aliases and pairs as active filters, so the Phase 67 manifest dry-run
+  generates zero commands and marks both source requests unavailable until
+  pickup root-body aliases are derived or validated.

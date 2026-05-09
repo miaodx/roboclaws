@@ -763,6 +763,36 @@ def _prior_fallback_candidate_filters_by_source_request(
     filters: dict[str, dict[str, Any]] = {}
     seen_aliases: set[tuple[str, str, str]] = set()
     seen_pairs: set[tuple[str, str, str]] = set()
+    for item in _carried_filtered_aliases(prior_summary):
+        source_request_id = str(item.get("source_request_id") or "")
+        axis = str(item.get("axis") or "")
+        alias = str(item.get("alias") or "")
+        if axis not in {"object", "target"} or not source_request_id or not alias:
+            continue
+        key = (source_request_id, axis, alias)
+        if key in seen_aliases:
+            continue
+        bucket = filters.setdefault(
+            source_request_id,
+            {"aliases": {"object": {}, "target": {}}, "pairs": []},
+        )
+        bucket["aliases"][axis][alias] = dict(item)
+        seen_aliases.add(key)
+    for item in _carried_filtered_pairs(prior_summary):
+        source_request_id = str(item.get("source_request_id") or "")
+        object_alias = str(item.get("object_alias") or "")
+        target_alias = str(item.get("target_alias") or "")
+        if not source_request_id or not object_alias or not target_alias:
+            continue
+        key = (source_request_id, object_alias, target_alias)
+        if key in seen_pairs:
+            continue
+        bucket = filters.setdefault(
+            source_request_id,
+            {"aliases": {"object": {}, "target": {}}, "pairs": []},
+        )
+        bucket["pairs"].append(dict(item))
+        seen_pairs.add(key)
     for result in prior_summary.get("results") or []:
         if not isinstance(result, dict):
             continue
@@ -817,6 +847,28 @@ def _prior_fallback_candidate_filters_by_source_request(
             )
             seen_pairs.add(key)
     return filters
+
+
+def _carried_filtered_aliases(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    fallback_generation = prior_summary.get("fallback_generation") or {}
+    if not isinstance(fallback_generation, dict):
+        return []
+    return [
+        dict(item)
+        for item in fallback_generation.get("filtered_aliases") or []
+        if isinstance(item, dict)
+    ]
+
+
+def _carried_filtered_pairs(prior_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    fallback_generation = prior_summary.get("fallback_generation") or {}
+    if not isinstance(fallback_generation, dict):
+        return []
+    return [
+        dict(item)
+        for item in fallback_generation.get("filtered_pairs") or []
+        if isinstance(item, dict)
+    ]
 
 
 def _prior_pair_filter_lookup(

@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 67 filtered fallback proof execution completed; next work is pickup root-body alias derivation or validation
+**Status:** Phase 68 fallback filter carry-forward completed; next work is pickup root-body alias derivation or validation
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -146,6 +146,12 @@ sampling with no config-import timeout, but both failed with
 `AssertionError: Object is not a root body` for the untried book runtime
 sibling. The next blocker is deriving or validating pickup root-body aliases
 before creating more object-side fallback commands.
+Phase 68 carries prior filtered aliases and filtered pairs forward so the latest
+executed bundle manifest is a complete prior input. The dry-run against the
+Phase 67 manifest generated zero commands, rendered seven filtered aliases and
+two filtered pairs, and makes the next blocker explicit: the current fallback
+candidate pool is exhausted until pickup root-body aliases can be derived or
+validated from a better source.
 
 ## Why This Exists
 

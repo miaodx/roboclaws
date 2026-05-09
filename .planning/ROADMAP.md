@@ -144,6 +144,9 @@ in the runner report.
 Phase 67 executes the two remaining filtered fallback commands locally; both
 reach task sampling without timeout but fail as non-root bodies before proof,
 binding, or views.
+Phase 68 carries prior filtered aliases and pairs forward so the latest executed
+bundle manifest generates no duplicate fallback commands and exposes the
+root-body alias derivation blocker.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -236,6 +239,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.66 MolmoSpaces discovered runtime fallback proof execution** - Phase 65 (completed 2026-05-10; discovered runtime-sibling commands execute locally but block on task feasibility or non-root bodies)
 - ✅ **v1.67 MolmoSpaces fallback failed-candidate memory** - Phase 66 (completed 2026-05-10; generated fallback selection filters prior non-root aliases and blocked alias pairs)
 - ✅ **v1.68 MolmoSpaces filtered fallback proof execution** - Phase 67 (completed 2026-05-10; remaining filtered fallback commands execute locally but fail as non-root bodies)
+- ✅ **v1.69 MolmoSpaces fallback filter carry-forward** - Phase 68 (completed 2026-05-10; prior filtered aliases and pairs remain active filters across manifests)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -319,6 +323,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 65: MolmoSpaces discovered runtime fallback proof execution** - ADR-0056 executes discovered runtime-sibling fallback commands locally with RBY1M/CuRobo warmup. Completed 2026-05-10; all four commands reach task sampling, but none promote cleanup binding or emit planner views.
 - [x] **Phase 66: MolmoSpaces fallback failed-candidate memory** - ADR-0057 carries prior discovered aliases forward while filtering prior non-root object aliases and task-feasibility-blocked alias pairs before generating new fallback proof commands. Completed 2026-05-10.
 - [x] **Phase 67: MolmoSpaces filtered fallback proof execution** - ADR-0058 executes the remaining failed-candidate-filtered fallback commands locally. Completed 2026-05-10; both commands reach task sampling and fail as non-root bodies.
+- [x] **Phase 68: MolmoSpaces fallback filter carry-forward** - ADR-0059 carries prior filtered aliases and filtered pairs forward so later runner passes do not regenerate known-bad candidates. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
