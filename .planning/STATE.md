@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 28 MolmoSpaces RBY1M CuRobo runtime gate completed on 2026-05-09; next work is actual planner-backed cleanup primitive replacement after CuRobo/runtime enablement, or camera-only model-policy cleanup.
+stopped_at: Phase 29 MolmoSpaces camera model policy cleanup planned on 2026-05-09; implementation in progress.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 23
+  total_phases: 24
   completed_phases: 23
-  total_plans: 26
+  total_plans: 27
   completed_plans: 26
-  percent: 100
+  percent: 96
 ---
 
 # Project State
@@ -21,21 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 28 complete; next candidate is actual planner-backed cleanup primitive replacement after RBY1M/CuRobo readiness.
+**Current focus:** Phase 29 camera model policy cleanup.
 
 ## Current Position
 
-Phase: 28 (molmospaces-rby1m-curobo-runtime-gate) — COMPLETE
-Plan: 1 of 1 complete — `28-01` added a target-robot runtime gate for
-RBY1M/CuRobo readiness before cleanup primitive replacement.
-Status: Phase 28 makes RBY1M/CuRobo readiness explicit so Franka standalone
-proof cannot satisfy the target cleanup primitive runtime precondition. Current
-local evidence is explicit `blocked_capability` because the RBY1M config-import
-probe times out during CuRobo CUDA-extension JIT warmup.
-Last activity: 2026-05-09 - Completed Phase 28 RBY1M CuRobo runtime gate.
+Phase: 29 (molmospaces-camera-model-policy-cleanup) — PLANNED
+Plan: 0 of 1 complete — `29-01` should derive cleanup candidates from public
+raw FPV observations, then reuse the existing ADR-0003 semantic cleanup loop and
+shared report underlay.
+Status: Phase 29 is planned. The RBY1M/CuRobo planner path remains blocked by
+CuRobo JIT/config-import timeout, so this phase targets the unblocked
+camera-only model-policy gap without changing cleanup primitive provenance.
+Last activity: 2026-05-09 - Planned Phase 29 camera model policy cleanup.
 
-Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate.)
+Progress: [#########-] 96%
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 is planned for camera-only model-policy cleanup.)
 
 ## Performance Metrics
 
@@ -69,7 +69,7 @@ Progress: [##########] 100%
 **Recent Trend:**
 
 - Last 3 shipped phases: 26, 27, 28
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, and a target RBY1M/CuRobo runtime gate.
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, and a target RBY1M/CuRobo runtime gate. Phase 29 is the unblocked camera-only model-policy follow-up.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -427,6 +427,10 @@ Recent decisions affecting current work:
   ADR-0019 renders and checker-gates RBY1M/CuRobo readiness; current local
   evidence remains blocked because CuRobo JIT/config import times out before
   planner execution.
+- Phase 29 planned (2026-05-09): **MolmoSpaces camera model policy cleanup** —
+  ADR-0020 defines a camera-model policy mode that derives observed handles from
+  public raw FPV observations with explicit simulated/model provenance while
+  reusing the shared ADR-0003 semantic cleanup/report underlay.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -462,11 +466,11 @@ None yet.
   completed standalone strict Franka planner proof with a headless renderer
   adapter. Phase 26 attached that proof to cleanup reports while preserving
   `api_semantic` cleanup primitive provenance. Phase 27 completed the
-  per-subphase primitive gate before actual primitive replacement. Camera-only
-  model-policy cleanup, RBY1M CuRobo setup, and actual planner-backed
-  cleanup-loop primitive replacement remain separate follow-ups. Phase 28
+  per-subphase primitive gate before actual primitive replacement. Phase 28
   completed the RBY1M/CuRobo readiness boundary, which is currently blocked by
-  CuRobo JIT/config-import timeout before planner execution.
+  CuRobo JIT/config-import timeout before planner execution. Phase 29 is now
+  planned for camera-only model-policy cleanup; actual planner-backed
+  cleanup-loop primitive replacement remains gated on RBY1M/CuRobo readiness.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -499,14 +503,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 28 MolmoSpaces RBY1M CuRobo runtime gate complete;
-the next implementation should either enable/prove RBY1M CuRobo execution or
-start the actual cleanup primitive replacement once that target runtime passes.
+Stopped at: Phase 29 MolmoSpaces camera model policy cleanup planned;
+implementation should add `camera_model_policy` mode, model-labelled candidate
+registration, shared report/checker gates, and a local artifact.
 Latest phase artifacts are
-`docs/adr/0019-gate-rby1m-curobo-runtime-before-cleanup-primitives.md`,
-`docs/plans/molmospaces-rby1m-curobo-runtime-gate.md`, and
-`.planning/phases/28-molmospaces-rby1m-curobo-runtime-gate/28-01-rby1m-curobo-runtime-gate-PLAN.md`.
-Resume file: .planning/phases/28-molmospaces-rby1m-curobo-runtime-gate/28-01-rby1m-curobo-runtime-gate-PLAN.md
+`docs/adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md`,
+`docs/plans/molmospaces-camera-model-policy-cleanup.md`, and
+`.planning/phases/29-molmospaces-camera-model-policy-cleanup/29-01-camera-model-policy-cleanup-PLAN.md`.
+Resume file: .planning/phases/29-molmospaces-camera-model-policy-cleanup/29-01-camera-model-policy-cleanup-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -514,6 +518,4 @@ Resume file: .planning/phases/28-molmospaces-rby1m-curobo-runtime-gate/28-01-rby
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** none. Phase 28 is complete; the next phase should target
-RBY1M/CuRobo runtime enablement, actual planner-backed cleanup primitive
-replacement, or camera-only model-policy cleanup.
+**Active Phase:** Phase 29 camera model policy cleanup.
