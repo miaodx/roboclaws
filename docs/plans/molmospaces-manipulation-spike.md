@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 39 planner primitive target binding completed on 2026-05-09
+**Status:** Phase 40 probe-backed cleanup primitive executor planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -41,9 +41,11 @@ semantic cleanup loop; Phase 37 adds bridge-readiness evidence that joins the
 target proof with cleanup primitive provenance. Phase 38 adds and tests the
 strict planner-backed cleanup primitive executor seam behind the shared cleanup
 loop. Phase 39 binds planner primitive evidence to the exact cleanup object and
-target before real executor wiring. Cleanup-loop primitives remain
-`api_semantic` until a real object-specific executor integrates target
-planner-backed primitives into the cleanup subphases.
+target before real executor wiring. Phase 40 adds the adapter from bound
+RBY1M/CuRobo proof attachments into cleanup primitive executor evidence while
+blocking generic standalone proof. Cleanup-loop primitives remain `api_semantic`
+until a real object-specific executor integrates target planner-backed
+primitives into the cleanup subphases.
 
 ## Why This Exists
 
