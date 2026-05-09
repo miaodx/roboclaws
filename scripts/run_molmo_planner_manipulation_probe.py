@@ -464,6 +464,10 @@ def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
             "requested_cleanup_primitive_binding"
         )
         or _requested_cleanup_primitive_binding(args),
+        "task_sampler_failure_diagnostics": _WORKER_EXCEPTION_CONTEXT.get(
+            "task_sampler_failure_diagnostics"
+        )
+        or {},
     }
 
 
@@ -1090,9 +1094,11 @@ def _execute_policy_probe(
         task_sampler,
         requested_cleanup_binding,
     )
+    task_sampler_failure_diagnostics = _apply_task_sampler_failure_diagnostics_adapter(task_sampler)
     _record_worker_exception_context(
         cleanup_task_sampler_adapter=cleanup_task_sampler_adapter,
         requested_cleanup_primitive_binding=requested_cleanup_binding,
+        task_sampler_failure_diagnostics=task_sampler_failure_diagnostics,
     )
     _emit_worker_event("execute_task_sampler_construct_done", stage="execute_task_sampler")
     _emit_worker_event("execute_task_sampler_reset_start", stage="execute_task_sampler_reset")
@@ -1169,6 +1175,7 @@ def _execute_policy_probe(
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
         "renderer_adapter": renderer_adapter,
         "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
+        "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
         "sampled_task_binding": sampled_task_binding,
         "requested_cleanup_primitive_binding": requested_cleanup_binding,
         "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
@@ -1326,6 +1333,157 @@ def _apply_exact_cleanup_task_sampler_adapter(
             "cleanup request's target object instead of an unrelated generated receptacle."
         ),
     }
+
+
+def _apply_task_sampler_failure_diagnostics_adapter(task_sampler: Any) -> dict[str, Any]:
+    diagnostics: dict[str, Any] = {
+        "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
+        "applied": False,
+        "task_sampler_class": type(task_sampler).__name__,
+        "robot_placement_config": _task_sampler_robot_placement_config(task_sampler),
+        "hooks": [],
+        "robot_placement_attempts": [],
+        "asset_failures": [],
+        "candidate_removals": [],
+    }
+    sample_and_place_robot = getattr(task_sampler, "_sample_and_place_robot", None)
+    if callable(sample_and_place_robot):
+
+        def recording_sample_and_place_robot(self: Any, env: Any) -> Any:
+            attempt = _task_sampler_robot_placement_attempt(self, env, diagnostics)
+            started_at = time.monotonic()
+            try:
+                result = sample_and_place_robot(env)
+            except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+                attempt.update(
+                    {
+                        "result": "failed",
+                        "exception_type": type(exc).__name__,
+                        "message": str(exc),
+                    }
+                )
+                raise
+            else:
+                attempt["result"] = "placed"
+                return result
+            finally:
+                attempt["elapsed_s"] = round(time.monotonic() - started_at, 6)
+                diagnostics["robot_placement_attempts"].append(attempt)
+                _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+        task_sampler._sample_and_place_robot = MethodType(  # noqa: SLF001
+            recording_sample_and_place_robot,
+            task_sampler,
+        )
+        diagnostics["hooks"].append("_sample_and_place_robot")
+
+    report_asset_failure = getattr(task_sampler, "report_asset_failure", None)
+    if callable(report_asset_failure):
+
+        def recording_report_asset_failure(self: Any, asset_uid: Any, reason: Any) -> Any:
+            diagnostics["asset_failures"].append(
+                {
+                    "asset_uid": str(asset_uid or ""),
+                    "reason": str(reason or ""),
+                }
+            )
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+            return report_asset_failure(asset_uid, reason)
+
+        task_sampler.report_asset_failure = MethodType(  # noqa: SLF001
+            recording_report_asset_failure,
+            task_sampler,
+        )
+        diagnostics["hooks"].append("report_asset_failure")
+
+    remove_candidate_object = getattr(task_sampler, "_remove_candidate_object", None)
+    if callable(remove_candidate_object):
+
+        def recording_remove_candidate_object(self: Any, object_name: Any) -> Any:
+            diagnostics["candidate_removals"].append({"object_name": str(object_name or "")})
+            _refresh_task_sampler_failure_diagnostics(diagnostics)
+            return remove_candidate_object(object_name)
+
+        task_sampler._remove_candidate_object = MethodType(  # noqa: SLF001
+            recording_remove_candidate_object,
+            task_sampler,
+        )
+        diagnostics["hooks"].append("_remove_candidate_object")
+
+    diagnostics["applied"] = bool(diagnostics["hooks"])
+    _refresh_task_sampler_failure_diagnostics(diagnostics)
+    return diagnostics
+
+
+def _task_sampler_robot_placement_config(task_sampler: Any) -> dict[str, Any]:
+    sampler_config = getattr(getattr(task_sampler, "config", None), "task_sampler_config", None)
+    fields = (
+        "base_pose_sampling_radius_range",
+        "robot_safety_radius",
+        "check_robot_placement_visibility",
+        "robot_object_z_offset",
+        "robot_object_z_offset_random_min",
+        "robot_object_z_offset_random_max",
+        "max_robot_placement_attempts",
+    )
+    return {
+        field: _diagnostic_json_value(getattr(sampler_config, field))
+        for field in fields
+        if sampler_config is not None and hasattr(sampler_config, field)
+    }
+
+
+def _task_sampler_robot_placement_attempt(
+    task_sampler: Any,
+    env: Any,
+    diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    task_config = getattr(getattr(task_sampler, "config", None), "task_config", None)
+    pickup_obj_name = str(getattr(task_config, "pickup_obj_name", "") or "")
+    attempt: dict[str, Any] = {
+        "attempt_index": len(diagnostics.get("robot_placement_attempts") or []) + 1,
+        "pickup_obj_name": pickup_obj_name,
+    }
+    if not pickup_obj_name:
+        return attempt
+    try:
+        asset_uid = task_sampler.get_asset_uid_from_object(env, pickup_obj_name)
+        if asset_uid:
+            attempt["asset_uid"] = str(asset_uid)
+    except Exception as exc:  # pragma: no cover - best-effort diagnostics.
+        attempt["asset_uid_error"] = f"{type(exc).__name__}: {exc}"
+    try:
+        om = env.object_managers[env.current_batch_index]
+        pickup_obj = om.get_object_by_name(pickup_obj_name)
+        if hasattr(pickup_obj, "position"):
+            attempt["pickup_position"] = _diagnostic_json_value(pickup_obj.position)
+    except Exception as exc:  # pragma: no cover - best-effort diagnostics.
+        attempt["pickup_position_error"] = f"{type(exc).__name__}: {exc}"
+    return attempt
+
+
+def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> None:
+    attempts = diagnostics.get("robot_placement_attempts") or []
+    failures = [item for item in attempts if item.get("result") == "failed"]
+    diagnostics["robot_placement_attempt_count"] = len(attempts)
+    diagnostics["robot_placement_failure_count"] = len(failures)
+    diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
+    diagnostics["candidate_removal_count"] = len(diagnostics.get("candidate_removals") or [])
+    if failures:
+        diagnostics["last_robot_placement_failure"] = failures[-1]
+
+
+def _diagnostic_json_value(value: Any) -> Any:
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    if isinstance(value, tuple | list):
+        return [_diagnostic_json_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _diagnostic_json_value(item) for key, item in value.items()}
+    tolist = getattr(value, "tolist", None)
+    if callable(tolist):
+        return _diagnostic_json_value(tolist())
+    return str(value)
 
 
 def _sampled_task_binding(task: Any) -> dict[str, Any]:
@@ -1596,6 +1754,10 @@ def _write_probe_result(
         evidence["cleanup_task_config"] = worker_payload["cleanup_task_config"]
     if worker_payload.get("cleanup_task_sampler_adapter"):
         evidence["cleanup_task_sampler_adapter"] = worker_payload["cleanup_task_sampler_adapter"]
+    if worker_payload.get("task_sampler_failure_diagnostics"):
+        evidence["task_sampler_failure_diagnostics"] = worker_payload[
+            "task_sampler_failure_diagnostics"
+        ]
     if worker_payload.get("sampled_task_binding"):
         evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
     if worker_payload.get("requested_cleanup_primitive_binding"):

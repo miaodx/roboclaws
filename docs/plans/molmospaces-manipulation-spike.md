@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 76 task-sampler exception context completed; next work is upstream task-feasibility handling for target-side fallback pairs
+**Status:** Phase 77 task-sampler failure diagnostics completed; next work is robot-placement feasibility mitigation for the exact book/shelf target-side blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -191,6 +191,11 @@ failures. A warmed local probe reached `execute_task_sample_start`, failed with
 real `HouseInvalidForTask`, and still carried exact cleanup task config, exact
 sampler adapter state, requested cleanup binding, and worker-stage evidence
 into the report/checker path.
+Phase 77 captures the upstream sampler failure mode behind that exception. The
+warmed local report renders `Task Sampler Failure Diagnostics` with 17
+robot-placement attempts, 17 asset failures for `Book_23`, and repeated
+`RobotPlacementError` for
+`book_be4d759484637aeb579b28e6a954b18d_1_0_8`.
 
 ## Why This Exists
 

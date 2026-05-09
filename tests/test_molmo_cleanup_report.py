@@ -913,6 +913,17 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "task_sampler_class": "PickAndPlaceTaskSampler",
                         "planner_target_receptacle_id": "sink/body",
                     },
+                    "task_sampler_failure_diagnostics": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 1,
+                        "asset_failure_count": 1,
+                        "last_robot_placement_failure": {
+                            "pickup_obj_name": "pickup/body",
+                            "message": "Failed to place robot near object: pickup/body",
+                        },
+                    },
                     "views": [
                         {
                             "label": "initial",
@@ -980,6 +991,9 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Exact sampler adapter class" in html
     assert "PickAndPlaceTaskSampler" in html
     assert "Exact sampler adapter target" in html
+    assert "Task sampler placement failures" in html
+    assert "Task sampler asset failures" in html
+    assert "Failed to place robot near object: pickup/body" in html
     assert "sink/body" in html
     assert "Timeouts" in html
     assert "Config-import timeouts" in html
@@ -1337,6 +1351,43 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "task_sampler_class": "PickAndPlaceTaskSampler",
         "planner_target_receptacle_id": "sink/body",
     }
+    run_result["manipulation_evidence"]["task_sampler_failure_diagnostics"] = {
+        "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "robot_placement_config": {
+            "base_pose_sampling_radius_range": [0.0, 0.7],
+            "robot_safety_radius": 0.15,
+            "check_robot_placement_visibility": True,
+            "max_robot_placement_attempts": 10,
+        },
+        "hooks": ["_sample_and_place_robot", "report_asset_failure"],
+        "robot_placement_attempt_count": 1,
+        "robot_placement_failure_count": 1,
+        "asset_failure_count": 1,
+        "candidate_removal_count": 1,
+        "robot_placement_attempts": [
+            {
+                "attempt_index": 1,
+                "pickup_obj_name": "pickup/body",
+                "asset_uid": "asset-book",
+                "result": "failed",
+                "exception_type": "RobotPlacementError",
+                "message": "Failed to place robot near object: pickup/body",
+            }
+        ],
+        "asset_failures": [
+            {
+                "asset_uid": "asset-book",
+                "reason": "robot placement failed",
+            }
+        ],
+        "candidate_removals": [{"object_name": "pickup/body"}],
+        "last_robot_placement_failure": {
+            "pickup_obj_name": "pickup/body",
+            "message": "Failed to place robot near object: pickup/body",
+        },
+    }
     run_result["manipulation_evidence"]["sampled_task_binding"] = {
         "schema": "planner_probe_sampled_task_binding_v1",
         "pickup_obj_name": "pickup/body",
@@ -1375,6 +1426,10 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Exact task config applied" in html
     assert "Exact sampler adapter class" in html
     assert "PickAndPlaceTaskSampler" in html
+    assert "Task Sampler Failure Diagnostics" in html
+    assert "Placement failures" in html
+    assert "Failed to place robot near object: pickup/body" in html
+    assert "asset-book" in html
     assert "pickup/body" in html
     assert "sink/body" in html
     assert "Planner object alias" in html

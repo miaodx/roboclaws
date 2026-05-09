@@ -367,6 +367,12 @@ before policy execution, including exact task config, sampler adapter state,
 requested cleanup binding, worker stage, and blockers.
 _Avoid_: treating `HouseInvalidForTask` as a context-free sampler failure
 
+**Task Sampler Failure Diagnostics**:
+The probe-local evidence captured from upstream task-sampler hooks when
+`HouseInvalidForTask` occurs, including robot-placement attempts, asset failure
+reasons, candidate removals, and placement config.
+_Avoid_: leaving robot-placement failures only in stderr logs
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -550,6 +556,9 @@ _Avoid_: full cleanup replacement claim
 - **Task Sampler Exception Context** should be rendered when upstream task
   sampling raises before policy execution, so target-feasibility blockers show
   whether the exact sampler adapter was applied before `HouseInvalidForTask`.
+- **Task Sampler Failure Diagnostics** should be captured through probe-local
+  wrappers around upstream sampler hooks, not by parsing stderr as the primary
+  evidence source.
 
 ## Example Dialogue
 
@@ -654,3 +663,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 76 preserved Task Sampler Exception Context so warmed local
   `HouseInvalidForTask` reports show the exact sampler adapter was applied
   before upstream task feasibility failed.
+- Phase 77 captured Task Sampler Failure Diagnostics. The warmed local report
+  shows the current exact book/shelf task fails through repeated robot
+  placement attempts for `Book_23`, not missing alias or sampler-adapter
+  context.

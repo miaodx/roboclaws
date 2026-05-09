@@ -92,6 +92,18 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    task_sampler_failure = evidence.get("task_sampler_failure_diagnostics") or {}
+    if task_sampler_failure:
+        assert "Task Sampler Failure Diagnostics" in report_text, report_text[:500]
+        for key in ("task_sampler_class",):
+            value = str(task_sampler_failure.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
+        for item in task_sampler_failure.get("robot_placement_attempts") or []:
+            for key in ("pickup_obj_name", "message"):
+                value = str(item.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
     if (
         evidence.get("sampled_task_binding")
         or evidence.get("requested_cleanup_primitive_binding")

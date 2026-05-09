@@ -168,6 +168,9 @@ view, while keeping source rows honest when no prior proof report link exists.
 Phase 76 preserves exact task-sampler exception context so
 `HouseInvalidForTask` proof artifacts show whether the exact cleanup task config
 and sampler adapter were applied before upstream task feasibility failed.
+Phase 77 captures structured task-sampler failure diagnostics, showing the
+current exact book/shelf blocker is repeated upstream robot-placement failure
+for `Book_23`.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -269,6 +272,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.75 MolmoSpaces target feasibility proof links** - Phase 74 (completed 2026-05-10; filtered target-feasibility pairs link to exact prior proof reports)
 - ✅ **v1.76 MolmoSpaces target feasibility blocker matrix** - Phase 75 (completed 2026-05-10; source and fallback target-feasibility blockers render in one runner report table)
 - ✅ **v1.77 MolmoSpaces task sampler exception context** - Phase 76 (completed 2026-05-10; worker exceptions preserve exact sampler adapter context)
+- ✅ **v1.78 MolmoSpaces task sampler failure diagnostics** - Phase 77 (completed 2026-05-10; sampler reports robot-placement failures behind `HouseInvalidForTask`)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -361,6 +365,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 74: MolmoSpaces target feasibility proof links** - ADR-0065 preserves distinct fallback attempts and links filtered target-feasibility pairs to their prior proof artifacts. Completed 2026-05-10.
 - [x] **Phase 75: MolmoSpaces target feasibility blocker matrix** - ADR-0066 renders source request blockers and fallback pair blockers together as the target-feasibility blocker matrix. Completed 2026-05-10.
 - [x] **Phase 76: MolmoSpaces task sampler exception context** - ADR-0067 preserves exact sampler adapter context on worker exceptions before policy execution. Completed 2026-05-10.
+- [x] **Phase 77: MolmoSpaces task sampler failure diagnostics** - ADR-0068 captures robot-placement attempts and asset failures behind upstream task-sampler exceptions. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

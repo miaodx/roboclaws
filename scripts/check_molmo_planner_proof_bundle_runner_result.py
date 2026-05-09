@@ -363,6 +363,17 @@ def _assert_proof_result_summary(
                 value = str(sampler_adapter.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+        task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
+        if task_sampler_failure:
+            assert "Task sampler placement failures" in report_text, report_text[:500]
+            for key in ("robot_placement_failure_count", "asset_failure_count"):
+                value = str(task_sampler_failure.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+            last_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
+            value = str(last_failure.get("message") or "")
+            if value:
+                assert value in report_text, ("last_robot_placement_failure", report_text[:500])
         worker_stage_events = item.get("worker_stage_events") or []
         assert int(item.get("worker_stage_event_count") or 0) == len(worker_stage_events), item
         for event in worker_stage_events:

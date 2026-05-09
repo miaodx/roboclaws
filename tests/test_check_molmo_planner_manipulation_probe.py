@@ -241,6 +241,67 @@ def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Pat
     )
 
 
+def test_runner_task_sampler_failure_diagnostics_records_robot_placement() -> None:
+    runner = _load_runner_module()
+
+    class FakeTaskConfig:
+        pickup_obj_name = "book/body"
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 0.7)
+        robot_safety_radius = 0.15
+        check_robot_placement_visibility = True
+        max_robot_placement_attempts = 10
+
+    class FakeConfig:
+        task_config = FakeTaskConfig()
+        task_sampler_config = FakeSamplerConfig()
+
+    class FakeObjectManager:
+        def get_object_by_name(self, name: str):
+            assert name == "book/body"
+            return SimpleNamespace(position=[1.0, 2.0, 3.0])
+
+    class FakeSampler:
+        config = FakeConfig()
+
+        def __init__(self) -> None:
+            self.reported: list[tuple[str, str]] = []
+            self.removed: list[str] = []
+
+        def _sample_and_place_robot(self, env):
+            raise RuntimeError("placement blocked")
+
+        def report_asset_failure(self, asset_uid, reason):
+            self.reported.append((asset_uid, reason))
+
+        def _remove_candidate_object(self, object_name):
+            self.removed.append(object_name)
+
+        def get_asset_uid_from_object(self, env, object_name):
+            assert object_name == "book/body"
+            return "asset-book"
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    env = SimpleNamespace(current_batch_index=0, object_managers=[FakeObjectManager()])
+
+    with pytest.raises(RuntimeError, match="placement blocked"):
+        sampler._sample_and_place_robot(env)
+    sampler.report_asset_failure("asset-book", "robot placement failed")
+    sampler._remove_candidate_object("book/body")
+
+    assert diagnostics["applied"] is True
+    assert diagnostics["robot_placement_attempt_count"] == 1
+    assert diagnostics["robot_placement_failure_count"] == 1
+    assert diagnostics["asset_failure_count"] == 1
+    assert diagnostics["candidate_removal_count"] == 1
+    assert diagnostics["last_robot_placement_failure"]["pickup_obj_name"] == "book/body"
+    assert diagnostics["last_robot_placement_failure"]["asset_uid"] == "asset-book"
+    assert diagnostics["last_robot_placement_failure"]["message"] == "placement blocked"
+    assert diagnostics["robot_placement_config"]["robot_safety_radius"] == 0.15
+
+
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
     checker = _load_checker_module()
     evidence = blocked_planner_probe_evidence(

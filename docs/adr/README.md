@@ -76,6 +76,7 @@ one decision per file, sequential numbering, explicit status.
 | [0065](0065-preserve-target-feasibility-proof-links.md) | Preserve Target Feasibility Proof Links | Accepted |
 | [0066](0066-render-target-feasibility-blocker-matrix.md) | Render Target Feasibility Blocker Matrix | Accepted |
 | [0067](0067-preserve-task-sampler-exception-context.md) | Preserve Task Sampler Exception Context | Accepted |
+| [0068](0068-capture-task-sampler-failure-diagnostics.md) | Capture Task Sampler Failure Diagnostics | Accepted |
 
 ## Adding a new ADR
 

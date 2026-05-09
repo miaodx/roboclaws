@@ -161,6 +161,7 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_cleanup_binding_section(evidence)}
+    {_planner_probe_task_sampler_failure_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
@@ -1131,6 +1132,8 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+    task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
+    last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1150,6 +1153,16 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
         ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
         ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
+        (
+            "Task sampler placement attempts",
+            task_sampler_failure.get("robot_placement_attempt_count", ""),
+        ),
+        (
+            "Task sampler placement failures",
+            task_sampler_failure.get("robot_placement_failure_count", ""),
+        ),
+        ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
+        ("Task sampler last failure", last_robot_failure.get("message", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
@@ -1365,6 +1378,101 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         '<section class="panel planner-probe-cleanup-binding">'
         "<h2>Planner Probe Cleanup Binding</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}{table}{blocker_table}</section>'
+    )
+
+
+def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    if not diagnostics:
+        return ""
+    attempts = diagnostics.get("robot_placement_attempts") or []
+    asset_failures = diagnostics.get("asset_failures") or []
+    candidate_removals = diagnostics.get("candidate_removals") or []
+    config = diagnostics.get("robot_placement_config") or {}
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Adapter applied', _yes_no(diagnostics.get('applied')))}"
+        f"{_metric('Placement attempts', diagnostics.get('robot_placement_attempt_count', 0))}"
+        f"{_metric('Placement failures', diagnostics.get('robot_placement_failure_count', 0))}"
+        f"{_metric('Asset failures', diagnostics.get('asset_failure_count', 0))}"
+        "</div>"
+    )
+    config_rows = [
+        ("Task sampler class", diagnostics.get("task_sampler_class", "")),
+        ("Hooks", ", ".join(str(item) for item in diagnostics.get("hooks") or [])),
+        ("Base pose radius", config.get("base_pose_sampling_radius_range", "")),
+        ("Robot safety radius", config.get("robot_safety_radius", "")),
+        ("Visibility check", _yes_no(config.get("check_robot_placement_visibility"))),
+        ("Max robot placement attempts", config.get("max_robot_placement_attempts", "")),
+    ]
+    config_table = _field_table(config_rows)
+    attempt_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('attempt_index', '')))}</td>"
+        f"<td>{html.escape(str(item.get('pickup_obj_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('result', '')))}</td>"
+        f"<td>{html.escape(str(item.get('exception_type', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in attempts
+        if isinstance(item, dict)
+    )
+    if not attempt_rows:
+        attempt_rows = '<tr><td colspan="6">No robot placement attempts recorded.</td></tr>'
+    attempt_table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Pickup object</th>'
+        "<th>Asset UID</th><th>Result</th><th>Exception</th><th>Message</th>"
+        f"</tr></thead><tbody>{attempt_rows}</tbody></table></div>"
+    )
+    asset_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+        "</tr>"
+        for item in asset_failures
+        if isinstance(item, dict)
+    )
+    removal_rows = "".join(
+        f"<tr><td>{html.escape(str(item.get('object_name', '')))}</td></tr>"
+        for item in candidate_removals
+        if isinstance(item, dict)
+    )
+    supporting_tables = ""
+    if asset_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>Asset UID</th>'
+            f"<th>Reason</th></tr></thead><tbody>{asset_rows}</tbody></table></div>"
+        )
+    if removal_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>Removed candidate</th>'
+            f"</tr></thead><tbody>{removal_rows}</tbody></table></div>"
+        )
+    note = (
+        "Task sampler failure diagnostics are probe-local wrappers around upstream "
+        "sampler hooks. They make upstream robot-placement failures visible without "
+        "changing the cleanup contract or promoting planner-backed cleanup readiness."
+    )
+    return (
+        '<section class="panel planner-probe-task-sampler-failure">'
+        "<h2>Task Sampler Failure Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{config_table}'
+        f"{attempt_table}{supporting_tables}</section>"
+    )
+
+
+def _field_table(rows: list[tuple[str, Any]]) -> str:
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in (None, "")
+    )
+    if not table_rows:
+        table_rows = '<tr><td colspan="2">No values recorded.</td></tr>'
+    return (
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{table_rows}</tbody></table></div>"
     )
 
 
