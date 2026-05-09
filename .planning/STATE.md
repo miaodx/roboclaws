@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 32 MolmoSpaces RBY1M CuRobo cache isolation completed on 2026-05-09; target execute-mode proof now blocks at Warp API compatibility.
+stopped_at: Phase 33 MolmoSpaces RBY1M Warp compatibility planned on 2026-05-09; next step is probe-local Warp adapter implementation and execute retry.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 27
+  total_phases: 28
   completed_phases: 27
-  total_plans: 30
+  total_plans: 31
   completed_plans: 30
-  percent: 100
+  percent: 97
 ---
 
 # Project State
@@ -21,30 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** RBY1M/CuRobo config import now succeeds from an isolated cache; target execute-mode proof remains gated on Warp API compatibility.
+**Current focus:** Phase 33 adds visible probe-local Warp compatibility before retrying RBY1M/CuRobo execute-mode proof.
 
 ## Current Position
 
-Phase: 32 (molmospaces-rby1m-curobo-cache-isolation) — COMPLETE
-Plan: 1 of 1 complete — `32-01` added isolated Torch extension cache support
-and cache diagnostics, then retried RBY1M/CuRobo config import and execute mode.
-Status: Phase 32 closes the cache-isolation evidence slice. The output-local
-Torch extension cache has 5/5 known CuRobo extension `.so` files and 0 locks;
-RBY1M config import reaches `CuroboPickAndPlacePlannerPolicy`. Execute mode
-reaches `execute_policy_construct` but fails with `AttributeError: module
-'warp' has no attribute 'torch'`. Actual planner-backed cleanup primitive
-replacement remains gated until execute-mode RBY1M/CuRobo proof passes.
-Last activity: 2026-05-09 - Completed Phase 32 RBY1M CuRobo cache isolation.
+Phase: 33 (molmospaces-rby1m-warp-compatibility) — PLANNED
+Plan: 0 of 1 complete — `33-01` will add Warp API diagnostics and a
+probe-local `warp.torch.device_from_torch` adapter before retrying RBY1M/CuRobo
+execute mode.
+Status: Phase 33 addresses the current blocker after Phase 32: RBY1M config
+import succeeds and execute mode reaches `execute_policy_construct`, but the
+installed `warp-lang 1.13.0` exposes top-level Torch bridge helpers without the
+older `warp.torch` namespace expected by the installed CuRobo path. Actual
+planner-backed cleanup primitive replacement remains gated until execute-mode
+RBY1M/CuRobo proof passes.
+Last activity: 2026-05-09 - Planned Phase 33 RBY1M Warp compatibility.
 
-Progress: [##########] 100%
-Phase 32 note: isolated cache removed the stale-lock ambiguity; next blocker is Warp API compatibility during Curobo planner construction.
+Progress: [#########-] 97%
+Phase 33 note: add visible Warp compatibility evidence before retrying target execution.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 39 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 32)
+- Total plans completed: 39 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 32; Phase 33 planned)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -72,7 +73,7 @@ Phase 32 note: isolated cache removed the stale-lock ambiguity; next blocker is 
 **Recent Trend:**
 
 - Last 3 shipped phases: 30, 31, 32
-- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, and isolated CuRobo extension-cache evidence showing the next blocker is Warp API compatibility.
+- Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict Franka proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, and an active Warp compatibility slice.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -471,6 +472,9 @@ Recent decisions affecting current work:
   The output-local cache has 5/5 known CuRobo `.so` files and 0 locks. RBY1M
   config import succeeds; execute mode reaches `execute_policy_construct` and
   blocks on `AttributeError: module 'warp' has no attribute 'torch'`.
+- Phase 33 planned (2026-05-09): **MolmoSpaces RBY1M Warp compatibility** —
+  ADR-0024 defines a probe-local `warp.torch.device_from_torch` adapter and
+  visible Warp API-shape evidence before the next target execute-mode retry.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -515,9 +519,10 @@ None yet.
   `last_worker_stage=rby1m_config_import` after a 300-second timeout. Phase 32
   proved an isolated output-local cache gets RBY1M config import through
   `CuroboPickAndPlacePlannerPolicy`, and execute mode now blocks later at Warp
-  API compatibility (`module 'warp' has no attribute 'torch'`). Actual
-  planner-backed cleanup-loop primitive replacement remains gated on target
-  execute-mode RBY1M/CuRobo readiness.
+  API compatibility (`module 'warp' has no attribute 'torch'`). Phase 33 is
+  planned to make the compatibility adapter visible and probe-local before the
+  next retry. Actual planner-backed cleanup-loop primitive replacement remains
+  gated on target execute-mode RBY1M/CuRobo readiness.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -550,17 +555,16 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-09T00:00:00+08:00
-Stopped at: Phase 32 MolmoSpaces RBY1M CuRobo cache isolation completed; the
-next implementation should address Warp API compatibility before retrying
-strict RBY1M/CuRobo execute-mode proof.
+Stopped at: Phase 33 MolmoSpaces RBY1M Warp compatibility planned; the next
+implementation should add visible Warp API diagnostics and a probe-local
+compatibility adapter before retrying strict RBY1M/CuRobo execute-mode proof.
 Latest phase artifacts are
-`docs/adr/0023-use-isolated-curobo-extension-cache-for-rby1m-warmup.md`,
-`docs/plans/molmospaces-rby1m-curobo-cache-isolation.md`, and
-`.planning/phases/32-molmospaces-rby1m-curobo-cache-isolation/32-01-rby1m-curobo-cache-isolation-PLAN.md`.
-Phase 32 evidence lives under
-`output/molmo-planner-rby1m-curobo-cache-isolation/` and
+`docs/adr/0024-use-probe-local-warp-torch-compatibility-adapter.md`,
+`docs/plans/molmospaces-rby1m-warp-compatibility.md`, and
+`.planning/phases/33-molmospaces-rby1m-warp-compatibility/33-01-rby1m-warp-compatibility-PLAN.md`.
+Phase 32 evidence remains under
 `output/molmo-planner-rby1m-curobo-cache-isolation-execute/`.
-Resume file: .planning/phases/32-molmospaces-rby1m-curobo-cache-isolation/32-01-rby1m-curobo-cache-isolation-PLAN.md
+Resume file: .planning/phases/33-molmospaces-rby1m-warp-compatibility/33-01-rby1m-warp-compatibility-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -568,6 +572,6 @@ Resume file: .planning/phases/32-molmospaces-rby1m-curobo-cache-isolation/32-01-
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None for cleanup primitive replacement. Phase 32 completed
-with blocked target execute-mode evidence; the next phase should address Warp
-API compatibility before any cleanup primitive replacement work.
+**Active Phase:** Phase 33 RBY1M Warp compatibility is planned; implement
+visible Warp API diagnostics and a probe-local compatibility adapter before any
+cleanup primitive replacement work.

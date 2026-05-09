@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 32 RBY1M CuRobo cache isolation completed on 2026-05-09
+**Status:** Phase 33 RBY1M Warp compatibility planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -32,7 +32,8 @@ times out at `rby1m_config_import`, so target execute-mode proof remains gated.
 Phase 32 isolates Torch/CuRobo extension-cache state for the next retry instead
 of mutating the global cache. It proves config import can reach
 `CuroboPickAndPlacePlannerPolicy` from an output-local cache; execute mode now
-blocks later on Warp API compatibility.
+blocks later on Warp API compatibility. Phase 33 plans a visible probe-local
+Warp adapter before retrying target execute mode.
 
 ## Why This Exists
 
@@ -819,8 +820,9 @@ completed:
   gsd-plan-phase 32-molmospaces-rby1m-curobo-cache-isolation
   gsd-execute-phase 32-molmospaces-rby1m-curobo-cache-isolation
   gsd-verify-work 32-molmospaces-rby1m-curobo-cache-isolation
+  gsd-plan-phase 33-molmospaces-rby1m-warp-compatibility
 
 next pipeline candidates:
-  plan RBY1M/CuRobo Warp API compatibility
+  execute 33-molmospaces-rby1m-warp-compatibility
   plan actual planner-backed cleanup-loop primitive replacement after target execute-mode readiness
 ```

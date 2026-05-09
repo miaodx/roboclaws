@@ -54,7 +54,9 @@ warmup-readiness evidence: the local target runtime still times out at
 `rby1m_config_import` during CuRobo warmup, so target execute-mode proof remains
 gated. Phase 32 isolates the CuRobo/Torch extension cache for RBY1M retries and
 renders extension cache state in the planner probe report; config import now
-succeeds, while execute mode is blocked by the installed Warp API shape.
+succeeds, while execute mode is blocked by the installed Warp API shape. Phase
+33 makes that Warp compatibility adapter visible and probe-local before the
+next execute-mode retry.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -112,6 +114,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.31 MolmoSpaces report underlay consolidation** - Phase 30 (completed 2026-05-09; canonical report visual core and semantic subphase labels)
 - ✅ **v1.32 MolmoSpaces RBY1M CuRobo warmup readiness** - Phase 31 (completed 2026-05-09; staged warmup/JIT evidence before target execute-mode retry)
 - ✅ **v1.33 MolmoSpaces RBY1M CuRobo cache isolation** - Phase 32 (completed 2026-05-09; isolated Torch extension cache evidence before target execute-mode retry)
+- 📋 **v1.34 MolmoSpaces RBY1M Warp compatibility** - Phase 33 (planned 2026-05-09; probe-local Warp API adapter before target execute-mode retry)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -160,6 +163,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 30: MolmoSpaces report underlay consolidation** - ADR-0021 canonical report visual core and semantic subphase labels across MolmoSpaces cleanup demos. Completed 2026-05-09.
 - [x] **Phase 31: MolmoSpaces RBY1M CuRobo warmup readiness** - ADR-0022 staged worker evidence for RBY1M/CuRobo JIT/config warmup before target execute-mode retry. Completed 2026-05-09; the local artifact remains blocked at `rby1m_config_import`.
 - [x] **Phase 32: MolmoSpaces RBY1M CuRobo cache isolation** - ADR-0023 isolated Torch extension cache evidence for RBY1M/CuRobo warmup retries. Completed 2026-05-09; config import succeeds, execute mode blocks at `warp.torch`.
+- [ ] **Phase 33: MolmoSpaces RBY1M Warp compatibility** - ADR-0024 probe-local Warp API adapter and visible compatibility evidence before target execute-mode retry. Planned 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -537,4 +541,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 30. MolmoSpaces report underlay consolidation | v1.31 | 1/1 | Complete | 2026-05-09 |
 | 31. MolmoSpaces RBY1M CuRobo warmup readiness | v1.32 | 1/1 | Complete | 2026-05-09 |
 | 32. MolmoSpaces RBY1M CuRobo cache isolation | v1.33 | 1/1 | Complete | 2026-05-09 |
+| 33. MolmoSpaces RBY1M Warp compatibility | v1.34 | 0/1 | Planned | - |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
