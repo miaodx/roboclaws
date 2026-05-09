@@ -26,6 +26,24 @@ one decision per file, sequential numbering, explicit status.
 | [0015](0015-capture-planner-runtime-diagnostics-before-strict-execution.md) | Capture Planner Runtime Diagnostics Before Strict Execution | Accepted |
 | [0016](0016-use-probe-local-egl-renderer-adapter-for-headless-planner-proof.md) | Use Probe-Local EGL Renderer Adapter For Headless Planner Proof | Accepted |
 | [0017](0017-attach-strict-planner-proof-to-cleanup-artifacts.md) | Attach Strict Planner Proof To Cleanup Artifacts | Accepted |
+| [0018](0018-gate-planner-backed-cleanup-primitives.md) | Gate Planner-Backed Cleanup Primitives Per Cleanup Subphase | Accepted |
+| [0019](0019-gate-rby1m-curobo-runtime-before-cleanup-primitives.md) | Gate RBY1M CuRobo Runtime Before Cleanup Primitive Replacement | Accepted |
+| [0020](0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md) | Add Camera Model Policy Mode For ADR-0003 Cleanup | Accepted |
+| [0021](0021-use-canonical-cleanup-report-presentation.md) | Use Canonical Cleanup Report Presentation | Accepted |
+| [0022](0022-capture-rby1m-curobo-warmup-readiness.md) | Capture RBY1M CuRobo Warmup Readiness | Accepted |
+| [0023](0023-use-isolated-curobo-extension-cache-for-rby1m-warmup.md) | Use Isolated CuRobo Extension Cache for RBY1M Warmup | Accepted |
+| [0024](0024-use-probe-local-warp-torch-compatibility-adapter.md) | Use Probe-Local Warp Torch Compatibility Adapter | Accepted |
+| [0025](0025-capture-rby1m-cuda-memory-headroom.md) | Capture RBY1M CUDA Memory Headroom Evidence | Accepted |
+| [0026](0026-use-visible-probe-local-curobo-memory-profile.md) | Use Visible Probe-Local CuRobo Memory Profile | Accepted |
+| [0027](0027-use-shared-semantic-cleanup-loop-driver.md) | Use Shared Semantic Cleanup Loop Driver | Accepted |
+| [0028](0028-add-planner-cleanup-bridge-readiness-evidence.md) | Add Planner Cleanup Bridge Readiness Evidence | Accepted |
+| [0029](0029-add-planner-backed-cleanup-primitive-executor.md) | Add Planner-Backed Cleanup Primitive Executor | Accepted |
+| [0030](0030-bind-planner-primitive-evidence-to-cleanup-targets.md) | Bind Planner Primitive Evidence to Cleanup Targets | Accepted |
+| [0031](0031-add-probe-backed-cleanup-primitive-executor-adapter.md) | Add Probe-Backed Cleanup Primitive Executor Adapter | Accepted |
+| [0032](0032-emit-cleanup-primitive-binding-from-planner-probe.md) | Emit Cleanup Primitive Binding from Planner Probe | Accepted |
+| [0033](0033-bind-observed-handles-to-planner-task-names.md) | Bind Observed Handles to Planner Task Names | Accepted |
+| [0034](0034-use-probe-backed-executor-for-bounded-cleanup-loop.md) | Use Probe-Backed Executor for Bounded Cleanup Loop | Accepted |
+| [0035](0035-use-bound-planner-proof-bundles-for-cleanup-coverage.md) | Use Bound Planner Proof Bundles for Cleanup Coverage | Accepted |
 
 ## Adding a new ADR
 

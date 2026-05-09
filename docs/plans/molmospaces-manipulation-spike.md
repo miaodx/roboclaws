@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 43 bounded planner cleanup executor completed on 2026-05-09
+**Status:** Phase 44 planner proof bundle cleanup planned on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -52,7 +52,9 @@ cleanup subphases. Phase 42 completed the first half of that remaining bridge:
 private observed-handle to planner-alias binding without leaking aliases into
 Agent View or relabeling cleanup subphases. Phase 43 wires matching
 probe-backed executor evidence into a bounded shared-loop cleanup attempt while
-leaving default and mismatched-proof cleanup on the normal semantic path.
+leaving default and mismatched-proof cleanup on the normal semantic path. Phase
+44 plans proof-bundle coverage so a full cleanup artifact can select one bound
+proof per cleaned object before passing the planner cleanup bridge.
 
 ## Why This Exists
 
