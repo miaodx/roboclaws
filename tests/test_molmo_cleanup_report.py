@@ -838,6 +838,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "object_id": "pickup/body",
         "target_receptacle_id": "sink/body",
         "source_receptacle_id": "counter/body",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
         "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
     }
     run_result["manipulation_evidence"]["cleanup_primitive_binding"] = {
@@ -845,6 +847,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "object_id": "pickup/body",
         "target_receptacle_id": "sink/body",
         "source_receptacle_id": "counter/body",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
         "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
     }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
@@ -859,6 +863,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner Probe Cleanup Binding" in html
     assert "pickup/body" in html
     assert "sink/body" in html
+    assert "Planner object alias" in html
     assert "navigate_to_receptacle" in html
     assert "CUDA Memory Headroom" in html
     assert "CuRobo Memory Profile" in html

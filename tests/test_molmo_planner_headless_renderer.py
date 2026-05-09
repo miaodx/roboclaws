@@ -277,6 +277,35 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
     ]
 
 
+def test_cleanup_primitive_binding_promotes_observed_handle_with_planner_aliases() -> None:
+    probe = _load_probe_module()
+    requested = probe._requested_cleanup_primitive_binding(
+        Namespace(
+            cleanup_object_id="observed_001",
+            cleanup_target_receptacle_id="sink_01",
+            cleanup_source_receptacle_id="counter_01",
+            cleanup_planner_object_id="pickup/body",
+            cleanup_planner_target_receptacle_id="sink/body",
+            cleanup_tools="pick,place",
+        )
+    )
+    sampled = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "pickup/body",
+        "place_receptacle_name": "sink/body",
+        "place_target_name": "sink/body",
+    }
+
+    result = probe._cleanup_primitive_binding_from_sampled_task(requested, sampled)
+
+    assert result["promoted"] is True
+    binding = result["cleanup_primitive_binding"]
+    assert binding["object_id"] == "observed_001"
+    assert binding["target_receptacle_id"] == "sink_01"
+    assert binding["planner_object_id"] == "pickup/body"
+    assert binding["planner_target_receptacle_id"] == "sink/body"
+
+
 def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
     probe = _load_probe_module()
     requested = probe._requested_cleanup_primitive_binding(
@@ -298,6 +327,35 @@ def test_cleanup_primitive_binding_blocks_sampled_task_mismatch() -> None:
 
     assert result["promoted"] is False
     assert result["cleanup_primitive_binding"] is None
+    assert [item["code"] for item in result["blockers"]] == [
+        "cleanup_binding_object_mismatch",
+        "cleanup_binding_target_mismatch",
+    ]
+
+
+def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
+    probe = _load_probe_module()
+    requested = probe._requested_cleanup_primitive_binding(
+        Namespace(
+            cleanup_object_id="observed_001",
+            cleanup_target_receptacle_id="sink_01",
+            cleanup_source_receptacle_id="counter_01",
+            cleanup_planner_object_id="pickup/body",
+            cleanup_planner_target_receptacle_id="sink/body",
+            cleanup_tools="pick,place",
+        )
+    )
+
+    result = probe._cleanup_primitive_binding_from_sampled_task(
+        requested,
+        {
+            "schema": "planner_probe_sampled_task_binding_v1",
+            "pickup_obj_name": "other/body",
+            "place_receptacle_name": "other/target",
+        },
+    )
+
+    assert result["promoted"] is False
     assert [item["code"] for item in result["blockers"]] == [
         "cleanup_binding_object_mismatch",
         "cleanup_binding_target_mismatch",

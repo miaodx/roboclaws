@@ -95,6 +95,8 @@ def normalize_cleanup_primitive_binding(binding: Mapping[str, Any]) -> dict[str,
         "object_id": str(binding.get("object_id") or ""),
         "target_receptacle_id": str(binding.get("target_receptacle_id") or ""),
         "source_receptacle_id": str(binding.get("source_receptacle_id") or ""),
+        "planner_object_id": str(binding.get("planner_object_id") or ""),
+        "planner_target_receptacle_id": str(binding.get("planner_target_receptacle_id") or ""),
         "tools": tools,
         "evidence_note": str(
             binding.get("evidence_note")

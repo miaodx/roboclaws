@@ -569,9 +569,13 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         ("Requested object", requested.get("object_id", "")),
         ("Requested target", requested.get("target_receptacle_id", "")),
         ("Requested source", requested.get("source_receptacle_id", "")),
+        ("Planner object alias", requested.get("planner_object_id", "")),
+        ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Requested tools", ", ".join(str(item) for item in requested.get("tools") or [])),
         ("Promoted object", promoted.get("object_id", "")),
         ("Promoted target", promoted.get("target_receptacle_id", "")),
+        ("Promoted planner object", promoted.get("planner_object_id", "")),
+        ("Promoted planner target", promoted.get("planner_target_receptacle_id", "")),
         ("Promoted tools", ", ".join(str(item) for item in promoted.get("tools") or [])),
     ]
     binding_rows = "".join(

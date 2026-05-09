@@ -1,6 +1,9 @@
 """MolmoSpaces-shaped cleanup contracts for provenance-labeled demos."""
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
+from roboclaws.molmo_cleanup.planner_observed_binding import (
+    observed_handle_planner_binding,
+)
 from roboclaws.molmo_cleanup.planner_primitive_executor import (
     CleanupPrimitiveRequest,
     CleanupPrimitiveResult,
@@ -29,5 +32,6 @@ __all__ = [
     "annotate_score_with_semantic_acceptability",
     "build_advisory_evaluation",
     "build_cleanup_scenario",
+    "observed_handle_planner_binding",
     "score_cleanup",
 ]

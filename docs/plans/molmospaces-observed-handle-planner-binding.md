@@ -1,6 +1,6 @@
 # MolmoSpaces Observed Handle Planner Binding
 
-**Status:** Planned for GSD Phase 42 on 2026-05-09
+**Status:** Implemented in GSD Phase 42 on 2026-05-09
 **Created:** 2026-05-09
 **Source:** CONTEXT.md, ADR-0003, ADR-0032, ADR-0033
 **Workflow:** `hybrid-phase-pipeline`
@@ -64,3 +64,24 @@ This phase should:
   requests.
 - Report/checker tests showing visual binding evidence.
 - Ruff check/format on changed files.
+
+## Completion Result - 2026-05-09
+
+Phase 42 added private Observed Handle Planner Binding evidence. ADR-0003
+observed handles now resolve to internal cleanup object IDs only after public
+observation registers them. Backends can provide planner-facing pickup/place
+names, and the planner probe can use those aliases for sampled-task matching
+while emitting cleanup primitive binding keyed by the observed handle and public
+target fixture.
+
+The proof remains consumable by the probe-backed executor without leaking
+planner aliases into Agent View. Cleanup-loop subphases still remain
+`api_semantic` until a later slice wires the executor into the shared semantic
+cleanup loop with matching proof.
+
+## Verification Evidence - 2026-05-09
+
+- `uv run ruff check roboclaws/molmo_cleanup/planner_observed_binding.py roboclaws/molmo_cleanup/backend.py roboclaws/molmo_cleanup/subprocess_backend.py roboclaws/molmo_cleanup/realworld_contract.py roboclaws/molmo_cleanup/__init__.py roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_observed_binding.py tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_cleanup_report.py tests/test_molmo_realworld_contract.py`
+- `uv run ruff format --check roboclaws/molmo_cleanup/planner_observed_binding.py roboclaws/molmo_cleanup/backend.py roboclaws/molmo_cleanup/subprocess_backend.py roboclaws/molmo_cleanup/realworld_contract.py roboclaws/molmo_cleanup/__init__.py roboclaws/molmo_cleanup/report.py roboclaws/molmo_cleanup/planner_probe_primitive_executor.py scripts/run_molmo_planner_manipulation_probe.py tests/test_molmo_planner_observed_binding.py tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_cleanup_report.py tests/test_molmo_realworld_contract.py`
+- `./scripts/run_pytest_standalone.sh -q tests/test_molmo_realworld_contract.py tests/test_molmo_planner_observed_binding.py tests/test_molmo_planner_headless_renderer.py tests/test_molmo_planner_probe_primitive_executor.py tests/test_molmo_cleanup_report.py`
+- `.venv/bin/python scripts/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --min-generated-mess-count 10 --require-robot-views --require-planner-proof-attachment --accept-blocked-planner-cleanup-primitives --accept-blocked-planner-cleanup-bridge output/molmospaces-planner-cleanup-bridge-readiness/run_result.json`

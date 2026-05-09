@@ -57,6 +57,27 @@ def test_probe_backed_executor_accepts_matching_bound_proof() -> None:
     assert evidence["cleanup_primitive_binding"]["target_receptacle_id"] == "sink_01"
 
 
+def test_probe_backed_executor_accepts_observed_handle_with_planner_aliases() -> None:
+    executor = ProbeBackedCleanupPrimitiveExecutor(
+        _attachment(
+            binding={
+                "schema": PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "planner_object_id": "pickup/body",
+                "planner_target_receptacle_id": "sink/body",
+                "tools": ["place"],
+            }
+        )
+    )
+
+    result = executor(_request("place"))
+
+    assert result.ok is True
+    assert result.evidence["cleanup_primitive_binding"]["object_id"] == "observed_001"
+    assert result.evidence["cleanup_primitive_binding"]["planner_object_id"] == "pickup/body"
+
+
 def test_probe_backed_executor_rejects_target_mismatch() -> None:
     executor = ProbeBackedCleanupPrimitiveExecutor(
         _attachment(
