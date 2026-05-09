@@ -206,6 +206,10 @@ _Avoid_: invisible dependency shim
 Recorded CUDA/PyTorch memory availability, allocation, reservation, allocator configuration, and worker-stage memory snapshots for RBY1M/CuRobo planner execution.
 _Avoid_: traceback-only OOM diagnosis
 
+**CuRobo Memory Profile Evidence**:
+Recorded probe-local CuRobo policy and planner memory-related overrides, including requested profile, effective batch/seed/attempt/timestep settings, and whether collision avoidance remains enabled.
+_Avoid_: hidden planner tuning
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -264,6 +268,7 @@ _Avoid_: traceback-only OOM diagnosis
 - **CuRobo Extension Cache Evidence** should be recorded before retrying target RBY1M/CuRobo imports when global Torch extension cache state may be stale.
 - **CUDA Memory Headroom Evidence** should be recorded before tuning RBY1M/CuRobo planner memory settings or treating a target execute-mode OOM as a generic failure.
 - **Warp Compatibility Evidence** should be visible before a shimmed target planner probe can be used as readiness evidence.
+- **CuRobo Memory Profile Evidence** should be visible before a tuned RBY1M/CuRobo planner probe is used to assess target runtime readiness.
 
 ## Example Dialogue
 
