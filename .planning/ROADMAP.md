@@ -457,7 +457,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -492,4 +492,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 20. MolmoSpaces real-world OpenClaw clean policy | v1.21 | 1/1 | Complete | 2026-05-09 |
 | 21. MolmoSpaces real-world advisory scoring | v1.22 | 1/1 | Complete | 2026-05-09 |
 | 22. MolmoSpaces real-world raw FPV perception | v1.23 | 1/1 | Complete | 2026-05-09 |
+| 23. MolmoSpaces planner-backed manipulation proof gate | v1.24 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

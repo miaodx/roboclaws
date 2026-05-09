@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 22 MolmoSpaces real-world raw FPV perception completed on 2026-05-09; ADR-0003 artifacts now support raw FPV-only observation evidence.
+stopped_at: Phase 23 MolmoSpaces planner-backed manipulation proof gate completed on 2026-05-09; strict planner-backed cleanup execution remains gated on `--require-planner-backed` evidence.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 17
-  completed_phases: 17
-  total_plans: 20
-  completed_plans: 20
+  total_phases: 18
+  completed_phases: 18
+  total_plans: 21
+  completed_plans: 21
   percent: 100
 ---
 
@@ -25,14 +25,14 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 
 ## Current Position
 
-Phase: 22 (molmospaces-realworld-raw-fpv-perception) — COMPLETE
-Plan: 1 of 1 complete — `22-01` implements ADR-0013 by adding a raw FPV-only
-perception evidence mode to ADR-0003 cleanup artifacts.
-Status: ADR-0003 deterministic and MCP artifacts now support
-`perception_mode=raw_fpv_only`, record public raw FPV observation rows, attach
-FPV image artifacts from the shared robot-view underlay, and render a Raw FPV
-Observations report panel. The checker can require raw-FPV evidence without
-claiming camera-only cleanup success.
+Phase: 23 (molmospaces-planner-backed-manipulation-proof) — COMPLETE
+Plan: 1 of 1 complete — `23-01` implements ADR-0014 by adding a
+planner-backed manipulation provenance/proof gate.
+Status: Current-contract and ADR-0003 cleanup artifacts now include explicit
+`manipulation_evidence`; the standalone planner probe/checker path records
+blocked-capability evidence and refuses to treat `api_semantic` as strict
+planner-backed proof. The latest execute-mode probe records SIGSEGV as a
+blocked capability rather than passing the strict proof gate.
 Last activity: 2026-05-09 - Completed Phase 23 planner-backed manipulation
 provenance/proof gate and recorded blocked-capability verification evidence.
 

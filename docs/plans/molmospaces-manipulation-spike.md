@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 22 raw FPV-only perception slice shipped and verified on 2026-05-09
+**Status:** Phase 23 planner-backed manipulation proof gate shipped and verified on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -14,8 +14,9 @@ Phase 14 ADR-0003 public/private cleanup -> Phase 15 Generated Mess Set scale
 -> Phase 16 ADR-0003 MCP -> Phase 17 direct-agent dogfood -> Phase 18
 synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 -> Phase 20 clean-policy semantic-loop hardening -> Phase 21 advisory scoring
--> Phase 22 raw FPV-only perception evidence. Real planner-backed manipulation
-remains deferred.
+-> Phase 22 raw FPV-only perception evidence -> Phase 23 planner-backed
+manipulation provenance/proof gate. Real planner-backed cleanup execution
+remains gated on a strict planner probe.
 
 ## Why This Exists
 
