@@ -51,6 +51,7 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "MolmoSpaces Cleanup Pilot" in html
     assert "api_semantic" in html
     assert "mug_01" in html
+    assert "Semantic acceptability" in html
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()

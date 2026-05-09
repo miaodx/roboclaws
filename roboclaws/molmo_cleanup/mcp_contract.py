@@ -21,11 +21,16 @@ class MolmoCleanupToolContract:
         return [
             {
                 "name": "observe",
-                "description": "Return current public room state without private scoring targets.",
+                "description": (
+                    "Call first. Return current public room state without private scoring targets."
+                ),
             },
             {
                 "name": "scene_objects",
-                "description": "List objects and receptacles with current semantic locations.",
+                "description": (
+                    "List global public objects and receptacles with current semantic locations. "
+                    "Current-contract shortcut; use it to choose the cleanup sequence yourself."
+                ),
             },
             {
                 "name": "goto",
@@ -33,11 +38,15 @@ class MolmoCleanupToolContract:
             },
             {
                 "name": "navigate_to_object",
-                "description": "Navigate to the public current location of a known object.",
+                "description": (
+                    "First semantic substep per object: navigate to the object before pick."
+                ),
             },
             {
                 "name": "navigate_to_receptacle",
-                "description": "Navigate to a known target receptacle ID.",
+                "description": (
+                    "After pick, navigate to the chosen target receptacle before placing."
+                ),
             },
             {
                 "name": "pick",
@@ -45,7 +54,9 @@ class MolmoCleanupToolContract:
             },
             {
                 "name": "open_receptacle",
-                "description": "Open an articulated receptacle when the scene exposes one.",
+                "description": (
+                    "Open fridge-like targets before place_inside; do this before placing food."
+                ),
             },
             {
                 "name": "place",
@@ -53,15 +64,17 @@ class MolmoCleanupToolContract:
             },
             {
                 "name": "place_inside",
-                "description": "Place the held object inside a known receptacle ID.",
+                "description": "Place the held object inside an opened fridge-like receptacle.",
             },
             {
                 "name": "object_done",
-                "description": "Return public readback for one completed object.",
+                "description": (
+                    "Call after each object is placed to record public completion readback."
+                ),
             },
             {
                 "name": "done",
-                "description": "Terminate the cleanup and return the private score.",
+                "description": "Call only after all intended objects have object_done readback.",
             },
         ]
 

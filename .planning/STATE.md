@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 11 MolmoSpaces held-object carry visuals completed on 2026-05-08; next MolmoSpaces follow-up is real coding-agent/OpenClaw policy or planner-backed RBY1M/Franka manipulation.
-last_updated: "2026-05-08T17:15:00+08:00"
+stopped_at: Phase 13 MolmoSpaces agent bridge visual-results follow-up completed on 2026-05-08; next MolmoSpaces follow-up is ADR-0003 real-world-style perception or planner-backed RBY1M/Franka manipulation.
+last_updated: "2026-05-08T22:45:00+08:00"
 last_activity: 2026-05-08
 progress:
-  total_phases: 9
-  completed_phases: 7
-  total_plans: 10
-  completed_plans: 10
+  total_phases: 11
+  completed_phases: 9
+  total_plans: 12
+  completed_plans: 12
   percent: 100
 ---
 
@@ -21,23 +21,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 11 — molmospaces-held-object-carry-visuals (completed; next queued MolmoSpaces work not yet planned)
+**Current focus:** Phase 13 — molmospaces-agent-bridge-visual-results (completed; next queued MolmoSpaces work is ADR-0003 real-world-style perception or planner-backed manipulation)
 
 ## Current Position
 
-Phase: 11 (molmospaces-held-object-carry-visuals) — COMPLETE
-Plan: 1 of 1 closed — `11-01` makes held objects follow RBY1M by updating their real MuJoCo free-joint qpos whenever semantic navigation/opening changes the robot pose, and tightens the robot visual checker to require carried-object FPV evidence.
-Status: The prompt `帮我整理这个房间` still runs through the public cleanup loop against upstream `procthor-10k-val` scene index 0 loaded by the isolated Python 3.11 runtime. The real subprocess backend records `backend=molmospaces_subprocess`, `planner_uses_private_manifest=false`, `primitive_provenance=api_semantic`, and held-object navigation mutations as `robot_base_qpos+held_object_freejoint_qpos`. The RBY1M visual harness records 25 FPV/chase/map/verification rows; all five `navigate_to_receptacle` rows now show the carried object in FPV with robot-relative position error <= 0.000001.
-Last activity: 2026-05-08 - Verified `just verify::molmo-robot-visual` with 5/5 restored objects, public planner use, apple fridge containment, held-object FPV pixels on all carried navigation rows, and required artifacts under `output/molmo-robot-visual-harness/`
+Phase: 13 (molmospaces-agent-bridge-visual-results) — COMPLETE
+Plan: 1 of 1 closed — `13-01` makes the current-contract agent bridge reports
+visually comparable to the Molmo robot visual harness by recording RBY1M
+robot-view timelines and semantic mid-phase rows for Codex, Claude Code, and
+OpenClaw runs.
+Status: `MolmoCleanupMCPServer` can now opt into real MolmoSpaces visual capture
+with `record_robot_views`, the direct server/smoke runner expose backend and
+robot flags, the checker can require visual evidence, and
+`just harness::molmo-agent-bridge-visual` / `just verify::molmo-agent-bridge-visual`
+exist. Rule and smoke visual runs are clean 5/5. Codex, Claude Code, and
+OpenClaw visual dogfood artifacts pass visual checks but score 4/5, 4/5, and
+3/5 respectively against private scorer truth, showing the expected
+current-contract public-choice limitation.
+Last activity: 2026-05-08 - Verified visual bridge harness, direct Codex/Claude
+Code visual dogfood, OpenClaw Gateway visual dogfood, checker gates, and Docker
+cleanup.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Remaining MolmoSpaces work is future policy/planner scope, not a blocker.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Remaining MolmoSpaces work is ADR-0003 perception or planner scope, not a blocker.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 28 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11 MolmoSpaces plans)
+- Total plans completed: 29 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12 MolmoSpaces plans)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -58,11 +70,13 @@ Progress: [##########] 100%
 | 9. MolmoSpaces FPV room plausibility | 1 | ~2h | ~2h |
 | 10. MolmoSpaces semantic substeps | 1 | ~2h | ~2h |
 | 11. MolmoSpaces held-object carry visuals | 1 | ~1h | ~1h |
+| 12. MolmoSpaces current-contract agent bridge | 1 | ~3h | ~3h |
+| 13. MolmoSpaces agent bridge visual results | 1 | ~3h | ~3h |
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 9, 10, 11
-- Trend: MolmoSpaces cleanup path now moved from real upstream MolmoSpaces/MuJoCo subprocess proof to reviewable RBY1M visual evidence, semantic object-level cleanup evidence, and carried-object visual consistency.
+- Last 3 shipped phases: 11, 12, 13
+- Trend: MolmoSpaces cleanup path now moved from real upstream MolmoSpaces/MuJoCo subprocess proof to reviewable semantic object-level cleanup evidence, carried-object visual consistency, direct agent/OpenClaw tool viability, and visual agent bridge reports.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -75,6 +89,8 @@ Progress: [##########] 100%
 | Phase 09 P01 | ~2h | 4 tasks | 10 files |
 | Phase 10 P01 | ~2h | 4 tasks | 18 files |
 | Phase 11 P01 | ~1h | 4 tasks | 7 files |
+| Phase 12 P01 | ~3h | 4 tasks | 15 files |
+| Phase 13 P01 | ~3h | 4 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -83,6 +99,21 @@ Progress: [##########] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- **Phase 12 completion (2026-05-08):** The Molmo cleanup current contract now
+  has a separate FastMCP bridge for external agents. Codex and Claude Code both
+  completed clean direct MCP runs (`success`, 5/5 restored, no stale references)
+  using `skills/molmo-cleanup/SKILL.md`. OpenClaw Gateway also restored 5/5 and
+  terminated cleanly, but made one recovered stale-reference attempt by using a
+  sofa/simulator-style id as an object id; the skill and observe instruction now
+  explicitly say object IDs must come only from `scene_objects.objects[*]` and
+  receptacles are targets only. This phase remains `contract=current_contract`
+  and does not satisfy ADR-0003 because global `scene_objects` is still exposed.
+- **Phase 13 completion (2026-05-08):** Agent bridge reports now have the same
+  RBY1M robot-view timeline and semantic mid-phase visual rows as the Molmo
+  robot visual harness. Visual dogfood passed for Codex, Claude Code, and
+  OpenClaw, but the scores were 4/5, 4/5, and 3/5 because public semantic
+  choices can miss private scorer truth. This is expected current-contract
+  behavior, not ADR-0003 realism.
 - **Phase 08 completion (2026-05-07):** The MolmoSpaces cleanup definition of
   done now requires and has evidence for `backend=molmospaces_subprocess`, an
   isolated Python 3.11 runtime, upstream `procthor-10k-val` scene loading, real
@@ -140,6 +171,14 @@ Recent decisions affecting current work:
 ### Roadmap Evolution
 
 - Phase 2.4 closed (2026-04-24): **Better Views** now has a locked product decision. The repo keeps only the `map-v2+chase` runtime path; the old multi-variant experiment is retained as historical context plus analysis tooling, not as an active gate.
+- Phase 12 completed (2026-05-08): **MolmoSpaces current-contract agent
+  bridge** — current semantic cleanup contract exposed through FastMCP and
+  validated with Codex, Claude Code, and OpenClaw Gateway against the same 5/5
+  public rule-based baseline.
+- Phase 13 completed (2026-05-08): **MolmoSpaces agent bridge visual results**
+  — current-contract agent bridge reports now include robot-view images and
+  semantic mid-phase rows comparable to the visual harness; public-agent score
+  gaps are documented as private-target limitations.
 - Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
@@ -160,9 +199,11 @@ None yet.
 - No active blocker for the MolmoSpaces cleanup definition of done. Phase 08
   completed the real-scene subprocess proof, Phase 09 completed the
   target-facing FPV / same-room visual-review follow-up, Phase 10 completed
-  the semantic substep / fridge containment / report-row follow-up, and Phase 11
-  completed the held-object carry visual follow-up. Future OpenClaw policy and
-  planner-backed manipulation are separate follow-ups.
+  the semantic substep / fridge containment / report-row follow-up, Phase 11
+  completed the held-object carry visual follow-up, Phase 12 completed
+  current-contract Codex/Claude/OpenClaw tool-viability proof, and Phase 13
+  completed visual agent bridge reporting. ADR-0003 robot-local perception and
+  planner-backed manipulation remain separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
@@ -194,11 +235,12 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-05-08T17:15:00+08:00
-Stopped at: Phase 11 MolmoSpaces held-object carry visuals is complete. Latest
-evidence is `.planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md`
-and `output/molmo-robot-visual-harness/run_result.json`.
-Resume file: .planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md
+Last session: 2026-05-08T20:05:00+08:00
+Stopped at: Phase 12 MolmoSpaces current-contract agent bridge is complete.
+Latest evidence is
+`.planning/phases/12-molmospaces-current-contract-agent-bridge/12-VERIFICATION.md`
+and the direct/OpenClaw artifacts under `output/molmo-agent-bridge-*`.
+Resume file: .planning/phases/12-molmospaces-current-contract-agent-bridge/12-VERIFICATION.md
 
 ## Dual-Stack Workflow
 
@@ -206,6 +248,7 @@ Resume file: .planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFI
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** 11 (molmospaces-held-object-carry-visuals) — complete; next
-MolmoSpaces phase should be opened only for real coding-agent/OpenClaw policy or
-planner-backed RBY1M/Franka manipulation — 2026-05-08T17:15:00+08:00
+**Active Phase:** 12 (molmospaces-current-contract-agent-bridge) — complete;
+next MolmoSpaces phase should be opened only for ADR-0003 real-world-style
+robot-local perception or planner-backed RBY1M/Franka manipulation —
+2026-05-08T20:05:00+08:00

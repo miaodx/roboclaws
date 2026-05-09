@@ -13,14 +13,18 @@ class CleanupReceptacle:
     name: str
     room_area: str
     kind: str = "receptacle"
+    category: str | None = None
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "receptacle_id": self.receptacle_id,
             "name": self.name,
             "room_area": self.room_area,
             "kind": self.kind,
         }
+        if self.category is not None:
+            payload["category"] = self.category
+        return payload
 
 
 @dataclass(frozen=True)

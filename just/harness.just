@@ -10,6 +10,8 @@
 # - just harness::molmo-cleanup       deterministic MolmoSpaces cleanup artifact
 # - just harness::molmo-real-cleanup  real MolmoSpaces/MuJoCo cleanup artifact
 # - just harness::molmo-robot-visual  real MolmoSpaces/RBY1M visual artifact
+# - just harness::molmo-agent-bridge  Molmo cleanup MCP bridge smoke + comparison
+# - just harness::molmo-agent-bridge-visual  Molmo cleanup MCP bridge visual smoke + comparison
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -118,7 +120,9 @@ molmo-cleanup seed="7" output_dir="output/molmo-cleanup-harness":
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --output-dir "{{output_dir}}"
-    .venv/bin/python scripts/check_molmospaces_cleanup_result.py "{{output_dir}}/run_result.json"
+    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+      --require-semantic-acceptability \
+      "{{output_dir}}/run_result.json"
 
 # Prompt-driven public-policy MolmoSpaces cleanup harness.
 molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" task="帮我整理这个房间":
@@ -133,6 +137,7 @@ molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" t
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
+      --require-semantic-acceptability \
       "{{output_dir}}/run_result.json"
 
 # Prompt-driven public-policy cleanup against a real upstream MolmoSpaces/MuJoCo scene.
@@ -151,6 +156,7 @@ molmo-real-cleanup seed="7" output_dir="output/molmo-real-cleanup-harness" task=
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --require-semantic-substeps \
+      --require-semantic-acceptability \
       "{{output_dir}}/run_result.json"
 
 # Real upstream MolmoSpaces cleanup with an actual RBY1M robot, FPV/chase/map,
@@ -175,6 +181,66 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
       --expect-robot rby1m \
       --require-robot-views \
       --require-semantic-substeps \
+      --require-semantic-acceptability \
+      "{{output_dir}}/run_result.json"
+
+# Current-contract Molmo MCP bridge smoke. This runs the existing public
+# rule-based cleanup once, then drives the same semantic tool loop through the
+# Molmo FastMCP wrapper without launching a live coding agent.
+molmo-agent-bridge seed="7" output_dir="output/molmo-agent-bridge-harness" rule_dir="output/molmo-agent-bridge-rule" task="帮我整理这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}" "{{rule_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --planner public_heuristic \
+      --task "{{task}}" \
+      --output-dir "{{rule_dir}}"
+    .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
+      --seed "{{seed}}" \
+      --task "{{task}}" \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
+      --expect-policy contract_smoke_agent \
+      --require-agent-driven \
+      --require-clean \
+      --require-semantic-acceptability \
+      --compare-rule-result "{{rule_dir}}/run_result.json" \
+      "{{output_dir}}/run_result.json"
+
+# Current-contract Molmo MCP bridge visual harness. This uses the real
+# MolmoSpaces subprocess backend plus RBY1M robot-view capture, then compares the
+# bridge result against the public-rule visual baseline.
+molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-harness" rule_dir="output/molmo-agent-bridge-visual-rule" task="帮我整理这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}" "{{rule_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --planner public_heuristic \
+      --task "{{task}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{rule_dir}}"
+    .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
+      --seed "{{seed}}" \
+      --task "{{task}}" \
+      --backend molmospaces_subprocess \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
+      --expect-policy contract_smoke_agent \
+      --expect-backend molmospaces_subprocess \
+      --expect-robot rby1m \
+      --require-agent-driven \
+      --require-clean \
+      --require-robot-views \
+      --require-semantic-acceptability \
+      --compare-rule-result "{{rule_dir}}/run_result.json" \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

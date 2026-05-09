@@ -85,13 +85,17 @@ def render_cleanup_report(
       <div class="badges">
         {_badge("Scenario", scenario.scenario_id)}
         {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Contract", run_result.get("contract", "legacy"))}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
-        {_badge("Planner", run_result.get("planner", "unknown"))}
+        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+        {_badge("Agent driven", run_result.get("agent_driven", False))}
         {_badge("Provenance", run_result["primitive_provenance"])}
+        {_badge("MCP server", run_result.get("mcp_server", "none"))}
         {_robot_badge(run_result)}
       </div>
     </section>
+    {_current_contract_note(run_result)}
     <section class="snapshots">
       <figure>
         <img src="{before_name}" alt="Before cleanup">
@@ -129,6 +133,20 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     if not robot_name:
         return ""
     return _badge("Robot", robot_name)
+
+
+def _current_contract_note(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "current_contract":
+        return ""
+    shortcuts = ", ".join(str(item) for item in run_result.get("current_contract_shortcuts", []))
+    note = (
+        "Current-contract bridge run. Global scene_objects is intentionally "
+        "available for agent/tool viability dogfood; this artifact does not "
+        "satisfy ADR-0003 robot-local perception."
+    )
+    if shortcuts:
+        note += f" Shortcut(s): {shortcuts}."
+    return f'<section><p class="note">{html.escape(note)}</p></section>'
 
 
 def _robot_timeline(steps: list[dict[str, Any]]) -> str:
@@ -286,17 +304,42 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
 def _score_table(score: dict[str, Any]) -> str:
     rows = []
     for row in score["object_results"]:
+        exact_private_match = row.get("exact_private_match", row.get("restored", False))
+        semantic_level = row.get("semantic_acceptability", "unknown")
+        semantic_reason = row.get("semantic_reason", "")
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(row['object_id']))}</td>"
             f"<td>{html.escape(str(row['actual_location_id']))}</td>"
-            f"<td>{'yes' if row['restored'] else 'no'}</td>"
+            f"<td>{'yes' if exact_private_match else 'no'}</td>"
+            f"<td>{html.escape(str(semantic_level))}</td>"
+            f"<td>{html.escape(str(semantic_reason))}</td>"
             "</tr>"
         )
+    semantic_summary = _semantic_acceptability_summary(score)
     return (
-        "<table><thead><tr><th>Object</th><th>Final location</th><th>Restored</th>"
+        semantic_summary + "<table><thead><tr><th>Object</th><th>Final location</th>"
+        "<th>Exact private match</th><th>Semantic acceptability</th><th>Reason</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
+
+
+def _semantic_acceptability_summary(score: dict[str, Any]) -> str:
+    semantic = score.get("semantic_acceptability")
+    if not isinstance(semantic, dict):
+        return ""
+    counts = semantic.get("counts") or {}
+    accepted = semantic.get("accepted_count", 0)
+    total = semantic.get("total_targets", score.get("total_targets", 0))
+    parts = [
+        f"accepted {accepted}/{total}",
+        f"preferred {counts.get('preferred', 0)}",
+        f"acceptable {counts.get('acceptable', 0)}",
+        f"questionable {counts.get('questionable', 0)}",
+        f"wrong {counts.get('wrong', 0)}",
+        f"unknown {counts.get('unknown', 0)}",
+    ]
+    return f'<p class="note">Semantic acceptability: {html.escape(", ".join(parts))}.</p>'
 
 
 def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:

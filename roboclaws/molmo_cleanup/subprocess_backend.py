@@ -209,6 +209,7 @@ def _scenario_from_worker_payload(
                 name=str(item["name"]),
                 room_area=str(item.get("room_area", "unknown")),
                 kind=str(item.get("kind", "receptacle")),
+                category=str(item["category"]) if item.get("category") is not None else None,
             )
             for item in public["receptacles"]
         ),

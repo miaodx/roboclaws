@@ -25,6 +25,9 @@ from roboclaws.molmo_cleanup.scenario import (  # noqa: E402
     build_cleanup_scenario,
     write_scenario_bundle,
 )
+from roboclaws.molmo_cleanup.semantic_acceptability import (  # noqa: E402
+    annotate_score_with_semantic_acceptability,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -276,6 +279,7 @@ def run_demo(
         {"reason": f"{planner} cleanup complete"},
         lambda: contract.done(f"{planner} cleanup complete"),
     )
+    score = annotate_score_with_semantic_acceptability(done["score"], scenario)
 
     after_snapshot = _write_snapshot(
         backend=backend,
@@ -321,7 +325,7 @@ def run_demo(
         "cleanup_plan": cleanup_plan,
         "semantic_loop_variant": "navigate-pick-navigate-open-place-object_done",
         "semantic_substeps": semantic_substeps,
-        "score": done["score"],
+        "score": score,
         "final_locations": done["final_locations"],
         "final_containment": done.get("final_containment", {}),
         "tool_event_counts": done["tool_event_counts"],
