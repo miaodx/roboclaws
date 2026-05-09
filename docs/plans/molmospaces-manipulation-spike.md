@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 20 OpenClaw clean-policy hardening shipped and verified on 2026-05-09
+**Status:** Phase 21 advisory scoring/model-check slice active on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -13,8 +13,8 @@ Phase 12 current-contract agent bridge -> Phase 13 bridge visual reports ->
 Phase 14 ADR-0003 public/private cleanup -> Phase 15 Generated Mess Set scale
 -> Phase 16 ADR-0003 MCP -> Phase 17 direct-agent dogfood -> Phase 18
 synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
--> Phase 20 clean-policy semantic-loop hardening. Raw FPV-only perception,
-advisory model scoring, and real planner-backed manipulation remain deferred.
+-> Phase 20 clean-policy semantic-loop hardening -> Phase 21 advisory scoring.
+Raw FPV-only perception and real planner-backed manipulation remain deferred.
 
 ## Why This Exists
 

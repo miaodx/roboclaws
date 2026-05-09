@@ -20,6 +20,7 @@ one decision per file, sequential numbering, explicit status.
 | [0009](0009-use-shared-molmo-cleanup-report-underlay.md) | Use Shared Molmo Cleanup Report Underlay | Accepted |
 | [0010](0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md) | Require Real Visual OpenClaw Evidence For ADR-0003 Cleanup | Accepted |
 | [0011](0011-enforce-semantic-loop-for-adr-0003-openclaw-clean-policy.md) | Enforce Semantic Loop For ADR-0003 OpenClaw Clean Policy | Accepted |
+| [0012](0012-add-non-authoritative-advisory-cleanup-scoring.md) | Add Non-Authoritative Advisory Cleanup Scoring | Accepted |
 
 ## Adding a new ADR
 

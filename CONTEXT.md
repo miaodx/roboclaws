@@ -170,6 +170,7 @@ _Avoid_: Raw tool log as visual flow
 - A **Scorer** judges **Tidy-Plausible Outcomes**, not only single correct destinations.
 - A **Scoring Policy** should be replaceable without changing what the **Cleanup Agent** is allowed to know.
 - A deterministic **Scoring Policy** is authoritative for v1; an **Advisory LLM Scorer** may be reported but must not decide pass/fail yet.
+- An **Advisory LLM Scorer** should be a post-run artifact, not Cleanup Agent input.
 - A **Cleanup Agent** may receive public map, landmark, and perception data.
 - A **Cleanup Agent** may receive a **Metric Map** before or during the run.
 - A **Cleanup Agent** must build any small-object **Agent-Built Semantic Map** from local observations.
@@ -202,6 +203,7 @@ _Avoid_: Raw tool log as visual flow
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
+- Advisory scoring/model checks should render in the shared **Cleanup Artifact Report** without changing deterministic scoring fields.
 
 ## Example Dialogue
 
@@ -255,4 +257,4 @@ _Avoid_: Raw tool log as visual flow
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 targets the advisory scoring/model-check follow-up.
