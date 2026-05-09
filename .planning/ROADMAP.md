@@ -87,7 +87,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.22 MolmoSpaces real-world advisory scoring** - Phase 21 (completed 2026-05-09; non-authoritative advisory scoring/model-check artifact)
 - ✅ **v1.23 MolmoSpaces real-world raw FPV perception** - Phase 22 (completed 2026-05-09; evidence-mode camera observations without structured movable-object detections)
 - ✅ **v1.24 MolmoSpaces planner-backed manipulation proof gate** - Phase 23 (completed 2026-05-09; provenance/report/checker gate before real planner-backed cleanup claims)
-- 📋 **v1.25 MolmoSpaces planner runtime diagnostics** - Phase 24 (planned 2026-05-09; dependency/crash diagnostics for strict planner probe blockers)
+- ✅ **v1.25 MolmoSpaces planner runtime diagnostics** - Phase 24 (completed 2026-05-09; dependency/crash diagnostics for strict planner probe blockers)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -127,7 +127,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 21: MolmoSpaces real-world advisory scoring** - ADR-0012 non-authoritative advisory scoring/model-check artifact for ADR-0003 cleanup reports. Completed 2026-05-09.
 - [x] **Phase 22: MolmoSpaces real-world raw FPV perception** - ADR-0013 raw FPV-only observation evidence mode for ADR-0003 cleanup reports. Completed 2026-05-09.
 - [x] **Phase 23: MolmoSpaces planner-backed manipulation proof gate** - ADR-0014 provenance/report/checker boundary for real planner-backed manipulation evidence. Completed 2026-05-09.
-- [ ] **Phase 24: MolmoSpaces planner runtime diagnostics** - ADR-0015 dependency/crash diagnostics for strict planner probe blockers.
+- [x] **Phase 24: MolmoSpaces planner runtime diagnostics** - ADR-0015 dependency/crash diagnostics for strict planner probe blockers. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -460,7 +460,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -496,4 +496,5 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 21. MolmoSpaces real-world advisory scoring | v1.22 | 1/1 | Complete | 2026-05-09 |
 | 22. MolmoSpaces real-world raw FPV perception | v1.23 | 1/1 | Complete | 2026-05-09 |
 | 23. MolmoSpaces planner-backed manipulation proof gate | v1.24 | 1/1 | Complete | 2026-05-09 |
+| 24. MolmoSpaces planner runtime diagnostics | v1.25 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

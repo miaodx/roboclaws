@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
+import importlib.metadata
+import importlib.util
 import json
 import os
+import platform
 import signal
 import subprocess
 import sys
@@ -63,6 +67,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     if args.worker:
+        faulthandler.enable(all_threads=True)
         worker_payload = _run_worker_probe(args)
         print(json.dumps(worker_payload, sort_keys=True))
         if not worker_payload.get("ok"):
@@ -124,6 +129,7 @@ def run_probe(
 
     env = os.environ.copy()
     env["PYTHONPATH"] = _prepend_pythonpath(molmospaces_root, env.get("PYTHONPATH"))
+    env["PYTHONFAULTHANDLER"] = "1"
     command = [
         str(python_executable),
         str(Path(__file__).resolve()),
@@ -178,12 +184,23 @@ def run_probe(
 
 
 def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
+    runtime_diagnostics = _runtime_diagnostics(args)
+    print(
+        json.dumps(
+            {
+                "event": "runtime_diagnostics",
+                "runtime_diagnostics": runtime_diagnostics,
+            },
+            sort_keys=True,
+        ),
+        flush=True,
+    )
     try:
         if args.embodiment == "franka":
             payload = _probe_franka(args)
         else:
             payload = _probe_rby1m(args)
-        return {"ok": True, **payload}
+        return {"ok": True, "runtime_diagnostics": runtime_diagnostics, **payload}
     except BaseException as exc:  # noqa: BLE001 - worker must report capability blockers.
         return {
             "ok": False,
@@ -193,7 +210,45 @@ def _run_worker_probe(args: argparse.Namespace) -> dict[str, Any]:
             "embodiment": args.embodiment,
             "probe_mode": args.probe_mode,
             "execution_attempted": args.probe_mode == "execute",
+            "runtime_diagnostics": runtime_diagnostics,
         }
+
+
+def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
+    modules = {}
+    for module_name in (
+        "molmo_spaces",
+        "mujoco",
+        "jax",
+        "jaxlib",
+        "curobo",
+        "warp",
+        "mujoco_warp",
+        "mlspaces_tests",
+    ):
+        spec = importlib.util.find_spec(module_name)
+        package_name = module_name.replace("_", "-")
+        modules[module_name] = {
+            "available": spec is not None,
+            "version": _package_version(package_name),
+        }
+    return {
+        "python_executable": sys.executable,
+        "python_version": sys.version.split()[0],
+        "platform": platform.platform(),
+        "embodiment": args.embodiment,
+        "probe_mode": args.probe_mode,
+        "modules": modules,
+        "faulthandler_enabled": faulthandler.is_enabled(),
+        "python_faulthandler_env": os.environ.get("PYTHONFAULTHANDLER", ""),
+    }
+
+
+def _package_version(package_name: str) -> str | None:
+    try:
+        return importlib.metadata.version(package_name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
@@ -343,6 +398,8 @@ def _write_probe_result(
         primitive_provenance = BLOCKED_CAPABILITY_PROVENANCE
     evidence["worker_returncode"] = returncode
     evidence["worker_payload"] = worker_payload
+    if worker_payload.get("runtime_diagnostics"):
+        evidence["runtime_diagnostics"] = worker_payload["runtime_diagnostics"]
     run_result = {
         "artifact_kind": "molmo_planner_backed_manipulation_probe",
         "contract": MANIPULATION_PROBE_CONTRACT,

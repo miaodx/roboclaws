@@ -169,6 +169,7 @@ def render_planner_manipulation_report(
     </section>
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
+    {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
@@ -299,6 +300,35 @@ def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
         f"{_view_figure(artifacts.get('initial'), 'Initial')}"
         f"{_view_figure(artifacts.get('final'), 'Final')}"
         "</div></section>"
+    )
+
+
+def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    if not diagnostics:
+        return ""
+    modules = diagnostics.get("modules") or {}
+    rows = []
+    for module_name, module_info in sorted(modules.items()):
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(module_name))}</td>"
+            f"<td>{html.escape(str(module_info.get('available', False)))}</td>"
+            f"<td>{html.escape(str(module_info.get('version') or ''))}</td>"
+            "</tr>"
+        )
+    module_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Module</th><th>Available</th>'
+        "<th>Version</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    summary = (
+        f"python={diagnostics.get('python_version', '')}; "
+        f"executable={diagnostics.get('python_executable', '')}; "
+        f"faulthandler={diagnostics.get('faulthandler_enabled', False)}"
+    )
+    return (
+        '<section class="panel"><h2>Runtime Diagnostics</h2>'
+        f'<p class="note">{html.escape(summary)}</p>{module_table}</section>'
     )
 
 

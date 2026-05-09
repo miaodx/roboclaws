@@ -314,11 +314,23 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "stderr": str(stderr),
         },
     }
+    run_result["manipulation_evidence"]["runtime_diagnostics"] = {
+        "python_executable": "/tmp/molmospaces/.venv/bin/python",
+        "python_version": "3.11.8",
+        "faulthandler_enabled": True,
+        "modules": {
+            "curobo": {"available": False, "version": None},
+            "molmo_spaces": {"available": True, "version": "0.1.0"},
+        },
+    }
 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
     html = report_path.read_text(encoding="utf-8")
 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
+    assert "Runtime Diagnostics" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
+    assert "faulthandler=True" in html
+    assert "curobo" in html

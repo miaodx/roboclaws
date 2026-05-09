@@ -57,6 +57,8 @@ def _assert_probe_result(
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     assert "Planner-Backed Manipulation Probe" in report_text, report_text[:500]
     assert "Manipulation Provenance" in report_text, report_text[:500]
+    if evidence.get("runtime_diagnostics"):
+        assert "Runtime Diagnostics" in report_text, report_text[:500]
 
     if require_planner_backed:
         _assert_planner_backed(data, evidence)

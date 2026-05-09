@@ -1,6 +1,6 @@
 # MolmoSpaces Planner Runtime Diagnostics
 
-**Status:** Planned under GSD Phase 24
+**Status:** Completed under GSD Phase 24
 **Created:** 2026-05-09
 **Source:** ADR-0014, ADR-0015, Phase 23 verification
 **Workflow:** `hybrid-phase-pipeline`
@@ -49,3 +49,24 @@ This phase should:
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_manipulation_provenance.py`
 - `ruff check` / `ruff format --check` on changed Python files.
 - `just verify::molmo-planner-manipulation-probe`
+
+## Completion Evidence
+
+Completed 2026-05-09.
+
+- Focused pytest passed with `10 passed`.
+- `uv run ruff check` and `uv run ruff format --check` passed on changed
+  Python files.
+- `just verify::molmo-planner-manipulation-probe` passed and produced
+  `output/molmo-planner-manipulation-probe-harness/run_result.json` plus a
+  shared-underlay `report.html` with `Runtime Diagnostics`.
+- Franka execute-mode probe produced accepted `blocked_capability` evidence at
+  `output/molmo-planner-manipulation-probe-execute/run_result.json`; stderr now
+  includes a faulthandler stack for the `SIGSEGV` in MuJoCo/GLFW window
+  creation during task sampling.
+- RBY1M config-import probe produced accepted `blocked_capability` evidence at
+  `output/molmo-planner-manipulation-probe-rby1m/run_result.json` with
+  `curobo.available=false`.
+
+Strict planner-backed cleanup execution remains separate until a probe passes
+the ADR-0014 `--require-planner-backed` gate.

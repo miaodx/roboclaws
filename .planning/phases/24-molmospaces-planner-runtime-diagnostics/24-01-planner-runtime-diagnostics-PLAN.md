@@ -8,7 +8,7 @@ and shared report underlay.
 
 ## Status
 
-Planned 2026-05-09.
+Completed 2026-05-09.
 
 ## Tasks
 
@@ -21,8 +21,15 @@ Planned 2026-05-09.
 ## Verification
 
 - `./scripts/run_pytest_standalone.sh -q tests/test_molmo_cleanup_report.py tests/test_check_molmo_planner_manipulation_probe.py tests/test_molmo_manipulation_provenance.py`
-- `ruff check` / `ruff format --check` on changed Python files.
-- `just verify::molmo-planner-manipulation-probe`
+  passed with `10 passed`.
+- `uv run ruff check` and `uv run ruff format --check` passed on changed
+  Python files.
+- `just verify::molmo-planner-manipulation-probe` passed.
+- Franka execute-mode probe produced accepted `blocked_capability` evidence
+  with `SIGSEGV`, runtime diagnostics, and a faulthandler stack in stderr.
+- RBY1M config-import probe produced accepted `blocked_capability` evidence
+  with `ModuleNotFoundError: No module named 'curobo'` and
+  `runtime_diagnostics.modules.curobo.available=false`.
 
 ## Risks
 

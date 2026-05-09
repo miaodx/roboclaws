@@ -26,7 +26,9 @@ def _load_checker_module():
     return module
 
 
-def _write_report_files(tmp_path: Path, *, blocked: bool = False) -> dict[str, str]:
+def _write_report_files(
+    tmp_path: Path, *, blocked: bool = False, diagnostics: bool = False
+) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
     report = tmp_path / "report.html"
@@ -35,24 +37,31 @@ def _write_report_files(tmp_path: Path, *, blocked: bool = False) -> dict[str, s
     body = "Planner-Backed Manipulation Probe\nManipulation Provenance\n"
     if blocked:
         body += "Capability Blockers\n"
+    if diagnostics:
+        body += "Runtime Diagnostics\n"
     report.write_text(body, encoding="utf-8")
     return {"stdout": str(stdout), "stderr": str(stderr), "report": str(report)}
 
 
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
     checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="franka",
+        task="pick_and_place",
+        probe_mode="config_import",
+        blockers=[{"code": "execution_not_attempted", "message": "not attempted"}],
+    )
+    evidence["runtime_diagnostics"] = {
+        "python_version": "3.11.8",
+        "modules": {"curobo": {"available": False, "version": None}},
+    }
     data = {
         "contract": MANIPULATION_PROBE_CONTRACT,
         "status": "blocked_capability",
         "primitive_provenance": "blocked_capability",
-        "manipulation_evidence": blocked_planner_probe_evidence(
-            backend="molmospaces_subprocess",
-            embodiment="franka",
-            task="pick_and_place",
-            probe_mode="config_import",
-            blockers=[{"code": "execution_not_attempted", "message": "not attempted"}],
-        ),
-        "artifacts": _write_report_files(tmp_path, blocked=True),
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(tmp_path, blocked=True, diagnostics=True),
     }
 
     checker._assert_probe_result(data, tmp_path, accept_blocked_capability=True)
