@@ -202,6 +202,10 @@ _Avoid_: hidden global cache side effects
 Recorded Warp API shape and any probe-local compatibility adapter applied before RBY1M/CuRobo planner execution.
 _Avoid_: invisible dependency shim
 
+**CUDA Memory Headroom Evidence**:
+Recorded CUDA/PyTorch memory availability, allocation, reservation, allocator configuration, and worker-stage memory snapshots for RBY1M/CuRobo planner execution.
+_Avoid_: traceback-only OOM diagnosis
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -258,6 +262,7 @@ _Avoid_: invisible dependency shim
 - An **RBY1M CuRobo Runtime Gate** should reject standalone Franka planner proof as target cleanup runtime readiness, while allowing explicit blocked-capability evidence when CuRobo is missing.
 - **RBY1M CuRobo Warmup Readiness** should record worker stages before treating a timeout as actionable evidence.
 - **CuRobo Extension Cache Evidence** should be recorded before retrying target RBY1M/CuRobo imports when global Torch extension cache state may be stale.
+- **CUDA Memory Headroom Evidence** should be recorded before tuning RBY1M/CuRobo planner memory settings or treating a target execute-mode OOM as a generic failure.
 - **Warp Compatibility Evidence** should be visible before a shimmed target planner probe can be used as readiness evidence.
 
 ## Example Dialogue

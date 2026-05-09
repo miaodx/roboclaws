@@ -56,7 +56,9 @@ gated. Phase 32 isolates the CuRobo/Torch extension cache for RBY1M retries and
 renders extension cache state in the planner probe report; config import now
 succeeds, while execute mode is blocked by the installed Warp API shape. Phase
 33 makes that Warp compatibility adapter visible and probe-local; execute mode
-now reaches policy run and blocks on CUDA memory pressure.
+now reaches policy run and blocks on CUDA memory pressure. Phase 34 captures
+CUDA memory headroom as first-class planner probe evidence before tuning or
+primitive replacement.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -115,6 +117,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.32 MolmoSpaces RBY1M CuRobo warmup readiness** - Phase 31 (completed 2026-05-09; staged warmup/JIT evidence before target execute-mode retry)
 - ✅ **v1.33 MolmoSpaces RBY1M CuRobo cache isolation** - Phase 32 (completed 2026-05-09; isolated Torch extension cache evidence before target execute-mode retry)
 - ✅ **v1.34 MolmoSpaces RBY1M Warp compatibility** - Phase 33 (completed 2026-05-09; probe-local Warp API adapter before target execute-mode retry)
+- 📋 **v1.35 MolmoSpaces RBY1M CUDA memory headroom** - Phase 34 (planned 2026-05-09; stage-local CUDA memory evidence for target execute-mode OOM)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -164,6 +167,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 31: MolmoSpaces RBY1M CuRobo warmup readiness** - ADR-0022 staged worker evidence for RBY1M/CuRobo JIT/config warmup before target execute-mode retry. Completed 2026-05-09; the local artifact remains blocked at `rby1m_config_import`.
 - [x] **Phase 32: MolmoSpaces RBY1M CuRobo cache isolation** - ADR-0023 isolated Torch extension cache evidence for RBY1M/CuRobo warmup retries. Completed 2026-05-09; config import succeeds, execute mode blocks at `warp.torch`.
 - [x] **Phase 33: MolmoSpaces RBY1M Warp compatibility** - ADR-0024 probe-local Warp API adapter and visible compatibility evidence before target execute-mode retry. Completed 2026-05-09; execute mode reaches `execute_policy_run` and blocks on CUDA OOM.
+- [ ] **Phase 34: MolmoSpaces RBY1M CUDA memory headroom** - ADR-0025 stage-local CUDA/PyTorch memory evidence for target execute-mode OOM before planner memory tuning or cleanup primitive replacement.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
