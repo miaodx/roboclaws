@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 31 RBY1M CuRobo warmup readiness completed on 2026-05-09
+**Status:** Phase 32 RBY1M CuRobo cache isolation planned on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -29,6 +29,8 @@ visual core keeps the same review shape across current-contract and ADR-0003
 artifacts while still showing all contract-specific evidence. Phase 31 closed
 staged RBY1M/CuRobo warmup-readiness evidence; the local target runtime still
 times out at `rby1m_config_import`, so target execute-mode proof remains gated.
+Phase 32 isolates Torch/CuRobo extension-cache state for the next retry instead
+of mutating the global cache.
 
 ## Why This Exists
 
@@ -812,8 +814,9 @@ completed:
   gsd-plan-phase 31-molmospaces-rby1m-curobo-warmup-readiness
   gsd-execute-phase 31-molmospaces-rby1m-curobo-warmup-readiness
   gsd-verify-work 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-plan-phase 32-molmospaces-rby1m-curobo-cache-isolation
 
 next pipeline candidates:
-  plan actual planner-backed cleanup-loop primitive replacement
-  plan RBY1M/CuRobo runtime enablement after config import can finish locally
+  execute 32-molmospaces-rby1m-curobo-cache-isolation
+  plan actual planner-backed cleanup-loop primitive replacement after target execute-mode readiness
 ```
