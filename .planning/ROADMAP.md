@@ -65,6 +65,9 @@ target execute retry; that retry now passes strict standalone RBY1M/CuRobo
 planner-backed proof with nonzero robot-state movement. Phase 36 consolidated
 the duplicated current-contract and ADR-0003 object cleanup loops behind one
 shared semantic driver before planner-backed primitive replacement begins.
+Phase 37 adds explicit planner cleanup bridge-readiness evidence so reports
+distinguish target RBY1M/CuRobo runtime readiness from cleanup subphases that
+still remain `api_semantic`.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -126,6 +129,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.35 MolmoSpaces RBY1M CUDA memory headroom** - Phase 34 (completed 2026-05-09; stage-local CUDA memory evidence for target execute-mode OOM)
 - ✅ **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (completed 2026-05-09; visible low-memory CuRobo retry profile and strict target proof)
 - ✅ **v1.37 MolmoSpaces shared semantic cleanup loop** - Phase 36 (completed 2026-05-09; one reusable `nav -> pick -> nav -> open? -> place` driver across cleanup demos)
+- 📋 **v1.38 MolmoSpaces planner cleanup bridge readiness** - Phase 37 (planned 2026-05-09; explicit bridge evidence joining target proof and cleanup subphase provenance)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -178,6 +182,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 34: MolmoSpaces RBY1M CUDA memory headroom** - ADR-0025 stage-local CUDA/PyTorch memory evidence for target execute-mode OOM before planner memory tuning or cleanup primitive replacement. Completed 2026-05-09; execute mode still blocks inside CuRobo trajectory planning before robot-state movement.
 - [x] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM. Completed 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof passes under the visible low-memory profile.
 - [x] **Phase 36: MolmoSpaces shared semantic cleanup loop** - ADR-0027 shared object-level cleanup loop driver for current-contract and ADR-0003 demos before planner-backed primitive replacement. Completed 2026-05-09.
+- [ ] **Phase 37: MolmoSpaces planner cleanup bridge readiness** - ADR-0028 bridge evidence for target RBY1M/CuRobo proof plus cleanup primitive subphase provenance before actual primitive replacement.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

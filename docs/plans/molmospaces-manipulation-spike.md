@@ -843,5 +843,6 @@ completed:
   gsd-verify-work 36-molmospaces-shared-semantic-cleanup-loop
 
 next pipeline candidates:
+  plan planner cleanup bridge readiness evidence
   plan actual planner-backed cleanup-loop primitive replacement after shared-loop integration
 ```

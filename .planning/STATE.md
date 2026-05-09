@@ -584,8 +584,7 @@ Resume file: .planning/phases/33-molmospaces-rby1m-warp-compatibility/33-01-rby1
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 36 completed the shared semantic cleanup loop
-driver for current-contract and ADR-0003 MolmoSpaces demos. The next cleanup
-primitive phase should attach planner-backed primitive implementations to that
-shared `nav -> pick -> nav -> open? -> place` integration point without
-relabeling `api_semantic` state edits.
+**Active Phase:** Phase 37 MolmoSpaces planner cleanup bridge readiness. Phase
+36 completed the shared cleanup loop driver; Phase 37 now makes target
+RBY1M/CuRobo proof and cleanup subphase provenance appear as one explicit
+bridge-readiness gate before actual planner-backed primitive replacement.
