@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 57 fallback proof request generation completed; next work is local execution of generated fallback requests on 2026-05-10
+**Status:** Phase 58 generated fallback proof execution completed; next work is timeout-stage diagnostics for generated fallback execution
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -88,6 +88,11 @@ aliases from observed-handle binding metadata. The runner report now renders
 the generated fallback request rows and commands, but real RBY1M/CuRobo
 execution still has to prove whether any generated request is feasible and can
 promote cleanup primitive binding.
+Phase 58 executed four generated fallback requests locally. The runner checker
+passed with required proof outputs, but all four probes reported
+`blocked_capability` with `timeout` at `rby1m_config_import`; no fallback reached
+task sampling, planner-backed proof, cleanup binding promotion, or planner view
+capture.
 
 ## Why This Exists
 
@@ -913,7 +918,10 @@ completed:
   gsd-plan-phase 57-molmospaces-proof-request-fallback-generation
   gsd-execute-phase 57-molmospaces-proof-request-fallback-generation
   gsd-verify-work 57-molmospaces-proof-request-fallback-generation
+  gsd-plan-phase 58-molmospaces-generated-fallback-proof-execution
+  gsd-execute-phase 58-molmospaces-generated-fallback-proof-execution
+  gsd-verify-work 58-molmospaces-generated-fallback-proof-execution
 
 next pipeline candidates:
-  plan local execution of generated fallback proof requests
+  plan generated fallback execution timeout diagnostics
 ```

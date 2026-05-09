@@ -57,6 +57,7 @@ one decision per file, sequential numbering, explicit status.
 | [0046](0046-render-proof-bundle-result-feasibility.md) | Render Proof Bundle Result Feasibility | Accepted |
 | [0047](0047-select-proof-requests-by-task-feasibility.md) | Select Proof Requests By Task Feasibility | Accepted |
 | [0048](0048-generate-private-fallback-proof-requests.md) | Generate Private Fallback Proof Requests | Accepted |
+| [0049](0049-run-generated-fallback-proofs-as-local-dev-evidence.md) | Run Generated Fallback Proofs As Local-Dev Evidence | Accepted |
 
 ## Adding a new ADR
 
