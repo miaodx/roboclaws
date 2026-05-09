@@ -35,7 +35,9 @@ policy path by making the ADR-0003 semantic cleanup loop executable in the MCP
 contract instead of prompt-only guidance. Phase 21 adds a non-authoritative
 advisory scoring/model-check artifact to the same shared report pipeline.
 Phase 22 starts the raw FPV-only perception branch with an evidence mode that
-records camera observations without structured movable-object detections.
+records camera observations without structured movable-object detections. Phase
+23 adds a planner-backed manipulation provenance/proof gate so semantic cleanup
+state edits cannot be confused with real RBY1M/Franka planner execution.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -83,6 +85,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.21 MolmoSpaces real-world OpenClaw clean policy** - Phase 20 (completed 2026-05-09; executable semantic-loop ordering for clean OpenClaw policy evidence)
 - ✅ **v1.22 MolmoSpaces real-world advisory scoring** - Phase 21 (completed 2026-05-09; non-authoritative advisory scoring/model-check artifact)
 - ✅ **v1.23 MolmoSpaces real-world raw FPV perception** - Phase 22 (completed 2026-05-09; evidence-mode camera observations without structured movable-object detections)
+- 📋 **v1.24 MolmoSpaces planner-backed manipulation proof gate** - Phase 23 (planned 2026-05-09; provenance/report/checker gate before real planner-backed cleanup claims)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -121,6 +124,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 20: MolmoSpaces real-world OpenClaw clean policy** - ADR-0011 executable semantic-loop ordering for clean ADR-0003 OpenClaw policy evidence. Completed 2026-05-09.
 - [x] **Phase 21: MolmoSpaces real-world advisory scoring** - ADR-0012 non-authoritative advisory scoring/model-check artifact for ADR-0003 cleanup reports. Completed 2026-05-09.
 - [x] **Phase 22: MolmoSpaces real-world raw FPV perception** - ADR-0013 raw FPV-only observation evidence mode for ADR-0003 cleanup reports. Completed 2026-05-09.
+- [ ] **Phase 23: MolmoSpaces planner-backed manipulation proof gate** - ADR-0014 provenance/report/checker boundary for real planner-backed manipulation evidence.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

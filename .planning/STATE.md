@@ -21,7 +21,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 22 complete; planner-backed manipulation remains the next broader MolmoSpaces follow-up.
+**Current focus:** Phase 23 planner-backed manipulation provenance/proof gate.
 
 ## Current Position
 
@@ -37,7 +37,7 @@ Last activity: 2026-05-09 - Completed Phase 22 raw FPV-only perception evidence
 slice and recorded verification evidence.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Remaining MolmoSpaces work after that is planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 is the active planner-backed manipulation provenance/proof gate.)
 
 ## Performance Metrics
 
@@ -204,6 +204,12 @@ Recent decisions affecting current work:
   `just verify::molmo-realworld-raw-fpv` passed with 14 raw observations, 16
   robot-view steps, full waypoint sweep, and expected cleanup failure because
   camera-only object registration is not part of this slice.
+- **Phase 23 planning (2026-05-09):** ADR-0014 adds a planner-backed
+  manipulation provenance/proof gate. Existing cleanup primitives remain
+  `api_semantic`; the phase should add shared manipulation provenance metadata,
+  report rendering, a standalone MolmoSpaces planner probe, and a checker that
+  accepts blocked-capability evidence only when explicit while requiring real
+  planner execution evidence for the strict proof gate.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the

@@ -772,9 +772,9 @@ completed:
   gsd-plan-phase 10-molmospaces-semantic-substeps
   gsd-execute-phase 10-molmospaces-semantic-substeps
   gsd-verify-work 10-molmospaces-semantic-substeps
+  gsd-plan-phase 23-molmospaces-planner-backed-manipulation-proof
 
 next pipeline candidates:
-  real coding-agent policy over the public contract
-  real RBY1M/Franka planner-backed manipulation proof
-  OpenClaw cleanup-agent integration
+  execute/verify 23-molmospaces-planner-backed-manipulation-proof
+  real RBY1M/Franka planner-backed cleanup execution after the proof gate passes
 ```
