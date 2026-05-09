@@ -84,7 +84,9 @@ Phase 45 tightens the shared report architecture by making current-contract and
 ADR-0003 checkers enforce one visual-core contract and by removing the remaining
 duplicated ADR-0003 MCP robot-view semantic mapping. Phase 46 closes the missing
 local-dev handoff from completed cleanup artifacts to executable planner proof
-requests, so real multi-proof bundle runs can be generated repeatably.
+requests, so real multi-proof bundle runs can be generated repeatably. Phase 47
+makes those private proof requests reviewable in the shared cleanup report
+without moving planner aliases into Agent View.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -156,6 +158,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.45 MolmoSpaces planner proof bundle cleanup** - Phase 44 (completed 2026-05-10; one bound proof per cleaned object for bridge-ready full cleanup artifacts)
 - ✅ **v1.46 MolmoSpaces report visual core contract** - Phase 45 (completed 2026-05-10; shared visual-core checks and MCP robot-view semantic reuse)
 - ✅ **v1.47 MolmoSpaces planner proof request manifest** - Phase 46 (completed 2026-05-10; private proof request manifest and local bundle runner)
+- 🚧 **v1.48 MolmoSpaces planner proof request report view** - Phase 47 (in progress 2026-05-10; private proof request report section)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -218,6 +221,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 44: MolmoSpaces planner proof bundle cleanup** - ADR-0035 multiple bound proof attachments selected per observed handle/target so a full cleanup artifact can pass the existing planner primitive and bridge gates. Completed 2026-05-10; this proves artifact proof coverage, not live generation of every proof.
 - [x] **Phase 45: MolmoSpaces report visual core contract** - ADR-0036 shared report visual-core checker plus ADR-0003 MCP robot-view semantic mapping reuse. Completed 2026-05-10; stale ignored reports now fail until regenerated with the shared visual core.
 - [x] **Phase 46: MolmoSpaces planner proof request manifest** - ADR-0037 private manifest and local runner that turn completed ADR-0003 cleanup artifacts into executable bound planner proof requests. Completed 2026-05-10.
+- [ ] **Phase 47: MolmoSpaces planner proof request report view** - ADR-0038 shared report section that renders private planner proof requests while keeping Agent View clean. In progress 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
