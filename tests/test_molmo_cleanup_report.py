@@ -715,11 +715,21 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "schema": "planner_cleanup_proof_request_selection_v1",
             "mode": "exclude_task_feasibility_blocked",
             "ready_request_count": 1,
-            "selected_count": 0,
+            "selected_count": 1,
             "excluded_count": 1,
-            "fallback_required": True,
-            "selected_request_ids": [],
-            "selected_requests": [],
+            "generated_fallback_request_count": 1,
+            "fallback_required": False,
+            "selected_request_ids": ["proof_001_fallback_01"],
+            "selected_requests": [
+                {
+                    "request_id": "proof_001_fallback_01",
+                    "request_type": "fallback_generated",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "prior_task_feasibility_status": "blocked",
+                }
+            ],
             "excluded_requests": [
                 {
                     "request_id": "proof_001",
@@ -730,11 +740,36 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
+            "fallback_generation": {
+                "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+                "enabled": True,
+                "generated_request_count": 1,
+                "generated_requests": [
+                    {
+                        "request_id": "proof_001_fallback_01",
+                        "source_request_id": "proof_001",
+                        "ready": True,
+                        "object_id": "observed_001",
+                        "target_receptacle_id": "sink_01",
+                        "planner_probe_args": {
+                            "--cleanup-object-id": "observed_001",
+                            "--cleanup-target-receptacle-id": "sink_01",
+                            "--cleanup-planner-object-id": "pickup/alt",
+                            "--cleanup-planner-target-receptacle-id": "sink/alt",
+                        },
+                        "fallback_request": {
+                            "source_request_id": "proof_001",
+                            "reason": "prior_task_feasibility_blocked",
+                            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                        },
+                    }
+                ],
+            },
         },
         "command_count": 1,
         "commands": [
             {
-                "request_id": "proof_001",
+                "request_id": "proof_001_fallback_01",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
                 "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
@@ -745,7 +780,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "--cleanup-object-id",
                     "observed_001",
                     "--cleanup-planner-target-receptacle-id",
-                    "sink/body",
+                    "sink/alt",
                 ],
             }
         ],
@@ -810,11 +845,14 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Cleanup Rerun Command" in html
     assert "dry_run" in html
     assert "proof_001" in html
+    assert "proof_001_fallback_01" in html
     assert "observed_001" in html
-    assert "sink/body" in html
+    assert "sink/alt" in html
     assert "HouseInvalidForTask" in html
     assert "Fallback required" in html
     assert "prior_task_feasibility_blocked" in html
+    assert "Generated Fallback Requests" in html
+    assert "fallback_generated" in html
     assert "Task feasibility" in html
     assert "blocked" in html
     assert "initial.png" in html

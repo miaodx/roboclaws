@@ -761,18 +761,27 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         return ""
     selected = selection.get("selected_requests") or []
     excluded = selection.get("excluded_requests") or []
+    fallback_generation = selection.get("fallback_generation") or {}
+    generated = (
+        fallback_generation.get("generated_requests") or []
+        if isinstance(fallback_generation, dict)
+        else []
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
         f"{_metric('Ready', selection.get('ready_request_count', 0))}"
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
+        f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
     selected_rows = "".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('request_type', 'source')))}</td>"
+        f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
@@ -793,12 +802,13 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="4">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="6">No proof requests selected.</td></tr>'
     if not excluded_rows:
         excluded_rows = '<tr><td colspan="6">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
-        "<th>Request</th><th>Object</th><th>Target</th><th>Prior feasibility</th>"
+        "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
+        "<th>Prior feasibility</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
@@ -807,6 +817,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         "<th>Prior feasibility</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
+    generated_table = _generated_fallback_requests_table(generated)
     note = selection.get("evidence_note") or (
         "Private proof request selection for local proof-bundle execution."
     )
@@ -814,7 +825,42 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}</section>"
+        f"{selected_table}{excluded_table}{generated_table}</section>"
+    )
+
+
+def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in generated:
+        if not isinstance(item, dict):
+            continue
+        fallback = item.get("fallback_request") or {}
+        args = item.get("planner_probe_args") or {}
+        source_request_id = fallback.get(
+            "source_request_id",
+            item.get("source_request_id", ""),
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+            f"<td>{html.escape(str(source_request_id))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(args.get('--cleanup-planner-object-id', '')))}</td>"
+            f"<td>{html.escape(str(args.get('--cleanup-planner-target-receptacle-id', '')))}</td>"
+            f"<td>{html.escape(str(fallback.get('reason', '')))}</td>"
+            f"<td>{html.escape(_blocker_codes(fallback.get('prior_blockers') or []))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="8">No generated fallback requests.</td></tr>')
+    return (
+        "<h3>Generated Fallback Requests</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
+        "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
+        "<th>Prior blockers</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
 

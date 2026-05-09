@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 56 proof request feasibility selection completed; alternate RBY1M-feasible request generation remains next on 2026-05-10
+**Status:** Phase 57 fallback proof request generation completed; next work is local execution of generated fallback requests on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -82,6 +82,12 @@ bundle-level evidence. Phase 56 adds the first fallback-selection seam: a
 runner can consume a prior proof-bundle manifest, exclude requests already known
 to be RBY1M task-feasibility blocked, and report when alternate request
 generation is required.
+Phase 57 turns that fallback-required state into bounded private fallback
+requests by preserving the cleanup object/target IDs while varying planner
+aliases from observed-handle binding metadata. The runner report now renders
+the generated fallback request rows and commands, but real RBY1M/CuRobo
+execution still has to prove whether any generated request is feasible and can
+promote cleanup primitive binding.
 
 ## Why This Exists
 
@@ -904,7 +910,10 @@ completed:
   gsd-plan-phase 56-molmospaces-proof-request-feasibility-selection
   gsd-execute-phase 56-molmospaces-proof-request-feasibility-selection
   gsd-verify-work 56-molmospaces-proof-request-feasibility-selection
+  gsd-plan-phase 57-molmospaces-proof-request-fallback-generation
+  gsd-execute-phase 57-molmospaces-proof-request-fallback-generation
+  gsd-verify-work 57-molmospaces-proof-request-fallback-generation
 
 next pipeline candidates:
-  plan alternate RBY1M-feasible cleanup proof request generation
+  plan local execution of generated fallback proof requests
 ```

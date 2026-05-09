@@ -55,6 +55,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cleanup-output-dir", type=Path)
     parser.add_argument("--prior-proof-bundle-manifest", type=Path)
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
+    parser.add_argument("--generate-fallback-requests", action="store_true")
+    parser.add_argument("--fallback-alias-limit", type=int, default=4)
     return parser.parse_args()
 
 
@@ -80,6 +82,8 @@ def main() -> None:
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
+        generate_fallback_requests=args.generate_fallback_requests,
+        fallback_alias_limit=args.fallback_alias_limit,
     )
     print(
         json.dumps(
@@ -113,6 +117,8 @@ def run_from_cleanup_result(
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    generate_fallback_requests: bool = False,
+    fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
     cleanup_run_result = cleanup_run_result.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -123,6 +129,8 @@ def run_from_cleanup_result(
         requests,
         prior_proof_result_summary=prior_summary,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+        generate_fallback_requests=generate_fallback_requests,
+        fallback_alias_limit=fallback_alias_limit,
     )
     commands = build_probe_commands(
         manifest=requests,

@@ -222,6 +222,138 @@ def test_proof_request_selection_marks_fallback_required_when_all_ready_blocked(
     assert selection["fallback_required"] is True
 
 
+def test_proof_request_selection_generates_fallback_alias_requests(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "source_receptacle_id": "counter_01",
+                "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+                "binding": {
+                    "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
+                    "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+                    "backend_planner_task_binding": {
+                        "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
+                        "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+                    },
+                    "requested_cleanup_primitive_binding": {
+                        "object_id": "observed_001",
+                        "target_receptacle_id": "sink_01",
+                        "planner_object_id": "pickup/body",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "sink_01",
+                    "--cleanup-source-receptacle-id": "counter_01",
+                    "--cleanup-tools": "navigate_to_object,pick,navigate_to_receptacle,place",
+                    "--cleanup-planner-object-id": "pickup/body",
+                    "--cleanup-planner-target-receptacle-id": "sink/body",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=2,
+    )
+    commands = build_probe_commands(
+        manifest=manifest,
+        output_dir=tmp_path,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        request_selection=selection,
+    )
+
+    assert selection["mode"] == "exclude_task_feasibility_blocked_with_fallbacks"
+    assert selection["fallback_required"] is False
+    assert selection["excluded_count"] == 1
+    assert selection["generated_fallback_request_count"] == 2
+    assert selection["selected_request_ids"] == [
+        "proof_001_fallback_01",
+        "proof_001_fallback_02",
+    ]
+    generated = selection["fallback_generation"]["generated_requests"]
+    assert generated[0]["source_request_id"] == "proof_001"
+    assert generated[0]["object_id"] == "observed_001"
+    assert generated[0]["target_receptacle_id"] == "sink_01"
+    assert generated[0]["fallback_request"]["prior_blockers"][0]["code"] == ("HouseInvalidForTask")
+    assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
+        "Sink|1|2"
+    )
+    assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == (
+        "Pickup|surface|1|1"
+    )
+    assert [item["request_id"] for item in commands] == selection["selected_request_ids"]
+    assert "Sink|1|2" in commands[0]["command"]
+    assert "Pickup|surface|1|1" in commands[1]["command"]
+
+
+def test_proof_request_selection_keeps_fallback_required_when_no_alias_available() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "binding": {
+                    "candidate_pickup_names": ["pickup/body"],
+                    "candidate_place_receptacle_names": ["sink/body"],
+                },
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "sink_01",
+                    "--cleanup-planner-object-id": "pickup/body",
+                    "--cleanup-planner-target-receptacle-id": "sink/body",
+                },
+            }
+        ],
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary={
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "task_feasibility_status": "blocked",
+                    "blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ]
+        },
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+    )
+
+    assert selection["selected_count"] == 0
+    assert selection["generated_fallback_request_count"] == 0
+    assert selection["fallback_required"] is True
+    assert selection["fallback_generation"]["unavailable_source_request_count"] == 1
+
+
 def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Path) -> None:
     proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
     views_dir = proof_dir / "planner_views"

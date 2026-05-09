@@ -104,6 +104,82 @@ def test_checker_can_require_expected_proof_outputs(tmp_path: Path) -> None:
     checker._assert_runner_result(manifest, tmp_path, require_proof_outputs=True)
 
 
+def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    manifest["ready_request_count"] = 0
+    manifest["commands"][0]["request_id"] = "proof_001_fallback_01"
+    manifest["commands"][0]["command"].extend(
+        [
+            "--cleanup-planner-object-id",
+            "pickup/alt",
+            "--cleanup-planner-target-receptacle-id",
+            "sink/alt",
+        ]
+    )
+    manifest["proof_request_selection"] = {
+        "schema": "planner_cleanup_proof_request_selection_v1",
+        "mode": "exclude_task_feasibility_blocked_with_fallbacks",
+        "ready_request_count": 1,
+        "selected_count": 1,
+        "excluded_count": 1,
+        "generated_fallback_request_count": 1,
+        "fallback_required": False,
+        "selected_request_ids": ["proof_001_fallback_01"],
+        "selected_requests": [
+            {
+                "request_id": "proof_001_fallback_01",
+                "request_type": "fallback_generated",
+                "source_request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "prior_task_feasibility_status": "blocked",
+            }
+        ],
+        "excluded_requests": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "reason": "prior_task_feasibility_blocked",
+                "prior_task_feasibility_status": "blocked",
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+        "fallback_generation": {
+            "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+            "enabled": True,
+            "generated_request_count": 1,
+            "generated_requests": [
+                {
+                    "request_id": "proof_001_fallback_01",
+                    "source_request_id": "proof_001",
+                    "ready": True,
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "planner_probe_args": {
+                        "--cleanup-planner-object-id": "pickup/alt",
+                        "--cleanup-planner-target-receptacle-id": "sink/alt",
+                    },
+                    "fallback_request": {
+                        "source_request_id": "proof_001",
+                        "reason": "prior_task_feasibility_blocked",
+                        "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                    },
+                }
+            ],
+        },
+    }
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    (tmp_path / "proof_bundle_run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
+
+    checker._assert_runner_result(manifest, tmp_path)
+
+
 def test_checker_requires_cleanup_rerun_outputs_for_cleanup_rerun_status(
     tmp_path: Path,
 ) -> None:

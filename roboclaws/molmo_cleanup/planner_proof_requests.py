@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,9 @@ PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
 PLANNER_PROOF_RESULT_SUMMARY_SCHEMA = "planner_cleanup_proof_result_summary_v1"
 PLANNER_PROOF_REQUEST_SELECTION_SCHEMA = "planner_cleanup_proof_request_selection_v1"
+PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA = (
+    "planner_cleanup_proof_request_fallback_generation_v1"
+)
 
 
 def planner_proof_requests_from_substeps(
@@ -81,9 +85,13 @@ def ready_planner_proof_requests(
 ) -> list[dict[str, Any]]:
     assert manifest.get("schema") == PLANNER_PROOF_REQUESTS_SCHEMA, manifest
     selected_ids = _selected_request_ids(request_selection)
+    requests = [
+        *(manifest.get("requests") or []),
+        *_generated_ready_proof_requests(request_selection),
+    ]
     return [
         request
-        for request in manifest.get("requests") or []
+        for request in requests
         if request.get("ready")
         and (selected_ids is None or str(request.get("request_id") or "") in selected_ids)
     ]
@@ -194,6 +202,8 @@ def proof_request_selection_from_summary(
     *,
     prior_proof_result_summary: dict[str, Any] | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    generate_fallback_requests: bool = False,
+    fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
     """Select ready proof requests, optionally excluding known infeasible requests."""
     ready_requests = [
@@ -202,6 +212,7 @@ def proof_request_selection_from_summary(
     prior_results = _prior_results_by_request_id(prior_proof_result_summary or {})
     selected = []
     excluded = []
+    generated = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
         prior_result = prior_results.get(request_id, {})
@@ -210,21 +221,39 @@ def proof_request_selection_from_summary(
             and prior_result.get("task_feasibility_status") == "blocked"
         ):
             excluded.append(_excluded_request(request, prior_result))
+            if generate_fallback_requests:
+                generated.extend(
+                    _fallback_requests_for_blocked_request(
+                        request,
+                        prior_result,
+                        limit=fallback_alias_limit,
+                    )
+                )
             continue
         selected.append(_selected_request(request, prior_result))
+    selected.extend(_selected_request(request, {}) for request in generated)
     fallback_required = bool(ready_requests) and not selected
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
-        "mode": (
-            "exclude_task_feasibility_blocked" if exclude_task_feasibility_blocked else "all_ready"
+        "mode": _proof_request_selection_mode(
+            exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+            generate_fallback_requests=generate_fallback_requests,
         ),
         "ready_request_count": len(ready_requests),
         "selected_count": len(selected),
         "excluded_count": len(excluded),
+        "generated_fallback_request_count": len(generated),
         "fallback_required": fallback_required,
         "selected_request_ids": [item["request_id"] for item in selected],
         "selected_requests": selected,
         "excluded_requests": excluded,
+        "fallback_generation": _fallback_generation(
+            enabled=generate_fallback_requests,
+            ready_request_count=len(ready_requests),
+            excluded_requests=excluded,
+            generated_requests=generated,
+            fallback_alias_limit=fallback_alias_limit,
+        ),
         "prior_summary_available": bool(prior_proof_result_summary),
         "prior_result_count": len(prior_results),
         "evidence_note": (
@@ -234,6 +263,18 @@ def proof_request_selection_from_summary(
     }
 
 
+def _proof_request_selection_mode(
+    *,
+    exclude_task_feasibility_blocked: bool,
+    generate_fallback_requests: bool,
+) -> str:
+    if exclude_task_feasibility_blocked and generate_fallback_requests:
+        return "exclude_task_feasibility_blocked_with_fallbacks"
+    if exclude_task_feasibility_blocked:
+        return "exclude_task_feasibility_blocked"
+    return "all_ready"
+
+
 def _selected_request_ids(request_selection: dict[str, Any] | None) -> set[str] | None:
     if not request_selection:
         return None
@@ -241,6 +282,22 @@ def _selected_request_ids(request_selection: dict[str, Any] | None) -> set[str] 
     if raw is None:
         return None
     return {str(item) for item in raw}
+
+
+def _generated_ready_proof_requests(
+    request_selection: dict[str, Any] | None,
+) -> list[dict[str, Any]]:
+    if not request_selection:
+        return []
+    fallback_generation = request_selection.get("fallback_generation") or {}
+    if not isinstance(fallback_generation, dict):
+        return []
+    raw = fallback_generation.get("generated_requests") or []
+    return [
+        dict(item)
+        for item in raw
+        if isinstance(item, dict) and item.get("ready") and item.get("request_id")
+    ]
 
 
 def _prior_results_by_request_id(summary: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -255,12 +312,18 @@ def _selected_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
 ) -> dict[str, Any]:
+    fallback = request.get("fallback_request") or {}
+    is_fallback = isinstance(fallback, dict) and bool(fallback)
     return {
         "request_id": str(request.get("request_id") or ""),
+        "request_type": "fallback_generated" if is_fallback else "source",
+        "source_request_id": str(fallback.get("source_request_id") or ""),
         "object_id": str(request.get("object_id") or ""),
         "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
         "prior_task_feasibility_status": str(
-            prior_result.get("task_feasibility_status") or "unknown"
+            prior_result.get("task_feasibility_status")
+            or fallback.get("prior_task_feasibility_status")
+            or "unknown"
         ),
     }
 
@@ -278,6 +341,152 @@ def _excluded_request(
         "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
     }
+
+
+def _fallback_generation(
+    *,
+    enabled: bool,
+    ready_request_count: int,
+    excluded_requests: list[dict[str, Any]],
+    generated_requests: list[dict[str, Any]],
+    fallback_alias_limit: int,
+) -> dict[str, Any]:
+    if not enabled and not generated_requests:
+        return {
+            "schema": PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA,
+            "enabled": False,
+            "generated_request_count": 0,
+            "generated_requests": [],
+        }
+    generated_source_ids = {str(item.get("source_request_id") or "") for item in generated_requests}
+    unavailable_count = len(excluded_requests) - len(generated_source_ids)
+    return {
+        "schema": PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA,
+        "enabled": enabled,
+        "ready_request_count": ready_request_count,
+        "excluded_request_count": len(excluded_requests),
+        "generated_request_count": len(generated_requests),
+        "unavailable_source_request_count": max(unavailable_count, 0),
+        "fallback_alias_limit": max(int(fallback_alias_limit or 0), 0),
+        "generated_requests": generated_requests,
+        "evidence_note": (
+            "Private generated fallback proof requests. They preserve cleanup-facing "
+            "object and target IDs while trying alternate planner aliases."
+        ),
+    }
+
+
+def _fallback_requests_for_blocked_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    if limit <= 0:
+        return []
+    args = request.get("planner_probe_args") or {}
+    current_object_alias = _planner_arg(args, "--cleanup-planner-object-id")
+    current_target_alias = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
+    pickup_candidates = _candidate_aliases(
+        request,
+        candidate_key="candidate_pickup_names",
+        current_alias=current_object_alias,
+    )
+    target_candidates = _candidate_aliases(
+        request,
+        candidate_key="candidate_place_receptacle_names",
+        current_alias=current_target_alias,
+    )
+    generated: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for object_alias in pickup_candidates:
+        for target_alias in target_candidates:
+            pair = (object_alias, target_alias)
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            if pair == (current_object_alias, current_target_alias):
+                continue
+            generated.append(
+                _fallback_request_with_planner_aliases(
+                    request,
+                    prior_result,
+                    index=len(generated) + 1,
+                    planner_object_id=object_alias,
+                    planner_target_receptacle_id=target_alias,
+                )
+            )
+            if len(generated) >= limit:
+                return generated
+    return generated
+
+
+def _fallback_request_with_planner_aliases(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+    *,
+    index: int,
+    planner_object_id: str,
+    planner_target_receptacle_id: str,
+) -> dict[str, Any]:
+    source_request_id = str(request.get("request_id") or "")
+    fallback = deepcopy(request)
+    fallback["request_id"] = f"{source_request_id}_fallback_{index:02d}"
+    fallback["ready"] = True
+    fallback["source_request_id"] = source_request_id
+    fallback["fallback_request"] = {
+        "source_request_id": source_request_id,
+        "reason": "prior_task_feasibility_blocked",
+        "strategy": "alternate_planner_alias",
+        "planner_object_id": planner_object_id,
+        "planner_target_receptacle_id": planner_target_receptacle_id,
+        "prior_status": str(prior_result.get("status") or ""),
+        "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
+        "prior_blockers": _blockers(prior_result.get("blockers") or []),
+        "agent_view_exposed": False,
+    }
+    args = dict(fallback.get("planner_probe_args") or {})
+    if planner_object_id:
+        args["--cleanup-planner-object-id"] = planner_object_id
+    if planner_target_receptacle_id:
+        args["--cleanup-planner-target-receptacle-id"] = planner_target_receptacle_id
+    fallback["planner_probe_args"] = args
+    binding = fallback.get("binding")
+    if isinstance(binding, dict):
+        binding["planner_object_id"] = planner_object_id
+        binding["planner_target_receptacle_id"] = planner_target_receptacle_id
+        binding["planner_probe_args"] = args
+        requested = binding.get("requested_cleanup_primitive_binding")
+        if isinstance(requested, dict):
+            requested["planner_object_id"] = planner_object_id
+            requested["planner_target_receptacle_id"] = planner_target_receptacle_id
+    return fallback
+
+
+def _candidate_aliases(
+    request: dict[str, Any],
+    *,
+    candidate_key: str,
+    current_alias: str,
+) -> list[str]:
+    binding = request.get("binding") or {}
+    backend_binding = (
+        binding.get("backend_planner_task_binding") if isinstance(binding, dict) else {}
+    )
+    values = [current_alias]
+    if isinstance(binding, dict):
+        values.extend(str(item) for item in binding.get(candidate_key) or [])
+    if isinstance(backend_binding, dict):
+        values.extend(str(item) for item in backend_binding.get(candidate_key) or [])
+    return _unique_nonempty_values(values)
+
+
+def _planner_arg(args: Any, key: str) -> str:
+    return str(args.get(key) or "") if isinstance(args, dict) else ""
+
+
+def _unique_nonempty_values(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(str(value) for value in values if str(value)))
 
 
 def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:

@@ -229,6 +229,80 @@ def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path
     assert "No proof requests selected" in report
 
 
+def test_runner_generates_fallback_requests_from_prior_blocked_aliases(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    request = requests["requests"][0]
+    request["binding"] = {
+        "candidate_pickup_names": ["pickup/body", "Pickup|surface|1|1"],
+        "candidate_place_receptacle_names": ["sink/body", "Sink|1|2"],
+    }
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}),
+        encoding="utf-8",
+    )
+    prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior.parent.mkdir()
+    prior.write_text(
+        json.dumps(
+            {
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                        }
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+        fallback_alias_limit=2,
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    assert manifest["command_count"] == 2
+    assert selection["fallback_required"] is False
+    assert selection["generated_fallback_request_count"] == 2
+    assert manifest["commands"][0]["request_id"] == "proof_001_fallback_01"
+    assert manifest["commands"][0]["object_id"] == "observed_001"
+    assert manifest["commands"][0]["target_receptacle_id"] == "sink_01"
+    assert "Sink|1|2" in manifest["commands"][0]["command"]
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Generated Fallback Requests" in report
+    assert "proof_001_fallback_01" in report
+    assert "Pickup|surface|1|1" in report
+    assert "Sink|1|2" in report
+
+
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_dir = tmp_path / "cleanup"

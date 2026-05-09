@@ -50,7 +50,6 @@ def _assert_runner_result(
     )
     commands = data.get("commands") or []
     assert data.get("command_count") == len(commands), data
-    assert int(data.get("ready_request_count") or 0) >= len(commands), data
     assert data.get("cleanup_run_result"), data
     report = _resolve_path(base, str(data.get("report") or "report.html"))
     assert report.is_file(), report
@@ -59,6 +58,10 @@ def _assert_runner_result(
     proof_request_selection = data.get("proof_request_selection") or {}
     if proof_request_selection:
         _assert_proof_request_selection(proof_request_selection, commands, report_text)
+        generated_count = _generated_fallback_request_count(proof_request_selection)
+    else:
+        generated_count = 0
+    assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
     if proof_result_summary:
         _assert_proof_result_summary(
@@ -143,6 +146,7 @@ def _assert_proof_request_selection(
     assert selected_ids == command_ids, selection
     assert int(selection.get("selected_count") or 0) == len(command_ids), selection
     assert "Proof Request Selection" in report_text, report_text[:500]
+    assert "Generated Fallback Requests" in report_text, report_text[:500]
     for item in selection.get("selected_requests") or []:
         for key in ("request_id", "object_id", "target_receptacle_id"):
             assert item.get(key), item
@@ -151,6 +155,34 @@ def _assert_proof_request_selection(
         for key in ("request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
             assert str(item[key]) in report_text, (key, report_text[:500])
+    fallback_generation = selection.get("fallback_generation") or {}
+    if fallback_generation:
+        generated = fallback_generation.get("generated_requests") or []
+        assert int(selection.get("generated_fallback_request_count") or 0) == len(generated), (
+            selection
+        )
+        for item in generated:
+            fallback = item.get("fallback_request") or {}
+            for key in ("request_id", "object_id", "target_receptacle_id"):
+                assert item.get(key), item
+                assert str(item[key]) in report_text, (key, report_text[:500])
+            assert fallback.get("source_request_id"), item
+            assert str(fallback["source_request_id"]) in report_text, report_text[:500]
+            args = item.get("planner_probe_args") or {}
+            for key in (
+                "--cleanup-planner-object-id",
+                "--cleanup-planner-target-receptacle-id",
+            ):
+                value = str(args.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+
+
+def _generated_fallback_request_count(selection: dict[str, Any]) -> int:
+    fallback_generation = selection.get("fallback_generation") or {}
+    if not isinstance(fallback_generation, dict):
+        return 0
+    return int(fallback_generation.get("generated_request_count") or 0)
 
 
 def _assert_proof_result_summary(
