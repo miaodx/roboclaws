@@ -1438,6 +1438,11 @@ def _apply_exact_cleanup_task_sampler_adapter(
     task_sampler: Any,
     requested_cleanup_binding: dict[str, Any],
 ) -> dict[str, Any]:
+    planner_object_id = str(
+        requested_cleanup_binding.get("planner_object_id")
+        or requested_cleanup_binding.get("object_id")
+        or ""
+    )
     planner_target_id = str(
         requested_cleanup_binding.get("planner_target_receptacle_id")
         or requested_cleanup_binding.get("target_receptacle_id")
@@ -1490,17 +1495,83 @@ def _apply_exact_cleanup_task_sampler_adapter(
         exact_prepare_place_target,
         task_sampler,
     )
-    return {
+    adapter = {
         "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
         "applied": True,
         "task_sampler_class": type(task_sampler).__name__,
+        "planner_object_id": planner_object_id,
         "planner_target_receptacle_id": planner_target_id,
         "hooks": ["_get_place_target_candidates", "_prepare_place_target"],
         "evidence_note": (
             "Probe-local adapter makes the upstream pick-and-place sampler use the "
-            "cleanup request's target object instead of an unrelated generated receptacle."
+            "cleanup request's object and target instead of unrelated generated candidates."
         ),
     }
+    select_pickup_object = getattr(task_sampler, "_select_pickup_object", None)
+    reset = getattr(task_sampler, "reset", None)
+    if planner_object_id and callable(select_pickup_object):
+
+        def exact_select_pickup_object(self: Any, env: Any) -> Any:
+            _apply_exact_pickup_candidate_binding(self, planner_object_id, adapter)
+            return select_pickup_object(env)
+
+        task_sampler._select_pickup_object = MethodType(  # noqa: SLF001
+            exact_select_pickup_object,
+            task_sampler,
+        )
+        adapter["hooks"].append("_select_pickup_object_exact_pickup_candidate_pool")
+    elif planner_object_id and callable(reset):
+
+        def exact_reset(self: Any, *args: Any, **kwargs: Any) -> Any:
+            result = reset(*args, **kwargs)
+            _apply_exact_pickup_candidate_binding(self, planner_object_id, adapter)
+            return result
+
+        task_sampler.reset = MethodType(exact_reset, task_sampler)
+        adapter["hooks"].append("reset_exact_pickup_candidate_pool")
+    return adapter
+
+
+def _apply_exact_pickup_candidate_binding(
+    task_sampler: Any,
+    planner_object_id: str,
+    adapter: dict[str, Any],
+) -> None:
+    candidate_objects = getattr(task_sampler, "candidate_objects", None)
+    binding = {
+        "schema": "planner_probe_exact_pickup_candidate_binding_v1",
+        "planner_object_id": planner_object_id,
+        "candidate_count_before": _candidate_object_count(task_sampler),
+        "candidate_names_before": _candidate_object_names(task_sampler),
+        "requested_present_before": None,
+        "candidate_count_after": None,
+        "candidate_names_after": None,
+        "requested_present_after": None,
+        "action": "no_candidate_pool",
+    }
+    if candidate_objects is None:
+        adapter["exact_pickup_candidate_binding"] = binding
+        return
+    try:
+        candidates = list(candidate_objects)
+    except TypeError:
+        adapter["exact_pickup_candidate_binding"] = binding
+        return
+    matches = [item for item in candidates if str(getattr(item, "name", item)) == planner_object_id]
+    binding["requested_present_before"] = bool(matches)
+    if matches:
+        task_sampler.candidate_objects = matches
+        binding["action"] = "filtered_to_requested_candidate"
+    else:
+        task_sampler.candidate_objects = [SimpleNamespace(name=planner_object_id)]
+        binding["action"] = "injected_requested_candidate_name"
+    binding["candidate_count_after"] = _candidate_object_count(task_sampler)
+    binding["candidate_names_after"] = _candidate_object_names(task_sampler)
+    binding["requested_present_after"] = _candidate_name_present(
+        binding["candidate_names_after"],
+        planner_object_id,
+    )
+    adapter["exact_pickup_candidate_binding"] = binding
 
 
 def _apply_task_sampler_failure_diagnostics_adapter(

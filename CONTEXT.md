@@ -150,6 +150,13 @@ from an actual candidate-pool mutation, including candidate-name presence
 before/after removal and effective-removal counts.
 _Avoid_: assuming candidate-removal calls mean the object was removed
 
+**Exact Pickup Candidate Binding**:
+Probe-local exact-scene sampler evidence that binds the upstream pickup
+candidate pool to the requested planner object immediately before pickup
+selection, recording before/after candidate counts, requested-name presence,
+and whether the requested candidate had to be injected.
+_Avoid_: reset-time candidate patch, unrelated candidate retry loop
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -644,6 +651,9 @@ _Avoid_: full cleanup replacement claim
 - **Planner Primitive Target Binding** should be enforced before wiring a real object-specific RBY1M/CuRobo cleanup executor.
 - A **Probe-Backed Cleanup Primitive Executor** should reject generic standalone planner proof unless it names the cleanup object, target, and tool it executed.
 - **Planner Probe Cleanup Binding** should be emitted before the probe-backed executor is used for ADR-0003 cleanup subphases.
+- **Exact Pickup Candidate Binding** should happen at the live upstream pickup
+  selection point, not at reset-time, and should remain private proof evidence
+  rendered by the shared report underlay.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -982,3 +992,9 @@ _Avoid_: full cleanup replacement claim
   removal from true grasp candidate exhaustion. A real Phase 105 RBY1M proof
   rerun confirmed the repeated seed-10 blocker has 17 grasp failures, 15
   removal calls, 0 effective removals, and 15 candidate-name misses.
+- Phase 106 added Exact Pickup Candidate Binding. The exact sampler adapter now
+  binds the live pickup candidate pool at `_select_pickup_object()` before
+  upstream selection and renders the binding action in shared reports. The real
+  Phase 106 rerun changed the blocker from 17 grasp failures / 15 ineffective
+  removals to a direct invalid planner-object `KeyError`, with candidate count
+  moving from 4 unrelated objects to the requested bread alias only.

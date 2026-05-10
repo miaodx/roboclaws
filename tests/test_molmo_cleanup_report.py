@@ -1548,7 +1548,17 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
         "applied": True,
         "task_sampler_class": "PickAndPlaceTaskSampler",
+        "planner_object_id": "pickup/body",
         "planner_target_receptacle_id": "sink/body",
+        "exact_pickup_candidate_binding": {
+            "schema": "planner_probe_exact_pickup_candidate_binding_v1",
+            "planner_object_id": "pickup/body",
+            "candidate_count_before": 17,
+            "candidate_count_after": 1,
+            "requested_present_before": False,
+            "requested_present_after": True,
+            "action": "injected_requested_candidate_name",
+        },
     }
     run_result["manipulation_evidence"]["task_sampler_failure_diagnostics"] = {
         "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
@@ -1713,6 +1723,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "place_robot_near max tries" in html
     assert "Exact task config applied" in html
     assert "Exact sampler adapter class" in html
+    assert "Exact sampler adapter object" in html
+    assert "Exact pickup candidate action" in html
+    assert "injected_requested_candidate_name" in html
     assert "PickAndPlaceTaskSampler" in html
     assert "Task Sampler Failure Diagnostics" in html
     assert "Placement failures" in html

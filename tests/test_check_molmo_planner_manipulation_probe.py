@@ -184,6 +184,18 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     class FakeSampler:
         place_receptacle_name = None
 
+        def __init__(self) -> None:
+            self.candidate_objects = []
+
+        def reset(self):
+            self.candidate_objects = [
+                SimpleNamespace(name="pickup/body"),
+                SimpleNamespace(name="other/body"),
+            ]
+
+        def _select_pickup_object(self, env):
+            return [item.name for item in self.candidate_objects]
+
         def _get_place_target_candidates(self, env, pickup_obj_name, supporting_geom_id):
             return ["random/target"]
 
@@ -203,6 +215,7 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     result = runner._apply_exact_cleanup_task_sampler_adapter(
         sampler,
         {
+            "planner_object_id": "pickup/body",
             "planner_target_receptacle_id": "sink/body",
             "target_receptacle_id": "sink_01",
         },
@@ -212,6 +225,56 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     assert sampler._get_place_target_candidates(env, "pickup/body", 1) == ["sink/body"]
     assert sampler._prepare_place_target(env, "ignored", "pickup/body", None, 1) is True
     assert sampler.place_receptacle_name == "sink/body"
+    sampler.reset()
+    assert sampler._select_pickup_object(env) == ["pickup/body"]
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"]
+    binding = result["exact_pickup_candidate_binding"]
+    assert binding["action"] == "filtered_to_requested_candidate"
+    assert binding["requested_present_before"] is True
+    assert binding["candidate_count_before"] == 2
+    assert binding["candidate_count_after"] == 1
+
+
+def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        def reset(self):
+            self.candidate_objects = [SimpleNamespace(name="other/body")]
+
+        def _select_pickup_object(self, env):
+            return [item.name for item in self.candidate_objects]
+
+        def _get_place_target_candidates(self, env, pickup_obj_name, supporting_geom_id):
+            return ["random/target"]
+
+        def _prepare_place_target(
+            self,
+            env,
+            place_target_name,
+            pickup_obj_name,
+            pickup_obj_pos,
+            supporting_geom_id,
+        ):
+            return True
+
+    sampler = FakeSampler()
+    result = runner._apply_exact_cleanup_task_sampler_adapter(
+        sampler,
+        {
+            "planner_object_id": "pickup/body",
+            "planner_target_receptacle_id": "sink/body",
+        },
+    )
+
+    sampler.reset()
+    assert sampler._select_pickup_object(None) == ["pickup/body"]
+
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"]
+    binding = result["exact_pickup_candidate_binding"]
+    assert binding["action"] == "injected_requested_candidate_name"
+    assert binding["requested_present_before"] is False
+    assert binding["requested_present_after"] is True
 
 
 def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Path) -> None:

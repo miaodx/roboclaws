@@ -527,10 +527,17 @@ def _assert_proof_result_summary(
                 assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
         if sampler_adapter:
             assert "Exact sampler adapter applied" in report_text, report_text[:500]
-            for key in ("planner_target_receptacle_id", "task_sampler_class"):
+            for key in ("planner_object_id", "planner_target_receptacle_id", "task_sampler_class"):
                 value = str(sampler_adapter.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+            pickup_binding = sampler_adapter.get("exact_pickup_candidate_binding") or {}
+            if pickup_binding:
+                assert "Exact pickup candidate action" in report_text, report_text[:500]
+                for key in ("planner_object_id", "action"):
+                    value = str(pickup_binding.get(key) or "")
+                    if value:
+                        assert value in report_text, (key, report_text[:500])
         task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
         if task_sampler_failure:
             placement_failure_keys = ("robot_placement_failure_count", "asset_failure_count")

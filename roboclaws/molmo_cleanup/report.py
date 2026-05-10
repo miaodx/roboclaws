@@ -1425,6 +1425,7 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
     robot_placement_overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+    pickup_binding = sampler_adapter.get("exact_pickup_candidate_binding") or {}
     task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
     last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
@@ -1457,7 +1458,15 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("place_robot_near max tries", robot_placement_overrides.get("max_tries", "")),
         ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
         ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
+        ("Exact sampler adapter object", sampler_adapter.get("planner_object_id", "")),
         ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
+        ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        (
+            "Exact pickup requested present before",
+            _yes_no(pickup_binding.get("requested_present_before")),
+        ),
+        ("Exact pickup candidates before", pickup_binding.get("candidate_count_before", "")),
+        ("Exact pickup candidates after", pickup_binding.get("candidate_count_after", "")),
         (
             "Task sampler placement attempts",
             task_sampler_failure.get("robot_placement_attempt_count", ""),
@@ -1813,6 +1822,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     blockers = evidence.get("cleanup_primitive_binding_blockers") or []
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+    pickup_binding = cleanup_task_sampler_adapter.get("exact_pickup_candidate_binding") or {}
     if not (
         sampled
         or requested
@@ -1834,9 +1844,24 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
             cleanup_task_sampler_adapter.get("task_sampler_class", ""),
         ),
         (
+            "Exact sampler adapter object",
+            cleanup_task_sampler_adapter.get("planner_object_id", ""),
+        ),
+        (
             "Exact sampler adapter target",
             cleanup_task_sampler_adapter.get("planner_target_receptacle_id", ""),
         ),
+        ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        (
+            "Exact pickup requested present before",
+            _yes_no(pickup_binding.get("requested_present_before")),
+        ),
+        (
+            "Exact pickup requested present after",
+            _yes_no(pickup_binding.get("requested_present_after")),
+        ),
+        ("Exact pickup candidates before", pickup_binding.get("candidate_count_before", "")),
+        ("Exact pickup candidates after", pickup_binding.get("candidate_count_after", "")),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
         (
             "Sampled target",

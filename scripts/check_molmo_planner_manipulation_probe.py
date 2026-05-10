@@ -153,6 +153,14 @@ def _assert_probe_result(
         or evidence.get("cleanup_task_sampler_adapter")
     ):
         assert "Planner Probe Cleanup Binding" in report_text, report_text[:500]
+        adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+        pickup_binding = adapter.get("exact_pickup_candidate_binding") or {}
+        if pickup_binding:
+            assert "Exact pickup candidate action" in report_text, report_text[:500]
+            for key in ("action", "planner_object_id"):
+                value = str(pickup_binding.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}

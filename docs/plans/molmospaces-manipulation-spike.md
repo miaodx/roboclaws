@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 105 candidate-removal effectiveness completed; next work is using the new effectiveness evidence to reduce the shared grasp-feasibility blocker or change proof candidate source
+**Status:** Phase 106 exact pickup candidate binding completed; next work is fixing proof candidate source / runtime object alias validity before another cleanup rerun
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -336,6 +336,15 @@ confirmed the seed-10 bread-to-refrigerator blocker has 17 grasp failures, 15
 removal calls, 0 effective removals, and 15 candidate-name misses, so the next
 slice should target candidate identity binding, proof candidate source
 rotation, or a grasp-feasibility mitigation.
+Phase 106 closes the candidate identity binding slice. The exact cleanup
+sampler adapter now binds the live pickup candidate pool at
+`_select_pickup_object()` rather than reset-time, and shared planner/proof
+reports render the exact pickup action plus before/after candidate counts. The
+real Phase 106 bread-to-refrigerator rerun injected the requested bread alias,
+moving the pickup pool from 4 unrelated candidates to 1 exact candidate with 0
+grasp failures and 0 removal calls. The remaining blocker is now a direct
+`KeyError` invalid planner object name, so the next slice should fix proof
+candidate source / runtime object alias validity before another cleanup rerun.
 
 ## Why This Exists
 
