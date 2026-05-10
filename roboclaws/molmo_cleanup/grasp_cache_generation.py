@@ -50,7 +50,7 @@ def run_grasp_cache_generation(
     output_dir.mkdir(parents=True, exist_ok=True)
     objects_list_path = (output_dir / "grasp_generation" / "rigid_objects_list.json").resolve()
     objects_list_path.parent.mkdir(parents=True, exist_ok=True)
-    objects_list = _objects_list_from_preflight(generation_preflight)
+    objects_list = objects_list_from_generation_preflight(generation_preflight)
     objects_list_path.write_text(
         json.dumps(objects_list, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -72,12 +72,12 @@ def run_grasp_cache_generation(
         command.extend(["--approach_steps", str(approach_steps)])
     if shake_steps is not None:
         command.extend(["--shake_steps", str(shake_steps)])
-    assets_symlink = _ensure_molmospaces_assets_symlink(
+    assets_symlink = ensure_molmospaces_assets_symlink(
         generation_preflight,
         working_dir=working_dir,
         dry_run=dry_run,
     )
-    command_result = _run_generation_command(
+    command_result = run_generation_command(
         command,
         cwd=working_dir,
         molmospaces_python=python,
@@ -182,14 +182,16 @@ def _blocked_result(
     }
 
 
-def _objects_list_from_preflight(generation_preflight: dict[str, Any]) -> list[dict[str, str]]:
+def objects_list_from_generation_preflight(
+    generation_preflight: dict[str, Any],
+) -> list[dict[str, str]]:
     objects: list[dict[str, str]] = []
     for asset in generation_preflight.get("assets") or []:
         if not isinstance(asset, dict):
             continue
         entry = asset.get("objects_list_entry") or {}
         name = str(entry.get("name") or asset.get("asset_uid") or "")
-        xml = str(_generation_xml_path(str(entry.get("xml") or asset.get("object_xml") or "")))
+        xml = str(generation_xml_path(str(entry.get("xml") or asset.get("object_xml") or "")))
         if name and xml:
             objects.append({"name": name, "xml": xml})
     if not objects:
@@ -197,7 +199,7 @@ def _objects_list_from_preflight(generation_preflight: dict[str, Any]) -> list[d
     return objects
 
 
-def _generation_xml_path(xml: str) -> Path:
+def generation_xml_path(xml: str) -> Path:
     path = Path(xml)
     mesh_xml = path.with_name(f"{path.stem}_mesh{path.suffix}")
     if mesh_xml.is_file():
@@ -205,7 +207,7 @@ def _generation_xml_path(xml: str) -> Path:
     return path
 
 
-def _ensure_molmospaces_assets_symlink(
+def ensure_molmospaces_assets_symlink(
     generation_preflight: dict[str, Any],
     *,
     working_dir: Path,
@@ -246,7 +248,7 @@ def _ensure_molmospaces_assets_symlink(
     return {**result, "created": True}
 
 
-def _run_generation_command(
+def run_generation_command(
     command: list[str],
     *,
     cwd: Path,

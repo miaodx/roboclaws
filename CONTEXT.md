@@ -202,6 +202,11 @@ Rigid grasp-cache evidence that parses candidate files and treats a loader file
 as ready only when it contains at least one transform.
 _Avoid_: treating empty NPZ/JSON files as a successful cache install
 
+**Grasp Filter Diagnostics**:
+Bounded local evidence that preserves MolmoSpaces rigid grasp intermediates and
+reruns perturbation-filter variants before cache installation.
+_Avoid_: relying on an empty filtered NPZ as the only failure signal
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -1156,3 +1161,9 @@ _Avoid_: full cleanup replacement claim
   `Bread_1` candidate grasp generation, but upstream perturbation filtering
   saves zero successful transforms, so install remains blocked and visible in
   the generation report.
+- Phase 119 adds Grasp Filter Diagnostics. A bounded local diagnostic preserves
+  the combined/manifold/simplified mesh, generated candidates, per-variant
+  subsets, and filtered NPZ outputs. It generated 24 valid `Bread_1` candidates
+  and showed zero successful transforms for `initial_contact`,
+  `translation_shake`, and `upstream_like`, narrowing the next blocker to the
+  initial contact/pose path inside perturbation testing.

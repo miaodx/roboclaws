@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 118 grasp cache generation runner completed; next work is fixing or replacing the upstream zero-success `Bread_1` perturbation/filter path before installing a non-empty droid loader cache
+**Status:** Phase 119 grasp filter diagnostics completed; next work is inspecting or replacing the upstream `Bread_1` initial contact/pose path before installing a non-empty droid loader cache
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -411,6 +411,11 @@ report-visible. The runner reaches upstream candidate generation and writes
 `Bread_1_grasps.json`, but the perturbation filter saves
 `Bread_1_grasps_filtered.npz` with zero transforms, so the wrapper blocks install
 and renders the zero-success filter result in `report.html`.
+Phase 119 adds bounded grasp filter diagnostics. The diagnostic runner preserves
+mesh and candidate intermediates under the output directory, renders explicit
+filter variants, and shows that 24 generated `Bread_1` candidates still produce
+zero successful transforms for `initial_contact`, `translation_shake`, and
+`upstream_like`.
 
 ## Why This Exists
 

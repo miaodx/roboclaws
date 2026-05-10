@@ -293,6 +293,28 @@ def render_grasp_cache_generation_report(
     return report_path
 
 
+def render_grasp_filter_diagnostics_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for bounded grasp perturbation-filter diagnostics."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_filter_diagnostics_summary_section(result),
+                _grasp_filter_diagnostics_artifacts_section(result),
+                _grasp_filter_diagnostics_variants_section(result.get("variants") or []),
+                _grasp_filter_diagnostics_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
 def _present_sections(sections: list[str]) -> list[str]:
     return [section for section in sections if section]
 
@@ -924,6 +946,136 @@ def _grasp_cache_generation_blockers_section(blockers: list[dict[str, Any]]) -> 
         "<h2>Generation Blockers</h2>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Code</th><th>Asset</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_summary_section(result: dict[str, Any]) -> str:
+    return (
+        '<section class="summary grasp-filter-diagnostics-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp filter diagnostic artifact</p>'
+        "<h1>MolmoSpaces Grasp Filter Diagnostics</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Object', result.get('object_name', ''))}"
+        f"{_metric('Variants', result.get('variant_count', 0))}"
+        f"{_metric('Successful', result.get('successful_variant_count', 0))}"
+        f"{_metric('Blockers', result.get('blocker_count', 0))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Object XML', result.get('object_xml', ''))}"
+        f"{_badge('Artifacts', result.get('artifact_dir', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_artifacts_section(result: dict[str, Any]) -> str:
+    pipeline = result.get("pipeline") or {}
+    subset = result.get("candidate_subset") or {}
+    rows = [
+        ("Pipeline source", pipeline.get("source", "")),
+        ("Candidate grasps", pipeline.get("candidate_grasps_path", "")),
+        ("Candidate count", pipeline.get("candidate_count", "")),
+        ("Subset grasps", subset.get("subset_path", "")),
+        ("Requested subset", subset.get("requested_sample_size", "")),
+        ("Subset count", subset.get("subset_count", "")),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    command_rows = []
+    for command in pipeline.get("commands") or []:
+        result_row = command.get("result") or {}
+        command_text = " ".join(str(part) for part in command.get("command") or [])
+        output_tail = _tail_text(result_row.get("stderr") or result_row.get("stdout"), limit=500)
+        command_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(command.get('stage', '')))}</td>"
+            f"<td>{html.escape(str(result_row.get('status', '')))}</td>"
+            f"<td>{html.escape(str(result_row.get('returncode', '')))}</td>"
+            f"<td><code>{html.escape(command_text)}</code></td>"
+            f"<td>{html.escape(output_tail)}</td>"
+            "</tr>"
+        )
+    command_table = ""
+    if command_rows:
+        command_table = (
+            '<div class="table-wrap"><table><thead><tr>'
+            "<th>Stage</th><th>Status</th><th>Return</th><th>Command</th><th>Output tail</th>"
+            f"</tr></thead><tbody>{''.join(command_rows)}</tbody></table></div>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-artifacts">'
+        "<h2>Diagnostic Artifacts</h2>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        f"{command_table}"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_variants_section(variants: list[dict[str, Any]]) -> str:
+    if not variants:
+        return ""
+    rows = []
+    for variant in variants:
+        validation = variant.get("validation") or {}
+        command_result = variant.get("command_result") or {}
+        output_tail = _tail_text(
+            command_result.get("stderr") or command_result.get("stdout"), limit=500
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(variant.get('name', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('classification', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('num_shakes', '')))}</td>"
+            f"<td>{html.escape(_yes_no(variant.get('rotate')))}</td>"
+            f"<td>{html.escape(str(variant.get('successful_transform_count', 0)))}</td>"
+            f"<td>{html.escape(str(validation.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('output_npz_path', '')))}</td>"
+            f"<td>{html.escape(output_tail)}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-variants">'
+        "<h2>Filter Variants</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Variant</th><th>Classification</th><th>Shakes</th><th>Rotate</th>"
+        "<th>Successful transforms</th><th>NPZ status</th><th>Output NPZ</th><th>Output tail</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Filter Diagnostic Blockers</h2>'
+            '<p class="note">No filter diagnostic blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('variant', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-blockers">'
+        "<h2>Filter Diagnostic Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Variant</th><th>Message</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
         "</section>"
     )
