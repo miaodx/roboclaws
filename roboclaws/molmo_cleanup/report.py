@@ -271,6 +271,28 @@ def render_planner_proof_bundle_runner_report(
     return report_path
 
 
+def render_grasp_cache_generation_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for MolmoSpaces grasp cache generation attempts."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_cache_generation_summary_section(result),
+                _grasp_cache_generation_assets_section(result.get("assets") or []),
+                _grasp_cache_generation_command_section(result),
+                _grasp_cache_generation_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
 def _present_sections(sections: list[str]) -> list[str]:
     return [section for section in sections if section]
 
@@ -799,6 +821,120 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         '<p class="note">Command evidence only. A command row is not planner proof until '
         "the referenced proof artifact passes the strict planner probe checker.</p>"
         f"{table}</section>"
+    )
+
+
+def _grasp_cache_generation_summary_section(result: dict[str, Any]) -> str:
+    return (
+        '<section class="summary grasp-cache-generation-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp cache generation artifact</p>'
+        "<h1>MolmoSpaces Grasp Cache Generation</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Assets', result.get('asset_count', 0))}"
+        f"{_metric('Blockers', result.get('blocker_count', 0))}"
+        f"{_metric('Ready', _yes_no(result.get('ready')))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Objects list', result.get('objects_list_path', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_assets_section(assets: list[dict[str, Any]]) -> str:
+    rows = []
+    for asset in assets:
+        generated = asset.get("generated_validation") or {}
+        installed = asset.get("installed_validation") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(asset.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(generated.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(generated.get('transform_count', 0)))}</td>"
+            f"<td>{html.escape(_yes_no(asset.get('installed')))}</td>"
+            f"<td>{html.escape(str(installed.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(installed.get('transform_count', 0)))}</td>"
+            f"<td>{html.escape(str(asset.get('generated_npz_path', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('cache_target_path', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        '<section class="panel grasp-cache-generation-assets">'
+        "<h2>Generated Cache Assets</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Generated status</th><th>Generated transforms</th>"
+        "<th>Installed</th><th>Installed status</th><th>Installed transforms</th>"
+        "<th>Generated NPZ</th><th>Cache target</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_command_section(result: dict[str, Any]) -> str:
+    command = " ".join(str(part) for part in result.get("command") or [])
+    command_result = result.get("command_result") or {}
+    if not command:
+        return ""
+    rows = [
+        ("Command status", command_result.get("status", "")),
+        ("Return code", command_result.get("returncode", "")),
+        ("Stdout tail", _tail_text(command_result.get("stdout", ""), limit=1600)),
+        ("Stderr tail", _tail_text(command_result.get("stderr", ""), limit=1600)),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    return (
+        '<section class="panel grasp-cache-generation-command">'
+        "<h2>Generation Command</h2>"
+        f"<pre><code>{html.escape(command)}</code></pre>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Generation Blockers</h2>'
+            '<p class="note">No generation blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-cache-generation-blockers">'
+        "<h2>Generation Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Asset</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _assets_symlink_summary(symlink: dict[str, Any]) -> str:
+    if not symlink:
+        return ""
+    return (
+        f"{symlink.get('status', '')}; path={symlink.get('path', '')}; "
+        f"target={symlink.get('target', '')}; created={_yes_no(symlink.get('created'))}"
     )
 
 
@@ -1930,6 +2066,11 @@ def _worker_stage_summary(events: list[dict[str, Any]]) -> str:
         if label:
             parts.append(label)
     return "; ".join(parts)
+
+
+def _tail_text(value: Any, *, limit: int) -> str:
+    text = str(value or "")
+    return text[-limit:] if len(text) > limit else text
 
 
 def _cleanup_rerun_command_section(command: list[str]) -> str:

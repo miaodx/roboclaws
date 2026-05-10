@@ -936,7 +936,7 @@ def _file_probe(
     gripper: str,
     loader_role: str,
 ) -> dict[str, Any]:
-    validation = _validate_grasp_file(path) if loader_role == "rigid_object_loader" else {}
+    validation = validate_grasp_cache_file(path) if loader_role == "rigid_object_loader" else {}
     return {
         "asset_uid": asset_uid,
         "source": source,
@@ -961,7 +961,8 @@ def _loader_file_status(*, ready: bool, present_candidate_count: int) -> str:
     return "missing"
 
 
-def _validate_grasp_file(path: Path) -> dict[str, Any]:
+def validate_grasp_cache_file(path: Path | str) -> dict[str, Any]:
+    path = Path(path)
     if not path.exists() or not path.is_file():
         return {
             "validation_status": "missing",

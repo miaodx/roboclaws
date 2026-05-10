@@ -408,6 +408,12 @@ prerequisites, initializes/builds Manifold, and reruns the same generation
 preflight as its acceptance gate.
 _Avoid_: one-off shell setup that cannot be reproduced by the next agent
 
+**Grasp Cache Generation Runner**:
+The checked-in local-dev runner that turns a ready generation preflight into an
+upstream `run_rigid.py` attempt, validates the generated NPZ, installs only
+non-empty cache files, and renders command/install blockers.
+_Avoid_: copying unfiltered candidates or empty NPZ files into the loader cache
+
 **Planner-Backed Manipulation Proof**:
 Evidence that a MolmoSpaces robot manipulation planner policy actually executed
 robot actions and changed robot state, separate from semantic state edits.
@@ -752,6 +758,8 @@ _Avoid_: full cleanup replacement claim
   rigid grasp generation or installing generated cache output.
 - **Grasp Generation Setup Runner** should be used to make that preflight pass
   instead of applying ad hoc local environment fixes.
+- **Grasp Cache Generation Runner** should install only a generated NPZ that
+  passes the nonzero-transform validation used by the availability preflight.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1144,3 +1152,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 117 adds Grasp Generation Setup Runner. The local MolmoSpaces runtime
   now has the rigid-path Python prerequisites and built Manifold executables,
   and the proof-bundle generation preflight reports `ready` with zero blockers.
+- Phase 118 adds Grasp Cache Generation Runner. The generation path reaches
+  `Bread_1` candidate grasp generation, but upstream perturbation filtering
+  saves zero successful transforms, so install remains blocked and visible in
+  the generation report.

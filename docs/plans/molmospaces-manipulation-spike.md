@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 117 grasp generation prerequisites completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target
+**Status:** Phase 118 grasp cache generation runner completed; next work is fixing or replacing the upstream zero-success `Bread_1` perturbation/filter path before installing a non-empty droid loader cache
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -406,6 +406,11 @@ runner installs the rigid-path Python prerequisites into the uv MolmoSpaces
 runtime, initializes/builds Manifold even when the checkout lacks a tracked
 gitlink, and reruns the proof-bundle report with `Grasp Cache Generation
 Preflight` at `ready` and zero blockers.
+Phase 118 makes the actual generation/install attempt reproducible and
+report-visible. The runner reaches upstream candidate generation and writes
+`Bread_1_grasps.json`, but the perturbation filter saves
+`Bread_1_grasps_filtered.npz` with zero transforms, so the wrapper blocks install
+and renders the zero-success filter result in `report.html`.
 
 ## Why This Exists
 

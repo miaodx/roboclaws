@@ -117,6 +117,7 @@ one decision per file, sequential numbering, explicit status.
 | [0106](0106-centralize-semantic-cleanup-vocabulary.md) | Centralize Semantic Cleanup Vocabulary | Accepted |
 | [0107](0107-preflight-grasp-cache-generation-before-running.md) | Preflight Grasp Cache Generation Before Running | Accepted |
 | [0108](0108-setup-grasp-generation-prerequisites-before-cache-generation.md) | Setup Grasp Generation Prerequisites Before Cache Generation | Accepted |
+| [0109](0109-report-grasp-cache-generation-and-install-blockers.md) | Report Grasp Cache Generation And Install Blockers | Accepted |
 
 ## Adding a new ADR
 
