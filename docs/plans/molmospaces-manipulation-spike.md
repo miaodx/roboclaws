@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 94 seeded source pool/proof memory completed; next work is executing the four newly selected proof commands
+**Status:** Phase 95 seeded selected proof execution completed; next work is diagnosing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -274,6 +274,10 @@ selection now uses the subprocess seed to choose different eligible objects on
 the same fixed scene, and proof-selection memory rejects local `proof_###` /
 `observed_###` matches when planner object identity conflicts. The patched seed
 9 artifact selected four new proof commands after prior-memory filtering.
+Phase 95 executed those four selected proof commands. All four reached task
+sampling with the wide placement profile but remained `grasp_feasibility`
+blocked with `17 grasp failures; 15 candidate-removal calls`, so no new
+planner-backed cleanup primitive coverage is available for a cleanup rerun yet.
 
 ## Why This Exists
 
@@ -1150,8 +1154,12 @@ completed:
   gsd-plan-phase 94-molmospaces-seeded-source-pool-proof-memory
   gsd-execute-phase 94-molmospaces-seeded-source-pool-proof-memory
   gsd-verify-work 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-plan-phase 95-molmospaces-seeded-selected-proof-execution
+  gsd-execute-phase 95-molmospaces-seeded-selected-proof-execution
+  gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  execute the four proof commands selected from the patched seed9 source pool:
-  proof_003, proof_005, proof_006, and proof_010
+  diagnose or reduce the shared RBY1M grasp-feasibility blocker before another
+  cleanup rerun; the patched seed9 selected proofs produced zero planner-backed
+  results
 ```

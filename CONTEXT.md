@@ -861,3 +861,10 @@ _Avoid_: full cleanup replacement claim
   The patched seed 9 artifact validates with 10 generated objects and 44 robot
   timeline steps; prior-aware selection now picks four proof commands
   (`proof_003`, `proof_005`, `proof_006`, `proof_010`) instead of zero.
+- Phase 95 added Seeded Selected Proof Execution. The four selected patched
+  seed 9 proof commands executed locally through the shared proof-bundle runner
+  with warmup, low RBY1M CuRobo memory, and wide placement profile. All four
+  reached task sampling but remained `grasp_feasibility` blocked with
+  `17 grasp failures; 15 candidate-removal calls`; no new planner-backed proof
+  or cleanup-binding promotion was produced. The runner report still provides
+  the visual review surface for selection, prior evidence, and proof results.

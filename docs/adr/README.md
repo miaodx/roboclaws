@@ -94,6 +94,7 @@ one decision per file, sequential numbering, explicit status.
 | [0083](0083-exclude-prior-covered-planner-proofs.md) | Exclude Prior Covered Planner Proofs | Accepted |
 | [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
 | [0085](0085-seed-generated-mess-pools-and-guard-local-proof-memory.md) | Seed Generated Mess Pools and Guard Local Proof Memory | Accepted |
+| [0086](0086-execute-seeded-selected-proof-commands.md) | Execute Seeded Selected Proof Commands | Accepted |
 
 ## Adding a new ADR
 

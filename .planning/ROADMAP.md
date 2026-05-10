@@ -242,6 +242,11 @@ proof-selection memory no longer lets local `proof_###` / `observed_###`
 collisions override conflicting planner-object identity. The patched seed 9
 artifact validates with 10 generated objects and 44 robot timeline steps; the
 prior-aware dry run selects 4 proof commands for the next execution slice.
+Phase 95 executes those four selected seed 9 proof commands through the shared
+proof-bundle runner. All four attempts reach task sampling with the wide
+placement profile, but all remain `grasp_feasibility` blocked with
+`17 grasp failures; 15 candidate-removal calls`; no new planner-backed cleanup
+binding is available for a cleanup rerun.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -361,6 +366,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.93 MolmoSpaces prior covered proof selection memory** - Phase 92 (completed 2026-05-10; already-covered planner proofs are excluded before broader proof expansion)
 - ✅ **v1.94 MolmoSpaces cleanup report artifact adapter** - Phase 93 (completed 2026-05-10; stale cleanup reports regenerate from run_result.json through the shared underlay)
 - ✅ **v1.95 MolmoSpaces seeded source pool proof memory** - Phase 94 (completed 2026-05-10; generated-mess seeds rotate object pools and local proof IDs cannot hide new planner objects)
+- ✅ **v1.96 MolmoSpaces seeded selected proof execution** - Phase 95 (completed 2026-05-10; four selected seed9 proofs executed and all remain grasp-feasibility blocked)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -471,6 +477,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 92: MolmoSpaces prior covered proof selection memory** - ADR-0083 excludes already-covered planner-backed cleanup bindings before new proof-bundle execution. Completed 2026-05-10.
 - [x] **Phase 93: MolmoSpaces cleanup report artifact adapter** - ADR-0084 regenerates stale cleanup `report.html` artifacts from `run_result.json` through the shared underlay. Completed 2026-05-10.
 - [x] **Phase 94: MolmoSpaces seeded source pool proof memory** - ADR-0085 makes generated-mess selection seed-aware and guards prior proof memory against local ID collisions when planner object identity differs. Completed 2026-05-10.
+- [x] **Phase 95: MolmoSpaces seeded selected proof execution** - ADR-0086 executes the four selected patched seed9 proof commands and records all four as grasp-feasibility blocked. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

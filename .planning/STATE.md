@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 94 MolmoSpaces seeded source pool proof memory completed on 2026-05-10.
+stopped_at: Phase 95 MolmoSpaces seeded selected proof execution completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 87
-  completed_phases: 87
-  total_plans: 90
-  completed_plans: 90
+  total_phases: 88
+  completed_phases: 88
+  total_plans: 91
+  completed_plans: 91
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 94 completed seeded source-pool rotation and proof-memory identity guards; next work is executing the four selected proof commands.
+**Current focus:** Phase 95 completed selected seed proof execution; next work is diagnosing the shared RBY1M grasp-feasibility blocker.
 
 ## Current Position
 
-Phase: 94 (molmospaces-seeded-source-pool-proof-memory) - COMPLETE
-Plan: 1 of 1 complete - `94-01` makes generated-mess source selection seed-aware and guards prior proof memory against local ID collisions.
+Phase: 95 (molmospaces-seeded-selected-proof-execution) - COMPLETE
+Plan: 1 of 1 complete - `95-01` executes the four selected seed9 proof commands and records all four as grasp-feasibility blocked.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -240,18 +240,24 @@ memory rejects local `proof_###` / `observed_###` matches when planner object
 identity conflicts. The patched seed 9 artifact validates with 10 generated
 objects and 44 robot timeline steps; the prior-aware dry run selects 4 proof
 commands.
-Last activity: 2026-05-10 - Completed Phase 94 seeded source pool proof memory.
+Phase 95 adds Seeded Selected Proof Execution. The four selected patched seed 9
+proof commands executed through the shared proof-bundle runner with warmup, low
+RBY1M CuRobo memory, and wide placement profile. All four reached task sampling
+but remained `grasp_feasibility` blocked with `17 grasp failures; 15
+candidate-removal calls`; no new planner-backed proof or cleanup-binding
+promotion was produced.
+Last activity: 2026-05-10 - Completed Phase 95 seeded selected proof execution.
 
 Progress: [##########] 100%
-Next blocker: execute the four selected patched seed 9 proof commands:
-`proof_003`, `proof_005`, `proof_006`, and `proof_010`.
+Next blocker: diagnose or reduce the shared RBY1M grasp-feasibility blocker
+before another planner-backed cleanup rerun.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 94 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 94)
+- Total plans completed: 95 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 95)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -915,25 +921,25 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 94 MolmoSpaces seeded source pool proof memory completed.
-The next implementation should execute the four selected proof commands from
-the patched seed 9 source pool instead of retrying the exhausted Phase90 pool.
+Stopped at: Phase 95 MolmoSpaces seeded selected proof execution completed.
+The next implementation should diagnose or reduce the shared RBY1M
+grasp-feasibility blocker before another planner-backed cleanup rerun.
 Latest phase artifacts are
-`docs/adr/0085-seed-generated-mess-pools-and-guard-local-proof-memory.md`,
-`docs/plans/molmospaces-seeded-source-pool-proof-memory.md`, and
-`.planning/phases/94-molmospaces-seeded-source-pool-proof-memory/94-01-seeded-source-pool-proof-memory-PLAN.md`.
+`docs/adr/0086-execute-seeded-selected-proof-commands.md`,
+`docs/plans/molmospaces-seeded-selected-proof-execution.md`, and
+`.planning/phases/95-molmospaces-seeded-selected-proof-execution/95-01-seeded-selected-proof-execution-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
 Latest executed cleanup artifact:
 `output/debug-phase94-seeded-source-candidate-seed9/run_result.json`.
 Latest executed proof-bundle artifact:
-`output/debug-phase90-broader-selected-proof-execution/proof_bundle_run_manifest.json`.
+`output/debug-phase95-seeded-selected-proof-execution/proof_bundle_run_manifest.json`.
 Latest proof-bundle dry-run artifact:
 `output/debug-phase94-seeded-source-candidate-selection-dry-run-after-id-fix/proof_bundle_run_manifest.json`.
 Latest regenerated stale report:
 `output/molmo-agent-bridge-visual-codex/report.html`.
-Resume file: .planning/phases/94-molmospaces-seeded-source-pool-proof-memory/94-01-seeded-source-pool-proof-memory-PLAN.md
+Resume file: .planning/phases/95-molmospaces-seeded-selected-proof-execution/95-01-seeded-selected-proof-execution-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -941,6 +947,6 @@ Resume file: .planning/phases/94-molmospaces-seeded-source-pool-proof-memory/94-
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 94 MolmoSpaces seeded source pool proof memory is
-complete; next work should execute the four selected proof commands before
+**Active Phase:** None. Phase 95 MolmoSpaces seeded selected proof execution is
+complete; next work should address the shared grasp-feasibility blocker before
 claiming more planner-backed cleanup replacement.
