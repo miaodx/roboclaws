@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -226,6 +227,7 @@ def render_planner_proof_bundle_runner_report(
     {
         _proof_bundle_results_section(
             manifest.get("prior_proof_result_summary") or {},
+            output_dir=output_dir,
             title="Prior Proof Evidence",
             section_class="prior-proof-evidence",
             default_note=(
@@ -236,7 +238,11 @@ def render_planner_proof_bundle_runner_report(
     }
     {_proof_bundle_warmup_section(manifest.get("warmup") or {})}
     {_proof_bundle_commands_section(commands)}
-    {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
+    {
+        _proof_bundle_results_section(
+            manifest.get("proof_result_summary") or {}, output_dir=output_dir
+        )
+    }
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
@@ -1155,6 +1161,7 @@ def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
 def _proof_bundle_results_section(
     summary: dict[str, Any],
     *,
+    output_dir: Path | None = None,
     title: str = "Proof Probe Results",
     section_class: str = "proof-bundle-results",
     default_note: str = (
@@ -1190,7 +1197,7 @@ def _proof_bundle_results_section(
         else ""
     )
     body = (
-        "".join(_proof_bundle_result_card(item) for item in results)
+        "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
         else '<p class="note">No proof result rows recorded.</p>'
     )
@@ -1276,7 +1283,7 @@ def _has_result_blocker_code(item: dict[str, Any], code: str) -> bool:
     )
 
 
-def _proof_bundle_result_card(item: dict[str, Any]) -> str:
+def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None = None) -> str:
     blockers = list(item.get("blockers") or [])
     binding_blockers = list(item.get("cleanup_binding_blockers") or [])
     blocker_text = ", ".join(
@@ -1357,7 +1364,7 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     if views:
         figures = "".join(
             _view_figure(
-                view.get("path"),
+                _report_asset_src(view.get("path"), output_dir),
                 f"{item.get('request_id', '')} {view.get('label', '')}",
             )
             for view in views
@@ -2682,6 +2689,27 @@ def _view_figure(path: Any, label: str) -> str:
         f"<figcaption>{escaped_label}</figcaption>"
         "</figure>"
     )
+
+
+def _report_asset_src(path: Any, output_dir: Path | None) -> str:
+    if not path:
+        return ""
+    path_text = str(path)
+    if output_dir is None or path_text.startswith(("http://", "https://", "data:")):
+        return path_text
+    candidate = Path(path_text)
+    try:
+        if candidate.is_absolute():
+            asset_path = candidate
+        elif candidate.exists():
+            asset_path = candidate.resolve()
+        elif (output_dir / candidate).exists():
+            asset_path = (output_dir / candidate).resolve()
+        else:
+            return path_text
+        return Path(os.path.relpath(asset_path, output_dir.resolve())).as_posix()
+    except OSError:
+        return path_text
 
 
 def _moves_table(moves: list[dict[str, Any]]) -> str:

@@ -688,8 +688,10 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
     assert "grasp_feasibility" in report
     assert "17 grasp failures; 15 candidate-removal calls" in report
     assert str(prior_probe.parent / "report.html") in report
-    assert str(prior_probe.parent / "initial.png") in report
-    assert str(prior_probe.parent / "final.png") in report
+    assert 'src="../prior-probe/initial.png"' in report
+    assert 'src="../prior-probe/final.png"' in report
+    assert str(prior_probe.parent / "initial.png") not in report
+    assert str(prior_probe.parent / "final.png") not in report
 
 
 def test_runner_carries_nested_prior_proof_result_summary_from_prior_manifest(

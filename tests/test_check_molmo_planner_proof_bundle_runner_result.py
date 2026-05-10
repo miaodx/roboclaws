@@ -320,6 +320,9 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
     )
     render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
 
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert 'src="prior-proof/final.png"' in report
+    assert f'src="{tmp_path}/prior-proof/final.png"' not in report
     checker._assert_runner_result(manifest, tmp_path)
 
 

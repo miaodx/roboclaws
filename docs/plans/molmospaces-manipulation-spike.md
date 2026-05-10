@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 89 planner-object proof selection memory completed; next work is executing the selected broader exact-scene proof candidates
+**Status:** Phase 90 broader selected proof execution completed; next work is rerunning cleanup with the passing bound proof bundle
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -245,6 +245,12 @@ MolmoSpaces cleanup artifact produced 10 ready proof requests and 176
 robot-view images; the dry-run selected 8 new exact-scene candidates while
 excluding only the two known grasp-infeasible internal book/shelf and bowl/sink
 pairs.
+Phase 90 executed those 8 selected broader candidates locally with
+RBY1M/CuRobo warmup and the wide placement profile. Seven candidates remained
+`grasp_feasibility` blocked, while `proof_008` passed as strict
+planner-backed remote-control-to-stand evidence, promoted cleanup binding for
+`nav, pick, nav, place`, and rendered report-relative initial/final planner
+views in the shared runner report.
 
 ## Why This Exists
 
@@ -1106,8 +1112,11 @@ completed:
   gsd-plan-phase 89-molmospaces-planner-object-proof-selection-memory
   gsd-execute-phase 89-molmospaces-planner-object-proof-selection-memory
   gsd-verify-work 89-molmospaces-planner-object-proof-selection-memory
+  gsd-plan-phase 90-molmospaces-broader-selected-proof-execution
+  gsd-execute-phase 90-molmospaces-broader-selected-proof-execution
+  gsd-verify-work 90-molmospaces-broader-selected-proof-execution
 
 next pipeline candidates:
-  execute the 8 selected broader exact-scene proof candidates and classify
-  strict planner-backed proof / cleanup binding outcomes
+  rerun cleanup with the passing proof_008 bound proof and verify the final
+  cleanup artifact keeps unmatched objects honest
 ```

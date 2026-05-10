@@ -100,6 +100,12 @@ Local-dev execution of the currently selected exact-scene proof request after
 prior infeasible requests are filtered.
 _Avoid_: treating selected as feasible before execution
 
+**Broader Selected Proof Execution**:
+Local-dev execution of selected exact-scene proof requests from a broader
+cleanup artifact, after known internal blocked pairs are filtered, to record
+strict proof, cleanup binding, and visual evidence before a cleanup rerun.
+_Avoid_: treating selection as proof, treating one passing proof as full cleanup readiness
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -610,6 +616,10 @@ _Avoid_: full cleanup replacement claim
 - A **Prior Proof Evidence View** should render normalized prior proof results
   in the runner report before new proof commands, so consumed blocker evidence
   keeps its report links and planner-view images.
+- **Planner Proof Bundle Runner Report** proof-result image sources should use
+  the same report-relative asset policy as standalone proof reports. Manifest
+  fields may keep trace paths, but generated HTML should not require a second
+  visual implementation or output-dir-prefixed `src` values.
 - **Nested Prior Proof Evidence Carry-Forward** should merge nested prior proof
   summaries before selection so a later proof-bundle manifest can stand alone
   as the next prior input.
@@ -619,6 +629,9 @@ _Avoid_: full cleanup replacement claim
 - **Selected Proof Candidate Execution** should be checker-gated with required
   proof outputs before treating a selected exact-scene request as feasible or
   as a durable blocker.
+- **Broader Selected Proof Execution** should follow **Planner-Object Proof
+  Memory** and precede cleanup rerun; one passing bound proof can feed a rerun
+  slice but does not prove all generated objects are planner-backed.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -797,3 +810,8 @@ _Avoid_: full cleanup replacement claim
   cleanup artifact produced 10 ready proof requests and 176 robot-view images;
   the proof-bundle dry-run selected 8 new candidates while excluding the two
   known internal book/bowl blocked pairs by planner-object/public-target match.
+- Phase 90 added Broader Selected Proof Execution. The executed runner bundle
+  ran all 8 selected candidates with warmup and wide placement; `proof_008`
+  became a strict planner-backed remote-control-to-stand proof with promoted
+  cleanup binding and report-relative initial/final planner views, while the
+  other 7 candidates were classified as `grasp_feasibility` blocked.

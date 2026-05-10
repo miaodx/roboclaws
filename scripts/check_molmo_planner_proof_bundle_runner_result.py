@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -73,11 +75,12 @@ def _assert_runner_result(
     proof_result_summary = data.get("proof_result_summary") or {}
     prior_proof_result_summary = data.get("prior_proof_result_summary") or {}
     if prior_proof_result_summary:
-        _assert_prior_proof_result_summary(prior_proof_result_summary, report_text)
+        _assert_prior_proof_result_summary(prior_proof_result_summary, base, report_text)
     if proof_result_summary:
         _assert_proof_result_summary(
             proof_result_summary,
             commands,
+            base,
             report_text,
             require_outputs=require_proof_outputs,
         )
@@ -345,6 +348,7 @@ def _generated_fallback_request_count(selection: dict[str, Any]) -> int:
 def _assert_proof_result_summary(
     summary: dict[str, Any],
     commands: list[dict[str, Any]],
+    base: Path,
     report_text: str,
     *,
     require_outputs: bool,
@@ -390,7 +394,7 @@ def _assert_proof_result_summary(
             if code:
                 assert code in report_text, (code, report_text[:500])
         for view in item.get("views") or []:
-            assert str(view.get("path") or "") in report_text, (view, report_text[:500])
+            _assert_report_view_src(view, base, report_text)
         for key in ("last_worker_stage", "stdout", "stderr"):
             value = str(item.get(key) or "")
             if value:
@@ -467,6 +471,7 @@ def _assert_proof_result_summary(
 
 def _assert_prior_proof_result_summary(
     summary: dict[str, Any],
+    base: Path,
     report_text: str,
 ) -> None:
     schema = str(summary.get("schema") or "")
@@ -481,7 +486,7 @@ def _assert_prior_proof_result_summary(
             if value:
                 assert value in report_text, (key, report_text[:500])
         for view in item.get("views") or []:
-            assert str(view.get("path") or "") in report_text, (view, report_text[:500])
+            _assert_report_view_src(view, base, report_text)
         blocker_summary = str(item.get("task_feasibility_blocker_summary") or "")
         if blocker_summary:
             assert blocker_summary in report_text, (
@@ -521,6 +526,34 @@ def _resolve_path(base: Path, value: str) -> Path:
     if path.is_absolute() or path.exists():
         return path
     return base / path
+
+
+def _assert_report_view_src(view: dict[str, Any], base: Path, report_text: str) -> None:
+    path_text = str(view.get("path") or "")
+    assert path_text, view
+    src = _report_asset_src(path_text, base)
+    expected = f'src="{html.escape(src)}"'
+    assert expected in report_text, (expected, report_text[:500])
+    if _resolve_path(base, path_text).exists():
+        assert _resolve_path(base, src).is_file(), src
+
+
+def _report_asset_src(path_text: str, base: Path) -> str:
+    if path_text.startswith(("http://", "https://", "data:")):
+        return path_text
+    candidate = Path(path_text)
+    try:
+        if candidate.is_absolute():
+            asset_path = candidate
+        elif candidate.exists():
+            asset_path = candidate.resolve()
+        elif (base / candidate).exists():
+            asset_path = (base / candidate).resolve()
+        else:
+            return path_text
+        return Path(os.path.relpath(asset_path, base.resolve())).as_posix()
+    except OSError:
+        return path_text
 
 
 def _has_blocker_code(item: dict[str, Any], code: str) -> bool:

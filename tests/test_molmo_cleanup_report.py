@@ -1121,6 +1121,12 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "prior-proof/report.html" in html
     assert "prior-proof/initial.png" in html
     assert "prior-proof/final.png" in html
+    assert 'src="prior-proof/initial.png"' in html
+    assert 'src="prior-proof/final.png"' in html
+    assert 'src="proofs/001/initial.png"' in html
+    assert 'src="proofs/001/final.png"' in html
+    assert f'src="{tmp_path}/prior-proof/initial.png"' not in html
+    assert f'src="{tmp_path}/proofs/001/initial.png"' not in html
     assert "Robot placement profile" in html
     assert "relaxed" in html
     assert "place_robot_near max tries" in html
