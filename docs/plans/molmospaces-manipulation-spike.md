@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 97 post-placement rejection views completed; next work is reducing the shared grasp-feasibility blocker
+**Status:** Phase 98 grasp-feasibility blocker matrix completed; next work is reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -287,6 +287,10 @@ Phase 97 adds the specific visual view for the current grasp-feasibility
 blocker: standalone planner reports and proof-bundle result cards now render
 post-placement grasp failures, candidate removals, threshold removals, and
 candidate-count movement from the same shared report helper.
+Phase 98 adds the selection-level companion view: proof-bundle reports now show
+grasp-infeasible object-target pairs as a `Grasp Feasibility Blocker Matrix`
+before the detailed blocker table, so source-rotation decisions are visually
+reviewable.
 
 ## Why This Exists
 

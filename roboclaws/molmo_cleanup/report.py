@@ -873,6 +873,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     )
     generated_table = _generated_fallback_requests_table(generated)
     target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
+    grasp_blockers_matrix = _grasp_feasibility_blocker_matrix(grasp_feasibility_blockers)
     grasp_blockers_table = _grasp_feasibility_blockers_table(grasp_feasibility_blockers)
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
     normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
@@ -886,8 +887,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{target_blockers_table}{grasp_blockers_table}"
-        f"{generated_table}{discovered_table}"
+        f"{selected_table}{excluded_table}{target_blockers_table}"
+        f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
@@ -996,6 +997,41 @@ def _grasp_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
         "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
         "<th>Derived from</th><th>Detail</th><th>Prior match</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _grasp_feasibility_blocker_matrix(blockers: list[dict[str, Any]]) -> str:
+    cards = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or "object"
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or "target"
+        detail = item.get("prior_task_feasibility_blocker_summary") or ""
+        badges = [
+            item.get("kind", "blocked"),
+            item.get("source_request_id", ""),
+            item.get("prior_result_match_kind", ""),
+        ]
+        badge_html = "".join(
+            f'<span class="badge">{html.escape(str(value))}</span>' for value in badges if value
+        )
+        cards.append(
+            '<article class="grasp-blocker-card">'
+            '<div class="grasp-blocker-route">'
+            f"<strong>{html.escape(str(object_value))}</strong>"
+            "<span>to</span>"
+            f"<strong>{html.escape(str(target_value))}</strong>"
+            "</div>"
+            f'<div class="evidence-badges">{badge_html}</div>'
+            f"<p>{html.escape(str(detail))}</p>"
+            "</article>"
+        )
+    if not cards:
+        return ""
+    return (
+        "<h3>Grasp Feasibility Blocker Matrix</h3>"
+        f'<div class="grasp-blocker-matrix">{"".join(cards)}</div>'
     )
 
 
@@ -3170,6 +3206,36 @@ def _wrap_html(body: str) -> str:
     }}
     .rejection-view .diagnostic-visual {{
       background: #fff7ed;
+    }}
+    .grasp-blocker-matrix {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }}
+    .grasp-blocker-card {{
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff7f7;
+    }}
+    .grasp-blocker-route {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }}
+    .grasp-blocker-route strong {{
+      overflow-wrap: anywhere;
+    }}
+    .grasp-blocker-route span {{
+      color: #64748b;
+      font-size: 12px;
+    }}
+    .grasp-blocker-card p {{
+      margin: 8px 0 0;
+      color: #475569;
     }}
     .raw-fpv-grid {{
       display: grid;

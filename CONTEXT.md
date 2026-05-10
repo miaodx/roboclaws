@@ -132,6 +132,12 @@ placement succeeds, showing grasp failures, candidate removals, threshold
 removals, and candidate-count movement from task-sampler diagnostics.
 _Avoid_: table-only grasp-feasibility blocker, per-report rejection chart
 
+**Grasp-Feasibility Blocker Matrix**:
+The proof-bundle selection report view that summarizes grasp-infeasible
+object-target pairs as cards before the detailed blocker table, preserving the
+source request, match kind, and blocker summary.
+_Avoid_: table-only selection blocker review
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -891,3 +897,7 @@ _Avoid_: full cleanup replacement claim
   proof-bundle result cards now render grasp-failure diagnostics as a shared
   visual view, and checker gates require that visual whenever
   `task_sampler_failure_diagnostics.grasp_failures` is present.
+- Phase 98 added the Grasp-Feasibility Blocker Matrix. Proof-bundle selection
+  reports now render grasp-infeasible object-target pairs as visual cards before
+  the detailed blocker table, and the runner checker requires the matrix when
+  `grasp_feasibility_blockers` are present.

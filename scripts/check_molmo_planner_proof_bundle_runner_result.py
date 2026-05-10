@@ -235,6 +235,7 @@ def _assert_proof_request_selection(
         assert "Target Feasibility Blockers" in report_text, report_text[:500]
     if grasp_feasibility_blockers:
         assert "Grasp Feasibility Blockers" in report_text, report_text[:500]
+        assert "Grasp Feasibility Blocker Matrix" in report_text, report_text[:500]
     for item in target_feasibility_blockers:
         for key in ("kind", "source_request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item

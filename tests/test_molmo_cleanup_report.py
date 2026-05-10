@@ -1097,6 +1097,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Target Feasibility Blockers" in html
     assert "Target blockers" in html
     assert "Grasp Feasibility Blockers" in html
+    assert "Grasp Feasibility Blocker Matrix" in html
     assert "Grasp blockers" in html
     assert "Prior match" in html
     assert "request_id" in html

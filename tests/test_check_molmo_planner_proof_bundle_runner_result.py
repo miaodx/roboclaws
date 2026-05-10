@@ -495,6 +495,8 @@ def test_checker_accepts_partial_selection_with_exhausted_fallbacks(tmp_path: Pa
     render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
 
     checker._assert_runner_result(manifest, tmp_path)
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "Grasp Feasibility Blocker Matrix" in report
 
 
 def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> None:
