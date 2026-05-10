@@ -287,6 +287,32 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
             ],
         },
     }
+    manifest["prior_proof_result_summary"] = {
+        "schema": "merged_prior_planner_proof_result_summary_v1",
+        "result_count": 1,
+        "view_artifact_count": 1,
+        "results": [
+            {
+                "request_id": "standalone_observed_001_to_shelf_01",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "run_result": str(tmp_path / "prior-proof" / "run_result.json"),
+                "report": str(tmp_path / "prior-proof" / "report.html"),
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "views": [
+                    {
+                        "label": "final",
+                        "path": str(tmp_path / "prior-proof" / "final.png"),
+                    }
+                ],
+            }
+        ],
+    }
     manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
     (tmp_path / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",

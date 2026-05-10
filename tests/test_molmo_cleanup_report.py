@@ -899,6 +899,36 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 str(tmp_path / "torch_extensions"),
             ],
         },
+        "prior_proof_result_summary": {
+            "schema": "merged_prior_planner_proof_result_summary_v1",
+            "result_count": 1,
+            "view_artifact_count": 2,
+            "results": [
+                {
+                    "request_id": "standalone_observed_001_to_sink_01",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "run_result": str(tmp_path / "prior-proof" / "run_result.json"),
+                    "report": str(tmp_path / "prior-proof" / "report.html"),
+                    "status": "blocked_capability",
+                    "task_feasibility_status": "blocked",
+                    "task_feasibility_blocker_kind": "grasp_feasibility",
+                    "task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "views": [
+                        {
+                            "label": "initial",
+                            "path": str(tmp_path / "prior-proof" / "initial.png"),
+                        },
+                        {
+                            "label": "final",
+                            "path": str(tmp_path / "prior-proof" / "final.png"),
+                        },
+                    ],
+                }
+            ],
+        },
         "command_count": 1,
         "commands": [
             {
@@ -1039,6 +1069,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
     assert "Proof Request Selection" in html
+    assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html
     assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
@@ -1085,6 +1116,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task feasibility blocker" in html
     assert "grasp_feasibility" in html
     assert "3 grasp failures; 1 candidate-removal calls" in html
+    assert "standalone_observed_001_to_sink_01" in html
+    assert "prior-proof/run_result.json" in html
+    assert "prior-proof/report.html" in html
+    assert "prior-proof/initial.png" in html
+    assert "prior-proof/final.png" in html
     assert "Robot placement profile" in html
     assert "relaxed" in html
     assert "place_robot_near max tries" in html

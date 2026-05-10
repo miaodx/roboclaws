@@ -223,6 +223,17 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {
+        _proof_bundle_results_section(
+            manifest.get("prior_proof_result_summary") or {},
+            title="Prior Proof Evidence",
+            section_class="prior-proof-evidence",
+            default_note=(
+                "Prior proof evidence consumed by selection. This keeps standalone "
+                "probe and prior bundle visuals reviewable in the runner report."
+            ),
+        )
+    }
     {_proof_bundle_warmup_section(manifest.get("warmup") or {})}
     {_proof_bundle_commands_section(commands)}
     {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
@@ -1141,23 +1152,35 @@ def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
     )
 
 
-def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
+def _proof_bundle_results_section(
+    summary: dict[str, Any],
+    *,
+    title: str = "Proof Probe Results",
+    section_class: str = "proof-bundle-results",
+    default_note: str = (
+        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
+    ),
+) -> str:
     if not summary:
         return ""
     results = summary.get("results") or []
+    planner_backed_count = _summary_metric(summary, results, "planner_backed_count")
+    config_import_timeout_count = _summary_config_import_timeout_count(summary, results)
+    binding_promoted_count = _summary_metric(summary, results, "cleanup_binding_promoted_count")
+    execution_attempted_count = _summary_metric(summary, results, "execution_attempted_count")
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Expected', summary.get('expected_count', len(results)))}"
         f"{_metric('Results', summary.get('result_count', 0))}"
-        f"{_metric('Planner-backed', summary.get('planner_backed_count', 0))}"
-        f"{_metric('Timeouts', summary.get('timeout_count', 0))}"
-        f"{_metric('Config-import timeouts', summary.get('rby1m_config_import_timeout_count', 0))}"
-        f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
-        f"{_metric('Execution attempted', summary.get('execution_attempted_count', 0))}"
-        f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
-        f"{_metric('Grasp-feasible blocked', summary.get('grasp_feasibility_blocked_count', 0))}"
-        f"{_metric('Worker stage events', summary.get('worker_stage_event_count', 0))}"
-        f"{_metric('Views', summary.get('view_artifact_count', 0))}"
+        f"{_metric('Planner-backed', planner_backed_count)}"
+        f"{_metric('Timeouts', _summary_timeout_count(summary, results))}"
+        f"{_metric('Config-import timeouts', config_import_timeout_count)}"
+        f"{_metric('Binding promoted', binding_promoted_count)}"
+        f"{_metric('Execution attempted', execution_attempted_count)}"
+        f"{_metric('Task-feasible blocked', _summary_task_blocked_count(summary, results))}"
+        f"{_metric('Grasp-feasible blocked', _summary_grasp_blocked_count(summary, results))}"
+        f"{_metric('Worker stage events', _summary_worker_stage_event_count(summary, results))}"
+        f"{_metric('Views', _summary_view_artifact_count(summary, results))}"
         "</div>"
     )
     stage_counts = _last_worker_stage_counts_text(summary.get("last_worker_stage_counts") or {})
@@ -1171,13 +1194,85 @@ def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
         if results
         else '<p class="note">No proof result rows recorded.</p>'
     )
-    note = summary.get("evidence_note") or (
-        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
-    )
+    note = summary.get("evidence_note") or default_note
     return (
-        '<section class="panel proof-bundle-results">'
-        "<h2>Proof Probe Results</h2>"
+        f'<section class="panel {html.escape(section_class)}">'
+        f"<h2>{html.escape(title)}</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
+    )
+
+
+def _summary_metric(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    key: str,
+) -> int:
+    if key in summary:
+        return int(summary.get(key) or 0)
+    if key == "planner_backed_count":
+        return sum(1 for item in results if item.get("planner_backed"))
+    if key == "cleanup_binding_promoted_count":
+        return sum(1 for item in results if item.get("cleanup_binding_promoted"))
+    if key == "execution_attempted_count":
+        return sum(1 for item in results if item.get("execution_attempted"))
+    return 0
+
+
+def _summary_timeout_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "timeout_count" in summary:
+        return int(summary.get("timeout_count") or 0)
+    return sum(1 for item in results if _has_result_blocker_code(item, "timeout"))
+
+
+def _summary_config_import_timeout_count(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> int:
+    if "rby1m_config_import_timeout_count" in summary:
+        return int(summary.get("rby1m_config_import_timeout_count") or 0)
+    return sum(
+        1
+        for item in results
+        if _has_result_blocker_code(item, "timeout")
+        and str(item.get("last_worker_stage") or "") == "rby1m_config_import"
+    )
+
+
+def _summary_task_blocked_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "task_feasibility_blocked_count" in summary:
+        return int(summary.get("task_feasibility_blocked_count") or 0)
+    return sum(1 for item in results if str(item.get("task_feasibility_status") or "") == "blocked")
+
+
+def _summary_grasp_blocked_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "grasp_feasibility_blocked_count" in summary:
+        return int(summary.get("grasp_feasibility_blocked_count") or 0)
+    return sum(
+        1
+        for item in results
+        if str(item.get("task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    )
+
+
+def _summary_worker_stage_event_count(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> int:
+    if "worker_stage_event_count" in summary:
+        return int(summary.get("worker_stage_event_count") or 0)
+    return sum(int(item.get("worker_stage_event_count") or 0) for item in results)
+
+
+def _summary_view_artifact_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "view_artifact_count" in summary:
+        return int(summary.get("view_artifact_count") or 0)
+    return sum(len(item.get("views") or []) for item in results)
+
+
+def _has_result_blocker_code(item: dict[str, Any], code: str) -> bool:
+    blockers = [*(item.get("blockers") or []), *(item.get("cleanup_binding_blockers") or [])]
+    return any(
+        isinstance(blocker, dict) and str(blocker.get("code") or "") == code for blocker in blockers
     )
 
 

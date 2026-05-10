@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 85 standalone prior proof ingest completed; next work is selecting or generating grasp-feasible exact-scene proof requests
+**Status:** Phase 86 prior proof evidence report completed; next work is selecting or generating grasp-feasible exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -227,6 +227,9 @@ prior proof results by `request_id` first and then by cleanup `object_id` plus
 Phase 85 lets that selection memory consume standalone planner-probe
 `run_result.json` artifacts directly by normalizing them into the same
 proof-result summary interface as prior proof-bundle manifests.
+Phase 86 makes that consumed prior evidence visible in runner reports as
+`Prior Proof Evidence`, preserving diagnostic rows, proof paths, and planner
+view images when present before new proof commands are reviewed.
 
 ## Why This Exists
 
@@ -1076,6 +1079,9 @@ completed:
   gsd-plan-phase 85-molmospaces-standalone-prior-proof-ingest
   gsd-execute-phase 85-molmospaces-standalone-prior-proof-ingest
   gsd-verify-work 85-molmospaces-standalone-prior-proof-ingest
+  gsd-plan-phase 86-molmospaces-prior-proof-evidence-report
+  gsd-execute-phase 86-molmospaces-prior-proof-evidence-report
+  gsd-verify-work 86-molmospaces-prior-proof-evidence-report
 
 next pipeline candidates:
   select or generate a grasp-feasible exact-scene proof request

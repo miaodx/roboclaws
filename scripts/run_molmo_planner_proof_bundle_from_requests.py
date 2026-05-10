@@ -229,6 +229,7 @@ def run_from_cleanup_result(
         commands=commands,
         warmup=warmup,
         proof_request_selection=proof_request_selection,
+        prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,
         cleanup_rerun=cleanup_rerun,
     )
@@ -464,11 +465,29 @@ def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict
         normalized_aliases=normalized_aliases,
         generated_requests=generated_requests,
     )
+    results = list(results_by_key.values())
     return {
         "schema": "merged_prior_planner_proof_result_summary_v1",
-        "result_count": len(results_by_key),
+        "result_count": len(results),
+        "planner_backed_count": sum(1 for item in results if item.get("planner_backed")),
+        "cleanup_binding_promoted_count": sum(
+            1 for item in results if item.get("cleanup_binding_promoted")
+        ),
+        "execution_attempted_count": sum(1 for item in results if item.get("execution_attempted")),
+        "task_feasibility_blocked_count": sum(
+            1 for item in results if item.get("task_feasibility_status") == "blocked"
+        ),
+        "grasp_feasibility_blocked_count": sum(
+            1
+            for item in results
+            if item.get("task_feasibility_blocker_kind") == "grasp_feasibility"
+        ),
+        "worker_stage_event_count": sum(
+            int(item.get("worker_stage_event_count") or 0) for item in results
+        ),
+        "view_artifact_count": sum(len(item.get("views") or []) for item in results),
         "prior_manifest_count": len(summaries),
-        "results": list(results_by_key.values()),
+        "results": results,
         "fallback_generation": fallback_generation,
     }
 

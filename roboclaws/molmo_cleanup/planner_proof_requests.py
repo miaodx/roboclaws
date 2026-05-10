@@ -237,6 +237,7 @@ def proof_bundle_run_manifest(
     commands: list[dict[str, Any]],
     warmup: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
+    prior_proof_result_summary: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
@@ -250,6 +251,7 @@ def proof_bundle_run_manifest(
         "planner_scene": proof_requests.get("planner_scene") or {},
         "proof_request_selection": proof_request_selection
         or proof_request_selection_from_summary(proof_requests),
+        "prior_proof_result_summary": prior_proof_result_summary or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,

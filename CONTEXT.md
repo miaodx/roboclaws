@@ -76,6 +76,12 @@ The proof-bundle runner behavior that loads standalone planner-probe
 interface before proof request selection.
 _Avoid_: manual synthetic prior summary wrapper, treating standalone probes as proof-bundle manifests
 
+**Prior Proof Evidence View**:
+The proof-bundle runner report section that renders normalized prior proof
+results, including diagnostic rows, proof report links, and planner-view image
+artifacts when present.
+_Avoid_: selection-only prior evidence, hidden prior visual artifacts
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -583,6 +589,9 @@ _Avoid_: full cleanup replacement claim
 - **Standalone Prior Proof Result Ingest** should normalize standalone planner
   probes to **Planner Proof Result Summary** before selection, so prior bundle
   manifests and standalone probes share one selection and report interface.
+- A **Prior Proof Evidence View** should render normalized prior proof results
+  in the runner report before new proof commands, so consumed blocker evidence
+  keeps its report links and planner-view images.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -746,3 +755,6 @@ _Avoid_: full cleanup replacement claim
   Phase 81-style standalone planner-probe `run_result.json` evidence, normalize
   it to proof-result summary, select by cleanup pair, render grasp blocker
   evidence, and check partial selection with an exhausted fallback pool.
+- Phase 86 added Prior Proof Evidence View. Runner manifests now carry
+  `prior_proof_result_summary`, and runner reports render consumed prior proof
+  diagnostics, paths, and planner-view images before new proof commands.

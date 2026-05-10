@@ -623,6 +623,10 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
                         "grasp_failure_count": 17,
                         "candidate_removal_count": 15,
                     },
+                    "image_artifacts": {
+                        "initial": "initial.png",
+                        "final": "final.png",
+                    },
                     "blockers": [
                         {
                             "code": "HouseInvalidForTask",
@@ -635,6 +639,8 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
         encoding="utf-8",
     )
     (prior_probe.parent / "report.html").write_text("<h1>probe</h1>", encoding="utf-8")
+    (prior_probe.parent / "initial.png").write_bytes(b"initial")
+    (prior_probe.parent / "final.png").write_bytes(b"final")
     (prior_probe.parent / "stdout.txt").write_text("", encoding="utf-8")
     (prior_probe.parent / "stderr.txt").write_text("", encoding="utf-8")
 
@@ -670,14 +676,20 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
     )
     assert selection["grasp_feasibility_blocker_count"] == 1
     assert selection["fallback_generation"]["status"] == "exhausted"
+    prior_summary = manifest["prior_proof_result_summary"]
+    assert prior_summary["result_count"] == 1
+    assert prior_summary["view_artifact_count"] == 2
     summary = manifest["proof_result_summary"]
     assert summary["expected_count"] == 0
     report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Prior Proof Evidence" in report
     assert "Prior match" in report
     assert "object_target" in report
     assert "grasp_feasibility" in report
     assert "17 grasp failures; 15 candidate-removal calls" in report
     assert str(prior_probe.parent / "report.html") in report
+    assert str(prior_probe.parent / "initial.png") in report
+    assert str(prior_probe.parent / "final.png") in report
 
 
 def test_runner_carries_prior_failed_runtime_fallback_candidates(

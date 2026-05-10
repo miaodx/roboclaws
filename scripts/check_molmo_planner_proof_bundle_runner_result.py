@@ -71,6 +71,9 @@ def _assert_runner_result(
         generated_count = 0
     assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
+    prior_proof_result_summary = data.get("prior_proof_result_summary") or {}
+    if prior_proof_result_summary:
+        _assert_prior_proof_result_summary(prior_proof_result_summary, report_text)
     if proof_result_summary:
         _assert_proof_result_summary(
             proof_result_summary,
@@ -454,6 +457,37 @@ def _assert_proof_result_summary(
                 value = str(event.get(key) or "")
                 if value:
                     assert value in report_text, (event, report_text[:500])
+
+
+def _assert_prior_proof_result_summary(
+    summary: dict[str, Any],
+    report_text: str,
+) -> None:
+    schema = str(summary.get("schema") or "")
+    assert schema, summary
+    results = summary.get("results") or []
+    assert isinstance(results, list), summary
+    assert "Prior Proof Evidence" in report_text, report_text[:500]
+    for item in results:
+        assert isinstance(item, dict), summary
+        for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
+            value = str(item.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
+        for view in item.get("views") or []:
+            assert str(view.get("path") or "") in report_text, (view, report_text[:500])
+        blocker_summary = str(item.get("task_feasibility_blocker_summary") or "")
+        if blocker_summary:
+            assert blocker_summary in report_text, (
+                "task_feasibility_blocker_summary",
+                report_text[:500],
+            )
+        blocker_kind = str(item.get("task_feasibility_blocker_kind") or "")
+        if blocker_kind:
+            assert blocker_kind in report_text, (
+                "task_feasibility_blocker_kind",
+                report_text[:500],
+            )
 
 
 def _assert_cleanup_rerun(
