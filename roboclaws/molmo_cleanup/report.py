@@ -148,6 +148,7 @@ def render_planner_manipulation_report(
     run_dir.mkdir(parents=True, exist_ok=True)
     report_path = run_dir / "report.html"
     evidence = run_result.get("manipulation_evidence") or {}
+    quality = planner_proof_quality_evidence(evidence)
     body = f"""
     <section class="summary">
       <div class="summary-head">
@@ -158,7 +159,10 @@ def render_planner_manipulation_report(
         {_metric("Status", run_result.get("status", "unknown"))}
         {_metric("Embodiment", evidence.get("embodiment", "unknown"))}
         {_metric("Policy", evidence.get("upstream_policy_class", "unknown"))}
+        {_metric("Proof Quality", quality.get("quality_tier", "unknown"))}
+        {_metric("Steps", evidence.get("steps_executed", "n/a"))}
         {_metric("Qpos delta", evidence.get("max_abs_qpos_delta", "n/a"))}
+        {_metric("Containment proven", "yes" if quality.get("containment_proven") else "no")}
       </div>
       <div class="badges">
         {_badge("Contract", run_result.get("contract", "unknown"))}
@@ -169,6 +173,7 @@ def render_planner_manipulation_report(
       </div>
     </section>
     {_manipulation_provenance_section(run_result)}
+    {_planner_probe_quality_section(evidence)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
@@ -189,6 +194,34 @@ def render_planner_manipulation_report(
     """
     report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
+
+
+def _planner_probe_quality_section(evidence: dict[str, Any]) -> str:
+    if not evidence:
+        return ""
+    quality = planner_proof_quality_evidence(evidence)
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Proof Quality', quality.get('quality_tier', 'unknown'))}"
+        f"{_metric('Steps', quality.get('steps_executed', 0))}"
+        f"{_metric('Qpos delta', quality.get('max_abs_qpos_delta', 0.0))}"
+        f"{_metric('Containment proven', 'yes' if quality.get('containment_proven') else 'no')}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("One-step motion", quality.get("one_step_motion", False)),
+            _badge("Multi-step motion", quality.get("multi_step_motion", False)),
+            _badge("Object state evidence", quality.get("object_state_evidence_present", False)),
+        )
+    )
+    note = quality.get("evidence_note") or ""
+    return (
+        '<section class="panel planner-proof-quality">'
+        "<h2>Planner Proof Quality</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div></section>'
+    )
 
 
 def render_planner_proof_bundle_runner_report(
@@ -2173,11 +2206,15 @@ def _proof_bundle_results_section(
     config_import_timeout_count = _summary_config_import_timeout_count(summary, results)
     binding_promoted_count = _summary_metric(summary, results, "cleanup_binding_promoted_count")
     execution_attempted_count = _summary_metric(summary, results, "execution_attempted_count")
+    proof_quality_summary = summary.get("proof_quality_summary") or planner_proof_quality_summary(
+        item for item in results if item.get("run_result_exists")
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Expected', summary.get('expected_count', len(results)))}"
         f"{_metric('Results', summary.get('result_count', 0))}"
         f"{_metric('Planner-backed', planner_backed_count)}"
+        f"{_metric('Proof Quality', format_quality_tier_counts(proof_quality_summary))}"
         f"{_metric('Timeouts', _summary_timeout_count(summary, results))}"
         f"{_metric('Config-import timeouts', config_import_timeout_count)}"
         f"{_metric('Binding promoted', binding_promoted_count)}"
@@ -2197,6 +2234,7 @@ def _proof_bundle_results_section(
     grasp_signature_html = _proof_bundle_grasp_signature_section(
         _summary_grasp_signature_counts(summary, results)
     )
+    proof_quality_html = _proof_bundle_quality_summary_section(proof_quality_summary)
     body = (
         "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
@@ -2207,8 +2245,23 @@ def _proof_bundle_results_section(
         f'<section class="panel {html.escape(section_class)}">'
         f"<h2>{html.escape(title)}</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}'
-        f"{grasp_signature_html}{body}</section>"
+        f"{proof_quality_html}{grasp_signature_html}{body}</section>"
     )
+
+
+def _proof_bundle_quality_summary_section(summary: dict[str, Any]) -> str:
+    if not summary or int(summary.get("proof_count") or 0) == 0:
+        return ""
+    rows = [
+        ("Proof quality tiers", format_quality_tier_counts(summary)),
+        ("Lowest quality tier", summary.get("lowest_quality_tier", "")),
+        ("Min steps", summary.get("min_steps_executed", "")),
+        ("Max steps", summary.get("max_steps_executed", "")),
+        ("Max qpos delta", summary.get("max_abs_qpos_delta", "")),
+        ("Any containment proven", _yes_no(summary.get("any_containment_proven"))),
+        ("All containment proven", _yes_no(summary.get("all_containment_proven"))),
+    ]
+    return "<h3>Planner Proof Quality</h3>" + _field_table(rows)
 
 
 def _summary_metric(
@@ -2375,6 +2428,13 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("Object", item.get("object_id", "")),
         ("Target", item.get("target_receptacle_id", "")),
         ("Status", item.get("status", "")),
+        ("Proof quality", (item.get("proof_quality") or {}).get("quality_tier", "")),
+        ("Steps executed", item.get("steps_executed", "")),
+        ("Qpos delta", item.get("max_abs_qpos_delta", "")),
+        (
+            "Containment proven",
+            _yes_no((item.get("proof_quality") or {}).get("containment_proven")),
+        ),
         ("Task feasibility", item.get("task_feasibility_status", "")),
         ("Task feasibility blocker", item.get("task_feasibility_blocker_kind", "")),
         ("Task feasibility detail", item.get("task_feasibility_blocker_summary", "")),

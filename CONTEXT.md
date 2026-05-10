@@ -456,6 +456,12 @@ one-step robot motion, multi-step robot motion, and containment-level proof
 from the lower-level `steps_executed` and `max_abs_qpos_delta` fields.
 _Avoid_: implicit proof strength, report-only quality labels
 
+**Planner Proof Quality Report Reuse**:
+The rule that standalone planner-probe reports, proof-bundle runner reports,
+and cleanup reports all render **Planner Proof Quality Evidence** through the
+same quality tiers.
+_Avoid_: separate proof-strength labels per report surface
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -753,6 +759,9 @@ _Avoid_: full cleanup replacement claim
 - An **Attached Planner Proof** should include **Planner Proof Quality
   Evidence**, so reports and checkers can distinguish `one_step_motion` from
   multi-step pick/place progress or full containment.
+- **Planner Proof Quality Report Reuse** should keep individual proof reports,
+  proof-bundle runner reports, and cleanup reports on the same proof-strength
+  vocabulary before stricter proof gates are raised.
 - A **Planner-Backed Cleanup Primitive Gate** should reject `api_semantic` cleanup subphases as strict planner-backed cleanup execution, while allowing explicit blocked-capability evidence until real primitives exist.
 - An **RBY1M CuRobo Runtime Gate** should reject standalone Franka planner proof as target cleanup runtime readiness, while allowing explicit blocked-capability evidence when CuRobo is missing.
 - **RBY1M CuRobo Warmup Readiness** should record worker stages before treating a timeout as actionable evidence.
@@ -1251,3 +1260,7 @@ _Avoid_: full cleanup replacement claim
   reports render `Proof Quality`, and the ADR-0003 checker can require both
   proof-quality evidence and a minimum executed-step horizon before stronger
   cleanup claims are accepted.
+- Phase 128 adds Planner Proof Quality Report Reuse. Planner-backed probe
+  evidence now embeds proof quality, standalone proof reports and proof-bundle
+  runner reports render `Planner Proof Quality`, and both probe and runner
+  checkers can require minimum proof-quality horizons.

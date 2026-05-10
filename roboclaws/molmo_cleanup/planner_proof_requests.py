@@ -7,6 +7,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    planner_proof_quality_summary,
+)
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
     grasp_cache_availability_preflight,
     grasp_cache_generation_preflight,
@@ -1632,6 +1636,9 @@ def _unique_nonempty_values(values: list[str]) -> list[str]:
 def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize generated proof outputs without replacing strict proof validation."""
     results = [_proof_result_from_command(item) for item in commands]
+    proof_quality_summary = planner_proof_quality_summary(
+        item for item in results if item.get("run_result_exists")
+    )
     return {
         "schema": PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
         "expected_count": len(commands),
@@ -1665,6 +1672,7 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
         ),
         "last_worker_stage_counts": _last_worker_stage_counts(results),
         "view_artifact_count": sum(len(item.get("views") or []) for item in results),
+        "proof_quality_summary": proof_quality_summary,
         "results": results,
         "evidence_note": (
             "Bundle-level summary of generated proof artifacts. Strict per-proof "
@@ -1696,6 +1704,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         "last_worker_stage": "",
         "worker_stage_event_count": 0,
         "worker_stage_events": [],
+        "steps_executed": 0,
+        "max_abs_qpos_delta": 0.0,
+        "proof_quality": {},
         "stdout": "",
         "stderr": "",
         "views": [],
@@ -1742,6 +1753,7 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     planner_backed = data.get("status") == "planner_backed"
     views = _proof_views(base, evidence)
     worker_stage_events = _compact_worker_stage_events(evidence.get("worker_stage_events") or [])
+    proof_quality = planner_proof_quality_evidence(evidence)
     result.update(
         {
             "status": str(data.get("status") or "unknown"),
@@ -1768,6 +1780,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
             "last_worker_stage": str(evidence.get("last_worker_stage") or ""),
             "worker_stage_event_count": len(worker_stage_events),
             "worker_stage_events": worker_stage_events,
+            "steps_executed": int(proof_quality.get("steps_executed") or 0),
+            "max_abs_qpos_delta": float(proof_quality.get("max_abs_qpos_delta") or 0.0),
+            "proof_quality": proof_quality,
             "stdout": _proof_artifact_path(base, artifacts, "stdout"),
             "stderr": _proof_artifact_path(base, artifacts, "stderr"),
             "cleanup_task_config": cleanup_task_config,

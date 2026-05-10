@@ -10,6 +10,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
+    planner_backed_probe_evidence,
 )
 from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
@@ -2190,6 +2191,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
+    assert "Planner Proof Quality" in html
     assert "Runtime Diagnostics" in html
     assert "Planner Probe Diagnostic Views" in html
     assert "Task sampler diagnostic: pickup/body" in html
@@ -2203,6 +2205,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Exact sampler adapter class" in html
     assert "Exact sampler adapter object" in html
     assert "Exact pickup candidate action" in html
+
     assert "Exact pickup retry budget" in html
     assert "injected_requested_candidate_name" in html
     assert "PickAndPlaceTaskSampler" in html
@@ -2259,6 +2262,42 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html
+
+
+def test_planner_manipulation_probe_report_renders_proof_quality(tmp_path: Path) -> None:
+    views = tmp_path / "planner_views"
+    views.mkdir()
+    (views / "initial.png").write_bytes(b"initial")
+    (views / "final.png").write_bytes(b"final")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": planner_backed_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="rby1m",
+            task="pick_and_place",
+            probe_mode="execute",
+            upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+            steps_requested=2,
+            steps_executed=2,
+            max_abs_qpos_delta=0.01,
+            image_artifacts={
+                "initial": "planner_views/initial.png",
+                "final": "planner_views/final.png",
+            },
+        ),
+        "artifacts": {},
+    }
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+    html = report_path.read_text(encoding="utf-8")
+
+    assert "Planner Proof Quality" in html
+    assert "multi_step_motion" in html
+    assert "Containment proven" in html
+    assert "Planner Probe Views" in html
 
 
 def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(

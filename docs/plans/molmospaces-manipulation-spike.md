@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 127 planner proof quality tier completed; one ADR-0003 object consumes the exact proof, with proof strength explicit and the full bridge still blocked
+**Status:** Phase 128 planner proof quality report reuse completed; proof strength now uses one vocabulary across standalone proof, runner, and cleanup reports while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -458,6 +458,10 @@ attachments and bundles now share one proof-quality module, reports render
 `Proof Quality`, and the ADR-0003 checker can require a minimum executed-step
 horizon before treating future artifacts as stronger than the current
 one-step-motion evidence.
+Phase 128 reuses that proof-quality module across the rest of the proof report
+pipeline. Standalone planner-probe reports and proof-bundle runner reports now
+render the same `Planner Proof Quality` tiers as cleanup reports, and their
+checkers can require minimum proof-quality horizons.
 
 ## Why This Exists
 
@@ -1340,6 +1344,6 @@ completed:
 
 next pipeline candidates:
   expand exact-proof coverage beyond observed_001, or generate a stricter
-  multi-step/containment proof before raising the checker horizon above
-  one-step motion
+  multi-step/containment proof before raising the shared checker horizon above
+  one-step motion across standalone, runner, and cleanup artifacts
 ```

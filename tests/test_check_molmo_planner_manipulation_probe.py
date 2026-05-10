@@ -61,6 +61,7 @@ def _write_report_files(
     placement_scene_diagnostics: bool = False,
     post_placement_rejections: bool = False,
     cleanup_config_blockers: bool = False,
+    proof_quality: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -74,6 +75,8 @@ def _write_report_files(
         body += "Runtime Diagnostics\n"
     if cleanup_binding:
         body += "Planner Probe Cleanup Binding\n"
+    if proof_quality:
+        body += "Planner Proof Quality\nProof Quality\nmulti_step_motion\n"
     if cleanup_config_blockers:
         body += "Exact task config blockers\ncleanup_scene_xml_missing\n"
     if worker_stages:
@@ -844,6 +847,42 @@ def test_checker_accepts_strict_planner_backed_evidence(tmp_path: Path) -> None:
     }
 
     checker._assert_probe_result(data, tmp_path, require_planner_backed=True)
+
+
+def test_checker_can_require_planner_probe_proof_quality(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": planner_backed_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="franka",
+            task="pick_and_place",
+            probe_mode="execute",
+            upstream_policy_class="PickAndPlacePlannerPolicy",
+            steps_requested=2,
+            steps_executed=2,
+            max_abs_qpos_delta=0.01,
+        ),
+        "artifacts": _write_report_files(tmp_path, proof_quality=True),
+    }
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        require_planner_backed=True,
+        require_proof_quality=True,
+        require_proof_min_steps=2,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            require_planner_backed=True,
+            require_proof_quality=True,
+            require_proof_min_steps=3,
+        )
 
 
 def test_checker_requires_cleanup_binding_report_when_evidence_exists(tmp_path: Path) -> None:

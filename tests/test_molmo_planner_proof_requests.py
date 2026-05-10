@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
 )
@@ -1451,7 +1452,9 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["missing_result_count"] == 1
     assert summary["task_feasibility_blocked_count"] == 1
     assert summary["view_artifact_count"] == 2
+    assert summary["proof_quality_summary"]["quality_tier_counts"] == {"unknown": 1}
     result = summary["results"][0]
+    assert result["proof_quality"]["quality_tier"] == "unknown"
     assert result["task_feasibility_status"] == "blocked"
     assert result["task_feasibility_blocker_kind"] == "robot_placement"
     assert result["task_feasibility_blocker_summary"] == "1 robot-placement failures"
@@ -1480,6 +1483,54 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     )
     assert result["views"][0]["path"].endswith("planner_views/final.png")
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
+
+
+def test_proof_result_summary_carries_planner_proof_quality(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    views_dir = proof_dir / "planner_views"
+    views_dir.mkdir(parents=True)
+    (views_dir / "initial.png").write_bytes(b"initial")
+    (views_dir / "final.png").write_bytes(b"final")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "planner_backed",
+                "manipulation_evidence": planner_backed_probe_evidence(
+                    backend="molmospaces_subprocess",
+                    embodiment="rby1m",
+                    task="pick_and_place",
+                    probe_mode="execute",
+                    upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+                    steps_requested=2,
+                    steps_executed=2,
+                    max_abs_qpos_delta=0.01,
+                    image_artifacts={
+                        "initial": "planner_views/initial.png",
+                        "final": "planner_views/final.png",
+                    },
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = proof_result_summary_from_commands(
+        [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "run_result": str(proof_dir / "run_result.json"),
+                "report": str(proof_dir / "report.html"),
+            }
+        ]
+    )
+
+    result = summary["results"][0]
+    assert result["proof_quality"]["quality_tier"] == "multi_step_motion"
+    assert result["steps_executed"] == 2
+    assert summary["proof_quality_summary"]["quality_tier_counts"] == {"multi_step_motion": 1}
 
 
 def test_proof_result_summary_classifies_grasp_feasibility_blocker(tmp_path: Path) -> None:
