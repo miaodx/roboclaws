@@ -268,7 +268,8 @@ def _assert_proof_request_selection(
             assert generated, fallback_generation
         if fallback_status == "exhausted":
             assert not generated, fallback_generation
-            assert selection.get("fallback_required") is True, selection
+            if not selected_ids:
+                assert selection.get("fallback_required") is True, selection
             assert exhaustion_blockers, fallback_generation
             assert "Fallback Exhaustion Blockers" in report_text, report_text[:500]
         for item in generated:

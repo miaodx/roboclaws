@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_probe_warmup_command,
     proof_bundle_run_manifest,
     proof_request_selection_from_summary,
+    proof_result_summary_from_commands,
 )
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
@@ -66,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rerun-cleanup", action="store_true")
     parser.add_argument("--cleanup-output-dir", type=Path)
     parser.add_argument("--prior-proof-bundle-manifest", type=Path, action="append")
+    parser.add_argument("--prior-planner-probe-run-result", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
     parser.add_argument("--generate-fallback-requests", action="store_true")
     parser.add_argument("--fallback-alias-limit", type=int, default=4)
@@ -95,6 +97,7 @@ def main() -> None:
         rerun_cleanup=args.rerun_cleanup,
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
+        prior_planner_probe_run_result=args.prior_planner_probe_run_result,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
         generate_fallback_requests=args.generate_fallback_requests,
         fallback_alias_limit=args.fallback_alias_limit,
@@ -132,6 +135,7 @@ def run_from_cleanup_result(
     rerun_cleanup: bool = False,
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
+    prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
@@ -140,7 +144,10 @@ def run_from_cleanup_result(
     output_dir.mkdir(parents=True, exist_ok=True)
     source_run = json.loads(cleanup_run_result.read_text(encoding="utf-8"))
     requests = _load_proof_requests(source_run, cleanup_run_result.parent)
-    prior_summary = _load_prior_proof_result_summary(prior_proof_bundle_manifest)
+    prior_summary = _load_prior_proof_result_summary(
+        prior_proof_bundle_manifest,
+        prior_planner_probe_run_result,
+    )
     proof_request_selection = proof_request_selection_from_summary(
         requests,
         prior_proof_result_summary=prior_summary,
@@ -284,16 +291,22 @@ def _with_source_planner_scene(
 
 
 def _load_prior_proof_result_summary(
-    paths: Path | Sequence[Path] | None,
+    manifest_paths: Path | Sequence[Path] | None,
+    standalone_probe_run_results: Path | Sequence[Path] | None = None,
 ) -> dict[str, Any]:
-    manifest_paths = _prior_manifest_paths(paths)
-    if not manifest_paths:
+    prior_manifest_paths = _prior_paths(manifest_paths)
+    prior_probe_paths = _prior_paths(standalone_probe_run_results)
+    if not prior_manifest_paths and not prior_probe_paths:
         return {}
-    summaries = [_load_one_prior_proof_result_summary(path) for path in manifest_paths]
+    summaries = [
+        *(_load_one_prior_proof_result_summary(path) for path in prior_manifest_paths),
+        _load_standalone_probe_result_summary(prior_probe_paths),
+    ]
+    summaries = [summary for summary in summaries if summary]
     return _merge_prior_proof_result_summaries(summaries)
 
 
-def _prior_manifest_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
+def _prior_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
     if paths is None:
         return []
     if isinstance(paths, (str, Path)):
@@ -314,6 +327,107 @@ def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
         (data.get("proof_request_selection") or {}).get("excluded_requests") or [],
     )
     return prior
+
+
+def _load_standalone_probe_result_summary(run_result_paths: list[Path]) -> dict[str, Any]:
+    if not run_result_paths:
+        return {}
+    commands = [
+        _standalone_probe_command(run_result_path, index)
+        for index, run_result_path in enumerate(run_result_paths, start=1)
+    ]
+    summary = proof_result_summary_from_commands(commands)
+    summary["source_kind"] = "standalone_planner_probe_run_result"
+    summary["evidence_note"] = (
+        "Prior proof-result summary loaded directly from standalone planner-probe "
+        "run_result artifacts. Selection still consumes the shared proof-result "
+        "summary interface."
+    )
+    return summary
+
+
+def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, Any]:
+    data = json.loads(run_result_path.read_text(encoding="utf-8"))
+    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    evidence = evidence if isinstance(evidence, dict) else {}
+    requested_binding = evidence.get("requested_cleanup_primitive_binding")
+    requested_binding = requested_binding if isinstance(requested_binding, dict) else {}
+    cleanup_binding = evidence.get("cleanup_primitive_binding")
+    cleanup_binding = cleanup_binding if isinstance(cleanup_binding, dict) else {}
+    object_id = _first_nonempty_str(
+        requested_binding.get("object_id"),
+        cleanup_binding.get("object_id"),
+        data.get("object_id") if isinstance(data, dict) else "",
+    )
+    target_receptacle_id = _first_nonempty_str(
+        requested_binding.get("target_receptacle_id"),
+        cleanup_binding.get("target_receptacle_id"),
+        data.get("target_receptacle_id") if isinstance(data, dict) else "",
+    )
+    return {
+        "request_id": _standalone_probe_request_id(
+            data=data if isinstance(data, dict) else {},
+            evidence=evidence,
+            requested_binding=requested_binding,
+            run_result_path=run_result_path,
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            index=index,
+        ),
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "run_result": str(run_result_path),
+        "report": str(_standalone_probe_report_path(run_result_path, data)),
+    }
+
+
+def _standalone_probe_request_id(
+    *,
+    data: dict[str, Any],
+    evidence: dict[str, Any],
+    requested_binding: dict[str, Any],
+    run_result_path: Path,
+    object_id: str,
+    target_receptacle_id: str,
+    index: int,
+) -> str:
+    explicit = _first_nonempty_str(
+        data.get("request_id"),
+        evidence.get("request_id"),
+        requested_binding.get("request_id"),
+    )
+    if explicit:
+        return explicit
+    if object_id or target_receptacle_id:
+        return (
+            "standalone_"
+            f"{_safe_id_part(object_id or 'object')}_to_"
+            f"{_safe_id_part(target_receptacle_id or 'target')}"
+        )
+    parent = run_result_path.parent.name or run_result_path.stem
+    return f"standalone_{index:03d}_{_safe_id_part(parent)}"
+
+
+def _standalone_probe_report_path(run_result_path: Path, data: Any) -> Path:
+    artifacts = data.get("artifacts") if isinstance(data, dict) else {}
+    artifacts = artifacts if isinstance(artifacts, dict) else {}
+    value = str(artifacts.get("report") or "report.html")
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return run_result_path.parent / path
+
+
+def _first_nonempty_str(*values: Any) -> str:
+    for value in values:
+        text = str(value or "")
+        if text:
+            return text
+    return ""
+
+
+def _safe_id_part(value: str) -> str:
+    return "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)[:96]
 
 
 def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:

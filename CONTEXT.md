@@ -70,6 +70,12 @@ Proof-request selection memory matched by public cleanup `object_id` plus
 request ID.
 _Avoid_: planner-alias-only memory, hidden object identity
 
+**Standalone Prior Proof Result Ingest**:
+The proof-bundle runner behavior that loads standalone planner-probe
+`run_result.json` artifacts into the shared **Planner Proof Result Summary**
+interface before proof request selection.
+_Avoid_: manual synthetic prior summary wrapper, treating standalone probes as proof-bundle manifests
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -574,6 +580,9 @@ _Avoid_: full cleanup replacement claim
   target aliases need separate task-feasibility evidence.
 - **Prior Proof Evidence Merge** should combine older alias-discovery evidence
   with newer failed-candidate memory before generating fallback proof commands.
+- **Standalone Prior Proof Result Ingest** should normalize standalone planner
+  probes to **Planner Proof Result Summary** before selection, so prior bundle
+  manifests and standalone probes share one selection and report interface.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -733,3 +742,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 84 added Cleanup-Pair Proof Memory. Prior proof results now match by
   `request_id` first, then by cleanup `object_id` plus `target_receptacle_id`,
   and runner reports show the `Prior match` kind.
+- Phase 85 added Standalone Prior Proof Result Ingest. The runner can now load
+  Phase 81-style standalone planner-probe `run_result.json` evidence, normalize
+  it to proof-result summary, select by cleanup pair, render grasp blocker
+  evidence, and check partial selection with an exhausted fallback pool.

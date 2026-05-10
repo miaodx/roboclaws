@@ -197,6 +197,9 @@ feasibility.
 Phase 84 makes selection memory robust to regenerated proof manifests by
 matching prior results by request ID first and cleanup object/target pair
 second, with the match kind visible in runner reports.
+Phase 85 lets the same selection path consume standalone planner-probe
+`run_result.json` artifacts by normalizing them into planner proof result
+summary before request filtering.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -306,6 +309,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.83 MolmoSpaces grasp-feasibility classification** - Phase 82 (completed 2026-05-10; proof summaries classify post-placement grasp/candidate rejection as `grasp_feasibility`)
 - ✅ **v1.84 MolmoSpaces grasp-feasibility selection memory** - Phase 83 (completed 2026-05-10; selection reports preserve and render grasp-feasibility blocker kind/detail)
 - ✅ **v1.85 MolmoSpaces cleanup-pair proof memory** - Phase 84 (completed 2026-05-10; selection memory matches regenerated requests by cleanup object/target pair)
+- ✅ **v1.86 MolmoSpaces standalone prior proof ingest** - Phase 85 (completed 2026-05-10; standalone planner-probe run results normalize into proof-result summaries before selection)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -406,6 +410,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 82: MolmoSpaces grasp-feasibility classification** - ADR-0073 classifies post-placement grasp/candidate rejection in proof summaries and runner reports. Completed 2026-05-10.
 - [x] **Phase 83: MolmoSpaces grasp-feasibility selection memory** - ADR-0074 preserves grasp-feasibility blocker kind/detail in selection and fallback memory. Completed 2026-05-10.
 - [x] **Phase 84: MolmoSpaces cleanup-pair proof memory** - ADR-0075 matches prior proof results by cleanup object/target pair when request IDs change. Completed 2026-05-10.
+- [x] **Phase 85: MolmoSpaces standalone prior proof ingest** - ADR-0076 normalizes standalone planner-probe run results into proof-result summaries before selection. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

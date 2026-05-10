@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 84 cleanup-pair proof memory completed; next work is selecting or generating grasp-feasible exact-scene proof requests
+**Status:** Phase 85 standalone prior proof ingest completed; next work is selecting or generating grasp-feasible exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -224,6 +224,9 @@ a dedicated `Grasp Feasibility Blockers` runner report view.
 Phase 84 makes that memory robust across regenerated proof manifests by matching
 prior proof results by `request_id` first and then by cleanup `object_id` plus
 `target_receptacle_id`, with `Prior match` rendered in runner reports.
+Phase 85 lets that selection memory consume standalone planner-probe
+`run_result.json` artifacts directly by normalizing them into the same
+proof-result summary interface as prior proof-bundle manifests.
 
 ## Why This Exists
 
@@ -1070,7 +1073,10 @@ completed:
   gsd-plan-phase 64-molmospaces-fallback-runtime-alias-discovery
   gsd-execute-phase 64-molmospaces-fallback-runtime-alias-discovery
   gsd-verify-work 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-plan-phase 85-molmospaces-standalone-prior-proof-ingest
+  gsd-execute-phase 85-molmospaces-standalone-prior-proof-ingest
+  gsd-verify-work 85-molmospaces-standalone-prior-proof-ingest
 
 next pipeline candidates:
-  plan discovered runtime-alias fallback proof execution
+  select or generate a grasp-feasible exact-scene proof request
 ```

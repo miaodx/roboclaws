@@ -297,6 +297,114 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
     checker._assert_runner_result(manifest, tmp_path)
 
 
+def test_checker_accepts_partial_selection_with_exhausted_fallbacks(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    manifest["commands"][0]["request_id"] = "proof_002"
+    manifest["commands"][0]["object_id"] = "observed_002"
+    manifest["commands"][0]["target_receptacle_id"] = "sink_02"
+    manifest["proof_request_selection"] = {
+        "schema": "planner_cleanup_proof_request_selection_v1",
+        "mode": "exclude_task_feasibility_blocked_with_fallbacks",
+        "ready_request_count": 2,
+        "selected_count": 1,
+        "excluded_count": 1,
+        "generated_fallback_request_count": 0,
+        "fallback_required": False,
+        "selected_request_ids": ["proof_002"],
+        "selected_requests": [
+            {
+                "request_id": "proof_002",
+                "request_type": "source",
+                "source_request_id": "",
+                "object_id": "observed_002",
+                "target_receptacle_id": "sink_02",
+                "prior_task_feasibility_status": "unknown",
+            }
+        ],
+        "excluded_requests": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "reason": "prior_task_feasibility_blocked",
+                "prior_task_feasibility_status": "blocked",
+                "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                "prior_task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "prior_result_match_kind": "object_target",
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+        "target_feasibility_blocker_count": 1,
+        "target_feasibility_blockers": [
+            {
+                "kind": "source_request",
+                "source_request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "reason": "prior_task_feasibility_blocked",
+                "prior_task_feasibility_status": "blocked",
+                "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                "prior_task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "prior_result_match_kind": "object_target",
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+        "grasp_feasibility_blocker_count": 1,
+        "grasp_feasibility_blockers": [
+            {
+                "kind": "source_request",
+                "source_request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "reason": "prior_task_feasibility_blocked",
+                "prior_task_feasibility_status": "blocked",
+                "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                "prior_task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "prior_result_match_kind": "object_target",
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+        "fallback_generation": {
+            "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+            "status": "exhausted",
+            "enabled": True,
+            "generated_request_count": 0,
+            "generated_requests": [],
+            "discovered_alias_count": 0,
+            "discovered_aliases": [],
+            "filtered_alias_count": 0,
+            "filtered_aliases": [],
+            "filtered_pair_count": 0,
+            "filtered_pairs": [],
+            "normalized_alias_count": 0,
+            "normalized_aliases": [],
+            "exhaustion_blocker_count": 1,
+            "exhaustion_blockers": [
+                {
+                    "code": "no_fallback_candidate_available",
+                    "count": 1,
+                    "message": "Excluded source request has no remaining fallback candidate.",
+                }
+            ],
+        },
+    }
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    (tmp_path / "proof_bundle_run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
+
+    checker._assert_runner_result(manifest, tmp_path)
+
+
 def test_checker_requires_timeout_stage_evidence_in_report(tmp_path: Path) -> None:
     checker = _load_checker()
     manifest = _runner_manifest(tmp_path)

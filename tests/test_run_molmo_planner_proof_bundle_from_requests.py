@@ -586,6 +586,100 @@ def test_runner_merges_multiple_prior_manifests_for_discovery_and_filters(
     assert "worker_exception" in report
 
 
+def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    requests["requests"][0]["request_id"] = "proof_regenerated"
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}),
+        encoding="utf-8",
+    )
+    prior_probe = tmp_path / "prior-probe" / "run_result.json"
+    prior_probe.parent.mkdir()
+    prior_probe.write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "artifacts": {
+                    "report": "report.html",
+                    "stdout": "stdout.txt",
+                    "stderr": "stderr.txt",
+                },
+                "manipulation_evidence": {
+                    "execution_attempted": True,
+                    "last_worker_stage": "worker_exception",
+                    "requested_cleanup_primitive_binding": {
+                        "object_id": "observed_001",
+                        "target_receptacle_id": "sink_01",
+                        "source_receptacle_id": "counter_01",
+                        "planner_object_id": "pickup/body",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "task_sampler_failure_diagnostics": {
+                        "grasp_failure_count": 17,
+                        "candidate_removal_count": 15,
+                    },
+                    "blockers": [
+                        {
+                            "code": "HouseInvalidForTask",
+                            "message": "House invalid after grasp failures",
+                        }
+                    ],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (prior_probe.parent / "report.html").write_text("<h1>probe</h1>", encoding="utf-8")
+    (prior_probe.parent / "stdout.txt").write_text("", encoding="utf-8")
+    (prior_probe.parent / "stderr.txt").write_text("", encoding="utf-8")
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_planner_probe_run_result=prior_probe,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    assert manifest["command_count"] == 0
+    assert selection["selected_request_ids"] == []
+    assert selection["excluded_requests"][0]["request_id"] == "proof_regenerated"
+    assert selection["excluded_requests"][0]["prior_result_match_kind"] == "object_target"
+    assert selection["excluded_requests"][0]["prior_run_result"] == str(prior_probe)
+    assert selection["excluded_requests"][0]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    assert selection["fallback_generation"]["status"] == "exhausted"
+    summary = manifest["proof_result_summary"]
+    assert summary["expected_count"] == 0
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Prior match" in report
+    assert "object_target" in report
+    assert "grasp_feasibility" in report
+    assert "17 grasp failures; 15 candidate-removal calls" in report
+    assert str(prior_probe.parent / "report.html") in report
+
+
 def test_runner_carries_prior_failed_runtime_fallback_candidates(
     tmp_path: Path,
 ) -> None:
