@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 125 CuRobo policy exception context completed; latest warmed exact proof is planner-backed for one step
+**Status:** Phase 126 Phase 125 bound proof cleanup rerun completed; one ADR-0003 object now consumes the exact proof while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -447,6 +447,12 @@ exception fires; the shared planner report renders `Policy Exception
 Diagnostics`. The warmed exact proof rerun did not reproduce the pre-grasp
 failure and returned `planner_backed` for one execution step with a nonzero
 robot-state delta.
+Phase 126 consumes the Phase 125 exact proof in the ADR-0003 cleanup primitive
+path. The bound `observed_001` refrigerator cleanup now renders as
+planner-backed for `nav, pick, nav, open, place_inside`, while unmatched
+objects remain `api_semantic`; the Cleanup Primitive Gate and Planner Cleanup
+Bridge stay blocked at the run level until all cleanup objects have matching
+planner proof coverage.
 
 ## Why This Exists
 
@@ -1328,8 +1334,7 @@ completed:
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  attach the Phase 125 planner-backed exact proof to the ADR-0003 cleanup
-  primitive path and decide whether the next gate should require one-step robot
-  motion, multi-step pick/place progress, or full containment before claiming
-  planner-backed cleanup
+  expand exact-proof coverage beyond observed_001 or define the next stricter
+  planner-backed cleanup gate: multi-step pick/place progress versus full
+  containment, before claiming full planner-backed cleanup
 ```

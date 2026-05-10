@@ -497,6 +497,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         min_generated_mess_count=5,
         require_planner_proof_attachment=True,
         require_planner_backed_cleanup_primitives=True,
+        require_bound_planner_cleanup_objects=["observed_006:fridge_01"],
         require_planner_cleanup_bridge_ready=True,
     )
 

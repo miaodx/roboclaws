@@ -1229,3 +1229,11 @@ _Avoid_: full cleanup replacement claim
   `max_abs_qpos_delta=0.018310936580938183`, preserved CuRobo profile and exact
   cleanup binding, and no cleanup binding blockers, so the prior pre-grasp
   failure did not reproduce in the Phase 125 run.
+- Phase 126 consumes that Phase 125 proof in the ADR-0003 cleanup primitive
+  path. The checker now accepts bound inside-target cleanup objects that require
+  `nav, pick, nav, open, place_inside`; the rerun at
+  `output/debug-phase126-phase125-bound-proof-cleanup-rerun/run_result.json`
+  marks `observed_001` to refrigerator planner-backed for 5 subphases while
+  leaving 37 unmatched subphases `api_semantic`, so the report shows attached
+  proof views, Cleanup Primitive Gate, Planner Cleanup Bridge, and a globally
+  blocked bridge rather than a premature full cleanup claim.

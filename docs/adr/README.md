@@ -125,6 +125,7 @@ one decision per file, sequential numbering, explicit status.
 | [0114](0114-record-cache-ready-proof-rerun.md) | Record Cache-Ready Proof Rerun | Accepted |
 | [0115](0115-focus-cleanup-report-robot-timeline-on-subphases.md) | Focus Cleanup Report Robot Timeline On Subphases | Accepted |
 | [0116](0116-preserve-curobo-policy-exception-context.md) | Preserve CuRobo Policy Exception Context | Accepted |
+| [0117](0117-consume-phase125-proof-in-cleanup-primitive-path.md) | Consume Phase 125 Proof In Cleanup Primitive Path | Accepted |
 
 ## Adding a new ADR
 

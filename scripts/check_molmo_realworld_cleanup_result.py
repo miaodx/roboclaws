@@ -32,6 +32,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
 )
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_INSIDE_CLEANUP_PHASES,
     CANONICAL_SURFACE_CLEANUP_PHASES,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
     OPEN_RECEPTACLE_PHASE,
@@ -586,7 +587,7 @@ def _assert_bound_planner_cleanup_objects(
         assert row.get("strict_proof_eligible") is True, row
         subphases = row.get("subphases") or []
         assert subphases, row
-        required_phases = set(CANONICAL_SURFACE_CLEANUP_PHASES)
+        required_phases = _required_bound_cleanup_phases(subphases)
         assert required_phases <= {str(step.get("phase") or "") for step in subphases}, row
         for step in subphases:
             assert step.get("primitive_provenance") == "planner_backed", step
@@ -598,6 +599,13 @@ def _assert_bound_planner_cleanup_objects(
         assert object_id in report_text, report_text[:500]
         assert target_receptacle_id in report_text, report_text[:500]
         assert "planner_backed" in report_text, report_text[:500]
+
+
+def _required_bound_cleanup_phases(subphases: list[dict[str, Any]]) -> set[str]:
+    phases = {str(step.get("phase") or "") for step in subphases}
+    if OPEN_RECEPTACLE_PHASE in phases or PLACE_INSIDE_PHASE in phases:
+        return set(CANONICAL_INSIDE_CLEANUP_PHASES)
+    return set(CANONICAL_SURFACE_CLEANUP_PHASES)
 
 
 def _assert_mixed_planner_cleanup_primitives(
