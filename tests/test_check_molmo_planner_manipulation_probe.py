@@ -229,13 +229,15 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     assert sampler._prepare_place_target(env, "ignored", "pickup/body", None, 1) is True
     assert sampler.place_receptacle_name == "sink/body"
     sampler.reset()
-    assert sampler._select_pickup_object(env) == ["pickup/body"]
-    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"]
+    assert sampler._select_pickup_object(env) == ["pickup/body"] * 3
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"] * 3
     binding = result["exact_pickup_candidate_binding"]
     assert binding["action"] == "filtered_to_requested_candidate"
+    assert binding["retry_budget"] == 3
+    assert binding["retry_budget_applied"] is True
     assert binding["requested_present_before"] is True
     assert binding["candidate_count_before"] == 2
-    assert binding["candidate_count_after"] == 1
+    assert binding["candidate_count_after"] == 3
 
 
 def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> None:
@@ -271,11 +273,13 @@ def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> No
     )
 
     sampler.reset()
-    assert sampler._select_pickup_object(None) == ["pickup/body"]
+    assert sampler._select_pickup_object(None) == ["pickup/body"] * 3
 
-    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"]
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"] * 3
     binding = result["exact_pickup_candidate_binding"]
     assert binding["action"] == "injected_requested_candidate_name"
+    assert binding["retry_budget"] == 3
+    assert binding["retry_budget_applied"] is True
     assert binding["requested_present_before"] is False
     assert binding["requested_present_after"] is True
 

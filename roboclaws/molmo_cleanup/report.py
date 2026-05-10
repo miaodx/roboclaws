@@ -1463,6 +1463,8 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("Exact sampler adapter object", sampler_adapter.get("planner_object_id", "")),
         ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
         ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        ("Exact pickup retry budget", pickup_binding.get("retry_budget", "")),
+        ("Exact pickup retry budget applied", _yes_no(pickup_binding.get("retry_budget_applied"))),
         (
             "Exact pickup requested present before",
             _yes_no(pickup_binding.get("requested_present_before")),
@@ -1856,6 +1858,8 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
             cleanup_task_sampler_adapter.get("planner_target_receptacle_id", ""),
         ),
         ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        ("Exact pickup retry budget", pickup_binding.get("retry_budget", "")),
+        ("Exact pickup retry budget applied", _yes_no(pickup_binding.get("retry_budget_applied"))),
         (
             "Exact pickup requested present before",
             _yes_no(pickup_binding.get("requested_present_before")),

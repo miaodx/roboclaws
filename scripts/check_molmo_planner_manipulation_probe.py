@@ -160,6 +160,8 @@ def _assert_probe_result(
         pickup_binding = adapter.get("exact_pickup_candidate_binding") or {}
         if pickup_binding:
             assert "Exact pickup candidate action" in report_text, report_text[:500]
+            if pickup_binding.get("retry_budget") is not None:
+                assert "Exact pickup retry budget" in report_text, report_text[:500]
             for key in ("action", "planner_object_id"):
                 value = str(pickup_binding.get(key) or "")
                 if value:

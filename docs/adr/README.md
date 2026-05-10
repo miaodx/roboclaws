@@ -107,6 +107,7 @@ one decision per file, sequential numbering, explicit status.
 | [0096](0096-record-candidate-removal-effectiveness.md) | Record Candidate Removal Effectiveness | Accepted |
 | [0097](0097-bind-exact-pickup-candidate-pool.md) | Bind Exact Pickup Candidate Pool | Accepted |
 | [0098](0098-require-valid-cleanup-scene-binding.md) | Require Valid Cleanup Scene Binding | Accepted |
+| [0099](0099-preserve-exact-pickup-retry-budget.md) | Preserve Exact Pickup Retry Budget | Accepted |
 
 ## Adding a new ADR
 

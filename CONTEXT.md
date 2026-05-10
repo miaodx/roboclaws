@@ -162,6 +162,12 @@ Exact-scene proof evidence that the requested cleanup scene XML exists and was
 applied before task-sampler or alias blockers are interpreted.
 _Avoid_: default-scene fallback, stale scene path proof
 
+**Exact Pickup Retry Budget**:
+Probe-local exact sampler evidence that repeats the requested pickup candidate
+enough times for upstream grasp-failure threshold semantics to run, without
+reintroducing unrelated candidate objects.
+_Avoid_: one-attempt exact candidate collapse, unrelated retry pool
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -661,6 +667,8 @@ _Avoid_: full cleanup replacement claim
   rendered by the shared report underlay.
 - **Valid Cleanup Scene Binding** should be required before an exact-scene
   proof blocker is interpreted as alias validity or task feasibility evidence.
+- **Exact Pickup Retry Budget** should preserve upstream grasp-threshold
+  semantics while keeping the candidate pool exact.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1012,3 +1020,8 @@ _Avoid_: full cleanup replacement claim
   the pool from 17 unrelated candidates to 1 exact candidate, robot placement
   succeeded, and the remaining blocker is one post-placement grasp failure
   with zero candidate-removal calls.
+- Phase 108 added Exact Pickup Retry Budget. The exact sampler adapter now
+  repeats the requested pickup candidate to a retry budget of 3, preserving the
+  upstream default `max_failures=2` threshold path without restoring unrelated
+  candidates. The valid-scene rerun produced 3 grasp failures, 1 threshold
+  crossing, 1 effective candidate removal, and 0 candidate-name misses.

@@ -68,6 +68,7 @@ CUROBO_LOW_MEMORY_PROFILE: dict[str, dict[str, Any]] = {
         "enable_finetune_trajopt": False,
     },
 }
+EXACT_PICKUP_RETRY_BUDGET = 3
 TASK_SAMPLER_RELAXED_ROBOT_PLACEMENT_PROFILE: dict[str, dict[str, Any]] = {
     "task_sampler_config": {
         "base_pose_sampling_radius_range": (0.0, 1.2),
@@ -1541,6 +1542,8 @@ def _apply_exact_pickup_candidate_binding(
     binding = {
         "schema": "planner_probe_exact_pickup_candidate_binding_v1",
         "planner_object_id": planner_object_id,
+        "retry_budget": EXACT_PICKUP_RETRY_BUDGET,
+        "retry_budget_applied": False,
         "candidate_count_before": _candidate_object_count(task_sampler),
         "candidate_names_before": _candidate_object_names(task_sampler),
         "requested_present_before": None,
@@ -1560,11 +1563,20 @@ def _apply_exact_pickup_candidate_binding(
     matches = [item for item in candidates if str(getattr(item, "name", item)) == planner_object_id]
     binding["requested_present_before"] = bool(matches)
     if matches:
-        task_sampler.candidate_objects = matches
+        task_sampler.candidate_objects = _repeat_candidate_objects(
+            matches,
+            EXACT_PICKUP_RETRY_BUDGET,
+        )
         binding["action"] = "filtered_to_requested_candidate"
     else:
-        task_sampler.candidate_objects = [SimpleNamespace(name=planner_object_id)]
+        task_sampler.candidate_objects = _repeat_candidate_objects(
+            [SimpleNamespace(name=planner_object_id)],
+            EXACT_PICKUP_RETRY_BUDGET,
+        )
         binding["action"] = "injected_requested_candidate_name"
+    binding["retry_budget_applied"] = int(binding["candidate_count_before"] or 0) != len(
+        task_sampler.candidate_objects
+    )
     binding["candidate_count_after"] = _candidate_object_count(task_sampler)
     binding["candidate_names_after"] = _candidate_object_names(task_sampler)
     binding["requested_present_after"] = _candidate_name_present(
@@ -1572,6 +1584,12 @@ def _apply_exact_pickup_candidate_binding(
         planner_object_id,
     )
     adapter["exact_pickup_candidate_binding"] = binding
+
+
+def _repeat_candidate_objects(candidates: list[Any], retry_budget: int) -> list[Any]:
+    if retry_budget <= 0 or len(candidates) >= retry_budget:
+        return list(candidates)
+    return [candidates[index % len(candidates)] for index in range(retry_budget)]
 
 
 def _apply_task_sampler_failure_diagnostics_adapter(

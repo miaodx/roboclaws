@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 107 valid cleanup scene binding completed; next work is targeting the one-failure post-placement grasp-feasibility path before another cleanup rerun
+**Status:** Phase 108 exact pickup retry budget completed; next work is targeting the remaining exact-object grasp-feasibility failure before another cleanup rerun
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -353,6 +353,13 @@ requested bread alias exists: pickup binding moves the candidate pool from 17
 unrelated candidates to 1 exact candidate, robot placement succeeds with one
 diagnostic view, and the remaining blocker is one post-placement grasp failure
 with zero candidate-removal calls.
+Phase 108 preserves upstream grasp-threshold semantics after exact pickup
+binding. The adapter repeats the requested pickup candidate to a retry budget
+of 3 while keeping unrelated candidates out of the pool, and shared reports
+render that budget. The valid-scene rerun now records 3 grasp failures, one
+threshold crossing, 1 candidate-removal call, 1 effective removal, and 0
+candidate-name misses. The remaining blocker is cleanly the exact object's
+grasp feasibility.
 
 ## Why This Exists
 

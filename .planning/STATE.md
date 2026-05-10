@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 107 MolmoSpaces valid cleanup scene binding completed on 2026-05-10.
+stopped_at: Phase 108 MolmoSpaces exact pickup retry budget completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 100
-  completed_phases: 100
-  total_plans: 103
-  completed_plans: 103
+  total_phases: 101
+  completed_phases: 101
+  total_plans: 104
+  completed_plans: 104
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 107 completed valid cleanup scene binding; next work is targeting the one-failure post-placement grasp-feasibility path before another cleanup rerun.
+**Current focus:** Phase 108 completed exact pickup retry budget; next work is targeting the remaining exact-object grasp-feasibility failure before another cleanup rerun.
 
 ## Current Position
 
-Phase: 107 (molmospaces-valid-cleanup-scene-binding) - COMPLETE
-Plan: 1 of 1 complete - `107-01` requires valid cleanup scene binding before exact-scene evidence is accepted.
+Phase: 108 (molmospaces-exact-pickup-retry-budget) - COMPLETE
+Plan: 1 of 1 complete - `108-01` preserves exact-candidate retry budget after pickup binding.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -299,18 +299,22 @@ passed the stricter checker, moved the pickup pool from 17 unrelated candidates
 to the requested bread alias, placed the robot once, captured one diagnostic
 view, and now blocks at one post-placement grasp failure with zero
 candidate-removal calls.
-Last activity: 2026-05-10 - Completed Phase 107 valid cleanup scene binding.
+Phase 108 preserves exact pickup retry budget after binding. The valid-scene
+rerun kept only the requested bread alias, repeated it to a budget of 3, and
+now records 3 grasp failures, 1 threshold crossing, 1 candidate-removal call,
+1 effective removal, and 0 candidate-name misses.
+Last activity: 2026-05-10 - Completed Phase 108 exact pickup retry budget.
 
 Progress: [##########] 100%
-Next blocker: target the one-failure post-placement grasp-feasibility path for
-the exact requested object before another cleanup rerun.
+Next blocker: target the remaining exact-object grasp-feasibility failure
+before another cleanup rerun.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 107 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 107)
+- Total plans completed: 108 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 108)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -974,25 +978,25 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 107 MolmoSpaces valid cleanup scene binding completed.
-The next implementation should target the one-failure post-placement
-grasp-feasibility path before another cleanup rerun.
+Stopped at: Phase 108 MolmoSpaces exact pickup retry budget completed.
+The next implementation should target the remaining exact-object
+grasp-feasibility failure before another cleanup rerun.
 Latest phase artifacts are
-`docs/adr/0098-require-valid-cleanup-scene-binding.md`,
-`docs/plans/molmospaces-valid-cleanup-scene-binding.md`, and
-`.planning/phases/107-molmospaces-valid-cleanup-scene-binding/107-01-valid-cleanup-scene-binding-PLAN.md`.
+`docs/adr/0099-preserve-exact-pickup-retry-budget.md`,
+`docs/plans/molmospaces-exact-pickup-retry-budget.md`, and
+`.planning/phases/108-molmospaces-exact-pickup-retry-budget/108-01-exact-pickup-retry-budget-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
 Latest executed cleanup artifact:
 `output/debug-phase94-seeded-source-candidate-seed9/run_result.json`.
 Latest executed standalone proof artifact:
-`output/debug-phase107-valid-cleanup-scene-pickup-binding/run_result.json`.
+`output/debug-phase108-exact-pickup-retry-budget/run_result.json`.
 Latest proof-bundle dry-run artifact:
 `output/debug-phase94-seeded-source-candidate-selection-dry-run-after-id-fix/proof_bundle_run_manifest.json`.
 Latest regenerated stale report:
 `output/molmo-agent-bridge-visual-codex/report.html`.
-Resume file: .planning/phases/107-molmospaces-valid-cleanup-scene-binding/107-01-valid-cleanup-scene-binding-PLAN.md
+Resume file: .planning/phases/108-molmospaces-exact-pickup-retry-budget/108-01-exact-pickup-retry-budget-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1000,6 +1004,6 @@ Resume file: .planning/phases/107-molmospaces-valid-cleanup-scene-binding/107-01
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 107 MolmoSpaces valid cleanup scene binding is
-complete; next work should target the one-failure post-placement
-grasp-feasibility path before claiming more planner-backed cleanup replacement.
+**Active Phase:** None. Phase 108 MolmoSpaces exact pickup retry budget is
+complete; next work should target the remaining exact-object grasp-feasibility
+failure before claiming more planner-backed cleanup replacement.

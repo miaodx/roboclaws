@@ -1555,7 +1555,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "schema": "planner_probe_exact_pickup_candidate_binding_v1",
             "planner_object_id": "pickup/body",
             "candidate_count_before": 17,
-            "candidate_count_after": 1,
+            "candidate_count_after": 3,
+            "retry_budget": 3,
+            "retry_budget_applied": True,
             "requested_present_before": False,
             "requested_present_after": True,
             "action": "injected_requested_candidate_name",
@@ -1728,6 +1730,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Exact sampler adapter class" in html
     assert "Exact sampler adapter object" in html
     assert "Exact pickup candidate action" in html
+    assert "Exact pickup retry budget" in html
     assert "injected_requested_candidate_name" in html
     assert "PickAndPlaceTaskSampler" in html
     assert "Task Sampler Failure Diagnostics" in html
