@@ -267,6 +267,7 @@ def render_planner_proof_bundle_runner_report(
         )
     }
     </section>
+    {_proof_execution_horizon_section(manifest.get("proof_execution_horizon") or {})}
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
     {
         _grasp_feasibility_mitigation_decision_section(
@@ -1546,6 +1547,42 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{selected_table}{excluded_table}{target_blockers_table}"
         f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+    )
+
+
+def _proof_execution_horizon_section(horizon: dict[str, Any]) -> str:
+    if not horizon:
+        return ""
+    blockers = horizon.get("blockers") or []
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', horizon.get('status', 'unknown'))}"
+        f"{_metric('Command steps', horizon.get('command_steps', 0))}"
+        f"{_metric('Command target', horizon.get('command_quality_target', 'unknown'))}"
+        f"{_metric('Coverage min steps', horizon.get('prior_covered_min_proof_steps', 1))}"
+        f"{_metric('Coverage floor', horizon.get('prior_covered_quality_floor', 'unknown'))}"
+        "</div>"
+    )
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    if not blocker_rows:
+        blocker_rows = '<tr><td colspan="2">No proof execution horizon blockers.</td></tr>'
+    blockers_table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Message</th>"
+        f"</tr></thead><tbody>{blocker_rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel proof-execution-horizon">'
+        "<h2>Proof Execution Horizon</h2>"
+        f'<p class="note">{html.escape(str(horizon.get("evidence_note", "")))}</p>'
+        f"{metrics}{blockers_table}</section>"
     )
 
 

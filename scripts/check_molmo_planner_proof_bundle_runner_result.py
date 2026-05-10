@@ -14,6 +14,7 @@ from roboclaws.molmo_cleanup.planner_proof_quality import (
 )
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA,
     PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
     PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
@@ -30,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-selected-requests", type=int)
     parser.add_argument("--max-selected-requests", type=int)
     parser.add_argument("--require-prior-covered-exclusion", action="store_true")
+    parser.add_argument("--require-proof-execution-horizon", action="store_true")
     parser.add_argument("--require-proof-quality", action="store_true")
     parser.add_argument("--require-planner-backed-proof-min-steps", type=int, default=None)
     return parser.parse_args()
@@ -47,6 +49,7 @@ def main() -> None:
         min_selected_requests=args.min_selected_requests,
         max_selected_requests=args.max_selected_requests,
         require_prior_covered_exclusion=args.require_prior_covered_exclusion,
+        require_proof_execution_horizon=args.require_proof_execution_horizon,
         require_proof_quality=args.require_proof_quality,
         planner_backed_proof_min_steps=args.require_planner_backed_proof_min_steps,
     )
@@ -62,6 +65,7 @@ def _assert_runner_result(
     min_selected_requests: int | None = None,
     max_selected_requests: int | None = None,
     require_prior_covered_exclusion: bool = False,
+    require_proof_execution_horizon: bool = False,
     require_proof_quality: bool = False,
     planner_backed_proof_min_steps: int | None = None,
 ) -> None:
@@ -82,6 +86,11 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    proof_execution_horizon = data.get("proof_execution_horizon") or {}
+    if proof_execution_horizon:
+        _assert_proof_execution_horizon(proof_execution_horizon, report_text)
+    elif require_proof_execution_horizon:
+        raise AssertionError("proof_execution_horizon is required")
     local_runtime_preflight = data.get("local_runtime_preflight") or {}
     if local_runtime_preflight:
         _assert_local_runtime_preflight(local_runtime_preflight, report_text)
@@ -160,6 +169,34 @@ def _assert_runner_report(report_text: str) -> None:
         "Cleanup Rerun Command",
     ):
         assert heading in report_text, (heading, report_text[:500])
+
+
+def _assert_proof_execution_horizon(horizon: dict[str, Any], report_text: str) -> None:
+    assert horizon.get("schema") == PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA, horizon
+    assert horizon.get("status") in {"aligned", "command_steps_below_coverage_horizon"}, horizon
+    assert int(horizon.get("command_steps") or 0) >= 0, horizon
+    assert int(horizon.get("prior_covered_min_proof_steps") or 0) >= 1, horizon
+    assert str(horizon.get("command_quality_target") or "") in {
+        "unknown",
+        "one_step_motion",
+        "multi_step_motion",
+    }, horizon
+    assert str(horizon.get("prior_covered_quality_floor") or "") in {
+        "one_step_motion",
+        "multi_step_motion",
+    }, horizon
+    assert "Proof Execution Horizon" in report_text, report_text[:500]
+    for value in (
+        horizon.get("status"),
+        horizon.get("command_quality_target"),
+        horizon.get("prior_covered_quality_floor"),
+    ):
+        _assert_report_contains(str(value), report_text)
+    for blocker in horizon.get("blockers") or []:
+        if not isinstance(blocker, dict):
+            continue
+        _assert_report_contains(str(blocker.get("code") or ""), report_text)
+        _assert_report_contains(str(blocker.get("message") or ""), report_text)
 
 
 def _assert_local_runtime_preflight(preflight: dict[str, Any], report_text: str) -> None:

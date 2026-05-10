@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 130 report-generation router completed; generic report generation now routes Molmo cleanup artifacts to the shared visual underlay while the full bridge remains blocked
+**Status:** Phase 131 proof execution horizon reports completed; proof-bundle dry-run reports now show command-step quality intent before local proof execution while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -471,6 +471,11 @@ generation entrypoint now detects Molmo cleanup run directories and
 `run_result.json` paths and delegates to the Cleanup Report Artifact Adapter
 instead of the older replay reporter, keeping the shared semantic visual
 underlay on the `nav, pick, nav, open?, place` path.
+Phase 131 makes stronger proof intent visible before execution. Proof-bundle
+manifests and dry-run reports now render a Proof Execution Horizon section with
+requested command steps, command quality target, prior-covered coverage floor,
+and blockers when generated commands cannot satisfy the stricter coverage
+horizon.
 
 ## Why This Exists
 
@@ -1356,9 +1361,13 @@ completed:
   gsd-plan-phase 130-molmospaces-report-generation-router
   gsd-execute-phase 130-molmospaces-report-generation-router
   gsd-verify-work 130-molmospaces-report-generation-router
+  gsd-plan-phase 131-molmospaces-proof-execution-horizon-report
+  gsd-execute-phase 131-molmospaces-proof-execution-horizon-report
+  gsd-verify-work 131-molmospaces-proof-execution-horizon-report
 
 next pipeline candidates:
   expand exact-proof coverage beyond observed_001, or generate a stricter
   multi-step/containment proof now that prior-covered selection can reselect
-  one-step proof memory when a higher coverage horizon is requested
+  one-step proof memory when a higher coverage horizon is requested and dry-run
+  reports expose the requested command quality horizon
 ```

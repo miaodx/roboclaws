@@ -834,6 +834,16 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
         "output_dir": str(tmp_path),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_execution_horizon": {
+            "schema": "planner_cleanup_proof_execution_horizon_v1",
+            "status": "aligned",
+            "command_steps": 2,
+            "command_quality_target": "multi_step_motion",
+            "prior_covered_min_proof_steps": 1,
+            "prior_covered_quality_floor": "one_step_motion",
+            "blockers": [],
+            "evidence_note": "requested horizon",
+        },
         "proof_request_selection": {
             "schema": "planner_cleanup_proof_request_selection_v1",
             "mode": "exclude_task_feasibility_blocked",
@@ -1478,6 +1488,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     html = report_path.read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
+    assert "Proof Execution Horizon" in html
+    assert "multi_step_motion" in html
     assert "Proof Request Selection" in html
     assert "Grasp Feasibility Mitigation Decision" in html
     assert "decision-card" in html

@@ -10,6 +10,7 @@ import pytest
 from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    proof_execution_horizon,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
@@ -36,6 +37,13 @@ def test_checker_accepts_valid_runner_artifact(tmp_path: Path) -> None:
     manifest = _write_runner_artifact(tmp_path)
 
     checker._assert_runner_result(manifest, tmp_path)
+
+
+def test_checker_can_require_proof_execution_horizon(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _write_runner_artifact(tmp_path)
+
+    checker._assert_runner_result(manifest, tmp_path, require_proof_execution_horizon=True)
 
 
 def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -> None:
@@ -1061,6 +1069,10 @@ def _runner_manifest(base: Path) -> dict[str, object]:
         "output_dir": str(base),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_execution_horizon": proof_execution_horizon(
+            command_steps=2,
+            prior_covered_min_proof_steps=1,
+        ),
         "command_count": 1,
         "commands": [
             {

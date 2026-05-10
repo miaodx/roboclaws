@@ -26,6 +26,7 @@ PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
 PLANNER_PROOF_RESULT_SUMMARY_SCHEMA = "planner_cleanup_proof_result_summary_v1"
 PLANNER_PROOF_REQUEST_SELECTION_SCHEMA = "planner_cleanup_proof_request_selection_v1"
+PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA = "planner_cleanup_proof_execution_horizon_v1"
 PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA = (
     "planner_cleanup_proof_request_fallback_generation_v1"
 )
@@ -242,6 +243,51 @@ def build_probe_warmup_command(
     }
 
 
+def proof_execution_horizon(
+    *,
+    command_steps: int,
+    prior_covered_min_proof_steps: int,
+) -> dict[str, Any]:
+    """Describe the proof-strength target requested by a proof-bundle run."""
+    command_steps = max(0, int(command_steps))
+    coverage_min_steps = max(1, int(prior_covered_min_proof_steps))
+    blockers: list[dict[str, Any]] = []
+    status = "aligned"
+    if command_steps < coverage_min_steps:
+        status = "command_steps_below_coverage_horizon"
+        blockers.append(
+            {
+                "code": "command_steps_below_coverage_horizon",
+                "message": (
+                    f"Probe commands request {command_steps} steps, below the "
+                    f"prior-covered minimum of {coverage_min_steps} steps."
+                ),
+            }
+        )
+    return {
+        "schema": PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA,
+        "status": status,
+        "command_steps": command_steps,
+        "command_quality_target": _quality_target_for_steps(command_steps),
+        "prior_covered_min_proof_steps": coverage_min_steps,
+        "prior_covered_quality_floor": _quality_target_for_steps(coverage_min_steps),
+        "blockers": blockers,
+        "evidence_note": (
+            "Requested proof-strength horizon for generated proof commands. "
+            "This records the intended proof tier before local execution; strict "
+            "proof results remain authoritative after execution."
+        ),
+    }
+
+
+def _quality_target_for_steps(steps: int) -> str:
+    if steps >= 2:
+        return "multi_step_motion"
+    if steps >= 1:
+        return "one_step_motion"
+    return "unknown"
+
+
 def proof_bundle_run_manifest(
     *,
     cleanup_run_result: Path,
@@ -250,6 +296,7 @@ def proof_bundle_run_manifest(
     commands: list[dict[str, Any]],
     warmup: dict[str, Any] | None = None,
     local_runtime_preflight: dict[str, Any] | None = None,
+    proof_execution_horizon: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
     prior_proof_result_summary: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
@@ -283,6 +330,7 @@ def proof_bundle_run_manifest(
         "proof_request_selection": selection,
         "prior_proof_result_summary": prior_summary,
         "local_runtime_preflight": local_runtime_preflight or {},
+        "proof_execution_horizon": proof_execution_horizon or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,

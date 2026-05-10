@@ -68,6 +68,13 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert manifest["proof_request_count"] == 1
     assert manifest["ready_request_count"] == 1
     assert manifest["command_count"] == 1
+    assert manifest["proof_execution_horizon"]["schema"] == (
+        "planner_cleanup_proof_execution_horizon_v1"
+    )
+    assert manifest["proof_execution_horizon"]["status"] == "aligned"
+    assert manifest["proof_execution_horizon"]["command_steps"] == 2
+    assert manifest["proof_execution_horizon"]["command_quality_target"] == "multi_step_motion"
+    assert manifest["proof_execution_horizon"]["prior_covered_min_proof_steps"] == 1
     assert manifest["proof_request_selection"]["mode"] == "all_ready"
     assert manifest["proof_request_selection"]["selected_request_ids"] == ["proof_001"]
     command = manifest["commands"][0]["command"]
@@ -88,6 +95,8 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert Path(result["report_path"]).is_file()
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in report
+    assert "Proof Execution Horizon" in report
+    assert "multi_step_motion" in report
     assert "Proof Request Selection" in report
     assert "Proof Probe Commands" in report
     assert "Proof Probe Results" in report
@@ -345,6 +354,13 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
     )
     strict_selection = strict_result["manifest"]["proof_request_selection"]
     assert strict_selection["prior_covered_min_proof_steps"] == 2
+    assert (
+        strict_result["manifest"]["proof_execution_horizon"]["prior_covered_min_proof_steps"] == 2
+    )
+    assert (
+        strict_result["manifest"]["proof_execution_horizon"]["prior_covered_quality_floor"]
+        == "multi_step_motion"
+    )
     assert strict_selection["selected_request_ids"] == ["proof_001", "proof_003"]
     assert strict_selection["covered_request_count"] == 0
     assert strict_selection["selected_requests"][0]["prior_proof_quality"] == "one_step_motion"
@@ -352,6 +368,44 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
     strict_report = Path(strict_result["report_path"]).read_text(encoding="utf-8")
     assert "Coverage min steps" in strict_report
     assert "one_step_motion" in strict_report
+    assert "Proof Execution Horizon" in strict_report
+
+
+def test_runner_reports_misaligned_proof_execution_horizon(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=1,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=2,
+    )
+
+    horizon = result["manifest"]["proof_execution_horizon"]
+    assert horizon["status"] == "command_steps_below_coverage_horizon"
+    assert horizon["command_quality_target"] == "one_step_motion"
+    assert horizon["prior_covered_quality_floor"] == "multi_step_motion"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "command_steps_below_coverage_horizon" in report
+    assert "Probe commands request 1 steps" in report
 
 
 def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path: Path) -> None:

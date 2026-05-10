@@ -474,6 +474,12 @@ only counts as covered when its **Planner Proof Quality Evidence** reaches the
 requested executed-step horizon.
 _Avoid_: one-step stale proof memory suppressing stricter proof reruns
 
+**Proof Execution Horizon**:
+The proof-bundle runner's pre-execution record of command step count, command
+quality target, prior-covered minimum step floor, and blocker rows when the
+command horizon cannot satisfy the requested coverage horizon.
+_Avoid_: hidden mismatch between selected proof horizon and generated command steps
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -1285,3 +1291,7 @@ _Avoid_: full cleanup replacement claim
   paths and delegates to the shared Cleanup Report Artifact Adapter, so cleanup
   artifacts keep the `nav, pick, nav, open?, place` visual underlay even when
   callers use the broader report-generation entrypoint.
+- Phase 131 adds Proof Execution Horizon reports. Proof-bundle manifests and
+  runner reports now show requested command steps, command quality target,
+  prior-covered coverage floor, and misalignment blockers before local proof
+  execution; the runner checker can require that view.

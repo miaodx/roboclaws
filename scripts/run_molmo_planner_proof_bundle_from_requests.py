@@ -20,6 +20,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_probe_commands,
     build_probe_warmup_command,
     proof_bundle_run_manifest,
+    proof_execution_horizon,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
@@ -219,6 +220,10 @@ def run_from_cleanup_result(
         task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         request_selection=proof_request_selection,
     )
+    requested_horizon = proof_execution_horizon(
+        command_steps=steps,
+        prior_covered_min_proof_steps=prior_covered_min_proof_steps,
+    )
     local_runtime_preflight = _local_runtime_preflight(
         molmospaces_python=molmospaces_python,
         execute_requested=execute_probes,
@@ -265,6 +270,7 @@ def run_from_cleanup_result(
         commands=commands,
         warmup=warmup,
         local_runtime_preflight=local_runtime_preflight,
+        proof_execution_horizon=requested_horizon,
         proof_request_selection=proof_request_selection,
         prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,
