@@ -1157,6 +1157,116 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 }
             ],
         },
+        "grasp_cache_availability_preflight": {
+            "schema": "planner_grasp_cache_availability_preflight_v1",
+            "status": "missing_cache",
+            "assets_dir": str(tmp_path / "assets"),
+            "assets_dir_source": "argument",
+            "assets_dir_exists": True,
+            "missing_grasp_asset_uids": ["Bread_1"],
+            "asset_count": 1,
+            "ready_asset_count": 0,
+            "missing_cache_asset_count": 1,
+            "cache_ready_asset_uids": [],
+            "cache_missing_asset_uids": ["Bread_1"],
+            "loader_sources": ["droid", "droid_objaverse", "rum"],
+            "mitigation_recommendation": "generate_or_install_rigid_grasp_cache_before_retry",
+            "upstream_loader": "molmo_spaces.utils.grasp_sample.load_grasps_for_object",
+            "evidence_note": "Preflights the rigid-object grasp files used by MolmoSpaces.",
+            "assets": [
+                {
+                    "asset_uid": "Bread_1",
+                    "status": "missing_cache",
+                    "loader_file_status": "missing",
+                    "object_asset_status": "present",
+                    "candidate_grasp_files": [
+                        {
+                            "asset_uid": "Bread_1",
+                            "source": "droid",
+                            "gripper": "droid",
+                            "loader_role": "rigid_object_loader",
+                            "path": str(
+                                tmp_path
+                                / "assets"
+                                / "grasps"
+                                / "droid"
+                                / "Bread_1"
+                                / "Bread_1_grasps_filtered.npz"
+                            ),
+                            "relative_path": ("grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"),
+                            "exists": False,
+                            "size_bytes": 0,
+                        },
+                        {
+                            "asset_uid": "Bread_1",
+                            "source": "droid_objaverse",
+                            "gripper": "droid",
+                            "loader_role": "rigid_object_loader",
+                            "path": str(
+                                tmp_path
+                                / "assets"
+                                / "grasps"
+                                / "droid_objaverse"
+                                / "Bread_1"
+                                / "Bread_1_grasps_filtered.npz"
+                            ),
+                            "relative_path": (
+                                "grasps/droid_objaverse/Bread_1/Bread_1_grasps_filtered.npz"
+                            ),
+                            "exists": False,
+                            "size_bytes": 0,
+                        },
+                        {
+                            "asset_uid": "Bread_1",
+                            "source": "rum",
+                            "gripper": "rum",
+                            "loader_role": "rigid_object_loader",
+                            "path": str(
+                                tmp_path
+                                / "assets"
+                                / "grasps"
+                                / "rum"
+                                / "Bread_1"
+                                / "Bread_1_grasps_filtered.json"
+                            ),
+                            "relative_path": ("grasps/rum/Bread_1/Bread_1_grasps_filtered.json"),
+                            "exists": False,
+                            "size_bytes": 0,
+                        },
+                    ],
+                    "folder_probe_files": [
+                        {
+                            "asset_uid": "Bread_1",
+                            "source": "droid",
+                            "gripper": "droid",
+                            "loader_role": "has_grasp_folder_only",
+                            "path": str(
+                                tmp_path
+                                / "assets"
+                                / "grasps"
+                                / "droid"
+                                / "Bread_1"
+                                / "Bread_1_joint_grasps_filtered.npz"
+                            ),
+                            "relative_path": (
+                                "grasps/droid/Bread_1/Bread_1_joint_grasps_filtered.npz"
+                            ),
+                            "exists": False,
+                            "size_bytes": 0,
+                        }
+                    ],
+                    "object_asset_files": [
+                        {
+                            "kind": "xml",
+                            "path": str(tmp_path / "assets" / "objects" / "thor" / "Bread_1.xml"),
+                            "relative_path": "objects/thor/Bread_1.xml",
+                            "exists": True,
+                            "size_bytes": 10,
+                        }
+                    ],
+                }
+            ],
+        },
         "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
     }
 
@@ -1173,6 +1283,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "decision-card" in html
     assert "grasp_cache_mitigation" in html
     assert "mitigate_missing_grasp_cache_before_retry" in html
+    assert "Grasp Cache Availability Preflight" in html
+    assert "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz" in html
+    assert "has_grasp_folder_only" in html
+    assert "objects/thor/Bread_1.xml" in html
     assert "available_for_unproven_requests" in html
     assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html

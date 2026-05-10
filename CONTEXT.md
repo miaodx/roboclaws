@@ -186,6 +186,12 @@ mitigation before exact retry while keeping source rotation state visible for
 separate unproven requests.
 _Avoid_: treating source rotation as if it mitigated a known missing cache asset
 
+**Grasp Cache Availability Preflight**:
+Proof-bundle runner evidence that probes the exact rigid grasp-cache files used
+by MolmoSpaces' object loader and distinguishes present object assets from
+missing loader-compatible grasp caches.
+_Avoid_: assuming an object asset cache implies cached rigid grasps exist
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -702,6 +708,9 @@ _Avoid_: full cleanup replacement claim
   proof-result summaries before source rotation or cache mitigation.
 - **Grasp Cache Routing Decision** should make cache mitigation versus source
   rotation explicit before another runtime proof attempt.
+- **Grasp Cache Availability Preflight** should record the droid,
+  droid-objaverse, and RUM rigid loader paths for a missing grasp asset before
+  generating or restoring cache data.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1073,3 +1082,7 @@ _Avoid_: full cleanup replacement claim
   reports now route `grasp_cache_missing` evidence for `Bread_1` to
   `grasp_cache_mitigation` before exact retry, while keeping source rotation
   visible as `available_for_unproven_requests` for unrelated selected requests.
+- Phase 112 adds Grasp Cache Availability Preflight. Proof-bundle manifests and
+  reports now show that `Bread_1` object XML/OBJ assets are present locally but
+  the rigid loader-compatible grasp cache files are missing for droid,
+  droid-objaverse, and RUM sources.

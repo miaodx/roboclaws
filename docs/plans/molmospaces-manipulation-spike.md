@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 111 grasp cache routing decision completed; next work is implementing `Bread_1` grasp-cache mitigation or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 112 grasp cache availability preflight completed; next work is generating/restoring a rigid `Bread_1` grasp cache or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -378,6 +378,10 @@ reports now render `Grasp Feasibility Mitigation Decision`, route the known
 `Bread_1` missing-cache blocker to `grasp_cache_mitigation`, and keep source
 rotation visible only as `available_for_unproven_requests` for different
 selected requests.
+Phase 112 makes that cache route concrete. Proof-bundle manifests and reports
+now render `Grasp Cache Availability Preflight`, showing that local `Bread_1`
+object XML/OBJ assets are present while the rigid loader files checked by
+MolmoSpaces are missing for droid, droid-objaverse, and RUM sources.
 
 ## Why This Exists
 

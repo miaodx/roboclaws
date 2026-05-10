@@ -231,6 +231,11 @@ def render_planner_proof_bundle_runner_report(
             manifest.get("grasp_feasibility_mitigation_decision") or {}
         )
     }
+    {
+        _grasp_cache_availability_preflight_section(
+            manifest.get("grasp_cache_availability_preflight") or {}
+        )
+    }
     {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
@@ -983,6 +988,104 @@ def _decision_card(title: str, value: Any, detail: Any) -> str:
         f"<strong>{html.escape(str(value))}</strong>"
         f"<p>{html.escape(str(detail))}</p>"
         "</article>"
+    )
+
+
+def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight:
+        return ""
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Assets', preflight.get('asset_count', 0))}"
+        f"{_metric('Ready assets', preflight.get('ready_asset_count', 0))}"
+        f"{_metric('Missing cache assets', preflight.get('missing_cache_asset_count', 0))}"
+        f"{_metric('Assets dir source', preflight.get('assets_dir_source', 'unknown'))}"
+        f"{_metric('Assets dir exists', preflight.get('assets_dir_exists', False))}"
+        "</div>"
+    )
+    path_rows = _path_table(
+        [
+            ("Assets dir", preflight.get("assets_dir", "")),
+            ("Upstream loader", preflight.get("upstream_loader", "")),
+        ]
+    )
+    asset_rows = []
+    candidate_rows = []
+    object_rows = []
+    for asset in preflight.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        asset_uid = str(asset.get("asset_uid") or "")
+        asset_rows.append(
+            "<tr>"
+            f"<td>{html.escape(asset_uid)}</td>"
+            f"<td>{html.escape(str(asset.get('status', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('loader_file_status', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('object_asset_status', '')))}</td>"
+            "</tr>"
+        )
+        for probe in [
+            *(asset.get("candidate_grasp_files") or []),
+            *(asset.get("folder_probe_files") or []),
+        ]:
+            if not isinstance(probe, dict):
+                continue
+            candidate_rows.append(
+                "<tr>"
+                f"<td>{html.escape(asset_uid)}</td>"
+                f"<td>{html.escape(str(probe.get('source', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('loader_role', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('exists', False)))}</td>"
+                f"<td>{html.escape(str(probe.get('size_bytes', 0)))}</td>"
+                f"<td>{html.escape(str(probe.get('relative_path', '')))}</td>"
+                "</tr>"
+            )
+        for object_file in asset.get("object_asset_files") or []:
+            if not isinstance(object_file, dict):
+                continue
+            object_rows.append(
+                "<tr>"
+                f"<td>{html.escape(asset_uid)}</td>"
+                f"<td>{html.escape(str(object_file.get('kind', '')))}</td>"
+                f"<td>{html.escape(str(object_file.get('size_bytes', 0)))}</td>"
+                f"<td>{html.escape(str(object_file.get('relative_path', '')))}</td>"
+                "</tr>"
+            )
+    if not asset_rows:
+        asset_rows.append('<tr><td colspan="4">No missing grasp-cache assets.</td></tr>')
+    if not candidate_rows:
+        candidate_rows.append('<tr><td colspan="6">No grasp-cache file probes.</td></tr>')
+    asset_table = (
+        '<h3>Asset Status</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Status</th><th>Rigid loader file</th><th>Object asset</th>"
+        f"</tr></thead><tbody>{''.join(asset_rows)}</tbody></table></div>"
+    )
+    candidate_table = (
+        '<h3>Loader File Probes</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Source</th><th>Loader role</th><th>Exists</th>"
+        "<th>Bytes</th><th>Relative path</th>"
+        f"</tr></thead><tbody>{''.join(candidate_rows)}</tbody></table></div>"
+    )
+    object_table = ""
+    if object_rows:
+        object_table = (
+            '<h3>Object Asset Probes</h3><div class="table-wrap"><table><thead><tr>'
+            "<th>Asset</th><th>Kind</th><th>Bytes</th><th>Relative path</th>"
+            f"</tr></thead><tbody>{''.join(object_rows)}</tbody></table></div>"
+        )
+    recommendation = str(preflight.get("mitigation_recommendation") or "")
+    recommendation_html = (
+        f'<p class="note">Recommendation: {html.escape(recommendation)}</p>'
+        if recommendation
+        else ""
+    )
+    note = preflight.get("evidence_note") or "Grasp cache availability preflight."
+    return (
+        '<section class="panel grasp-cache-preflight">'
+        "<h2>Grasp Cache Availability Preflight</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{path_rows}'
+        f"{recommendation_html}{asset_table}{candidate_table}{object_table}</section>"
     )
 
 

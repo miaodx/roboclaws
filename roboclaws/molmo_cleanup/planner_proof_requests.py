@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
+    grasp_cache_availability_preflight,
     grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
@@ -253,6 +254,11 @@ def proof_bundle_run_manifest(
     selection = proof_request_selection or proof_request_selection_from_summary(proof_requests)
     summary = proof_result_summary or proof_result_summary_from_commands(commands)
     prior_summary = prior_proof_result_summary or {}
+    grasp_mitigation_decision = grasp_feasibility_mitigation_decision(
+        prior_proof_result_summary=prior_summary,
+        proof_result_summary=summary,
+        proof_request_selection=selection,
+    )
     return {
         "schema": PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
         "cleanup_run_result": str(cleanup_run_result),
@@ -267,10 +273,9 @@ def proof_bundle_run_manifest(
         "command_count": len(commands),
         "commands": commands,
         "proof_result_summary": summary,
-        "grasp_feasibility_mitigation_decision": grasp_feasibility_mitigation_decision(
-            prior_proof_result_summary=prior_summary,
-            proof_result_summary=summary,
-            proof_request_selection=selection,
+        "grasp_feasibility_mitigation_decision": grasp_mitigation_decision,
+        "grasp_cache_availability_preflight": grasp_cache_availability_preflight(
+            grasp_mitigation_decision
         ),
         "cleanup_command": cleanup_command or [],
         "cleanup_rerun": cleanup_rerun or {},
