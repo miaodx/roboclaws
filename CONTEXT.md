@@ -250,6 +250,12 @@ _Avoid_: Accidental success
 The shared HTML review artifact for MolmoSpaces cleanup demos, backed by one report renderer and one semantic timeline model.
 _Avoid_: Per-demo report clone
 
+**Cleanup Report Artifact Adapter**:
+A small adapter whose interface starts from an existing cleanup `run_result.json`
+and rehydrates scenario, trace, snapshots, private manifest, and robot-view
+steps before delegating to the shared Cleanup Artifact Report underlay.
+_Avoid_: second report renderer, manual stale HTML repair
+
 **Report Visual Core**:
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture

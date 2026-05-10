@@ -231,6 +231,11 @@ results that are already `planner_backed` and cleanup-binding promoted. The
 dry-run against the current broader seed now selects zero commands, marks
 `proof_008` as `prior_planner_proof_covered`, renders prior proof views, and
 makes the seed exhaustion explicit before rotating to a new source pool.
+Phase 93 adds a Cleanup Report Artifact Adapter so existing MolmoSpaces cleanup
+artifacts can be regenerated from `run_result.json` through the shared report
+underlay. The referenced stale visual Codex report now renders the canonical
+visual core and semantic subphase rails (`nav, pick, nav, open?, place`) and
+passes the agent-bridge checker without rerunning MolmoSpaces.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -348,6 +353,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.91 MolmoSpaces broader selected proof execution** - Phase 90 (completed 2026-05-10; one selected broader candidate passes strict planner-backed proof with cleanup binding and views)
 - ✅ **v1.92 MolmoSpaces broader bound proof cleanup rerun** - Phase 91 (completed 2026-05-10; final cleanup consumes proof_008 for one planner-backed object while keeping unmatched objects api_semantic)
 - ✅ **v1.93 MolmoSpaces prior covered proof selection memory** - Phase 92 (completed 2026-05-10; already-covered planner proofs are excluded before broader proof expansion)
+- ✅ **v1.94 MolmoSpaces cleanup report artifact adapter** - Phase 93 (completed 2026-05-10; stale cleanup reports regenerate from run_result.json through the shared underlay)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -456,6 +462,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 90: MolmoSpaces broader selected proof execution** - ADR-0081 executes the broader selected candidates and records the first strict planner-backed bound proof from that pool. Completed 2026-05-10.
 - [x] **Phase 91: MolmoSpaces broader bound proof cleanup rerun** - ADR-0082 consumes the passing broader proof in final cleanup and verifies mixed planner-backed/API-semantic primitive evidence. Completed 2026-05-10.
 - [x] **Phase 92: MolmoSpaces prior covered proof selection memory** - ADR-0083 excludes already-covered planner-backed cleanup bindings before new proof-bundle execution. Completed 2026-05-10.
+- [x] **Phase 93: MolmoSpaces cleanup report artifact adapter** - ADR-0084 regenerates stale cleanup `report.html` artifacts from `run_result.json` through the shared underlay. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

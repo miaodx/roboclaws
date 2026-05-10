@@ -92,6 +92,7 @@ one decision per file, sequential numbering, explicit status.
 | [0081](0081-record-broader-selected-proof-execution.md) | Record Broader Selected Proof Execution | Accepted |
 | [0082](0082-rerun-cleanup-with-broader-bound-proof.md) | Rerun Cleanup with Broader Bound Proof | Accepted |
 | [0083](0083-exclude-prior-covered-planner-proofs.md) | Exclude Prior Covered Planner Proofs | Accepted |
+| [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
 
 ## Adding a new ADR
 

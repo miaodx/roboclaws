@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 92 prior covered-proof selection memory completed; next work is rotating to a new broader source candidate pool
+**Status:** Phase 93 cleanup report artifact adapter completed; next work is rotating to a new broader source candidate pool
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -263,6 +263,12 @@ zero commands, excluded `proof_008` as `prior_planner_proof_covered`, excluded
 nine grasp-infeasible requests, and rendered the prior proof views in the
 runner report. The next slice should rotate to a different broader cleanup
 source artifact rather than rerunning this seed.
+Phase 93 closes the stale-report architecture gap: a Cleanup Report Artifact
+Adapter can now regenerate `report.html` from an existing cleanup
+`run_result.json` through the shared underlay. The referenced stale
+`output/molmo-agent-bridge-visual-codex/report.html` was repaired locally to
+show the canonical visual core and semantic subphase rails
+`nav, pick, nav, open?, place`, then passed the agent-bridge checker.
 
 ## Why This Exists
 
@@ -1133,9 +1139,12 @@ completed:
   gsd-plan-phase 92-molmospaces-prior-covered-proof-selection-memory
   gsd-execute-phase 92-molmospaces-prior-covered-proof-selection-memory
   gsd-verify-work 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-plan-phase 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-execute-phase 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-verify-work 93-molmospaces-cleanup-report-artifact-adapter
 
 next pipeline candidates:
-  rotate to a new broader source candidate pool; the current broader seed is
-  exhausted after excluding nine grasp-infeasible requests and one covered
-  proof_008 request
+  after the report adapter slice, rotate to a new broader source candidate
+  pool; the current broader seed and the local seed8 probe are exhausted after
+  excluding nine grasp-infeasible requests and one covered proof_008 request
 ```
