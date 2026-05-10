@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 101 seed 10 source rotation completed; next work is executing selected seed 10 proof commands or reducing the shared grasp-feasibility blocker
+**Status:** Phase 102 seed 10 selected proof execution completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -305,6 +305,13 @@ artifact validated with 10 generated objects, 44 robot-view semantic steps, and
 excluding five requests as `prior_task_feasibility_blocked`. The next slice
 should execute those selected commands locally, then only rerun cleanup if any
 selected proof becomes planner-backed and promotes cleanup binding.
+Phase 102 executed those five selected seed 10 proof commands locally with
+runtime preflight, RBY1M/CuRobo warmup, low memory, and wide placement. All
+five attempts produced proof outputs and diagnostic views, but every request
+blocked as `grasp_feasibility` with 17 grasp failures and 15 candidate-removal
+calls. No new planner-backed proof or cleanup-binding promotion was produced,
+so the next slice should target the shared grasp-feasibility blocker rather
+than rerunning cleanup.
 
 ## Why This Exists
 

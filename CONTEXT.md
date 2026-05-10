@@ -155,6 +155,12 @@ different exact-scene proof request pool while prior proof memory filters
 already covered or known-blocked requests before execution.
 _Avoid_: claiming selected dry-run commands as planner-backed proof
 
+**Seed 10 Selected Proof Execution**:
+Local-dev execution evidence for selected seed 10 proof commands. It can add
+planner-backed cleanup coverage only if a proof both passes and promotes cleanup
+binding; otherwise it is blocker evidence.
+_Avoid_: treating selected commands or executed blockers as cleanup success
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -933,3 +939,9 @@ _Avoid_: full cleanup replacement claim
   `proof_010`) and excluded five requests as `prior_task_feasibility_blocked`;
   those selected commands still need a separate local execution phase before
   any new planner-backed cleanup coverage is claimed.
+- Phase 102 added Seed 10 Selected Proof Execution. The five selected seed 10
+  proof commands executed with local runtime preflight, RBY1M/CuRobo warmup,
+  low memory, and wide placement. All five attempted proofs blocked as
+  `grasp_feasibility` with 17 grasp failures, 15 candidate-removal calls, and
+  one diagnostic view artifact each; none became planner-backed or promoted
+  cleanup binding.

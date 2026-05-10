@@ -101,6 +101,7 @@ one decision per file, sequential numbering, explicit status.
 | [0090](0090-record-proof-bundle-local-runtime-preflight.md) | Record Proof-Bundle Local Runtime Preflight | Accepted |
 | [0091](0091-use-canonical-molmo-spaces-preflight-import.md) | Use Canonical MolmoSpaces Preflight Import | Accepted |
 | [0092](0092-record-seed10-source-rotation.md) | Record Seed 10 Source Rotation | Accepted |
+| [0093](0093-execute-seed10-selected-proof-commands.md) | Execute Seed 10 Selected Proof Commands | Accepted |
 
 ## Adding a new ADR
 
