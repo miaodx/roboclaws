@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 87 selected proof candidate execution completed; next work is generating or discovering a different grasp-feasible exact-scene proof request
+**Status:** Phase 88 nested prior proof evidence carry-forward completed; next work is generating or discovering a different grasp-feasible exact-scene proof request beyond the current source/fallback alias pool
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -234,6 +234,11 @@ Phase 87 executed the remaining selected `proof_002` bowl/sink request. It also
 blocked as `grasp_feasibility` with `17 grasp failures; 15 candidate-removal
 calls`, so the next work must generate or discover a different exact-scene
 candidate rather than retrying the two known blocked source requests.
+Phase 88 carries nested prior proof evidence forward when a later proof-bundle
+manifest is reused as the next prior input. The Phase88 dry-run uses only the
+Phase87 manifest, preserves nested Phase81 evidence plus Phase87 proof results,
+excludes both source requests, generates zero commands, and renders both prior
+evidence rows in the same proof-bundle runner report.
 
 ## Why This Exists
 
@@ -1089,7 +1094,11 @@ completed:
   gsd-plan-phase 87-molmospaces-selected-proof-candidate-execution
   gsd-execute-phase 87-molmospaces-selected-proof-candidate-execution
   gsd-verify-work 87-molmospaces-selected-proof-candidate-execution
+  gsd-plan-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-execute-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-verify-work 88-molmospaces-nested-prior-proof-evidence-carry-forward
 
 next pipeline candidates:
   generate or discover a different grasp-feasible exact-scene proof request
+  beyond the current source/fallback alias pool
 ```

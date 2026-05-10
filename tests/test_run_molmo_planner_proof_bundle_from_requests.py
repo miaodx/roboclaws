@@ -692,6 +692,144 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
     assert str(prior_probe.parent / "final.png") in report
 
 
+def test_runner_carries_nested_prior_proof_result_summary_from_prior_manifest(
+    tmp_path: Path,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    prior_manifest = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior_manifest.parent.mkdir()
+    prior_manifest.write_text(
+        json.dumps(
+            {
+                "schema": "planner_cleanup_proof_bundle_run_manifest_v1",
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "result_count": 1,
+                    "results": [
+                        {
+                            "request_id": "proof_unrelated",
+                            "object_id": "observed_other",
+                            "target_receptacle_id": "sink_other",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "run_result": str(tmp_path / "other" / "run_result.json"),
+                            "report": str(tmp_path / "other" / "report.html"),
+                        }
+                    ],
+                },
+                "prior_proof_result_summary": {
+                    "schema": "merged_prior_planner_proof_result_summary_v1",
+                    "result_count": 1,
+                    "results": [
+                        {
+                            "request_id": "standalone_observed_001_to_sink_01",
+                            "object_id": "observed_001",
+                            "target_receptacle_id": "sink_01",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "task_feasibility_blocker_kind": "grasp_feasibility",
+                            "task_feasibility_blocker_summary": (
+                                "17 grasp failures; 15 candidate-removal calls"
+                            ),
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                            "run_result": str(tmp_path / "prior" / "run_result.json"),
+                            "report": str(tmp_path / "prior" / "report.html"),
+                        }
+                    ],
+                },
+                "proof_request_selection": {
+                    "fallback_generation": {
+                        "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+                        "status": "exhausted",
+                        "enabled": True,
+                        "generated_request_count": 0,
+                        "generated_requests": [],
+                        "discovered_alias_count": 0,
+                        "discovered_aliases": [],
+                        "filtered_alias_count": 0,
+                        "filtered_aliases": [],
+                        "filtered_pair_count": 0,
+                        "filtered_pairs": [],
+                        "normalized_alias_count": 0,
+                        "normalized_aliases": [],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior_manifest,
+        exclude_task_feasibility_blocked=True,
+        generate_fallback_requests=True,
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    assert manifest["command_count"] == 0
+    assert selection["selected_request_ids"] == []
+    assert selection["excluded_requests"][0]["request_id"] == "proof_001"
+    assert selection["excluded_requests"][0]["prior_result_match_kind"] == "object_target"
+    assert selection["excluded_requests"][0]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
+    assert manifest["prior_proof_result_summary"]["result_count"] == 2
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Prior Proof Evidence" in report
+    assert "standalone_observed_001_to_sink_01" in report
+    assert "proof_unrelated" in report
+
+
+def test_runner_preserves_prior_blocker_detail_from_excluded_requests() -> None:
+    runner = _load_module()
+
+    results = runner._merged_prior_results(
+        [],
+        [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "prior_status": "blocked_capability",
+                "prior_task_feasibility_status": "blocked",
+                "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                "prior_task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "prior_blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ],
+    )
+
+    assert results[0]["object_id"] == "observed_001"
+    assert results[0]["target_receptacle_id"] == "sink_01"
+    assert results[0]["task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert results[0]["task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+
+
 def test_runner_carries_prior_failed_runtime_fallback_candidates(
     tmp_path: Path,
 ) -> None:

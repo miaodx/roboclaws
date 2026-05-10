@@ -318,16 +318,33 @@ def _prior_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
 def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    selection = data.get("proof_request_selection") or {}
+    summaries = []
+    nested_prior = data.get("prior_proof_result_summary")
+    if isinstance(nested_prior, dict):
+        summaries.append(dict(nested_prior))
+    current = _prior_manifest_current_result_summary(data, selection)
+    if current:
+        summaries.append(current)
+    if not summaries:
+        return {}
+    return _merge_prior_proof_result_summaries(summaries)
+
+
+def _prior_manifest_current_result_summary(
+    data: dict[str, Any],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
     summary = data.get("proof_result_summary")
-    prior = dict(summary) if isinstance(summary, dict) else {}
-    fallback_generation = (data.get("proof_request_selection") or {}).get("fallback_generation")
+    current = dict(summary) if isinstance(summary, dict) else {}
+    fallback_generation = selection.get("fallback_generation")
     if isinstance(fallback_generation, dict):
-        prior["fallback_generation"] = dict(fallback_generation)
-    prior["results"] = _merged_prior_results(
-        prior.get("results") or [],
-        (data.get("proof_request_selection") or {}).get("excluded_requests") or [],
+        current["fallback_generation"] = dict(fallback_generation)
+    current["results"] = _merged_prior_results(
+        current.get("results") or [],
+        selection.get("excluded_requests") or [],
     )
-    return prior
+    return current
 
 
 def _load_standalone_probe_result_summary(run_result_paths: list[Path]) -> dict[str, Any]:
@@ -600,9 +617,17 @@ def _merged_prior_results(
         merged.append(
             {
                 "request_id": request_id,
+                "object_id": str(item.get("object_id") or ""),
+                "target_receptacle_id": str(item.get("target_receptacle_id") or ""),
                 "status": str(item.get("prior_status") or "blocked_capability"),
                 "task_feasibility_status": str(
                     item.get("prior_task_feasibility_status") or "blocked"
+                ),
+                "task_feasibility_blocker_kind": str(
+                    item.get("prior_task_feasibility_blocker_kind") or ""
+                ),
+                "task_feasibility_blocker_summary": str(
+                    item.get("prior_task_feasibility_blocker_summary") or ""
                 ),
                 "blockers": list(item.get("prior_blockers") or []),
                 "run_result": str(item.get("prior_run_result") or ""),

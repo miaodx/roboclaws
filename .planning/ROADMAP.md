@@ -206,6 +206,10 @@ commands are reviewed.
 Phase 87 executed the remaining selected exact-scene candidate and proved it is
 also grasp-infeasible, so the next slice must generate or discover a different
 candidate rather than retrying the known blocked source requests.
+Phase 88 carries nested prior proof evidence forward when a later proof-bundle
+manifest becomes the next prior input, so the Phase87 manifest alone preserves
+Phase81 evidence, Phase87 proof results, and both grasp-feasibility blockers in
+the shared runner report.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -318,6 +322,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.86 MolmoSpaces standalone prior proof ingest** - Phase 85 (completed 2026-05-10; standalone planner-probe run results normalize into proof-result summaries before selection)
 - ✅ **v1.87 MolmoSpaces prior proof evidence report** - Phase 86 (completed 2026-05-10; runner reports render consumed prior proof evidence and planner-view artifacts)
 - ✅ **v1.88 MolmoSpaces selected proof candidate execution** - Phase 87 (completed 2026-05-10; selected proof_002 executed and classified as grasp-infeasible)
+- ✅ **v1.89 MolmoSpaces nested prior proof evidence carry-forward** - Phase 88 (completed 2026-05-10; later proof-bundle manifests preserve nested prior evidence across runner generations)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -421,6 +426,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 85: MolmoSpaces standalone prior proof ingest** - ADR-0076 normalizes standalone planner-probe run results into proof-result summaries before selection. Completed 2026-05-10.
 - [x] **Phase 86: MolmoSpaces prior proof evidence report** - ADR-0077 renders consumed prior proof evidence in runner reports before new proof commands. Completed 2026-05-10.
 - [x] **Phase 87: MolmoSpaces selected proof candidate execution** - ADR-0078 executes the selected proof candidate and records the grasp-feasibility blocker. Completed 2026-05-10.
+- [x] **Phase 88: MolmoSpaces nested prior proof evidence carry-forward** - ADR-0079 merges nested prior summaries from proof-bundle manifests before selection, preserving blocker evidence across runner generations. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

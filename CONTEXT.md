@@ -82,6 +82,13 @@ results, including diagnostic rows, proof report links, and planner-view image
 artifacts when present.
 _Avoid_: selection-only prior evidence, hidden prior visual artifacts
 
+**Nested Prior Proof Evidence Carry-Forward**:
+The proof-bundle runner behavior that re-ingests a prior proof-bundle
+manifest's own `prior_proof_result_summary` together with its current
+`proof_result_summary`, so prior evidence survives across multiple runner
+generations.
+_Avoid_: single-hop prior memory, dropping nested blocker evidence
+
 **Selected Proof Candidate Execution**:
 Local-dev execution of the currently selected exact-scene proof request after
 prior infeasible requests are filtered.
@@ -597,6 +604,9 @@ _Avoid_: full cleanup replacement claim
 - A **Prior Proof Evidence View** should render normalized prior proof results
   in the runner report before new proof commands, so consumed blocker evidence
   keeps its report links and planner-view images.
+- **Nested Prior Proof Evidence Carry-Forward** should merge nested prior proof
+  summaries before selection so a later proof-bundle manifest can stand alone
+  as the next prior input.
 - **Selected Proof Candidate Execution** should be checker-gated with required
   proof outputs before treating a selected exact-scene request as feasible or
   as a durable blocker.
@@ -770,3 +780,7 @@ _Avoid_: full cleanup replacement claim
   `proof_002` bowl/sink request executed locally, passed runner checking with
   required outputs, and was classified as `grasp_feasibility` blocked with
   `17 grasp failures; 15 candidate-removal calls`.
+- Phase 88 added Nested Prior Proof Evidence Carry-Forward. A Phase87
+  proof-bundle manifest can now stand alone as prior input, preserving nested
+  Phase81 evidence plus Phase87 proof results; the dry-run excluded both source
+  requests, generated zero commands, and rendered both prior evidence rows.
