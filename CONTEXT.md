@@ -112,6 +112,12 @@ verifies the matching cleanup object uses planner-backed primitive evidence
 while unmatched objects remain honest `api_semantic` work.
 _Avoid_: re-executing proof bundles, full bridge-ready claim from one bound object
 
+**Prior Covered Proof Memory**:
+Proof-request selection memory that excludes prior results that are already
+`planner_backed` and have promoted cleanup binding, so broader proof execution
+expands coverage instead of retrying solved cleanup object/target pairs.
+_Avoid_: rerunning passing bound proofs
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -642,6 +648,9 @@ _Avoid_: full cleanup replacement claim
   object to be strict planner-backed, require at least one unmatched object to
   remain `api_semantic`, and keep the global bridge blocked until every cleaned
   object has matching proof.
+- **Prior Covered Proof Memory** should run alongside task-feasibility memory
+  before broader proof execution, so already solved planner-backed cleanup
+  bindings are visible as covered exclusions instead of selected again.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -830,3 +839,9 @@ _Avoid_: full cleanup replacement claim
   rendered the full visual report surface, made `observed_008` strict
   planner-backed for `nav, pick, nav, place`, and kept the global bridge
   blocked with 38 unmatched `api_semantic` subphases.
+- Phase 92 added Prior Covered Proof Memory. The runner now excludes prior
+  `planner_backed` + cleanup-binding-promoted requests as
+  `prior_planner_proof_covered`; the dry-run against the current broader seed
+  selected zero commands, excluded `proof_008` as covered, excluded nine
+  grasp-infeasible requests, and rendered the prior proof views in the runner
+  report.

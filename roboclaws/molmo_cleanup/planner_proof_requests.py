@@ -271,6 +271,7 @@ def proof_request_selection_from_summary(
     *,
     prior_proof_result_summary: dict[str, Any] | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    exclude_prior_covered: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -304,6 +305,16 @@ def proof_request_selection_from_summary(
             prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
             prior_results_by_planner_object_target=prior_results_by_planner_object_target,
         )
+        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(prior_result):
+            excluded.append(
+                _excluded_request(
+                    request,
+                    prior_result,
+                    reason="prior_planner_proof_covered",
+                    prior_result_match_kind=prior_result_match_kind,
+                )
+            )
+            continue
         if (
             exclude_task_feasibility_blocked
             and prior_result.get("task_feasibility_status") == "blocked"
@@ -312,6 +323,7 @@ def proof_request_selection_from_summary(
                 _excluded_request(
                     request,
                     prior_result,
+                    reason="prior_task_feasibility_blocked",
                     prior_result_match_kind=prior_result_match_kind,
                 )
             )
@@ -361,11 +373,15 @@ def proof_request_selection_from_summary(
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
             exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+            exclude_prior_covered=exclude_prior_covered,
             generate_fallback_requests=generate_fallback_requests,
         ),
         "ready_request_count": len(ready_requests),
         "selected_count": len(selected),
         "excluded_count": len(excluded),
+        "covered_request_count": sum(
+            1 for item in excluded if item.get("reason") == "prior_planner_proof_covered"
+        ),
         "generated_fallback_request_count": len(generated),
         "fallback_required": fallback_required,
         "selected_request_ids": [item["request_id"] for item in selected],
@@ -388,12 +404,19 @@ def proof_request_selection_from_summary(
 def _proof_request_selection_mode(
     *,
     exclude_task_feasibility_blocked: bool,
+    exclude_prior_covered: bool,
     generate_fallback_requests: bool,
 ) -> str:
+    if exclude_task_feasibility_blocked and exclude_prior_covered and generate_fallback_requests:
+        return "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
+    if exclude_task_feasibility_blocked and exclude_prior_covered:
+        return "exclude_task_feasibility_blocked_and_prior_covered"
     if exclude_task_feasibility_blocked and generate_fallback_requests:
         return "exclude_task_feasibility_blocked_with_fallbacks"
     if exclude_task_feasibility_blocked:
         return "exclude_task_feasibility_blocked"
+    if exclude_prior_covered:
+        return "exclude_prior_covered"
     return "all_ready"
 
 
@@ -550,6 +573,10 @@ def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:
     )
 
 
+def _prior_result_has_cleanup_binding_coverage(item: dict[str, Any]) -> bool:
+    return bool(item.get("planner_backed")) and bool(item.get("cleanup_binding_promoted"))
+
+
 def _selected_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
@@ -588,13 +615,14 @@ def _excluded_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
     *,
+    reason: str,
     prior_result_match_kind: str,
 ) -> dict[str, Any]:
     item = {
         "request_id": str(request.get("request_id") or ""),
         "object_id": str(request.get("object_id") or ""),
         "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
-        "reason": "prior_task_feasibility_blocked",
+        "reason": reason,
         "prior_status": str(prior_result.get("status") or ""),
         "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
         "prior_blockers": _blockers(prior_result.get("blockers") or []),

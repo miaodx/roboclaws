@@ -193,6 +193,122 @@ def test_runner_excludes_prior_task_feasibility_blocked_requests(tmp_path: Path)
     assert str(tmp_path / "prior-proof" / "report.html") in report
 
 
+def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    requests = _proof_requests()
+    base_request = requests["requests"][0]
+    requests["request_count"] = 3
+    requests["ready_count"] = 3
+    requests["requests"] = [
+        base_request,
+        {
+            **base_request,
+            "request_id": "proof_002",
+            "object_id": "observed_002",
+            "target_receptacle_id": "shelf_01",
+            "planner_probe_args": {
+                **base_request["planner_probe_args"],
+                "--cleanup-object-id": "observed_002",
+                "--cleanup-target-receptacle-id": "shelf_01",
+                "--cleanup-planner-object-id": "book/body",
+                "--cleanup-planner-target-receptacle-id": "shelf/body",
+            },
+        },
+        {
+            **base_request,
+            "request_id": "proof_003",
+            "object_id": "observed_003",
+            "target_receptacle_id": "stand_01",
+            "planner_probe_args": {
+                **base_request["planner_probe_args"],
+                "--cleanup-object-id": "observed_003",
+                "--cleanup-target-receptacle-id": "stand_01",
+                "--cleanup-planner-object-id": "remote/body",
+                "--cleanup-planner-target-receptacle-id": "stand/body",
+            },
+        },
+    ]
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": requests}), encoding="utf-8"
+    )
+    prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
+    prior.parent.mkdir()
+    prior.write_text(
+        json.dumps(
+            {
+                "proof_result_summary": {
+                    "schema": "planner_cleanup_proof_result_summary_v1",
+                    "results": [
+                        {
+                            "request_id": "proof_001",
+                            "object_id": "observed_001",
+                            "target_receptacle_id": "sink_01",
+                            "status": "planner_backed",
+                            "task_feasibility_status": "ready",
+                            "planner_backed": True,
+                            "cleanup_binding_promoted": True,
+                            "run_result": str(tmp_path / "prior-proof-1" / "run_result.json"),
+                            "report": str(tmp_path / "prior-proof-1" / "report.html"),
+                        },
+                        {
+                            "request_id": "proof_002",
+                            "object_id": "observed_002",
+                            "target_receptacle_id": "shelf_01",
+                            "status": "blocked_capability",
+                            "task_feasibility_status": "blocked",
+                            "task_feasibility_blocker_kind": "grasp_feasibility",
+                            "task_feasibility_blocker_summary": (
+                                "3 grasp failures; 1 candidate-removal calls"
+                            ),
+                            "run_result": str(tmp_path / "prior-proof-2" / "run_result.json"),
+                            "report": str(tmp_path / "prior-proof-2" / "report.html"),
+                            "blockers": [{"code": "HouseInvalidForTask"}],
+                        },
+                    ],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+        exclude_prior_covered=True,
+    )
+
+    selection = result["manifest"]["proof_request_selection"]
+    assert selection["mode"] == "exclude_task_feasibility_blocked_and_prior_covered"
+    assert selection["selected_request_ids"] == ["proof_003"]
+    assert selection["covered_request_count"] == 1
+    assert [item["reason"] for item in selection["excluded_requests"]] == [
+        "prior_planner_proof_covered",
+        "prior_task_feasibility_blocked",
+    ]
+    assert result["manifest"]["command_count"] == 1
+    assert result["manifest"]["commands"][0]["request_id"] == "proof_003"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Covered" in report
+    assert "prior_planner_proof_covered" in report
+    assert "prior_task_feasibility_blocked" in report
+
+
 def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_run_result = tmp_path / "cleanup" / "run_result.json"

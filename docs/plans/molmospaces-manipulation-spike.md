@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 91 broader bound proof cleanup rerun completed; next work is expanding proof coverage beyond the one passing bound object
+**Status:** Phase 92 prior covered-proof selection memory completed; next work is rotating to a new broader source candidate pool
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -256,6 +256,13 @@ re-executing the proof bundle. The cleanup report now shows `observed_008` as
 strict planner-backed for `nav, pick, nav, place`, renders 44 robot timeline
 steps plus attached planner proof views, and keeps the global bridge blocked
 because the other 38 cleanup subphases remain `api_semantic`.
+Phase 92 prevents the next proof expansion from retrying solved work:
+proof-bundle selection now excludes prior `planner_backed` requests that also
+promoted cleanup binding. The dry-run against the current broader seed selected
+zero commands, excluded `proof_008` as `prior_planner_proof_covered`, excluded
+nine grasp-infeasible requests, and rendered the prior proof views in the
+runner report. The next slice should rotate to a different broader cleanup
+source artifact rather than rerunning this seed.
 
 ## Why This Exists
 
@@ -1123,9 +1130,12 @@ completed:
   gsd-plan-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
   gsd-execute-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
   gsd-verify-work 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-plan-phase 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-execute-phase 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-verify-work 92-molmospaces-prior-covered-proof-selection-memory
 
 next pipeline candidates:
-  expand proof coverage beyond the one bound proof_008 object, or select a new
-  broader source candidate pool rather than retrying the nine known blocked
-  pairs from this seed
+  rotate to a new broader source candidate pool; the current broader seed is
+  exhausted after excluding nine grasp-infeasible requests and one covered
+  proof_008 request
 ```

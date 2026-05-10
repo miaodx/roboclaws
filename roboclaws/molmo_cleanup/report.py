@@ -812,6 +812,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Ready', selection.get('ready_request_count', 0))}"
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
+        f"{_metric('Covered', selection.get('covered_request_count', 0))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
         f"{_metric('Normalized aliases', len(normalized_aliases))}"

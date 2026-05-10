@@ -22,6 +22,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path, help="proof_bundle_run_manifest.json or output dir")
     parser.add_argument("--require-proof-outputs", action="store_true")
     parser.add_argument("--require-cleanup-rerun-output", action="store_true")
+    parser.add_argument("--min-selected-requests", type=int)
+    parser.add_argument("--max-selected-requests", type=int)
+    parser.add_argument("--require-prior-covered-exclusion", action="store_true")
     return parser.parse_args()
 
 
@@ -34,6 +37,9 @@ def main() -> None:
         path.parent,
         require_proof_outputs=args.require_proof_outputs,
         require_cleanup_rerun_output=args.require_cleanup_rerun_output,
+        min_selected_requests=args.min_selected_requests,
+        max_selected_requests=args.max_selected_requests,
+        require_prior_covered_exclusion=args.require_prior_covered_exclusion,
     )
     print(f"molmo-planner-proof-bundle-runner ok: {path}")
 
@@ -44,6 +50,9 @@ def _assert_runner_result(
     *,
     require_proof_outputs: bool = False,
     require_cleanup_rerun_output: bool = False,
+    min_selected_requests: int | None = None,
+    max_selected_requests: int | None = None,
+    require_prior_covered_exclusion: bool = False,
 ) -> None:
     assert data.get("schema") == PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA, data
     assert data.get("status") in {"dry_run", "probes_executed", "cleanup_rerun"}, data
@@ -68,8 +77,17 @@ def _assert_runner_result(
     proof_request_selection = data.get("proof_request_selection") or {}
     if proof_request_selection:
         _assert_proof_request_selection(proof_request_selection, commands, report_text)
+        _assert_selection_requirements(
+            proof_request_selection,
+            report_text,
+            min_selected_requests=min_selected_requests,
+            max_selected_requests=max_selected_requests,
+            require_prior_covered_exclusion=require_prior_covered_exclusion,
+        )
         generated_count = _generated_fallback_request_count(proof_request_selection)
     else:
+        assert not require_prior_covered_exclusion, data
+        assert min_selected_requests in {None, 0}, data
         generated_count = 0
     assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
@@ -336,6 +354,32 @@ def _assert_proof_request_selection(
             for key in ("alias", "normalized_alias", "reason"):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
+
+
+def _assert_selection_requirements(
+    selection: dict[str, Any],
+    report_text: str,
+    *,
+    min_selected_requests: int | None,
+    max_selected_requests: int | None,
+    require_prior_covered_exclusion: bool,
+) -> None:
+    selected_count = int(selection.get("selected_count") or 0)
+    if min_selected_requests is not None:
+        assert selected_count >= min_selected_requests, selection
+    if max_selected_requests is not None:
+        assert selected_count <= max_selected_requests, selection
+    if not require_prior_covered_exclusion:
+        return
+    excluded = selection.get("excluded_requests") or []
+    covered = [
+        item
+        for item in excluded
+        if isinstance(item, dict) and item.get("reason") == "prior_planner_proof_covered"
+    ]
+    assert covered, selection
+    assert int(selection.get("covered_request_count") or 0) == len(covered), selection
+    assert "prior_planner_proof_covered" in report_text, report_text[:500]
 
 
 def _generated_fallback_request_count(selection: dict[str, Any]) -> int:

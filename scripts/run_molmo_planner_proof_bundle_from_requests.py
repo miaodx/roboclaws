@@ -69,6 +69,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prior-proof-bundle-manifest", type=Path, action="append")
     parser.add_argument("--prior-planner-probe-run-result", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
+    parser.add_argument(
+        "--exclude-prior-covered",
+        action="store_true",
+        help=(
+            "Exclude requests that already have prior planner-backed proof with "
+            "cleanup binding promoted."
+        ),
+    )
     parser.add_argument("--generate-fallback-requests", action="store_true")
     parser.add_argument("--fallback-alias-limit", type=int, default=4)
     return parser.parse_args()
@@ -99,6 +107,7 @@ def main() -> None:
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
         prior_planner_probe_run_result=args.prior_planner_probe_run_result,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
+        exclude_prior_covered=args.exclude_prior_covered,
         generate_fallback_requests=args.generate_fallback_requests,
         fallback_alias_limit=args.fallback_alias_limit,
     )
@@ -137,6 +146,7 @@ def run_from_cleanup_result(
     prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
     prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    exclude_prior_covered: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -152,6 +162,7 @@ def run_from_cleanup_result(
         requests,
         prior_proof_result_summary=prior_summary,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+        exclude_prior_covered=exclude_prior_covered,
         generate_fallback_requests=generate_fallback_requests,
         fallback_alias_limit=fallback_alias_limit,
     )

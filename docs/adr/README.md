@@ -91,6 +91,7 @@ one decision per file, sequential numbering, explicit status.
 | [0080](0080-scope-proof-selection-memory-by-planner-object.md) | Scope Proof Selection Memory by Planner Object | Accepted |
 | [0081](0081-record-broader-selected-proof-execution.md) | Record Broader Selected Proof Execution | Accepted |
 | [0082](0082-rerun-cleanup-with-broader-bound-proof.md) | Rerun Cleanup with Broader Bound Proof | Accepted |
+| [0083](0083-exclude-prior-covered-planner-proofs.md) | Exclude Prior Covered Planner Proofs | Accepted |
 
 ## Adding a new ADR
 
