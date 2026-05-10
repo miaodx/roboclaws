@@ -197,6 +197,11 @@ Grasp-cache availability evidence bound to the MolmoSpaces runtime `ASSETS_DIR`
 derived from the planner scene XML, including symlink-resolved cache targets.
 _Avoid_: displaying data-cache roots as if they were the loader root
 
+**Grasp Cache Validity Preflight**:
+Rigid grasp-cache evidence that parses candidate files and treats a loader file
+as ready only when it contains at least one transform.
+_Avoid_: treating empty NPZ/JSON files as a successful cache install
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -719,6 +724,8 @@ _Avoid_: full cleanup replacement claim
 - **Runtime Assets Grasp Cache Preflight** should derive `ASSETS_DIR` from the
   planner scene XML and render symlink-resolved cache targets before a restore
   or generation command is chosen.
+- **Grasp Cache Validity Preflight** should parse rigid loader files and require
+  nonzero transforms before marking a missing-cache asset ready.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1097,3 +1104,6 @@ _Avoid_: full cleanup replacement claim
 - Phase 113 adds Runtime Assets Grasp Cache Preflight. The preflight now derives
   the runtime `ASSETS_DIR` from the planner scene XML and renders
   symlink-resolved missing cache targets under the local versioned grasp cache.
+- Phase 114 adds Grasp Cache Validity Preflight. Reports now distinguish
+  existing-but-empty rigid loader files from valid cache data; the installed
+  droid `Bread_1` file is `present_but_invalid` with zero transforms.

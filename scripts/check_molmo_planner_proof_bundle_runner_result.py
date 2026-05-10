@@ -734,7 +734,14 @@ def _assert_grasp_cache_availability_preflight(
         assert len(candidate_files) == 3, asset
         for probe in [*candidate_files, *(asset.get("folder_probe_files") or [])]:
             assert isinstance(probe, dict), asset
-            for key in ("source", "loader_role", "relative_path", "resolved_path"):
+            for key in (
+                "source",
+                "loader_role",
+                "relative_path",
+                "resolved_path",
+                "validation_status",
+                "transform_count",
+            ):
                 value = str(probe.get(key) or "")
                 if value:
                     _assert_report_contains(value, report_text, probe)

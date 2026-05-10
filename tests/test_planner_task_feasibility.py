@@ -227,9 +227,11 @@ def test_grasp_cache_preflight_resolves_runtime_symlink_root(tmp_path: Path) -> 
 
 
 def test_grasp_cache_preflight_ready_when_rigid_loader_file_exists(tmp_path: Path) -> None:
+    import numpy as np
+
     grasp_dir = tmp_path / "grasps" / "droid" / "Bread_1"
     grasp_dir.mkdir(parents=True)
-    (grasp_dir / "Bread_1_grasps_filtered.npz").write_bytes(b"npz placeholder")
+    np.savez(grasp_dir / "Bread_1_grasps_filtered.npz", transforms=np.zeros((1, 4, 4)))
 
     preflight = grasp_cache_availability_preflight(
         {"missing_grasp_asset_uids": ["Bread_1"]},
@@ -240,5 +242,30 @@ def test_grasp_cache_preflight_ready_when_rigid_loader_file_exists(tmp_path: Pat
     assert preflight["ready_asset_count"] == 1
     assert preflight["missing_cache_asset_count"] == 0
     assert preflight["cache_ready_asset_uids"] == ["Bread_1"]
-    assert preflight["assets"][0]["loader_file_status"] == "present"
+    assert preflight["assets"][0]["loader_file_status"] == "valid"
     assert preflight["assets"][0]["object_asset_status"] == "missing"
+    assert preflight["assets"][0]["candidate_grasp_files"][0]["valid"] is True
+    assert preflight["assets"][0]["candidate_grasp_files"][0]["transform_count"] == 1
+
+
+def test_grasp_cache_preflight_rejects_empty_loader_file(tmp_path: Path) -> None:
+    import numpy as np
+
+    grasp_dir = tmp_path / "grasps" / "droid" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    np.savez(grasp_dir / "Bread_1_grasps_filtered.npz", transforms=np.zeros((0,)))
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    probe = preflight["assets"][0]["candidate_grasp_files"][0]
+    assert preflight["status"] == "missing_cache"
+    assert preflight["ready_asset_count"] == 0
+    assert preflight["missing_cache_asset_count"] == 1
+    assert preflight["assets"][0]["loader_file_status"] == "present_but_invalid"
+    assert probe["exists"] is True
+    assert probe["valid"] is False
+    assert probe["validation_status"] == "empty"
+    assert probe["transform_count"] == 0

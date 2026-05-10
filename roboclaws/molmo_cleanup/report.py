@@ -1038,6 +1038,9 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
                 f"<td>{html.escape(str(probe.get('source', '')))}</td>"
                 f"<td>{html.escape(str(probe.get('loader_role', '')))}</td>"
                 f"<td>{html.escape(str(probe.get('exists', False)))}</td>"
+                f"<td>{html.escape(str(probe.get('valid', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('transform_count', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('validation_status', '')))}</td>"
                 f"<td>{html.escape(str(probe.get('size_bytes', 0)))}</td>"
                 f"<td>{html.escape(str(probe.get('relative_path', '')))}</td>"
                 f"<td>{html.escape(str(probe.get('resolved_path', '')))}</td>"
@@ -1058,7 +1061,7 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
     if not asset_rows:
         asset_rows.append('<tr><td colspan="4">No missing grasp-cache assets.</td></tr>')
     if not candidate_rows:
-        candidate_rows.append('<tr><td colspan="7">No grasp-cache file probes.</td></tr>')
+        candidate_rows.append('<tr><td colspan="10">No grasp-cache file probes.</td></tr>')
     asset_table = (
         '<h3>Asset Status</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Asset</th><th>Status</th><th>Rigid loader file</th><th>Object asset</th>"
@@ -1067,7 +1070,8 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
     candidate_table = (
         '<h3>Loader File Probes</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Asset</th><th>Source</th><th>Loader role</th><th>Exists</th>"
-        "<th>Bytes</th><th>Relative path</th><th>Resolved path</th>"
+        "<th>Valid</th><th>Transforms</th><th>Validation</th><th>Bytes</th>"
+        "<th>Relative path</th><th>Resolved path</th>"
         f"</tr></thead><tbody>{''.join(candidate_rows)}</tbody></table></div>"
     )
     object_table = ""

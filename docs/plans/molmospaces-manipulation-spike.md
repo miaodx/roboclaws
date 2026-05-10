@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 113 runtime assets grasp cache preflight completed; next work is generating/restoring a rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 114 grasp cache validity preflight completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -386,6 +386,10 @@ Phase 113 binds that preflight to the runtime MolmoSpaces assets root. The
 report now derives `ASSETS_DIR` from the planner scene XML and shows both
 loader-relative paths and symlink-resolved cache targets such as
 `grasps/droid/20251116/Bread_1/...`.
+Phase 114 tightens readiness from file existence to content validity. After the
+upstream droid Bread package install, `Bread_1_grasps_filtered.npz` exists but
+contains zero transforms, so reports now show `present_but_invalid` instead of
+ready.
 
 ## Why This Exists
 

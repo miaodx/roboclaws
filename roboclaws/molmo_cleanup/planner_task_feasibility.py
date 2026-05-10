@@ -352,12 +352,16 @@ def _resolve_assets_dir(
 def _grasp_cache_asset_preflight(asset_uid: str, *, assets_dir: Path) -> dict[str, Any]:
     candidate_files = _rigid_grasp_loader_files(asset_uid, assets_dir=assets_dir)
     folder_probe_files = _folder_probe_grasp_files(asset_uid, assets_dir=assets_dir)
-    ready = any(bool(item.get("exists")) for item in candidate_files)
+    ready = any(bool(item.get("valid")) for item in candidate_files)
+    present_candidate_count = sum(1 for item in candidate_files if bool(item.get("exists")))
     object_asset_files = _object_asset_files(asset_uid, assets_dir=assets_dir)
     return {
         "asset_uid": asset_uid,
         "status": "ready" if ready else "missing_cache",
-        "loader_file_status": "present" if ready else "missing",
+        "loader_file_status": _loader_file_status(
+            ready=ready,
+            present_candidate_count=present_candidate_count,
+        ),
         "object_asset_status": "present" if object_asset_files else "missing",
         "candidate_grasp_files": candidate_files,
         "folder_probe_files": folder_probe_files,
@@ -447,6 +451,7 @@ def _file_probe(
     gripper: str,
     loader_role: str,
 ) -> dict[str, Any]:
+    validation = _validate_grasp_file(path) if loader_role == "rigid_object_loader" else {}
     return {
         "asset_uid": asset_uid,
         "source": source,
@@ -459,6 +464,54 @@ def _file_probe(
         "relative_path": _relative_to_assets(path, assets_dir),
         "exists": path.exists(),
         "size_bytes": _file_size(path),
+        **validation,
+    }
+
+
+def _loader_file_status(*, ready: bool, present_candidate_count: int) -> str:
+    if ready:
+        return "valid"
+    if present_candidate_count:
+        return "present_but_invalid"
+    return "missing"
+
+
+def _validate_grasp_file(path: Path) -> dict[str, Any]:
+    if not path.exists() or not path.is_file():
+        return {
+            "validation_status": "missing",
+            "valid": False,
+            "transform_count": 0,
+        }
+    try:
+        if path.suffix == ".npz":
+            import numpy as np
+
+            with np.load(path) as data:
+                transforms = data.get("transforms", [])
+                transform_count = len(transforms)
+        elif path.suffix == ".json":
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            transforms = payload.get("transforms", []) if isinstance(payload, dict) else []
+            transform_count = len(transforms)
+        else:
+            return {
+                "validation_status": "unsupported",
+                "valid": False,
+                "transform_count": 0,
+            }
+    except Exception as exc:
+        return {
+            "validation_status": "error",
+            "valid": False,
+            "transform_count": 0,
+            "validation_error_type": type(exc).__name__,
+            "validation_error": str(exc),
+        }
+    return {
+        "validation_status": "valid" if transform_count > 0 else "empty",
+        "valid": transform_count > 0,
+        "transform_count": transform_count,
     }
 
 
