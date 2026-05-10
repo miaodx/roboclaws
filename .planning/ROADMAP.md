@@ -194,6 +194,9 @@ Phase 83 carries that classification into proof request selection memory and
 renders a dedicated `Grasp Feasibility Blockers` runner view, so exact-scene
 retry review can distinguish grasp/candidate rejection from generic target task
 feasibility.
+Phase 84 makes selection memory robust to regenerated proof manifests by
+matching prior results by request ID first and cleanup object/target pair
+second, with the match kind visible in runner reports.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -302,6 +305,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.82 MolmoSpaces post-placement rejection diagnostics** - Phase 81 (completed 2026-05-10; report shows grasp-failure and candidate-removal evidence after placement succeeds)
 - ✅ **v1.83 MolmoSpaces grasp-feasibility classification** - Phase 82 (completed 2026-05-10; proof summaries classify post-placement grasp/candidate rejection as `grasp_feasibility`)
 - ✅ **v1.84 MolmoSpaces grasp-feasibility selection memory** - Phase 83 (completed 2026-05-10; selection reports preserve and render grasp-feasibility blocker kind/detail)
+- ✅ **v1.85 MolmoSpaces cleanup-pair proof memory** - Phase 84 (completed 2026-05-10; selection memory matches regenerated requests by cleanup object/target pair)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -401,6 +405,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 81: MolmoSpaces post-placement rejection diagnostics** - ADR-0072 renders grasp-failure and candidate-removal evidence after robot placement succeeds. Completed 2026-05-10.
 - [x] **Phase 82: MolmoSpaces grasp-feasibility classification** - ADR-0073 classifies post-placement grasp/candidate rejection in proof summaries and runner reports. Completed 2026-05-10.
 - [x] **Phase 83: MolmoSpaces grasp-feasibility selection memory** - ADR-0074 preserves grasp-feasibility blocker kind/detail in selection and fallback memory. Completed 2026-05-10.
+- [x] **Phase 84: MolmoSpaces cleanup-pair proof memory** - ADR-0075 matches prior proof results by cleanup object/target pair when request IDs change. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

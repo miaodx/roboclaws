@@ -193,6 +193,7 @@ def _assert_proof_request_selection(
         for key in (
             "prior_task_feasibility_blocker_kind",
             "prior_task_feasibility_blocker_summary",
+            "prior_result_match_kind",
         ):
             if item.get(key):
                 assert str(item[key]) in report_text, (key, report_text[:500])
@@ -224,6 +225,7 @@ def _assert_proof_request_selection(
             "last_worker_stage",
             "prior_task_feasibility_blocker_kind",
             "prior_task_feasibility_blocker_summary",
+            "prior_result_match_kind",
         ):
             if item.get(key):
                 assert str(item[key]) in report_text, (key, report_text[:500])
@@ -279,6 +281,7 @@ def _assert_proof_request_selection(
             for key in (
                 "prior_task_feasibility_blocker_kind",
                 "prior_task_feasibility_blocker_summary",
+                "prior_result_match_kind",
             ):
                 if fallback.get(key):
                     assert str(fallback[key]) in report_text, (key, report_text[:500])
@@ -314,6 +317,7 @@ def _assert_proof_request_selection(
             for key in (
                 "prior_task_feasibility_blocker_kind",
                 "prior_task_feasibility_blocker_summary",
+                "prior_result_match_kind",
             ):
                 if item.get(key):
                     assert str(item[key]) in report_text, (key, report_text[:500])

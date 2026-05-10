@@ -83,6 +83,7 @@ one decision per file, sequential numbering, explicit status.
 | [0072](0072-capture-post-placement-candidate-rejections.md) | Capture Post-Placement Candidate Rejections | Accepted |
 | [0073](0073-classify-grasp-feasibility-blockers.md) | Classify Grasp-Feasibility Blockers | Accepted |
 | [0074](0074-surface-grasp-feasibility-selection-memory.md) | Surface Grasp-Feasibility Selection Memory | Accepted |
+| [0075](0075-match-proof-selection-memory-by-cleanup-pair.md) | Match Proof Selection Memory by Cleanup Pair | Accepted |
 
 ## Adding a new ADR
 

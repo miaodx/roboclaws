@@ -731,6 +731,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "target_receptacle_id": "sink_01",
                     "prior_task_feasibility_status": "blocked",
                     "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_result_match_kind": "request_id",
                 }
             ],
             "excluded_requests": [
@@ -744,6 +745,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
@@ -760,6 +762,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 },
                 {
@@ -774,6 +777,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "last_worker_stage": "worker_exception",
                     "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -792,6 +796,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 },
                 {
@@ -806,6 +811,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "last_worker_stage": "worker_exception",
                     "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -839,6 +845,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                             "prior_task_feasibility_blocker_summary": (
                                 "3 grasp failures; 1 candidate-removal calls"
                             ),
+                            "prior_result_match_kind": "request_id",
                             "prior_blockers": [{"code": "HouseInvalidForTask"}],
                         },
                     }
@@ -872,6 +879,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "prior_task_feasibility_blocker_summary": (
                             "3 grasp failures; 1 candidate-removal calls"
                         ),
+                        "prior_result_match_kind": "request_id",
                         "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     }
                 ],
@@ -1059,6 +1067,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Target blockers" in html
     assert "Grasp Feasibility Blockers" in html
     assert "Grasp blockers" in html
+    assert "Prior match" in html
+    assert "request_id" in html
     assert "source_request" in html
     assert "fallback_pair" in html
     assert "worker_exception" in html

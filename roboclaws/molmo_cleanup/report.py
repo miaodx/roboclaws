@@ -816,6 +816,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         "</tr>"
         for item in selected
         if isinstance(item, dict)
@@ -829,26 +830,27 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
         "</tr>"
         for item in excluded
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="7">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="8">No proof requests selected.</td></tr>'
     if not excluded_rows:
-        excluded_rows = '<tr><td colspan="8">No proof requests excluded.</td></tr>'
+        excluded_rows = '<tr><td colspan="9">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
-        "<th>Prior feasibility</th><th>Prior blocker</th>"
+        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior match</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
         '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
         "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior detail</th>"
-        "<th>Prior blockers</th>"
+        "<th>Prior match</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)
@@ -896,17 +898,18 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
             "<td>"
             f"{html.escape(str(fallback.get('prior_task_feasibility_blocker_summary', '')))}"
             "</td>"
+            f"<td>{html.escape(str(fallback.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(fallback.get('prior_blockers') or []))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="10">No generated fallback requests.</td></tr>')
+        rows.append('<tr><td colspan="11">No generated fallback requests.</td></tr>')
     return (
         "<h3>Generated Fallback Requests</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
-        "<th>Prior blocker</th><th>Prior detail</th><th>Prior blockers</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -929,19 +932,20 @@ def _target_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="12">No target feasibility blockers recorded.</td></tr>')
+        rows.append('<tr><td colspan="13">No target feasibility blockers recorded.</td></tr>')
     return (
         "<h3>Target Feasibility Blockers</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Prior blocker</th><th>Prior detail</th><th>Last stage</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Last stage</th>"
         "<th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
@@ -962,16 +966,17 @@ def _grasp_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(target_value))}</td>"
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="7">No grasp-feasibility blockers recorded.</td></tr>')
+        rows.append('<tr><td colspan="8">No grasp-feasibility blockers recorded.</td></tr>')
     return (
         "<h3>Grasp Feasibility Blockers</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
-        "<th>Derived from</th><th>Detail</th><th>Proof report</th>"
+        "<th>Derived from</th><th>Detail</th><th>Prior match</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -1064,19 +1069,20 @@ def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="11">No fallback alias pairs filtered.</td></tr>')
+        rows.append('<tr><td colspan="12">No fallback alias pairs filtered.</td></tr>')
     return (
         "<h3>Filtered Fallback Pairs</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Prior blocker</th><th>Prior detail</th><th>Last stage</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Last stage</th>"
         "<th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )

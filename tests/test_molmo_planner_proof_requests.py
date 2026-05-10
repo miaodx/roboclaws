@@ -224,6 +224,7 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
     assert selection["selected_request_ids"] == ["proof_002"]
     assert selection["excluded_requests"][0]["request_id"] == "proof_001"
     assert selection["excluded_requests"][0]["reason"] == "prior_task_feasibility_blocked"
+    assert selection["excluded_requests"][0]["prior_result_match_kind"] == "request_id"
     assert selection["excluded_requests"][0]["prior_report"] == str(
         tmp_path / "prior" / "report.html"
     )
@@ -247,6 +248,7 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
             "prior_stderr": str(tmp_path / "prior" / "stderr.txt"),
             "last_worker_stage": "worker_exception",
             "execution_attempted": True,
+            "prior_result_match_kind": "request_id",
         }
     ]
     assert selection["fallback_required"] is False
@@ -322,6 +324,7 @@ def test_proof_request_selection_surfaces_grasp_feasibility_blockers() -> None:
     )
 
     excluded = selection["excluded_requests"][0]
+    assert excluded["prior_result_match_kind"] == "request_id"
     assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
     assert excluded["prior_task_feasibility_blocker_summary"] == (
         "17 grasp failures; 15 candidate-removal calls"
@@ -331,9 +334,57 @@ def test_proof_request_selection_surfaces_grasp_feasibility_blockers() -> None:
     grasp_blocker = selection["grasp_feasibility_blockers"][0]
     assert grasp_blocker["source_request_id"] == "proof_001"
     assert grasp_blocker["kind"] == "source_request"
+    assert grasp_blocker["prior_result_match_kind"] == "request_id"
     assert grasp_blocker["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
     assert grasp_blocker["prior_task_feasibility_blocker_summary"] == (
         "17 grasp failures; 15 candidate-removal calls"
+    )
+
+
+def test_proof_request_selection_matches_prior_result_by_cleanup_pair() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_regenerated",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_old",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["request_id"] == "proof_regenerated"
+    assert excluded["prior_result_match_kind"] == "object_target"
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert selection["selected_request_ids"] == []
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blockers"][0]["prior_result_match_kind"] == (
+        "object_target"
     )
 
 
@@ -438,6 +489,7 @@ def test_proof_request_selection_generates_fallback_alias_requests(
     assert generated[0]["fallback_request"]["prior_task_feasibility_blocker_summary"] == (
         "3 grasp failures; 1 candidate-removal calls"
     )
+    assert generated[0]["fallback_request"]["prior_result_match_kind"] == "request_id"
     assert generated[0]["fallback_request"]["prior_blockers"][0]["code"] == ("HouseInvalidForTask")
     assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
         "sink/alt"
@@ -446,6 +498,7 @@ def test_proof_request_selection_generates_fallback_alias_requests(
     assert selection["selected_requests"][0]["prior_task_feasibility_blocker_kind"] == (
         "grasp_feasibility"
     )
+    assert selection["selected_requests"][0]["prior_result_match_kind"] == "request_id"
     assert selection["fallback_generation"]["filtered_alias_count"] == 2
     assert {
         (item["axis"], item["alias"])

@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 83 grasp-feasibility selection memory completed; next work is selecting or generating grasp-feasible exact-scene proof requests
+**Status:** Phase 84 cleanup-pair proof memory completed; next work is selecting or generating grasp-feasible exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -221,6 +221,9 @@ grasp-infeasible exact aliases without parsing nested diagnostics.
 Phase 83 carries that blocker kind/detail into proof request selection memory:
 excluded requests, generated fallback provenance, filtered fallback pairs, and
 a dedicated `Grasp Feasibility Blockers` runner report view.
+Phase 84 makes that memory robust across regenerated proof manifests by matching
+prior proof results by `request_id` first and then by cleanup `object_id` plus
+`target_receptacle_id`, with `Prior match` rendered in runner reports.
 
 ## Why This Exists
 

@@ -135,6 +135,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "target_receptacle_id": "sink_01",
                 "prior_task_feasibility_status": "blocked",
                 "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                "prior_result_match_kind": "request_id",
             }
         ],
         "excluded_requests": [
@@ -148,6 +149,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_task_feasibility_blocker_summary": (
                     "3 grasp failures; 1 candidate-removal calls"
                 ),
+                "prior_result_match_kind": "request_id",
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
             }
         ],
@@ -164,6 +166,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_task_feasibility_blocker_summary": (
                     "3 grasp failures; 1 candidate-removal calls"
                 ),
+                "prior_result_match_kind": "request_id",
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
             },
             {
@@ -178,6 +181,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_task_feasibility_blocker_summary": (
                     "3 grasp failures; 1 candidate-removal calls"
                 ),
+                "prior_result_match_kind": "request_id",
                 "last_worker_stage": "worker_exception",
                 "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -196,6 +200,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_task_feasibility_blocker_summary": (
                     "3 grasp failures; 1 candidate-removal calls"
                 ),
+                "prior_result_match_kind": "request_id",
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
             },
             {
@@ -210,6 +215,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "prior_task_feasibility_blocker_summary": (
                     "3 grasp failures; 1 candidate-removal calls"
                 ),
+                "prior_result_match_kind": "request_id",
                 "last_worker_stage": "worker_exception",
                 "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                 "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -241,6 +247,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                         "prior_task_feasibility_blocker_summary": (
                             "3 grasp failures; 1 candidate-removal calls"
                         ),
+                        "prior_result_match_kind": "request_id",
                         "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     },
                 }
@@ -274,6 +281,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                     "prior_task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],

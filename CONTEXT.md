@@ -64,6 +64,12 @@ kind/detail into excluded requests, fallback provenance, filtered fallback
 pairs, and runner report blocker views.
 _Avoid_: hidden retry heuristic, cleanup readiness proof
 
+**Cleanup-Pair Proof Memory**:
+Proof-request selection memory matched by public cleanup `object_id` plus
+`target_receptacle_id` when a regenerated proof request has a different
+request ID.
+_Avoid_: planner-alias-only memory, hidden object identity
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -724,3 +730,6 @@ _Avoid_: full cleanup replacement claim
 - Phase 83 added Grasp-Feasibility Selection Memory. Proof request selection now
   preserves that blocker kind/detail through excluded requests, generated
   fallback provenance, filtered fallback pairs, and runner report blocker views.
+- Phase 84 added Cleanup-Pair Proof Memory. Prior proof results now match by
+  `request_id` first, then by cleanup `object_id` plus `target_receptacle_id`,
+  and runner reports show the `Prior match` kind.

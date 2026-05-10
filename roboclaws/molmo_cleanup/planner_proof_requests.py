@@ -278,6 +278,7 @@ def proof_request_selection_from_summary(
     ]
     prior_summary = prior_proof_result_summary or {}
     prior_results = _prior_results_by_request_id(prior_summary)
+    prior_results_by_cleanup_pair = _prior_results_by_cleanup_pair(prior_summary)
     discovered_aliases_by_request = _discovered_runtime_aliases_by_source_request(
         ready_requests,
         prior_summary,
@@ -294,12 +295,22 @@ def proof_request_selection_from_summary(
     normalized_aliases = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
-        prior_result = prior_results.get(request_id, {})
+        prior_result, prior_result_match_kind = _prior_result_for_request(
+            request,
+            prior_results_by_request_id=prior_results,
+            prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
+        )
         if (
             exclude_task_feasibility_blocked
             and prior_result.get("task_feasibility_status") == "blocked"
         ):
-            excluded.append(_excluded_request(request, prior_result))
+            excluded.append(
+                _excluded_request(
+                    request,
+                    prior_result,
+                    prior_result_match_kind=prior_result_match_kind,
+                )
+            )
             if generate_fallback_requests:
                 fallback = _fallback_requests_for_blocked_request(
                     request,
@@ -307,6 +318,7 @@ def proof_request_selection_from_summary(
                     limit=fallback_alias_limit,
                     discovered_aliases=discovered_aliases_by_request.get(request_id, {}),
                     prior_candidate_filters=prior_candidate_filters_by_request.get(request_id, {}),
+                    prior_result_match_kind=prior_result_match_kind,
                 )
                 generated.extend(fallback["generated_requests"])
                 filtered_aliases.extend(fallback["filtered_aliases"])
@@ -314,8 +326,16 @@ def proof_request_selection_from_summary(
                 filtered_pairs.extend(fallback["filtered_pairs"])
                 normalized_aliases.extend(fallback["normalized_aliases"])
             continue
-        selected.append(_selected_request(request, prior_result))
-    selected.extend(_selected_request(request, {}) for request in generated)
+        selected.append(
+            _selected_request(
+                request,
+                prior_result,
+                prior_result_match_kind=prior_result_match_kind,
+            )
+        )
+    selected.extend(
+        _selected_request(request, {}, prior_result_match_kind="") for request in generated
+    )
     fallback_required = bool(ready_requests) and not selected
     fallback_generation = _fallback_generation(
         enabled=generate_fallback_requests,
@@ -406,9 +426,66 @@ def _prior_results_by_request_id(summary: dict[str, Any]) -> dict[str, dict[str,
     }
 
 
+def _prior_results_by_cleanup_pair(
+    summary: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    results: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in summary.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        pair = _cleanup_pair_from_result(item)
+        if not all(pair):
+            continue
+        existing = results.get(pair)
+        if existing is None or _prior_selection_result_rank(item) >= _prior_selection_result_rank(
+            existing
+        ):
+            results[pair] = dict(item)
+    return results
+
+
+def _prior_result_for_request(
+    request: dict[str, Any],
+    *,
+    prior_results_by_request_id: dict[str, dict[str, Any]],
+    prior_results_by_cleanup_pair: dict[tuple[str, str], dict[str, Any]],
+) -> tuple[dict[str, Any], str]:
+    request_id = str(request.get("request_id") or "")
+    if request_id in prior_results_by_request_id:
+        return prior_results_by_request_id[request_id], "request_id"
+    pair = _cleanup_pair_from_request(request)
+    if pair in prior_results_by_cleanup_pair:
+        return prior_results_by_cleanup_pair[pair], "object_target"
+    return {}, ""
+
+
+def _cleanup_pair_from_request(request: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(request.get("object_id") or ""),
+        str(request.get("target_receptacle_id") or ""),
+    )
+
+
+def _cleanup_pair_from_result(result: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(result.get("object_id") or ""),
+        str(result.get("target_receptacle_id") or ""),
+    )
+
+
+def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        int(str(item.get("task_feasibility_status") or "") == "blocked"),
+        int(str(item.get("status") or "") == "blocked_capability"),
+        int(bool(item.get("run_result_exists") or item.get("run_result"))),
+    )
+
+
 def _selected_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
+    *,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
     fallback = request.get("fallback_request") or {}
     is_fallback = isinstance(fallback, dict) and bool(fallback)
@@ -432,12 +509,17 @@ def _selected_request(
             or fallback.get("prior_task_feasibility_blocker_summary"),
         )
     )
+    match_kind = prior_result_match_kind or str(fallback.get("prior_result_match_kind") or "")
+    if match_kind:
+        item["prior_result_match_kind"] = match_kind
     return item
 
 
 def _excluded_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
+    *,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
     item = {
         "request_id": str(request.get("request_id") or ""),
@@ -450,6 +532,8 @@ def _excluded_request(
         **_prior_result_evidence_fields(prior_result),
     }
     item.update(_prior_result_blocker_fields(prior_result))
+    if prior_result_match_kind:
+        item["prior_result_match_kind"] = prior_result_match_kind
     return item
 
 
@@ -523,6 +607,8 @@ def _target_feasibility_blocker(
             item.get("prior_task_feasibility_blocker_summary"),
         )
     )
+    if item.get("prior_result_match_kind"):
+        blocker["prior_result_match_kind"] = str(item.get("prior_result_match_kind") or "")
     return blocker
 
 
@@ -748,6 +834,7 @@ def _fallback_requests_for_blocked_request(
     limit: int,
     discovered_aliases: dict[str, list[dict[str, Any]]] | None = None,
     prior_candidate_filters: dict[str, Any] | None = None,
+    prior_result_match_kind: str = "",
 ) -> dict[str, list[dict[str, Any]]]:
     if limit <= 0:
         return {
@@ -827,6 +914,7 @@ def _fallback_requests_for_blocked_request(
                     index=len(generated) + 1,
                     planner_object_id=object_alias,
                     planner_target_receptacle_id=target_alias,
+                    prior_result_match_kind=prior_result_match_kind,
                 )
             )
             if len(generated) >= limit:
@@ -853,6 +941,7 @@ def _fallback_request_with_planner_aliases(
     index: int,
     planner_object_id: str,
     planner_target_receptacle_id: str,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
     source_request_id = str(request.get("request_id") or "")
     fallback = deepcopy(request)
@@ -871,6 +960,8 @@ def _fallback_request_with_planner_aliases(
         "agent_view_exposed": False,
     }
     fallback["fallback_request"].update(_prior_result_blocker_fields(prior_result))
+    if prior_result_match_kind:
+        fallback["fallback_request"]["prior_result_match_kind"] = prior_result_match_kind
     args = dict(fallback.get("planner_probe_args") or {})
     if planner_object_id:
         args["--cleanup-planner-object-id"] = planner_object_id
