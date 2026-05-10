@@ -138,6 +138,12 @@ object-target pairs as cards before the detailed blocker table, preserving the
 source request, match kind, and blocker summary.
 _Avoid_: table-only selection blocker review
 
+**Grasp-Feasibility Signature Matrix**:
+The proof-bundle result report view that groups repeated executed
+grasp-feasibility failures by their blocker pattern, such as identical grasp
+failure and candidate-removal counts across multiple proof requests.
+_Avoid_: treating grouped blockers as proof success
+
 **Proof-Bundle Local Runtime Preflight**:
 The proof-bundle runner evidence that checks the configured MolmoSpaces Python
 runtime before real `--execute-probes` commands, rendering missing import or
@@ -945,3 +951,9 @@ _Avoid_: full cleanup replacement claim
   `grasp_feasibility` with 17 grasp failures, 15 candidate-removal calls, and
   one diagnostic view artifact each; none became planner-backed or promoted
   cleanup binding.
+- Phase 103 added the Grasp-Feasibility Signature Matrix. Task-feasibility
+  blocker naming now lives in a shared planner module, proof result summaries
+  carry per-proof grasp signatures and grouped signature counts, proof-bundle
+  reports render the grouped matrix, and the checker validates the view. The
+  regenerated Phase 103 report groups the five Phase 102 blockers into one
+  repeated signature.

@@ -948,6 +948,63 @@ def test_runner_preserves_prior_blocker_detail_from_excluded_requests() -> None:
     )
 
 
+def test_runner_summarizes_grasp_feasibility_signatures(tmp_path: Path) -> None:
+    runner = _load_module()
+    proof_dir = tmp_path / "proofs" / "001"
+    proof_dir.mkdir(parents=True)
+    (proof_dir / "report.html").write_text("<h1>report</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "artifacts": {},
+                "manipulation_evidence": {
+                    "execution_attempted": True,
+                    "blockers": [{"code": "HouseInvalidForTask"}],
+                    "task_sampler_failure_diagnostics": {
+                        "robot_placement_attempt_count": 17,
+                        "robot_placement_failure_count": 0,
+                        "place_robot_near_call_count": 17,
+                        "grasp_failure_count": 17,
+                        "candidate_removal_count": 15,
+                        "image_artifacts": {
+                            "post_placement_attempt_001_head_camera": "planner_views/view.png"
+                        },
+                        "grasp_failures": [
+                            {
+                                "object_name": "bread_1",
+                                "count_before": 0,
+                                "count_after": 1,
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = runner.proof_result_summary_from_commands(
+        [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "fridge_01",
+                "run_result": str(proof_dir / "run_result.json"),
+                "report": str(proof_dir / "report.html"),
+            }
+        ]
+    )
+
+    result = summary["results"][0]
+    assert result["task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert result["grasp_feasibility_signature"]["summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+    assert summary["grasp_feasibility_signature_count"] == 1
+    assert summary["grasp_feasibility_signature_counts"][0]["request_ids"] == ["proof_001"]
+
+
 def test_runner_carries_prior_failed_runtime_fallback_candidates(
     tmp_path: Path,
 ) -> None:

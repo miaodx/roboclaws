@@ -461,6 +461,22 @@ def _assert_proof_result_summary(
         int(summary.get("rby1m_config_import_timeout_count") or 0)
         == rby1m_config_import_timeout_count
     ), summary
+    grasp_signature_counts = summary.get("grasp_feasibility_signature_counts") or []
+    if grasp_signature_counts:
+        assert int(summary.get("grasp_feasibility_signature_count") or 0) == len(
+            grasp_signature_counts
+        ), summary
+        assert "Grasp Feasibility Signature Matrix" in report_text, report_text[:500]
+        for signature in grasp_signature_counts:
+            assert signature.get("pattern_key"), signature
+            assert int(signature.get("count") or 0) > 0, signature
+            for value in [
+                signature.get("summary"),
+                *(signature.get("request_ids") or []),
+                *(signature.get("object_names") or []),
+            ]:
+                if value:
+                    assert str(value) in report_text, (signature, report_text[:500])
     for item in results:
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
             assert item.get(key), item

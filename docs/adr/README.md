@@ -102,6 +102,7 @@ one decision per file, sequential numbering, explicit status.
 | [0091](0091-use-canonical-molmo-spaces-preflight-import.md) | Use Canonical MolmoSpaces Preflight Import | Accepted |
 | [0092](0092-record-seed10-source-rotation.md) | Record Seed 10 Source Rotation | Accepted |
 | [0093](0093-execute-seed10-selected-proof-commands.md) | Execute Seed 10 Selected Proof Commands | Accepted |
+| [0094](0094-render-grasp-feasibility-signature-matrix.md) | Render Grasp Feasibility Signature Matrix | Accepted |
 
 ## Adding a new ADR
 

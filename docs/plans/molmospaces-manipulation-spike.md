@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 102 seed 10 selected proof execution completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
+**Status:** Phase 103 grasp-feasibility signature matrix completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -312,6 +312,13 @@ blocked as `grasp_feasibility` with 17 grasp failures and 15 candidate-removal
 calls. No new planner-backed proof or cleanup-binding promotion was produced,
 so the next slice should target the shared grasp-feasibility blocker rather
 than rerunning cleanup.
+Phase 103 makes that repeated blocker easier to reason about before the next
+runtime experiment. Task-feasibility blocker naming moved into a shared planner
+module, proof result summaries now carry per-proof grasp signatures and grouped
+signature counts, and proof-bundle reports render a `Grasp Feasibility
+Signature Matrix`. The regenerated Phase 103 report groups all five Phase 102
+proof blockers into one repeated signature, so the next slice can target that
+shared blocker pattern directly.
 
 ## Why This Exists
 

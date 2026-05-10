@@ -960,6 +960,20 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "execution_attempted_count": 0,
             "task_feasibility_blocked_count": 1,
             "grasp_feasibility_blocked_count": 1,
+            "grasp_feasibility_signature_count": 1,
+            "grasp_feasibility_signature_counts": [
+                {
+                    "schema": "planner_grasp_feasibility_signature_group_v1",
+                    "pattern_key": "grasp=3;removals=1",
+                    "summary": "3 grasp failures; 1 candidate-removal calls",
+                    "count": 1,
+                    "request_ids": ["proof_001"],
+                    "object_names": ["pickup/body"],
+                    "robot_placement_failure_count": 1,
+                    "place_robot_near_call_count": 1,
+                    "image_artifact_count": 2,
+                }
+            ],
             "worker_stage_event_count": 2,
             "last_worker_stage_counts": {"rby1m_config_import": 1},
             "view_artifact_count": 2,
@@ -981,6 +995,20 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "grasp_feasibility_signature": {
+                        "schema": "planner_grasp_feasibility_signature_v1",
+                        "kind": "grasp_feasibility",
+                        "pattern_key": "grasp=3;removals=1",
+                        "summary": "3 grasp failures; 1 candidate-removal calls",
+                        "grasp_failure_count": 3,
+                        "candidate_removal_count": 1,
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 1,
+                        "place_robot_near_call_count": 1,
+                        "object_name_count": 1,
+                        "object_names": ["pickup/body"],
+                        "image_artifact_count": 2,
+                    },
                     "visual_status": "views_recorded",
                     "blockers": [
                         {"code": "HouseInvalidForTask", "message": "robot placement"},
@@ -1114,6 +1142,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task feasibility" in html
     assert "blocked" in html
     assert "Grasp-feasible blocked" in html
+    assert "Grasp Feasibility Signature Matrix" in html
+    assert "Diagnostic views" in html
     assert "Task feasibility blocker" in html
     assert "grasp_feasibility" in html
     assert "3 grasp failures; 1 candidate-removal calls" in html

@@ -1289,6 +1289,9 @@ def _proof_bundle_results_section(
         if stage_counts
         else ""
     )
+    grasp_signature_html = _proof_bundle_grasp_signature_section(
+        summary.get("grasp_feasibility_signature_counts") or []
+    )
     body = (
         "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
@@ -1298,7 +1301,8 @@ def _proof_bundle_results_section(
     return (
         f'<section class="panel {html.escape(section_class)}">'
         f"<h2>{html.escape(title)}</h2>"
-        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}'
+        f"{grasp_signature_html}{body}</section>"
     )
 
 
@@ -1367,6 +1371,34 @@ def _summary_view_artifact_count(summary: dict[str, Any], results: list[dict[str
     if "view_artifact_count" in summary:
         return int(summary.get("view_artifact_count") or 0)
     return sum(len(item.get("views") or []) for item in results)
+
+
+def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in signatures:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('robot_placement_failure_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('place_robot_near_call_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('image_artifact_count', '')))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('request_ids') or []))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('object_names') or []))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        "<h3>Grasp Feasibility Signature Matrix</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Proofs</th><th>Pattern</th><th>Robot placement failures</th>"
+        "<th>place_robot_near calls</th><th>Diagnostic views</th>"
+        "<th>Requests</th><th>Planner objects</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
 
 
 def _has_result_blocker_code(item: dict[str, Any], code: str) -> bool:
