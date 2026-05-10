@@ -91,7 +91,8 @@ def _write_report_files(
     if post_placement_rejections:
         body += (
             "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
-            "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\nbook/body\n3\n"
+            "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\n"
+            "Post-Placement Rejection Views\nbook/body\n3\n"
         )
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"

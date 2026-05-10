@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 95 seeded selected proof execution completed; next work is diagnosing the shared grasp-feasibility blocker
+**Status:** Phase 97 post-placement rejection views completed; next work is reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -283,6 +283,10 @@ now emit bounded post-placement camera artifacts through the same
 `image_artifacts` interface as successful initial/final planner views, while
 older diagnostic-only artifacts render an inline task-sampler diagnostic view
 instead of an empty no-view state.
+Phase 97 adds the specific visual view for the current grasp-feasibility
+blocker: standalone planner reports and proof-bundle result cards now render
+post-placement grasp failures, candidate removals, threshold removals, and
+candidate-count movement from the same shared report helper.
 
 ## Why This Exists
 

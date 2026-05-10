@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 96 MolmoSpaces planner failure diagnostic views completed on 2026-05-10.
+stopped_at: Phase 97 MolmoSpaces post-placement rejection views completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 89
-  completed_phases: 89
-  total_plans: 92
-  completed_plans: 92
+  total_phases: 90
+  completed_phases: 90
+  total_plans: 93
+  completed_plans: 93
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 96 completed planner failure diagnostic views; next work is reducing the shared RBY1M grasp-feasibility blocker or rerendering local proof reports as needed.
+**Current focus:** Phase 97 completed post-placement rejection views; next work is reducing the shared RBY1M grasp-feasibility blocker or rotating proof sources as needed.
 
 ## Current Position
 
-Phase: 96 (molmospaces-planner-failure-diagnostic-views) - COMPLETE
-Plan: 1 of 1 complete - `96-01` captures and renders planner failure diagnostic views for blocked task-sampler proofs.
+Phase: 97 (molmospaces-post-placement-rejection-views) - COMPLETE
+Plan: 1 of 1 complete - `97-01` renders grasp-feasibility rejection diagnostics as shared report visuals.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -251,7 +251,11 @@ now capture one bounded post-placement camera artifact through the same
 `image_artifacts` interface used by successful planner views, and
 diagnostic-only blocked reports render an inline task-sampler diagnostic view
 instead of an empty no-view state.
-Last activity: 2026-05-10 - Completed Phase 96 planner failure diagnostic views.
+Phase 97 adds Post-Placement Rejection Views. Standalone planner reports and
+proof-bundle result cards now render grasp-failure diagnostics as a shared
+visual view, and checkers require that visual whenever grasp-failure
+diagnostics are present.
+Last activity: 2026-05-10 - Completed Phase 97 post-placement rejection views.
 
 Progress: [##########] 100%
 Next blocker: diagnose or reduce the shared RBY1M grasp-feasibility blocker
@@ -262,7 +266,7 @@ before another planner-backed cleanup rerun.
 
 **Velocity:**
 
-- Total plans completed: 96 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 96)
+- Total plans completed: 97 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 97)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 

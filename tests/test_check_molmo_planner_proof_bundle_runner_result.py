@@ -575,6 +575,8 @@ def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> 
 
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "Post-placement grasp failures" in report
+    assert "Post-Placement Rejection Views" in report
+    assert "Post-placement rejection flow: pickup/body" in report
     assert "Task sampler placement failures" not in report
     checker._assert_runner_result(manifest, tmp_path)
 

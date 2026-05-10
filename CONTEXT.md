@@ -126,6 +126,12 @@ runs should prefer captured post-placement camera artifacts through
 task-sampler visual summaries instead of an empty no-view state.
 _Avoid_: second report renderer, table-only blocked proof
 
+**Post-Placement Rejection Views**:
+The shared report visual surface for grasp-feasibility blockers after robot
+placement succeeds, showing grasp failures, candidate removals, threshold
+removals, and candidate-count movement from task-sampler diagnostics.
+_Avoid_: table-only grasp-feasibility blocker, per-report rejection chart
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -881,3 +887,7 @@ _Avoid_: full cleanup replacement claim
   `image_artifacts` path used by successful initial/final planner views, and
   old diagnostic-only blocked reports render an inline task-sampler diagnostic
   view instead of an empty no-view state.
+- Phase 97 added Post-Placement Rejection Views. Standalone planner reports and
+  proof-bundle result cards now render grasp-failure diagnostics as a shared
+  visual view, and checker gates require that visual whenever
+  `task_sampler_failure_diagnostics.grasp_failures` is present.

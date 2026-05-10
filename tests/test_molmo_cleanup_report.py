@@ -1137,6 +1137,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task sampler placement failures" in html
     assert "Task sampler asset failures" in html
     assert "Post-placement grasp failures" in html
+    assert "Post-Placement Rejection Views" in html
+    assert "Post-placement rejection flow: pickup/body" in html
     assert "Placement free-space fraction" in html
     assert "0.000017" in html
     assert "Failed to place robot near object: pickup/body" in html
@@ -1668,6 +1670,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Placement failures" in html
     assert "Effective max tries" in html
     assert "Post-Placement Candidate Rejections" in html
+    assert "Post-Placement Rejection Views" in html
+    assert "Post-placement rejection flow: pickup/body" in html
     assert "Removed by grasp threshold" in html
     assert "Placement Scene Diagnostics" in html
     assert "Free-space fraction" in html

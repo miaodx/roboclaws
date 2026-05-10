@@ -1371,9 +1371,15 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
             for view in views
             if isinstance(view, dict)
         )
-        view_html = f'<div class="views">{figures}</div>'
+        view_html = (
+            f'<div class="views">{figures}</div>'
+            f"{_post_placement_rejection_views(task_sampler_failure)}"
+        )
     elif task_sampler_failure:
-        view_html = _task_sampler_diagnostic_views(task_sampler_failure)
+        view_html = (
+            f"{_task_sampler_diagnostic_views(task_sampler_failure)}"
+            f"{_post_placement_rejection_views(task_sampler_failure)}"
+        )
     else:
         view_html = (
             '<p class="note">No planner probe views recorded'
@@ -1509,6 +1515,75 @@ def _task_sampler_diagnostic_views(diagnostics: dict[str, Any]) -> str:
     return f'<div class="views">{_task_sampler_diagnostic_figure(diagnostics)}</div>'
 
 
+def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
+    grasp_failures = [
+        item for item in diagnostics.get("grasp_failures") or [] if isinstance(item, dict)
+    ]
+    if not grasp_failures:
+        return ""
+    removed = [item for item in grasp_failures if item.get("removed_candidate")]
+    first = grasp_failures[0]
+    object_name = str(first.get("object_name") or "sampled object")
+    grasp_count = _safe_int(diagnostics.get("grasp_failure_count"), len(grasp_failures))
+    removal_count = _safe_int(
+        diagnostics.get("candidate_removal_count"),
+        len(diagnostics.get("candidate_removals") or []),
+    )
+    max_value = max(grasp_count, removal_count, len(removed), 1)
+    grasp_width = _scaled_bar_width(grasp_count, max_value)
+    removal_width = _scaled_bar_width(removal_count, max_value)
+    removed_width = _scaled_bar_width(len(removed), max_value)
+    stats = [
+        ("Grasp failures", grasp_count),
+        ("Candidate removals", removal_count),
+        ("Removed by threshold", len(removed)),
+        ("Candidate rows", len(grasp_failures)),
+        ("Candidates before", first.get("candidate_count_before", "")),
+        ("Candidates after", first.get("candidate_count_after", "")),
+    ]
+    stat_html = "".join(
+        '<span class="diagnostic-stat">'
+        f"<small>{html.escape(str(label))}</small>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        "</span>"
+        for label, value in stats
+        if value != ""
+    )
+    return (
+        '<div class="post-placement-rejection-views">'
+        "<h3>Post-Placement Rejection Views</h3>"
+        '<div class="views"><figure class="diagnostic-view rejection-view">'
+        '<div class="diagnostic-visual" role="img" '
+        'aria-label="Post-placement rejection flow">'
+        '<svg viewBox="0 0 360 210" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="360" height="210" rx="8" fill="#fff7ed"/>'
+        '<text x="24" y="34" fill="#0f172a" font-size="15" font-weight="700">'
+        "Post-placement rejection flow</text>"
+        '<text x="24" y="58" fill="#64748b" font-size="12">'
+        f"{html.escape(object_name)}</text>"
+        '<text x="24" y="91" fill="#334155" font-size="12">grasp failures</text>'
+        '<rect x="150" y="79" width="170" height="14" rx="7" fill="#fed7aa"/>'
+        f'<rect x="150" y="79" width="{grasp_width}" height="14" rx="7" fill="#f97316"/>'
+        '<text x="326" y="91" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{grasp_count}</text>"
+        '<text x="24" y="128" fill="#334155" font-size="12">candidate removals</text>'
+        '<rect x="150" y="116" width="170" height="14" rx="7" fill="#fecaca"/>'
+        f'<rect x="150" y="116" width="{removal_width}" height="14" rx="7" fill="#ef4444"/>'
+        '<text x="326" y="128" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{removal_count}</text>"
+        '<text x="24" y="165" fill="#334155" font-size="12">threshold removals</text>'
+        '<rect x="150" y="153" width="170" height="14" rx="7" fill="#e2e8f0"/>'
+        f'<rect x="150" y="153" width="{removed_width}" height="14" rx="7" fill="#64748b"/>'
+        '<text x="326" y="165" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{len(removed)}</text>"
+        "</svg>"
+        "</div>"
+        f"<figcaption>Post-placement rejection flow: {html.escape(object_name)}</figcaption>"
+        f'<div class="diagnostic-stats">{stat_html}</div>'
+        "</figure></div></div>"
+    )
+
+
 def _task_sampler_diagnostic_figure(diagnostics: dict[str, Any]) -> str:
     last = diagnostics.get("last_placement_scene_diagnostic") or {}
     target = str(last.get("target_name") or "target")
@@ -1572,6 +1647,19 @@ def _safe_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _scaled_bar_width(value: int, max_value: int, *, width: int = 170) -> int:
+    if max_value <= 0:
+        return 0
+    return int(max(0.0, min(float(value) / float(max_value), 1.0)) * width)
 
 
 def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
@@ -1930,7 +2018,8 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
     return (
         '<section class="panel planner-probe-post-placement-rejections">'
         "<h2>Post-Placement Candidate Rejections</h2>"
-        f'<p class="note">{html.escape(note)}</p>{metrics}{table}</section>'
+        f'<p class="note">{html.escape(note)}</p>{metrics}'
+        f"{_post_placement_rejection_views(diagnostics)}{table}</section>"
     )
 
 
@@ -3074,6 +3163,13 @@ def _wrap_html(body: str) -> str:
     }}
     .diagnostic-stat strong {{
       color: #0f172a;
+    }}
+    .post-placement-rejection-views h3 {{
+      margin: 14px 0 8px;
+      font-size: 15px;
+    }}
+    .rejection-view .diagnostic-visual {{
+      background: #fff7ed;
     }}
     .raw-fpv-grid {{
       display: grid;
