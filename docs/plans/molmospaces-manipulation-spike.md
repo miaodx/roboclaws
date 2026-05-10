@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 116 grasp cache generation preflight completed; next work is installing/building grasp-generation prerequisites before generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target
+**Status:** Phase 117 grasp generation prerequisites completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -401,6 +401,11 @@ Preflight`, including the `Bread_1` object XML, generated NPZ path, final droid
 loader cache target, upstream `run_rigid.py` command, and prerequisite blockers.
 The current local environment blocks generation on missing `sklearn`, missing
 `python-fcl`, and missing Manifold `manifold`/`simplify` executables.
+Phase 117 turns that prerequisite gate green with a reusable setup runner. The
+runner installs the rigid-path Python prerequisites into the uv MolmoSpaces
+runtime, initializes/builds Manifold even when the checkout lacks a tracked
+gitlink, and reruns the proof-bundle report with `Grasp Cache Generation
+Preflight` at `ready` and zero blockers.
 
 ## Why This Exists
 

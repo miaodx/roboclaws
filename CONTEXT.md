@@ -402,6 +402,12 @@ loader cache target, Python prerequisites, Manifold executables, and proposed
 generation command.
 _Avoid_: failed invisible generation attempt, fake grasp cache
 
+**Grasp Generation Setup Runner**:
+The checked-in local-dev runner that installs rigid grasp-generation Python
+prerequisites, initializes/builds Manifold, and reruns the same generation
+preflight as its acceptance gate.
+_Avoid_: one-off shell setup that cannot be reproduced by the next agent
+
 **Planner-Backed Manipulation Proof**:
 Evidence that a MolmoSpaces robot manipulation planner policy actually executed
 robot actions and changed robot state, separate from semantic state edits.
@@ -744,6 +750,8 @@ _Avoid_: full cleanup replacement claim
   nonzero transforms before marking a missing-cache asset ready.
 - **Grasp Cache Generation Preflight** should pass before running upstream
   rigid grasp generation or installing generated cache output.
+- **Grasp Generation Setup Runner** should be used to make that preflight pass
+  instead of applying ad hoc local environment fixes.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1133,3 +1141,6 @@ _Avoid_: full cleanup replacement claim
   renders the upstream rigid generation route for `Bread_1` and blocks visibly
   on missing `sklearn`, missing `python-fcl`, and missing Manifold
   `manifold`/`simplify` executables.
+- Phase 117 adds Grasp Generation Setup Runner. The local MolmoSpaces runtime
+  now has the rigid-path Python prerequisites and built Manifold executables,
+  and the proof-bundle generation preflight reports `ready` with zero blockers.
