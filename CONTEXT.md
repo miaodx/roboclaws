@@ -480,6 +480,12 @@ quality target, prior-covered minimum step floor, and blocker rows when the
 command horizon cannot satisfy the requested coverage horizon.
 _Avoid_: hidden mismatch between selected proof horizon and generated command steps
 
+**Proof Command Semantic Subphases**:
+The proof-bundle runner command-row view that carries raw cleanup tools and
+display-ready `nav, pick, nav, open?, place` subphase labels before local proof
+execution.
+_Avoid_: shell-only proof command rows detached from the cleanup visual underlay
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -1295,3 +1301,6 @@ _Avoid_: full cleanup replacement claim
   runner reports now show requested command steps, command quality target,
   prior-covered coverage floor, and misalignment blockers before local proof
   execution; the runner checker can require that view.
+- Phase 132 adds Proof Command Semantic Subphases. Generated proof command rows
+  now keep cleanup tools and render a `nav, pick, nav, open?, place` semantic
+  rail in the proof-bundle runner report, with checker coverage for the view.

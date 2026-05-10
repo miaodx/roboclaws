@@ -77,7 +77,20 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert manifest["proof_execution_horizon"]["prior_covered_min_proof_steps"] == 1
     assert manifest["proof_request_selection"]["mode"] == "all_ready"
     assert manifest["proof_request_selection"]["selected_request_ids"] == ["proof_001"]
-    command = manifest["commands"][0]["command"]
+    command_item = manifest["commands"][0]
+    command = command_item["command"]
+    assert command_item["tools"] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "place",
+    ]
+    assert command_item["semantic_subphases"] == [
+        {"phase": "navigate_to_object", "label": "nav", "detail": "object"},
+        {"phase": "pick", "label": "pick", "detail": "object"},
+        {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
+        {"phase": "place", "label": "place", "detail": "surface"},
+    ]
     assert command[:2] == ["python", "probe.py"]
     assert "--cleanup-object-id" in command
     assert "observed_001" in command
@@ -97,6 +110,9 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "Planner Proof Bundle Runner" in report
     assert "Proof Execution Horizon" in report
     assert "multi_step_motion" in report
+    assert "Semantic subphases" in report
+    assert "navigate_to_object" in report
+    assert "surface / place" in report
     assert "Proof Request Selection" in report
     assert "Proof Probe Commands" in report
     assert "Proof Probe Results" in report

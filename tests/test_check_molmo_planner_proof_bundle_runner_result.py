@@ -1079,6 +1079,18 @@ def _runner_manifest(base: Path) -> dict[str, object]:
                 "request_id": "proof_001",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "place",
+                ],
+                "semantic_subphases": [
+                    {"phase": "navigate_to_object", "label": "nav", "detail": "object"},
+                    {"phase": "pick", "label": "pick", "detail": "object"},
+                    {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
+                    {"phase": "place", "label": "place", "detail": "surface"},
+                ],
                 "output_dir": str(proof_dir),
                 "run_result": str(proof_dir / "run_result.json"),
                 "report": str(proof_dir / "report.html"),

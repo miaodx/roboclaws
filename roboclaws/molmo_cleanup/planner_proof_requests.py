@@ -177,11 +177,14 @@ def build_probe_commands(
             command.extend(["--cleanup-scene-xml", scene_xml])
         for flag, value in sorted((request.get("planner_probe_args") or {}).items()):
             command.extend([str(flag), str(value)])
+        tools = _request_tools(request)
         commands.append(
             {
                 "request_id": request.get("request_id"),
                 "object_id": request.get("object_id"),
                 "target_receptacle_id": request.get("target_receptacle_id"),
+                "tools": tools,
+                "semantic_subphases": _semantic_subphase_entries(tools),
                 "output_dir": str(proof_dir),
                 "run_result": str(proof_dir / "run_result.json"),
                 "report": str(proof_dir / "report.html"),
@@ -2069,6 +2072,30 @@ def _cleanup_tools(steps: list[dict[str, Any]]) -> list[str]:
         for phase in (str(step.get("phase") or "") for step in steps)
         if phase in SEMANTIC_SUBPHASE_LABELS
     ]
+
+
+def _request_tools(request: dict[str, Any]) -> list[str]:
+    raw_tools = request.get("tools") or []
+    if isinstance(raw_tools, str):
+        values = raw_tools.split(",")
+    else:
+        values = [str(item) for item in raw_tools if str(item)]
+    if not values:
+        cleanup_tools = _planner_arg(request.get("planner_probe_args") or {}, "--cleanup-tools")
+        values = cleanup_tools.split(",") if cleanup_tools else []
+    return [
+        tool
+        for tool in _unique_nonempty_values([value.strip() for value in values])
+        if tool in SEMANTIC_SUBPHASE_LABELS
+    ]
+
+
+def _semantic_subphase_entries(tools: list[str]) -> list[dict[str, str]]:
+    entries = []
+    for phase in tools:
+        label, detail = SEMANTIC_SUBPHASE_LABELS[phase]
+        entries.append({"phase": phase, "label": label, "detail": detail})
+    return entries
 
 
 def _request_blockers(request: dict[str, Any]) -> list[dict[str, Any]]:

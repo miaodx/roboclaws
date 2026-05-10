@@ -279,6 +279,16 @@ def _assert_command(
     command_text = " ".join(str(part) for part in command)
     assert "--output-dir" in command, command
     assert "--cleanup-object-id" in command, command
+    semantic_subphases = item.get("semantic_subphases") or []
+    if semantic_subphases:
+        assert "Semantic subphases" in report_text, report_text[:500]
+        for subphase in semantic_subphases:
+            if not isinstance(subphase, dict):
+                continue
+            for key in ("phase", "label", "detail"):
+                value = str(subphase.get(key) or "")
+                if value:
+                    _assert_report_contains(value, report_text, key)
     for value in (
         item["request_id"],
         item["object_id"],

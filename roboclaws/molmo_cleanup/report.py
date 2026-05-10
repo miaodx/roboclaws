@@ -936,6 +936,7 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{_command_semantic_subphases(item)}</td>"
             f"<td>{html.escape(str(item.get('run_result', '')))}</td>"
             f"<td>{html.escape(str(item.get('report', '')))}</td>"
             f"<td><code>{html.escape(command)}</code></td>"
@@ -943,8 +944,10 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>#</th><th>Request</th>'
-        "<th>Object</th><th>Target</th><th>Proof run result</th><th>Proof report</th>"
-        "<th>Command</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        "<th>Object</th><th>Target</th><th>Semantic subphases</th>"
+        "<th>Proof run result</th><th>Proof report</th><th>Command</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
     return (
         '<section class="panel proof-bundle-commands">'
@@ -953,6 +956,28 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         "the referenced proof artifact passes the strict planner probe checker.</p>"
         f"{table}</section>"
     )
+
+
+def _command_semantic_subphases(item: dict[str, Any]) -> str:
+    subphases = item.get("semantic_subphases") or []
+    if not subphases:
+        return ""
+    rail_items = []
+    for subphase in subphases:
+        if not isinstance(subphase, dict):
+            continue
+        label = str(subphase.get("label") or "")
+        detail = str(subphase.get("detail") or "")
+        phase = str(subphase.get("phase") or "")
+        rail_items.append(
+            "<li>"
+            f"<span>{html.escape(label)}</span>"
+            f"<small>{html.escape(detail)} / {html.escape(phase)}</small>"
+            "</li>"
+        )
+    if not rail_items:
+        return ""
+    return '<ol class="phase-rail command-phase-rail">' + "".join(rail_items) + "</ol>"
 
 
 def _grasp_cache_generation_summary_section(result: dict[str, Any]) -> str:
@@ -4657,6 +4682,7 @@ def _wrap_html(body: str, *, extra_css: str = "") -> str:
     }}
     .phase-rail span {{ display: block; font-weight: 750; color: #1f5f58; }}
     .phase-rail small {{ display: block; margin-top: 2px; color: #687789; }}
+    .command-phase-rail {{ min-width: 280px; }}
     .readback {{ margin: 10px 0 0; color: #565f70; font-size: 13px; overflow-wrap: anywhere; }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; }}
     th, td {{

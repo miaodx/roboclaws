@@ -131,6 +131,7 @@ one decision per file, sequential numbering, explicit status.
 | [0120](0120-honor-proof-quality-horizon-in-prior-covered-selection.md) | Honor Proof Quality Horizon In Prior Covered Selection | Accepted |
 | [0121](0121-route-molmo-cleanup-report-generation-through-shared-adapter.md) | Route Molmo Cleanup Report Generation Through Shared Adapter | Accepted |
 | [0122](0122-render-proof-execution-horizon-in-runner-reports.md) | Render Proof Execution Horizon In Runner Reports | Accepted |
+| [0123](0123-render-proof-command-semantic-subphases.md) | Render Proof Command Semantic Subphases | Accepted |
 
 ## Adding a new ADR
 

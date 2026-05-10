@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 131 proof execution horizon reports completed; proof-bundle dry-run reports now show command-step quality intent before local proof execution while the full bridge remains blocked
+**Status:** Phase 132 proof command semantic subphase reports completed; proof-bundle dry-run command rows now show shared `nav, pick, nav, open?, place` intent while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -476,6 +476,11 @@ manifests and dry-run reports now render a Proof Execution Horizon section with
 requested command steps, command quality target, prior-covered coverage floor,
 and blockers when generated commands cannot satisfy the stricter coverage
 horizon.
+Phase 132 keeps proof command rows on the same semantic visual underlay.
+Generated proof commands now retain cleanup tools and render display-ready
+`nav, pick, nav, open?, place` subphase rails in the proof-bundle runner report,
+so stricter local proof attempts show both command-strength intent and
+cleanup-loop intent before execution.
 
 ## Why This Exists
 
@@ -1364,10 +1369,14 @@ completed:
   gsd-plan-phase 131-molmospaces-proof-execution-horizon-report
   gsd-execute-phase 131-molmospaces-proof-execution-horizon-report
   gsd-verify-work 131-molmospaces-proof-execution-horizon-report
+  gsd-plan-phase 132-molmospaces-proof-command-semantic-subphases
+  gsd-execute-phase 132-molmospaces-proof-command-semantic-subphases
+  gsd-verify-work 132-molmospaces-proof-command-semantic-subphases
 
 next pipeline candidates:
   expand exact-proof coverage beyond observed_001, or generate a stricter
   multi-step/containment proof now that prior-covered selection can reselect
   one-step proof memory when a higher coverage horizon is requested and dry-run
-  reports expose the requested command quality horizon
+  reports expose both the requested command quality horizon and semantic
+  cleanup subphase intent
 ```

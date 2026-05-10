@@ -1090,6 +1090,18 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "request_id": "proof_001_fallback_01",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "place",
+                ],
+                "semantic_subphases": [
+                    {"phase": "navigate_to_object", "label": "nav", "detail": "object"},
+                    {"phase": "pick", "label": "pick", "detail": "object"},
+                    {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
+                    {"phase": "place", "label": "place", "detail": "surface"},
+                ],
                 "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
                 "report": str(tmp_path / "proofs" / "001" / "report.html"),
                 "command": [
@@ -1506,6 +1518,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "available_for_unproven_requests" in html
     assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html
+    assert "Semantic subphases" in html
+    assert "surface / place" in html
     assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
     assert "dry_run" in html
