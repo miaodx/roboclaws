@@ -271,8 +271,8 @@ def test_cleanup_primitive_binding_promotes_only_matching_sampled_task() -> None
     assert binding["source_receptacle_id"] == "source/body"
     assert binding["tools"] == [
         "navigate_to_object",
-        "navigate_to_receptacle",
         "pick",
+        "navigate_to_receptacle",
         "place",
     ]
 

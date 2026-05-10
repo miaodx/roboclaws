@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 133 proof-bundle request filter completed; stricter proof dry-runs can now target one cleanup request while the full bridge remains blocked
+**Status:** Phase 134 canonical proof command tool order completed; bounded proof commands now preserve `nav, pick, nav, open?, place` before execution while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -485,6 +485,12 @@ Phase 133 makes that stricter local proof attempt bounded. The proof-bundle
 runner accepts repeatable `--request-id` filters, records requested/matched/
 unavailable/missing IDs, and renders `Request ID Filter`; the Phase 126 stricter
 dry-run now selects only `proof_001` when asked.
+Phase 134 closes the remaining command/report semantic drift. Cleanup tool
+lists now normalize through one shared canonical order for proof requests,
+observed-handle bindings, probe command arguments, probe-side parsed bindings,
+and promoted cleanup primitive bindings, so the executable `--cleanup-tools`
+flag matches the `nav, pick, nav, open?, place` report rail before bounded
+proof execution.
 
 ## Why This Exists
 
@@ -1379,6 +1385,9 @@ completed:
   gsd-plan-phase 133-molmospaces-proof-bundle-request-filter
   gsd-execute-phase 133-molmospaces-proof-bundle-request-filter
   gsd-verify-work 133-molmospaces-proof-bundle-request-filter
+  gsd-plan-phase 134-molmospaces-canonical-proof-command-tool-order
+  gsd-execute-phase 134-molmospaces-canonical-proof-command-tool-order
+  gsd-verify-work 134-molmospaces-canonical-proof-command-tool-order
 
 next pipeline candidates:
   execute the bounded proof_001 two-step local proof attempt, then rerun cleanup

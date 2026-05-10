@@ -7,6 +7,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import BLOCKED_CAPABILITY_P
 from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (
     PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import canonical_cleanup_tool_sequence
 
 OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA = "observed_handle_planner_binding_v1"
 BACKEND_PLANNER_TASK_BINDING_SCHEMA = "backend_planner_task_binding_v1"
@@ -225,7 +226,7 @@ def _backend_blockers(binding: Mapping[str, Any]) -> list[dict[str, str]]:
 
 
 def _normalize_tools(tools: Sequence[str]) -> list[str]:
-    return sorted({str(item).strip() for item in tools if str(item).strip()})
+    return canonical_cleanup_tool_sequence(tools)
 
 
 def _unique_nonempty(*values: str) -> list[str]:

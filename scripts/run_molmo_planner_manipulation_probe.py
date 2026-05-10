@@ -37,6 +37,9 @@ from roboclaws.molmo_cleanup.rby1m_curobo_gate import (  # noqa: E402
     rby1m_curobo_gate_from_planner_probe,
 )
 from roboclaws.molmo_cleanup.report import render_planner_manipulation_report  # noqa: E402
+from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
+    canonical_cleanup_tool_sequence,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     DEFAULT_MOLMOSPACES_PYTHON,
     MOLMOSPACES_SUBPROCESS_BACKEND,
@@ -2680,7 +2683,7 @@ def _cleanup_primitive_binding_from_sampled_task(
             "object_id": requested_object,
             "target_receptacle_id": requested_target,
             "source_receptacle_id": str(requested.get("source_receptacle_id") or ""),
-            "tools": sorted(set(str(tool) for tool in tools)),
+            "tools": canonical_cleanup_tool_sequence(tools),
             "planner_object_id": requested_planner_object,
             "planner_target_receptacle_id": requested_planner_target,
             "sampled_task_binding": sampled,
@@ -2691,7 +2694,7 @@ def _cleanup_primitive_binding_from_sampled_task(
 
 
 def _cleanup_tools_from_arg(value: str) -> list[str]:
-    return sorted({item.strip() for item in value.split(",") if item.strip()})
+    return canonical_cleanup_tool_sequence(value)
 
 
 def _renderer_device_id_for_probe(

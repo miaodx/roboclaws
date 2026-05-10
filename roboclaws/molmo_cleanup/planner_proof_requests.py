@@ -21,7 +21,10 @@ from roboclaws.molmo_cleanup.planner_task_feasibility import (
     task_feasibility_blocker_kind,
     task_feasibility_blocker_summary,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    SEMANTIC_SUBPHASE_LABELS,
+    canonical_cleanup_tool_sequence,
+)
 
 PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
@@ -176,9 +179,12 @@ def build_probe_commands(
         scene_xml = str((manifest.get("planner_scene") or {}).get("scene_xml") or "")
         if scene_xml:
             command.extend(["--cleanup-scene-xml", scene_xml])
-        for flag, value in sorted((request.get("planner_probe_args") or {}).items()):
-            command.extend([str(flag), str(value)])
         tools = _request_tools(request)
+        planner_probe_args = dict(request.get("planner_probe_args") or {})
+        if tools:
+            planner_probe_args["--cleanup-tools"] = ",".join(tools)
+        for flag, value in sorted(planner_probe_args.items()):
+            command.extend([str(flag), str(value)])
         commands.append(
             {
                 "request_id": request.get("request_id"),
@@ -2129,11 +2135,13 @@ def _planner_scene(contract: Any) -> dict[str, Any]:
 
 
 def _cleanup_tools(steps: list[dict[str, Any]]) -> list[str]:
-    return [
-        phase
-        for phase in (str(step.get("phase") or "") for step in steps)
-        if phase in SEMANTIC_SUBPHASE_LABELS
-    ]
+    return canonical_cleanup_tool_sequence(
+        [
+            phase
+            for phase in (str(step.get("phase") or "") for step in steps)
+            if phase in SEMANTIC_SUBPHASE_LABELS
+        ]
+    )
 
 
 def _request_tools(request: dict[str, Any]) -> list[str]:
@@ -2146,9 +2154,7 @@ def _request_tools(request: dict[str, Any]) -> list[str]:
         cleanup_tools = _planner_arg(request.get("planner_probe_args") or {}, "--cleanup-tools")
         values = cleanup_tools.split(",") if cleanup_tools else []
     return [
-        tool
-        for tool in _unique_nonempty_values([value.strip() for value in values])
-        if tool in SEMANTIC_SUBPHASE_LABELS
+        tool for tool in canonical_cleanup_tool_sequence(values) if tool in SEMANTIC_SUBPHASE_LABELS
     ]
 
 

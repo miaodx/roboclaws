@@ -91,6 +91,9 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
         {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
         {"phase": "place", "label": "place", "detail": "surface"},
     ]
+    assert command[command.index("--cleanup-tools") + 1] == (
+        "navigate_to_object,pick,navigate_to_receptacle,place"
+    )
     assert command[:2] == ["python", "probe.py"]
     assert "--cleanup-object-id" in command
     assert "observed_001" in command

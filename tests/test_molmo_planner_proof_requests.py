@@ -18,6 +18,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     proof_result_summary_from_commands,
     write_planner_proof_requests,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import canonical_cleanup_tool_sequence
 
 
 def test_planner_proof_requests_preserve_bound_probe_args(tmp_path: Path) -> None:
@@ -136,6 +137,72 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "--task-sampler-robot-placement-profile" in command
     assert "relaxed" in command
     assert commands[0]["run_result"].endswith("run_result.json")
+
+
+def test_build_probe_commands_rewrites_cleanup_tools_in_semantic_order(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "open_receptacle",
+                    "place_inside",
+                ],
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "sink_01",
+                    "--cleanup-tools": (
+                        "navigate_to_object,navigate_to_receptacle,"
+                        "open_receptacle,pick,place_inside"
+                    ),
+                    "--cleanup-planner-object-id": "pickup/body",
+                    "--cleanup-planner-target-receptacle-id": "sink/body",
+                },
+            }
+        ],
+        "planner_scene": {},
+    }
+
+    commands = build_probe_commands(
+        manifest=manifest,
+        output_dir=tmp_path,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+    )
+
+    command = commands[0]["command"]
+    cleanup_tools_arg = command[command.index("--cleanup-tools") + 1]
+    assert cleanup_tools_arg == (
+        "navigate_to_object,pick,navigate_to_receptacle,open_receptacle,place_inside"
+    )
+    assert commands[0]["tools"] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+    ]
+
+
+def test_canonical_cleanup_tool_sequence_uses_semantic_order() -> None:
+    assert canonical_cleanup_tool_sequence(
+        "navigate_to_object,navigate_to_receptacle,open_receptacle,pick,place_inside"
+    ) == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+    ]
 
 
 def test_build_probe_warmup_command_uses_config_import_and_shared_cache(

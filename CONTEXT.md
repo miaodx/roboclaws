@@ -486,6 +486,13 @@ display-ready `nav, pick, nav, open?, place` subphase labels before local proof
 execution.
 _Avoid_: shell-only proof command rows detached from the cleanup visual underlay
 
+**Canonical Proof Command Tool Order**:
+The rule that cleanup tool lists in proof request bindings, proof command
+arguments, and promoted cleanup bindings preserve `nav, pick, nav, open?, place`
+semantic order instead of alphabetical set order.
+_Avoid_: report rails saying `nav, pick, nav` while executable
+`--cleanup-tools` says `nav, nav, open, pick`
+
 **Proof Bundle Request Filter**:
 The proof-bundle runner's explicit request-id selection path for bounded local
 proof attempts against one cleanup request before wider bundle execution.
@@ -1313,3 +1320,8 @@ _Avoid_: full cleanup replacement claim
   `--request-id` flags, records requested/matched/unavailable/missing IDs, and
   renders a `Request ID Filter` report view so stricter local proof attempts can
   be bounded to one cleanup request.
+- Phase 134 adds Canonical Proof Command Tool Order. Cleanup tool lists now
+  normalize through the shared semantic order for observed-handle bindings,
+  probe command arguments, probe-side parsed bindings, and promoted cleanup
+  primitive bindings, so the executable command matches the report rail before
+  bounded proof execution.
