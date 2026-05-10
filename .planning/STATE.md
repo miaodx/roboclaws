@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 119 MolmoSpaces grasp filter diagnostics completed on 2026-05-10.
+stopped_at: Phase 120 MolmoSpaces report artifact scenario fallback completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 109
-  completed_phases: 109
-  total_plans: 115
-  completed_plans: 115
+  total_phases: 110
+  completed_phases: 110
+  total_plans: 116
+  completed_plans: 116
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 119 completed bounded grasp filter diagnostics and narrowed the next blocker to the upstream `Bread_1` initial contact/pose path.
+**Current focus:** Phase 120 closed the scenario-less cleanup report adapter gap; the next manipulation blocker remains the upstream `Bread_1` initial contact/pose path.
 
 ## Current Position
 
-Phase: 119 (molmospaces-grasp-filter-diagnostics) - COMPLETE
-Plan: 1 of 1 complete - `119-01` preserves generation/filter intermediates and reports zero-success filter variants.
+Phase: 120 (molmospaces-report-artifact-scenario-fallback) - COMPLETE
+Plan: 1 of 1 complete - `120-01` keeps scenario-less cleanup artifacts on the shared report underlay.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -349,7 +349,12 @@ Phase 119 adds a bounded grasp-filter diagnostics runner and report. The local
 diagnostic preserves mesh/candidate/filter intermediates, generated 24 valid
 `Bread_1` candidates, and showed zero successful transforms for
 `initial_contact`, `translation_shake`, and `upstream_like`.
-Last activity: 2026-05-10 - Completed Phase 119 grasp filter diagnostics.
+Phase 120 adds a scenario-less fallback to the Cleanup Report Artifact Adapter.
+ADR-0003 visual cleanup artifacts without `scenario.json` now regenerate from
+`run_result.json` through the shared report underlay using a minimal public
+scenario shell, so stale local reports do not behave like separate
+implementations.
+Last activity: 2026-05-10 - Completed Phase 120 report artifact scenario fallback.
 
 Progress: [##########] 100%
 Next blocker: inspect or replace the upstream `Bread_1` initial contact/pose
@@ -361,7 +366,7 @@ before installing the droid loader cache target.
 
 **Velocity:**
 
-- Total plans completed: 119 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 119)
+- Total plans completed: 120 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 120)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -1025,14 +1030,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 119 MolmoSpaces grasp filter diagnostics completed.
-The next implementation should inspect or replace the upstream `Bread_1`
-initial contact/pose path so perturbation testing produces at least one nonzero
-transform before installing the droid loader cache target.
+Stopped at: Phase 120 MolmoSpaces report artifact scenario fallback completed.
+The next manipulation implementation should inspect or replace the upstream
+`Bread_1` initial contact/pose path so perturbation testing produces at least
+one nonzero transform before installing the droid loader cache target.
 Latest phase artifacts are
-`docs/adr/0110-preserve-grasp-filter-intermediates-and-variant-diagnostics.md`,
-`docs/plans/molmospaces-grasp-filter-diagnostics.md`, and
-`.planning/phases/119-molmospaces-grasp-filter-diagnostics/119-01-grasp-filter-diagnostics-PLAN.md`.
+`docs/adr/0111-regenerate-scenario-less-cleanup-artifacts.md`,
+`docs/plans/molmospaces-report-artifact-scenario-fallback.md`, and
+`.planning/phases/120-molmospaces-report-artifact-scenario-fallback/120-01-report-artifact-scenario-fallback-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1052,7 +1057,9 @@ Latest grasp-filter diagnostics report:
 `output/debug-phase119-grasp-filter-diagnostics/report.html`.
 Latest regenerated stale report:
 `output/molmo-agent-bridge-visual-codex/report.html`.
-Resume file: .planning/phases/119-molmospaces-grasp-filter-diagnostics/119-01-grasp-filter-diagnostics-PLAN.md
+Latest regenerated scenario-less report:
+`output/molmo-realworld-report-underlay-visual/report.html`.
+Resume file: .planning/phases/120-molmospaces-report-artifact-scenario-fallback/120-01-report-artifact-scenario-fallback-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1060,6 +1067,7 @@ Resume file: .planning/phases/119-molmospaces-grasp-filter-diagnostics/119-01-gr
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 119 MolmoSpaces grasp filter diagnostics is
-complete; next work should inspect or replace the zero-success `Bread_1`
-initial contact/pose path before installing a non-empty rigid grasp cache.
+**Active Phase:** None. Phase 120 MolmoSpaces report artifact scenario fallback
+is complete; next manipulation work should inspect or replace the zero-success
+`Bread_1` initial contact/pose path before installing a non-empty rigid grasp
+cache.

@@ -371,7 +371,10 @@ _Avoid_: Per-demo report clone
 **Cleanup Report Artifact Adapter**:
 A small adapter whose interface starts from an existing cleanup `run_result.json`
 and rehydrates scenario, trace, snapshots, private manifest, and robot-view
-steps before delegating to the shared Cleanup Artifact Report underlay.
+steps before delegating to the shared Cleanup Artifact Report underlay. When an
+older ADR-0003 artifact has no `scenario.json`, the adapter uses only a minimal
+public scenario shell from `run_result.json` and does not fabricate objects or
+private targets.
 _Avoid_: second report renderer, manual stale HTML repair
 
 **Report Visual Core**:
@@ -1036,6 +1039,10 @@ _Avoid_: full cleanup replacement claim
 - Phase 93 added Cleanup Report Artifact Adapter. Existing cleanup artifacts now
   regenerate `report.html` from `run_result.json` through the shared report
   underlay, so stale ignored reports do not act like a second implementation.
+- Phase 120 closes the scenario-less report adapter gap. ADR-0003 visual
+  artifacts without `scenario.json` now regenerate through the same shared
+  underlay using a minimal public scenario shell, keeping the canonical
+  `nav, pick, nav, open?, place` report rhythm without inventing private truth.
 - Phase 94 added Seeded Source Pool and Proof Memory. MolmoSpaces generated-mess
   selection now uses the subprocess seed to rotate object identities while
   preserving semantic target fixtures, and proof-selection memory rejects local
@@ -1167,3 +1174,7 @@ _Avoid_: full cleanup replacement claim
   and showed zero successful transforms for `initial_contact`,
   `translation_shake`, and `upstream_like`, narrowing the next blocker to the
   initial contact/pose path inside perturbation testing.
+- Phase 120 adds Report Artifact Scenario Fallback. Scenario-less ADR-0003
+  cleanup artifacts now regenerate from `run_result.json` through the shared
+  Cleanup Artifact Report adapter using a minimal public scenario shell, so
+  stale local `report.html` files do not imply multiple report implementations.
