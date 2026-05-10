@@ -388,6 +388,12 @@ _Avoid_: second report renderer, manual stale HTML repair
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture
 
+**Focused Robot View Timeline**:
+The Robot View Timeline view inside the Report Visual Core after raw FPV scan
+captures are kept in Raw FPV Observations instead of mixed into the first-pass
+cleanup action review.
+_Avoid_: perception scan log as primary cleanup timeline
+
 **Report Visual Core Contract**:
 The package-level validation contract that current-contract and ADR-0003
 checkers use to enforce one Cleanup Artifact Report section order and one
@@ -720,6 +726,9 @@ _Avoid_: full cleanup replacement claim
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
   secondary role detail, not as part of the primary **Semantic Cleanup
   Subphase** label.
+- A **Cleanup Artifact Report** should keep raw FPV scan captures in Raw FPV
+  Observations, not in the first-pass **Focused Robot View Timeline**, when the
+  dedicated raw FPV panel exists.
 - **Semantic Cleanup Vocabulary** should be imported by the shared loop,
   Cleanup Artifact Report, visual-core checks, and checkers instead of
   redefined per demo.
@@ -1203,3 +1212,8 @@ _Avoid_: full cleanup replacement claim
   non-colliding grasps, so the prior missing-cache blocker is cleared. The
   proof remains `blocked_capability` because CuRobo reaches pre-grasp execution
   with no planned trajectory.
+- Phase 124 adds Focused Report Timeline behavior. ADR-0003 raw FPV scan
+  captures remain in `run_result.json`, Agent View, and Raw FPV Observations,
+  but the primary Robot View Timeline now focuses on before/after and semantic
+  cleanup action views so ADR-0003 artifacts keep the same first-pass visual
+  rhythm as `output/molmo-agent-bridge-visual-codex/report.html`.

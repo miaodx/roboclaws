@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 123 cache-ready proof rerun completed; next work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
+**Status:** Phase 124 focused report timeline completed; next manipulation work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -434,6 +434,11 @@ Phase 123 reruns the exact `observed_001` proof against that cache. The warmed
 run proves the task sampler now loads 9 `Bread_1` grasps and finds 2
 non-colliding grasps, clearing the cache blocker; the remaining blocker is
 CuRobo pre-grasp trajectory generation (`no planned trajectory`).
+Phase 124 focuses the cleanup report Robot View Timeline. ADR-0003 raw FPV
+scan captures remain available in Raw FPV Observations, but the first-pass
+Robot View Timeline no longer buries semantic cleanup subphases under
+`observe raw_fpv_*` cards, so visual reports keep the same rhythm as
+`output/molmo-agent-bridge-visual-codex/report.html`.
 
 ## Why This Exists
 

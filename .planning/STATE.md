@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 123 MolmoSpaces cache-ready proof rerun completed on 2026-05-10.
-last_updated: "2026-05-10T00:00:00+08:00"
+stopped_at: Phase 124 MolmoSpaces focused report timeline completed on 2026-05-10.
+last_updated: "2026-05-10T18:46:15+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 111
-  completed_phases: 111
-  total_plans: 119
-  completed_plans: 119
+  total_phases: 112
+  completed_phases: 112
+  total_plans: 120
+  completed_plans: 120
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 123 proved the `Bread_1` cache now loads; the next manipulation blocker is CuRobo pre-grasp trajectory generation.
+**Current focus:** Phase 124 closed the remaining cleanup report visual-timeline gap; the next manipulation blocker is still CuRobo pre-grasp trajectory generation after `Bread_1` cache loading.
 
 ## Current Position
 
-Phase: 123 (molmospaces-cache-ready-proof-rerun) - COMPLETE
-Plan: 1 of 1 complete - `123-01` reruns the exact proof against the valid cache and records the next planner blocker.
+Phase: 124 (molmospaces-focused-report-timeline) - COMPLETE
+Plan: 1 of 1 complete - `124-01` keeps the cleanup report Robot View Timeline focused on semantic cleanup subphases while preserving raw FPV evidence.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -366,7 +366,11 @@ the droid `Bread_1` loader cache, and revalidated cache availability as ready.
 Phase 123 reruns the exact cache-ready `observed_001` proof. The warmed run
 loads 9 cached `Bread_1` grasps, finds 2 non-colliding grasps, matches the exact
 cleanup binding, and blocks later at CuRobo pre-grasp trajectory generation.
-Last activity: 2026-05-10 - Completed Phase 123 cache-ready proof rerun.
+Phase 124 focuses the cleanup report Robot View Timeline. ADR-0003 raw FPV
+scan captures stay in `run_result.json`, Agent View, and Raw FPV Observations,
+but the visual-core timeline now emphasizes before/after plus semantic cleanup
+actions so ADR-0003 reports match the current-contract visual rhythm.
+Last activity: 2026-05-10 - Completed Phase 124 focused report timeline.
 
 Progress: [##########] 100%
 Next blocker: diagnose CuRobo pre-grasp trajectory generation for the loaded
@@ -378,7 +382,7 @@ active blockers.
 
 **Velocity:**
 
-- Total plans completed: 123 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 123)
+- Total plans completed: 124 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 124)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -1041,14 +1045,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 123 MolmoSpaces cache-ready proof rerun completed.
+Last session: 2026-05-10T18:46:15+08:00
+Stopped at: Phase 124 MolmoSpaces focused report timeline completed.
 The next manipulation implementation should diagnose CuRobo pre-grasp trajectory
 generation for the now-loaded `Bread_1` grasp set.
 Latest phase artifacts are
-`docs/adr/0114-record-cache-ready-proof-rerun.md`,
-`docs/plans/molmospaces-cache-ready-proof-rerun.md`, and
-`.planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cache-ready-proof-rerun-PLAN.md`.
+`docs/adr/0115-focus-cleanup-report-robot-timeline-on-subphases.md`,
+`docs/plans/molmospaces-focused-report-timeline.md`, and
+`.planning/phases/124-molmospaces-focused-report-timeline/124-01-focused-report-timeline-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1082,7 +1086,10 @@ Latest cache-ready exact proof artifact:
 `output/debug-phase123-cache-ready-proof001-warmed-rerun/run_result.json`.
 Latest cache-ready exact proof report:
 `output/debug-phase123-cache-ready-proof001-warmed-rerun/report.html`.
-Resume file: .planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cache-ready-proof-rerun-PLAN.md
+Latest focused cleanup report examples:
+`output/molmo-agent-bridge-visual-codex/report.html` and
+`output/molmo-realworld-report-underlay-visual/report.html`.
+Resume file: .planning/phases/124-molmospaces-focused-report-timeline/124-01-focused-report-timeline-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1090,6 +1097,6 @@ Resume file: .planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cac
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 123 MolmoSpaces cache-ready proof rerun is
+**Active Phase:** None. Phase 124 MolmoSpaces focused report timeline is
 complete; next manipulation work should diagnose CuRobo pre-grasp trajectory
 generation after valid `Bread_1` grasp loading.

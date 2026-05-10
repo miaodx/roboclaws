@@ -118,7 +118,7 @@ def _cleanup_report_sections(
             _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
             _object_moves_section(moves),
             _semantic_steps_table(run_result.get("semantic_substeps") or []),
-            _robot_timeline(robot_view_steps),
+            _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
             _score_section(score),
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
@@ -4066,6 +4066,30 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
         "The map and verification panels are report artifacts from public MuJoCo state, "
         "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
     )
+
+
+def _visual_core_robot_view_steps(
+    run_result: dict[str, Any],
+    steps: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not _has_raw_fpv_observations(run_result):
+        return steps
+    return [step for step in steps if not _is_raw_fpv_observation_step(step)]
+
+
+def _has_raw_fpv_observations(run_result: dict[str, Any]) -> bool:
+    observations = run_result.get("raw_fpv_observations") or (
+        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+    )
+    return bool(observations)
+
+
+def _is_raw_fpv_observation_step(step: dict[str, Any]) -> bool:
+    if step.get("semantic_phase"):
+        return False
+    action = str(step.get("action") or "")
+    label = str(step.get("label") or "")
+    return action.startswith("observe raw_fpv_") or "_raw_fpv_" in f"_{label}"
 
 
 def _semantic_phase_summary(semantic_phase: Any) -> str:

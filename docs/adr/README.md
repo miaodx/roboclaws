@@ -119,6 +119,11 @@ one decision per file, sequential numbering, explicit status.
 | [0108](0108-setup-grasp-generation-prerequisites-before-cache-generation.md) | Setup Grasp Generation Prerequisites Before Cache Generation | Accepted |
 | [0109](0109-report-grasp-cache-generation-and-install-blockers.md) | Report Grasp Cache Generation And Install Blockers | Accepted |
 | [0110](0110-preserve-grasp-filter-intermediates-and-variant-diagnostics.md) | Preserve Grasp Filter Intermediates And Variant Diagnostics | Accepted |
+| [0111](0111-regenerate-scenario-less-cleanup-artifacts.md) | Regenerate Scenario-Less Cleanup Artifacts | Accepted |
+| [0112](0112-record-grasp-initial-contact-diagnostics.md) | Record Grasp Initial Contact Diagnostics | Accepted |
+| [0113](0113-generate-grasp-cache-with-validated-pose-policy.md) | Generate Grasp Cache With Validated Pose Policy | Accepted |
+| [0114](0114-record-cache-ready-proof-rerun.md) | Record Cache-Ready Proof Rerun | Accepted |
+| [0115](0115-focus-cleanup-report-robot-timeline-on-subphases.md) | Focus Cleanup Report Robot Timeline On Subphases | Accepted |
 
 ## Adding a new ADR
 

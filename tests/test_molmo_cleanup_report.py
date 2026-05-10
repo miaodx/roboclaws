@@ -333,6 +333,123 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "support estimates" in html
 
 
+def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    robot_dir = tmp_path / "robot_views"
+    robot_dir.mkdir()
+    for name in ("raw.fpv.png", "nav.fpv.png", "after.fpv.png"):
+        (robot_dir / name).write_bytes(b"placeholder")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "semantic_substeps": [
+            {
+                "object_id": "observed_001",
+                "source_receptacle_id": "counter_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {"phase": "navigate_to_object"},
+                    {"phase": "pick"},
+                    {"phase": "navigate_to_receptacle"},
+                    {"phase": "place", "location_id": "sink_01"},
+                ],
+            }
+        ],
+        "agent_view": {
+            "perception_mode": "raw_fpv_only",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "raw_fpv_only",
+                    "structured_detections_available": False,
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "perception_mode": "raw_fpv_only",
+                "structured_detections_available": False,
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "before",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+            {
+                "label": "0001_raw_fpv_001",
+                "action": "observe raw_fpv_001",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/raw.fpv.png"},
+                "focus": {},
+            },
+            {
+                "action": "navigate_to_object observed_001",
+                "semantic_phase": "navigate_to_object",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+            {
+                "action": "after",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/after.fpv.png"},
+                "focus": {},
+            },
+        ],
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    timeline_html = html[html.index("<h2>Robot View Timeline</h2>") : html.index("<h2>Score</h2>")]
+    raw_fpv_html = html[html.index("<h2>Raw FPV Observations</h2>") :]
+    assert "navigate_to_object observed_001" in timeline_html
+    assert "Subphase: <strong>nav</strong>" in timeline_html
+    assert "observe raw_fpv_001" not in timeline_html
+    assert "robot_views/raw.fpv.png" not in timeline_html
+    assert "raw_fpv_001" in raw_fpv_html
+    assert "robot_views/raw.fpv.png" in raw_fpv_html
+
+
 def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     score = score_cleanup(scenario.object_locations(), scenario.private_manifest)

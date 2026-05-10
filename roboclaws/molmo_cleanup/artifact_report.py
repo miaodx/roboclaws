@@ -57,6 +57,11 @@ def rerender_cleanup_report_from_run_result(run_result_path: Path) -> Path:
     )
 
 
+def rerender_cleanup_reports_from_run_results(run_result_paths: list[Path]) -> list[Path]:
+    """Regenerate multiple cleanup reports through the same run-result adapter."""
+    return [rerender_cleanup_report_from_run_result(path) for path in run_result_paths]
+
+
 def cleanup_scenario_shell_from_run_result(run_result: dict[str, Any]) -> CleanupScenario:
     """Build the minimal public scenario needed to re-render an existing report.
 
