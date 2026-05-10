@@ -258,6 +258,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
+    assert "diagnostic-view" not in html
+    assert "decision-card" not in html
 
 
 def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
@@ -1168,6 +1170,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Source Cleanup Artifact" in html
     assert "Proof Request Selection" in html
     assert "Grasp Feasibility Mitigation Decision" in html
+    assert "decision-card" in html
     assert "grasp_cache_mitigation" in html
     assert "mitigate_missing_grasp_cache_before_retry" in html
     assert "available_for_unproven_requests" in html
@@ -1944,3 +1947,4 @@ def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(
     assert "Planner Probe Views" in html
     assert "Post Placement Attempt 001 Head Camera" in html
     assert 'src="planner_views/post_placement_attempt_001_head_camera.png"' in html
+    assert "diagnostic-view" in html

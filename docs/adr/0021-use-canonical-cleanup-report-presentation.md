@@ -53,3 +53,8 @@ particular visual result.
   reused by semantic cards, robot timeline badges, and cleanup primitive gates.
 - Additional report-specific evidence remains conditional, but it hangs off the
   shared underlay rather than defining another implementation path.
+- Planner and proof-bundle diagnostic reports may opt into extra CSS for
+  diagnostic SVGs, blocker cards, and mitigation decisions. Cleanup Artifact
+  Reports keep the base visual underlay stable so regenerating a
+  current-contract or ADR-0003 cleanup artifact does not inherit planner-only
+  style drift.

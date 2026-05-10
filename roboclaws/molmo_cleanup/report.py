@@ -178,7 +178,7 @@ def render_planner_manipulation_report(
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
-    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
 
 
@@ -254,7 +254,7 @@ def render_planner_proof_bundle_runner_report(
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
-    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
 
 
@@ -3494,7 +3494,8 @@ def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return moves
 
 
-def _wrap_html(body: str) -> str:
+def _wrap_html(body: str, *, extra_css: str = "") -> str:
+    extra_css_block = f"{extra_css.rstrip()}\n" if extra_css else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -3598,97 +3599,7 @@ def _wrap_html(body: str) -> str:
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
-    .diagnostic-view {{
-      background: #ffffff;
-    }}
-    .diagnostic-visual {{
-      border-radius: 8px;
-      overflow: hidden;
-      background: #f8fafc;
-    }}
-    .diagnostic-visual svg {{
-      width: 100%;
-      height: auto;
-      display: block;
-    }}
-    .diagnostic-stats {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-    }}
-    .diagnostic-stat {{
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 8px;
-      background: #f8fafc;
-    }}
-    .diagnostic-stat small {{
-      display: block;
-      color: #64748b;
-      margin-bottom: 3px;
-    }}
-    .diagnostic-stat strong {{
-      color: #0f172a;
-    }}
-    .post-placement-rejection-views h3 {{
-      margin: 14px 0 8px;
-      font-size: 15px;
-    }}
-    .rejection-view .diagnostic-visual {{
-      background: #fff7ed;
-    }}
-    .grasp-blocker-matrix {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
-    }}
-    .grasp-blocker-card {{
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-      padding: 12px;
-      background: #fff7f7;
-    }}
-    .grasp-blocker-route {{
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 8px;
-    }}
-    .grasp-blocker-route strong {{
-      overflow-wrap: anywhere;
-    }}
-    .grasp-blocker-route span {{
-      color: #64748b;
-      font-size: 12px;
-    }}
-    .grasp-blocker-card p {{
-      margin: 8px 0 0;
-      color: #475569;
-    }}
-    .decision-cards {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin: 0 0 12px;
-    }}
-    .decision-card {{
-      border: 1px solid #bfdbfe;
-      border-radius: 8px;
-      padding: 12px;
-      background: #eff6ff;
-    }}
-    .decision-card h3 {{ margin: 0 0 6px; font-size: 14px; color: #1e3a8a; }}
-    .decision-card strong {{
-      display: block;
-      color: #0f172a;
-      overflow-wrap: anywhere;
-      margin-bottom: 8px;
-    }}
-    .decision-card p {{ margin: 0; color: #475569; }}
-    .raw-fpv-grid {{
+{extra_css_block}    .raw-fpv-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 12px;
@@ -3757,6 +3668,100 @@ def _wrap_html(body: str) -> str:
 </head>
 <body><main>{body}</main></body>
 </html>
+"""
+
+
+def _planner_report_css() -> str:
+    return """    .diagnostic-view {
+      background: #ffffff;
+    }
+    .diagnostic-visual {
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+    }
+    .diagnostic-visual svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .diagnostic-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .diagnostic-stat {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8fafc;
+    }
+    .diagnostic-stat small {
+      display: block;
+      color: #64748b;
+      margin-bottom: 3px;
+    }
+    .diagnostic-stat strong {
+      color: #0f172a;
+    }
+    .post-placement-rejection-views h3 {
+      margin: 14px 0 8px;
+      font-size: 15px;
+    }
+    .rejection-view .diagnostic-visual {
+      background: #fff7ed;
+    }
+    .grasp-blocker-matrix {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .grasp-blocker-card {
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff7f7;
+    }
+    .grasp-blocker-route {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .grasp-blocker-route strong {
+      overflow-wrap: anywhere;
+    }
+    .grasp-blocker-route span {
+      color: #64748b;
+      font-size: 12px;
+    }
+    .grasp-blocker-card p {
+      margin: 8px 0 0;
+      color: #475569;
+    }
+    .decision-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 0 0 12px;
+    }
+    .decision-card {
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      background: #eff6ff;
+    }
+    .decision-card h3 { margin: 0 0 6px; font-size: 14px; color: #1e3a8a; }
+    .decision-card strong {
+      display: block;
+      color: #0f172a;
+      overflow-wrap: anywhere;
+      margin-bottom: 8px;
+    }
+    .decision-card p { margin: 0; color: #475569; }
 """
 
 

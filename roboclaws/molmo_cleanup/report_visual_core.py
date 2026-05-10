@@ -8,6 +8,12 @@ VISUAL_CORE_PRIVATE_SECTION = "Private Evaluation"
 VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION = "Planner Proof Requests"
 CANONICAL_SEMANTIC_SUBPHASES = (("nav", "object"), ("pick", "object"), ("nav", "target"))
 CANONICAL_PLACE_SUBPHASES = (("place", "surface"), ("place", "inside"))
+PLANNER_DIAGNOSTIC_STYLE_MARKERS = (
+    "diagnostic-view",
+    "diagnostic-visual",
+    "grasp-blocker-card",
+    "decision-card",
+)
 
 
 def assert_cleanup_report_visual_core(
@@ -20,6 +26,9 @@ def assert_cleanup_report_visual_core(
     require_planner_proof_requests: bool = False,
 ) -> None:
     """Assert the shared Cleanup Artifact Report visual core contract."""
+    for marker in PLANNER_DIAGNOSTIC_STYLE_MARKERS:
+        assert marker not in report_text, (marker, report_text[:500])
+
     ordered = [
         VISUAL_CORE_BASE_SECTIONS[0],
         VISUAL_CORE_BASE_SECTIONS[1],

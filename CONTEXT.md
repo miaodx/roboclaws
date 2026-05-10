@@ -363,6 +363,12 @@ checkers use to enforce one Cleanup Artifact Report section order and one
 semantic subphase display vocabulary.
 _Avoid_: Per-checker report string smoke test
 
+**Report Style Scope**:
+The rule that planner/proof diagnostic report styles are opt-in extras, while
+Cleanup Artifact Reports keep the base visual underlay used by current-contract
+and ADR-0003 cleanup demos.
+_Avoid_: planner diagnostics changing cleanup report visuals
+
 **Semantic Cleanup Subphase**:
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow
@@ -650,6 +656,9 @@ _Avoid_: full cleanup replacement claim
 - A report may show **Private Evaluation** only after the run, separated from the **Agent View**.
 - A **Cleanup Artifact Report** should reuse the same report renderer across current-contract, ADR-0003, direct-agent, and OpenClaw dogfood runs.
 - A **Cleanup Artifact Report** should keep the **Report Visual Core** in a stable order even when new ADR-0003 evidence panels are added.
+- A **Cleanup Artifact Report** should keep **Report Style Scope** stable:
+  planner/proof diagnostics may add opt-in styles to their own reports, but
+  they must not change the cleanup report visual underlay.
 - A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
