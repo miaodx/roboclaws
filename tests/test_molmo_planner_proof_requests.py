@@ -388,6 +388,106 @@ def test_proof_request_selection_matches_prior_result_by_cleanup_pair() -> None:
     )
 
 
+def test_proof_request_selection_ignores_colliding_request_id_for_different_pair() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "fridge_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-planner-object-id": "apple_runtime_1_0_2",
+                    "--cleanup-planner-target-receptacle-id": "fridge_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "book_runtime_1_0_8",
+                    "planner_target_receptacle_id": "shelf_runtime_1_0_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert selection["selected_request_ids"] == ["proof_001"]
+    assert selection["excluded_requests"] == []
+    assert selection["target_feasibility_blocker_count"] == 0
+
+
+def test_proof_request_selection_matches_prior_result_by_planner_object_target() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_new",
+                "ready": True,
+                "object_id": "observed_009",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_009",
+                    "--cleanup-planner-object-id": "book_runtime_1_0_8",
+                    "--cleanup-planner-target-receptacle-id": "shelf_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "standalone_observed_001_to_shelf_01",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "cleanup_task_config": {
+                    "planner_object_id": "book_runtime_1_0_8",
+                    "planner_target_receptacle_id": "shelf_runtime_1_1_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["request_id"] == "proof_new"
+    assert excluded["prior_result_match_kind"] == "planner_object_target"
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert selection["selected_request_ids"] == []
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blockers"][0]["prior_result_match_kind"] == (
+        "planner_object_target"
+    )
+
+
 def test_proof_request_selection_generates_fallback_alias_requests(
     tmp_path: Path,
 ) -> None:

@@ -89,6 +89,12 @@ manifest's own `prior_proof_result_summary` together with its current
 generations.
 _Avoid_: single-hop prior memory, dropping nested blocker evidence
 
+**Planner-Object Proof Memory**:
+Proof-request selection memory keyed by internal planner object alias plus
+public target receptacle, used when public `observed_*` handles or request IDs
+change across broader cleanup artifacts.
+_Avoid_: global request ID memory, observed-handle-only proof memory
+
 **Selected Proof Candidate Execution**:
 Local-dev execution of the currently selected exact-scene proof request after
 prior infeasible requests are filtered.
@@ -607,6 +613,9 @@ _Avoid_: full cleanup replacement claim
 - **Nested Prior Proof Evidence Carry-Forward** should merge nested prior proof
   summaries before selection so a later proof-bundle manifest can stand alone
   as the next prior input.
+- **Planner-Object Proof Memory** should run after guarded request-ID and
+  cleanup-pair matching so broader cleanup artifacts can select new requests
+  without retrying known internal blocked object/target pairs.
 - **Selected Proof Candidate Execution** should be checker-gated with required
   proof outputs before treating a selected exact-scene request as feasible or
   as a durable blocker.
@@ -784,3 +793,7 @@ _Avoid_: full cleanup replacement claim
   proof-bundle manifest can now stand alone as prior input, preserving nested
   Phase81 evidence plus Phase87 proof results; the dry-run excluded both source
   requests, generated zero commands, and rendered both prior evidence rows.
+- Phase 89 added Planner-Object Proof Memory. A broader 10-object MolmoSpaces
+  cleanup artifact produced 10 ready proof requests and 176 robot-view images;
+  the proof-bundle dry-run selected 8 new candidates while excluding the two
+  known internal book/bowl blocked pairs by planner-object/public-target match.

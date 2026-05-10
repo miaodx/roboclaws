@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 88 nested prior proof evidence carry-forward completed; next work is generating or discovering a different grasp-feasible exact-scene proof request beyond the current source/fallback alias pool
+**Status:** Phase 89 planner-object proof selection memory completed; next work is executing the selected broader exact-scene proof candidates
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -239,6 +239,12 @@ manifest is reused as the next prior input. The Phase88 dry-run uses only the
 Phase87 manifest, preserves nested Phase81 evidence plus Phase87 proof results,
 excludes both source requests, generates zero commands, and renders both prior
 evidence rows in the same proof-bundle runner report.
+Phase 89 scopes proof-selection memory by internal planner object plus public
+target after guarded request-ID and cleanup-pair matching. A broader 10-object
+MolmoSpaces cleanup artifact produced 10 ready proof requests and 176
+robot-view images; the dry-run selected 8 new exact-scene candidates while
+excluding only the two known grasp-infeasible internal book/shelf and bowl/sink
+pairs.
 
 ## Why This Exists
 
@@ -1097,8 +1103,11 @@ completed:
   gsd-plan-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
   gsd-execute-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
   gsd-verify-work 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-plan-phase 89-molmospaces-planner-object-proof-selection-memory
+  gsd-execute-phase 89-molmospaces-planner-object-proof-selection-memory
+  gsd-verify-work 89-molmospaces-planner-object-proof-selection-memory
 
 next pipeline candidates:
-  generate or discover a different grasp-feasible exact-scene proof request
-  beyond the current source/fallback alias pool
+  execute the 8 selected broader exact-scene proof candidates and classify
+  strict planner-backed proof / cleanup binding outcomes
 ```

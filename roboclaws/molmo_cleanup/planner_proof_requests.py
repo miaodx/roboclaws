@@ -281,6 +281,7 @@ def proof_request_selection_from_summary(
     prior_summary = prior_proof_result_summary or {}
     prior_results = _prior_results_by_request_id(prior_summary)
     prior_results_by_cleanup_pair = _prior_results_by_cleanup_pair(prior_summary)
+    prior_results_by_planner_object_target = _prior_results_by_planner_object_target(prior_summary)
     discovered_aliases_by_request = _discovered_runtime_aliases_by_source_request(
         ready_requests,
         prior_summary,
@@ -301,6 +302,7 @@ def proof_request_selection_from_summary(
             request,
             prior_results_by_request_id=prior_results,
             prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
+            prior_results_by_planner_object_target=prior_results_by_planner_object_target,
         )
         if (
             exclude_task_feasibility_blocked
@@ -446,18 +448,44 @@ def _prior_results_by_cleanup_pair(
     return results
 
 
+def _prior_results_by_planner_object_target(
+    summary: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    results: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in summary.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        pair = _planner_object_target_pair_from_result(item)
+        if not all(pair):
+            continue
+        existing = results.get(pair)
+        if existing is None or _prior_selection_result_rank(item) >= _prior_selection_result_rank(
+            existing
+        ):
+            results[pair] = dict(item)
+    return results
+
+
 def _prior_result_for_request(
     request: dict[str, Any],
     *,
     prior_results_by_request_id: dict[str, dict[str, Any]],
     prior_results_by_cleanup_pair: dict[tuple[str, str], dict[str, Any]],
+    prior_results_by_planner_object_target: dict[tuple[str, str], dict[str, Any]],
 ) -> tuple[dict[str, Any], str]:
     request_id = str(request.get("request_id") or "")
-    if request_id in prior_results_by_request_id:
-        return prior_results_by_request_id[request_id], "request_id"
+    prior_by_request_id = prior_results_by_request_id.get(request_id)
+    if prior_by_request_id and _request_id_prior_result_matches_request(
+        request,
+        prior_by_request_id,
+    ):
+        return prior_by_request_id, "request_id"
     pair = _cleanup_pair_from_request(request)
     if pair in prior_results_by_cleanup_pair:
         return prior_results_by_cleanup_pair[pair], "object_target"
+    planner_pair = _planner_object_target_pair_from_request(request)
+    if planner_pair in prior_results_by_planner_object_target:
+        return prior_results_by_planner_object_target[planner_pair], "planner_object_target"
     return {}, ""
 
 
@@ -473,6 +501,45 @@ def _cleanup_pair_from_result(result: dict[str, Any]) -> tuple[str, str]:
         str(result.get("object_id") or ""),
         str(result.get("target_receptacle_id") or ""),
     )
+
+
+def _planner_object_target_pair_from_request(request: dict[str, Any]) -> tuple[str, str]:
+    args = request.get("planner_probe_args") or {}
+    planner_object_id = _planner_arg(args, "--cleanup-planner-object-id")
+    planner_target_id = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
+    return (
+        planner_object_id,
+        str(request.get("target_receptacle_id") or planner_target_id),
+    )
+
+
+def _planner_object_target_pair_from_result(result: dict[str, Any]) -> tuple[str, str]:
+    config = _proof_cleanup_task_config(result)
+    planner_object_id = str(config.get("planner_object_id") or "")
+    planner_target_id = str(config.get("planner_target_receptacle_id") or "")
+    return (
+        planner_object_id,
+        str(
+            result.get("target_receptacle_id")
+            or config.get("target_receptacle_id")
+            or planner_target_id
+        ),
+    )
+
+
+def _request_id_prior_result_matches_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    request_cleanup_pair = _cleanup_pair_from_request(request)
+    prior_cleanup_pair = _cleanup_pair_from_result(prior_result)
+    if all(request_cleanup_pair) and all(prior_cleanup_pair):
+        return request_cleanup_pair == prior_cleanup_pair
+    request_planner_pair = _planner_object_target_pair_from_request(request)
+    prior_planner_pair = _planner_object_target_pair_from_result(prior_result)
+    if all(request_planner_pair) and all(prior_planner_pair):
+        return request_planner_pair == prior_planner_pair
+    return True
 
 
 def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:

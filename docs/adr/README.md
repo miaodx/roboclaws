@@ -88,6 +88,7 @@ one decision per file, sequential numbering, explicit status.
 | [0077](0077-render-prior-proof-evidence-in-runner-reports.md) | Render Prior Proof Evidence in Runner Reports | Accepted |
 | [0078](0078-record-selected-proof-candidate-execution.md) | Record Selected Proof Candidate Execution | Accepted |
 | [0079](0079-carry-forward-nested-prior-proof-evidence.md) | Carry Forward Nested Prior Proof Evidence | Accepted |
+| [0080](0080-scope-proof-selection-memory-by-planner-object.md) | Scope Proof Selection Memory by Planner Object | Accepted |
 
 ## Adding a new ADR
 
