@@ -403,6 +403,30 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "task_feasibility_blocker_summary": (
                     "17 grasp failures; 15 candidate-removal calls"
                 ),
+                "grasp_feasibility_signature": {
+                    "schema": "planner_grasp_feasibility_signature_v1",
+                    "kind": "grasp_feasibility",
+                    "subkind": "grasp_cache_missing",
+                    "pattern_key": "prior-grasp-cache-missing",
+                    "summary": (
+                        "17 grasp failures; 15 candidate-removal calls; "
+                        "17 grasp-load failures; missing grasp cache: PriorBread_1"
+                    ),
+                    "grasp_failure_count": 17,
+                    "candidate_removal_count": 15,
+                    "grasp_load_attempt_count": 17,
+                    "grasp_load_failure_count": 17,
+                    "grasp_collision_check_count": 0,
+                    "zero_noncolliding_grasp_check_count": 0,
+                    "grasp_load_exception_asset_uids": ["PriorBread_1"],
+                    "grasp_load_exception_types": ["ValueError"],
+                    "robot_placement_attempt_count": 17,
+                    "robot_placement_failure_count": 0,
+                    "place_robot_near_call_count": 17,
+                    "object_name_count": 1,
+                    "object_names": ["prior/pickup"],
+                    "image_artifact_count": 1,
+                },
                 "views": [
                     {
                         "label": "final",
@@ -422,6 +446,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert 'src="prior-proof/final.png"' in report
     assert f'src="{tmp_path}/prior-proof/final.png"' not in report
+    assert "PriorBread_1" in report
     checker._assert_runner_result(manifest, tmp_path)
 
 

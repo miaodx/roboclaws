@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 109 grasp collision diagnostics completed; next work is targeting missing cached grasps for the exact bread asset before another cleanup rerun
+**Status:** Phase 110 missing grasp cache signatures completed; next work is deciding source rotation versus grasp-cache mitigation for the exact bread asset
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -369,6 +369,10 @@ collision-free-grasp problems before any mitigation is chosen. The valid-scene
 rerun classified the blocker as missing cached grasps for asset UID `Bread_1`:
 3 grasp-load attempts, 3 `ValueError` load failures, and 0 collision-mask
 checks.
+Phase 110 turns that blocker into a distinct proof-result signature subkind.
+Reports still classify the task blocker as `grasp_feasibility`, but the grouped
+signature matrix now shows `grasp_cache_missing`, grasp-load failure counts,
+collision-check counts, and missing asset IDs such as `Bread_1`.
 
 ## Why This Exists
 

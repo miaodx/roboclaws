@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
     display_semantic_subphase,
     display_semantic_subphases,
@@ -1291,7 +1292,7 @@ def _proof_bundle_results_section(
         else ""
     )
     grasp_signature_html = _proof_bundle_grasp_signature_section(
-        summary.get("grasp_feasibility_signature_counts") or []
+        _summary_grasp_signature_counts(summary, results)
     )
     body = (
         "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
@@ -1374,22 +1375,40 @@ def _summary_view_artifact_count(summary: dict[str, Any], results: list[dict[str
     return sum(len(item.get("views") or []) for item in results)
 
 
+def _summary_grasp_signature_counts(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    signatures = summary.get("grasp_feasibility_signature_counts") or []
+    if signatures:
+        return [item for item in signatures if isinstance(item, dict)]
+    return grasp_feasibility_signature_counts(results)
+
+
 def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> str:
     rows = []
     for item in signatures:
         if not isinstance(item, dict):
             continue
+        missing_grasp_assets = ", ".join(
+            str(v) for v in item.get("grasp_load_exception_asset_uids") or []
+        )
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('subkind', '')))}</td>"
             f"<td>{html.escape(str(item.get('summary', '')))}</td>"
             f"<td>{html.escape(str(item.get('candidate_effective_removal_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('candidate_name_miss_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('grasp_load_failure_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('grasp_collision_check_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('zero_noncolliding_grasp_check_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('robot_placement_failure_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('place_robot_near_call_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('image_artifact_count', '')))}</td>"
             f"<td>{html.escape(', '.join(str(v) for v in item.get('request_ids') or []))}</td>"
             f"<td>{html.escape(', '.join(str(v) for v in item.get('object_names') or []))}</td>"
+            f"<td>{html.escape(missing_grasp_assets)}</td>"
             "</tr>"
         )
     if not rows:
@@ -1397,10 +1416,12 @@ def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> s
     return (
         "<h3>Grasp Feasibility Signature Matrix</h3>"
         '<div class="table-wrap"><table><thead><tr>'
-        "<th>Proofs</th><th>Pattern</th><th>Effective removals</th>"
-        "<th>Candidate name misses</th><th>Robot placement failures</th>"
+        "<th>Proofs</th><th>Subkind</th><th>Pattern</th><th>Effective removals</th>"
+        "<th>Candidate name misses</th><th>Grasp-load failures</th>"
+        "<th>Collision checks</th><th>Zero non-colliding checks</th>"
+        "<th>Robot placement failures</th>"
         "<th>place_robot_near calls</th><th>Diagnostic views</th>"
-        "<th>Requests</th><th>Planner objects</th>"
+        "<th>Requests</th><th>Planner objects</th><th>Missing grasp assets</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -1433,12 +1454,19 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
     last_grasp_load = task_sampler_failure.get("last_grasp_load_attempt") or {}
     last_grasp_collision = task_sampler_failure.get("last_grasp_collision_check") or {}
+    grasp_signature = item.get("grasp_feasibility_signature") or {}
     grasp_failures = task_sampler_failure.get("grasp_failures") or []
     candidate_effective_removals = task_sampler_failure.get(
         "candidate_effective_removal_count",
         "",
     )
     candidate_name_misses = task_sampler_failure.get("candidate_name_miss_count", "")
+    missing_grasp_assets = ", ".join(
+        str(value) for value in grasp_signature.get("grasp_load_exception_asset_uids") or []
+    )
+    grasp_load_exception_types = ", ".join(
+        str(value) for value in grasp_signature.get("grasp_load_exception_types") or []
+    )
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1492,9 +1520,22 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
             last_scene_diagnostic.get("nearest_free_point_distance_m", ""),
         ),
         ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
+        ("Grasp feasibility subkind", grasp_signature.get("subkind", "")),
         ("Grasp load attempts", task_sampler_failure.get("grasp_load_attempt_count", "")),
+        (
+            "Grasp load failures",
+            grasp_signature.get("grasp_load_failure_count")
+            or task_sampler_failure.get("grasp_load_failure_count", ""),
+        ),
+        ("Missing grasp assets", missing_grasp_assets),
+        ("Grasp load exception types", grasp_load_exception_types),
         ("Grasp load cached grasps", last_grasp_load.get("cached_grasp_count", "")),
         ("Grasp collision checks", task_sampler_failure.get("grasp_collision_check_count", "")),
+        (
+            "Zero non-colliding grasp checks",
+            grasp_signature.get("zero_noncolliding_grasp_check_count")
+            or task_sampler_failure.get("zero_noncolliding_grasp_check_count", ""),
+        ),
         ("Grasp collision asset", last_grasp_collision.get("asset_uid", "")),
         (
             "Grasp collision non-colliding",

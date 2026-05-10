@@ -52,8 +52,10 @@ def test_task_feasibility_signature_groups_repeated_grasp_blockers() -> None:
     )
     assert signature["pattern_key"] == (
         '{"candidate_removal_count":15,"grasp_failure_count":17,'
-        '"place_robot_near_call_count":17,"robot_placement_failure_count":0}'
+        '"place_robot_near_call_count":17,"robot_placement_failure_count":0,'
+        '"subkind":"grasp_rejection"}'
     )
+    assert signature["subkind"] == "grasp_rejection"
     assert signature["object_names"] == ["bread_1"]
     assert groups[0]["count"] == 2
     assert groups[0]["request_ids"] == ["proof_001", "proof_002"]
@@ -81,3 +83,43 @@ def test_grasp_summary_includes_candidate_removal_effectiveness_when_present() -
     assert signature["candidate_name_miss_count"] == 15
     assert signature["grasp_threshold_exceeded_count"] == 15
     assert '"candidate_effective_removal_count":0' in signature["pattern_key"]
+
+
+def test_grasp_summary_classifies_missing_grasp_cache() -> None:
+    diagnostics = {
+        "grasp_failure_count": 3,
+        "candidate_removal_count": 1,
+        "candidate_effective_removal_count": 1,
+        "candidate_name_miss_count": 0,
+        "grasp_load_attempt_count": 3,
+        "grasp_load_failure_count": 3,
+        "grasp_collision_check_count": 0,
+        "grasp_load_attempts": [
+            {
+                "asset_uid": "Bread_1",
+                "exception_type": "ValueError",
+                "result": "exception",
+            },
+            {
+                "asset_uid": "Bread_1",
+                "exception_type": "ValueError",
+                "result": "exception",
+            },
+        ],
+        "grasp_failures": [{"object_name": "bread/body"}],
+    }
+
+    kind = task_feasibility_blocker_kind([], diagnostics)
+    signature = grasp_feasibility_signature(diagnostics)
+
+    assert task_feasibility_blocker_summary(kind, diagnostics) == (
+        "3 grasp failures; 1 candidate-removal calls; 1 effective removals; "
+        "0 candidate-name misses; 3 grasp-load failures; missing grasp cache: Bread_1"
+    )
+    assert signature["subkind"] == "grasp_cache_missing"
+    assert signature["grasp_load_failure_count"] == 3
+    assert signature["grasp_collision_check_count"] == 0
+    assert signature["grasp_load_exception_asset_uids"] == ["Bread_1"]
+    assert signature["grasp_load_exception_types"] == ["ValueError"]
+    assert '"subkind":"grasp_cache_missing"' in signature["pattern_key"]
+    assert '"grasp_load_exception_asset_uids":["Bread_1"]' in signature["pattern_key"]

@@ -174,6 +174,12 @@ grasp count, collision-checked pose count, non-colliding count, and hook
 exceptions for the exact requested object.
 _Avoid_: opaque grasp-failure counts with no loader/collision-mask detail
 
+**Missing Grasp Cache Signature**:
+Proof-result summary evidence that keeps `grasp_feasibility` as the top-level
+blocker while classifying missing cached grasp files as a distinct subkind with
+failed asset UIDs.
+_Avoid_: grouping missing cache with zero non-colliding grasp checks
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -677,6 +683,8 @@ _Avoid_: full cleanup replacement claim
   semantics while keeping the candidate pool exact.
 - **Grasp Collision Diagnostics** should explain exact-object post-placement
   failures before any grasp-feasibility mitigation is chosen.
+- **Missing Grasp Cache Signature** should keep missing asset data visible in
+  proof-result summaries before source rotation or cache mitigation.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1040,3 +1048,7 @@ _Avoid_: full cleanup replacement claim
   rerun classified the exact bread blocker as missing cached grasps for
   `Bread_1`: 3 grasp-load attempts, 3 `ValueError` load failures, and 0
   collision-mask checks.
+- Phase 110 adds Missing Grasp Cache Signature. Proof-result summaries now keep
+  `task_feasibility_blocker_kind=grasp_feasibility` but add
+  `subkind=grasp_cache_missing`, failed grasp-load counts, and missing asset
+  IDs such as `Bread_1` to the grouped signature matrix.

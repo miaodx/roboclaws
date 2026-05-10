@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
     PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
+from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 
 
 def parse_args() -> argparse.Namespace:
@@ -461,23 +462,7 @@ def _assert_proof_result_summary(
         int(summary.get("rby1m_config_import_timeout_count") or 0)
         == rby1m_config_import_timeout_count
     ), summary
-    grasp_signature_counts = summary.get("grasp_feasibility_signature_counts") or []
-    if grasp_signature_counts:
-        assert int(summary.get("grasp_feasibility_signature_count") or 0) == len(
-            grasp_signature_counts
-        ), summary
-        assert "Grasp Feasibility Signature Matrix" in report_text, report_text[:500]
-        assert "Effective removals" in report_text, report_text[:500]
-        for signature in grasp_signature_counts:
-            assert signature.get("pattern_key"), signature
-            assert int(signature.get("count") or 0) > 0, signature
-            for value in [
-                signature.get("summary"),
-                *(signature.get("request_ids") or []),
-                *(signature.get("object_names") or []),
-            ]:
-                if value:
-                    assert str(value) in report_text, (signature, report_text[:500])
+    _assert_grasp_signature_counts(summary, results, report_text)
     for item in results:
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
             assert item.get(key), item
@@ -615,6 +600,7 @@ def _assert_prior_proof_result_summary(
     results = summary.get("results") or []
     assert isinstance(results, list), summary
     assert "Prior Proof Evidence" in report_text, report_text[:500]
+    _assert_grasp_signature_counts(summary, results, report_text)
     for item in results:
         assert isinstance(item, dict), summary
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
@@ -635,6 +621,37 @@ def _assert_prior_proof_result_summary(
                 "task_feasibility_blocker_kind",
                 report_text[:500],
             )
+
+
+def _assert_grasp_signature_counts(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    report_text: str,
+) -> None:
+    grasp_signature_counts = summary.get("grasp_feasibility_signature_counts") or []
+    if grasp_signature_counts:
+        assert int(summary.get("grasp_feasibility_signature_count") or 0) == len(
+            grasp_signature_counts
+        ), summary
+    else:
+        grasp_signature_counts = grasp_feasibility_signature_counts(results)
+    if not grasp_signature_counts:
+        return
+    assert "Grasp Feasibility Signature Matrix" in report_text, report_text[:500]
+    assert "Effective removals" in report_text, report_text[:500]
+    for signature in grasp_signature_counts:
+        assert signature.get("pattern_key"), signature
+        assert int(signature.get("count") or 0) > 0, signature
+        for value in [
+            signature.get("summary"),
+            signature.get("subkind"),
+            *(signature.get("request_ids") or []),
+            *(signature.get("object_names") or []),
+            *(signature.get("grasp_load_exception_asset_uids") or []),
+            *(signature.get("grasp_load_exception_types") or []),
+        ]:
+            if value:
+                assert str(value) in report_text, (signature, report_text[:500])
 
 
 def _assert_cleanup_rerun(

@@ -109,6 +109,7 @@ one decision per file, sequential numbering, explicit status.
 | [0098](0098-require-valid-cleanup-scene-binding.md) | Require Valid Cleanup Scene Binding | Accepted |
 | [0099](0099-preserve-exact-pickup-retry-budget.md) | Preserve Exact Pickup Retry Budget | Accepted |
 | [0100](0100-record-grasp-collision-diagnostics.md) | Record Grasp Collision Diagnostics | Accepted |
+| [0101](0101-classify-missing-grasp-cache-signatures.md) | Classify Missing Grasp Cache Signatures | Accepted |
 
 ## Adding a new ADR
 

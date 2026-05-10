@@ -795,6 +795,8 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
     prior_summary = manifest["prior_proof_result_summary"]
     assert prior_summary["result_count"] == 1
     assert prior_summary["view_artifact_count"] == 2
+    assert prior_summary["grasp_feasibility_signature_count"] == 1
+    assert prior_summary["grasp_feasibility_signature_counts"][0]["subkind"] == "grasp_rejection"
     summary = manifest["proof_result_summary"]
     assert summary["expected_count"] == 0
     report = Path(result["report_path"]).read_text(encoding="utf-8")

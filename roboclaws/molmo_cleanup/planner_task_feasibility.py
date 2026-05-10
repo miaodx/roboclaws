@@ -34,6 +34,15 @@ def task_feasibility_blocker_summary(
             "robot-placement failures"
         )
     if blocker_kind == "grasp_feasibility":
+        grasp_load_failures = int(
+            task_sampler_failure_diagnostics.get("grasp_load_failure_count") or 0
+        )
+        grasp_collision_checks = int(
+            task_sampler_failure_diagnostics.get("grasp_collision_check_count") or 0
+        )
+        zero_noncolliding_checks = int(
+            task_sampler_failure_diagnostics.get("zero_noncolliding_grasp_check_count") or 0
+        )
         summary = (
             f"{int(task_sampler_failure_diagnostics.get('grasp_failure_count') or 0)} "
             "grasp failures; "
@@ -50,6 +59,15 @@ def task_feasibility_blocker_summary(
                 task_sampler_failure_diagnostics.get("candidate_name_miss_count") or 0
             )
             summary += f"; {name_misses} candidate-name misses"
+        if grasp_load_failures:
+            summary += f"; {grasp_load_failures} grasp-load failures"
+            missing_assets = _grasp_load_exception_asset_uids(task_sampler_failure_diagnostics)
+            if missing_assets:
+                summary += f"; missing grasp cache: {', '.join(missing_assets)}"
+        if grasp_collision_checks:
+            summary += f"; {grasp_collision_checks} grasp collision checks"
+        if zero_noncolliding_checks:
+            summary += f"; {zero_noncolliding_checks} zero non-colliding checks"
         return summary
     return ""
 
@@ -68,6 +86,7 @@ def grasp_feasibility_signature(
     signature = {
         "schema": GRASP_FEASIBILITY_SIGNATURE_SCHEMA,
         "kind": "grasp_feasibility",
+        "subkind": _grasp_feasibility_subkind(task_sampler_failure_diagnostics),
         "pattern_key": _grasp_pattern_key(task_sampler_failure_diagnostics),
         "summary": task_feasibility_blocker_summary(
             "grasp_feasibility",
@@ -86,6 +105,22 @@ def grasp_feasibility_signature(
         "place_robot_near_call_count": int(
             task_sampler_failure_diagnostics.get("place_robot_near_call_count") or 0
         ),
+        "grasp_load_attempt_count": int(
+            task_sampler_failure_diagnostics.get("grasp_load_attempt_count") or 0
+        ),
+        "grasp_load_failure_count": int(
+            task_sampler_failure_diagnostics.get("grasp_load_failure_count") or 0
+        ),
+        "grasp_collision_check_count": int(
+            task_sampler_failure_diagnostics.get("grasp_collision_check_count") or 0
+        ),
+        "zero_noncolliding_grasp_check_count": int(
+            task_sampler_failure_diagnostics.get("zero_noncolliding_grasp_check_count") or 0
+        ),
+        "grasp_load_exception_asset_uids": _grasp_load_exception_asset_uids(
+            task_sampler_failure_diagnostics
+        ),
+        "grasp_load_exception_types": _grasp_load_exception_types(task_sampler_failure_diagnostics),
         "object_name_count": len(object_names),
         "object_names": object_names,
         "image_artifact_count": len(task_sampler_failure_diagnostics.get("image_artifacts") or {}),
@@ -131,6 +166,15 @@ def grasp_feasibility_signature_counts(
                 "robot_placement_attempt_count": signature.get("robot_placement_attempt_count"),
                 "robot_placement_failure_count": signature.get("robot_placement_failure_count"),
                 "place_robot_near_call_count": signature.get("place_robot_near_call_count"),
+                "grasp_load_attempt_count": signature.get("grasp_load_attempt_count"),
+                "grasp_load_failure_count": signature.get("grasp_load_failure_count"),
+                "grasp_collision_check_count": signature.get("grasp_collision_check_count"),
+                "zero_noncolliding_grasp_check_count": signature.get(
+                    "zero_noncolliding_grasp_check_count"
+                ),
+                "subkind": signature.get("subkind"),
+                "grasp_load_exception_asset_uids": [],
+                "grasp_load_exception_types": [],
                 "image_artifact_count": 0,
             },
         )
@@ -144,6 +188,10 @@ def grasp_feasibility_signature_counts(
         )
         for object_name in signature.get("object_names") or []:
             _append_unique(group["object_names"], str(object_name or ""))
+        for asset_uid in signature.get("grasp_load_exception_asset_uids") or []:
+            _append_unique(group["grasp_load_exception_asset_uids"], str(asset_uid or ""))
+        for exception_type in signature.get("grasp_load_exception_types") or []:
+            _append_unique(group["grasp_load_exception_types"], str(exception_type or ""))
         _append_unique(group["proof_reports"], str(item.get("report") or ""))
     return sorted(
         groups.values(),
@@ -165,11 +213,56 @@ def _grasp_pattern_key(task_sampler_failure_diagnostics: dict[str, Any]) -> str:
         "robot_placement_failure_count": int(
             task_sampler_failure_diagnostics.get("robot_placement_failure_count") or 0
         ),
+        "subkind": _grasp_feasibility_subkind(task_sampler_failure_diagnostics),
     }
     for key in ("candidate_effective_removal_count", "candidate_name_miss_count"):
         if key in task_sampler_failure_diagnostics:
             fields[key] = int(task_sampler_failure_diagnostics.get(key) or 0)
+    for key in (
+        "grasp_load_attempt_count",
+        "grasp_load_failure_count",
+        "grasp_collision_check_count",
+        "zero_noncolliding_grasp_check_count",
+    ):
+        if key in task_sampler_failure_diagnostics:
+            fields[key] = int(task_sampler_failure_diagnostics.get(key) or 0)
+    missing_assets = _grasp_load_exception_asset_uids(task_sampler_failure_diagnostics)
+    if missing_assets:
+        fields["grasp_load_exception_asset_uids"] = missing_assets
+    exception_types = _grasp_load_exception_types(task_sampler_failure_diagnostics)
+    if exception_types:
+        fields["grasp_load_exception_types"] = exception_types
     return json.dumps(fields, sort_keys=True, separators=(",", ":"))
+
+
+def _grasp_feasibility_subkind(task_sampler_failure_diagnostics: dict[str, Any]) -> str:
+    if int(task_sampler_failure_diagnostics.get("grasp_load_failure_count") or 0) and not int(
+        task_sampler_failure_diagnostics.get("grasp_collision_check_count") or 0
+    ):
+        return "grasp_cache_missing"
+    if int(task_sampler_failure_diagnostics.get("zero_noncolliding_grasp_check_count") or 0):
+        return "zero_noncolliding_grasps"
+    return "grasp_rejection"
+
+
+def _grasp_load_exception_asset_uids(
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> list[str]:
+    return _unique_nonempty(
+        str(item.get("asset_uid") or "")
+        for item in task_sampler_failure_diagnostics.get("grasp_load_attempts") or []
+        if isinstance(item, dict) and str(item.get("result") or "") != "loaded"
+    )
+
+
+def _grasp_load_exception_types(
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> list[str]:
+    return _unique_nonempty(
+        str(item.get("exception_type") or "")
+        for item in task_sampler_failure_diagnostics.get("grasp_load_attempts") or []
+        if isinstance(item, dict) and str(item.get("result") or "") != "loaded"
+    )
 
 
 def _append_unique(values: list[str], value: str) -> None:

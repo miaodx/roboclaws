@@ -916,6 +916,30 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "grasp_feasibility_signature": {
+                        "schema": "planner_grasp_feasibility_signature_v1",
+                        "kind": "grasp_feasibility",
+                        "subkind": "grasp_cache_missing",
+                        "pattern_key": "prior-grasp-cache-missing",
+                        "summary": (
+                            "3 grasp failures; 1 candidate-removal calls; "
+                            "3 grasp-load failures; missing grasp cache: PriorBread_1"
+                        ),
+                        "grasp_failure_count": 3,
+                        "candidate_removal_count": 1,
+                        "grasp_load_attempt_count": 3,
+                        "grasp_load_failure_count": 3,
+                        "grasp_collision_check_count": 0,
+                        "zero_noncolliding_grasp_check_count": 0,
+                        "grasp_load_exception_asset_uids": ["PriorBread_1"],
+                        "grasp_load_exception_types": ["ValueError"],
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 0,
+                        "place_robot_near_call_count": 1,
+                        "object_name_count": 1,
+                        "object_names": ["prior/pickup"],
+                        "image_artifact_count": 2,
+                    },
                     "views": [
                         {
                             "label": "initial",
@@ -965,10 +989,19 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 {
                     "schema": "planner_grasp_feasibility_signature_group_v1",
                     "pattern_key": "grasp=3;removals=1",
-                    "summary": "3 grasp failures; 1 candidate-removal calls",
+                    "subkind": "grasp_cache_missing",
+                    "summary": (
+                        "3 grasp failures; 1 candidate-removal calls; "
+                        "3 grasp-load failures; missing grasp cache: Bread_1"
+                    ),
                     "count": 1,
                     "request_ids": ["proof_001"],
                     "object_names": ["pickup/body"],
+                    "grasp_load_failure_count": 3,
+                    "grasp_collision_check_count": 0,
+                    "zero_noncolliding_grasp_check_count": 0,
+                    "grasp_load_exception_asset_uids": ["Bread_1"],
+                    "grasp_load_exception_types": ["ValueError"],
                     "robot_placement_failure_count": 1,
                     "place_robot_near_call_count": 1,
                     "image_artifact_count": 2,
@@ -998,10 +1031,20 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "grasp_feasibility_signature": {
                         "schema": "planner_grasp_feasibility_signature_v1",
                         "kind": "grasp_feasibility",
+                        "subkind": "grasp_cache_missing",
                         "pattern_key": "grasp=3;removals=1",
-                        "summary": "3 grasp failures; 1 candidate-removal calls",
+                        "summary": (
+                            "3 grasp failures; 1 candidate-removal calls; "
+                            "3 grasp-load failures; missing grasp cache: Bread_1"
+                        ),
                         "grasp_failure_count": 3,
                         "candidate_removal_count": 1,
+                        "grasp_load_attempt_count": 3,
+                        "grasp_load_failure_count": 3,
+                        "grasp_collision_check_count": 0,
+                        "zero_noncolliding_grasp_check_count": 0,
+                        "grasp_load_exception_asset_uids": ["Bread_1"],
+                        "grasp_load_exception_types": ["ValueError"],
                         "robot_placement_attempt_count": 1,
                         "robot_placement_failure_count": 1,
                         "place_robot_near_call_count": 1,
@@ -1143,6 +1186,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "blocked" in html
     assert "Grasp-feasible blocked" in html
     assert "Grasp Feasibility Signature Matrix" in html
+    assert "Grasp-load failures" in html
+    assert "grasp_cache_missing" in html
+    assert "Bread_1" in html
+    assert "PriorBread_1" in html
+    assert "prior/pickup" in html
     assert "Diagnostic views" in html
     assert "Task feasibility blocker" in html
     assert "grasp_feasibility" in html
