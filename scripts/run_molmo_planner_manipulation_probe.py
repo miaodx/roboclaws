@@ -1614,6 +1614,8 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "place_robot_near_calls": [],
         "placement_scene_diagnostics": [],
         "asset_failures": [],
+        "grasp_load_attempts": [],
+        "grasp_collision_checks": [],
         "grasp_failures": [],
         "candidate_removals": [],
         "candidate_removal_effectiveness": [],
@@ -1687,6 +1689,8 @@ def _apply_task_sampler_failure_diagnostics_adapter(
             task_sampler,
         )
         diagnostics["hooks"].append("report_asset_failure")
+
+    _install_grasp_collision_diagnostics(task_sampler, diagnostics)
 
     report_grasp_failure = getattr(task_sampler, "report_grasp_failure", None)
     if callable(report_grasp_failure):
@@ -1781,6 +1785,197 @@ def _apply_task_sampler_failure_diagnostics_adapter(
     diagnostics["applied"] = bool(diagnostics["hooks"])
     _refresh_task_sampler_failure_diagnostics(diagnostics)
     return diagnostics
+
+
+def _install_grasp_collision_diagnostics(task_sampler: Any, diagnostics: dict[str, Any]) -> None:
+    installed_hooks = []
+    for module in _task_sampler_grasp_modules(task_sampler):
+        load_grasps_for_object = getattr(module, "load_grasps_for_object", None)
+        if callable(load_grasps_for_object):
+            original_load = getattr(
+                load_grasps_for_object,
+                "__roboclaws_original__",
+                load_grasps_for_object,
+            )
+
+            def recording_load_grasps_for_object(
+                object_name: Any,
+                num_grasps: int = 50,
+                *args: Any,
+                _original_load: Any = original_load,
+                _module_name: str = str(getattr(module, "__name__", "")),
+                **kwargs: Any,
+            ) -> Any:
+                record: dict[str, Any] = {
+                    "schema": "planner_probe_grasp_load_attempt_v1",
+                    "module": _module_name,
+                    "asset_uid": str(object_name or ""),
+                    "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
+                    "requested_grasp_count": _safe_count_value(num_grasps),
+                }
+                started_at = time.monotonic()
+                try:
+                    result = _original_load(object_name, num_grasps, *args, **kwargs)
+                except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+                    record.update(
+                        {
+                            "result": "exception",
+                            "exception_type": type(exc).__name__,
+                            "message": str(exc),
+                        }
+                    )
+                    raise
+                else:
+                    gripper, cached_grasps = result
+                    record.update(
+                        {
+                            "result": "loaded",
+                            "gripper": str(gripper or ""),
+                            "cached_grasp_count": _safe_len(cached_grasps),
+                        }
+                    )
+                    return result
+                finally:
+                    record["elapsed_s"] = round(time.monotonic() - started_at, 6)
+                    diagnostics["grasp_load_attempts"].append(record)
+                    _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+            recording_load_grasps_for_object.__roboclaws_original__ = original_load  # type: ignore[attr-defined]
+            setattr(module, "load_grasps_for_object", recording_load_grasps_for_object)
+            installed_hooks.append(f"{getattr(module, '__name__', '')}.load_grasps_for_object")
+
+        get_noncolliding_grasp_mask = getattr(module, "get_noncolliding_grasp_mask", None)
+        if callable(get_noncolliding_grasp_mask):
+            original_mask = getattr(
+                get_noncolliding_grasp_mask,
+                "__roboclaws_original__",
+                get_noncolliding_grasp_mask,
+            )
+
+            def recording_get_noncolliding_grasp_mask(
+                mj_model: Any,
+                mj_data: Any,
+                grasp_poses_world: Any,
+                batch_size: int,
+                *args: Any,
+                _original_mask: Any = original_mask,
+                _module_name: str = str(getattr(module, "__name__", "")),
+                **kwargs: Any,
+            ) -> Any:
+                record = {
+                    "schema": "planner_probe_grasp_collision_check_v1",
+                    "module": _module_name,
+                    "asset_uid": _latest_grasp_load_asset_uid(diagnostics),
+                    "pickup_obj_name": _task_sampler_config_pickup_obj_name(task_sampler),
+                    "grasp_pose_count": _safe_len(grasp_poses_world),
+                    "batch_size": _safe_count_value(batch_size),
+                }
+                started_at = time.monotonic()
+                try:
+                    result = _original_mask(
+                        mj_model,
+                        mj_data,
+                        grasp_poses_world,
+                        batch_size,
+                        *args,
+                        **kwargs,
+                    )
+                except BaseException as exc:  # noqa: BLE001 - diagnostic wrapper must re-raise.
+                    record.update(
+                        {
+                            "result": "exception",
+                            "exception_type": type(exc).__name__,
+                            "message": str(exc),
+                        }
+                    )
+                    raise
+                else:
+                    noncolliding_count = _truthy_count(result)
+                    grasp_pose_count = _safe_len(grasp_poses_world)
+                    record.update(
+                        {
+                            "result": "checked",
+                            "noncolliding_grasp_count": noncolliding_count,
+                            "colliding_grasp_count": (
+                                grasp_pose_count - noncolliding_count
+                                if grasp_pose_count is not None and noncolliding_count is not None
+                                else None
+                            ),
+                            "zero_noncolliding": noncolliding_count == 0,
+                        }
+                    )
+                    return result
+                finally:
+                    record["elapsed_s"] = round(time.monotonic() - started_at, 6)
+                    diagnostics["grasp_collision_checks"].append(record)
+                    _refresh_task_sampler_failure_diagnostics(diagnostics)
+
+            recording_get_noncolliding_grasp_mask.__roboclaws_original__ = original_mask  # type: ignore[attr-defined]
+            setattr(module, "get_noncolliding_grasp_mask", recording_get_noncolliding_grasp_mask)
+            installed_hooks.append(f"{getattr(module, '__name__', '')}.get_noncolliding_grasp_mask")
+
+    if installed_hooks:
+        diagnostics["hooks"].append("grasp_collision_diagnostics")
+        diagnostics["grasp_collision_hooks"] = installed_hooks
+
+
+def _task_sampler_grasp_modules(task_sampler: Any) -> list[Any]:
+    modules: list[Any] = []
+    module_names = {"molmo_spaces.tasks.pick_task_sampler"}
+    for method_name in ("_sample_task", "sample", "next_task"):
+        method = getattr(task_sampler, method_name, None)
+        module_name = getattr(method, "__module__", None)
+        if module_name:
+            module_names.add(str(module_name))
+    for module_name in sorted(module_names):
+        module = sys.modules.get(module_name)
+        if module is None:
+            continue
+        if module not in modules and (
+            hasattr(module, "load_grasps_for_object")
+            or hasattr(module, "get_noncolliding_grasp_mask")
+        ):
+            modules.append(module)
+    return modules
+
+
+def _task_sampler_config_pickup_obj_name(task_sampler: Any) -> str:
+    task_config = getattr(getattr(task_sampler, "config", None), "task_config", None)
+    return str(getattr(task_config, "pickup_obj_name", "") or "")
+
+
+def _latest_grasp_load_asset_uid(diagnostics: dict[str, Any]) -> str:
+    for item in reversed(diagnostics.get("grasp_load_attempts") or []):
+        if isinstance(item, dict) and item.get("asset_uid"):
+            return str(item.get("asset_uid") or "")
+    return ""
+
+
+def _safe_len(value: Any) -> int | None:
+    try:
+        return len(value)
+    except TypeError:
+        return None
+
+
+def _safe_count_value(value: Any) -> Any:
+    try:
+        return int(value)
+    except Exception:
+        return _diagnostic_json_value(value)
+
+
+def _truthy_count(value: Any) -> int | None:
+    try:
+        import numpy as np
+
+        return int(np.sum(value))
+    except Exception:
+        pass
+    try:
+        return sum(1 for item in value if bool(item))
+    except TypeError:
+        return None
 
 
 def _capture_task_sampler_diagnostic_views(
@@ -2174,6 +2369,20 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
     diagnostics["placement_scene_diagnostic_count"] = len(scene_diagnostics)
     diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
+    grasp_load_attempts = diagnostics.get("grasp_load_attempts") or []
+    diagnostics["grasp_load_attempt_count"] = len(grasp_load_attempts)
+    diagnostics["grasp_load_failure_count"] = sum(
+        1
+        for item in grasp_load_attempts
+        if isinstance(item, dict) and item.get("result") != "loaded"
+    )
+    grasp_collision_checks = diagnostics.get("grasp_collision_checks") or []
+    diagnostics["grasp_collision_check_count"] = len(grasp_collision_checks)
+    diagnostics["zero_noncolliding_grasp_check_count"] = sum(
+        1
+        for item in grasp_collision_checks
+        if isinstance(item, dict) and item.get("zero_noncolliding")
+    )
     grasp_failures = diagnostics.get("grasp_failures") or []
     candidate_removals = diagnostics.get("candidate_removals") or []
     diagnostics["grasp_failure_count"] = len(grasp_failures)
@@ -2199,6 +2408,10 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
         diagnostics["last_place_robot_near_call"] = place_robot_near_calls[-1]
     if scene_diagnostics:
         diagnostics["last_placement_scene_diagnostic"] = scene_diagnostics[-1]
+    if grasp_load_attempts:
+        diagnostics["last_grasp_load_attempt"] = grasp_load_attempts[-1]
+    if grasp_collision_checks:
+        diagnostics["last_grasp_collision_check"] = grasp_collision_checks[-1]
 
 
 def _diagnostic_json_value(value: Any) -> Any:

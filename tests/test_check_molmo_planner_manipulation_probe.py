@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
@@ -654,6 +655,49 @@ def test_runner_records_ineffective_candidate_removal_calls() -> None:
     assert removal["effective_removal"] is False
     assert diagnostics["grasp_failures"][0]["threshold_exceeded"] is True
     assert diagnostics["grasp_failures"][0]["candidate_removal_call_count_delta"] == 1
+
+
+def test_runner_records_grasp_collision_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _load_runner_module()
+    module = ModuleType("molmo_spaces.tasks.pick_task_sampler")
+
+    def load_grasps_for_object(object_name, num_grasps=50):
+        assert object_name == "asset-book"
+        assert num_grasps == 512
+        return "droid", np.zeros((4, 4, 4))
+
+    def get_noncolliding_grasp_mask(mj_model, mj_data, grasp_poses_world, batch_size):
+        assert batch_size == 64
+        assert len(grasp_poses_world) == 4
+        return np.array([False, False, True, False])
+
+    module.load_grasps_for_object = load_grasps_for_object
+    module.get_noncolliding_grasp_mask = get_noncolliding_grasp_mask
+    monkeypatch.setitem(sys.modules, "molmo_spaces.tasks.pick_task_sampler", module)
+
+    class FakeSampler:
+        config = SimpleNamespace(task_config=SimpleNamespace(pickup_obj_name="book/body"))
+
+        def _sample_and_place_robot(self, env):
+            return None
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    _, grasps = module.load_grasps_for_object("asset-book", 512)
+    module.get_noncolliding_grasp_mask(None, None, grasps, 64)
+
+    assert "grasp_collision_diagnostics" in diagnostics["hooks"]
+    assert diagnostics["grasp_load_attempt_count"] == 1
+    assert diagnostics["last_grasp_load_attempt"]["cached_grasp_count"] == 4
+    assert diagnostics["grasp_collision_check_count"] == 1
+    check = diagnostics["last_grasp_collision_check"]
+    assert check["asset_uid"] == "asset-book"
+    assert check["pickup_obj_name"] == "book/body"
+    assert check["grasp_pose_count"] == 4
+    assert check["noncolliding_grasp_count"] == 1
+    assert check["colliding_grasp_count"] == 3
+    assert check["zero_noncolliding"] is False
 
 
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:

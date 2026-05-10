@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 108 exact pickup retry budget completed; next work is targeting the remaining exact-object grasp-feasibility failure before another cleanup rerun
+**Status:** Phase 109 grasp collision diagnostics completed; next work is targeting missing cached grasps for the exact bread asset before another cleanup rerun
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -360,6 +360,15 @@ render that budget. The valid-scene rerun now records 3 grasp failures, one
 threshold crossing, 1 candidate-removal call, 1 effective removal, and 0
 candidate-name misses. The remaining blocker is cleanly the exact object's
 grasp feasibility.
+Phase 109 records grasp collision diagnostics for that exact-object blocker.
+The probe-local task-sampler adapter wraps upstream grasp loading and
+non-colliding mask calls, and shared reports expose cached-grasp count,
+collision-checked pose count, non-colliding count, and hook exceptions. The
+diagnostics are intended to separate missing-grasp-cache problems from zero
+collision-free-grasp problems before any mitigation is chosen. The valid-scene
+rerun classified the blocker as missing cached grasps for asset UID `Bread_1`:
+3 grasp-load attempts, 3 `ValueError` load failures, and 0 collision-mask
+checks.
 
 ## Why This Exists
 

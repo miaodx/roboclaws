@@ -572,6 +572,16 @@ def _assert_proof_result_summary(
                 value = str(task_sampler_failure.get("grasp_failure_count") or "")
                 if value:
                     assert value in report_text, ("grasp_failure_count", report_text[:500])
+            if task_sampler_failure.get("grasp_load_attempts") or task_sampler_failure.get(
+                "grasp_collision_checks"
+            ):
+                assert "Grasp collision checks" in report_text, report_text[:500]
+                last_check = task_sampler_failure.get("last_grasp_collision_check") or {}
+                last_load = task_sampler_failure.get("last_grasp_load_attempt") or {}
+                for key in ("asset_uid", "noncolliding_grasp_count", "cached_grasp_count"):
+                    value = str(last_check.get(key) or last_load.get(key) or "")
+                    if value:
+                        assert value in report_text, (key, report_text[:500])
             last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
             if last_scene:
                 assert "Placement free-space fraction" in report_text, report_text[:500]

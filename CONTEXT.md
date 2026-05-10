@@ -168,6 +168,12 @@ enough times for upstream grasp-failure threshold semantics to run, without
 reintroducing unrelated candidate objects.
 _Avoid_: one-attempt exact candidate collapse, unrelated retry pool
 
+**Grasp Collision Diagnostics**:
+Probe-local evidence from upstream grasp loading and collision masking: cached
+grasp count, collision-checked pose count, non-colliding count, and hook
+exceptions for the exact requested object.
+_Avoid_: opaque grasp-failure counts with no loader/collision-mask detail
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -669,6 +675,8 @@ _Avoid_: full cleanup replacement claim
   proof blocker is interpreted as alias validity or task feasibility evidence.
 - **Exact Pickup Retry Budget** should preserve upstream grasp-threshold
   semantics while keeping the candidate pool exact.
+- **Grasp Collision Diagnostics** should explain exact-object post-placement
+  failures before any grasp-feasibility mitigation is chosen.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1025,3 +1033,10 @@ _Avoid_: full cleanup replacement claim
   upstream default `max_failures=2` threshold path without restoring unrelated
   candidates. The valid-scene rerun produced 3 grasp failures, 1 threshold
   crossing, 1 effective candidate removal, and 0 candidate-name misses.
+- Phase 109 adds Grasp Collision Diagnostics. The task-sampler diagnostics
+  adapter records upstream grasp-load and non-colliding mask outcomes so the
+  remaining exact-object grasp-feasibility blocker can be classified as missing
+  cached grasps, zero collision-free grasps, or a hook exception. The valid-scene
+  rerun classified the exact bread blocker as missing cached grasps for
+  `Bread_1`: 3 grasp-load attempts, 3 `ValueError` load failures, and 0
+  collision-mask checks.

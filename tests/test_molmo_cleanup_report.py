@@ -1597,6 +1597,53 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "reason": "robot placement failed",
             }
         ],
+        "grasp_load_attempt_count": 1,
+        "grasp_collision_check_count": 1,
+        "zero_noncolliding_grasp_check_count": 1,
+        "grasp_load_attempts": [
+            {
+                "schema": "planner_probe_grasp_load_attempt_v1",
+                "asset_uid": "asset-book",
+                "pickup_obj_name": "pickup/body",
+                "requested_grasp_count": 512,
+                "result": "loaded",
+                "gripper": "droid",
+                "cached_grasp_count": 512,
+            }
+        ],
+        "grasp_collision_checks": [
+            {
+                "schema": "planner_probe_grasp_collision_check_v1",
+                "asset_uid": "asset-book",
+                "pickup_obj_name": "pickup/body",
+                "grasp_pose_count": 512,
+                "batch_size": 64,
+                "result": "checked",
+                "noncolliding_grasp_count": 0,
+                "colliding_grasp_count": 512,
+                "zero_noncolliding": True,
+            }
+        ],
+        "last_grasp_load_attempt": {
+            "schema": "planner_probe_grasp_load_attempt_v1",
+            "asset_uid": "asset-book",
+            "pickup_obj_name": "pickup/body",
+            "requested_grasp_count": 512,
+            "result": "loaded",
+            "gripper": "droid",
+            "cached_grasp_count": 512,
+        },
+        "last_grasp_collision_check": {
+            "schema": "planner_probe_grasp_collision_check_v1",
+            "asset_uid": "asset-book",
+            "pickup_obj_name": "pickup/body",
+            "grasp_pose_count": 512,
+            "batch_size": 64,
+            "result": "checked",
+            "noncolliding_grasp_count": 0,
+            "colliding_grasp_count": 512,
+            "zero_noncolliding": True,
+        },
         "grasp_failure_count": 1,
         "grasp_failures": [
             {
@@ -1737,6 +1784,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Placement failures" in html
     assert "Effective max tries" in html
     assert "Post-Placement Candidate Rejections" in html
+    assert "Grasp Collision Diagnostics" in html
+    assert "Non-colliding grasps" in html
+    assert "Zero non-colliding" in html
     assert "Post-Placement Rejection Views" in html
     assert "Post-placement rejection flow: pickup/body" in html
     assert "Removed by grasp threshold" in html
