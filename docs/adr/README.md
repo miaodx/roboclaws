@@ -104,6 +104,7 @@ one decision per file, sequential numbering, explicit status.
 | [0093](0093-execute-seed10-selected-proof-commands.md) | Execute Seed 10 Selected Proof Commands | Accepted |
 | [0094](0094-render-grasp-feasibility-signature-matrix.md) | Render Grasp Feasibility Signature Matrix | Accepted |
 | [0095](0095-record-seed10-post-execution-fallback-exhaustion.md) | Record Seed 10 Post-Execution Fallback Exhaustion | Accepted |
+| [0096](0096-record-candidate-removal-effectiveness.md) | Record Candidate Removal Effectiveness | Accepted |
 
 ## Adding a new ADR
 

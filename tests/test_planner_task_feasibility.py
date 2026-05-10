@@ -58,3 +58,26 @@ def test_task_feasibility_signature_groups_repeated_grasp_blockers() -> None:
     assert groups[0]["count"] == 2
     assert groups[0]["request_ids"] == ["proof_001", "proof_002"]
     assert groups[0]["object_names"] == ["bread_1", "bread_2"]
+
+
+def test_grasp_summary_includes_candidate_removal_effectiveness_when_present() -> None:
+    diagnostics = {
+        "grasp_failure_count": 17,
+        "candidate_removal_count": 15,
+        "candidate_effective_removal_count": 0,
+        "candidate_name_miss_count": 15,
+        "grasp_threshold_exceeded_count": 15,
+        "grasp_failures": [{"object_name": "bread_1"}],
+    }
+
+    kind = task_feasibility_blocker_kind([], diagnostics)
+    signature = grasp_feasibility_signature(diagnostics)
+
+    assert task_feasibility_blocker_summary(kind, diagnostics) == (
+        "17 grasp failures; 15 candidate-removal calls; "
+        "0 effective removals; 15 candidate-name misses"
+    )
+    assert signature["candidate_effective_removal_count"] == 0
+    assert signature["candidate_name_miss_count"] == 15
+    assert signature["grasp_threshold_exceeded_count"] == 15
+    assert '"candidate_effective_removal_count":0' in signature["pattern_key"]

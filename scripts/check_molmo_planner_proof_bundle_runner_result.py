@@ -467,6 +467,7 @@ def _assert_proof_result_summary(
             grasp_signature_counts
         ), summary
         assert "Grasp Feasibility Signature Matrix" in report_text, report_text[:500]
+        assert "Effective removals" in report_text, report_text[:500]
         for signature in grasp_signature_counts:
             assert signature.get("pattern_key"), signature
             assert int(signature.get("count") or 0) > 0, signature
@@ -547,6 +548,10 @@ def _assert_proof_result_summary(
             if grasp_failures:
                 assert "Post-placement grasp failures" in report_text, report_text[:500]
                 assert "Post-Placement Rejection Views" in report_text, report_text[:500]
+                if "candidate_effective_removal_count" in task_sampler_failure:
+                    assert "Post-placement effective removals" in report_text, report_text[:500]
+                if "candidate_name_miss_count" in task_sampler_failure:
+                    assert "Post-placement candidate name misses" in report_text, report_text[:500]
                 value = str(task_sampler_failure.get("grasp_failure_count") or "")
                 if value:
                     assert value in report_text, ("grasp_failure_count", report_text[:500])

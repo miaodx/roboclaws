@@ -549,6 +549,43 @@ def test_runner_records_post_placement_grasp_rejections() -> None:
     assert diagnostics["grasp_failures"][-1]["candidate_count_after"] == 0
 
 
+def test_runner_records_ineffective_candidate_removal_calls() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        candidate_objects = [
+            SimpleNamespace(name="bread/body"),
+            SimpleNamespace(name="mug/body"),
+        ]
+
+        def __init__(self) -> None:
+            self._grasp_failure_counts: dict[str, int] = {}
+
+        def _remove_candidate_object(self, obj_name):
+            self.candidate_objects = [
+                item for item in self.candidate_objects if item.name != obj_name
+            ]
+
+        def report_grasp_failure(self, obj_name, max_failures=2):
+            self._grasp_failure_counts[obj_name] = self._grasp_failure_counts.get(obj_name, 0) + 1
+            if self._grasp_failure_counts[obj_name] > max_failures:
+                self._remove_candidate_object(obj_name)
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    sampler.report_grasp_failure("unknown/body", max_failures=0)
+
+    assert diagnostics["candidate_removal_count"] == 1
+    assert diagnostics["candidate_effective_removal_count"] == 0
+    assert diagnostics["candidate_name_miss_count"] == 1
+    removal = diagnostics["candidate_removals"][0]
+    assert removal["candidate_name_present_before"] is False
+    assert removal["effective_removal"] is False
+    assert diagnostics["grasp_failures"][0]["threshold_exceeded"] is True
+    assert diagnostics["grasp_failures"][0]["candidate_removal_call_count_delta"] == 1
+
+
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
     checker = _load_checker_module()
     evidence = blocked_planner_probe_evidence(

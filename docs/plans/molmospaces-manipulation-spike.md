@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 104 seed 10 fallback exhaustion completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
+**Status:** Phase 105 candidate-removal effectiveness completed; next work is using the new effectiveness evidence to reduce the shared grasp-feasibility blocker or change proof candidate source
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -326,6 +326,16 @@ blocked, generates zero fallback requests, and records
 `no_fallback_candidate_available` for all ten source requests. The next slice
 should either reduce the shared grasp-feasibility blocker or rotate to a new
 source with a different candidate strategy.
+Phase 105 closes the blocker-explanation gap inside the repeated
+grasp-feasibility signature. The planner probe now records whether each
+threshold-triggered `_remove_candidate_object()` call actually finds and
+removes the requested name from upstream `candidate_objects`, and shared
+planner/proof-bundle reports render effective-removal counts, candidate-name
+misses, threshold state, and removal-call deltas. The real Phase 105 probe
+confirmed the seed-10 bread-to-refrigerator blocker has 17 grasp failures, 15
+removal calls, 0 effective removals, and 15 candidate-name misses, so the next
+slice should target candidate identity binding, proof candidate source
+rotation, or a grasp-feasibility mitigation.
 
 ## Why This Exists
 

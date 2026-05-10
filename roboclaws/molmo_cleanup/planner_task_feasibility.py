@@ -34,12 +34,23 @@ def task_feasibility_blocker_summary(
             "robot-placement failures"
         )
     if blocker_kind == "grasp_feasibility":
-        return (
+        summary = (
             f"{int(task_sampler_failure_diagnostics.get('grasp_failure_count') or 0)} "
             "grasp failures; "
             f"{int(task_sampler_failure_diagnostics.get('candidate_removal_count') or 0)} "
             "candidate-removal calls"
         )
+        if "candidate_effective_removal_count" in task_sampler_failure_diagnostics:
+            effective_removals = int(
+                task_sampler_failure_diagnostics.get("candidate_effective_removal_count") or 0
+            )
+            summary += f"; {effective_removals} effective removals"
+        if "candidate_name_miss_count" in task_sampler_failure_diagnostics:
+            name_misses = int(
+                task_sampler_failure_diagnostics.get("candidate_name_miss_count") or 0
+            )
+            summary += f"; {name_misses} candidate-name misses"
+        return summary
     return ""
 
 
@@ -79,6 +90,13 @@ def grasp_feasibility_signature(
         "object_names": object_names,
         "image_artifact_count": len(task_sampler_failure_diagnostics.get("image_artifacts") or {}),
     }
+    for key in (
+        "candidate_effective_removal_count",
+        "candidate_name_miss_count",
+        "grasp_threshold_exceeded_count",
+    ):
+        if key in task_sampler_failure_diagnostics:
+            signature[key] = int(task_sampler_failure_diagnostics.get(key) or 0)
     return signature
 
 
@@ -105,6 +123,11 @@ def grasp_feasibility_signature_counts(
                 "proof_reports": [],
                 "grasp_failure_count": signature.get("grasp_failure_count"),
                 "candidate_removal_count": signature.get("candidate_removal_count"),
+                "candidate_effective_removal_count": signature.get(
+                    "candidate_effective_removal_count"
+                ),
+                "candidate_name_miss_count": signature.get("candidate_name_miss_count"),
+                "grasp_threshold_exceeded_count": signature.get("grasp_threshold_exceeded_count"),
                 "robot_placement_attempt_count": signature.get("robot_placement_attempt_count"),
                 "robot_placement_failure_count": signature.get("robot_placement_failure_count"),
                 "place_robot_near_call_count": signature.get("place_robot_near_call_count"),
@@ -143,6 +166,9 @@ def _grasp_pattern_key(task_sampler_failure_diagnostics: dict[str, Any]) -> str:
             task_sampler_failure_diagnostics.get("robot_placement_failure_count") or 0
         ),
     }
+    for key in ("candidate_effective_removal_count", "candidate_name_miss_count"):
+        if key in task_sampler_failure_diagnostics:
+            fields[key] = int(task_sampler_failure_diagnostics.get(key) or 0)
     return json.dumps(fields, sort_keys=True, separators=(",", ":"))
 
 

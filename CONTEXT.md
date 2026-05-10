@@ -144,6 +144,12 @@ grasp-feasibility failures by their blocker pattern, such as identical grasp
 failure and candidate-removal counts across multiple proof requests.
 _Avoid_: treating grouped blockers as proof success
 
+**Candidate Removal Effectiveness**:
+Task-sampler diagnostic evidence that separates a grasp-threshold removal call
+from an actual candidate-pool mutation, including candidate-name presence
+before/after removal and effective-removal counts.
+_Avoid_: assuming candidate-removal calls mean the object was removed
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -968,3 +974,11 @@ _Avoid_: full cleanup replacement claim
   excluded all ten seed 10 requests as grasp-feasibility blockers, generated no
   fallback requests, and recorded `no_fallback_candidate_available` for all ten
   source requests.
+- Phase 105 added Candidate Removal Effectiveness. The planner probe now
+  records threshold-exceeded rows, candidate-removal call deltas,
+  candidate-name presence before/after removal, effective-removal counts, and
+  candidate-name misses; shared planner/proof-bundle reports render those
+  fields so the next runtime slice can distinguish ineffective candidate
+  removal from true grasp candidate exhaustion. A real Phase 105 RBY1M proof
+  rerun confirmed the repeated seed-10 blocker has 17 grasp failures, 15
+  removal calls, 0 effective removals, and 15 candidate-name misses.

@@ -1527,6 +1527,7 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "asset_failures": [],
         "grasp_failures": [],
         "candidate_removals": [],
+        "candidate_removal_effectiveness": [],
         "image_artifacts": {},
         "visual_capture_failures": [],
     }
@@ -1608,17 +1609,33 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         ) -> Any:
             before_candidates = _candidate_object_count(self)
             before_count = _grasp_failure_count(self, obj_name)
+            before_names = _candidate_object_names(self)
+            removal_count_before = len(diagnostics.get("candidate_removals") or [])
             result = report_grasp_failure(obj_name, max_failures)
             after_candidates = _candidate_object_count(self)
             after_count = _grasp_failure_count(self, obj_name)
+            after_names = _candidate_object_names(self)
+            removal_count_after = len(diagnostics.get("candidate_removals") or [])
             diagnostics["grasp_failures"].append(
                 {
                     "object_name": str(obj_name or ""),
                     "count_before": before_count,
                     "count_after": after_count,
                     "max_failures": int(max_failures),
+                    "threshold_exceeded": after_count > int(max_failures),
+                    "threshold_crossed": before_count <= int(max_failures) < after_count,
                     "candidate_count_before": before_candidates,
                     "candidate_count_after": after_candidates,
+                    "candidate_name_present_before": _candidate_name_present(
+                        before_names,
+                        obj_name,
+                    ),
+                    "candidate_name_present_after": _candidate_name_present(after_names, obj_name),
+                    "candidate_removal_call_count_before": removal_count_before,
+                    "candidate_removal_call_count_after": removal_count_after,
+                    "candidate_removal_call_count_delta": (
+                        removal_count_after - removal_count_before
+                    ),
                     "removed_candidate": (
                         before_candidates is not None
                         and after_candidates is not None
@@ -1639,9 +1656,32 @@ def _apply_task_sampler_failure_diagnostics_adapter(
     if callable(remove_candidate_object):
 
         def recording_remove_candidate_object(self: Any, object_name: Any) -> Any:
-            diagnostics["candidate_removals"].append({"object_name": str(object_name or "")})
+            before_candidates = _candidate_object_count(self)
+            before_names = _candidate_object_names(self)
+            result = remove_candidate_object(object_name)
+            after_candidates = _candidate_object_count(self)
+            after_names = _candidate_object_names(self)
+            record = {
+                "object_name": str(object_name or ""),
+                "candidate_count_before": before_candidates,
+                "candidate_count_after": after_candidates,
+                "candidate_name_present_before": _candidate_name_present(
+                    before_names,
+                    object_name,
+                ),
+                "candidate_name_present_after": _candidate_name_present(after_names, object_name),
+                "effective_removal": (
+                    before_candidates is not None
+                    and after_candidates is not None
+                    and after_candidates < before_candidates
+                ),
+                "candidate_names_before": before_names,
+                "candidate_names_after": after_names,
+            }
+            diagnostics["candidate_removals"].append(record)
+            diagnostics["candidate_removal_effectiveness"].append(record)
             _refresh_task_sampler_failure_diagnostics(diagnostics)
-            return remove_candidate_object(object_name)
+            return result
 
         task_sampler._remove_candidate_object = MethodType(  # noqa: SLF001
             recording_remove_candidate_object,
@@ -1751,6 +1791,29 @@ def _candidate_object_count(task_sampler: Any) -> int | None:
         return len(candidate_objects) if candidate_objects is not None else None
     except TypeError:
         return None
+
+
+def _candidate_object_names(task_sampler: Any, *, limit: int = 40) -> list[str] | None:
+    candidate_objects = getattr(task_sampler, "candidate_objects", None)
+    if candidate_objects is None:
+        return None
+    names = []
+    try:
+        iterator = iter(candidate_objects)
+    except TypeError:
+        return None
+    for item in iterator:
+        if len(names) >= limit:
+            break
+        name = getattr(item, "name", None)
+        names.append(str(name if name is not None else item))
+    return names
+
+
+def _candidate_name_present(candidate_names: list[str] | None, object_name: Any) -> bool | None:
+    if candidate_names is None:
+        return None
+    return str(object_name or "") in candidate_names
 
 
 def _grasp_failure_count(task_sampler: Any, obj_name: Any) -> int:
@@ -2022,8 +2085,24 @@ def _refresh_task_sampler_failure_diagnostics(diagnostics: dict[str, Any]) -> No
     scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
     diagnostics["placement_scene_diagnostic_count"] = len(scene_diagnostics)
     diagnostics["asset_failure_count"] = len(diagnostics.get("asset_failures") or [])
-    diagnostics["grasp_failure_count"] = len(diagnostics.get("grasp_failures") or [])
-    diagnostics["candidate_removal_count"] = len(diagnostics.get("candidate_removals") or [])
+    grasp_failures = diagnostics.get("grasp_failures") or []
+    candidate_removals = diagnostics.get("candidate_removals") or []
+    diagnostics["grasp_failure_count"] = len(grasp_failures)
+    diagnostics["candidate_removal_count"] = len(candidate_removals)
+    diagnostics["candidate_effective_removal_count"] = sum(
+        1 for item in candidate_removals if isinstance(item, dict) and item.get("effective_removal")
+    )
+    diagnostics["candidate_name_miss_count"] = sum(
+        1
+        for item in candidate_removals
+        if isinstance(item, dict) and item.get("candidate_name_present_before") is False
+    )
+    diagnostics["grasp_threshold_exceeded_count"] = sum(
+        1 for item in grasp_failures if isinstance(item, dict) and item.get("threshold_exceeded")
+    )
+    diagnostics["grasp_threshold_crossed_count"] = sum(
+        1 for item in grasp_failures if isinstance(item, dict) and item.get("threshold_crossed")
+    )
     if failures:
         diagnostics["last_robot_placement_failure"] = failures[-1]
     place_robot_near_calls = diagnostics.get("place_robot_near_calls") or []

@@ -1382,6 +1382,8 @@ def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> s
             "<tr>"
             f"<td>{html.escape(str(item.get('count', '')))}</td>"
             f"<td>{html.escape(str(item.get('summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_effective_removal_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_name_miss_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('robot_placement_failure_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('place_robot_near_call_count', '')))}</td>"
             f"<td>{html.escape(str(item.get('image_artifact_count', '')))}</td>"
@@ -1394,7 +1396,8 @@ def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> s
     return (
         "<h3>Grasp Feasibility Signature Matrix</h3>"
         '<div class="table-wrap"><table><thead><tr>'
-        "<th>Proofs</th><th>Pattern</th><th>Robot placement failures</th>"
+        "<th>Proofs</th><th>Pattern</th><th>Effective removals</th>"
+        "<th>Candidate name misses</th><th>Robot placement failures</th>"
         "<th>place_robot_near calls</th><th>Diagnostic views</th>"
         "<th>Requests</th><th>Planner objects</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
@@ -1426,6 +1429,11 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
     last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
     grasp_failures = task_sampler_failure.get("grasp_failures") or []
+    candidate_effective_removals = task_sampler_failure.get(
+        "candidate_effective_removal_count",
+        "",
+    )
+    candidate_name_misses = task_sampler_failure.get("candidate_name_miss_count", "")
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1469,6 +1477,9 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ),
         ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
         ("Post-placement grasp failures", task_sampler_failure.get("grasp_failure_count", "")),
+        ("Post-placement removal calls", task_sampler_failure.get("candidate_removal_count", "")),
+        ("Post-placement effective removals", candidate_effective_removals),
+        ("Post-placement candidate name misses", candidate_name_misses),
         ("Post-placement rejection rows", len(grasp_failures)),
         ("Task sampler last failure", last_robot_failure.get("message", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
@@ -1653,14 +1664,23 @@ def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
         diagnostics.get("candidate_removal_count"),
         len(diagnostics.get("candidate_removals") or []),
     )
-    max_value = max(grasp_count, removal_count, len(removed), 1)
+    effective_removal_count = (
+        _safe_int(diagnostics.get("candidate_effective_removal_count"), 0)
+        if "candidate_effective_removal_count" in diagnostics
+        else len(removed)
+    )
+    candidate_name_miss_count = _safe_int(diagnostics.get("candidate_name_miss_count"), 0)
+    threshold_exceeded_count = _safe_int(diagnostics.get("grasp_threshold_exceeded_count"), 0)
+    max_value = max(grasp_count, removal_count, effective_removal_count, 1)
     grasp_width = _scaled_bar_width(grasp_count, max_value)
     removal_width = _scaled_bar_width(removal_count, max_value)
-    removed_width = _scaled_bar_width(len(removed), max_value)
+    effective_width = _scaled_bar_width(effective_removal_count, max_value)
     stats = [
         ("Grasp failures", grasp_count),
-        ("Candidate removals", removal_count),
-        ("Removed by threshold", len(removed)),
+        ("Removal calls", removal_count),
+        ("Effective removals", effective_removal_count),
+        ("Candidate name misses", candidate_name_miss_count),
+        ("Threshold exceeded", threshold_exceeded_count),
         ("Candidate rows", len(grasp_failures)),
         ("Candidates before", first.get("candidate_count_before", "")),
         ("Candidates after", first.get("candidate_count_after", "")),
@@ -1690,16 +1710,16 @@ def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
         f'<rect x="150" y="79" width="{grasp_width}" height="14" rx="7" fill="#f97316"/>'
         '<text x="326" y="91" fill="#0f172a" font-size="12" text-anchor="end">'
         f"{grasp_count}</text>"
-        '<text x="24" y="128" fill="#334155" font-size="12">candidate removals</text>'
+        '<text x="24" y="128" fill="#334155" font-size="12">removal calls</text>'
         '<rect x="150" y="116" width="170" height="14" rx="7" fill="#fecaca"/>'
         f'<rect x="150" y="116" width="{removal_width}" height="14" rx="7" fill="#ef4444"/>'
         '<text x="326" y="128" fill="#0f172a" font-size="12" text-anchor="end">'
         f"{removal_count}</text>"
-        '<text x="24" y="165" fill="#334155" font-size="12">threshold removals</text>'
+        '<text x="24" y="165" fill="#334155" font-size="12">effective removals</text>'
         '<rect x="150" y="153" width="170" height="14" rx="7" fill="#e2e8f0"/>'
-        f'<rect x="150" y="153" width="{removed_width}" height="14" rx="7" fill="#64748b"/>'
+        f'<rect x="150" y="153" width="{effective_width}" height="14" rx="7" fill="#64748b"/>'
         '<text x="326" y="165" fill="#0f172a" font-size="12" text-anchor="end">'
-        f"{len(removed)}</text>"
+        f"{effective_removal_count}</text>"
         "</svg>"
         "</div>"
         f"<figcaption>Post-placement rejection flow: {html.escape(object_name)}</figcaption>"
@@ -1992,7 +2012,13 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         if isinstance(item, dict)
     )
     removal_rows = "".join(
-        f"<tr><td>{html.escape(str(item.get('object_name', '')))}</td></tr>"
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('effective_removal', '')))}</td>"
+        "</tr>"
         for item in candidate_removals
         if isinstance(item, dict)
     )
@@ -2017,6 +2043,8 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
     if removal_rows:
         supporting_tables += (
             '<div class="table-wrap"><table><thead><tr><th>Removed candidate</th>'
+            "<th>Candidates before</th><th>Candidates after</th>"
+            "<th>Name present before</th><th>Effective removal</th>"
             f"</tr></thead><tbody>{removal_rows}</tbody></table></div>"
         )
     note = (
@@ -2108,11 +2136,21 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
     removed = [
         item for item in grasp_failures if isinstance(item, dict) and item.get("removed_candidate")
     ]
+    effective_removals = (
+        _safe_int(diagnostics.get("candidate_effective_removal_count"), 0)
+        if "candidate_effective_removal_count" in diagnostics
+        else len(removed)
+    )
+    candidate_name_misses = _safe_int(diagnostics.get("candidate_name_miss_count"), 0)
+    threshold_exceeded = _safe_int(diagnostics.get("grasp_threshold_exceeded_count"), 0)
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Grasp failures', diagnostics.get('grasp_failure_count', len(grasp_failures)))}"
-        f"{_metric('Candidate removals', diagnostics.get('candidate_removal_count', 0))}"
+        f"{_metric('Candidate removal calls', diagnostics.get('candidate_removal_count', 0))}"
         f"{_metric('Removed by grasp threshold', len(removed))}"
+        f"{_metric('Effective removals', effective_removals)}"
+        f"{_metric('Candidate name misses', candidate_name_misses)}"
+        f"{_metric('Threshold exceeded rows', threshold_exceeded)}"
         "</div>"
     )
     rows = "".join(
@@ -2121,8 +2159,13 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
         f"<td>{html.escape(str(item.get('count_before', '')))}</td>"
         f"<td>{html.escape(str(item.get('count_after', '')))}</td>"
         f"<td>{html.escape(str(item.get('max_failures', '')))}</td>"
+        f"<td>{html.escape(str(item.get('threshold_exceeded', '')))}</td>"
+        f"<td>{html.escape(str(item.get('threshold_crossed', '')))}</td>"
         f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
         f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_removal_call_count_delta', '')))}</td>"
         f"<td>{html.escape(str(item.get('removed_candidate', '')))}</td>"
         "</tr>"
         for item in grasp_failures
@@ -2131,8 +2174,33 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
         "<th>Count before</th><th>Count after</th><th>Max failures</th>"
-        "<th>Candidates before</th><th>Candidates after</th><th>Removed</th></tr></thead>"
+        "<th>Threshold exceeded</th><th>Threshold crossed</th>"
+        "<th>Candidates before</th><th>Candidates after</th>"
+        "<th>Name present before</th><th>Name present after</th>"
+        "<th>Removal-call delta</th><th>Removed</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></div>"
+    )
+    removal_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('effective_removal', '')))}</td>"
+        "</tr>"
+        for item in diagnostics.get("candidate_removals") or []
+        if isinstance(item, dict)
+    )
+    removal_table = (
+        "<h3>Candidate Removal Effectiveness</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Candidates before</th><th>Candidates after</th>"
+        "<th>Name present before</th><th>Name present after</th>"
+        "<th>Effective removal</th></tr></thead>"
+        f"<tbody>{removal_rows}</tbody></table></div>"
+        if removal_rows
+        else ""
     )
     note = (
         "Post-placement candidate rejection diagnostics explain failures after "
@@ -2143,7 +2211,7 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
         '<section class="panel planner-probe-post-placement-rejections">'
         "<h2>Post-Placement Candidate Rejections</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}'
-        f"{_post_placement_rejection_views(diagnostics)}{table}</section>"
+        f"{_post_placement_rejection_views(diagnostics)}{table}{removal_table}</section>"
     )
 
 

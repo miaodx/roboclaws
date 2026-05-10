@@ -1565,6 +1565,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "robot_placement_failure_count": 1,
         "asset_failure_count": 1,
         "candidate_removal_count": 1,
+        "candidate_effective_removal_count": 0,
+        "candidate_name_miss_count": 1,
+        "grasp_threshold_exceeded_count": 1,
         "robot_placement_attempts": [
             {
                 "attempt_index": 1,
@@ -1588,9 +1591,14 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "count_before": 2,
                 "count_after": 3,
                 "max_failures": 2,
+                "threshold_exceeded": True,
+                "threshold_crossed": True,
                 "candidate_count_before": 1,
-                "candidate_count_after": 0,
-                "removed_candidate": True,
+                "candidate_count_after": 1,
+                "candidate_name_present_before": False,
+                "candidate_name_present_after": False,
+                "candidate_removal_call_count_delta": 1,
+                "removed_candidate": False,
             }
         ],
         "place_robot_near_calls": [
@@ -1648,7 +1656,16 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
             ],
         },
-        "candidate_removals": [{"object_name": "pickup/body"}],
+        "candidate_removals": [
+            {
+                "object_name": "pickup/body",
+                "candidate_count_before": 1,
+                "candidate_count_after": 1,
+                "candidate_name_present_before": False,
+                "candidate_name_present_after": False,
+                "effective_removal": False,
+            }
+        ],
         "last_robot_placement_failure": {
             "pickup_obj_name": "pickup/body",
             "message": "Failed to place robot near object: pickup/body",
@@ -1704,6 +1721,10 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Post-Placement Rejection Views" in html
     assert "Post-placement rejection flow: pickup/body" in html
     assert "Removed by grasp threshold" in html
+    assert "Candidate Removal Effectiveness" in html
+    assert "Effective removals" in html
+    assert "Candidate name misses" in html
+    assert "Removal-call delta" in html
     assert "Placement Scene Diagnostics" in html
     assert "Free-space fraction" in html
     assert "0.000017" in html
