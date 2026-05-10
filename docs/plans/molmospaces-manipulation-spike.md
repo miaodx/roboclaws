@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 129 prior-covered proof-quality horizon completed; proof memory now respects stricter executed-step horizons while the full bridge remains blocked
+**Status:** Phase 130 report-generation router completed; generic report generation now routes Molmo cleanup artifacts to the shared visual underlay while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -466,6 +466,11 @@ Phase 129 makes prior-covered proof selection honor that same quality horizon.
 The runner can require a stricter minimum executed-step count before old
 planner-backed cleanup-bound proof memory suppresses a request, so one-step
 proofs remain compatible by default but can be reselected for stronger runs.
+Phase 130 closes the remaining report-command ambiguity. The generic report
+generation entrypoint now detects Molmo cleanup run directories and
+`run_result.json` paths and delegates to the Cleanup Report Artifact Adapter
+instead of the older replay reporter, keeping the shared semantic visual
+underlay on the `nav, pick, nav, open?, place` path.
 
 ## Why This Exists
 
@@ -1348,6 +1353,9 @@ completed:
   gsd-plan-phase 129-molmospaces-prior-covered-proof-quality-horizon
   gsd-execute-phase 129-molmospaces-prior-covered-proof-quality-horizon
   gsd-verify-work 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-plan-phase 130-molmospaces-report-generation-router
+  gsd-execute-phase 130-molmospaces-report-generation-router
+  gsd-verify-work 130-molmospaces-report-generation-router
 
 next pipeline candidates:
   expand exact-proof coverage beyond observed_001, or generate a stricter

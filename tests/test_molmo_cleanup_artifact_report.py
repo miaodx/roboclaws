@@ -4,8 +4,11 @@ import json
 from pathlib import Path
 
 from roboclaws.molmo_cleanup.artifact_report import (
+    is_cleanup_run_result_artifact,
     load_cleanup_scenario_artifact,
+    rerender_cleanup_report_from_artifact_path,
     rerender_cleanup_report_from_run_result,
+    rerender_cleanup_reports_from_artifact_paths,
     rerender_cleanup_reports_from_run_results,
 )
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
@@ -215,6 +218,33 @@ def test_rerender_cleanup_reports_from_run_results_reuses_single_adapter(
             report_path.read_text(encoding="utf-8"),
             require_semantic_subphases=True,
         )
+
+
+def test_rerender_cleanup_report_from_artifact_path_accepts_run_directory(
+    tmp_path: Path,
+) -> None:
+    run_result = _write_minimal_run_result(tmp_path / "run")
+
+    assert is_cleanup_run_result_artifact(run_result.parent)
+
+    report_path = rerender_cleanup_report_from_artifact_path(run_result.parent)
+
+    assert report_path == run_result.parent / "report.html"
+    assert_cleanup_report_visual_core(
+        report_path.read_text(encoding="utf-8"),
+        require_semantic_subphases=True,
+    )
+
+
+def test_rerender_cleanup_reports_from_artifact_paths_reuses_directory_adapter(
+    tmp_path: Path,
+) -> None:
+    first = _write_minimal_run_result(tmp_path / "first")
+    second = _write_minimal_run_result(tmp_path / "second")
+
+    report_paths = rerender_cleanup_reports_from_artifact_paths([first.parent, second])
+
+    assert report_paths == [first.parent / "report.html", second.parent / "report.html"]
 
 
 def _write_minimal_run_result(run_dir: Path) -> Path:

@@ -384,6 +384,12 @@ public scenario shell from `run_result.json` and does not fabricate objects or
 private targets.
 _Avoid_: second report renderer, manual stale HTML repair
 
+**Cleanup Report Generation Router**:
+The artifact-path entrypoint that detects MolmoSpaces cleanup run directories or
+`run_result.json` files and routes them to the **Cleanup Report Artifact
+Adapter** instead of the older generic replay reporter.
+_Avoid_: using AI2-THOR replay report UI for Molmo cleanup artifacts
+
 **Report Visual Core**:
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture
@@ -1274,3 +1280,8 @@ _Avoid_: full cleanup replacement claim
   memory now honors a requested minimum executed-step horizon before suppressing
   a proof request, so one-step motion evidence can be reselected for stricter
   multi-step proof runs while default one-step workflows remain compatible.
+- Phase 130 adds the Cleanup Report Generation Router. Generic report
+  generation now detects Molmo cleanup run directories and `run_result.json`
+  paths and delegates to the shared Cleanup Report Artifact Adapter, so cleanup
+  artifacts keep the `nav, pick, nav, open?, place` visual underlay even when
+  callers use the broader report-generation entrypoint.

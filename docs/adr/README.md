@@ -129,6 +129,7 @@ one decision per file, sequential numbering, explicit status.
 | [0118](0118-record-planner-proof-quality-tier.md) | Record Planner Proof Quality Tier | Accepted |
 | [0119](0119-render-planner-proof-quality-across-probe-reports.md) | Render Planner Proof Quality Across Probe Reports | Accepted |
 | [0120](0120-honor-proof-quality-horizon-in-prior-covered-selection.md) | Honor Proof Quality Horizon In Prior Covered Selection | Accepted |
+| [0121](0121-route-molmo-cleanup-report-generation-through-shared-adapter.md) | Route Molmo Cleanup Report Generation Through Shared Adapter | Accepted |
 
 ## Adding a new ADR
 
