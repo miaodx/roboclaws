@@ -287,6 +287,56 @@ def test_proof_request_selection_marks_fallback_required_when_all_ready_blocked(
     assert selection["fallback_required"] is True
 
 
+def test_proof_request_selection_surfaces_grasp_feasibility_blockers() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert excluded["prior_task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+    assert selection["target_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    grasp_blocker = selection["grasp_feasibility_blockers"][0]
+    assert grasp_blocker["source_request_id"] == "proof_001"
+    assert grasp_blocker["kind"] == "source_request"
+    assert grasp_blocker["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert grasp_blocker["prior_task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+
+
 def test_proof_request_selection_generates_fallback_alias_requests(
     tmp_path: Path,
 ) -> None:
@@ -347,6 +397,8 @@ def test_proof_request_selection_generates_fallback_alias_requests(
                 "request_id": "proof_001",
                 "status": "blocked_capability",
                 "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": ("3 grasp failures; 1 candidate-removal calls"),
                 "blockers": [{"code": "HouseInvalidForTask"}],
             }
         ]
@@ -380,11 +432,20 @@ def test_proof_request_selection_generates_fallback_alias_requests(
     assert generated[0]["source_request_id"] == "proof_001"
     assert generated[0]["object_id"] == "observed_001"
     assert generated[0]["target_receptacle_id"] == "sink_01"
+    assert generated[0]["fallback_request"]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
+    assert generated[0]["fallback_request"]["prior_task_feasibility_blocker_summary"] == (
+        "3 grasp failures; 1 candidate-removal calls"
+    )
     assert generated[0]["fallback_request"]["prior_blockers"][0]["code"] == ("HouseInvalidForTask")
     assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
         "sink/alt"
     )
     assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("pickup/alt")
+    assert selection["selected_requests"][0]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
     assert selection["fallback_generation"]["filtered_alias_count"] == 2
     assert {
         (item["axis"], item["alias"])
@@ -723,6 +784,10 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
                 "request_id": "proof_001_fallback_01",
                 "status": "blocked_capability",
                 "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
                 "cleanup_task_config": {
                     "planner_object_id": "book_beef_1_0_8",
                     "planner_target_receptacle_id": "shelf_cafe_1_1_2",
@@ -761,7 +826,7 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
-        "target_task_feasibility_blocked_pairs",
+        "grasp_feasibility_blocked_pairs",
         "no_fallback_candidate_available",
     }
     assert fallback_generation["normalized_alias_count"] == 2
@@ -793,6 +858,8 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
             "reason",
             "prior_status",
             "prior_task_feasibility_status",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
             "last_worker_stage",
             "execution_attempted",
         )
@@ -804,6 +871,8 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
         "reason": "prior_task_feasibility_blocked_pair",
         "prior_status": "blocked_capability",
         "prior_task_feasibility_status": "blocked",
+        "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+        "prior_task_feasibility_blocker_summary": ("17 grasp failures; 15 candidate-removal calls"),
         "last_worker_stage": "",
         "execution_attempted": False,
     }

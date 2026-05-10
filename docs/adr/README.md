@@ -82,6 +82,7 @@ one decision per file, sequential numbering, explicit status.
 | [0071](0071-add-wide-placement-profile-retry.md) | Add Wide Placement Profile Retry | Accepted |
 | [0072](0072-capture-post-placement-candidate-rejections.md) | Capture Post-Placement Candidate Rejections | Accepted |
 | [0073](0073-classify-grasp-feasibility-blockers.md) | Classify Grasp-Feasibility Blockers | Accepted |
+| [0074](0074-surface-grasp-feasibility-selection-memory.md) | Surface Grasp-Feasibility Selection Memory | Accepted |
 
 ## Adding a new ADR
 

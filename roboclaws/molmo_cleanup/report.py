@@ -770,6 +770,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     selected = selection.get("selected_requests") or []
     excluded = selection.get("excluded_requests") or []
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
+    grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
     raw_fallback_generation = selection.get("fallback_generation") or {}
     fallback_generation = (
         raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
@@ -783,6 +784,10 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     target_blocker_count = selection.get(
         "target_feasibility_blocker_count",
         len(target_feasibility_blockers),
+    )
+    grasp_blocker_count = selection.get(
+        "grasp_feasibility_blocker_count",
+        len(grasp_feasibility_blockers),
     )
     metrics = (
         '<div class="metric-grid">'
@@ -798,6 +803,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
         f"{_metric('Exhaustion blockers', len(exhaustion_blockers))}"
         f"{_metric('Target blockers', target_blocker_count)}"
+        f"{_metric('Grasp blockers', grasp_blocker_count)}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
@@ -809,6 +815,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         "</tr>"
         for item in selected
         if isinstance(item, dict)
@@ -820,29 +827,33 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('reason', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
         f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
         "</tr>"
         for item in excluded
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="6">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="7">No proof requests selected.</td></tr>'
     if not excluded_rows:
-        excluded_rows = '<tr><td colspan="6">No proof requests excluded.</td></tr>'
+        excluded_rows = '<tr><td colspan="8">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
-        "<th>Prior feasibility</th>"
+        "<th>Prior feasibility</th><th>Prior blocker</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
         '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
-        "<th>Prior feasibility</th><th>Prior blockers</th>"
+        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior detail</th>"
+        "<th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)
     target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
+    grasp_blockers_table = _grasp_feasibility_blockers_table(grasp_feasibility_blockers)
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
     normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
     filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
@@ -855,7 +866,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{target_blockers_table}{generated_table}{discovered_table}"
+        f"{selected_table}{excluded_table}{target_blockers_table}{grasp_blockers_table}"
+        f"{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
@@ -880,17 +892,21 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(args.get('--cleanup-planner-object-id', '')))}</td>"
             f"<td>{html.escape(str(args.get('--cleanup-planner-target-receptacle-id', '')))}</td>"
             f"<td>{html.escape(str(fallback.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(fallback.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            "<td>"
+            f"{html.escape(str(fallback.get('prior_task_feasibility_blocker_summary', '')))}"
+            "</td>"
             f"<td>{html.escape(_blocker_codes(fallback.get('prior_blockers') or []))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="8">No generated fallback requests.</td></tr>')
+        rows.append('<tr><td colspan="10">No generated fallback requests.</td></tr>')
     return (
         "<h3>Generated Fallback Requests</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
-        "<th>Prior blockers</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -911,19 +927,51 @@ def _target_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('reason', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="10">No target feasibility blockers recorded.</td></tr>')
+        rows.append('<tr><td colspan="12">No target feasibility blockers recorded.</td></tr>')
     return (
         "<h3>Target Feasibility Blockers</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Last stage</th>"
+        "<th>Prior blockers</th><th>Proof report</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _grasp_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or ""
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or ""
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(object_value))}</td>"
+            f"<td>{html.escape(str(target_value))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="7">No grasp-feasibility blockers recorded.</td></tr>')
+    return (
+        "<h3>Grasp Feasibility Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
+        "<th>Derived from</th><th>Detail</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -1014,19 +1062,22 @@ def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('reason', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="9">No fallback alias pairs filtered.</td></tr>')
+        rows.append('<tr><td colspan="11">No fallback alias pairs filtered.</td></tr>')
     return (
         "<h3>Filtered Fallback Pairs</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Last stage</th>"
+        "<th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 

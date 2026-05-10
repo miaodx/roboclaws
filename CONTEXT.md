@@ -58,6 +58,12 @@ A proof-result classification for exact-scene requests that clear robot
 placement but fail through post-placement grasp/candidate rejection.
 _Avoid_: generic task-feasibility blocker
 
+**Grasp-Feasibility Selection Memory**:
+Proof-request selection evidence that carries a prior grasp-feasibility blocker
+kind/detail into excluded requests, fallback provenance, filtered fallback
+pairs, and runner report blocker views.
+_Avoid_: hidden retry heuristic, cleanup readiness proof
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -715,3 +721,6 @@ _Avoid_: full cleanup replacement claim
 - Phase 82 added Grasp-Feasibility Blocker classification. Proof-result
   summaries now classify the Phase 81 artifact as `grasp_feasibility` with
   `17 grasp failures; 15 candidate-removal calls`.
+- Phase 83 added Grasp-Feasibility Selection Memory. Proof request selection now
+  preserves that blocker kind/detail through excluded requests, generated
+  fallback provenance, filtered fallback pairs, and runner report blocker views.

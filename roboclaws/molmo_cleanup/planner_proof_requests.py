@@ -332,6 +332,7 @@ def proof_request_selection_from_summary(
         excluded_requests=excluded,
         filtered_pairs=fallback_generation.get("filtered_pairs") or [],
     )
+    grasp_feasibility_blockers = _grasp_feasibility_blockers(target_feasibility_blockers)
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
@@ -348,6 +349,8 @@ def proof_request_selection_from_summary(
         "excluded_requests": excluded,
         "target_feasibility_blocker_count": len(target_feasibility_blockers),
         "target_feasibility_blockers": target_feasibility_blockers,
+        "grasp_feasibility_blocker_count": len(grasp_feasibility_blockers),
+        "grasp_feasibility_blockers": grasp_feasibility_blockers,
         "fallback_generation": fallback_generation,
         "prior_summary_available": bool(prior_proof_result_summary),
         "prior_result_count": len(prior_results),
@@ -409,7 +412,7 @@ def _selected_request(
 ) -> dict[str, Any]:
     fallback = request.get("fallback_request") or {}
     is_fallback = isinstance(fallback, dict) and bool(fallback)
-    return {
+    item = {
         "request_id": str(request.get("request_id") or ""),
         "request_type": "fallback_generated" if is_fallback else "source",
         "source_request_id": str(fallback.get("source_request_id") or ""),
@@ -421,13 +424,22 @@ def _selected_request(
             or "unknown"
         ),
     }
+    item.update(
+        _nonempty_prior_blocker_fields(
+            prior_result.get("task_feasibility_blocker_kind")
+            or fallback.get("prior_task_feasibility_blocker_kind"),
+            prior_result.get("task_feasibility_blocker_summary")
+            or fallback.get("prior_task_feasibility_blocker_summary"),
+        )
+    )
+    return item
 
 
 def _excluded_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    item = {
         "request_id": str(request.get("request_id") or ""),
         "object_id": str(request.get("object_id") or ""),
         "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
@@ -437,6 +449,8 @@ def _excluded_request(
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
         **_prior_result_evidence_fields(prior_result),
     }
+    item.update(_prior_result_blocker_fields(prior_result))
+    return item
 
 
 def _target_feasibility_blockers(
@@ -484,7 +498,7 @@ def _target_feasibility_blocker(
     target_alias: str = "",
     derived_from: str = "",
 ) -> dict[str, Any]:
-    return {
+    blocker = {
         "kind": kind,
         "source_request_id": source_request_id,
         "object_id": object_id,
@@ -503,6 +517,23 @@ def _target_feasibility_blocker(
         "last_worker_stage": str(item.get("last_worker_stage") or ""),
         "execution_attempted": bool(item.get("execution_attempted")),
     }
+    blocker.update(
+        _nonempty_prior_blocker_fields(
+            item.get("prior_task_feasibility_blocker_kind"),
+            item.get("prior_task_feasibility_blocker_summary"),
+        )
+    )
+    return blocker
+
+
+def _grasp_feasibility_blockers(
+    target_feasibility_blockers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        dict(item)
+        for item in target_feasibility_blockers
+        if str(item.get("prior_task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    ]
 
 
 def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
@@ -514,6 +545,24 @@ def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
         "last_worker_stage": str(result.get("last_worker_stage") or ""),
         "execution_attempted": bool(result.get("execution_attempted")),
     }
+
+
+def _prior_result_blocker_fields(result: dict[str, Any]) -> dict[str, Any]:
+    return _nonempty_prior_blocker_fields(
+        result.get("task_feasibility_blocker_kind"),
+        result.get("task_feasibility_blocker_summary"),
+    )
+
+
+def _nonempty_prior_blocker_fields(kind: Any, summary: Any) -> dict[str, str]:
+    fields = {}
+    kind_text = str(kind or "")
+    summary_text = str(summary or "")
+    if kind_text:
+        fields["prior_task_feasibility_blocker_kind"] = kind_text
+    if summary_text:
+        fields["prior_task_feasibility_blocker_summary"] = summary_text
+    return fields
 
 
 def _fallback_generation(
@@ -636,10 +685,28 @@ def _fallback_exhaustion_blockers(
                 ),
             }
         )
+    grasp_feasibility_pair_count = sum(
+        1
+        for item in filtered_pairs
+        if str(item.get("reason") or "") == "prior_task_feasibility_blocked_pair"
+        and str(item.get("prior_task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    )
+    if grasp_feasibility_pair_count:
+        blockers.append(
+            {
+                "code": "grasp_feasibility_blocked_pairs",
+                "count": grasp_feasibility_pair_count,
+                "message": (
+                    "Known object/target fallback alias pairs clear robot placement "
+                    "but are blocked by post-placement grasp/candidate rejection."
+                ),
+            }
+        )
     task_feasibility_pair_count = sum(
         1
         for item in filtered_pairs
         if str(item.get("reason") or "") == "prior_task_feasibility_blocked_pair"
+        and str(item.get("prior_task_feasibility_blocker_kind") or "") != "grasp_feasibility"
     )
     if task_feasibility_pair_count:
         blockers.append(
@@ -803,6 +870,7 @@ def _fallback_request_with_planner_aliases(
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
         "agent_view_exposed": False,
     }
+    fallback["fallback_request"].update(_prior_result_blocker_fields(prior_result))
     args = dict(fallback.get("planner_probe_args") or {})
     if planner_object_id:
         args["--cleanup-planner-object-id"] = planner_object_id
@@ -1127,7 +1195,7 @@ def _task_feasibility_pair_filter(
     blockers: list[dict[str, Any]],
     result: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    item = {
         "source_request_id": source_request_id,
         "object_alias": object_alias,
         "target_alias": target_alias,
@@ -1138,6 +1206,8 @@ def _task_feasibility_pair_filter(
         "prior_blockers": blockers,
         **_prior_result_evidence_fields(result),
     }
+    item.update(_prior_result_blocker_fields(result))
+    return item
 
 
 def _enrich_existing_pair_filter(
@@ -1155,6 +1225,8 @@ def _enrich_existing_pair_filter(
         for field in (
             "prior_status",
             "prior_task_feasibility_status",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
             "prior_run_result",
             "prior_report",
             "prior_stdout",

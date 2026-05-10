@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 82 grasp-feasibility blocker classification completed; next work is selecting or generating grasp-feasible exact-scene proof requests
+**Status:** Phase 83 grasp-feasibility selection memory completed; next work is selecting or generating grasp-feasible exact-scene proof requests
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -218,6 +218,9 @@ Phase 82 carries that evidence into proof-result summaries and proof-bundle
 runner reports as `task_feasibility_blocker_kind=grasp_feasibility` with
 `17 grasp failures; 15 candidate-removal calls`, so future selection can filter
 grasp-infeasible exact aliases without parsing nested diagnostics.
+Phase 83 carries that blocker kind/detail into proof request selection memory:
+excluded requests, generated fallback provenance, filtered fallback pairs, and
+a dedicated `Grasp Feasibility Blockers` runner report view.
 
 ## Why This Exists
 

@@ -730,6 +730,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "object_id": "observed_001",
                     "target_receptacle_id": "sink_01",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
                 }
             ],
             "excluded_requests": [
@@ -739,6 +740,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "target_receptacle_id": "sink_01",
                     "reason": "prior_task_feasibility_blocked",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
@@ -751,6 +756,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "target_receptacle_id": "sink_01",
                     "reason": "prior_task_feasibility_blocked",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 },
                 {
@@ -761,6 +770,42 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "derived_from": "proof_001_fallback_02",
                     "reason": "prior_task_feasibility_blocked_pair",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "last_worker_stage": "worker_exception",
+                    "prior_report": str(tmp_path / "prior-proof" / "report.html"),
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+            ],
+            "grasp_feasibility_blocker_count": 2,
+            "grasp_feasibility_blockers": [
+                {
+                    "kind": "source_request",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+                {
+                    "kind": "fallback_pair",
+                    "source_request_id": "proof_001",
+                    "object_alias": "pickup/body",
+                    "target_alias": "sink/body_alt",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
                     "last_worker_stage": "worker_exception",
                     "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -790,6 +835,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "fallback_request": {
                             "source_request_id": "proof_001",
                             "reason": "prior_task_feasibility_blocked",
+                            "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                            "prior_task_feasibility_blocker_summary": (
+                                "3 grasp failures; 1 candidate-removal calls"
+                            ),
                             "prior_blockers": [{"code": "HouseInvalidForTask"}],
                         },
                     }
@@ -819,6 +868,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "target_alias": "sink/body_alt",
                         "derived_from": "proof_001_fallback_02",
                         "reason": "prior_task_feasibility_blocked_pair",
+                        "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                        "prior_task_feasibility_blocker_summary": (
+                            "3 grasp failures; 1 candidate-removal calls"
+                        ),
                         "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     }
                 ],
@@ -1004,6 +1057,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Filtered pairs" in html
     assert "Target Feasibility Blockers" in html
     assert "Target blockers" in html
+    assert "Grasp Feasibility Blockers" in html
+    assert "Grasp blockers" in html
     assert "source_request" in html
     assert "fallback_pair" in html
     assert "worker_exception" in html

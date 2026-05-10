@@ -190,13 +190,26 @@ def _assert_proof_request_selection(
         for key in ("request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
             assert str(item[key]) in report_text, (key, report_text[:500])
+        for key in (
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
+        ):
+            if item.get(key):
+                assert str(item[key]) in report_text, (key, report_text[:500])
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
     if "target_feasibility_blocker_count" in selection:
         assert int(selection.get("target_feasibility_blocker_count") or 0) == len(
             target_feasibility_blockers
         ), selection
+    grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
+    if "grasp_feasibility_blocker_count" in selection:
+        assert int(selection.get("grasp_feasibility_blocker_count") or 0) == len(
+            grasp_feasibility_blockers
+        ), selection
     if target_feasibility_blockers:
         assert "Target Feasibility Blockers" in report_text, report_text[:500]
+    if grasp_feasibility_blockers:
+        assert "Grasp Feasibility Blockers" in report_text, report_text[:500]
     for item in target_feasibility_blockers:
         for key in ("kind", "source_request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
@@ -209,9 +222,15 @@ def _assert_proof_request_selection(
             "derived_from",
             "prior_report",
             "last_worker_stage",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
         ):
             if item.get(key):
                 assert str(item[key]) in report_text, (key, report_text[:500])
+    for item in grasp_feasibility_blockers:
+        for key in ("kind", "source_request_id", "prior_task_feasibility_blocker_summary"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
     fallback_generation = selection.get("fallback_generation") or {}
     if fallback_generation:
         fallback_status = str(fallback_generation.get("status") or "")
@@ -257,6 +276,12 @@ def _assert_proof_request_selection(
                 assert str(item[key]) in report_text, (key, report_text[:500])
             assert fallback.get("source_request_id"), item
             assert str(fallback["source_request_id"]) in report_text, report_text[:500]
+            for key in (
+                "prior_task_feasibility_blocker_kind",
+                "prior_task_feasibility_blocker_summary",
+            ):
+                if fallback.get(key):
+                    assert str(fallback[key]) in report_text, (key, report_text[:500])
             args = item.get("planner_probe_args") or {}
             for key in (
                 "--cleanup-planner-object-id",
@@ -284,6 +309,12 @@ def _assert_proof_request_selection(
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
             for key in ("prior_report", "last_worker_stage"):
+                if item.get(key):
+                    assert str(item[key]) in report_text, (key, report_text[:500])
+            for key in (
+                "prior_task_feasibility_blocker_kind",
+                "prior_task_feasibility_blocker_summary",
+            ):
                 if item.get(key):
                     assert str(item[key]) in report_text, (key, report_text[:500])
         for item in exhaustion_blockers:

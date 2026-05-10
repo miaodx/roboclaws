@@ -190,6 +190,10 @@ Phase 82 classifies that downstream blocker in proof-result summaries and
 proof-bundle runner reports as `grasp_feasibility`, with compact detail
 `17 grasp failures; 15 candidate-removal calls`, so selection can consume the
 evidence without scraping planner-probe report tables.
+Phase 83 carries that classification into proof request selection memory and
+renders a dedicated `Grasp Feasibility Blockers` runner view, so exact-scene
+retry review can distinguish grasp/candidate rejection from generic target task
+feasibility.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -297,6 +301,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.81 MolmoSpaces wide placement profile** - Phase 80 (completed 2026-05-10; wide profile clears robot placement and exposes downstream candidate removal blocker)
 - ✅ **v1.82 MolmoSpaces post-placement rejection diagnostics** - Phase 81 (completed 2026-05-10; report shows grasp-failure and candidate-removal evidence after placement succeeds)
 - ✅ **v1.83 MolmoSpaces grasp-feasibility classification** - Phase 82 (completed 2026-05-10; proof summaries classify post-placement grasp/candidate rejection as `grasp_feasibility`)
+- ✅ **v1.84 MolmoSpaces grasp-feasibility selection memory** - Phase 83 (completed 2026-05-10; selection reports preserve and render grasp-feasibility blocker kind/detail)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -395,6 +400,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 80: MolmoSpaces wide placement profile** - ADR-0071 widens exact-scene robot placement and shows the blocker moved to downstream candidate rejection. Completed 2026-05-10.
 - [x] **Phase 81: MolmoSpaces post-placement rejection diagnostics** - ADR-0072 renders grasp-failure and candidate-removal evidence after robot placement succeeds. Completed 2026-05-10.
 - [x] **Phase 82: MolmoSpaces grasp-feasibility classification** - ADR-0073 classifies post-placement grasp/candidate rejection in proof summaries and runner reports. Completed 2026-05-10.
+- [x] **Phase 83: MolmoSpaces grasp-feasibility selection memory** - ADR-0074 preserves grasp-feasibility blocker kind/detail in selection and fallback memory. Completed 2026-05-10.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
