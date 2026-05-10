@@ -865,6 +865,66 @@ def test_proof_request_selection_normalizes_non_root_alias_into_generated_reques
     }
 
 
+def test_proof_request_selection_reselects_prior_covered_below_quality_horizon() -> None:
+    evidence = planner_backed_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        steps_requested=1,
+        steps_executed=1,
+        max_abs_qpos_delta=0.01,
+    )
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "status": "planner_backed",
+                "planner_backed": True,
+                "cleanup_binding_promoted": True,
+                "task_feasibility_status": "ready",
+                "steps_executed": 1,
+                "max_abs_qpos_delta": 0.01,
+                "proof_quality": evidence["proof_quality"],
+            }
+        ]
+    }
+
+    one_step_selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=1,
+    )
+    two_step_selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=2,
+    )
+
+    assert one_step_selection["covered_request_count"] == 1
+    assert one_step_selection["selected_count"] == 0
+    assert two_step_selection["covered_request_count"] == 0
+    assert two_step_selection["selected_request_ids"] == ["proof_001"]
+    assert two_step_selection["selected_requests"][0]["prior_proof_quality"] == "one_step_motion"
+    assert two_step_selection["selected_requests"][0]["prior_steps_executed"] == 1
+
+
 def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,

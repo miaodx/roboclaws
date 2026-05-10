@@ -462,6 +462,12 @@ and cleanup reports all render **Planner Proof Quality Evidence** through the
 same quality tiers.
 _Avoid_: separate proof-strength labels per report surface
 
+**Proof-Quality Coverage Horizon**:
+The proof-request selection rule that a prior planner-backed cleanup-bound proof
+only counts as covered when its **Planner Proof Quality Evidence** reaches the
+requested executed-step horizon.
+_Avoid_: one-step stale proof memory suppressing stricter proof reruns
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -1264,3 +1270,7 @@ _Avoid_: full cleanup replacement claim
   evidence now embeds proof quality, standalone proof reports and proof-bundle
   runner reports render `Planner Proof Quality`, and both probe and runner
   checkers can require minimum proof-quality horizons.
+- Phase 129 adds Proof-Quality Coverage Horizon selection. Prior-covered proof
+  memory now honors a requested minimum executed-step horizon before suppressing
+  a proof request, so one-step motion evidence can be reselected for stricter
+  multi-step proof runs while default one-step workflows remain compatible.

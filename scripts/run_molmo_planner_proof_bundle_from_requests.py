@@ -80,6 +80,15 @@ def parse_args() -> argparse.Namespace:
             "cleanup binding promoted."
         ),
     )
+    parser.add_argument(
+        "--prior-covered-min-proof-steps",
+        type=int,
+        default=1,
+        help=(
+            "Minimum executed proof steps required before a prior planner-backed "
+            "cleanup binding counts as covered."
+        ),
+    )
     parser.add_argument("--generate-fallback-requests", action="store_true")
     parser.add_argument("--fallback-alias-limit", type=int, default=4)
     return parser.parse_args()
@@ -111,6 +120,7 @@ def main() -> None:
         prior_planner_probe_run_result=args.prior_planner_probe_run_result,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
         exclude_prior_covered=args.exclude_prior_covered,
+        prior_covered_min_proof_steps=args.prior_covered_min_proof_steps,
         generate_fallback_requests=args.generate_fallback_requests,
         fallback_alias_limit=args.fallback_alias_limit,
     )
@@ -150,6 +160,7 @@ def run_from_cleanup_result(
     prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
+    prior_covered_min_proof_steps: int = 1,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -166,6 +177,7 @@ def run_from_cleanup_result(
         prior_proof_result_summary=prior_summary,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
         exclude_prior_covered=exclude_prior_covered,
+        prior_covered_min_proof_steps=prior_covered_min_proof_steps,
         generate_fallback_requests=generate_fallback_requests,
         fallback_alias_limit=fallback_alias_limit,
     )

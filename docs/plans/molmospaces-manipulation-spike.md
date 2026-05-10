@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 128 planner proof quality report reuse completed; proof strength now uses one vocabulary across standalone proof, runner, and cleanup reports while the full bridge remains blocked
+**Status:** Phase 129 prior-covered proof-quality horizon completed; proof memory now respects stricter executed-step horizons while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -462,6 +462,10 @@ Phase 128 reuses that proof-quality module across the rest of the proof report
 pipeline. Standalone planner-probe reports and proof-bundle runner reports now
 render the same `Planner Proof Quality` tiers as cleanup reports, and their
 checkers can require minimum proof-quality horizons.
+Phase 129 makes prior-covered proof selection honor that same quality horizon.
+The runner can require a stricter minimum executed-step count before old
+planner-backed cleanup-bound proof memory suppresses a request, so one-step
+proofs remain compatible by default but can be reselected for stronger runs.
 
 ## Why This Exists
 
@@ -1341,9 +1345,12 @@ completed:
   gsd-plan-phase 95-molmospaces-seeded-selected-proof-execution
   gsd-execute-phase 95-molmospaces-seeded-selected-proof-execution
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
+  gsd-plan-phase 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-execute-phase 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-verify-work 129-molmospaces-prior-covered-proof-quality-horizon
 
 next pipeline candidates:
   expand exact-proof coverage beyond observed_001, or generate a stricter
-  multi-step/containment proof before raising the shared checker horizon above
-  one-step motion across standalone, runner, and cleanup artifacts
+  multi-step/containment proof now that prior-covered selection can reselect
+  one-step proof memory when a higher coverage horizon is requested
 ```

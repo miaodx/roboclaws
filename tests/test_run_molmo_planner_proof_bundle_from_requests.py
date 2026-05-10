@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
 from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -235,6 +236,16 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
     )
     prior = tmp_path / "prior" / "proof_bundle_run_manifest.json"
     prior.parent.mkdir()
+    one_step_quality = planner_backed_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        steps_requested=1,
+        steps_executed=1,
+        max_abs_qpos_delta=0.01,
+    )["proof_quality"]
     prior.write_text(
         json.dumps(
             {
@@ -249,6 +260,9 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
                             "task_feasibility_status": "ready",
                             "planner_backed": True,
                             "cleanup_binding_promoted": True,
+                            "steps_executed": 1,
+                            "max_abs_qpos_delta": 0.01,
+                            "proof_quality": one_step_quality,
                             "run_result": str(tmp_path / "prior-proof-1" / "run_result.json"),
                             "report": str(tmp_path / "prior-proof-1" / "report.html"),
                         },
@@ -295,6 +309,7 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
 
     selection = result["manifest"]["proof_request_selection"]
     assert selection["mode"] == "exclude_task_feasibility_blocked_and_prior_covered"
+    assert selection["prior_covered_min_proof_steps"] == 1
     assert selection["selected_request_ids"] == ["proof_003"]
     assert selection["covered_request_count"] == 1
     assert [item["reason"] for item in selection["excluded_requests"]] == [
@@ -307,6 +322,36 @@ def test_runner_excludes_prior_covered_requests(tmp_path: Path) -> None:
     assert "Covered" in report
     assert "prior_planner_proof_covered" in report
     assert "prior_task_feasibility_blocked" in report
+
+    strict_result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle-strict",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        prior_proof_bundle_manifest=prior,
+        exclude_task_feasibility_blocked=True,
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=2,
+    )
+    strict_selection = strict_result["manifest"]["proof_request_selection"]
+    assert strict_selection["prior_covered_min_proof_steps"] == 2
+    assert strict_selection["selected_request_ids"] == ["proof_001", "proof_003"]
+    assert strict_selection["covered_request_count"] == 0
+    assert strict_selection["selected_requests"][0]["prior_proof_quality"] == "one_step_motion"
+    assert strict_result["manifest"]["command_count"] == 2
+    strict_report = Path(strict_result["report_path"]).read_text(encoding="utf-8")
+    assert "Coverage min steps" in strict_report
+    assert "one_step_motion" in strict_report
 
 
 def test_runner_marks_fallback_required_when_all_prior_requests_blocked(tmp_path: Path) -> None:

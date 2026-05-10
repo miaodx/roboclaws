@@ -1462,6 +1462,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
         f"{_metric('Covered', selection.get('covered_request_count', 0))}"
+        f"{_metric('Coverage min steps', selection.get('prior_covered_min_proof_steps', 1))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
         f"{_metric('Normalized aliases', len(normalized_aliases))}"
@@ -1482,6 +1483,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_proof_quality', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_steps_executed', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         "</tr>"
@@ -1495,6 +1498,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('reason', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_proof_quality', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_steps_executed', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
@@ -1504,20 +1509,22 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="8">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="10">No proof requests selected.</td></tr>'
     if not excluded_rows:
-        excluded_rows = '<tr><td colspan="9">No proof requests excluded.</td></tr>'
+        excluded_rows = '<tr><td colspan="11">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
-        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior match</th>"
+        "<th>Prior feasibility</th><th>Prior quality</th><th>Prior steps</th>"
+        "<th>Prior blocker</th><th>Prior match</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
         '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
-        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior detail</th>"
-        "<th>Prior match</th><th>Prior blockers</th>"
+        "<th>Prior feasibility</th><th>Prior quality</th><th>Prior steps</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th>"
+        "<th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)

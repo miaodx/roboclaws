@@ -321,10 +321,12 @@ def proof_request_selection_from_summary(
     prior_proof_result_summary: dict[str, Any] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
+    prior_covered_min_proof_steps: int = 1,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
     """Select ready proof requests, optionally excluding known infeasible requests."""
+    prior_covered_min_proof_steps = max(1, int(prior_covered_min_proof_steps))
     ready_requests = [
         request for request in proof_requests.get("requests") or [] if request.get("ready")
     ]
@@ -354,7 +356,10 @@ def proof_request_selection_from_summary(
             prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
             prior_results_by_planner_object_target=prior_results_by_planner_object_target,
         )
-        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(prior_result):
+        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(
+            prior_result,
+            min_proof_steps=prior_covered_min_proof_steps,
+        ):
             excluded.append(
                 _excluded_request(
                     request,
@@ -431,6 +436,7 @@ def proof_request_selection_from_summary(
         "covered_request_count": sum(
             1 for item in excluded if item.get("reason") == "prior_planner_proof_covered"
         ),
+        "prior_covered_min_proof_steps": prior_covered_min_proof_steps,
         "generated_fallback_request_count": len(generated),
         "fallback_required": fallback_required,
         "selected_request_ids": [item["request_id"] for item in selected],
@@ -648,8 +654,34 @@ def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:
     )
 
 
-def _prior_result_has_cleanup_binding_coverage(item: dict[str, Any]) -> bool:
-    return bool(item.get("planner_backed")) and bool(item.get("cleanup_binding_promoted"))
+def _prior_result_has_cleanup_binding_coverage(
+    item: dict[str, Any],
+    *,
+    min_proof_steps: int,
+) -> bool:
+    if not bool(item.get("planner_backed")) or not bool(item.get("cleanup_binding_promoted")):
+        return False
+    if min_proof_steps <= 1 and not _has_prior_quality_inputs(item):
+        return True
+    quality = planner_proof_quality_evidence(item)
+    return (
+        bool(quality.get("one_step_motion"))
+        and int(quality.get("steps_executed") or 0) >= min_proof_steps
+        and float(quality.get("max_abs_qpos_delta") or 0.0) > 0.0
+    )
+
+
+def _has_prior_quality_inputs(item: dict[str, Any]) -> bool:
+    return any(
+        key in item
+        for key in (
+            "proof_quality",
+            "steps_executed",
+            "max_abs_qpos_delta",
+            "containment_proven",
+            "object_state_evidence",
+        )
+    )
 
 
 def _selected_request(
@@ -683,6 +715,8 @@ def _selected_request(
     match_kind = prior_result_match_kind or str(fallback.get("prior_result_match_kind") or "")
     if match_kind:
         item["prior_result_match_kind"] = match_kind
+    if prior_result:
+        item.update(_prior_result_evidence_fields(prior_result))
     return item
 
 
@@ -795,6 +829,7 @@ def _grasp_feasibility_blockers(
 
 
 def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
+    quality = planner_proof_quality_evidence(result)
     return {
         "prior_run_result": str(result.get("run_result") or ""),
         "prior_report": str(result.get("report") or ""),
@@ -802,6 +837,9 @@ def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
         "prior_stderr": str(result.get("stderr") or ""),
         "last_worker_stage": str(result.get("last_worker_stage") or ""),
         "execution_attempted": bool(result.get("execution_attempted")),
+        "prior_proof_quality": str(quality.get("quality_tier") or ""),
+        "prior_steps_executed": int(quality.get("steps_executed") or 0),
+        "prior_max_abs_qpos_delta": float(quality.get("max_abs_qpos_delta") or 0.0),
     }
 
 
