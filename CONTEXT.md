@@ -106,6 +106,12 @@ cleanup artifact, after known internal blocked pairs are filtered, to record
 strict proof, cleanup binding, and visual evidence before a cleanup rerun.
 _Avoid_: treating selection as proof, treating one passing proof as full cleanup readiness
 
+**Broader Bound Proof Cleanup Rerun**:
+Final cleanup rerun that consumes an already passing broader bound proof and
+verifies the matching cleanup object uses planner-backed primitive evidence
+while unmatched objects remain honest `api_semantic` work.
+_Avoid_: re-executing proof bundles, full bridge-ready claim from one bound object
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -632,6 +638,10 @@ _Avoid_: full cleanup replacement claim
 - **Broader Selected Proof Execution** should follow **Planner-Object Proof
   Memory** and precede cleanup rerun; one passing bound proof can feed a rerun
   slice but does not prove all generated objects are planner-backed.
+- **Broader Bound Proof Cleanup Rerun** should require the matching bound
+  object to be strict planner-backed, require at least one unmatched object to
+  remain `api_semantic`, and keep the global bridge blocked until every cleaned
+  object has matching proof.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -815,3 +825,8 @@ _Avoid_: full cleanup replacement claim
   became a strict planner-backed remote-control-to-stand proof with promoted
   cleanup binding and report-relative initial/final planner views, while the
   other 7 candidates were classified as `grasp_feasibility` blocked.
+- Phase 91 added Broader Bound Proof Cleanup Rerun. The cleanup rerun consumed
+  the existing `proof_008` artifact without re-executing the proof bundle,
+  rendered the full visual report surface, made `observed_008` strict
+  planner-backed for `nav, pick, nav, place`, and kept the global bridge
+  blocked with 38 unmatched `api_semantic` subphases.

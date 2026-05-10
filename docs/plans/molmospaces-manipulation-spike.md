@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 90 broader selected proof execution completed; next work is rerunning cleanup with the passing bound proof bundle
+**Status:** Phase 91 broader bound proof cleanup rerun completed; next work is expanding proof coverage beyond the one passing bound object
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -251,6 +251,11 @@ RBY1M/CuRobo warmup and the wide placement profile. Seven candidates remained
 planner-backed remote-control-to-stand evidence, promoted cleanup binding for
 `nav, pick, nav, place`, and rendered report-relative initial/final planner
 views in the shared runner report.
+Phase 91 reran final cleanup with the existing `proof_008` result, without
+re-executing the proof bundle. The cleanup report now shows `observed_008` as
+strict planner-backed for `nav, pick, nav, place`, renders 44 robot timeline
+steps plus attached planner proof views, and keeps the global bridge blocked
+because the other 38 cleanup subphases remain `api_semantic`.
 
 ## Why This Exists
 
@@ -1115,8 +1120,12 @@ completed:
   gsd-plan-phase 90-molmospaces-broader-selected-proof-execution
   gsd-execute-phase 90-molmospaces-broader-selected-proof-execution
   gsd-verify-work 90-molmospaces-broader-selected-proof-execution
+  gsd-plan-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-execute-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-verify-work 91-molmospaces-broader-bound-proof-cleanup-rerun
 
 next pipeline candidates:
-  rerun cleanup with the passing proof_008 bound proof and verify the final
-  cleanup artifact keeps unmatched objects honest
+  expand proof coverage beyond the one bound proof_008 object, or select a new
+  broader source candidate pool rather than retrying the nine known blocked
+  pairs from this seed
 ```

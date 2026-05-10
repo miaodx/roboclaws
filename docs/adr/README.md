@@ -90,6 +90,7 @@ one decision per file, sequential numbering, explicit status.
 | [0079](0079-carry-forward-nested-prior-proof-evidence.md) | Carry Forward Nested Prior Proof Evidence | Accepted |
 | [0080](0080-scope-proof-selection-memory-by-planner-object.md) | Scope Proof Selection Memory by Planner Object | Accepted |
 | [0081](0081-record-broader-selected-proof-execution.md) | Record Broader Selected Proof Execution | Accepted |
+| [0082](0082-rerun-cleanup-with-broader-bound-proof.md) | Rerun Cleanup with Broader Bound Proof | Accepted |
 
 ## Adding a new ADR
 

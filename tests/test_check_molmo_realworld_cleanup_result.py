@@ -403,6 +403,18 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
     report = (cleanup_dir / "report.html").read_text(encoding="utf-8")
     assert "Cleanup Primitive Gate" in report
     assert "Planner Cleanup Bridge" in report
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        require_planner_proof_attachment=True,
+        accept_blocked_planner_cleanup_primitives=True,
+        require_bound_planner_cleanup_objects=["observed_001:toy_bin_01"],
+        require_mixed_planner_cleanup_primitives=True,
+        accept_blocked_planner_cleanup_bridge=True,
+    )
 
 
 def test_realworld_cleanup_mismatched_probe_binding_keeps_semantic_path(
