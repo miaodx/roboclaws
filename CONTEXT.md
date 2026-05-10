@@ -1190,3 +1190,10 @@ _Avoid_: full cleanup replacement claim
   zero-success, while positive-sign larger standoffs produce nonzero contacts
   without initial object displacement; the best local variant is
   `sign_1_dist_0.8_settle_1` with 9/24 successes.
+- Phase 122 adds Grasp Pose Policy Cache Generation. The same MuJoCo probe now
+  has cache-output mode, so the validated `sign_1_dist_0.8_settle_1` policy can
+  write loader-compatible object-relative TCP transforms without creating a
+  second approach implementation. The local run generated 9 valid transforms
+  from 24 candidates, installed them to the droid `Bread_1` loader cache after
+  generated-NPZ validation, and the post-install availability preflight returned
+  `ready`.

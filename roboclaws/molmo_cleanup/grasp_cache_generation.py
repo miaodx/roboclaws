@@ -85,7 +85,7 @@ def run_grasp_cache_generation(
         dry_run=dry_run,
     )
     assets = [
-        _generation_asset_result(asset, install=install and not dry_run)
+        generation_asset_result(asset, install=install and not dry_run)
         for asset in generation_preflight.get("assets") or []
         if isinstance(asset, dict)
     ]
@@ -126,7 +126,7 @@ def run_grasp_cache_generation(
 
     availability_after_install = {}
     if install and not dry_run:
-        availability_after_install = _availability_after_install(generation_preflight)
+        availability_after_install = generation_availability_after_install(generation_preflight)
         if availability_after_install.get("status") != "ready":
             blockers.append(
                 {
@@ -296,7 +296,8 @@ def run_generation_command(
     }
 
 
-def _generation_asset_result(asset: dict[str, Any], *, install: bool) -> dict[str, Any]:
+def generation_asset_result(asset: dict[str, Any], *, install: bool) -> dict[str, Any]:
+    """Validate a generated cache asset and optionally install it into the loader path."""
     generated_path = Path(str(asset.get("generated_npz_path") or ""))
     target_path = Path(
         str(asset.get("cache_target_resolved_path") or asset.get("cache_target_path") or "")
@@ -328,6 +329,11 @@ def _generation_asset_result(asset: dict[str, Any], *, install: bool) -> dict[st
             }
         )
     return result
+
+
+def generation_availability_after_install(generation_preflight: dict[str, Any]) -> dict[str, Any]:
+    """Re-run grasp-cache availability after generated cache files are installed."""
+    return _availability_after_install(generation_preflight)
 
 
 def _availability_after_install(generation_preflight: dict[str, Any]) -> dict[str, Any]:

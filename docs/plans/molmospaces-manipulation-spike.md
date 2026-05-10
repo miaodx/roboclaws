@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 121 grasp initial contact diagnostics completed; next work is applying a validated pose policy before installing a non-empty droid loader cache
+**Status:** Phase 122 grasp pose policy cache completed; next work is rerunning cleanup/proof evidence against the newly valid droid `Bread_1` cache
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -425,6 +425,11 @@ The upstream-sign approach variants remain zero-success, while positive-sign
 larger standoffs produce nonzero final gripper contacts. The best local variant
 is `sign_1_dist_0.8_settle_1` with 9/24 successes and zero initial object
 displacement.
+Phase 122 applies that validated policy to cache generation without adding a
+second MuJoCo approach implementation. The initial-contact probe now has
+cache-output mode, the generated NPZ routes through the shared cache
+validation/install helper, and the local droid `Bread_1` loader cache now
+validates with 9 transforms after install.
 
 ## Why This Exists
 

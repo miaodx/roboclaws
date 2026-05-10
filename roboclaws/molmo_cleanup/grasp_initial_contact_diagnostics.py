@@ -51,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--object-xml", required=True)
     parser.add_argument("--candidate-grasps", required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--cache-output")
     parser.add_argument("--max-candidates", type=int, default=24)
     parser.add_argument("--approach-signs", default="-1,1")
     parser.add_argument("--approach-distances", default="0.1,0.2,0.3,0.5,0.8")
@@ -167,8 +168,10 @@ def evaluate_variant(
     sign: int,
     distance: float,
     settle_steps: int,
+    include_successful_transforms: bool = False,
 ) -> dict:
     rows = []
+    successful_transforms = []
     for index, transform in enumerate(transforms):
         model, data, pos, quat, approach_pos = model_for_grasp(
             xml_content,
@@ -199,6 +202,14 @@ def evaluate_variant(
         final_object_pos = data.body(args.object_name).xpos.copy()
         final_sides, final_pairs = contact_sides(model, data, args.object_name)
         success = "left" in final_sides and "right" in final_sides
+        if success and include_successful_transforms:
+            tcp_pose = np.eye(4)
+            tcp_pose[:3, 3] = data.site("grasp_site").xpos
+            tcp_pose[:3, :3] = data.site("grasp_site").xmat.reshape(3, 3)
+            object_pose = np.eye(4)
+            object_pose[:3, :3] = data.body(args.object_name).xmat.reshape(3, 3)
+            object_pose[:3, 3] = data.body(args.object_name).xpos
+            successful_transforms.append((np.linalg.inv(object_pose) @ tcp_pose).tolist())
         rows.append(
             {
                 "candidate_index": index,
@@ -239,6 +250,7 @@ def evaluate_variant(
             row["candidate_index"] for row in rows if row["success"]
         ][:20],
         "classification": "nonzero_success" if success_count else "zero_success",
+        "successful_transforms": successful_transforms,
     }
 
 
@@ -252,19 +264,31 @@ def main() -> None:
             transforms = transforms[: args.max_candidates]
         xml_content = base_scene_xml(args.object_xml)
         variants = []
+        cache_transforms = []
         for sign in parse_csv_ints(args.approach_signs):
             for distance in parse_csv_floats(args.approach_distances):
                 for settle_steps in parse_csv_ints(args.settle_steps):
-                    variants.append(
-                        evaluate_variant(
-                            xml_content,
-                            transforms,
-                            args,
-                            sign,
-                            distance,
-                            settle_steps,
-                        )
+                    variant = evaluate_variant(
+                        xml_content,
+                        transforms,
+                        args,
+                        sign,
+                        distance,
+                        settle_steps,
+                        include_successful_transforms=bool(args.cache_output),
                     )
+                    cache_transforms.extend(variant.pop("successful_transforms", []))
+                    variants.append(variant)
+        if args.cache_output:
+            cache_output = Path(args.cache_output)
+            cache_output.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(
+                cache_output,
+                transforms=np.array(cache_transforms, dtype=np.float16),
+            )
+            for variant in variants:
+                variant["cache_output_path"] = str(cache_output)
+                variant["cache_transform_count"] = len(cache_transforms)
         payload = {
             "status": "ready",
             "candidate_count": int(len(transforms)),
@@ -378,7 +402,7 @@ def run_grasp_initial_contact_diagnostics(
             "--close-steps",
             str(close_steps),
         ]
-        command_result = _run_command(
+        command_result = run_molmospaces_probe_command(
             command,
             cwd=working_dir,
             molmospaces_python=python,
@@ -520,7 +544,7 @@ def _blocked_result(*, output_dir: Path, blockers: list[dict[str, Any]]) -> dict
     }
 
 
-def _run_command(
+def run_molmospaces_probe_command(
     command: list[str],
     *,
     cwd: Path,
