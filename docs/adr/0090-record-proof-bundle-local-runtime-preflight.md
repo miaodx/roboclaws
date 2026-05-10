@@ -10,9 +10,10 @@ Accepted
 
 The broader MolmoSpaces plan is ready to rotate proof sources or reduce the
 shared RBY1M grasp-feasibility blocker, but real proof execution is a local-dev
-operation. The configured default MolmoSpaces Python path can exist while no
-longer importing `molmospaces`, which causes execution attempts to fail before
-the proof-bundle runner writes a reviewable manifest/report.
+operation. The configured default MolmoSpaces Python path can exist while the
+canonical `molmo_spaces` package import is unavailable, which causes execution
+attempts to fail before the proof-bundle runner writes a reviewable
+manifest/report.
 
 That makes the next local action ambiguous: did selection fail, did RBY1M/CuRobo
 fail, or is the local Python runtime not ready?
@@ -21,7 +22,7 @@ fail, or is the local Python runtime not ready?
 
 Add a proof-bundle local runtime preflight before executing real proof commands.
 When `--execute-probes` is requested, the runner checks whether the configured
-MolmoSpaces Python can import `molmospaces`.
+MolmoSpaces Python can import the canonical package, `molmo_spaces`.
 
 If the check fails:
 

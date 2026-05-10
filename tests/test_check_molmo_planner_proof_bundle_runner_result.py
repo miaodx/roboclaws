@@ -48,18 +48,18 @@ def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -
         "python_executable": str(tmp_path / "molmospaces-python"),
         "checks": [
             {
-                "name": "molmospaces_import",
+                "name": "molmo_spaces_import",
                 "status": "blocked",
-                "command": [str(tmp_path / "molmospaces-python"), "-c", "import molmospaces"],
+                "command": [str(tmp_path / "molmospaces-python"), "-c", "import molmo_spaces"],
                 "returncode": 1,
-                "code": "molmospaces_import_failed",
-                "message": "No module named molmospaces",
+                "code": "molmo_spaces_import_failed",
+                "message": "No module named molmo_spaces",
             }
         ],
         "blockers": [
             {
-                "code": "molmospaces_import_failed",
-                "message": "No module named molmospaces",
+                "code": "molmo_spaces_import_failed",
+                "message": "No module named molmo_spaces",
             }
         ],
     }

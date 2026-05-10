@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 99 MolmoSpaces proof-bundle local runtime preflight completed on 2026-05-10.
+stopped_at: Phase 100 MolmoSpaces canonical runtime preflight import completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 92
-  completed_phases: 92
-  total_plans: 95
-  completed_plans: 95
+  total_phases: 93
+  completed_phases: 93
+  total_plans: 96
+  completed_plans: 96
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 99 completed proof-bundle local runtime preflight; next work is restoring the local MolmoSpaces runtime or reducing the shared RBY1M grasp-feasibility blocker.
+**Current focus:** Phase 100 completed canonical runtime preflight import; next work is rotating proof sources or reducing the shared RBY1M grasp-feasibility blocker.
 
 ## Current Position
 
-Phase: 99 (molmospaces-proof-bundle-local-runtime-preflight) - COMPLETE
-Plan: 1 of 1 complete - `99-01` records local runtime preflight blockers before real proof execution.
+Phase: 100 (molmospaces-canonical-runtime-preflight-import) - COMPLETE
+Plan: 1 of 1 complete - `100-01` uses canonical `molmo_spaces` import for runtime preflight.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -263,19 +263,21 @@ Phase 99 adds Proof-Bundle Local Runtime Preflight. Real proof-bundle execution
 now checks the configured MolmoSpaces Python import path before running
 warmup/proof commands and writes a `local_runtime_blocked` report when the
 runtime is not ready.
-Last activity: 2026-05-10 - Completed Phase 99 proof-bundle local runtime preflight.
+Phase 100 corrects the runtime preflight import to canonical `molmo_spaces`;
+the local default MolmoSpaces Python now records `Local Runtime Preflight`
+status `ready` for the current zero-command seeded-selection handoff.
+Last activity: 2026-05-10 - Completed Phase 100 canonical runtime preflight import.
 
 Progress: [##########] 100%
-Next blocker: restore the local MolmoSpaces Python runtime if preflight blocks
-execution, then diagnose or reduce the shared RBY1M grasp-feasibility blocker
-before another planner-backed cleanup rerun.
+Next blocker: rotate proof sources or diagnose/reduce the shared RBY1M
+grasp-feasibility blocker before another planner-backed cleanup rerun.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 99 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 99)
+- Total plans completed: 100 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 100)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 

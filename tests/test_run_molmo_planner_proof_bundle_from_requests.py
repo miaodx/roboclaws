@@ -1219,7 +1219,7 @@ def test_runner_records_local_runtime_preflight_blocker_before_execute(
     )
     fake_python = tmp_path / "molmospaces-python"
     fake_python.write_text(
-        "#!/bin/sh\necho \"ModuleNotFoundError: No module named 'molmospaces'\" >&2\nexit 1\n",
+        "#!/bin/sh\necho \"ModuleNotFoundError: No module named 'molmo_spaces'\" >&2\nexit 1\n",
         encoding="utf-8",
     )
     fake_python.chmod(0o755)
@@ -1252,12 +1252,12 @@ def test_runner_records_local_runtime_preflight_blocker_before_execute(
     preflight = manifest["local_runtime_preflight"]
     assert result["status"] == "local_runtime_blocked"
     assert preflight["status"] == "blocked"
-    assert preflight["blockers"][0]["code"] == "molmospaces_import_failed"
+    assert preflight["blockers"][0]["code"] == "molmo_spaces_import_failed"
     assert manifest["proof_result_summary"]["result_count"] == 0
     assert manifest["proof_result_summary"]["results"][0]["status"] == "not_run"
     report = Path(result["report_path"]).read_text(encoding="utf-8")
     assert "Local Runtime Preflight" in report
-    assert "molmospaces_import_failed" in report
+    assert "molmo_spaces_import_failed" in report
     assert str(fake_python) in report
 
 

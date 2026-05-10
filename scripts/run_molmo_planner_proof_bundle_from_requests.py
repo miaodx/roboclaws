@@ -316,7 +316,7 @@ def _local_runtime_preflight(
     command = [
         str(molmospaces_python),
         "-c",
-        "import molmospaces; print('molmospaces import ok')",
+        "import molmo_spaces; print('molmo_spaces import ok')",
     ]
     try:
         completed = subprocess.run(
@@ -329,13 +329,13 @@ def _local_runtime_preflight(
     except subprocess.TimeoutExpired as exc:
         preflight["status"] = "blocked"
         blocker = {
-            "code": "molmospaces_import_timeout",
-            "message": "MolmoSpaces import preflight exceeded 30 seconds.",
+            "code": "molmo_spaces_import_timeout",
+            "message": "MolmoSpaces package import preflight exceeded 30 seconds.",
         }
         preflight["blockers"].append(blocker)
         preflight["checks"].append(
             {
-                "name": "molmospaces_import",
+                "name": "molmo_spaces_import",
                 "command": command,
                 "status": "blocked",
                 "returncode": "",
@@ -346,7 +346,7 @@ def _local_runtime_preflight(
         )
         return preflight
     check = {
-        "name": "molmospaces_import",
+        "name": "molmo_spaces_import",
         "command": command,
         "returncode": completed.returncode,
         "stdout": completed.stdout.strip(),
@@ -358,7 +358,7 @@ def _local_runtime_preflight(
     else:
         preflight["status"] = "blocked"
         blocker = {
-            "code": "molmospaces_import_failed",
+            "code": "molmo_spaces_import_failed",
             "message": completed.stderr.strip() or completed.stdout.strip() or "import failed",
         }
         preflight["blockers"].append(blocker)

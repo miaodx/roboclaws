@@ -3,7 +3,8 @@
 ## Goal
 
 Make local proof-bundle execution fail reviewably when the configured
-MolmoSpaces Python runtime is unavailable or cannot import `molmospaces`.
+MolmoSpaces Python runtime is unavailable or cannot import the canonical
+`molmo_spaces` package.
 
 ## Tasks
 

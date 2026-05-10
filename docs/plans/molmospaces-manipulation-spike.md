@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 99 proof-bundle local runtime preflight completed; next work is restoring local MolmoSpaces runtime or reducing the shared grasp-feasibility blocker
+**Status:** Phase 100 canonical runtime preflight import completed; next work is rotating proof sources or reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -292,9 +292,12 @@ grasp-infeasible object-target pairs as a `Grasp Feasibility Blocker Matrix`
 before the detailed blocker table, so source-rotation decisions are visually
 reviewable.
 Phase 99 adds a local-dev runtime preflight before real proof-bundle execution.
-If the configured MolmoSpaces Python cannot import `molmospaces`, the runner now
-writes a `local_runtime_blocked` manifest/report with `Local Runtime Preflight`
-evidence instead of failing before report generation.
+If the configured MolmoSpaces Python cannot import canonical `molmo_spaces`,
+the runner writes a `local_runtime_blocked` manifest/report with
+`Local Runtime Preflight` evidence instead of failing before report generation.
+Phase 100 corrects that preflight to the actual upstream package import
+(`molmo_spaces`) and records ready local preflight evidence with zero selected
+proof commands against the current seeded source plus prior memory.
 
 ## Why This Exists
 
@@ -1176,7 +1179,6 @@ completed:
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  restore the local MolmoSpaces Python runtime if `Local Runtime Preflight`
-  blocks execution, then diagnose or reduce the shared RBY1M grasp-feasibility
+  rotate proof sources or diagnose/reduce the shared RBY1M grasp-feasibility
   blocker before another cleanup rerun
 ```

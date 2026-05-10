@@ -9,9 +9,8 @@
 
 The next broader step is either proof-source rotation or grasp-feasibility
 reduction, but real proof execution depends on the local MolmoSpaces Python
-runtime. The configured default Python path currently fails to import
-`molmospaces`, so a real execution attempt can fail before the runner writes a
-manifest or report.
+runtime. The runner must check the canonical `molmo_spaces` package import so a
+real execution attempt cannot fail before it writes a manifest or report.
 
 ## Decision
 
