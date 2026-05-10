@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
+    grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
     task_feasibility_blocker_kind,
@@ -249,6 +250,9 @@ def proof_bundle_run_manifest(
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    selection = proof_request_selection or proof_request_selection_from_summary(proof_requests)
+    summary = proof_result_summary or proof_result_summary_from_commands(commands)
+    prior_summary = prior_proof_result_summary or {}
     return {
         "schema": PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
         "cleanup_run_result": str(cleanup_run_result),
@@ -256,15 +260,18 @@ def proof_bundle_run_manifest(
         "proof_request_count": int(proof_requests.get("request_count") or 0),
         "ready_request_count": int(proof_requests.get("ready_count") or 0),
         "planner_scene": proof_requests.get("planner_scene") or {},
-        "proof_request_selection": proof_request_selection
-        or proof_request_selection_from_summary(proof_requests),
-        "prior_proof_result_summary": prior_proof_result_summary or {},
+        "proof_request_selection": selection,
+        "prior_proof_result_summary": prior_summary,
         "local_runtime_preflight": local_runtime_preflight or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,
-        "proof_result_summary": proof_result_summary
-        or proof_result_summary_from_commands(commands),
+        "proof_result_summary": summary,
+        "grasp_feasibility_mitigation_decision": grasp_feasibility_mitigation_decision(
+            prior_proof_result_summary=prior_summary,
+            proof_result_summary=summary,
+            proof_request_selection=selection,
+        ),
         "cleanup_command": cleanup_command or [],
         "cleanup_rerun": cleanup_rerun or {},
         "evidence_note": (

@@ -797,6 +797,9 @@ def test_runner_ingests_standalone_prior_probe_run_result_by_cleanup_pair(
     assert prior_summary["view_artifact_count"] == 2
     assert prior_summary["grasp_feasibility_signature_count"] == 1
     assert prior_summary["grasp_feasibility_signature_counts"][0]["subkind"] == "grasp_rejection"
+    decision = manifest["grasp_feasibility_mitigation_decision"]
+    assert decision["primary_route"] == "source_rotation"
+    assert decision["source_rotation_state"] == "exhausted_by_prior_memory"
     summary = manifest["proof_result_summary"]
     assert summary["expected_count"] == 0
     report = Path(result["report_path"]).read_text(encoding="utf-8")

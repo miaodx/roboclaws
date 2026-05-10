@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
+    grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
     task_feasibility_blocker_kind,
@@ -123,3 +124,40 @@ def test_grasp_summary_classifies_missing_grasp_cache() -> None:
     assert signature["grasp_load_exception_types"] == ["ValueError"]
     assert '"subkind":"grasp_cache_missing"' in signature["pattern_key"]
     assert '"grasp_load_exception_asset_uids":["Bread_1"]' in signature["pattern_key"]
+
+
+def test_grasp_mitigation_decision_routes_missing_cache_before_retry() -> None:
+    decision = grasp_feasibility_mitigation_decision(
+        prior_proof_result_summary={
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "fridge_01",
+                    "grasp_feasibility_signature": {
+                        "schema": "planner_grasp_feasibility_signature_v1",
+                        "kind": "grasp_feasibility",
+                        "subkind": "grasp_cache_missing",
+                        "pattern_key": "missing-cache",
+                        "summary": "3 grasp-load failures; missing grasp cache: Bread_1",
+                        "count": 1,
+                        "request_ids": ["proof_001"],
+                        "object_names": ["bread/body"],
+                        "grasp_failure_count": 3,
+                        "candidate_removal_count": 1,
+                        "grasp_load_exception_asset_uids": ["Bread_1"],
+                        "grasp_load_exception_types": ["ValueError"],
+                    },
+                }
+            ]
+        },
+        proof_request_selection={"selected_count": 2, "excluded_count": 1},
+    )
+
+    assert decision["primary_route"] == "grasp_cache_mitigation"
+    assert decision["status"] == "action_required"
+    assert decision["recommendation"] == "mitigate_missing_grasp_cache_before_retry"
+    assert decision["source_rotation_state"] == "available_for_unproven_requests"
+    assert decision["missing_grasp_asset_uids"] == ["Bread_1"]
+    assert decision["grasp_load_exception_types"] == ["ValueError"]
+    assert decision["subkind_counts"] == {"grasp_cache_missing": 1}

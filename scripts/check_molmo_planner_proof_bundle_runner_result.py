@@ -101,6 +101,9 @@ def _assert_runner_result(
     assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
     prior_proof_result_summary = data.get("prior_proof_result_summary") or {}
+    decision = data.get("grasp_feasibility_mitigation_decision") or {}
+    if decision:
+        _assert_grasp_mitigation_decision(decision, report_text)
     if prior_proof_result_summary:
         _assert_prior_proof_result_summary(prior_proof_result_summary, base, report_text)
     if proof_result_summary:
@@ -652,6 +655,39 @@ def _assert_grasp_signature_counts(
         ]:
             if value:
                 assert str(value) in report_text, (signature, report_text[:500])
+
+
+def _assert_grasp_mitigation_decision(
+    decision: dict[str, Any],
+    report_text: str,
+) -> None:
+    assert decision.get("schema") == "planner_grasp_feasibility_mitigation_decision_v1", decision
+    assert decision.get("status") in {"not_applicable", "action_required"}, decision
+    assert decision.get("primary_route"), decision
+    assert decision.get("recommendation"), decision
+    assert "Grasp Feasibility Mitigation Decision" in report_text, report_text[:500]
+    for value in [
+        decision.get("status"),
+        decision.get("primary_route"),
+        decision.get("recommendation"),
+        decision.get("source_rotation_state"),
+        *(decision.get("missing_grasp_asset_uids") or []),
+        *(decision.get("grasp_load_exception_types") or []),
+    ]:
+        if value:
+            assert str(value) in report_text, (decision, report_text[:500])
+    for item in decision.get("signature_groups") or []:
+        assert isinstance(item, dict), decision
+        for value in [
+            item.get("source"),
+            item.get("subkind"),
+            item.get("summary"),
+            *(item.get("request_ids") or []),
+            *(item.get("object_names") or []),
+            *(item.get("grasp_load_exception_asset_uids") or []),
+        ]:
+            if value:
+                assert str(value) in report_text, (item, report_text[:500])
 
 
 def _assert_cleanup_rerun(

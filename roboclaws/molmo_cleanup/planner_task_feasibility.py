@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 GRASP_FEASIBILITY_SIGNATURE_SCHEMA = "planner_grasp_feasibility_signature_v1"
+GRASP_FEASIBILITY_MITIGATION_DECISION_SCHEMA = "planner_grasp_feasibility_mitigation_decision_v1"
 
 
 def task_feasibility_blocker_kind(
@@ -199,6 +200,60 @@ def grasp_feasibility_signature_counts(
     )
 
 
+def grasp_feasibility_mitigation_decision(
+    *,
+    prior_proof_result_summary: dict[str, Any] | None = None,
+    proof_result_summary: dict[str, Any] | None = None,
+    proof_request_selection: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    prior_summary = prior_proof_result_summary or {}
+    proof_summary = proof_result_summary or {}
+    selection = proof_request_selection or {}
+    signature_rows = _mitigation_signature_rows(
+        [
+            ("prior_proof_result_summary", prior_summary),
+            ("proof_result_summary", proof_summary),
+        ]
+    )
+    subkind_counts: dict[str, int] = {}
+    missing_assets: list[str] = []
+    exception_types: list[str] = []
+    request_ids: list[str] = []
+    for row in signature_rows:
+        subkind = str(row.get("subkind") or "unknown")
+        subkind_counts[subkind] = subkind_counts.get(subkind, 0) + int(row.get("count") or 0)
+        for value in row.get("grasp_load_exception_asset_uids") or []:
+            _append_unique(missing_assets, str(value or ""))
+        for value in row.get("grasp_load_exception_types") or []:
+            _append_unique(exception_types, str(value or ""))
+        for value in row.get("request_ids") or []:
+            _append_unique(request_ids, str(value or ""))
+    selected_count = int(selection.get("selected_count") or 0)
+    excluded_count = int(selection.get("excluded_count") or 0)
+    source_rotation_state = _source_rotation_state(selected_count, excluded_count)
+    primary_route, status, recommendation, rationale = _mitigation_route(
+        missing_assets=missing_assets,
+        subkind_counts=subkind_counts,
+        source_rotation_state=source_rotation_state,
+    )
+    return {
+        "schema": GRASP_FEASIBILITY_MITIGATION_DECISION_SCHEMA,
+        "status": status,
+        "primary_route": primary_route,
+        "recommendation": recommendation,
+        "rationale": rationale,
+        "source_rotation_state": source_rotation_state,
+        "selected_request_count": selected_count,
+        "excluded_request_count": excluded_count,
+        "signature_group_count": len(signature_rows),
+        "subkind_counts": subkind_counts,
+        "missing_grasp_asset_uids": missing_assets,
+        "grasp_load_exception_types": exception_types,
+        "evidence_request_ids": request_ids,
+        "signature_groups": signature_rows,
+    }
+
+
 def _grasp_pattern_key(task_sampler_failure_diagnostics: dict[str, Any]) -> str:
     fields = {
         "candidate_removal_count": int(
@@ -233,6 +288,86 @@ def _grasp_pattern_key(task_sampler_failure_diagnostics: dict[str, Any]) -> str:
     if exception_types:
         fields["grasp_load_exception_types"] = exception_types
     return json.dumps(fields, sort_keys=True, separators=(",", ":"))
+
+
+def _mitigation_signature_rows(
+    summaries: list[tuple[str, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    rows = []
+    for source, summary in summaries:
+        if not isinstance(summary, dict) or not summary:
+            continue
+        signature_groups = summary.get("grasp_feasibility_signature_counts") or []
+        if not signature_groups:
+            signature_groups = grasp_feasibility_signature_counts(summary.get("results") or [])
+        for group in signature_groups:
+            if not isinstance(group, dict) or not group:
+                continue
+            rows.append(
+                {
+                    "source": source,
+                    "subkind": str(group.get("subkind") or "unknown"),
+                    "count": int(group.get("count") or 0),
+                    "summary": str(group.get("summary") or ""),
+                    "request_ids": [str(value) for value in group.get("request_ids") or []],
+                    "object_names": [str(value) for value in group.get("object_names") or []],
+                    "grasp_load_exception_asset_uids": [
+                        str(value) for value in group.get("grasp_load_exception_asset_uids") or []
+                    ],
+                    "grasp_load_exception_types": [
+                        str(value) for value in group.get("grasp_load_exception_types") or []
+                    ],
+                }
+            )
+    return rows
+
+
+def _source_rotation_state(selected_count: int, excluded_count: int) -> str:
+    if selected_count:
+        return "available_for_unproven_requests"
+    if excluded_count:
+        return "exhausted_by_prior_memory"
+    return "not_applicable"
+
+
+def _mitigation_route(
+    *,
+    missing_assets: list[str],
+    subkind_counts: dict[str, int],
+    source_rotation_state: str,
+) -> tuple[str, str, str, str]:
+    if missing_assets:
+        recommendation = "mitigate_missing_grasp_cache_before_retry"
+        rationale = (
+            "At least one exact-scene proof failed before collision masking because cached "
+            "grasps could not be loaded for the requested asset."
+        )
+        if source_rotation_state == "available_for_unproven_requests":
+            rationale += (
+                " Source rotation still has selected unproven requests, but it should not "
+                "be treated as a retry path for the missing-cache asset."
+            )
+        return ("grasp_cache_mitigation", "action_required", recommendation, rationale)
+    if subkind_counts.get("zero_noncolliding_grasps"):
+        return (
+            "collision_or_pose_mitigation",
+            "action_required",
+            "investigate_zero_noncolliding_grasps",
+            "Cached grasps loaded, but collision masking rejected every checked pose.",
+        )
+    if subkind_counts:
+        return (
+            "source_rotation",
+            "action_required",
+            "rotate_source_or_improve_grasp_policy",
+            "Current grasp-feasibility evidence is not a missing-cache signature.",
+        )
+    return (
+        "none",
+        "not_applicable",
+        "no_grasp_feasibility_signature_evidence",
+        "No grouped grasp-feasibility signatures were present in prior or current proof results.",
+    )
 
 
 def _grasp_feasibility_subkind(task_sampler_failure_diagnostics: dict[str, Any]) -> str:

@@ -226,6 +226,11 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {
+        _grasp_feasibility_mitigation_decision_section(
+            manifest.get("grasp_feasibility_mitigation_decision") or {}
+        )
+    }
     {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
@@ -893,6 +898,91 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{selected_table}{excluded_table}{target_blockers_table}"
         f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+    )
+
+
+def _grasp_feasibility_mitigation_decision_section(decision: dict[str, Any]) -> str:
+    if not decision:
+        return ""
+    missing_assets = ", ".join(
+        str(value) for value in decision.get("missing_grasp_asset_uids") or []
+    )
+    exception_types = ", ".join(
+        str(value) for value in decision.get("grasp_load_exception_types") or []
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', decision.get('status', 'unknown'))}"
+        f"{_metric('Primary route', decision.get('primary_route', 'unknown'))}"
+        f"{_metric('Source rotation', decision.get('source_rotation_state', 'unknown'))}"
+        f"{_metric('Selected requests', decision.get('selected_request_count', 0))}"
+        f"{_metric('Excluded requests', decision.get('excluded_request_count', 0))}"
+        f"{_metric('Signature groups', decision.get('signature_group_count', 0))}"
+        f"{_metric('Missing assets', missing_assets or 'none')}"
+        f"{_metric('Exception types', exception_types or 'none')}"
+        "</div>"
+    )
+    rows = []
+    for item in decision.get("signature_groups") or []:
+        if not isinstance(item, dict):
+            continue
+        row_missing_assets = ", ".join(
+            str(v) for v in item.get("grasp_load_exception_asset_uids") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source', '')))}</td>"
+            f"<td>{html.escape(str(item.get('subkind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('summary', '')))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('request_ids') or []))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('object_names') or []))}</td>"
+            f"<td>{html.escape(row_missing_assets)}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="7">No grasp-feasibility signature groups.</td></tr>')
+    table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Subkind</th><th>Proofs</th><th>Summary</th>"
+        "<th>Requests</th><th>Planner objects</th><th>Missing grasp assets</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+    cards = "".join(
+        [
+            _decision_card(
+                "Recommendation",
+                decision.get("recommendation", "unknown"),
+                decision.get("rationale", ""),
+            ),
+            _decision_card(
+                "Cache path",
+                missing_assets or "No missing cache assets",
+                "Mitigate missing cached grasps before retrying the matching exact-scene asset.",
+            ),
+            _decision_card(
+                "Source rotation",
+                decision.get("source_rotation_state", "unknown"),
+                "Run selected unproven source-rotation requests separately from "
+                "known cache misses.",
+            ),
+        ]
+    )
+    return (
+        '<section class="panel grasp-mitigation-decision">'
+        "<h2>Grasp Feasibility Mitigation Decision</h2>"
+        '<p class="note">Routes grouped grasp-feasibility evidence before another runtime run.</p>'
+        f'{metrics}<div class="decision-cards">{cards}</div>{table}</section>'
+    )
+
+
+def _decision_card(title: str, value: Any, detail: Any) -> str:
+    return (
+        '<article class="decision-card">'
+        f"<h3>{html.escape(str(title))}</h3>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<p>{html.escape(str(detail))}</p>"
+        "</article>"
     )
 
 
@@ -3578,6 +3668,26 @@ def _wrap_html(body: str) -> str:
       margin: 8px 0 0;
       color: #475569;
     }}
+    .decision-cards {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 0 0 12px;
+    }}
+    .decision-card {{
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      background: #eff6ff;
+    }}
+    .decision-card h3 {{ margin: 0 0 6px; font-size: 14px; color: #1e3a8a; }}
+    .decision-card strong {{
+      display: block;
+      color: #0f172a;
+      overflow-wrap: anywhere;
+      margin-bottom: 8px;
+    }}
+    .decision-card p {{ margin: 0; color: #475569; }}
     .raw-fpv-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

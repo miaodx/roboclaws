@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 110 missing grasp cache signatures completed; next work is deciding source rotation versus grasp-cache mitigation for the exact bread asset
+**Status:** Phase 111 grasp cache routing decision completed; next work is implementing `Bread_1` grasp-cache mitigation or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -373,6 +373,11 @@ Phase 110 turns that blocker into a distinct proof-result signature subkind.
 Reports still classify the task blocker as `grasp_feasibility`, but the grouped
 signature matrix now shows `grasp_cache_missing`, grasp-load failure counts,
 collision-check counts, and missing asset IDs such as `Bread_1`.
+Phase 111 makes the routing decision explicit. Proof-bundle manifests and
+reports now render `Grasp Feasibility Mitigation Decision`, route the known
+`Bread_1` missing-cache blocker to `grasp_cache_mitigation`, and keep source
+rotation visible only as `available_for_unproven_requests` for different
+selected requests.
 
 ## Why This Exists
 

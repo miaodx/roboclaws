@@ -180,6 +180,12 @@ blocker while classifying missing cached grasp files as a distinct subkind with
 failed asset UIDs.
 _Avoid_: grouping missing cache with zero non-colliding grasp checks
 
+**Grasp Cache Routing Decision**:
+Proof-bundle runner evidence that routes missing cached grasp assets to cache
+mitigation before exact retry while keeping source rotation state visible for
+separate unproven requests.
+_Avoid_: treating source rotation as if it mitigated a known missing cache asset
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -685,6 +691,8 @@ _Avoid_: full cleanup replacement claim
   failures before any grasp-feasibility mitigation is chosen.
 - **Missing Grasp Cache Signature** should keep missing asset data visible in
   proof-result summaries before source rotation or cache mitigation.
+- **Grasp Cache Routing Decision** should make cache mitigation versus source
+  rotation explicit before another runtime proof attempt.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1052,3 +1060,7 @@ _Avoid_: full cleanup replacement claim
   `task_feasibility_blocker_kind=grasp_feasibility` but add
   `subkind=grasp_cache_missing`, failed grasp-load counts, and missing asset
   IDs such as `Bread_1` to the grouped signature matrix.
+- Phase 111 adds Grasp Cache Routing Decision. Proof-bundle manifests and
+  reports now route `grasp_cache_missing` evidence for `Bread_1` to
+  `grasp_cache_mitigation` before exact retry, while keeping source rotation
+  visible as `available_for_unproven_requests` for unrelated selected requests.

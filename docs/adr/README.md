@@ -110,6 +110,7 @@ one decision per file, sequential numbering, explicit status.
 | [0099](0099-preserve-exact-pickup-retry-budget.md) | Preserve Exact Pickup Retry Budget | Accepted |
 | [0100](0100-record-grasp-collision-diagnostics.md) | Record Grasp Collision Diagnostics | Accepted |
 | [0101](0101-classify-missing-grasp-cache-signatures.md) | Classify Missing Grasp Cache Signatures | Accepted |
+| [0102](0102-route-missing-grasp-cache-before-retry.md) | Route Missing Grasp Cache Before Retry | Accepted |
 
 ## Adding a new ADR
 
