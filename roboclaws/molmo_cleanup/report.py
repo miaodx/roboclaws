@@ -315,6 +315,29 @@ def render_grasp_filter_diagnostics_report(
     return report_path
 
 
+def render_grasp_initial_contact_diagnostics_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for rigid-grasp initial-contact diagnostics."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_initial_contact_summary_section(result),
+                _grasp_initial_contact_artifacts_section(result),
+                _grasp_initial_contact_variants_section(result.get("variants") or []),
+                _grasp_initial_contact_samples_section(result.get("best_variant") or {}),
+                _grasp_initial_contact_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
 def _present_sections(sections: list[str]) -> list[str]:
     return [section for section in sections if section]
 
@@ -1076,6 +1099,156 @@ def _grasp_filter_diagnostics_blockers_section(blockers: list[dict[str, Any]]) -
         "<h2>Filter Diagnostic Blockers</h2>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Code</th><th>Variant</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_summary_section(result: dict[str, Any]) -> str:
+    best = result.get("best_variant") or {}
+    return (
+        '<section class="summary grasp-initial-contact-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp initial-contact artifact</p>'
+        "<h1>MolmoSpaces Grasp Initial Contact Diagnostics</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Object', result.get('object_name', ''))}"
+        f"{_metric('Candidates', result.get('candidate_count', 0))}"
+        f"{_metric('Variants', result.get('variant_count', 0))}"
+        f"{_metric('Successful variants', result.get('successful_variant_count', 0))}"
+        f"{_metric('Best success', best.get('success_count', 0))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Best variant', best.get('name', ''))}"
+        f"{_badge('Best sign', best.get('approach_sign', ''))}"
+        f"{_badge('Best distance', best.get('approach_distance', ''))}"
+        f"{_badge('Best settle', best.get('settle_steps', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_artifacts_section(result: dict[str, Any]) -> str:
+    command_result = result.get("command_result") or {}
+    rows = [
+        ("Candidate grasps", result.get("candidate_grasps_path", "")),
+        ("Object XML", result.get("object_xml", "")),
+        ("Artifact dir", result.get("artifact_dir", "")),
+        ("Probe script", result.get("probe_script_path", "")),
+        ("Probe result", result.get("probe_output_path", "")),
+        ("Command status", command_result.get("status", "")),
+        ("Command return", command_result.get("returncode", "")),
+        (
+            "Command output tail",
+            _tail_text(command_result.get("stderr") or command_result.get("stdout"), limit=500),
+        ),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    command = " ".join(str(part) for part in result.get("command") or [])
+    command_html = f'<p class="note"><code>{html.escape(command)}</code></p>' if command else ""
+    return (
+        '<section class="panel grasp-initial-contact-artifacts">'
+        "<h2>Diagnostic Artifacts</h2>"
+        f"{command_html}"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_variants_section(variants: list[dict[str, Any]]) -> str:
+    if not variants:
+        return ""
+    rows = []
+    for variant in variants:
+        successful_indices = ", ".join(
+            str(i) for i in variant.get("successful_candidate_indices") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(variant.get('name', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('classification', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('approach_sign', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('approach_distance', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('settle_steps', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('candidate_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('success_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('initial_contact_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('initial_displaced_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('avg_initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(str(variant.get('max_initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(successful_indices)}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-initial-contact-variants">'
+        "<h2>Approach Variants</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Variant</th><th>Classification</th><th>Sign</th><th>Distance</th>"
+        "<th>Settle</th><th>Candidates</th><th>Successes</th><th>Initial contacts</th>"
+        "<th>Initial displaced</th><th>Avg initial move</th><th>Max initial move</th>"
+        "<th>Successful candidates</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_samples_section(best: dict[str, Any]) -> str:
+    rows = []
+    for sample in best.get("sample_rows") or []:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(sample.get('candidate_index', '')))}</td>"
+            f"<td>{html.escape(_yes_no(sample.get('success')))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_contact_sides', [])))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_contact_pair_count', 0)))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(str(sample.get('final_contact_sides', [])))}</td>"
+            f"<td>{html.escape(str(sample.get('final_contact_pair_count', 0)))}</td>"
+            f"<td>{html.escape(str(sample.get('final_displacement_m', 0.0)))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        '<section class="panel grasp-initial-contact-samples">'
+        f"<h2>Best Variant Samples: {html.escape(str(best.get('name', '')))}</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Candidate</th><th>Success</th><th>Initial sides</th><th>Initial contacts</th>"
+        "<th>Initial move</th><th>Final sides</th><th>Final contacts</th><th>Final move</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Initial Contact Blockers</h2>'
+            '<p class="note">No initial-contact diagnostic blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-initial-contact-blockers">'
+        "<h2>Initial Contact Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Message</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
         "</section>"
     )

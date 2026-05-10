@@ -207,6 +207,13 @@ Bounded local evidence that preserves MolmoSpaces rigid grasp intermediates and
 reruns perturbation-filter variants before cache installation.
 _Avoid_: relying on an empty filtered NPZ as the only failure signal
 
+**Grasp Initial Contact Diagnostics**:
+Bounded local evidence that sweeps rigid-grasp open-settle and approach-pose
+parameters against preserved generated candidates, recording initial object
+contacts, initial displacement, final gripper contacts, and nonzero success
+counts before any loader cache installation.
+_Avoid_: treating zero filtered transforms as an opaque perturbation failure
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -1178,3 +1185,8 @@ _Avoid_: full cleanup replacement claim
   cleanup artifacts now regenerate from `run_result.json` through the shared
   Cleanup Artifact Report adapter using a minimal public scenario shell, so
   stale local `report.html` files do not imply multiple report implementations.
+- Phase 121 adds Grasp Initial Contact Diagnostics. A reusable MuJoCo sweep over
+  the 24 preserved `Bread_1` candidates shows the upstream-sign approach remains
+  zero-success, while positive-sign larger standoffs produce nonzero contacts
+  without initial object displacement; the best local variant is
+  `sign_1_dist_0.8_settle_1` with 9/24 successes.

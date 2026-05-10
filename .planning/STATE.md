@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 120 MolmoSpaces report artifact scenario fallback completed on 2026-05-10.
+stopped_at: Phase 121 MolmoSpaces grasp initial contact diagnostics completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 110
-  completed_phases: 110
-  total_plans: 116
-  completed_plans: 116
+  total_phases: 111
+  completed_phases: 111
+  total_plans: 117
+  completed_plans: 117
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 120 closed the scenario-less cleanup report adapter gap; the next manipulation blocker remains the upstream `Bread_1` initial contact/pose path.
+**Current focus:** Phase 121 recorded a reusable `Bread_1` initial-contact sweep; the next manipulation blocker is applying a validated pose policy to cache filtering without installing unproven grasps.
 
 ## Current Position
 
-Phase: 120 (molmospaces-report-artifact-scenario-fallback) - COMPLETE
-Plan: 1 of 1 complete - `120-01` keeps scenario-less cleanup artifacts on the shared report underlay.
+Phase: 121 (molmospaces-grasp-initial-contact-diagnostics) - COMPLETE
+Plan: 1 of 1 complete - `121-01` records approach-sign/standoff/open-settle diagnostics for preserved `Bread_1` candidates.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -354,19 +354,23 @@ ADR-0003 visual cleanup artifacts without `scenario.json` now regenerate from
 `run_result.json` through the shared report underlay using a minimal public
 scenario shell, so stale local reports do not behave like separate
 implementations.
-Last activity: 2026-05-10 - Completed Phase 120 report artifact scenario fallback.
+Phase 121 adds a reusable grasp initial-contact diagnostic runner and report.
+The local `Bread_1` sweep evaluated 24 candidates across 30 approach variants:
+upstream-sign variants remained zero-success, while the best positive-sign
+variant, `sign_1_dist_0.8_settle_1`, produced 9/24 successes with zero initial
+object displacement.
+Last activity: 2026-05-10 - Completed Phase 121 grasp initial contact diagnostics.
 
 Progress: [##########] 100%
-Next blocker: inspect or replace the upstream `Bread_1` initial contact/pose
-path inside perturbation testing so at least one nonzero transform is generated
-before installing the droid loader cache target.
+Next blocker: apply a validated positive-standoff pose policy to the actual
+filter/cache path and revalidate a non-empty droid loader cache before install.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 120 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 120)
+- Total plans completed: 121 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 121)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -1030,14 +1034,14 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 120 MolmoSpaces report artifact scenario fallback completed.
-The next manipulation implementation should inspect or replace the upstream
-`Bread_1` initial contact/pose path so perturbation testing produces at least
-one nonzero transform before installing the droid loader cache target.
+Stopped at: Phase 121 MolmoSpaces grasp initial contact diagnostics completed.
+The next manipulation implementation should apply a validated positive-standoff
+pose policy to the actual filter/cache path and revalidate a non-empty droid
+loader cache before install.
 Latest phase artifacts are
-`docs/adr/0111-regenerate-scenario-less-cleanup-artifacts.md`,
-`docs/plans/molmospaces-report-artifact-scenario-fallback.md`, and
-`.planning/phases/120-molmospaces-report-artifact-scenario-fallback/120-01-report-artifact-scenario-fallback-PLAN.md`.
+`docs/adr/0112-record-grasp-initial-contact-diagnostics.md`,
+`docs/plans/molmospaces-grasp-initial-contact-diagnostics.md`, and
+`.planning/phases/121-molmospaces-grasp-initial-contact-diagnostics/121-01-grasp-initial-contact-diagnostics-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1059,7 +1063,11 @@ Latest regenerated stale report:
 `output/molmo-agent-bridge-visual-codex/report.html`.
 Latest regenerated scenario-less report:
 `output/molmo-realworld-report-underlay-visual/report.html`.
-Resume file: .planning/phases/120-molmospaces-report-artifact-scenario-fallback/120-01-report-artifact-scenario-fallback-PLAN.md
+Latest grasp initial-contact diagnostics artifact:
+`output/debug-phase121-grasp-initial-contact-diagnostics/initial_contact_result.json`.
+Latest grasp initial-contact diagnostics report:
+`output/debug-phase121-grasp-initial-contact-diagnostics/report.html`.
+Resume file: .planning/phases/121-molmospaces-grasp-initial-contact-diagnostics/121-01-grasp-initial-contact-diagnostics-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1067,7 +1075,7 @@ Resume file: .planning/phases/120-molmospaces-report-artifact-scenario-fallback/
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 120 MolmoSpaces report artifact scenario fallback
-is complete; next manipulation work should inspect or replace the zero-success
-`Bread_1` initial contact/pose path before installing a non-empty rigid grasp
-cache.
+**Active Phase:** None. Phase 121 MolmoSpaces grasp initial contact diagnostics
+is complete; next manipulation work should apply a validated positive-standoff
+pose policy to the actual filter/cache path before installing a non-empty rigid
+grasp cache.

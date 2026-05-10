@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 120 report artifact scenario fallback completed; next work is inspecting or replacing the upstream `Bread_1` initial contact/pose path before installing a non-empty droid loader cache
+**Status:** Phase 121 grasp initial contact diagnostics completed; next work is applying a validated pose policy before installing a non-empty droid loader cache
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -420,6 +420,11 @@ Phase 120 closes the scenario-less report adapter gap. ADR-0003 visual cleanup
 artifacts without `scenario.json` now regenerate from `run_result.json` through
 the same shared report underlay, using only a minimal public scenario shell and
 preserving the plain `nav, pick, nav, open?, place` visual rhythm.
+Phase 121 records the initial-contact/approach sweep as a reusable diagnostic.
+The upstream-sign approach variants remain zero-success, while positive-sign
+larger standoffs produce nonzero final gripper contacts. The best local variant
+is `sign_1_dist_0.8_settle_1` with 9/24 successes and zero initial object
+displacement.
 
 ## Why This Exists
 
