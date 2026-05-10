@@ -1642,6 +1642,9 @@ def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
 
     html = report_path.read_text(encoding="utf-8")
     assert "Attached Planner-Backed Proof" in html
+    assert "Proof Quality" in html
+    assert "multi_step_motion" in html
+    assert "Containment proven" in html
     assert "Planner Initial" in html
     assert "Planner Final" in html
     assert "Cleanup object moves" in html
@@ -1704,6 +1707,8 @@ def test_cleanup_report_renders_attached_planner_proof_bundle(tmp_path: Path) ->
 
     html = report_path.read_text(encoding="utf-8")
     assert "Attached Planner-Backed Proofs" in html
+    assert "Proof Quality" in html
+    assert "multi_step_motion=2" in html
     assert "proof_001 Planner Initial" in html
     assert "proof_002 Planner Final" in html
     assert "observed_001" in html

@@ -8,6 +8,11 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    format_quality_tier_counts,
+    planner_proof_quality_evidence,
+    planner_proof_quality_summary,
+)
 from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
     OBJECT_DONE_PHASE,
@@ -559,6 +564,7 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         return _attached_planner_proof_bundle_section(run_result, proof)
     diagnostics = proof.get("runtime_diagnostics") or {}
     images = proof.get("image_artifacts") or {}
+    quality = planner_proof_quality_evidence(proof)
     note = (
         proof.get("evidence_note")
         or "Strict standalone planner-backed manipulation proof attached for review."
@@ -567,14 +573,17 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         '<div class="metric-grid">'
         f"{_metric('Status', proof.get('status', 'unknown'))}"
         f"{_metric('Embodiment', proof.get('embodiment', 'unknown'))}"
+        f"{_metric('Proof Quality', quality.get('quality_tier', 'unknown'))}"
         f"{_metric('Steps', proof.get('steps_executed', 'n/a'))}"
         f"{_metric('Qpos delta', proof.get('max_abs_qpos_delta', 'n/a'))}"
+        f"{_metric('Containment proven', 'yes' if quality.get('containment_proven') else 'no')}"
         "</div>"
     )
     badges = "".join(
         (
             _badge("Strict proof", proof.get("strict_proof_eligible", False)),
             _badge("Planner backed", proof.get("planner_backed", False)),
+            _badge("Multi-step motion", quality.get("multi_step_motion", False)),
             _badge("Cleanup primitive", run_result.get("primitive_provenance", "unknown")),
             _badge("Renderer adapter", diagnostics.get("renderer_adapter_enabled", False)),
         )
@@ -591,6 +600,9 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(str(note))} Cleanup object moves in this '
         f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
         "</p>"
+        f'<p class="note"><strong>Proof Quality:</strong> '
+        f"{html.escape(str(quality.get('quality_tier', 'unknown')))}. "
+        f"{html.escape(str(quality.get('evidence_note', '')))}</p>"
         f'{metrics}<div class="badges">{badges}</div>{views}</section>'
     )
 
@@ -602,6 +614,11 @@ def _attached_planner_proof_bundle_section(
     attachments = [item for item in bundle.get("attachments") or [] if isinstance(item, dict)]
     if not attachments:
         return ""
+    quality_summary = (
+        bundle.get("proof_quality_summary")
+        if isinstance(bundle.get("proof_quality_summary"), dict)
+        else planner_proof_quality_summary(attachments)
+    )
     note = (
         bundle.get("evidence_note")
         or "Multiple strict standalone planner-backed manipulation proofs attached."
@@ -610,6 +627,8 @@ def _attached_planner_proof_bundle_section(
         '<div class="metric-grid">'
         f"{_metric('Status', bundle.get('status', 'unknown'))}"
         f"{_metric('Proofs', bundle.get('proof_count', len(attachments)))}"
+        f"{_metric('Proof Quality', format_quality_tier_counts(quality_summary))}"
+        f"{_metric('Min steps', quality_summary.get('min_steps_executed', 0))}"
         f"{_metric('Cleanup primitive', run_result.get('primitive_provenance', 'unknown'))}"
         "</div>"
     )
@@ -625,13 +644,16 @@ def _attached_planner_proof_bundle_section(
         proof_id = str(attachment.get("proof_id") or "proof")
         binding = attachment.get("cleanup_primitive_binding") or {}
         images = attachment.get("image_artifacts") or {}
+        quality = planner_proof_quality_evidence(attachment)
         rows.append(
             "<tr>"
             f"<td>{html.escape(proof_id)}</td>"
             f"<td>{html.escape(str(binding.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(binding.get('target_receptacle_id', '')))}</td>"
             f"<td>{html.escape(str(attachment.get('embodiment', 'unknown')))}</td>"
+            f"<td>{html.escape(str(quality.get('quality_tier', 'unknown')))}</td>"
             f"<td>{html.escape(str(attachment.get('steps_executed', 'n/a')))}</td>"
+            f"<td>{html.escape(str(quality.get('containment_proven', False)))}</td>"
             "</tr>"
         )
         views.append(
@@ -642,13 +664,18 @@ def _attached_planner_proof_bundle_section(
         )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Proof</th><th>Object</th>'
-        "<th>Target</th><th>Embodiment</th><th>Steps</th></tr></thead><tbody>"
+        "<th>Target</th><th>Embodiment</th><th>Quality</th><th>Steps</th>"
+        "<th>Containment proven</th></tr></thead><tbody>"
         f"{''.join(rows)}</tbody></table></div>"
     )
     return (
         '<section class="panel attached-planner-proof">'
         "<h2>Attached Planner-Backed Proofs</h2>"
         f'<p class="note">{html.escape(str(note))}</p>'
+        f'<p class="note"><strong>Proof Quality:</strong> '
+        f"{html.escape(format_quality_tier_counts(quality_summary))}. "
+        "Attached planner proofs classify robot-motion strength separately from "
+        "final cleanup containment.</p>"
         f'{metrics}<div class="badges">{badges}</div>{table}'
         f'<div class="views">{"".join(views)}</div></section>'
     )

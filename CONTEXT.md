@@ -450,6 +450,12 @@ A strict standalone planner-backed manipulation proof rendered alongside a
 cleanup artifact, without changing the cleanup loop's own primitive provenance.
 _Avoid_: planner-backed cleanup
 
+**Planner Proof Quality Evidence**:
+Reusable proof-strength classification for attached planner proofs, separating
+one-step robot motion, multi-step robot motion, and containment-level proof
+from the lower-level `steps_executed` and `max_abs_qpos_delta` fields.
+_Avoid_: implicit proof strength, report-only quality labels
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -744,6 +750,9 @@ _Avoid_: full cleanup replacement claim
 - Planner runtime blockers should be reported as dependency/runtime diagnostics, not inferred from sparse shell failures.
 - A **Headless Planner Renderer Adapter** may help reach planner execution in local probes, but it is not itself **Planner-Backed Manipulation Proof**.
 - An **Attached Planner Proof** may make planner capability visible in a cleanup report, but cleanup object moves remain `api_semantic` unless the cleanup loop actually calls planner-backed primitives.
+- An **Attached Planner Proof** should include **Planner Proof Quality
+  Evidence**, so reports and checkers can distinguish `one_step_motion` from
+  multi-step pick/place progress or full containment.
 - A **Planner-Backed Cleanup Primitive Gate** should reject `api_semantic` cleanup subphases as strict planner-backed cleanup execution, while allowing explicit blocked-capability evidence until real primitives exist.
 - An **RBY1M CuRobo Runtime Gate** should reject standalone Franka planner proof as target cleanup runtime readiness, while allowing explicit blocked-capability evidence when CuRobo is missing.
 - **RBY1M CuRobo Warmup Readiness** should record worker stages before treating a timeout as actionable evidence.
@@ -1237,3 +1246,8 @@ _Avoid_: full cleanup replacement claim
   leaving 37 unmatched subphases `api_semantic`, so the report shows attached
   proof views, Cleanup Primitive Gate, Planner Cleanup Bridge, and a globally
   blocked bridge rather than a premature full cleanup claim.
+- Phase 127 adds Planner Proof Quality Evidence. Attached planner proofs and
+  proof bundles now classify proof strength through one shared module; cleanup
+  reports render `Proof Quality`, and the ADR-0003 checker can require both
+  proof-quality evidence and a minimum executed-step horizon before stronger
+  cleanup claims are accepted.

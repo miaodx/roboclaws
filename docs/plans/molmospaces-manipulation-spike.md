@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 126 Phase 125 bound proof cleanup rerun completed; one ADR-0003 object now consumes the exact proof while the full bridge remains blocked
+**Status:** Phase 127 planner proof quality tier completed; one ADR-0003 object consumes the exact proof, with proof strength explicit and the full bridge still blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -453,6 +453,11 @@ planner-backed for `nav, pick, nav, open, place_inside`, while unmatched
 objects remain `api_semantic`; the Cleanup Primitive Gate and Planner Cleanup
 Bridge stay blocked at the run level until all cleanup objects have matching
 planner proof coverage.
+Phase 127 makes the strength of those attached proofs explicit. Planner proof
+attachments and bundles now share one proof-quality module, reports render
+`Proof Quality`, and the ADR-0003 checker can require a minimum executed-step
+horizon before treating future artifacts as stronger than the current
+one-step-motion evidence.
 
 ## Why This Exists
 
@@ -1334,7 +1339,7 @@ completed:
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  expand exact-proof coverage beyond observed_001 or define the next stricter
-  planner-backed cleanup gate: multi-step pick/place progress versus full
-  containment, before claiming full planner-backed cleanup
+  expand exact-proof coverage beyond observed_001, or generate a stricter
+  multi-step/containment proof before raising the checker horizon above
+  one-step motion
 ```

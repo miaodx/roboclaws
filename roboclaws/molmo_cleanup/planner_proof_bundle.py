@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.planner_proof_attachment import (
     attach_planner_proof,
     validate_planner_proof_attachment,
 )
+from roboclaws.molmo_cleanup.planner_proof_quality import planner_proof_quality_summary
 
 PLANNER_PROOF_BUNDLE_SCHEMA = "planner_backed_cleanup_proof_bundle_v1"
 
@@ -47,6 +48,7 @@ def attach_planner_proof_bundle(
         "cleanup_primitive_bindings": [
             cleanup_primitive_binding_from_attachment(attachment) for attachment in attachments
         ],
+        "proof_quality_summary": planner_proof_quality_summary(attachments),
         "evidence_note": (
             "Multiple strict planner-backed manipulation proofs attached for cleanup "
             "primitive coverage. Each cleanup object must match its own proof binding."

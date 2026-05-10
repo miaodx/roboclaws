@@ -21,6 +21,10 @@ from roboclaws.molmo_cleanup.planner_proof_bundle import (
     planner_proof_attachments,
     validate_planner_proof_bundle,
 )
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    validate_planner_proof_quality_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -62,6 +66,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
+    parser.add_argument("--require-planner-proof-quality", action="store_true")
+    parser.add_argument(
+        "--require-planner-proof-min-steps",
+        type=int,
+        default=None,
+        help="Require every attached planner proof to execute at least this many steps.",
+    )
     parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
     parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
     parser.add_argument(
@@ -122,6 +133,8 @@ def main() -> None:
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_camera_model_policy=args.require_camera_model_policy,
             require_planner_proof_attachment=args.require_planner_proof_attachment,
+            require_planner_proof_quality=args.require_planner_proof_quality,
+            require_planner_proof_min_steps=args.require_planner_proof_min_steps,
             accept_blocked_planner_cleanup_primitives=(
                 args.accept_blocked_planner_cleanup_primitives
             ),
@@ -167,6 +180,8 @@ def _assert_result(
     require_raw_fpv_observations: bool = False,
     require_camera_model_policy: bool = False,
     require_planner_proof_attachment: bool = False,
+    require_planner_proof_quality: bool = False,
+    require_planner_proof_min_steps: int | None = None,
     accept_blocked_planner_cleanup_primitives: bool = False,
     require_planner_backed_cleanup_primitives: bool = False,
     require_bound_planner_cleanup_objects: list[str] | None = None,
@@ -252,8 +267,18 @@ def _assert_result(
         _assert_raw_fpv_observations(data, base, report_text)
     if require_camera_model_policy:
         _assert_camera_model_policy(data, report_text)
-    if require_planner_proof_attachment:
-        _assert_planner_proof_attachment(data, base, report_text)
+    if (
+        require_planner_proof_attachment
+        or require_planner_proof_quality
+        or require_planner_proof_min_steps is not None
+    ):
+        _assert_planner_proof_attachment(
+            data,
+            base,
+            report_text,
+            require_quality=require_planner_proof_quality,
+            min_steps_executed=require_planner_proof_min_steps,
+        )
     if accept_blocked_planner_cleanup_primitives or require_planner_backed_cleanup_primitives:
         _assert_cleanup_primitive_gate(
             data,
@@ -511,6 +536,9 @@ def _assert_planner_proof_attachment(
     data: dict[str, Any],
     base: Path,
     report_text: str,
+    *,
+    require_quality: bool = False,
+    min_steps_executed: int | None = None,
 ) -> None:
     assert data.get("primitive_provenance") in {
         API_SEMANTIC_PROVENANCE,
@@ -531,6 +559,14 @@ def _assert_planner_proof_attachment(
         proof_attachments = [attachment]
         assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
     for proof in proof_attachments:
+        quality = planner_proof_quality_evidence(proof)
+        validate_planner_proof_quality_evidence(
+            quality,
+            min_steps_executed=min_steps_executed or 1,
+        )
+        if require_quality:
+            assert "Proof Quality" in report_text, report_text[:500]
+            assert str(quality.get("quality_tier") or "") in report_text, report_text[:500]
         for value in (proof.get("image_artifacts") or {}).values():
             path = _resolve_path(base, str(value))
             assert path.is_file(), path

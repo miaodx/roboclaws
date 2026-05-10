@@ -126,6 +126,7 @@ one decision per file, sequential numbering, explicit status.
 | [0115](0115-focus-cleanup-report-robot-timeline-on-subphases.md) | Focus Cleanup Report Robot Timeline On Subphases | Accepted |
 | [0116](0116-preserve-curobo-policy-exception-context.md) | Preserve CuRobo Policy Exception Context | Accepted |
 | [0117](0117-consume-phase125-proof-in-cleanup-primitive-path.md) | Consume Phase 125 Proof In Cleanup Primitive Path | Accepted |
+| [0118](0118-record-planner-proof-quality-tier.md) | Record Planner Proof Quality Tier | Accepted |
 
 ## Adding a new ADR
 
