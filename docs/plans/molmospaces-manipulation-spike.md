@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 100 canonical runtime preflight import completed; next work is rotating proof sources or reducing the shared grasp-feasibility blocker
+**Status:** Phase 101 seed 10 source rotation completed; next work is executing selected seed 10 proof commands or reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -298,6 +298,13 @@ the runner writes a `local_runtime_blocked` manifest/report with
 Phase 100 corrects that preflight to the actual upstream package import
 (`molmo_spaces`) and records ready local preflight evidence with zero selected
 proof commands against the current seeded source plus prior memory.
+Phase 101 records the next source-rotation step. A seed 10 cleanup source
+artifact validated with 10 generated objects, 44 robot-view semantic steps, and
+10 ready proof requests. Prior-aware dry-run selection produced five commands
+(`proof_001`, `proof_003`, `proof_005`, `proof_008`, `proof_010`) while
+excluding five requests as `prior_task_feasibility_blocked`. The next slice
+should execute those selected commands locally, then only rerun cleanup if any
+selected proof becomes planner-backed and promotes cleanup binding.
 
 ## Why This Exists
 

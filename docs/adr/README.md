@@ -95,6 +95,12 @@ one decision per file, sequential numbering, explicit status.
 | [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
 | [0085](0085-seed-generated-mess-pools-and-guard-local-proof-memory.md) | Seed Generated Mess Pools and Guard Local Proof Memory | Accepted |
 | [0086](0086-execute-seeded-selected-proof-commands.md) | Execute Seeded Selected Proof Commands | Accepted |
+| [0087](0087-capture-planner-failure-diagnostic-views.md) | Capture Planner Failure Diagnostic Views | Accepted |
+| [0088](0088-render-post-placement-rejection-views.md) | Render Post-Placement Rejection Views | Accepted |
+| [0089](0089-render-grasp-feasibility-blocker-matrix.md) | Render Grasp-Feasibility Blocker Matrix | Accepted |
+| [0090](0090-record-proof-bundle-local-runtime-preflight.md) | Record Proof-Bundle Local Runtime Preflight | Accepted |
+| [0091](0091-use-canonical-molmo-spaces-preflight-import.md) | Use Canonical MolmoSpaces Preflight Import | Accepted |
+| [0092](0092-record-seed10-source-rotation.md) | Record Seed 10 Source Rotation | Accepted |
 
 ## Adding a new ADR
 

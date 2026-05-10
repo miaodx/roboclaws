@@ -149,6 +149,12 @@ The runtime preflight import name for upstream MolmoSpaces Python packages:
 `molmo_spaces`, not the colloquial project label `molmospaces`.
 _Avoid_: false blocked preflight from wrong package name
 
+**Seeded Source Rotation Evidence**:
+Local-dev evidence that a new MolmoSpaces generated-mess seed can produce a
+different exact-scene proof request pool while prior proof memory filters
+already covered or known-blocked requests before execution.
+_Avoid_: claiming selected dry-run commands as planner-backed proof
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -920,3 +926,10 @@ _Avoid_: full cleanup replacement claim
 - Phase 100 corrected the runtime preflight to the canonical upstream package
   import, `molmo_spaces`, and generated a ready local preflight report with
   zero selected proof commands.
+- Phase 101 added Seeded Source Rotation Evidence. A seed 10 MolmoSpaces
+  cleanup source artifact validated with 10 generated objects, 44 robot-view
+  semantic steps, and 10 ready proof requests. Prior-aware dry-run selection
+  picked five commands (`proof_001`, `proof_003`, `proof_005`, `proof_008`,
+  `proof_010`) and excluded five requests as `prior_task_feasibility_blocked`;
+  those selected commands still need a separate local execution phase before
+  any new planner-backed cleanup coverage is claimed.
