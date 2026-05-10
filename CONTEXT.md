@@ -82,6 +82,11 @@ results, including diagnostic rows, proof report links, and planner-view image
 artifacts when present.
 _Avoid_: selection-only prior evidence, hidden prior visual artifacts
 
+**Selected Proof Candidate Execution**:
+Local-dev execution of the currently selected exact-scene proof request after
+prior infeasible requests are filtered.
+_Avoid_: treating selected as feasible before execution
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -592,6 +597,9 @@ _Avoid_: full cleanup replacement claim
 - A **Prior Proof Evidence View** should render normalized prior proof results
   in the runner report before new proof commands, so consumed blocker evidence
   keeps its report links and planner-view images.
+- **Selected Proof Candidate Execution** should be checker-gated with required
+  proof outputs before treating a selected exact-scene request as feasible or
+  as a durable blocker.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -758,3 +766,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 86 added Prior Proof Evidence View. Runner manifests now carry
   `prior_proof_result_summary`, and runner reports render consumed prior proof
   diagnostics, paths, and planner-view images before new proof commands.
+- Phase 87 added Selected Proof Candidate Execution. The remaining selected
+  `proof_002` bowl/sink request executed locally, passed runner checking with
+  required outputs, and was classified as `grasp_feasibility` blocked with
+  `17 grasp failures; 15 candidate-removal calls`.

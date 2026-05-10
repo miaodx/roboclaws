@@ -86,6 +86,7 @@ one decision per file, sequential numbering, explicit status.
 | [0075](0075-match-proof-selection-memory-by-cleanup-pair.md) | Match Proof Selection Memory by Cleanup Pair | Accepted |
 | [0076](0076-ingest-standalone-prior-proof-results.md) | Ingest Standalone Prior Proof Results | Accepted |
 | [0077](0077-render-prior-proof-evidence-in-runner-reports.md) | Render Prior Proof Evidence in Runner Reports | Accepted |
+| [0078](0078-record-selected-proof-candidate-execution.md) | Record Selected Proof Candidate Execution | Accepted |
 
 ## Adding a new ADR
 

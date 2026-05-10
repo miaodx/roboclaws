@@ -431,6 +431,88 @@ def test_checker_accepts_partial_selection_with_exhausted_fallbacks(tmp_path: Pa
     checker._assert_runner_result(manifest, tmp_path)
 
 
+def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    manifest["proof_request_selection"] = proof_request_selection_from_summary(
+        {
+            "schema": "planner_cleanup_proof_requests_v1",
+            "requests": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "ready": True,
+                }
+            ],
+        }
+    )
+    manifest["proof_result_summary"] = {
+        "schema": "planner_cleanup_proof_result_summary_v1",
+        "expected_count": 1,
+        "result_count": 1,
+        "planner_backed_count": 0,
+        "blocked_count": 1,
+        "timeout_count": 0,
+        "rby1m_config_import_timeout_count": 0,
+        "missing_result_count": 0,
+        "cleanup_binding_promoted_count": 0,
+        "execution_attempted_count": 1,
+        "task_feasibility_blocked_count": 1,
+        "grasp_feasibility_blocked_count": 1,
+        "worker_stage_event_count": 1,
+        "last_worker_stage_counts": {"worker_exception": 1},
+        "view_artifact_count": 0,
+        "results": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
+                "report": str(tmp_path / "proofs" / "001" / "report.html"),
+                "run_result_exists": True,
+                "report_exists": True,
+                "status": "blocked_capability",
+                "planner_backed": False,
+                "cleanup_binding_promoted": False,
+                "execution_attempted": True,
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "visual_status": "no_views_recorded",
+                "blockers": [{"code": "HouseInvalidForTask"}],
+                "cleanup_binding_blockers": [],
+                "last_worker_stage": "worker_exception",
+                "worker_stage_event_count": 1,
+                "worker_stage_events": [
+                    {"elapsed_s": 1.0, "event": "worker_exception", "stage": "worker_exception"}
+                ],
+                "task_sampler_failure_diagnostics": {
+                    "grasp_failure_count": 17,
+                    "candidate_removal_count": 15,
+                    "grasp_failures": [
+                        {
+                            "object_name": "pickup/body",
+                            "candidate_count_before": 17,
+                            "candidate_count_after": 17,
+                            "removed_candidate": False,
+                        }
+                    ],
+                },
+                "views": [],
+            }
+        ],
+    }
+    render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
+
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "Post-placement grasp failures" in report
+    assert "Task sampler placement failures" not in report
+    checker._assert_runner_result(manifest, tmp_path)
+
+
 def test_checker_requires_timeout_stage_evidence_in_report(tmp_path: Path) -> None:
     checker = _load_checker()
     manifest = _runner_manifest(tmp_path)

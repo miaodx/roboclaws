@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 86 prior proof evidence report completed; next work is selecting or generating grasp-feasible exact-scene proof requests
+**Status:** Phase 87 selected proof candidate execution completed; next work is generating or discovering a different grasp-feasible exact-scene proof request
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -230,6 +230,10 @@ proof-result summary interface as prior proof-bundle manifests.
 Phase 86 makes that consumed prior evidence visible in runner reports as
 `Prior Proof Evidence`, preserving diagnostic rows, proof paths, and planner
 view images when present before new proof commands are reviewed.
+Phase 87 executed the remaining selected `proof_002` bowl/sink request. It also
+blocked as `grasp_feasibility` with `17 grasp failures; 15 candidate-removal
+calls`, so the next work must generate or discover a different exact-scene
+candidate rather than retrying the two known blocked source requests.
 
 ## Why This Exists
 
@@ -1082,7 +1086,10 @@ completed:
   gsd-plan-phase 86-molmospaces-prior-proof-evidence-report
   gsd-execute-phase 86-molmospaces-prior-proof-evidence-report
   gsd-verify-work 86-molmospaces-prior-proof-evidence-report
+  gsd-plan-phase 87-molmospaces-selected-proof-candidate-execution
+  gsd-execute-phase 87-molmospaces-selected-proof-candidate-execution
+  gsd-verify-work 87-molmospaces-selected-proof-candidate-execution
 
 next pipeline candidates:
-  select or generate a grasp-feasible exact-scene proof request
+  generate or discover a different grasp-feasible exact-scene proof request
 ```

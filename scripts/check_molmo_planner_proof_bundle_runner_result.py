@@ -425,10 +425,16 @@ def _assert_proof_result_summary(
                     assert value in report_text, (key, report_text[:500])
         task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
         if task_sampler_failure:
-            assert "Task sampler placement failures" in report_text, report_text[:500]
-            for key in ("robot_placement_failure_count", "asset_failure_count"):
+            placement_failure_keys = ("robot_placement_failure_count", "asset_failure_count")
+            if any(_positive_int(task_sampler_failure.get(key)) for key in placement_failure_keys):
+                assert "Task sampler placement failures" in report_text, report_text[:500]
+                for key in placement_failure_keys:
+                    value = str(task_sampler_failure.get(key) or "")
+                    if value and value != "0":
+                        assert value in report_text, (key, report_text[:500])
+            for key in ("robot_placement_attempt_count",):
                 value = str(task_sampler_failure.get(key) or "")
-                if value:
+                if value and value != "0":
                     assert value in report_text, (key, report_text[:500])
             grasp_failures = task_sampler_failure.get("grasp_failures") or []
             if grasp_failures:
@@ -522,6 +528,13 @@ def _has_blocker_code(item: dict[str, Any], code: str) -> bool:
     return any(
         isinstance(blocker, dict) and str(blocker.get("code") or "") == code for blocker in blockers
     )
+
+
+def _positive_int(value: Any) -> bool:
+    try:
+        return int(value or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 if __name__ == "__main__":
