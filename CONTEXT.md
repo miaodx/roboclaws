@@ -486,6 +486,11 @@ display-ready `nav, pick, nav, open?, place` subphase labels before local proof
 execution.
 _Avoid_: shell-only proof command rows detached from the cleanup visual underlay
 
+**Proof Bundle Request Filter**:
+The proof-bundle runner's explicit request-id selection path for bounded local
+proof attempts against one cleanup request before wider bundle execution.
+_Avoid_: broad multi-command local proof runs when one request should be tested first
+
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
 `nav, pick, nav, open?, place` steps are planner-backed, separate from attached
@@ -1304,3 +1309,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 132 adds Proof Command Semantic Subphases. Generated proof command rows
   now keep cleanup tools and render a `nav, pick, nav, open?, place` semantic
   rail in the proof-bundle runner report, with checker coverage for the view.
+- Phase 133 adds Proof Bundle Request Filter. The runner now accepts repeatable
+  `--request-id` flags, records requested/matched/unavailable/missing IDs, and
+  renders a `Request ID Filter` report view so stricter local proof attempts can
+  be bounded to one cleanup request.

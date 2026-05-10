@@ -1463,6 +1463,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     excluded = selection.get("excluded_requests") or []
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
     grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
+    request_filter = selection.get("request_filter") or {}
+    request_filter = request_filter if isinstance(request_filter, dict) else {}
     raw_fallback_generation = selection.get("fallback_generation") or {}
     fallback_generation = (
         raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
@@ -1485,6 +1487,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
         f"{_metric('Ready', selection.get('ready_request_count', 0))}"
+        f"{_metric('Candidate ready', selection.get('candidate_request_count', 0))}"
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
         f"{_metric('Covered', selection.get('covered_request_count', 0))}"
@@ -1553,6 +1556,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         "<th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
+    request_filter_table = _request_filter_table(request_filter)
     generated_table = _generated_fallback_requests_table(generated)
     target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
     grasp_blockers_matrix = _grasp_feasibility_blocker_matrix(grasp_feasibility_blockers)
@@ -1569,9 +1573,43 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{target_blockers_table}"
+        f"{request_filter_table}{selected_table}{excluded_table}{target_blockers_table}"
         f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+    )
+
+
+def _request_filter_table(request_filter: dict[str, Any]) -> str:
+    if not request_filter.get("enabled"):
+        return ""
+    requested = [str(item) for item in request_filter.get("requested_request_ids") or []]
+    matched = {str(item) for item in request_filter.get("matched_request_ids") or []}
+    missing = {str(item) for item in request_filter.get("missing_request_ids") or []}
+    rows = []
+    for request_id in requested:
+        if request_id in matched:
+            status = "matched_ready"
+        elif request_id in missing:
+            status = "missing"
+        else:
+            status = "unavailable"
+        rows.append(f"<tr><td>{html.escape(request_id)}</td><td>{html.escape(status)}</td></tr>")
+    if not rows:
+        rows.append('<tr><td colspan="2">No request ids requested.</td></tr>')
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requested', request_filter.get('requested_count', len(requested)))}"
+        f"{_metric('Matched', request_filter.get('matched_count', len(matched)))}"
+        f"{_metric('Unavailable', request_filter.get('unavailable_count', 0))}"
+        f"{_metric('Missing', request_filter.get('missing_count', len(missing)))}"
+        "</div>"
+    )
+    note = request_filter.get("evidence_note") or "Explicit request-id filter."
+    return (
+        "<h3>Request ID Filter</h3>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}'
+        '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Status</th>'
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
 

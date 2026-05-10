@@ -317,6 +317,17 @@ def _assert_proof_request_selection(
     assert int(selection.get("selected_count") or 0) == len(command_ids), selection
     assert "Proof Request Selection" in report_text, report_text[:500]
     assert "Generated Fallback Requests" in report_text, report_text[:500]
+    request_filter = selection.get("request_filter") or {}
+    if isinstance(request_filter, dict) and request_filter.get("enabled"):
+        assert "Request ID Filter" in report_text, report_text[:500]
+        requested = [str(item) for item in request_filter.get("requested_request_ids") or []]
+        matched = [str(item) for item in request_filter.get("matched_request_ids") or []]
+        unavailable = [str(item) for item in request_filter.get("unavailable_request_ids") or []]
+        assert int(request_filter.get("requested_count") or 0) == len(requested), selection
+        assert int(request_filter.get("matched_count") or 0) == len(matched), selection
+        assert int(request_filter.get("unavailable_count") or 0) == len(unavailable), selection
+        for request_id in requested:
+            assert request_id in report_text, (request_id, report_text[:500])
     for item in selection.get("selected_requests") or []:
         for key in ("request_id", "object_id", "target_receptacle_id"):
             assert item.get(key), item

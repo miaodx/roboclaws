@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -370,6 +371,7 @@ def proof_request_selection_from_summary(
     proof_requests: dict[str, Any],
     *,
     prior_proof_result_summary: dict[str, Any] | None = None,
+    include_request_ids: Sequence[str] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
     prior_covered_min_proof_steps: int = 1,
@@ -378,8 +380,20 @@ def proof_request_selection_from_summary(
 ) -> dict[str, Any]:
     """Select ready proof requests, optionally excluding known infeasible requests."""
     prior_covered_min_proof_steps = max(1, int(prior_covered_min_proof_steps))
-    ready_requests = [
+    requested_ids = _normalized_request_ids(include_request_ids)
+    all_requests = [request for request in proof_requests.get("requests") or []]
+    all_ready_requests = [
         request for request in proof_requests.get("requests") or [] if request.get("ready")
+    ]
+    request_filter = _request_id_filter(
+        requested_ids=requested_ids,
+        requests=all_requests,
+        ready_requests=all_ready_requests,
+    )
+    ready_requests = [
+        request
+        for request in all_ready_requests
+        if not requested_ids or str(request.get("request_id") or "") in set(requested_ids)
     ]
     prior_summary = prior_proof_result_summary or {}
     prior_results = _prior_results_by_request_id(prior_summary)
@@ -477,11 +491,14 @@ def proof_request_selection_from_summary(
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
+            include_request_ids=bool(requested_ids),
             exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
             exclude_prior_covered=exclude_prior_covered,
             generate_fallback_requests=generate_fallback_requests,
         ),
-        "ready_request_count": len(ready_requests),
+        "ready_request_count": len(all_ready_requests),
+        "candidate_request_count": len(ready_requests),
+        "request_filter": request_filter,
         "selected_count": len(selected),
         "excluded_count": len(excluded),
         "covered_request_count": sum(
@@ -509,21 +526,66 @@ def proof_request_selection_from_summary(
 
 def _proof_request_selection_mode(
     *,
+    include_request_ids: bool,
     exclude_task_feasibility_blocked: bool,
     exclude_prior_covered: bool,
     generate_fallback_requests: bool,
 ) -> str:
     if exclude_task_feasibility_blocked and exclude_prior_covered and generate_fallback_requests:
-        return "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
-    if exclude_task_feasibility_blocked and exclude_prior_covered:
-        return "exclude_task_feasibility_blocked_and_prior_covered"
-    if exclude_task_feasibility_blocked and generate_fallback_requests:
-        return "exclude_task_feasibility_blocked_with_fallbacks"
-    if exclude_task_feasibility_blocked:
-        return "exclude_task_feasibility_blocked"
-    if exclude_prior_covered:
-        return "exclude_prior_covered"
-    return "all_ready"
+        mode = "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
+    elif exclude_task_feasibility_blocked and exclude_prior_covered:
+        mode = "exclude_task_feasibility_blocked_and_prior_covered"
+    elif exclude_task_feasibility_blocked and generate_fallback_requests:
+        mode = "exclude_task_feasibility_blocked_with_fallbacks"
+    elif exclude_task_feasibility_blocked:
+        mode = "exclude_task_feasibility_blocked"
+    elif exclude_prior_covered:
+        mode = "exclude_prior_covered"
+    else:
+        mode = "all_ready"
+    if include_request_ids:
+        if mode == "all_ready":
+            return "request_id_filter"
+        return f"request_id_filter_and_{mode}"
+    return mode
+
+
+def _normalized_request_ids(request_ids: Sequence[str] | None) -> list[str]:
+    if not request_ids:
+        return []
+    return _unique_nonempty_values([str(item).strip() for item in request_ids])
+
+
+def _request_id_filter(
+    *,
+    requested_ids: list[str],
+    requests: list[dict[str, Any]],
+    ready_requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not requested_ids:
+        return {
+            "enabled": False,
+            "requested_request_ids": [],
+            "matched_request_ids": [],
+            "unavailable_request_ids": [],
+        }
+    request_ids = {str(item.get("request_id") or "") for item in requests}
+    ready_ids = {str(item.get("request_id") or "") for item in ready_requests}
+    matched = [request_id for request_id in requested_ids if request_id in ready_ids]
+    unavailable = [request_id for request_id in requested_ids if request_id not in ready_ids]
+    missing = [request_id for request_id in requested_ids if request_id not in request_ids]
+    return {
+        "enabled": True,
+        "requested_request_ids": requested_ids,
+        "requested_count": len(requested_ids),
+        "matched_request_ids": matched,
+        "matched_count": len(matched),
+        "unavailable_request_ids": unavailable,
+        "unavailable_count": len(unavailable),
+        "missing_request_ids": missing,
+        "missing_count": len(missing),
+        "evidence_note": ("Explicit proof request filter for bounded local proof-bundle runs."),
+    }
 
 
 def _selected_request_ids(request_selection: dict[str, Any] | None) -> set[str] | None:

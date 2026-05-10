@@ -124,6 +124,70 @@ def test_runner_writes_dry_run_manifest_and_report_from_inline_requests(tmp_path
     assert "/tmp/molmospaces-scene.xml" in report
 
 
+def test_runner_filters_to_requested_request_ids(tmp_path: Path) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    proof_requests = _proof_requests()
+    proof_requests["request_count"] = 2
+    proof_requests["ready_count"] = 2
+    proof_requests["requests"].append(
+        {
+            "request_id": "proof_002",
+            "ready": True,
+            "object_id": "observed_002",
+            "target_receptacle_id": "shelf_01",
+            "source_receptacle_id": "counter_01",
+            "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+            "planner_probe_args": {
+                "--cleanup-object-id": "observed_002",
+                "--cleanup-target-receptacle-id": "shelf_01",
+                "--cleanup-source-receptacle-id": "counter_01",
+                "--cleanup-tools": "navigate_to_object,pick,navigate_to_receptacle,place",
+                "--cleanup-planner-object-id": "pickup/body2",
+                "--cleanup-planner-target-receptacle-id": "shelf/body",
+            },
+        }
+    )
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": proof_requests}),
+        encoding="utf-8",
+    )
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=None,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        request_ids=["proof_002"],
+    )
+
+    manifest = result["manifest"]
+    selection = manifest["proof_request_selection"]
+    assert selection["mode"] == "request_id_filter"
+    assert selection["ready_request_count"] == 2
+    assert selection["candidate_request_count"] == 1
+    assert selection["request_filter"]["requested_request_ids"] == ["proof_002"]
+    assert selection["request_filter"]["matched_request_ids"] == ["proof_002"]
+    assert selection["selected_request_ids"] == ["proof_002"]
+    assert manifest["command_count"] == 1
+    assert manifest["commands"][0]["request_id"] == "proof_002"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Request ID Filter" in report
+    assert "proof_002" in report
+    assert "Semantic subphases" in report
+
+
 def test_runner_excludes_prior_task_feasibility_blocked_requests(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_run_result = tmp_path / "cleanup" / "run_result.json"

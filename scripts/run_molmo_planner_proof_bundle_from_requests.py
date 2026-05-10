@@ -74,6 +74,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prior-planner-probe-run-result", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
     parser.add_argument(
+        "--request-id",
+        dest="request_ids",
+        action="append",
+        help="Limit proof-bundle command generation to the named request id. Repeatable.",
+    )
+    parser.add_argument(
         "--exclude-prior-covered",
         action="store_true",
         help=(
@@ -119,6 +125,7 @@ def main() -> None:
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
         prior_planner_probe_run_result=args.prior_planner_probe_run_result,
+        request_ids=args.request_ids,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
         exclude_prior_covered=args.exclude_prior_covered,
         prior_covered_min_proof_steps=args.prior_covered_min_proof_steps,
@@ -159,6 +166,7 @@ def run_from_cleanup_result(
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
     prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
+    request_ids: Sequence[str] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
     prior_covered_min_proof_steps: int = 1,
@@ -176,6 +184,7 @@ def run_from_cleanup_result(
     proof_request_selection = proof_request_selection_from_summary(
         requests,
         prior_proof_result_summary=prior_summary,
+        include_request_ids=request_ids,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
         exclude_prior_covered=exclude_prior_covered,
         prior_covered_min_proof_steps=prior_covered_min_proof_steps,

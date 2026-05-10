@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 132 proof command semantic subphase reports completed; proof-bundle dry-run command rows now show shared `nav, pick, nav, open?, place` intent while the full bridge remains blocked
+**Status:** Phase 133 proof-bundle request filter completed; stricter proof dry-runs can now target one cleanup request while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -481,6 +481,10 @@ Generated proof commands now retain cleanup tools and render display-ready
 `nav, pick, nav, open?, place` subphase rails in the proof-bundle runner report,
 so stricter local proof attempts show both command-strength intent and
 cleanup-loop intent before execution.
+Phase 133 makes that stricter local proof attempt bounded. The proof-bundle
+runner accepts repeatable `--request-id` filters, records requested/matched/
+unavailable/missing IDs, and renders `Request ID Filter`; the Phase 126 stricter
+dry-run now selects only `proof_001` when asked.
 
 ## Why This Exists
 
@@ -1372,11 +1376,12 @@ completed:
   gsd-plan-phase 132-molmospaces-proof-command-semantic-subphases
   gsd-execute-phase 132-molmospaces-proof-command-semantic-subphases
   gsd-verify-work 132-molmospaces-proof-command-semantic-subphases
+  gsd-plan-phase 133-molmospaces-proof-bundle-request-filter
+  gsd-execute-phase 133-molmospaces-proof-bundle-request-filter
+  gsd-verify-work 133-molmospaces-proof-bundle-request-filter
 
 next pipeline candidates:
-  expand exact-proof coverage beyond observed_001, or generate a stricter
-  multi-step/containment proof now that prior-covered selection can reselect
-  one-step proof memory when a higher coverage horizon is requested and dry-run
-  reports expose both the requested command quality horizon and semantic
-  cleanup subphase intent
+  execute the bounded proof_001 two-step local proof attempt, then rerun cleanup
+  if the resulting proof has cleanup binding coverage; otherwise record the
+  exact blocker before expanding beyond observed_001
 ```
