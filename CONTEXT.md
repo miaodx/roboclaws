@@ -1197,3 +1197,9 @@ _Avoid_: full cleanup replacement claim
   from 24 candidates, installed them to the droid `Bread_1` loader cache after
   generated-NPZ validation, and the post-install availability preflight returned
   `ready`.
+- Phase 123 adds Cache-Ready Proof Rerun evidence. The warmed exact
+  `observed_001` to refrigerator proof now loads the installed `Bread_1` droid
+  cache (`cached_grasp_count=9`, `grasp_load_failure_count=0`) and finds two
+  non-colliding grasps, so the prior missing-cache blocker is cleared. The
+  proof remains `blocked_capability` because CuRobo reaches pre-grasp execution
+  with no planned trajectory.

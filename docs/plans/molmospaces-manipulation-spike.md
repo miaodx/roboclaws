@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 122 grasp pose policy cache completed; next work is rerunning cleanup/proof evidence against the newly valid droid `Bread_1` cache
+**Status:** Phase 123 cache-ready proof rerun completed; next work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -430,6 +430,10 @@ second MuJoCo approach implementation. The initial-contact probe now has
 cache-output mode, the generated NPZ routes through the shared cache
 validation/install helper, and the local droid `Bread_1` loader cache now
 validates with 9 transforms after install.
+Phase 123 reruns the exact `observed_001` proof against that cache. The warmed
+run proves the task sampler now loads 9 `Bread_1` grasps and finds 2
+non-colliding grasps, clearing the cache blocker; the remaining blocker is
+CuRobo pre-grasp trajectory generation (`no planned trajectory`).
 
 ## Why This Exists
 
