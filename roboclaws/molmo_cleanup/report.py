@@ -174,6 +174,7 @@ def render_planner_manipulation_report(
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
+    {_planner_probe_policy_exception_section(evidence)}
     {_planner_probe_curobo_extension_cache_section(evidence)}
     {_planner_probe_warp_compatibility_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
@@ -3557,6 +3558,63 @@ def _curobo_profile_rows(
             "</tr>"
         )
     return rows
+
+
+def _planner_probe_policy_exception_section(evidence: dict[str, Any]) -> str:
+    context = evidence.get("policy_exception_context") or {}
+    if not context:
+        return ""
+    primitives = context.get("action_primitives") or []
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Failure kind', context.get('failure_kind', 'unknown'))}"
+        f"{_metric('Stage', context.get('stage', 'unknown'))}"
+        f"{_metric('Exception', context.get('exception_type', 'unknown'))}"
+        f"{_metric('No planned trajectory', _yes_no(context.get('no_planned_trajectory')))}"
+        f"{_metric('Steps requested', context.get('steps_requested', 'unknown'))}"
+        f"{_metric('Primitives', context.get('action_primitive_count', len(primitives)))}"
+        "</div>"
+    )
+    message = str(context.get("message") or "")
+    rows = []
+    for primitive in primitives:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(primitive.get('index', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('primitive_class', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('current_phase', '')))}</td>"
+            f"<td>{html.escape(_yes_no(primitive.get('planned_trajectory_present')))}</td>"
+            f"<td>{html.escape(str(primitive.get('planned_trajectory_len', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('trajectory_index', '')))}</td>"
+            "</tr>"
+        )
+    table_rows = "".join(rows) or '<tr><td colspan="6">No action primitives recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Primitive</th>'
+        "<th>Current phase</th><th>Planned trajectory</th><th>Trajectory len</th>"
+        f"<th>Trajectory index</th></tr></thead><tbody>{table_rows}</tbody></table></div>"
+    )
+    detail_rows = "".join(
+        f"<tr><td>{html.escape(label)}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in (
+            ("Policy class", context.get("policy_class") or ""),
+            ("Policy phase", context.get("policy_current_phase") or ""),
+            ("Message", message),
+        )
+    )
+    details = (
+        '<div class="table-wrap"><table><thead><tr><th>Signal</th><th>Value</th>'
+        f"</tr></thead><tbody>{detail_rows}</tbody></table></div>"
+    )
+    note = (
+        "Policy exception diagnostics preserve the planner primitive state at the "
+        "target-runtime failure point, before the artifact is collapsed into a "
+        "blocked-capability result."
+    )
+    return (
+        '<section class="panel"><h2>Policy Exception Diagnostics</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{details}{table}</section>'
+    )
 
 
 def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:

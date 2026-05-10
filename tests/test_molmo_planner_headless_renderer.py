@@ -362,6 +362,93 @@ def test_cleanup_primitive_binding_blocks_planner_alias_mismatch() -> None:
     ]
 
 
+def test_worker_exception_context_preserves_policy_failure_state() -> None:
+    probe = _load_probe_module()
+    probe._WORKER_EXCEPTION_CONTEXT.clear()
+    profile = {"schema": "rby1m_curobo_memory_profile_v1", "applied": True, "profile": "low"}
+    sampled = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "bread/body",
+        "place_receptacle_name": "fridge/body",
+        "place_target_name": "fridge/body",
+    }
+    cleanup_binding = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "observed_001",
+        "planner_object_id": "bread/body",
+        "target_receptacle_id": "refrigerator",
+        "planner_target_receptacle_id": "fridge/body",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place_inside"],
+    }
+    policy_exception = {
+        "schema": "planner_probe_policy_exception_context_v1",
+        "failure_kind": "curobo_no_planned_trajectory",
+        "stage": "execute_policy_run",
+    }
+
+    probe._record_worker_exception_context(
+        curobo_memory_profile=profile,
+        sampled_task_binding=sampled,
+        cleanup_primitive_binding=cleanup_binding,
+        cleanup_primitive_binding_blockers=[],
+        policy_exception_context=policy_exception,
+    )
+
+    context = probe._worker_exception_probe_context(
+        Namespace(
+            cleanup_object_id="observed_001",
+            cleanup_target_receptacle_id="refrigerator",
+            cleanup_source_receptacle_id="countertop",
+            cleanup_planner_object_id="bread/body",
+            cleanup_planner_target_receptacle_id="fridge/body",
+            cleanup_scene_xml="",
+            cleanup_tools="navigate_to_object,pick,navigate_to_receptacle,place_inside",
+            task_sampler_robot_placement_profile="wide",
+        )
+    )
+
+    assert context["curobo_memory_profile"] == profile
+    assert context["sampled_task_binding"] == sampled
+    assert context["cleanup_primitive_binding"] == cleanup_binding
+    assert context["cleanup_primitive_binding_blockers"] == []
+    assert context["policy_exception_context"] == policy_exception
+
+
+def test_policy_exception_context_classifies_no_planned_trajectory() -> None:
+    probe = _load_probe_module()
+
+    class FakePrimitive:
+        planned_trajectory: list[object] = []
+        trajectory_index = 0
+
+        @staticmethod
+        def get_current_phase() -> str:
+            return "pre_grasp"
+
+    class FakePolicy:
+        action_primitives = [FakePrimitive()]
+
+    context = probe._policy_exception_context(
+        FakePolicy(),
+        ValueError(
+            "_execute_trajectory was called with no planned trajectory or trajectory "
+            "index >= len(planned_trajectory)"
+        ),
+        stage="execute_policy_run",
+        steps_requested=1,
+    )
+
+    assert context["schema"] == "planner_probe_policy_exception_context_v1"
+    assert context["failure_kind"] == "curobo_no_planned_trajectory"
+    assert context["no_planned_trajectory"] is True
+    assert context["stage"] == "execute_policy_run"
+    primitive = context["action_primitives"][0]
+    assert primitive["current_phase"] == "pre_grasp"
+    assert primitive["planned_trajectory_present"] is True
+    assert primitive["planned_trajectory_len"] == 0
+    assert primitive["trajectory_index"] == 0
+
+
 def test_cleanup_primitive_binding_no_request_stays_generic() -> None:
     probe = _load_probe_module()
     requested = probe._requested_cleanup_primitive_binding(

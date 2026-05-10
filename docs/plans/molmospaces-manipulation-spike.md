@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 124 focused report timeline completed; next manipulation work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
+**Status:** Phase 125 CuRobo policy exception context completed; latest warmed exact proof is planner-backed for one step
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -439,6 +439,14 @@ scan captures remain available in Raw FPV Observations, but the first-pass
 Robot View Timeline no longer buries semantic cleanup subphases under
 `observe raw_fpv_*` cards, so visual reports keep the same rhythm as
 `output/molmo-agent-bridge-visual-codex/report.html`.
+Phase 125 preserves CuRobo policy exception context through the planner probe
+artifact seam. The top-level `manipulation_evidence` now retains the applied
+CuRobo memory profile, sampled task binding, promoted cleanup binding,
+binding blockers, and policy primitive phase/trajectory state when a policy
+exception fires; the shared planner report renders `Policy Exception
+Diagnostics`. The warmed exact proof rerun did not reproduce the pre-grasp
+failure and returned `planner_backed` for one execution step with a nonzero
+robot-state delta.
 
 ## Why This Exists
 
@@ -1320,6 +1328,8 @@ completed:
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  rotate proof sources or diagnose/reduce the shared RBY1M grasp-feasibility
-  blocker before another cleanup rerun
+  attach the Phase 125 planner-backed exact proof to the ADR-0003 cleanup
+  primitive path and decide whether the next gate should require one-step robot
+  motion, multi-step pick/place progress, or full containment before claiming
+  planner-backed cleanup
 ```

@@ -1217,3 +1217,15 @@ _Avoid_: full cleanup replacement claim
   but the primary Robot View Timeline now focuses on before/after and semantic
   cleanup action views so ADR-0003 artifacts keep the same first-pass visual
   rhythm as `output/molmo-agent-bridge-visual-codex/report.html`.
+- Phase 125 adds CuRobo Policy Exception Context. The planner probe worker
+  exception path now preserves the low-memory CuRobo profile, sampled cleanup
+  task binding, promoted cleanup primitive binding, empty-or-nonempty binding
+  blockers, and structured policy primitive state in top-level
+  `manipulation_evidence`; reports render this as `Policy Exception
+  Diagnostics`, and the checker can require it with
+  `--require-policy-exception-context`. The warmed exact proof rerun at
+  `output/debug-phase125-curobo-pregrasp-exception-context/run_result.json`
+  returned `planner_backed` with `steps_executed=1`,
+  `max_abs_qpos_delta=0.018310936580938183`, preserved CuRobo profile and exact
+  cleanup binding, and no cleanup binding blockers, so the prior pre-grasp
+  failure did not reproduce in the Phase 125 run.

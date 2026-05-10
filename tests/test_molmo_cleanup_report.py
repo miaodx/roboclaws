@@ -2155,6 +2155,28 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "planner_target_receptacle_id": "sink/body",
         "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
     }
+    run_result["manipulation_evidence"]["policy_exception_context"] = {
+        "schema": "planner_probe_policy_exception_context_v1",
+        "stage": "execute_policy_run",
+        "steps_requested": 1,
+        "exception_type": "ValueError",
+        "message": "_execute_trajectory was called with no planned trajectory",
+        "failure_kind": "curobo_no_planned_trajectory",
+        "no_planned_trajectory": True,
+        "policy_class": "PickAndPlacePlannerPolicy",
+        "policy_current_phase": "pre_grasp",
+        "action_primitive_count": 1,
+        "action_primitives": [
+            {
+                "index": 0,
+                "primitive_class": "PickAndPlacePrimitive",
+                "current_phase": "pre_grasp",
+                "planned_trajectory_present": True,
+                "planned_trajectory_len": 0,
+                "trajectory_index": 0,
+            }
+        ],
+    }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -2205,6 +2227,11 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "navigate_to_receptacle" in html
     assert "CUDA Memory Headroom" in html
     assert "CuRobo Memory Profile" in html
+    assert "Policy Exception Diagnostics" in html
+    assert "curobo_no_planned_trajectory" in html
+    assert "_execute_trajectory was called with no planned trajectory" in html
+    assert "pre_grasp" in html
+    assert "Trajectory len" in html
     assert "CuRobo Extension Cache" in html
     assert "lbfgs_step_cu" in html
     assert "Warp Compatibility" in html

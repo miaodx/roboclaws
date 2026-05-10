@@ -491,12 +491,12 @@ def _emit_worker_event(event: str, **payload: Any) -> None:
 
 def _record_worker_exception_context(**payload: Any) -> None:
     for key, value in payload.items():
-        if value:
+        if value is not None:
             _WORKER_EXCEPTION_CONTEXT[key] = value
 
 
 def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
-    return {
+    context = {
         "cleanup_task_config": _WORKER_EXCEPTION_CONTEXT.get("cleanup_task_config")
         or _cleanup_task_config_request_from_args(args),
         "task_sampler_robot_placement_profile": _WORKER_EXCEPTION_CONTEXT.get(
@@ -517,6 +517,16 @@ def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
         or {},
         "image_artifacts": _WORKER_EXCEPTION_CONTEXT.get("image_artifacts") or {},
     }
+    for key in (
+        "curobo_memory_profile",
+        "sampled_task_binding",
+        "cleanup_primitive_binding",
+        "cleanup_primitive_binding_blockers",
+        "policy_exception_context",
+    ):
+        if key in _WORKER_EXCEPTION_CONTEXT:
+            context[key] = _WORKER_EXCEPTION_CONTEXT[key]
+    return context
 
 
 def _runtime_diagnostics(args: argparse.Namespace) -> dict[str, Any]:
@@ -1177,6 +1187,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
         task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
     )
     curobo_memory_profile = _apply_rby1m_curobo_memory_profile(config, args)
+    _record_worker_exception_context(curobo_memory_profile=curobo_memory_profile)
     _emit_worker_event(
         "task_sampler_robot_placement_profile_ready",
         stage="task_sampler_robot_placement_profile",
@@ -1280,6 +1291,11 @@ def _execute_policy_probe(
         requested_cleanup_binding,
         sampled_task_binding,
     )
+    _record_worker_exception_context(
+        sampled_task_binding=sampled_task_binding,
+        cleanup_primitive_binding=cleanup_binding_result.get("cleanup_primitive_binding"),
+        cleanup_primitive_binding_blockers=cleanup_binding_result.get("blockers", []),
+    )
     _emit_worker_event(
         "execute_task_sample_done",
         stage="execute_task_sample",
@@ -1310,12 +1326,30 @@ def _execute_policy_probe(
     _emit_worker_event("execute_policy_reset_done", stage="execute_policy_reset")
     _record_cuda_memory_snapshot("execute_policy_run_start")
     _emit_worker_event("execute_policy_run_start", stage="execute_policy_run", steps=steps)
-    initial_qpos, final_qpos, initial_obs, final_obs = run_task_for_steps_with_observations(
-        task,
-        policy,
-        num_steps=steps,
-        profiler=None,
-    )
+    try:
+        initial_qpos, final_qpos, initial_obs, final_obs = run_task_for_steps_with_observations(
+            task,
+            policy,
+            num_steps=steps,
+            profiler=None,
+        )
+    except BaseException as exc:  # noqa: BLE001 - preserve target-runtime diagnosis.
+        policy_exception_context = _policy_exception_context(
+            policy,
+            exc,
+            stage="execute_policy_run",
+            steps_requested=steps,
+        )
+        _record_worker_exception_context(
+            policy_exception_context=policy_exception_context,
+        )
+        _emit_worker_event(
+            "execute_policy_run_exception",
+            stage="execute_policy_run",
+            policy_exception_context=policy_exception_context,
+        )
+        _record_cuda_memory_snapshot("execute_policy_run_exception")
+        raise
     _record_cuda_memory_snapshot("execute_policy_run_done")
     _emit_worker_event("execute_policy_run_done", stage="execute_policy_run", steps=steps)
     views_dir = output_dir / "planner_views"
@@ -1350,6 +1384,107 @@ def _execute_policy_probe(
         "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
         "cleanup_primitive_binding_blockers": cleanup_binding_result.get("blockers", []),
     }
+
+
+def _policy_exception_context(
+    policy: Any,
+    exc: BaseException,
+    *,
+    stage: str,
+    steps_requested: int,
+) -> dict[str, Any]:
+    action_primitives = [
+        _policy_action_primitive_context(index, primitive)
+        for index, primitive in enumerate(getattr(policy, "action_primitives", []) or [])
+    ]
+    return {
+        "schema": "planner_probe_policy_exception_context_v1",
+        "stage": stage,
+        "steps_requested": steps_requested,
+        "exception_type": type(exc).__name__,
+        "message": str(exc),
+        "failure_kind": _policy_exception_failure_kind(exc),
+        "no_planned_trajectory": _policy_exception_is_no_planned_trajectory(exc),
+        "policy_class": type(policy).__name__,
+        "policy_module": type(policy).__module__,
+        "policy_current_phase": _safe_current_phase(policy),
+        "action_primitive_count": len(action_primitives),
+        "action_primitives": action_primitives,
+    }
+
+
+def _policy_exception_failure_kind(exc: BaseException) -> str:
+    if _policy_exception_is_no_planned_trajectory(exc):
+        return "curobo_no_planned_trajectory"
+    return "policy_exception"
+
+
+def _policy_exception_is_no_planned_trajectory(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return "no planned trajectory" in message or "trajectory index >= len" in message
+
+
+def _policy_action_primitive_context(index: int, primitive: Any) -> dict[str, Any]:
+    trajectory = _safe_attr(primitive, "planned_trajectory")
+    if trajectory is None:
+        trajectory = _safe_attr(primitive, "_planned_trajectory")
+    return {
+        "index": index,
+        "primitive_class": type(primitive).__name__,
+        "primitive_module": type(primitive).__module__,
+        "current_phase": _safe_current_phase(primitive),
+        "planned_trajectory_present": trajectory is not None,
+        "planned_trajectory_len": _safe_len(trajectory),
+        "trajectory_index": _diagnostic_json_value(
+            _first_present_attr(
+                primitive,
+                (
+                    "trajectory_index",
+                    "_trajectory_index",
+                    "current_trajectory_index",
+                    "_current_trajectory_index",
+                ),
+            )
+        ),
+    }
+
+
+def _safe_current_phase(obj: Any) -> str:
+    getter = getattr(obj, "get_current_phase", None)
+    if callable(getter):
+        try:
+            return str(getter())
+        except Exception as exc:  # pragma: no cover - diagnostic only
+            return f"{type(exc).__name__}: {exc}"
+    for attr in ("current_phase", "phase"):
+        value = _safe_attr(obj, attr)
+        if value is not None:
+            return str(value)
+    return ""
+
+
+def _first_present_attr(obj: Any, names: tuple[str, ...]) -> Any:
+    for name in names:
+        value = _safe_attr(obj, name)
+        if value is not None:
+            return value
+    return None
+
+
+def _safe_attr(obj: Any, name: str) -> Any:
+    try:
+        return getattr(obj, name)
+    except Exception:  # pragma: no cover - diagnostic only
+        return None
+
+
+def _safe_len(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return len(value)
+    except TypeError:
+        return None
 
 
 def _configure_exact_cleanup_task(config: Any, args: argparse.Namespace) -> dict[str, Any]:
@@ -2717,10 +2852,12 @@ def _write_probe_result(
         ]
     if worker_payload.get("cleanup_primitive_binding"):
         evidence["cleanup_primitive_binding"] = worker_payload["cleanup_primitive_binding"]
-    if worker_payload.get("cleanup_primitive_binding_blockers"):
+    if "cleanup_primitive_binding_blockers" in worker_payload:
         evidence["cleanup_primitive_binding_blockers"] = worker_payload[
             "cleanup_primitive_binding_blockers"
         ]
+    if worker_payload.get("policy_exception_context"):
+        evidence["policy_exception_context"] = worker_payload["policy_exception_context"]
     worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
     if worker_stage_events:
         evidence["worker_stage_events"] = worker_stage_events

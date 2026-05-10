@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-cuda-memory", action="store_true")
     parser.add_argument("--require-curobo-memory-profile", action="store_true")
     parser.add_argument("--require-cleanup-scene-bound", action="store_true")
+    parser.add_argument("--require-policy-exception-context", action="store_true")
     return parser.parse_args()
 
 
@@ -51,6 +52,7 @@ def main() -> None:
         require_cuda_memory=args.require_cuda_memory,
         require_curobo_memory_profile=args.require_curobo_memory_profile,
         require_cleanup_scene_bound=args.require_cleanup_scene_bound,
+        require_policy_exception_context=args.require_policy_exception_context,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -68,6 +70,7 @@ def _assert_probe_result(
     require_cuda_memory: bool = False,
     require_curobo_memory_profile: bool = False,
     require_cleanup_scene_bound: bool = False,
+    require_policy_exception_context: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -95,6 +98,9 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    policy_exception_context = evidence.get("policy_exception_context") or {}
+    if policy_exception_context:
+        _assert_policy_exception_context_report(policy_exception_context, report_text)
     robot_placement_profile = evidence.get("task_sampler_robot_placement_profile") or {}
     if robot_placement_profile:
         assert "Task Sampler Robot Placement Profile" in report_text, report_text[:500]
@@ -207,6 +213,9 @@ def _assert_probe_result(
         assert profile, evidence
         assert profile.get("applied") is True, profile
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    if require_policy_exception_context:
+        assert policy_exception_context, evidence
+        _assert_policy_exception_context_report(policy_exception_context, report_text)
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]
@@ -278,6 +287,22 @@ def _assert_rby1m_curobo_gate(
         require_ready=require_ready,
     )
     assert "RBY1M CuRobo Gate" in report_text, report_text[:500]
+
+
+def _assert_policy_exception_context_report(
+    context: dict[str, Any],
+    report_text: str,
+) -> None:
+    assert "Policy Exception Diagnostics" in report_text, report_text[:500]
+    for key in ("failure_kind", "stage", "exception_type"):
+        value = str(context.get(key) or "")
+        if value:
+            assert value in report_text, (key, report_text[:500])
+    for primitive in context.get("action_primitives") or []:
+        for key in ("primitive_class", "current_phase"):
+            value = str(primitive.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
 
 
 def _resolve_path(base: Path, value: str) -> Path:
