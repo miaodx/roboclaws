@@ -31,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-warp-compatibility", action="store_true")
     parser.add_argument("--require-cuda-memory", action="store_true")
     parser.add_argument("--require-curobo-memory-profile", action="store_true")
+    parser.add_argument("--require-cleanup-scene-bound", action="store_true")
     return parser.parse_args()
 
 
@@ -49,6 +50,7 @@ def main() -> None:
         require_warp_compatibility=args.require_warp_compatibility,
         require_cuda_memory=args.require_cuda_memory,
         require_curobo_memory_profile=args.require_curobo_memory_profile,
+        require_cleanup_scene_bound=args.require_cleanup_scene_bound,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -65,6 +67,7 @@ def _assert_probe_result(
     require_warp_compatibility: bool = False,
     require_cuda_memory: bool = False,
     require_curobo_memory_profile: bool = False,
+    require_cleanup_scene_bound: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -161,6 +164,16 @@ def _assert_probe_result(
                 value = str(pickup_binding.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+        config = evidence.get("cleanup_task_config") or {}
+        config_blockers = config.get("blockers") or []
+        if config_blockers:
+            assert "Exact task config blockers" in report_text, report_text[:500]
+            for blocker in config_blockers:
+                value = str(blocker.get("code") or "")
+                if value:
+                    assert value in report_text, (value, report_text[:500])
+    if require_cleanup_scene_bound:
+        _assert_cleanup_scene_bound(evidence)
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}
@@ -223,6 +236,20 @@ def _assert_planner_backed(data: dict[str, Any], evidence: dict[str, Any]) -> No
     assert float(evidence.get("max_abs_qpos_delta") or 0.0) > 0.0, evidence
     assert not evidence.get("blockers"), evidence
     assert evidence.get("upstream_policy_class"), evidence
+
+
+def _assert_cleanup_scene_bound(evidence: dict[str, Any]) -> None:
+    config = evidence.get("cleanup_task_config") or {}
+    assert config.get("applied") is True, config
+    scene_xml = str(config.get("scene_xml") or "")
+    assert scene_xml, config
+    assert Path(scene_xml).is_file(), config
+    blocker_codes = {
+        str(item.get("code") or "")
+        for item in config.get("blockers") or []
+        if isinstance(item, dict)
+    }
+    assert "cleanup_scene_xml_missing" not in blocker_codes, config
 
 
 def _assert_rby1m_curobo_gate(

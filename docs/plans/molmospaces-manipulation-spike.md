@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 106 exact pickup candidate binding completed; next work is fixing proof candidate source / runtime object alias validity before another cleanup rerun
+**Status:** Phase 107 valid cleanup scene binding completed; next work is targeting the one-failure post-placement grasp-feasibility path before another cleanup rerun
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -345,6 +345,14 @@ moving the pickup pool from 4 unrelated candidates to 1 exact candidate with 0
 grasp failures and 0 removal calls. The remaining blocker is now a direct
 `KeyError` invalid planner object name, so the next slice should fix proof
 candidate source / runtime object alias validity before another cleanup rerun.
+Phase 107 closes the stale scene evidence gap behind that invalid-alias result.
+The planner checker now has a `--require-cleanup-scene-bound` gate, shared
+reports render exact task config blockers, and the corrected local rerun uses
+the canonical seed-10 cleanup scene XML. With the valid scene bound, the
+requested bread alias exists: pickup binding moves the candidate pool from 17
+unrelated candidates to 1 exact candidate, robot placement succeeds with one
+diagnostic view, and the remaining blocker is one post-placement grasp failure
+with zero candidate-removal calls.
 
 ## Why This Exists
 

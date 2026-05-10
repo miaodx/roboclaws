@@ -157,6 +157,11 @@ selection, recording before/after candidate counts, requested-name presence,
 and whether the requested candidate had to be injected.
 _Avoid_: reset-time candidate patch, unrelated candidate retry loop
 
+**Valid Cleanup Scene Binding**:
+Exact-scene proof evidence that the requested cleanup scene XML exists and was
+applied before task-sampler or alias blockers are interpreted.
+_Avoid_: default-scene fallback, stale scene path proof
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -654,6 +659,8 @@ _Avoid_: full cleanup replacement claim
 - **Exact Pickup Candidate Binding** should happen at the live upstream pickup
   selection point, not at reset-time, and should remain private proof evidence
   rendered by the shared report underlay.
+- **Valid Cleanup Scene Binding** should be required before an exact-scene
+  proof blocker is interpreted as alias validity or task feasibility evidence.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -998,3 +1005,10 @@ _Avoid_: full cleanup replacement claim
   Phase 106 rerun changed the blocker from 17 grasp failures / 15 ineffective
   removals to a direct invalid planner-object `KeyError`, with candidate count
   moving from 4 unrelated objects to the requested bread alias only.
+- Phase 107 added Valid Cleanup Scene Binding. The checker can now require the
+  cleanup scene XML to exist before accepting exact-scene evidence, and reports
+  render exact task config blockers. A corrected seed-10 rerun with the
+  canonical scene showed the requested bread alias exists: pickup binding moved
+  the pool from 17 unrelated candidates to 1 exact candidate, robot placement
+  succeeded, and the remaining blocker is one post-placement grasp failure
+  with zero candidate-removal calls.

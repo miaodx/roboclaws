@@ -1523,6 +1523,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "scene_xml": "/tmp/scene.xml",
         "planner_object_id": "pickup/body",
         "planner_target_receptacle_id": "sink/body",
+        "blockers": [{"code": "cleanup_scene_xml_missing", "message": "missing stale scene"}],
     }
     run_result["manipulation_evidence"]["task_sampler_robot_placement_profile"] = {
         "schema": "planner_probe_task_sampler_robot_placement_profile_v1",
@@ -1722,6 +1723,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "relaxed" in html
     assert "place_robot_near max tries" in html
     assert "Exact task config applied" in html
+    assert "Exact task config blockers" in html
+    assert "cleanup_scene_xml_missing" in html
     assert "Exact sampler adapter class" in html
     assert "Exact sampler adapter object" in html
     assert "Exact pickup candidate action" in html

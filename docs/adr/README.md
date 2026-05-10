@@ -106,6 +106,7 @@ one decision per file, sequential numbering, explicit status.
 | [0095](0095-record-seed10-post-execution-fallback-exhaustion.md) | Record Seed 10 Post-Execution Fallback Exhaustion | Accepted |
 | [0096](0096-record-candidate-removal-effectiveness.md) | Record Candidate Removal Effectiveness | Accepted |
 | [0097](0097-bind-exact-pickup-candidate-pool.md) | Bind Exact Pickup Candidate Pool | Accepted |
+| [0098](0098-require-valid-cleanup-scene-binding.md) | Require Valid Cleanup Scene Binding | Accepted |
 
 ## Adding a new ADR
 

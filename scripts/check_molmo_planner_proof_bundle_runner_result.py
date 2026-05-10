@@ -538,6 +538,14 @@ def _assert_proof_result_summary(
                     value = str(pickup_binding.get(key) or "")
                     if value:
                         assert value in report_text, (key, report_text[:500])
+        cleanup_task_config = item.get("cleanup_task_config") or {}
+        config_blockers = cleanup_task_config.get("blockers") or []
+        if config_blockers:
+            assert "Exact task config blockers" in report_text, report_text[:500]
+            for blocker in config_blockers:
+                value = str(blocker.get("code") or "")
+                if value:
+                    assert value in report_text, (value, report_text[:500])
         task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
         if task_sampler_failure:
             placement_failure_keys = ("robot_placement_failure_count", "asset_failure_count")

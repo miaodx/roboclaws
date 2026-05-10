@@ -1422,6 +1422,7 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     requested = item.get("requested_cleanup_primitive_binding") or {}
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
+    config_blockers = _blocker_codes(config.get("blockers") or [])
     robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
     robot_placement_overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
@@ -1453,6 +1454,7 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Exact task config blockers", config_blockers),
         ("Robot placement profile", robot_placement_profile.get("profile", "")),
         ("Robot placement profile applied", _yes_no(robot_placement_profile.get("applied"))),
         ("place_robot_near max tries", robot_placement_overrides.get("max_tries", "")),
@@ -1821,6 +1823,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     promoted = evidence.get("cleanup_primitive_binding") or {}
     blockers = evidence.get("cleanup_primitive_binding_blockers") or []
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    config_blockers = _blocker_codes(cleanup_task_config.get("blockers") or [])
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
     pickup_binding = cleanup_task_sampler_adapter.get("exact_pickup_candidate_binding") or {}
     if not (
@@ -1835,6 +1838,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     rows = [
         ("Cleanup scene XML", cleanup_task_config.get("scene_xml", "")),
         ("Exact task config applied", _yes_no(cleanup_task_config.get("applied"))),
+        ("Exact task config blockers", config_blockers),
         (
             "Exact sampler adapter applied",
             _yes_no(cleanup_task_sampler_adapter.get("applied")),

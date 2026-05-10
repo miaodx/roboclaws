@@ -58,6 +58,7 @@ def _write_report_files(
     task_sampler_robot_placement_profile: bool = False,
     placement_scene_diagnostics: bool = False,
     post_placement_rejections: bool = False,
+    cleanup_config_blockers: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -71,6 +72,8 @@ def _write_report_files(
         body += "Runtime Diagnostics\n"
     if cleanup_binding:
         body += "Planner Probe Cleanup Binding\n"
+    if cleanup_config_blockers:
+        body += "Exact task config blockers\ncleanup_scene_xml_missing\n"
     if worker_stages:
         body += "Worker Stage Timeline\n"
     if curobo_cache:
@@ -673,6 +676,69 @@ def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -
     checker._assert_probe_result(data, tmp_path, accept_blocked_capability=True)
     with pytest.raises(AssertionError):
         checker._assert_probe_result(data, tmp_path, accept_blocked_capability=False)
+
+
+def test_checker_requires_cleanup_scene_bound_when_requested(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "physics blocked"}],
+        execution_attempted=True,
+    )
+    evidence["cleanup_task_config"] = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": str(scene_xml),
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+        "blockers": [],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(tmp_path, blocked=True, cleanup_binding=True),
+    }
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        require_cleanup_scene_bound=True,
+    )
+
+    evidence["cleanup_task_config"]["scene_xml"] = str(tmp_path / "missing.xml")
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            require_cleanup_scene_bound=True,
+        )
+
+    evidence["cleanup_task_config"]["scene_xml"] = str(scene_xml)
+    evidence["cleanup_task_config"]["blockers"] = [
+        {"code": "cleanup_scene_xml_missing", "message": "missing scene"}
+    ]
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        cleanup_binding=True,
+        cleanup_config_blockers=True,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            require_cleanup_scene_bound=True,
+        )
 
 
 def test_checker_rejects_api_semantic_as_planner_proof(tmp_path: Path) -> None:
