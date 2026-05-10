@@ -185,6 +185,7 @@ def init_state(
         objects,
         receptacles,
         target_count=generated_mess_count,
+        seed=seed,
     )
     if len(targets) < generated_mess_count:
         raise RuntimeError(

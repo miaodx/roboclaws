@@ -93,6 +93,7 @@ one decision per file, sequential numbering, explicit status.
 | [0082](0082-rerun-cleanup-with-broader-bound-proof.md) | Rerun Cleanup with Broader Bound Proof | Accepted |
 | [0083](0083-exclude-prior-covered-planner-proofs.md) | Exclude Prior Covered Planner Proofs | Accepted |
 | [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
+| [0085](0085-seed-generated-mess-pools-and-guard-local-proof-memory.md) | Seed Generated Mess Pools and Guard Local Proof Memory | Accepted |
 
 ## Adding a new ADR
 

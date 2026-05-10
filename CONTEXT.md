@@ -851,3 +851,13 @@ _Avoid_: full cleanup replacement claim
   selected zero commands, excluded `proof_008` as covered, excluded nine
   grasp-infeasible requests, and rendered the prior proof views in the runner
   report.
+- Phase 93 added Cleanup Report Artifact Adapter. Existing cleanup artifacts now
+  regenerate `report.html` from `run_result.json` through the shared report
+  underlay, so stale ignored reports do not act like a second implementation.
+- Phase 94 added Seeded Source Pool and Proof Memory. MolmoSpaces generated-mess
+  selection now uses the subprocess seed to rotate object identities while
+  preserving semantic target fixtures, and proof-selection memory rejects local
+  `proof_###`/`observed_###` matches when planner object identity conflicts.
+  The patched seed 9 artifact validates with 10 generated objects and 44 robot
+  timeline steps; prior-aware selection now picks four proof commands
+  (`proof_003`, `proof_005`, `proof_006`, `proof_010`) instead of zero.

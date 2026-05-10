@@ -504,8 +504,12 @@ def _prior_result_for_request(
     ):
         return prior_by_request_id, "request_id"
     pair = _cleanup_pair_from_request(request)
-    if pair in prior_results_by_cleanup_pair:
-        return prior_results_by_cleanup_pair[pair], "object_target"
+    prior_by_cleanup_pair = prior_results_by_cleanup_pair.get(pair)
+    if prior_by_cleanup_pair and _cleanup_pair_prior_result_matches_request(
+        request,
+        prior_by_cleanup_pair,
+    ):
+        return prior_by_cleanup_pair, "object_target"
     planner_pair = _planner_object_target_pair_from_request(request)
     if planner_pair in prior_results_by_planner_object_target:
         return prior_results_by_planner_object_target[planner_pair], "planner_object_target"
@@ -554,6 +558,8 @@ def _request_id_prior_result_matches_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
 ) -> bool:
+    if _planner_object_target_pairs_conflict(request, prior_result):
+        return False
     request_cleanup_pair = _cleanup_pair_from_request(request)
     prior_cleanup_pair = _cleanup_pair_from_result(prior_result)
     if all(request_cleanup_pair) and all(prior_cleanup_pair):
@@ -563,6 +569,26 @@ def _request_id_prior_result_matches_request(
     if all(request_planner_pair) and all(prior_planner_pair):
         return request_planner_pair == prior_planner_pair
     return True
+
+
+def _cleanup_pair_prior_result_matches_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    return not _planner_object_target_pairs_conflict(request, prior_result)
+
+
+def _planner_object_target_pairs_conflict(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    request_planner_pair = _planner_object_target_pair_from_request(request)
+    prior_planner_pair = _planner_object_target_pair_from_result(prior_result)
+    return (
+        all(request_planner_pair)
+        and all(prior_planner_pair)
+        and (request_planner_pair != prior_planner_pair)
+    )
 
 
 def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:

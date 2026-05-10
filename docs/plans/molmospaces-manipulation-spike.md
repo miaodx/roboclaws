@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 93 cleanup report artifact adapter completed; next work is rotating to a new broader source candidate pool
+**Status:** Phase 94 seeded source pool/proof memory completed; next work is executing the four newly selected proof commands
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -269,6 +269,11 @@ Adapter can now regenerate `report.html` from an existing cleanup
 `output/molmo-agent-bridge-visual-codex/report.html` was repaired locally to
 show the canonical visual core and semantic subphase rails
 `nav, pick, nav, open?, place`, then passed the agent-bridge checker.
+Phase 94 closes the source-rotation identity gap: MolmoSpaces generated-mess
+selection now uses the subprocess seed to choose different eligible objects on
+the same fixed scene, and proof-selection memory rejects local `proof_###` /
+`observed_###` matches when planner object identity conflicts. The patched seed
+9 artifact selected four new proof commands after prior-memory filtering.
 
 ## Why This Exists
 
@@ -1142,9 +1147,11 @@ completed:
   gsd-plan-phase 93-molmospaces-cleanup-report-artifact-adapter
   gsd-execute-phase 93-molmospaces-cleanup-report-artifact-adapter
   gsd-verify-work 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-plan-phase 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-execute-phase 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-verify-work 94-molmospaces-seeded-source-pool-proof-memory
 
 next pipeline candidates:
-  after the report adapter slice, rotate to a new broader source candidate
-  pool; the current broader seed and the local seed8 probe are exhausted after
-  excluding nine grasp-infeasible requests and one covered proof_008 request
+  execute the four proof commands selected from the patched seed9 source pool:
+  proof_003, proof_005, proof_006, and proof_010
 ```

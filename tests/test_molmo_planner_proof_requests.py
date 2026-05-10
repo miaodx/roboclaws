@@ -433,6 +433,51 @@ def test_proof_request_selection_ignores_colliding_request_id_for_different_pair
     assert selection["target_feasibility_blocker_count"] == 0
 
 
+def test_proof_request_selection_ignores_local_ids_when_planner_object_differs() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_003",
+                "ready": True,
+                "object_id": "observed_003",
+                "target_receptacle_id": "fridge_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_003",
+                    "--cleanup-planner-object-id": "lettuce_runtime_1_0_2",
+                    "--cleanup-planner-target-receptacle-id": "fridge_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_003",
+                "object_id": "observed_003",
+                "target_receptacle_id": "fridge_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "bread_runtime_1_0_2",
+                    "planner_target_receptacle_id": "fridge_runtime_1_0_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert selection["selected_request_ids"] == ["proof_003"]
+    assert selection["excluded_requests"] == []
+    assert selection["target_feasibility_blocker_count"] == 0
+
+
 def test_proof_request_selection_matches_prior_result_by_planner_object_target() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
