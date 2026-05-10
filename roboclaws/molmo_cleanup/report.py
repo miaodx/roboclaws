@@ -239,6 +239,11 @@ def render_planner_proof_bundle_runner_report(
             manifest.get("grasp_cache_availability_preflight") or {}
         )
     }
+    {
+        _grasp_cache_generation_preflight_section(
+            manifest.get("grasp_cache_generation_preflight") or {}
+        )
+    }
     {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
@@ -1097,6 +1102,105 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
         "<h2>Grasp Cache Availability Preflight</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{path_rows}'
         f"{recommendation_html}{asset_table}{candidate_table}{object_table}</section>"
+    )
+
+
+def _grasp_cache_generation_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight or preflight.get("status") == "not_applicable":
+        return ""
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Assets', preflight.get('asset_count', 0))}"
+        f"{_metric('Blockers', preflight.get('blocker_count', 0))}"
+        f"{_metric('Ready', _yes_no(preflight.get('ready')))}"
+        "</div>"
+    )
+    paths = _path_table(
+        [
+            ("MolmoSpaces Python", preflight.get("molmospaces_python", "")),
+            ("MolmoSpaces root", preflight.get("molmospaces_root", "")),
+            ("Assets dir", preflight.get("assets_dir", "")),
+            ("Objects list path", preflight.get("objects_list_path", "")),
+            ("Working dir", preflight.get("working_dir", "")),
+        ]
+    )
+    asset_rows = []
+    for asset in preflight.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        asset_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(asset.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('object_xml_exists', False)))}</td>"
+            f"<td>{html.escape(str(asset.get('object_xml', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('generated_npz_path', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('cache_target_resolved_path', '')))}</td>"
+            "</tr>"
+        )
+    if not asset_rows:
+        asset_rows.append('<tr><td colspan="5">No grasp generation assets recorded.</td></tr>')
+    asset_table = (
+        '<h3>Generation Assets</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Object XML exists</th><th>Object XML</th>"
+        "<th>Generated NPZ</th><th>Loader cache target</th>"
+        f"</tr></thead><tbody>{''.join(asset_rows)}</tbody></table></div>"
+    )
+    check_rows = []
+    for check in preflight.get("checks") or []:
+        if not isinstance(check, dict):
+            continue
+        check_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(check.get('name', '')))}</td>"
+            f"<td>{html.escape(str(check.get('status', '')))}</td>"
+            f"<td>{html.escape(str(check.get('code', '')))}</td>"
+            f"<td>{html.escape(str(check.get('path') or check.get('resolved_path') or ''))}</td>"
+            f"<td>{html.escape(str(check.get('message') or check.get('stderr') or ''))}</td>"
+            "</tr>"
+        )
+    if not check_rows:
+        check_rows.append('<tr><td colspan="5">No generation checks recorded.</td></tr>')
+    check_table = (
+        '<h3>Prerequisite Checks</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Check</th><th>Status</th><th>Code</th><th>Path</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(check_rows)}</tbody></table></div>"
+    )
+    blocker_rows = []
+    for blocker in preflight.get("blockers") or []:
+        if not isinstance(blocker, dict):
+            continue
+        blocker_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('name', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    blocker_table = (
+        '<p class="note">No generation blockers recorded.</p>'
+        if not blocker_rows
+        else (
+            '<h3>Generation Blockers</h3><div class="table-wrap"><table><thead><tr>'
+            "<th>Code</th><th>Check</th><th>Message</th>"
+            f"</tr></thead><tbody>{''.join(blocker_rows)}</tbody></table></div>"
+        )
+    )
+    command = " ".join(str(part) for part in preflight.get("command") or [])
+    command_html = f"<pre><code>{html.escape(command)}</code></pre>" if command else ""
+    recommendation = str(preflight.get("mitigation_recommendation") or "")
+    recommendation_html = (
+        f'<p class="note">Recommendation: {html.escape(recommendation)}</p>'
+        if recommendation
+        else ""
+    )
+    note = preflight.get("evidence_note") or "Grasp cache generation preflight."
+    return (
+        '<section class="panel grasp-cache-generation-preflight">'
+        "<h2>Grasp Cache Generation Preflight</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f"{metrics}{recommendation_html}{paths}{asset_table}{check_table}"
+        f"{blocker_table}<h3>Proposed Generation Command</h3>{command_html}</section>"
     )
 
 

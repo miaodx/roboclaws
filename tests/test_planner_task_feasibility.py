@@ -4,6 +4,7 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
     grasp_cache_availability_preflight,
+    grasp_cache_generation_preflight,
     grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
@@ -269,3 +270,36 @@ def test_grasp_cache_preflight_rejects_empty_loader_file(tmp_path: Path) -> None
     assert probe["valid"] is False
     assert probe["validation_status"] == "empty"
     assert probe["transform_count"] == 0
+
+
+def test_grasp_cache_generation_preflight_reports_missing_prerequisites(
+    tmp_path: Path,
+) -> None:
+    object_dir = tmp_path / "objects" / "thor" / "Kitchen Objects" / "Bread" / "Prefabs"
+    object_dir.mkdir(parents=True)
+    (object_dir / "Bread_1.xml").write_text("<mujoco />", encoding="utf-8")
+
+    availability = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    preflight = grasp_cache_generation_preflight(
+        availability,
+        output_dir=tmp_path / "runner",
+        molmospaces_python=None,
+    )
+
+    assert preflight["schema"] == "planner_grasp_cache_generation_preflight_v1"
+    assert preflight["status"] == "blocked"
+    assert preflight["asset_count"] == 1
+    assert preflight["blocker_count"] >= 1
+    assert preflight["assets"][0]["asset_uid"] == "Bread_1"
+    assert preflight["assets"][0]["object_xml_exists"] is True
+    assert preflight["assets"][0]["cache_target_relative_path"] == (
+        "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"
+    )
+    assert preflight["objects_list_path"].endswith("grasp_generation/rigid_objects_list.json")
+    assert any(
+        blocker["code"] == "molmospaces_python_not_configured" for blocker in preflight["blockers"]
+    )

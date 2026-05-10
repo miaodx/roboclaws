@@ -107,6 +107,9 @@ def _assert_runner_result(
     grasp_cache_preflight = data.get("grasp_cache_availability_preflight") or {}
     if grasp_cache_preflight:
         _assert_grasp_cache_availability_preflight(grasp_cache_preflight, report_text)
+    grasp_generation_preflight = data.get("grasp_cache_generation_preflight") or {}
+    if grasp_generation_preflight:
+        _assert_grasp_cache_generation_preflight(grasp_generation_preflight, report_text)
     if prior_proof_result_summary:
         _assert_prior_proof_result_summary(prior_proof_result_summary, base, report_text)
     if proof_result_summary:
@@ -751,6 +754,61 @@ def _assert_grasp_cache_availability_preflight(
                 value = str(object_file.get(key) or "")
                 if value:
                     _assert_report_contains(value, report_text, object_file)
+
+
+def _assert_grasp_cache_generation_preflight(
+    preflight: dict[str, Any],
+    report_text: str,
+) -> None:
+    assert preflight.get("schema") == "planner_grasp_cache_generation_preflight_v1", preflight
+    assert preflight.get("status") in {"ready", "blocked", "not_applicable"}, preflight
+    if preflight.get("status") == "not_applicable":
+        return
+    assert "Grasp Cache Generation Preflight" in report_text, report_text[:500]
+    for value in [
+        preflight.get("status"),
+        preflight.get("molmospaces_python"),
+        preflight.get("molmospaces_root"),
+        preflight.get("assets_dir"),
+        preflight.get("objects_list_path"),
+        preflight.get("working_dir"),
+        preflight.get("mitigation_recommendation"),
+    ]:
+        if value:
+            _assert_report_contains(str(value), report_text, preflight)
+    assets = preflight.get("assets") or []
+    assert int(preflight.get("asset_count") or 0) == len(assets), preflight
+    for asset in assets:
+        assert isinstance(asset, dict), preflight
+        for key in (
+            "asset_uid",
+            "object_xml",
+            "generated_npz_path",
+            "cache_target_resolved_path",
+        ):
+            value = str(asset.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, asset)
+    checks = preflight.get("checks") or []
+    for check in checks:
+        assert isinstance(check, dict), preflight
+        for key in ("name", "status", "code", "message"):
+            value = str(check.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, check)
+        path_value = str(check.get("path") or check.get("resolved_path") or "")
+        if path_value:
+            _assert_report_contains(path_value, report_text, check)
+    blockers = preflight.get("blockers") or []
+    assert int(preflight.get("blocker_count") or 0) == len(blockers), preflight
+    if preflight.get("status") == "blocked":
+        assert blockers, preflight
+    for blocker in blockers:
+        assert isinstance(blocker, dict), preflight
+        for key in ("code", "name", "message"):
+            value = str(blocker.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, blocker)
 
 
 def _assert_cleanup_rerun(

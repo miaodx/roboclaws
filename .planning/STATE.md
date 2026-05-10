@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 115 MolmoSpaces semantic underlay architecture completed on 2026-05-10.
+stopped_at: Phase 116 MolmoSpaces grasp cache generation preflight completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 108
-  completed_phases: 108
-  total_plans: 111
-  completed_plans: 111
+  total_phases: 109
+  completed_phases: 109
+  total_plans: 112
+  completed_plans: 112
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 115 completed the semantic underlay architecture refactor; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target or executing unrelated selected source-rotation requests without treating them as a cache fix.
+**Current focus:** Phase 116 completed the grasp cache generation preflight; next work is installing/building grasp-generation prerequisites before generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target.
 
 ## Current Position
 
-Phase: 115 (molmospaces-semantic-underlay-architecture) - COMPLETE
-Plan: 1 of 1 complete - `115-01` centralizes semantic cleanup vocabulary for the shared loop, reports, and checkers.
+Phase: 116 (molmospaces-grasp-cache-generation-preflight) - COMPLETE
+Plan: 1 of 1 complete - `116-01` renders rigid grasp-generation prerequisites and blockers before cache generation.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -332,18 +332,24 @@ surface/inside canonical sequences, display labels, focused action prefixes,
 and loop variant strings now live in `semantic_timeline.py`; the shared cleanup
 loop, Cleanup Artifact Report, visual-core checks, and checkers import them
 instead of carrying local copies.
-Last activity: 2026-05-10 - Completed Phase 115 semantic underlay architecture.
+Phase 116 records the grasp cache generation preflight. The proof-bundle runner
+now renders the `Bread_1` object XML, proposed upstream `run_rigid.py` command,
+generated NPZ path, final droid loader cache target, and local prerequisite
+blockers. Current generation is blocked by missing `sklearn`, missing
+`python-fcl`, and missing Manifold `manifold` / `simplify` executables.
+Last activity: 2026-05-10 - Completed Phase 116 grasp cache generation preflight.
 
 Progress: [##########] 100%
-Next blocker: generate or restore a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target, or execute unrelated
-selected source-rotation requests without treating them as a cache fix.
+Next blocker: install missing grasp-generation Python prerequisites, build
+Manifold `manifold` / `simplify`, then rerun the grasp cache generation
+preflight before generating a non-empty `Bread_1` rigid grasp cache.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 115 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 115)
+- Total plans completed: 116 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 116)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -1007,15 +1013,16 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 115 MolmoSpaces semantic underlay architecture completed.
-The next implementation should generate or restore a rigid `Bread_1` grasp
+Stopped at: Phase 116 MolmoSpaces grasp cache generation preflight completed.
+The next implementation should install/build missing generation prerequisites
+(`sklearn`, `python-fcl`, Manifold `manifold` / `simplify`), rerun the
+generation preflight, and only then generate or restore a rigid `Bread_1` grasp
 cache with nonzero transforms at the resolved runtime cache target before exact
-retry, or execute unrelated selected source-rotation requests without treating
-them as a cache fix.
+retry.
 Latest phase artifacts are
-`docs/adr/0106-centralize-semantic-cleanup-vocabulary.md`,
-`docs/plans/molmospaces-semantic-underlay-architecture.md`, and
-`.planning/phases/115-molmospaces-semantic-underlay-architecture/115-01-semantic-underlay-architecture-PLAN.md`.
+`docs/adr/0107-preflight-grasp-cache-generation-before-running.md`,
+`docs/plans/molmospaces-grasp-cache-generation-preflight.md`, and
+`.planning/phases/116-molmospaces-grasp-cache-generation-preflight/116-01-grasp-cache-generation-preflight-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1024,10 +1031,10 @@ Latest executed cleanup artifact:
 Latest executed standalone proof artifact:
 `output/debug-phase109-grasp-collision-diagnostics/run_result.json`.
 Latest proof-bundle dry-run artifact:
-`output/debug-phase114-grasp-cache-validity-preflight/proof_bundle_run_manifest.json`.
+`output/debug-phase116-grasp-cache-generation-preflight/proof_bundle_run_manifest.json`.
 Latest regenerated stale report:
 `output/molmo-agent-bridge-visual-codex/report.html`.
-Resume file: .planning/phases/115-molmospaces-semantic-underlay-architecture/115-01-semantic-underlay-architecture-PLAN.md
+Resume file: .planning/phases/116-molmospaces-grasp-cache-generation-preflight/116-01-grasp-cache-generation-preflight-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1035,7 +1042,7 @@ Resume file: .planning/phases/115-molmospaces-semantic-underlay-architecture/115
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 115 MolmoSpaces semantic underlay architecture is
-complete; next work should generate or restore a non-empty rigid `Bread_1`
-grasp cache at the resolved runtime cache target or run unrelated selected
-source-rotation requests without claiming the cache blocker is fixed.
+**Active Phase:** None. Phase 116 MolmoSpaces grasp cache generation preflight
+is complete; next work should install/build generation prerequisites, rerun the
+preflight, and only then generate or restore a non-empty rigid `Bread_1` grasp
+cache at the resolved runtime cache target.

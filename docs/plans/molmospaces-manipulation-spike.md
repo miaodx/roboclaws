@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 115 semantic underlay architecture completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 116 grasp cache generation preflight completed; next work is installing/building grasp-generation prerequisites before generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -395,6 +395,12 @@ surface/inside cleanup sequences, display labels, focused action prefixes, and
 loop variants now live in `semantic_timeline.py`; the loop, reports, visual-core
 checks, and artifact checkers import that vocabulary instead of carrying local
 copies.
+Phase 116 makes the next cache-mitigation local-dev step visible before
+execution. The proof-bundle runner now renders `Grasp Cache Generation
+Preflight`, including the `Bread_1` object XML, generated NPZ path, final droid
+loader cache target, upstream `run_rigid.py` command, and prerequisite blockers.
+The current local environment blocks generation on missing `sklearn`, missing
+`python-fcl`, and missing Manifold `manifold`/`simplify` executables.
 
 ## Why This Exists
 

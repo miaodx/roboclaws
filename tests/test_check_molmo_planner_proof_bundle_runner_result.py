@@ -205,6 +205,65 @@ def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -
             }
         ],
     }
+    manifest["grasp_cache_generation_preflight"] = {
+        "schema": "planner_grasp_cache_generation_preflight_v1",
+        "status": "blocked",
+        "ready": False,
+        "asset_count": 1,
+        "blocker_count": 1,
+        "molmospaces_python": str(tmp_path / "molmospaces-python"),
+        "molmospaces_root": str(tmp_path / "molmospaces"),
+        "assets_dir": str(tmp_path / "assets"),
+        "objects_list_path": str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+        "working_dir": str(tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation"),
+        "command": [
+            str(tmp_path / "molmospaces-python"),
+            str(tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation" / "run_rigid.py"),
+            "--objects_list",
+            str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+        ],
+        "mitigation_recommendation": (
+            "install_grasp_generation_prerequisites_before_cache_generation"
+        ),
+        "assets": [
+            {
+                "asset_uid": "PriorBread_1",
+                "object_xml": str(tmp_path / "assets" / "objects" / "thor" / "PriorBread_1.xml"),
+                "object_xml_exists": True,
+                "generated_npz_path": str(
+                    tmp_path
+                    / "molmospaces"
+                    / "grasp_results"
+                    / "rigid_objects"
+                    / "PriorBread_1"
+                    / "PriorBread_1_grasps_filtered.npz"
+                ),
+                "cache_target_resolved_path": str(
+                    tmp_path
+                    / "assets"
+                    / "grasps"
+                    / "droid"
+                    / "PriorBread_1"
+                    / "PriorBread_1_grasps_filtered.npz"
+                ),
+            }
+        ],
+        "checks": [
+            {
+                "name": "python_fcl_runtime",
+                "status": "blocked",
+                "code": "python_fcl_missing",
+                "message": "No FCL Available",
+            }
+        ],
+        "blockers": [
+            {
+                "code": "python_fcl_missing",
+                "name": "python_fcl_runtime",
+                "message": "No FCL Available",
+            }
+        ],
+    }
     (tmp_path / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

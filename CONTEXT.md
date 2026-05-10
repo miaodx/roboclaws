@@ -395,6 +395,13 @@ phase sequences, report-facing subphase labels, loop variant strings, and
 focused robot-view action prefixes.
 _Avoid_: per-demo phase constants, checker-local visual vocabulary
 
+**Grasp Cache Generation Preflight**:
+Report-visible evidence for whether the upstream MolmoSpaces rigid grasp
+generator is locally runnable for a missing-cache asset, including object XML,
+loader cache target, Python prerequisites, Manifold executables, and proposed
+generation command.
+_Avoid_: failed invisible generation attempt, fake grasp cache
+
 **Planner-Backed Manipulation Proof**:
 Evidence that a MolmoSpaces robot manipulation planner policy actually executed
 robot actions and changed robot state, separate from semantic state edits.
@@ -735,6 +742,8 @@ _Avoid_: full cleanup replacement claim
   or generation command is chosen.
 - **Grasp Cache Validity Preflight** should parse rigid loader files and require
   nonzero transforms before marking a missing-cache asset ready.
+- **Grasp Cache Generation Preflight** should pass before running upstream
+  rigid grasp generation or installing generated cache output.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1120,3 +1129,7 @@ _Avoid_: full cleanup replacement claim
   the raw phases, canonical surface/inside cleanup sequences, display labels,
   focused action prefixes, and loop variants used by the shared semantic loop,
   Cleanup Artifact Report, visual-core contract, and checkers.
+- Phase 116 adds Grasp Cache Generation Preflight. The proof-bundle runner now
+  renders the upstream rigid generation route for `Bread_1` and blocks visibly
+  on missing `sklearn`, missing `python-fcl`, and missing Manifold
+  `manifold`/`simplify` executables.

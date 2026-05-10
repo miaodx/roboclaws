@@ -9,6 +9,7 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
     grasp_cache_availability_preflight,
+    grasp_cache_generation_preflight,
     grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
@@ -250,6 +251,8 @@ def proof_bundle_run_manifest(
     proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
+    molmospaces_python: Path | None = None,
+    molmospaces_root: Path | None = None,
 ) -> dict[str, Any]:
     selection = proof_request_selection or proof_request_selection_from_summary(proof_requests)
     summary = proof_result_summary or proof_result_summary_from_commands(commands)
@@ -261,6 +264,11 @@ def proof_bundle_run_manifest(
     )
     planner_scene = proof_requests.get("planner_scene") or {}
     planner_assets_dir = _assets_dir_from_planner_scene(planner_scene)
+    grasp_cache_preflight = grasp_cache_availability_preflight(
+        grasp_mitigation_decision,
+        assets_dir=planner_assets_dir,
+        assets_dir_source="planner_scene" if planner_assets_dir is not None else None,
+    )
     return {
         "schema": PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
         "cleanup_run_result": str(cleanup_run_result),
@@ -276,10 +284,12 @@ def proof_bundle_run_manifest(
         "commands": commands,
         "proof_result_summary": summary,
         "grasp_feasibility_mitigation_decision": grasp_mitigation_decision,
-        "grasp_cache_availability_preflight": grasp_cache_availability_preflight(
-            grasp_mitigation_decision,
-            assets_dir=planner_assets_dir,
-            assets_dir_source="planner_scene" if planner_assets_dir is not None else None,
+        "grasp_cache_availability_preflight": grasp_cache_preflight,
+        "grasp_cache_generation_preflight": grasp_cache_generation_preflight(
+            grasp_cache_preflight,
+            output_dir=output_dir,
+            molmospaces_python=molmospaces_python,
+            molmospaces_root=molmospaces_root,
         ),
         "cleanup_command": cleanup_command or [],
         "cleanup_rerun": cleanup_rerun or {},

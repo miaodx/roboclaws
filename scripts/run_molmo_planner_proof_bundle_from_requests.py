@@ -257,6 +257,8 @@ def run_from_cleanup_result(
         prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,
         cleanup_rerun=cleanup_rerun,
+        molmospaces_python=molmospaces_python,
+        molmospaces_root=molmospaces_root,
     )
     manifest["status"] = status
     report_path = output_dir / "report.html"

@@ -1268,6 +1268,87 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 }
             ],
         },
+        "grasp_cache_generation_preflight": {
+            "schema": "planner_grasp_cache_generation_preflight_v1",
+            "status": "blocked",
+            "ready": False,
+            "asset_count": 1,
+            "blocker_count": 2,
+            "molmospaces_python": str(tmp_path / "molmospaces-python"),
+            "molmospaces_root": str(tmp_path / "molmospaces"),
+            "assets_dir": str(tmp_path / "assets"),
+            "objects_list_path": str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+            "working_dir": str(tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation"),
+            "command": [
+                str(tmp_path / "molmospaces-python"),
+                str(
+                    tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation" / "run_rigid.py"
+                ),
+                "--objects_list",
+                str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+            ],
+            "mitigation_recommendation": (
+                "install_grasp_generation_prerequisites_before_cache_generation"
+            ),
+            "evidence_note": "Preflights rigid grasp generation.",
+            "assets": [
+                {
+                    "asset_uid": "Bread_1",
+                    "object_xml": str(tmp_path / "assets" / "objects" / "thor" / "Bread_1.xml"),
+                    "object_xml_exists": True,
+                    "generated_npz_path": str(
+                        tmp_path
+                        / "molmospaces"
+                        / "grasp_results"
+                        / "rigid_objects"
+                        / "Bread_1"
+                        / "Bread_1_grasps_filtered.npz"
+                    ),
+                    "cache_target_resolved_path": str(
+                        tmp_path
+                        / "assets"
+                        / "grasps"
+                        / "droid"
+                        / "Bread_1"
+                        / "Bread_1_grasps_filtered.npz"
+                    ),
+                }
+            ],
+            "checks": [
+                {
+                    "name": "python_module_sklearn",
+                    "status": "blocked",
+                    "code": "sklearn_missing",
+                    "message": "No module named sklearn",
+                },
+                {
+                    "name": "manifold_executable",
+                    "status": "blocked",
+                    "code": "manifold_executable_missing",
+                    "path": str(
+                        tmp_path
+                        / "molmospaces"
+                        / "external_src"
+                        / "Manifold"
+                        / "build"
+                        / "manifold"
+                    ),
+                    "message": "Required path is not ready",
+                },
+            ],
+            "blockers": [
+                {
+                    "code": "sklearn_missing",
+                    "name": "python_module_sklearn",
+                    "message": "No module named sklearn",
+                },
+                {
+                    "code": "manifold_executable_missing",
+                    "name": "manifold_executable",
+                    "message": "Required path is not ready",
+                },
+            ],
+        },
         "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
     }
 
@@ -1285,6 +1366,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "grasp_cache_mitigation" in html
     assert "mitigate_missing_grasp_cache_before_retry" in html
     assert "Grasp Cache Availability Preflight" in html
+    assert "Grasp Cache Generation Preflight" in html
+    assert "python_module_sklearn" in html
+    assert "manifold_executable_missing" in html
+    assert "run_rigid.py" in html
     assert "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz" in html
     assert "has_grasp_folder_only" in html
     assert "objects/thor/Bread_1.xml" in html
