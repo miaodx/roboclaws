@@ -278,6 +278,11 @@ Phase 95 executed those four selected proof commands. All four reached task
 sampling with the wide placement profile but remained `grasp_feasibility`
 blocked with `17 grasp failures; 15 candidate-removal calls`, so no new
 planner-backed cleanup primitive coverage is available for a cleanup rerun yet.
+Phase 96 closes the blocked-proof report visual gap: task-sampler failures can
+now emit bounded post-placement camera artifacts through the same
+`image_artifacts` interface as successful initial/final planner views, while
+older diagnostic-only artifacts render an inline task-sampler diagnostic view
+instead of an empty no-view state.
 
 ## Why This Exists
 

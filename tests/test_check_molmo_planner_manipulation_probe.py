@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from roboclaws.molmo_cleanup.manipulation_provenance import (
@@ -85,12 +86,12 @@ def _write_report_files(
     if placement_scene_diagnostics:
         body += (
             "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
-            "Placement Scene Diagnostics\nbook/body\n12\n0.012\n"
+            "Planner Probe Diagnostic Views\nPlacement Scene Diagnostics\nbook/body\n12\n0.012\n"
         )
     if post_placement_rejections:
         body += (
             "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
-            "Post-Placement Candidate Rejections\nbook/body\n3\n"
+            "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\nbook/body\n3\n"
         )
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
@@ -315,6 +316,52 @@ def test_runner_task_sampler_failure_diagnostics_records_robot_placement() -> No
     assert diagnostics["last_robot_placement_failure"]["asset_uid"] == "asset-book"
     assert diagnostics["last_robot_placement_failure"]["message"] == "placement blocked"
     assert diagnostics["robot_placement_config"]["robot_safety_radius"] == 0.15
+
+
+def test_runner_task_sampler_failure_diagnostics_captures_post_placement_view(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner_module()
+    runner._WORKER_EXCEPTION_CONTEXT.clear()
+
+    class FakeSampler:
+        config = SimpleNamespace(task_config=SimpleNamespace(pickup_obj_name="book/body"))
+
+        def _sample_and_place_robot(self, env):
+            return True
+
+    class FakeRegistry:
+        def __init__(self) -> None:
+            self.updated = False
+
+        def keys(self):
+            return ["wrist_camera_l", "head_camera"]
+
+        def update_all_cameras(self, env) -> list[str]:
+            self.updated = True
+            return ["head_camera"]
+
+    class FakeEnv:
+        def __init__(self) -> None:
+            self.camera_manager = SimpleNamespace(registry=FakeRegistry())
+
+        def render_rgb_frame(self, camera_name: str):
+            assert camera_name == "head_camera"
+            return np.full((3, 4, 3), 64, dtype=np.uint8)
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(
+        sampler,
+        output_dir=tmp_path,
+    )
+
+    assert sampler._sample_and_place_robot(FakeEnv()) is True
+
+    artifacts = diagnostics["image_artifacts"]
+    assert list(artifacts) == ["post_placement_attempt_001_head_camera"]
+    assert (tmp_path / artifacts["post_placement_attempt_001_head_camera"]).is_file()
+    assert diagnostics["robot_placement_attempts"][0]["image_artifacts"] == artifacts
+    assert runner._WORKER_EXCEPTION_CONTEXT["image_artifacts"] == artifacts
 
 
 def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_call() -> None:

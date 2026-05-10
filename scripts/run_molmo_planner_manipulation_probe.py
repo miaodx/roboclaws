@@ -514,6 +514,7 @@ def _worker_exception_probe_context(args: argparse.Namespace) -> dict[str, Any]:
             "task_sampler_failure_diagnostics"
         )
         or {},
+        "image_artifacts": _WORKER_EXCEPTION_CONTEXT.get("image_artifacts") or {},
     }
 
 
@@ -1258,6 +1259,7 @@ def _execute_policy_probe(
     task_sampler_failure_diagnostics = _apply_task_sampler_failure_diagnostics_adapter(
         task_sampler,
         task_sampler_robot_placement_profile,
+        output_dir=output_dir,
     )
     _record_worker_exception_context(
         cleanup_task_sampler_adapter=cleanup_task_sampler_adapter,
@@ -1504,6 +1506,8 @@ def _apply_exact_cleanup_task_sampler_adapter(
 def _apply_task_sampler_failure_diagnostics_adapter(
     task_sampler: Any,
     robot_placement_profile: dict[str, Any] | None = None,
+    *,
+    output_dir: Path | None = None,
 ) -> dict[str, Any]:
     profile = robot_placement_profile or {}
     diagnostics: dict[str, Any] = {
@@ -1523,6 +1527,8 @@ def _apply_task_sampler_failure_diagnostics_adapter(
         "asset_failures": [],
         "grasp_failures": [],
         "candidate_removals": [],
+        "image_artifacts": {},
+        "visual_capture_failures": [],
     }
     sample_and_place_robot = getattr(task_sampler, "_sample_and_place_robot", None)
     if callable(sample_and_place_robot):
@@ -1548,6 +1554,18 @@ def _apply_task_sampler_failure_diagnostics_adapter(
                 raise
             else:
                 attempt["result"] = "placed"
+                image_artifacts = _capture_task_sampler_diagnostic_views(
+                    env,
+                    output_dir,
+                    prefix=f"post_placement_attempt_{attempt['attempt_index']:03d}",
+                    diagnostics=diagnostics,
+                )
+                if image_artifacts:
+                    attempt["image_artifacts"] = image_artifacts
+                    diagnostics["image_artifacts"].update(image_artifacts)
+                    _record_worker_exception_context(
+                        image_artifacts=diagnostics["image_artifacts"],
+                    )
                 return result
             finally:
                 restore_place_robot_near()
@@ -1634,6 +1652,97 @@ def _apply_task_sampler_failure_diagnostics_adapter(
     diagnostics["applied"] = bool(diagnostics["hooks"])
     _refresh_task_sampler_failure_diagnostics(diagnostics)
     return diagnostics
+
+
+def _capture_task_sampler_diagnostic_views(
+    env: Any,
+    output_dir: Path | None,
+    *,
+    prefix: str,
+    diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    if output_dir is None or int(diagnostics.get("visual_capture_count") or 0) >= 1:
+        return {}
+    try:
+        camera_manager = getattr(env, "camera_manager", None)
+        registry = getattr(camera_manager, "registry", None)
+        update_all = getattr(registry, "update_all_cameras", None)
+        if callable(update_all):
+            update_all(env)
+        camera_names = _task_sampler_diagnostic_camera_names(env)
+        if not camera_names:
+            return {}
+        views_dir = output_dir / "planner_views"
+        artifacts = {}
+        for camera_name in camera_names[:1]:
+            path = _write_env_camera_image(env, camera_name, views_dir, prefix)
+            if path:
+                key = f"{prefix}_{_safe_artifact_key(camera_name)}"
+                artifacts[key] = str(path.relative_to(output_dir))
+        if artifacts:
+            diagnostics["visual_capture_count"] = (
+                int(diagnostics.get("visual_capture_count") or 0) + 1
+            )
+        return artifacts
+    except Exception as exc:  # pragma: no cover - best-effort failure evidence.
+        diagnostics.setdefault("visual_capture_failures", []).append(
+            {
+                "prefix": prefix,
+                "exception_type": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
+        return {}
+
+
+def _task_sampler_diagnostic_camera_names(env: Any) -> list[str]:
+    registry = getattr(getattr(env, "camera_manager", None), "registry", None)
+    keys = getattr(registry, "keys", None)
+    if not callable(keys):
+        return []
+    names = [str(name) for name in keys()]
+    preferred = [
+        "head_camera",
+        "camera_follower",
+        "wrist_camera",
+        "wrist_camera_l",
+        "wrist_camera_r",
+        "exo_camera_1",
+    ]
+    ordered = [name for name in preferred if name in names]
+    ordered.extend(name for name in names if name not in ordered)
+    return ordered
+
+
+def _write_env_camera_image(
+    env: Any,
+    camera_name: str,
+    output_dir: Path,
+    prefix: str,
+) -> Path | None:
+    import numpy as np
+    from PIL import Image
+
+    render = getattr(env, "render_rgb_frame", None)
+    if not callable(render):
+        return None
+    frame = np.asarray(render(camera_name))
+    if frame.ndim != 3:
+        return None
+    if frame.shape[2] > 3:
+        frame = frame[:, :, :3]
+    if frame.dtype.kind == "f" and float(np.nanmax(frame)) <= 1.0:
+        frame = frame * 255.0
+    image = Image.fromarray(np.clip(frame, 0, 255).astype("uint8"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / f"{prefix}_{_safe_artifact_key(camera_name)}.png"
+    image.save(path)
+    return path
+
+
+def _safe_artifact_key(value: str) -> str:
+    cleaned = "".join(char if char.isalnum() else "_" for char in value.strip())
+    return cleaned.strip("_") or "camera"
 
 
 def _candidate_object_count(task_sampler: Any) -> int | None:
@@ -2217,6 +2326,8 @@ def _write_probe_result(
         evidence["task_sampler_failure_diagnostics"] = worker_payload[
             "task_sampler_failure_diagnostics"
         ]
+    if worker_payload.get("image_artifacts"):
+        evidence["image_artifacts"] = worker_payload["image_artifacts"]
     if worker_payload.get("sampled_task_binding"):
         evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
     if worker_payload.get("requested_cleanup_primitive_binding"):

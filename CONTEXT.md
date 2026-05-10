@@ -118,6 +118,14 @@ Proof-request selection memory that excludes prior results that are already
 expands coverage instead of retrying solved cleanup object/target pairs.
 _Avoid_: rerunning passing bound proofs
 
+**Planner Failure Diagnostic Views**:
+The shared report visual surface for exact-scene planner probes that fail
+during task sampling before normal initial/final planner views exist. Future
+runs should prefer captured post-placement camera artifacts through
+`image_artifacts`; older diagnostic-only artifacts may render inline
+task-sampler visual summaries instead of an empty no-view state.
+_Avoid_: second report renderer, table-only blocked proof
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -868,3 +876,8 @@ _Avoid_: full cleanup replacement claim
   `17 grasp failures; 15 candidate-removal calls`; no new planner-backed proof
   or cleanup-binding promotion was produced. The runner report still provides
   the visual review surface for selection, prior evidence, and proof results.
+- Phase 96 added Planner Failure Diagnostic Views. Blocked task-sampler probes
+  can now capture a bounded post-placement camera artifact through the same
+  `image_artifacts` path used by successful initial/final planner views, and
+  old diagnostic-only blocked reports render an inline task-sampler diagnostic
+  view instead of an empty no-view state.

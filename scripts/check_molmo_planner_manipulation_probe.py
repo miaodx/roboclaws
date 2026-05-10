@@ -106,6 +106,15 @@ def _assert_probe_result(
         if max_tries:
             assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
     task_sampler_failure = evidence.get("task_sampler_failure_diagnostics") or {}
+    image_artifacts = evidence.get("image_artifacts") or {}
+    if image_artifacts:
+        assert "Planner Probe Views" in report_text, report_text[:500]
+        for label, value in image_artifacts.items():
+            path = _resolve_path(base, str(value))
+            assert path.is_file(), path
+            assert str(value) in report_text, (label, report_text[:500])
+    elif task_sampler_failure:
+        assert "Planner Probe Diagnostic Views" in report_text, report_text[:500]
     if task_sampler_failure:
         assert "Task Sampler Failure Diagnostics" in report_text, report_text[:500]
         if task_sampler_failure.get("placement_scene_diagnostics"):

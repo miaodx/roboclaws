@@ -1366,12 +1366,14 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         figures = "".join(
             _view_figure(
                 _report_asset_src(view.get("path"), output_dir),
-                f"{item.get('request_id', '')} {view.get('label', '')}",
+                f"{item.get('request_id', '')} {_image_artifact_label(view.get('label', ''))}",
             )
             for view in views
             if isinstance(view, dict)
         )
         view_html = f'<div class="views">{figures}</div>'
+    elif task_sampler_failure:
+        view_html = _task_sampler_diagnostic_views(task_sampler_failure)
     else:
         view_html = (
             '<p class="note">No planner probe views recorded'
@@ -1462,14 +1464,114 @@ def _path_table(rows: list[tuple[str, Any]]) -> str:
 def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
     artifacts = evidence.get("image_artifacts") or {}
     if not artifacts:
+        diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+        if diagnostics:
+            return (
+                '<section class="panel"><h2>Planner Probe Diagnostic Views</h2>'
+                f"{_task_sampler_diagnostic_views(diagnostics)}</section>"
+            )
         return ""
+    figures = "".join(
+        _view_figure(path, _image_artifact_label(label))
+        for label, path in _ordered_image_artifacts(artifacts)
+    )
     return (
         '<section class="panel"><h2>Planner Probe Views</h2>'
         '<div class="views">'
-        f"{_view_figure(artifacts.get('initial'), 'Initial')}"
-        f"{_view_figure(artifacts.get('final'), 'Final')}"
-        "</div></section>"
+        f"{figures}</div></section>"
     )
+
+
+def _ordered_image_artifacts(artifacts: dict[str, Any]) -> list[tuple[str, Any]]:
+    preferred = ("initial", "final")
+    items = []
+    for key in preferred:
+        if artifacts.get(key):
+            items.append((key, artifacts[key]))
+    items.extend(
+        (str(key), value)
+        for key, value in sorted(artifacts.items())
+        if key not in preferred and value
+    )
+    return items
+
+
+def _image_artifact_label(value: Any) -> str:
+    text = str(value or "").replace("_", " ").replace("-", " ").strip()
+    if not text:
+        return "Planner view"
+    return " ".join(part.capitalize() for part in text.split())
+
+
+def _task_sampler_diagnostic_views(diagnostics: dict[str, Any]) -> str:
+    if not diagnostics:
+        return ""
+    return f'<div class="views">{_task_sampler_diagnostic_figure(diagnostics)}</div>'
+
+
+def _task_sampler_diagnostic_figure(diagnostics: dict[str, Any]) -> str:
+    last = diagnostics.get("last_placement_scene_diagnostic") or {}
+    target = str(last.get("target_name") or "target")
+    fraction = _safe_float(last.get("valid_neighborhood_fraction"))
+    fraction_text = _format_fraction(last.get("valid_neighborhood_fraction", ""))
+    bar_width = int(max(0.0, min(fraction, 1.0)) * 125)
+    placement_attempts = int(diagnostics.get("robot_placement_attempt_count") or 0)
+    placement_failures = int(diagnostics.get("robot_placement_failure_count") or 0)
+    grasp_failures = int(diagnostics.get("grasp_failure_count") or 0)
+    candidate_removals = int(diagnostics.get("candidate_removal_count") or 0)
+    nearest = last.get("nearest_free_point_distance_m", "")
+    stats = [
+        ("Placement attempts", placement_attempts),
+        ("Placement failures", placement_failures),
+        ("Grasp failures", grasp_failures),
+        ("Candidate removals", candidate_removals),
+        ("Free-space fraction", fraction_text),
+        ("Nearest free distance", nearest),
+    ]
+    stat_html = "".join(
+        '<span class="diagnostic-stat">'
+        f"<small>{html.escape(str(label))}</small>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        "</span>"
+        for label, value in stats
+        if value != ""
+    )
+    return (
+        '<figure class="diagnostic-view">'
+        '<div class="diagnostic-visual" role="img" aria-label="Task sampler diagnostic view">'
+        '<svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="360" height="220" rx="8" fill="#f8fafc"/>'
+        '<circle cx="110" cy="104" r="70" fill="#e0f2fe" stroke="#0284c7" '
+        'stroke-width="2" stroke-dasharray="7 5"/>'
+        '<circle cx="110" cy="104" r="9" fill="#f97316"/>'
+        '<path d="M110 104 L166 64" stroke="#475569" stroke-width="2"/>'
+        '<circle cx="166" cy="64" r="6" fill="#475569"/>'
+        '<text x="30" y="196" fill="#334155" font-size="13">target</text>'
+        '<text x="145" y="196" fill="#334155" font-size="13">nearest free point</text>'
+        '<text x="215" y="54" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{html.escape(str(fraction_text))}</text>"
+        '<text x="215" y="75" fill="#475569" font-size="12">free-space fraction</text>'
+        '<rect x="215" y="92" width="125" height="12" rx="6" fill="#e2e8f0"/>'
+        f'<rect x="215" y="92" width="{bar_width}" height="12" rx="6" fill="#22c55e"/>'
+        '<text x="215" y="134" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{grasp_failures}</text>"
+        '<text x="215" y="155" fill="#475569" font-size="12">grasp failures</text>'
+        '<text x="215" y="184" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{candidate_removals}</text>"
+        '<text x="215" y="205" fill="#475569" font-size="12">candidate removals</text>'
+        "</svg>"
+        "</div>"
+        f"<figcaption>Task sampler diagnostic: {html.escape(target)}</figcaption>"
+        f'<div class="diagnostic-stats">{stat_html}</div>'
+        "</figure>"
+    )
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
@@ -2939,6 +3041,39 @@ def _wrap_html(body: str) -> str:
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
+    }}
+    .diagnostic-view {{
+      background: #ffffff;
+    }}
+    .diagnostic-visual {{
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+    }}
+    .diagnostic-visual svg {{
+      width: 100%;
+      height: auto;
+      display: block;
+    }}
+    .diagnostic-stats {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }}
+    .diagnostic-stat {{
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8fafc;
+    }}
+    .diagnostic-stat small {{
+      display: block;
+      color: #64748b;
+      margin-bottom: 3px;
+    }}
+    .diagnostic-stat strong {{
+      color: #0f172a;
     }}
     .raw-fpv-grid {{
       display: grid;

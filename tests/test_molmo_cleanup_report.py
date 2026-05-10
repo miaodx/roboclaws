@@ -1655,6 +1655,8 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "Planner Probe Diagnostic Views" in html
+    assert "Task sampler diagnostic: pickup/body" in html
     assert "Planner Probe Cleanup Binding" in html
     assert "Task Sampler Robot Placement Profile" in html
     assert "relaxed" in html
@@ -1701,3 +1703,40 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html
+
+
+def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(
+    tmp_path: Path,
+) -> None:
+    views = tmp_path / "planner_views"
+    views.mkdir()
+    image = views / "post_placement_attempt_001_head_camera.png"
+    image.write_bytes(b"not a real image but enough for an html src")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": blocked_planner_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="rby1m",
+            task="pick_and_place",
+            probe_mode="execute",
+            blockers=[{"code": "HouseInvalidForTask", "message": "candidate removed"}],
+            execution_attempted=True,
+        ),
+        "artifacts": {"stdout": "stdout.txt", "stderr": "stderr.txt"},
+    }
+    run_result["manipulation_evidence"]["image_artifacts"] = {
+        "post_placement_attempt_001_head_camera": (
+            "planner_views/post_placement_attempt_001_head_camera.png"
+        )
+    }
+    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Planner Probe Views" in html
+    assert "Post Placement Attempt 001 Head Camera" in html
+    assert 'src="planner_views/post_placement_attempt_001_head_camera.png"' in html

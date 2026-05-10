@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 95 MolmoSpaces seeded selected proof execution completed on 2026-05-10.
+stopped_at: Phase 96 MolmoSpaces planner failure diagnostic views completed on 2026-05-10.
 last_updated: "2026-05-10T00:00:00+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 88
-  completed_phases: 88
-  total_plans: 91
-  completed_plans: 91
+  total_phases: 89
+  completed_phases: 89
+  total_plans: 92
+  completed_plans: 92
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 95 completed selected seed proof execution; next work is diagnosing the shared RBY1M grasp-feasibility blocker.
+**Current focus:** Phase 96 completed planner failure diagnostic views; next work is reducing the shared RBY1M grasp-feasibility blocker or rerendering local proof reports as needed.
 
 ## Current Position
 
-Phase: 95 (molmospaces-seeded-selected-proof-execution) - COMPLETE
-Plan: 1 of 1 complete - `95-01` executes the four selected seed9 proof commands and records all four as grasp-feasibility blocked.
+Phase: 96 (molmospaces-planner-failure-diagnostic-views) - COMPLETE
+Plan: 1 of 1 complete - `96-01` captures and renders planner failure diagnostic views for blocked task-sampler proofs.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -246,7 +246,12 @@ RBY1M CuRobo memory, and wide placement profile. All four reached task sampling
 but remained `grasp_feasibility` blocked with `17 grasp failures; 15
 candidate-removal calls`; no new planner-backed proof or cleanup-binding
 promotion was produced.
-Last activity: 2026-05-10 - Completed Phase 95 seeded selected proof execution.
+Phase 96 adds Planner Failure Diagnostic Views. Blocked task-sampler probes can
+now capture one bounded post-placement camera artifact through the same
+`image_artifacts` interface used by successful planner views, and
+diagnostic-only blocked reports render an inline task-sampler diagnostic view
+instead of an empty no-view state.
+Last activity: 2026-05-10 - Completed Phase 96 planner failure diagnostic views.
 
 Progress: [##########] 100%
 Next blocker: diagnose or reduce the shared RBY1M grasp-feasibility blocker
@@ -257,7 +262,7 @@ before another planner-backed cleanup rerun.
 
 **Velocity:**
 
-- Total plans completed: 95 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 95)
+- Total plans completed: 96 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 96)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
