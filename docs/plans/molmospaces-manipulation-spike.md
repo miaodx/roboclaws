@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 112 grasp cache availability preflight completed; next work is generating/restoring a rigid `Bread_1` grasp cache or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 113 runtime assets grasp cache preflight completed; next work is generating/restoring a rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -382,6 +382,10 @@ Phase 112 makes that cache route concrete. Proof-bundle manifests and reports
 now render `Grasp Cache Availability Preflight`, showing that local `Bread_1`
 object XML/OBJ assets are present while the rigid loader files checked by
 MolmoSpaces are missing for droid, droid-objaverse, and RUM sources.
+Phase 113 binds that preflight to the runtime MolmoSpaces assets root. The
+report now derives `ASSETS_DIR` from the planner scene XML and shows both
+loader-relative paths and symlink-resolved cache targets such as
+`grasps/droid/20251116/Bread_1/...`.
 
 ## Why This Exists
 

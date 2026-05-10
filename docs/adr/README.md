@@ -112,6 +112,7 @@ one decision per file, sequential numbering, explicit status.
 | [0101](0101-classify-missing-grasp-cache-signatures.md) | Classify Missing Grasp Cache Signatures | Accepted |
 | [0102](0102-route-missing-grasp-cache-before-retry.md) | Route Missing Grasp Cache Before Retry | Accepted |
 | [0103](0103-record-grasp-cache-availability-preflight.md) | Record Grasp Cache Availability Preflight | Accepted |
+| [0104](0104-bind-grasp-cache-preflight-to-runtime-assets-dir.md) | Bind Grasp Cache Preflight To Runtime Assets Dir | Accepted |
 
 ## Adding a new ADR
 

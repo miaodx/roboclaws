@@ -173,7 +173,7 @@ def test_proof_bundle_manifest_includes_grasp_cache_preflight(
     object_dir = tmp_path / "assets" / "objects" / "thor" / "Kitchen Objects" / "Bread"
     object_dir.mkdir(parents=True)
     (object_dir / "Bread_1.xml").write_text("<mujoco />", encoding="utf-8")
-    monkeypatch.setenv("MLSPACES_ASSETS_DIR", str(tmp_path / "assets"))
+    monkeypatch.setenv("MLSPACES_ASSETS_DIR", str(tmp_path / "wrong-assets"))
 
     manifest = proof_bundle_run_manifest(
         cleanup_run_result=tmp_path / "cleanup" / "run_result.json",
@@ -191,6 +191,11 @@ def test_proof_bundle_manifest_includes_grasp_cache_preflight(
                     "planner_probe_args": {"--cleanup-object-id": "observed_001"},
                 }
             ],
+            "planner_scene": {
+                "schema": "planner_cleanup_proof_scene_v1",
+                "available": True,
+                "scene_xml": str(tmp_path / "assets" / "scenes" / "procthor-val" / "val_0.xml"),
+            },
         },
         commands=[],
         prior_proof_result_summary={
@@ -226,7 +231,8 @@ def test_proof_bundle_manifest_includes_grasp_cache_preflight(
     preflight = manifest["grasp_cache_availability_preflight"]
     assert decision["primary_route"] == "grasp_cache_mitigation"
     assert preflight["status"] == "missing_cache"
-    assert preflight["assets_dir_source"] == "MLSPACES_ASSETS_DIR"
+    assert preflight["assets_dir"] == str(tmp_path / "assets")
+    assert preflight["assets_dir_source"] == "planner_scene"
     assert preflight["cache_missing_asset_uids"] == ["Bread_1"]
     assert preflight["assets"][0]["object_asset_status"] == "present"
     assert preflight["assets"][0]["candidate_grasp_files"][0]["relative_path"] == (

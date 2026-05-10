@@ -703,6 +703,7 @@ def _assert_grasp_cache_availability_preflight(
     for value in [
         preflight.get("status"),
         preflight.get("assets_dir"),
+        preflight.get("assets_dir_resolved"),
         preflight.get("assets_dir_source"),
         preflight.get("upstream_loader"),
         preflight.get("mitigation_recommendation"),
@@ -733,13 +734,13 @@ def _assert_grasp_cache_availability_preflight(
         assert len(candidate_files) == 3, asset
         for probe in [*candidate_files, *(asset.get("folder_probe_files") or [])]:
             assert isinstance(probe, dict), asset
-            for key in ("source", "loader_role", "relative_path"):
+            for key in ("source", "loader_role", "relative_path", "resolved_path"):
                 value = str(probe.get(key) or "")
                 if value:
                     _assert_report_contains(value, report_text, probe)
         for object_file in asset.get("object_asset_files") or []:
             assert isinstance(object_file, dict), asset
-            for key in ("kind", "relative_path"):
+            for key in ("kind", "relative_path", "resolved_path"):
                 value = str(object_file.get(key) or "")
                 if value:
                     _assert_report_contains(value, report_text, object_file)

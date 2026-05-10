@@ -1007,6 +1007,7 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
     path_rows = _path_table(
         [
             ("Assets dir", preflight.get("assets_dir", "")),
+            ("Resolved assets dir", preflight.get("assets_dir_resolved", "")),
             ("Upstream loader", preflight.get("upstream_loader", "")),
         ]
     )
@@ -1039,6 +1040,7 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
                 f"<td>{html.escape(str(probe.get('exists', False)))}</td>"
                 f"<td>{html.escape(str(probe.get('size_bytes', 0)))}</td>"
                 f"<td>{html.escape(str(probe.get('relative_path', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('resolved_path', '')))}</td>"
                 "</tr>"
             )
         for object_file in asset.get("object_asset_files") or []:
@@ -1050,12 +1052,13 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
                 f"<td>{html.escape(str(object_file.get('kind', '')))}</td>"
                 f"<td>{html.escape(str(object_file.get('size_bytes', 0)))}</td>"
                 f"<td>{html.escape(str(object_file.get('relative_path', '')))}</td>"
+                f"<td>{html.escape(str(object_file.get('resolved_path', '')))}</td>"
                 "</tr>"
             )
     if not asset_rows:
         asset_rows.append('<tr><td colspan="4">No missing grasp-cache assets.</td></tr>')
     if not candidate_rows:
-        candidate_rows.append('<tr><td colspan="6">No grasp-cache file probes.</td></tr>')
+        candidate_rows.append('<tr><td colspan="7">No grasp-cache file probes.</td></tr>')
     asset_table = (
         '<h3>Asset Status</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Asset</th><th>Status</th><th>Rigid loader file</th><th>Object asset</th>"
@@ -1064,7 +1067,7 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
     candidate_table = (
         '<h3>Loader File Probes</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Asset</th><th>Source</th><th>Loader role</th><th>Exists</th>"
-        "<th>Bytes</th><th>Relative path</th>"
+        "<th>Bytes</th><th>Relative path</th><th>Resolved path</th>"
         f"</tr></thead><tbody>{''.join(candidate_rows)}</tbody></table></div>"
     )
     object_table = ""
@@ -1072,6 +1075,7 @@ def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> st
         object_table = (
             '<h3>Object Asset Probes</h3><div class="table-wrap"><table><thead><tr>'
             "<th>Asset</th><th>Kind</th><th>Bytes</th><th>Relative path</th>"
+            "<th>Resolved path</th>"
             f"</tr></thead><tbody>{''.join(object_rows)}</tbody></table></div>"
         )
     recommendation = str(preflight.get("mitigation_recommendation") or "")

@@ -182,6 +182,7 @@ def test_grasp_cache_preflight_distinguishes_object_asset_from_missing_cache(
     assert preflight["schema"] == "planner_grasp_cache_availability_preflight_v1"
     assert preflight["status"] == "missing_cache"
     assert preflight["assets_dir_source"] == "argument"
+    assert preflight["assets_dir_resolved"] == str(tmp_path)
     assert preflight["missing_cache_asset_count"] == 1
     assert preflight["cache_missing_asset_uids"] == ["Bread_1"]
     asset = preflight["assets"][0]
@@ -200,6 +201,29 @@ def test_grasp_cache_preflight_distinguishes_object_asset_from_missing_cache(
     )
     assert asset["folder_probe_files"][0]["loader_role"] == "has_grasp_folder_only"
     assert {item["kind"] for item in asset["object_asset_files"]} == {"xml", "obj"}
+
+
+def test_grasp_cache_preflight_resolves_runtime_symlink_root(tmp_path: Path) -> None:
+    assets_dir = tmp_path / "assets"
+    cache_dir = tmp_path / "cache" / "grasps" / "droid" / "20251116"
+    cache_dir.mkdir(parents=True)
+    (assets_dir / "grasps").mkdir(parents=True)
+    (assets_dir / "grasps" / "droid").symlink_to(cache_dir, target_is_directory=True)
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=assets_dir,
+        assets_dir_source="planner_scene",
+    )
+
+    probe = preflight["assets"][0]["candidate_grasp_files"][0]
+    assert preflight["assets_dir_source"] == "planner_scene"
+    assert probe["relative_path"] == "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"
+    assert probe["path"] == str(
+        assets_dir / "grasps" / "droid" / "Bread_1" / "Bread_1_grasps_filtered.npz"
+    )
+    assert probe["resolved_path"] == str(cache_dir / "Bread_1" / "Bread_1_grasps_filtered.npz")
+    assert probe["parent_resolved_path"] == str(cache_dir / "Bread_1")
 
 
 def test_grasp_cache_preflight_ready_when_rigid_loader_file_exists(tmp_path: Path) -> None:

@@ -192,6 +192,11 @@ by MolmoSpaces' object loader and distinguishes present object assets from
 missing loader-compatible grasp caches.
 _Avoid_: assuming an object asset cache implies cached rigid grasps exist
 
+**Runtime Assets Grasp Cache Preflight**:
+Grasp-cache availability evidence bound to the MolmoSpaces runtime `ASSETS_DIR`
+derived from the planner scene XML, including symlink-resolved cache targets.
+_Avoid_: displaying data-cache roots as if they were the loader root
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -711,6 +716,9 @@ _Avoid_: full cleanup replacement claim
 - **Grasp Cache Availability Preflight** should record the droid,
   droid-objaverse, and RUM rigid loader paths for a missing grasp asset before
   generating or restoring cache data.
+- **Runtime Assets Grasp Cache Preflight** should derive `ASSETS_DIR` from the
+  planner scene XML and render symlink-resolved cache targets before a restore
+  or generation command is chosen.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -1086,3 +1094,6 @@ _Avoid_: full cleanup replacement claim
   reports now show that `Bread_1` object XML/OBJ assets are present locally but
   the rigid loader-compatible grasp cache files are missing for droid,
   droid-objaverse, and RUM sources.
+- Phase 113 adds Runtime Assets Grasp Cache Preflight. The preflight now derives
+  the runtime `ASSETS_DIR` from the planner scene XML and renders
+  symlink-resolved missing cache targets under the local versioned grasp cache.

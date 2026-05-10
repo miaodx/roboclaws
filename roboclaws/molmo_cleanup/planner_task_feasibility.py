@@ -261,16 +261,21 @@ def grasp_cache_availability_preflight(
     decision: dict[str, Any],
     *,
     assets_dir: Path | str | None = None,
+    assets_dir_source: str | None = None,
 ) -> dict[str, Any]:
     """Check the exact rigid grasp-cache files used by MolmoSpaces' loader."""
     missing_assets = _unique_nonempty(decision.get("missing_grasp_asset_uids") or [])
-    resolved_assets_dir, assets_dir_source = _resolve_assets_dir(assets_dir)
+    resolved_assets_dir, resolved_assets_dir_source = _resolve_assets_dir(
+        assets_dir,
+        source=assets_dir_source,
+    )
     if not missing_assets:
         return {
             "schema": GRASP_CACHE_AVAILABILITY_PREFLIGHT_SCHEMA,
             "status": "not_applicable",
             "assets_dir": str(resolved_assets_dir),
-            "assets_dir_source": assets_dir_source,
+            "assets_dir_resolved": _resolved_path(resolved_assets_dir),
+            "assets_dir_source": resolved_assets_dir_source,
             "assets_dir_exists": resolved_assets_dir.exists(),
             "missing_grasp_asset_uids": [],
             "asset_count": 0,
@@ -310,7 +315,8 @@ def grasp_cache_availability_preflight(
         "schema": GRASP_CACHE_AVAILABILITY_PREFLIGHT_SCHEMA,
         "status": status,
         "assets_dir": str(resolved_assets_dir),
-        "assets_dir_source": assets_dir_source,
+        "assets_dir_resolved": _resolved_path(resolved_assets_dir),
+        "assets_dir_source": resolved_assets_dir_source,
         "assets_dir_exists": resolved_assets_dir.exists(),
         "missing_grasp_asset_uids": missing_assets,
         "asset_count": len(assets),
@@ -330,9 +336,13 @@ def grasp_cache_availability_preflight(
     }
 
 
-def _resolve_assets_dir(assets_dir: Path | str | None) -> tuple[Path, str]:
+def _resolve_assets_dir(
+    assets_dir: Path | str | None,
+    *,
+    source: str | None = None,
+) -> tuple[Path, str]:
     if assets_dir is not None:
-        return Path(assets_dir).expanduser(), "argument"
+        return Path(assets_dir).expanduser(), source or "argument"
     env_value = os.environ.get("MLSPACES_ASSETS_DIR")
     if env_value:
         return Path(env_value).expanduser(), "MLSPACES_ASSETS_DIR"
@@ -417,6 +427,7 @@ def _object_asset_files(
                     {
                         "kind": kind,
                         "path": str(path),
+                        "resolved_path": _resolved_path(path),
                         "relative_path": _relative_to_assets(path, assets_dir),
                         "exists": path.exists(),
                         "size_bytes": _file_size(path),
@@ -442,6 +453,9 @@ def _file_probe(
         "gripper": gripper,
         "loader_role": loader_role,
         "path": str(path),
+        "resolved_path": _resolved_path(path),
+        "parent_resolved_path": _resolved_path(path.parent),
+        "parent_exists": path.parent.exists(),
         "relative_path": _relative_to_assets(path, assets_dir),
         "exists": path.exists(),
         "size_bytes": _file_size(path),
@@ -452,6 +466,13 @@ def _relative_to_assets(path: Path, assets_dir: Path) -> str:
     try:
         return str(path.relative_to(assets_dir))
     except ValueError:
+        return str(path)
+
+
+def _resolved_path(path: Path) -> str:
+    try:
+        return str(path.resolve(strict=False))
+    except OSError:
         return str(path)
 
 
