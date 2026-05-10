@@ -37,6 +37,42 @@ def test_checker_accepts_valid_runner_artifact(tmp_path: Path) -> None:
     checker._assert_runner_result(manifest, tmp_path)
 
 
+def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    manifest["status"] = "local_runtime_blocked"
+    manifest["local_runtime_preflight"] = {
+        "schema": "planner_proof_bundle_local_runtime_preflight_v1",
+        "requested": True,
+        "status": "blocked",
+        "python_executable": str(tmp_path / "molmospaces-python"),
+        "checks": [
+            {
+                "name": "molmospaces_import",
+                "status": "blocked",
+                "command": [str(tmp_path / "molmospaces-python"), "-c", "import molmospaces"],
+                "returncode": 1,
+                "code": "molmospaces_import_failed",
+                "message": "No module named molmospaces",
+            }
+        ],
+        "blockers": [
+            {
+                "code": "molmospaces_import_failed",
+                "message": "No module named molmospaces",
+            }
+        ],
+    }
+    manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    (tmp_path / "proof_bundle_run_manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    render_planner_proof_bundle_runner_report(output_dir=tmp_path, manifest=manifest)
+
+    checker._assert_runner_result(manifest, tmp_path)
+
+
 def test_checker_can_require_prior_covered_exclusion(tmp_path: Path) -> None:
     checker = _load_checker()
     manifest = _runner_manifest(tmp_path)

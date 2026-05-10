@@ -138,6 +138,12 @@ object-target pairs as cards before the detailed blocker table, preserving the
 source request, match kind, and blocker summary.
 _Avoid_: table-only selection blocker review
 
+**Proof-Bundle Local Runtime Preflight**:
+The proof-bundle runner evidence that checks the configured MolmoSpaces Python
+runtime before real `--execute-probes` commands, rendering missing import or
+missing executable blockers instead of failing before `report.html` exists.
+_Avoid_: local-dev crash before manifest, treating runtime setup as proof failure
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -901,3 +907,8 @@ _Avoid_: full cleanup replacement claim
   reports now render grasp-infeasible object-target pairs as visual cards before
   the detailed blocker table, and the runner checker requires the matrix when
   `grasp_feasibility_blockers` are present.
+- Phase 99 added Proof-Bundle Local Runtime Preflight. Real proof-bundle
+  execution now checks whether the configured MolmoSpaces Python imports
+  `molmospaces` before running warmup/proof commands, writes a
+  `local_runtime_blocked` manifest/report when blocked, and renders
+  `Local Runtime Preflight` evidence for the local-dev handoff.

@@ -55,7 +55,12 @@ def _assert_runner_result(
     require_prior_covered_exclusion: bool = False,
 ) -> None:
     assert data.get("schema") == PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA, data
-    assert data.get("status") in {"dry_run", "probes_executed", "cleanup_rerun"}, data
+    assert data.get("status") in {
+        "dry_run",
+        "probes_executed",
+        "cleanup_rerun",
+        "local_runtime_blocked",
+    }, data
     assert int(data.get("proof_request_count") or 0) >= int(data.get("ready_request_count") or 0), (
         data
     )
@@ -66,6 +71,9 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    local_runtime_preflight = data.get("local_runtime_preflight") or {}
+    if local_runtime_preflight:
+        _assert_local_runtime_preflight(local_runtime_preflight, report_text)
     warmup = data.get("warmup") or {}
     if warmup:
         _assert_warmup(
@@ -118,6 +126,8 @@ def _assert_runner_result(
             report_text,
             require_outputs=require_cleanup_rerun_output or data.get("status") == "cleanup_rerun",
         )
+    if data.get("status") == "local_runtime_blocked":
+        assert local_runtime_preflight.get("status") == "blocked", local_runtime_preflight
 
 
 def _assert_runner_report(report_text: str) -> None:
@@ -128,6 +138,38 @@ def _assert_runner_report(report_text: str) -> None:
         "Cleanup Rerun Command",
     ):
         assert heading in report_text, (heading, report_text[:500])
+
+
+def _assert_local_runtime_preflight(preflight: dict[str, Any], report_text: str) -> None:
+    assert preflight.get("schema") == "planner_proof_bundle_local_runtime_preflight_v1", preflight
+    assert preflight.get("status") in {"ready", "blocked", "not_checked"}, preflight
+    assert "Local Runtime Preflight" in report_text, report_text[:500]
+    assert str(preflight.get("status") or "") in report_text, report_text[:500]
+    python_executable = str(preflight.get("python_executable") or "")
+    if python_executable:
+        _assert_report_contains(python_executable, report_text)
+    for check in preflight.get("checks") or []:
+        assert isinstance(check, dict), preflight
+        for key in ("name", "status"):
+            value = str(check.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, key)
+        command = " ".join(str(part) for part in check.get("command") or [])
+        if command:
+            _assert_report_contains(command, report_text, command)
+    for blocker in preflight.get("blockers") or []:
+        assert isinstance(blocker, dict), preflight
+        for key in ("code", "message"):
+            value = str(blocker.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, key)
+
+
+def _assert_report_contains(value: str, report_text: str, context: Any = "") -> None:
+    assert value in report_text or html.escape(value) in report_text, (
+        context or value,
+        report_text[:500],
+    )
 
 
 def _assert_warmup(

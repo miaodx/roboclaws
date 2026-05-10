@@ -1206,6 +1206,61 @@ def test_runner_executes_warmup_before_proof_commands(
     assert result["manifest"]["proof_result_summary"]["planner_backed_count"] == 1
 
 
+def test_runner_records_local_runtime_preflight_blocker_before_execute(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner = _load_module()
+    cleanup_run_result = tmp_path / "cleanup" / "run_result.json"
+    cleanup_run_result.parent.mkdir()
+    cleanup_run_result.write_text(
+        json.dumps({"planner_proof_requests": _proof_requests()}),
+        encoding="utf-8",
+    )
+    fake_python = tmp_path / "molmospaces-python"
+    fake_python.write_text(
+        "#!/bin/sh\necho \"ModuleNotFoundError: No module named 'molmospaces'\" >&2\nexit 1\n",
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    def fail_run_command(command: list[str]) -> None:
+        raise AssertionError(f"proof command should not run after failed preflight: {command}")
+
+    monkeypatch.setattr(runner, "_run_command", fail_run_command)
+
+    result = runner.run_from_cleanup_result(
+        cleanup_run_result=cleanup_run_result,
+        output_dir=tmp_path / "bundle",
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+        cleanup_script=Path("cleanup.py"),
+        molmospaces_python=fake_python,
+        molmospaces_root=None,
+        embodiment="rby1m",
+        probe_mode="execute",
+        steps=2,
+        timeout_s=600.0,
+        renderer_device_id=0,
+        torch_extensions_dir=None,
+        rby1m_curobo_memory_profile="low",
+        execute_probes=True,
+        warmup_rby1m_curobo=True,
+    )
+
+    manifest = result["manifest"]
+    preflight = manifest["local_runtime_preflight"]
+    assert result["status"] == "local_runtime_blocked"
+    assert preflight["status"] == "blocked"
+    assert preflight["blockers"][0]["code"] == "molmospaces_import_failed"
+    assert manifest["proof_result_summary"]["result_count"] == 0
+    assert manifest["proof_result_summary"]["results"][0]["status"] == "not_run"
+    report = Path(result["report_path"]).read_text(encoding="utf-8")
+    assert "Local Runtime Preflight" in report
+    assert "molmospaces_import_failed" in report
+    assert str(fake_python) in report
+
+
 def test_runner_loads_request_artifact_from_run_result(tmp_path: Path) -> None:
     runner = _load_module()
     cleanup_dir = tmp_path / "cleanup"

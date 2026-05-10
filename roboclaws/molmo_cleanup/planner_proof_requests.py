@@ -236,6 +236,7 @@ def proof_bundle_run_manifest(
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
     warmup: dict[str, Any] | None = None,
+    local_runtime_preflight: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
     prior_proof_result_summary: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
@@ -252,6 +253,7 @@ def proof_bundle_run_manifest(
         "proof_request_selection": proof_request_selection
         or proof_request_selection_from_summary(proof_requests),
         "prior_proof_result_summary": prior_proof_result_summary or {},
+        "local_runtime_preflight": local_runtime_preflight or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,

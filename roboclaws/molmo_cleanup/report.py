@@ -224,6 +224,7 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
             manifest.get("prior_proof_result_summary") or {},
@@ -1184,6 +1185,61 @@ def _proof_bundle_warmup_section(warmup: dict[str, Any]) -> str:
             ]
         )
         + f"<pre><code>{html.escape(command)}</code></pre></section>"
+    )
+
+
+def _proof_bundle_local_runtime_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight:
+        return ""
+    blockers = preflight.get("blockers") or []
+    checks = [item for item in preflight.get("checks") or [] if isinstance(item, dict)]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Requested', _yes_no(preflight.get('requested')))}"
+        f"{_metric('Checks', len(checks))}"
+        f"{_metric('Blockers', len(blockers))}"
+        "</div>"
+    )
+    rows = [
+        ("Python executable", preflight.get("python_executable", "")),
+        ("Evidence note", preflight.get("evidence_note", "")),
+    ]
+    check_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('status', '')))}</td>"
+        f"<td>{html.escape(' '.join(str(part) for part in item.get('command') or []))}</td>"
+        f"<td>{html.escape(str(item.get('returncode', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in checks
+    )
+    check_table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Check</th><th>Status</th><th>Command</th><th>Return code</th><th>Message</th>"
+        f"</tr></thead><tbody>{check_rows}</tbody></table></div>"
+        if check_rows
+        else ""
+    )
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    blocker_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th><th>Message</th></tr>'
+        f"</thead><tbody>{blocker_rows}</tbody></table></div>"
+        if blocker_rows
+        else ""
+    )
+    return (
+        '<section class="panel proof-bundle-local-runtime-preflight">'
+        "<h2>Local Runtime Preflight</h2>"
+        f"{metrics}{_field_table(rows)}{check_table}{blocker_table}</section>"
     )
 
 

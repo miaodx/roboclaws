@@ -204,41 +204,52 @@ def run_from_cleanup_result(
         task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         request_selection=proof_request_selection,
     )
+    local_runtime_preflight = _local_runtime_preflight(
+        molmospaces_python=molmospaces_python,
+        execute_requested=execute_probes,
+    )
     proof_results: list[Path] = []
     status = "dry_run"
     if execute_probes:
-        status = "probes_executed"
-        if warmup:
-            _run_command(warmup["command"])
-        for item in commands:
-            _run_command(item["command"])
-            proof_results.append(Path(item["run_result"]))
+        if _local_runtime_preflight_blocked(local_runtime_preflight):
+            status = "local_runtime_blocked"
+        else:
+            status = "probes_executed"
+            if warmup:
+                _run_command(warmup["command"])
+            for item in commands:
+                _run_command(item["command"])
+                proof_results.append(Path(item["run_result"]))
     cleanup_command: list[str] = []
     cleanup_rerun: dict[str, Any] = {}
     if rerun_cleanup:
         if not execute_probes:
             raise ValueError("--rerun-cleanup requires --execute-probes")
-        cleanup_output = cleanup_output_dir or output_dir / "cleanup_with_planner_proof_bundle"
-        cleanup_command = build_cleanup_rerun_command(
-            runner_python=runner_python,
-            cleanup_script=cleanup_script,
-            cleanup_output_dir=cleanup_output,
-            source_run_result=source_run,
-            proof_run_results=proof_results,
-        )
-        _run_command(cleanup_command)
-        status = "cleanup_rerun"
-        cleanup_rerun = {
-            "output_dir": str(cleanup_output),
-            "run_result": str(cleanup_output / "run_result.json"),
-            "report": str(cleanup_output / "report.html"),
-        }
+        if status == "local_runtime_blocked":
+            cleanup_rerun = {}
+        else:
+            cleanup_output = cleanup_output_dir or output_dir / "cleanup_with_planner_proof_bundle"
+            cleanup_command = build_cleanup_rerun_command(
+                runner_python=runner_python,
+                cleanup_script=cleanup_script,
+                cleanup_output_dir=cleanup_output,
+                source_run_result=source_run,
+                proof_run_results=proof_results,
+            )
+            _run_command(cleanup_command)
+            status = "cleanup_rerun"
+            cleanup_rerun = {
+                "output_dir": str(cleanup_output),
+                "run_result": str(cleanup_output / "run_result.json"),
+                "report": str(cleanup_output / "report.html"),
+            }
     manifest = proof_bundle_run_manifest(
         cleanup_run_result=cleanup_run_result,
         output_dir=output_dir,
         proof_requests=requests,
         commands=commands,
         warmup=warmup,
+        local_runtime_preflight=local_runtime_preflight,
         proof_request_selection=proof_request_selection,
         prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,
@@ -262,6 +273,102 @@ def run_from_cleanup_result(
         "report_path": report_path,
         "manifest": manifest,
     }
+
+
+def _local_runtime_preflight(
+    *,
+    molmospaces_python: Path | None,
+    execute_requested: bool,
+) -> dict[str, Any]:
+    if not execute_requested:
+        return {}
+    preflight: dict[str, Any] = {
+        "schema": "planner_proof_bundle_local_runtime_preflight_v1",
+        "requested": True,
+        "status": "not_checked",
+        "python_executable": str(molmospaces_python or ""),
+        "checks": [],
+        "blockers": [],
+        "evidence_note": (
+            "Local-dev runtime preflight for real proof execution. A blocked "
+            "preflight prevents proof commands from running and keeps the report "
+            "reviewable."
+        ),
+    }
+    if molmospaces_python is None:
+        preflight["checks"].append(
+            {
+                "name": "molmospaces_python",
+                "status": "not_checked",
+                "message": "No separate MolmoSpaces Python runtime configured.",
+            }
+        )
+        return preflight
+    if not molmospaces_python.is_file():
+        blocker = {
+            "code": "molmospaces_python_missing",
+            "message": f"MolmoSpaces Python executable is missing: {molmospaces_python}",
+        }
+        preflight["status"] = "blocked"
+        preflight["blockers"].append(blocker)
+        preflight["checks"].append({"name": "python_executable", "status": "blocked", **blocker})
+        return preflight
+    command = [
+        str(molmospaces_python),
+        "-c",
+        "import molmospaces; print('molmospaces import ok')",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30.0,
+        )
+    except subprocess.TimeoutExpired as exc:
+        preflight["status"] = "blocked"
+        blocker = {
+            "code": "molmospaces_import_timeout",
+            "message": "MolmoSpaces import preflight exceeded 30 seconds.",
+        }
+        preflight["blockers"].append(blocker)
+        preflight["checks"].append(
+            {
+                "name": "molmospaces_import",
+                "command": command,
+                "status": "blocked",
+                "returncode": "",
+                "stdout": str(exc.stdout or "").strip(),
+                "stderr": str(exc.stderr or "").strip(),
+                **blocker,
+            }
+        )
+        return preflight
+    check = {
+        "name": "molmospaces_import",
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
+    if completed.returncode == 0:
+        preflight["status"] = "ready"
+        check["status"] = "ready"
+    else:
+        preflight["status"] = "blocked"
+        blocker = {
+            "code": "molmospaces_import_failed",
+            "message": completed.stderr.strip() or completed.stdout.strip() or "import failed",
+        }
+        preflight["blockers"].append(blocker)
+        check.update({"status": "blocked", **blocker})
+    preflight["checks"].append(check)
+    return preflight
+
+
+def _local_runtime_preflight_blocked(preflight: dict[str, Any]) -> bool:
+    return str(preflight.get("status") or "") == "blocked"
 
 
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:

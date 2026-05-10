@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 98 grasp-feasibility blocker matrix completed; next work is reducing the shared grasp-feasibility blocker
+**Status:** Phase 99 proof-bundle local runtime preflight completed; next work is restoring local MolmoSpaces runtime or reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -291,6 +291,10 @@ Phase 98 adds the selection-level companion view: proof-bundle reports now show
 grasp-infeasible object-target pairs as a `Grasp Feasibility Blocker Matrix`
 before the detailed blocker table, so source-rotation decisions are visually
 reviewable.
+Phase 99 adds a local-dev runtime preflight before real proof-bundle execution.
+If the configured MolmoSpaces Python cannot import `molmospaces`, the runner now
+writes a `local_runtime_blocked` manifest/report with `Local Runtime Preflight`
+evidence instead of failing before report generation.
 
 ## Why This Exists
 
@@ -1172,7 +1176,7 @@ completed:
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  diagnose or reduce the shared RBY1M grasp-feasibility blocker before another
-  cleanup rerun; the patched seed9 selected proofs produced zero planner-backed
-  results
+  restore the local MolmoSpaces Python runtime if `Local Runtime Preflight`
+  blocks execution, then diagnose or reduce the shared RBY1M grasp-feasibility
+  blocker before another cleanup rerun
 ```
