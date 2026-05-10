@@ -144,6 +144,12 @@ grasp-feasibility failures by their blocker pattern, such as identical grasp
 failure and candidate-removal counts across multiple proof requests.
 _Avoid_: treating grouped blockers as proof success
 
+**Post-Execution Fallback Exhaustion**:
+Proof-request selection evidence showing that, after executed proof results are
+used as prior memory, a source pool has no selected requests and no generated
+fallback requests left.
+_Avoid_: rerunning an exhausted source pool
+
 **Proof-Bundle Local Runtime Preflight**:
 The proof-bundle runner evidence that checks the configured MolmoSpaces Python
 runtime before real `--execute-probes` commands, rendering missing import or
@@ -957,3 +963,8 @@ _Avoid_: full cleanup replacement claim
   reports render the grouped matrix, and the checker validates the view. The
   regenerated Phase 103 report groups the five Phase 102 blockers into one
   repeated signature.
+- Phase 104 added Post-Execution Fallback Exhaustion for seed 10. With the
+  Phase 102 executed bundle as prior memory, the dry-run selected zero commands,
+  excluded all ten seed 10 requests as grasp-feasibility blockers, generated no
+  fallback requests, and recorded `no_fallback_candidate_available` for all ten
+  source requests.

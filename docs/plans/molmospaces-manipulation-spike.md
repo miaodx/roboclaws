@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 103 grasp-feasibility signature matrix completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
+**Status:** Phase 104 seed 10 fallback exhaustion completed; next work is reducing the shared grasp-feasibility blocker or changing proof candidate source
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -319,6 +319,13 @@ signature counts, and proof-bundle reports render a `Grasp Feasibility
 Signature Matrix`. The regenerated Phase 103 report groups all five Phase 102
 proof blockers into one repeated signature, so the next slice can target that
 shared blocker pattern directly.
+Phase 104 closes the seed 10 source pool after execution evidence. A
+post-execution fallback dry-run using the Phase 102 bundle as prior memory
+selects zero commands, excludes all ten seed 10 requests as grasp-feasibility
+blocked, generates zero fallback requests, and records
+`no_fallback_candidate_available` for all ten source requests. The next slice
+should either reduce the shared grasp-feasibility blocker or rotate to a new
+source with a different candidate strategy.
 
 ## Why This Exists
 
