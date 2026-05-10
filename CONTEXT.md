@@ -389,6 +389,12 @@ _Avoid_: planner diagnostics changing cleanup report visuals
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow
 
+**Semantic Cleanup Vocabulary**:
+The package-level source of truth for raw cleanup phases, canonical cleanup
+phase sequences, report-facing subphase labels, loop variant strings, and
+focused robot-view action prefixes.
+_Avoid_: per-demo phase constants, checker-local visual vocabulary
+
 **Planner-Backed Manipulation Proof**:
 Evidence that a MolmoSpaces robot manipulation planner policy actually executed
 robot actions and changed robot state, separate from semantic state edits.
@@ -680,6 +686,9 @@ _Avoid_: full cleanup replacement claim
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
   secondary role detail, not as part of the primary **Semantic Cleanup
   Subphase** label.
+- **Semantic Cleanup Vocabulary** should be imported by the shared loop,
+  Cleanup Artifact Report, visual-core checks, and checkers instead of
+  redefined per demo.
 - A **Shared Semantic Cleanup Loop** should be the default object-level execution path for MolmoSpaces cleanup demos, with contract-specific perception and scoring layered around it.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
@@ -1107,3 +1116,7 @@ _Avoid_: full cleanup replacement claim
 - Phase 114 adds Grasp Cache Validity Preflight. Reports now distinguish
   existing-but-empty rigid loader files from valid cache data; the installed
   droid `Bread_1` file is `present_but_invalid` with zero transforms.
+- Phase 115 adds Semantic Cleanup Vocabulary. `semantic_timeline.py` now owns
+  the raw phases, canonical surface/inside cleanup sequences, display labels,
+  focused action prefixes, and loop variants used by the shared semantic loop,
+  Cleanup Artifact Report, visual-core contract, and checkers.

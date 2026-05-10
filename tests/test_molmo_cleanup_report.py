@@ -22,6 +22,7 @@ from roboclaws.molmo_cleanup.report import (
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
+from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_LOOP_DISPLAY_NOTE
 
 
 def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> None:
@@ -237,7 +238,7 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     html = report_path.read_text(encoding="utf-8")
     assert "Robot View Timeline" in html
     assert "Semantic Substeps" in html
-    assert "Canonical cleanup loop: nav, pick, nav, open when needed, place." in html
+    assert SEMANTIC_LOOP_DISPLAY_NOTE in html
     assert "<span>nav</span><small>object</small>" in html
     assert "<span>pick</span><small>object</small>" in html
     assert "<span>nav</span><small>target</small>" in html

@@ -114,6 +114,7 @@ one decision per file, sequential numbering, explicit status.
 | [0103](0103-record-grasp-cache-availability-preflight.md) | Record Grasp Cache Availability Preflight | Accepted |
 | [0104](0104-bind-grasp-cache-preflight-to-runtime-assets-dir.md) | Bind Grasp Cache Preflight To Runtime Assets Dir | Accepted |
 | [0105](0105-validate-grasp-cache-contents-before-ready.md) | Validate Grasp Cache Contents Before Ready | Accepted |
+| [0106](0106-centralize-semantic-cleanup-vocabulary.md) | Centralize Semantic Cleanup Vocabulary | Accepted |
 
 ## Adding a new ADR
 

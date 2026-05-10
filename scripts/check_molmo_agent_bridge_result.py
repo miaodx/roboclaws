@@ -8,6 +8,16 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_SURFACE_CLEANUP_PHASES,
+    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+    FOCUSED_SEMANTIC_ACTION_PREFIXES,
+    OBJECT_DONE_PHASE,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_INSIDE_PHASE,
+    fridge_sequence_ok,
+    has_complete_semantic_sequence,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -164,32 +174,18 @@ def _assert_robot_views(data: dict[str, Any], base: Path) -> None:
         if _is_focused_robot_action(action):
             focused_actions.add(action.split(" ", 1)[0])
             _assert_focused_robot_step(step)
-    for expected in {
-        "navigate_to_object",
-        "pick",
-        "navigate_to_receptacle",
-        "place",
-    }:
+    for expected in CANONICAL_SURFACE_CLEANUP_PHASES:
         assert expected in focused_actions, (expected, focused_actions, data)
     if any(
         item.get("target_receptacle_category") == "Fridge"
         for item in data.get("semantic_substeps") or []
     ):
-        assert "open_receptacle" in focused_actions, data
-        assert "place_inside" in focused_actions, data
+        assert OPEN_RECEPTACLE_PHASE in focused_actions, data
+        assert PLACE_INSIDE_PHASE in focused_actions, data
 
 
 def _is_focused_robot_action(action: str) -> bool:
-    return action.startswith(
-        (
-            "navigate_to_object ",
-            "pick ",
-            "navigate_to_receptacle ",
-            "open_receptacle ",
-            "place ",
-            "place_inside ",
-        )
-    )
+    return action.startswith(FOCUSED_SEMANTIC_ACTION_PREFIXES)
 
 
 def _assert_focused_robot_step(step: dict[str, Any]) -> None:
@@ -249,20 +245,19 @@ def _assert_held_object_tracks_robot(step: dict[str, Any]) -> None:
 
 
 def _assert_semantic_substeps(data: dict[str, Any]) -> None:
-    assert data.get("semantic_loop_variant") == "navigate-pick-navigate-open-place-object_done"
+    assert data.get("semantic_loop_variant") == CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT
     saw_fridge = False
     for item in data.get("semantic_substeps") or []:
-        phases = [step.get("phase") for step in item.get("steps", [])]
-        assert phases[:3] == ["navigate_to_object", "pick", "navigate_to_receptacle"], item
-        assert phases[-1:] == ["object_done"], item
-        assert "place" in phases or "place_inside" in phases, item
+        phases = [str(step.get("phase") or "") for step in item.get("steps", [])]
+        assert has_complete_semantic_sequence(phases), item
+        assert phases[-1:] == [OBJECT_DONE_PHASE], item
         done_step = item["steps"][-1]
         assert done_step.get("matches_expected_location") is True, item
         if item.get("target_receptacle_category") == "Fridge":
             saw_fridge = True
-            assert "open_receptacle" in phases, item
-            assert "place_inside" in phases, item
-            assert phases.index("open_receptacle") < phases.index("place_inside"), item
+            assert OPEN_RECEPTACLE_PHASE in phases, item
+            assert PLACE_INSIDE_PHASE in phases, item
+            assert fridge_sequence_ok(phases), item
     assert saw_fridge, data
 
 

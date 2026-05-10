@@ -10,6 +10,9 @@ from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    OBJECT_DONE_PHASE,
+    PLACE_CLEANUP_PHASES,
+    SEMANTIC_LOOP_DISPLAY_NOTE,
     display_semantic_subphase,
     display_semantic_subphases,
     semantic_subphase_text,
@@ -3532,14 +3535,14 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
         )
     return (
         '<section class="panel semantic-section"><h2>Semantic Substeps</h2>'
-        '<p class="note">Canonical cleanup loop: nav, pick, nav, open when needed, place.</p>'
+        f'<p class="note">{html.escape(SEMANTIC_LOOP_DISPLAY_NOTE)}</p>'
         '<div class="semantic-cards">' + "".join(cards) + "</div></section>"
     )
 
 
 def _semantic_readback(steps: list[dict[str, Any]]) -> str:
     candidates = [
-        step for step in steps if step.get("phase") in {"object_done", "place", "place_inside"}
+        step for step in steps if step.get("phase") in {OBJECT_DONE_PHASE, *PLACE_CLEANUP_PHASES}
     ]
     if not candidates:
         return "pending"

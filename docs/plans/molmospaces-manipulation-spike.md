@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 114 grasp cache validity preflight completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 115 semantic underlay architecture completed; next work is generating/restoring a non-empty rigid `Bread_1` grasp cache at the resolved runtime cache target or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -390,6 +390,11 @@ Phase 114 tightens readiness from file existence to content validity. After the
 upstream droid Bread package install, `Bread_1_grasps_filtered.npz` exists but
 contains zero transforms, so reports now show `present_but_invalid` instead of
 ready.
+Phase 115 tightens the shared semantic underlay. Raw phase names, canonical
+surface/inside cleanup sequences, display labels, focused action prefixes, and
+loop variants now live in `semantic_timeline.py`; the loop, reports, visual-core
+checks, and artifact checkers import that vocabulary instead of carrying local
+copies.
 
 ## Why This Exists
 

@@ -32,7 +32,12 @@ from roboclaws.molmo_cleanup.realworld_contract import (
 )
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_SURFACE_CLEANUP_PHASES,
+    FOCUSED_SEMANTIC_ACTION_PREFIXES,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_INSIDE_PHASE,
     SEMANTIC_LOOP_VARIANT,
+    SEMANTIC_RESPONSE_PHASES,
     has_complete_semantic_sequence,
 )
 
@@ -286,12 +291,7 @@ def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
         "fixture_hints",
         "navigate_to_waypoint",
         "observe",
-        "navigate_to_object",
-        "pick",
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "place",
-        "place_inside",
+        *SEMANTIC_RESPONSE_PHASES,
         "done",
     ):
         public_requests += int(counts.get(f"{tool}:request") or 0)
@@ -308,10 +308,7 @@ def _assert_clean_agent_run(data: dict[str, Any]) -> None:
         "fixture_hints",
         "navigate_to_waypoint",
         "observe",
-        "navigate_to_object",
-        "pick",
-        "navigate_to_receptacle",
-        "place",
+        *CANONICAL_SURFACE_CLEANUP_PHASES,
         "done",
     ):
         assert int(counts.get(f"{tool}:request") or 0) >= 1, (tool, counts, data)
@@ -429,14 +426,14 @@ def _assert_robot_views(
                 _assert_focused_robot_step(step)
     assert focused_actions, (focused_actions, data)
     if require_complete_actions:
-        for expected in {"navigate_to_object", "pick", "navigate_to_receptacle", "place"}:
+        for expected in CANONICAL_SURFACE_CLEANUP_PHASES:
             assert expected in focused_actions, (expected, focused_actions, data)
         if any(
             item.get("target_receptacle_category") == "Fridge"
             for item in data.get("semantic_substeps") or []
         ):
-            assert "open_receptacle" in focused_actions, data
-            assert "place_inside" in focused_actions, data
+            assert OPEN_RECEPTACLE_PHASE in focused_actions, data
+            assert PLACE_INSIDE_PHASE in focused_actions, data
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:
@@ -589,12 +586,7 @@ def _assert_bound_planner_cleanup_objects(
         assert row.get("strict_proof_eligible") is True, row
         subphases = row.get("subphases") or []
         assert subphases, row
-        required_phases = {
-            "navigate_to_object",
-            "pick",
-            "navigate_to_receptacle",
-            "place",
-        }
+        required_phases = set(CANONICAL_SURFACE_CLEANUP_PHASES)
         assert required_phases <= {str(step.get("phase") or "") for step in subphases}, row
         for step in subphases:
             assert step.get("primitive_provenance") == "planner_backed", step
@@ -685,16 +677,7 @@ def _assert_planner_proof_requests(data: dict[str, Any], base: Path, report_text
 
 def _is_focused_robot_action(action: str) -> bool:
     return action.startswith(
-        (
-            "navigate_to_waypoint ",
-            "navigate_to_object ",
-            "navigate_to_receptacle ",
-            "observe ",
-            "pick ",
-            "open_receptacle ",
-            "place ",
-            "place_inside ",
-        )
+        ("navigate_to_waypoint ", "observe ", *FOCUSED_SEMANTIC_ACTION_PREFIXES)
     )
 
 
