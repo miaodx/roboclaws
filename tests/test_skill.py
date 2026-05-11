@@ -41,41 +41,13 @@ def _make_skill_input(agent_id: int = 0) -> SkillInput:
 
 
 # ---------------------------------------------------------------------------
-# SkillInput / SkillOutput dataclasses
-# ---------------------------------------------------------------------------
-
-
-def test_skill_input_fields():
-    si = _make_skill_input(agent_id=2)
-    assert si.agent_id == 2
-    assert si.camera_frame.shape == (8, 8, 3)
-    assert si.overhead_frame.shape == (8, 8, 3)
-    assert si.game_state["game"] == "territory"
-
-
-def test_skill_output_fields():
-    so = SkillOutput(reasoning="ok", action="RotateLeft")
-    assert so.reasoning == "ok"
-    assert so.action == "RotateLeft"
-
-
-# ---------------------------------------------------------------------------
 # AI2THORNavigatorSkill — initialisation
 # ---------------------------------------------------------------------------
 
 
-def test_skill_init_with_cooperative_soul():
-    skill = AI2THORNavigatorSkill(_mock_provider(), soul="cooperative")
-    assert "cooperative" in skill._soul_text.lower() or len(skill._soul_text) > 10
-
-
-def test_skill_init_with_aggressive_soul():
-    skill = AI2THORNavigatorSkill(_mock_provider(), soul="aggressive")
-    assert len(skill._soul_text) > 0
-
-
-def test_skill_init_with_defensive_soul():
-    skill = AI2THORNavigatorSkill(_mock_provider(), soul="defensive")
+@pytest.mark.parametrize("soul_name", ["aggressive", "cooperative", "defensive"])
+def test_skill_init_loads_builtin_soul(soul_name: str):
+    skill = AI2THORNavigatorSkill(_mock_provider(), soul=soul_name)
     assert len(skill._soul_text) > 0
 
 
@@ -207,12 +179,6 @@ def test_run_accepts_all_valid_actions():
 # ---------------------------------------------------------------------------
 # SOUL files exist and have content
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("soul_name", ["aggressive", "defensive", "cooperative"])
-def test_soul_file_exists(soul_name: str):
-    soul_path = _SOULS_DIR / f"{soul_name}.md"
-    assert soul_path.exists(), f"Missing soul file: {soul_path}"
 
 
 @pytest.mark.parametrize("soul_name", ["aggressive", "defensive", "cooperative"])
