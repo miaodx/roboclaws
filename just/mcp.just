@@ -35,7 +35,7 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
     set -euo pipefail
 
     if [[ ! -x .venv/bin/python ]]; then
-      echo "error: .venv/bin/python not found — run 'pip install -e .[dev]' first" >&2
+      echo "error: .venv/bin/python not found — run 'uv sync --extra dev' first" >&2
       exit 1
     fi
 

@@ -11,6 +11,13 @@ set working-directory := '..'
 default:
     @just --list code
 
+# Local demos intentionally run coding agents with full permissions by default.
+# Any new just recipe that launches Codex or Claude Code should call these
+# recipes or reuse these args; avoid bare agent launches that fall back to
+# read-only or approval-prompting modes.
+codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox --ask-for-approval never"
+claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
+
 cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -59,10 +66,10 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     claude mcp remove roboclaws >/dev/null 2>&1 || true
     claude mcp add --transport http roboclaws "$mcp_url"
 
-    echo "==> launching Claude Code (cwd=$(pwd))" >&2
+    echo "==> launching Claude Code with full permissions (cwd=$(pwd))" >&2
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    claude --dangerously-skip-permissions
+    claude {{claude_full_permission_args}}
 
 # Open the live snapshot viewer for the most recent run (output/runs/).
 # Polls latest.{fpv,map,chase}.png written by every observe() call.
@@ -109,7 +116,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
-    echo "==> launching Codex (cwd=$(pwd))" >&2
+    echo "==> launching Codex with full permissions (cwd=$(pwd))" >&2
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    codex --yolo
+    codex {{codex_full_permission_args}}

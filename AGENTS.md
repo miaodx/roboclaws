@@ -56,6 +56,21 @@ uv sync --extra dev
 
 If a new optional-extras group is needed (e.g. `[openclaw]` for the MCP server),
 install it with `uv sync --extra dev --extra openclaw`.
+For real MolmoSpaces/MuJoCo demos, use
+`uv sync --extra dev --extra molmospaces`.
+
+Mainland China network note: if PyPI downloads are slow or flaky, keep mirror
+selection machine-local via uv flags or environment variables, not committed
+project metadata. Example:
+
+```bash
+UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
+  uv sync --extra dev --extra molmospaces
+```
+
+Use `uv sync` / `uv pip install` with mirrors as needed; do not switch to plain
+`pip install`. Direct Git dependencies such as upstream MolmoSpaces may still
+need normal GitHub access or a local network proxy.
 
 ### 1.1.1 Work-network guard
 
@@ -73,6 +88,15 @@ If that command reports `network: work`, do not run `just code::cc`,
 recipes are guarded and should fail before launching when the work-network probe
 is reachable. Switch to a non-work network before running Claude Code or
 OpenClaw workflows.
+
+### 1.1.2 Coding-agent permissions
+
+Local Codex / Claude Code demo launchers default to full agent permissions.
+Use `just code::codex` or `just code::cc` for direct coding-agent demos; those
+recipes carry the required bypass-approval / bypass-sandbox flags. New `just`
+recipes that launch Codex or Claude Code must either call those recipes or use
+the same full-permission defaults. Do not add bare `codex` or `claude` launches
+that silently fall back to read-only or prompt-for-approval modes.
 
 ### 1.2 Verify AI2-THOR is available
 
