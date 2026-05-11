@@ -15,6 +15,9 @@ from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (
 from roboclaws.molmo_cleanup.planner_proof_bundle import (
     attach_planner_proof_bundle,
 )
+from roboclaws.molmo_cleanup.planner_proof_requests import (
+    planner_proof_requests_from_substeps,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
@@ -37,5 +40,6 @@ __all__ = [
     "build_advisory_evaluation",
     "build_cleanup_scenario",
     "observed_handle_planner_binding",
+    "planner_proof_requests_from_substeps",
     "score_cleanup",
 ]

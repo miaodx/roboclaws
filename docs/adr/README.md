@@ -45,6 +45,14 @@ one decision per file, sequential numbering, explicit status.
 | [0034](0034-use-probe-backed-executor-for-bounded-cleanup-loop.md) | Use Probe-Backed Executor for Bounded Cleanup Loop | Accepted |
 | [0035](0035-use-bound-planner-proof-bundles-for-cleanup-coverage.md) | Use Bound Planner Proof Bundles for Cleanup Coverage | Accepted |
 | [0036](0036-centralize-cleanup-report-visual-core-checks.md) | Centralize Cleanup Report Visual Core Checks | Accepted |
+| [0037](0037-emit-cleanup-planner-proof-request-manifests.md) | Emit Cleanup Planner Proof Request Manifests | Accepted |
+| [0038](0038-render-planner-proof-requests-in-cleanup-reports.md) | Render Planner Proof Requests In Cleanup Reports | Accepted |
+| [0039](0039-render-planner-proof-bundle-runner-reports.md) | Render Planner Proof Bundle Runner Reports | Accepted |
+| [0040](0040-check-planner-proof-bundle-runner-artifacts.md) | Check Planner Proof Bundle Runner Artifacts | Accepted |
+| [0041](0041-reuse-shared-semantic-cleanup-loop-in-mcp-smoke-demos.md) | Reuse Shared Semantic Cleanup Loop In MCP Smoke Demos | Accepted |
+| [0042](0042-add-dry-run-harness-for-planner-proof-bundle-runner.md) | Add Dry-Run Harness For Planner Proof Bundle Runner | Accepted |
+| [0043](0043-track-cleanup-rerun-artifacts-in-proof-bundle-runner.md) | Track Cleanup Rerun Artifacts In Proof Bundle Runner | Accepted |
+| [0044](0044-add-local-gate-for-planner-proof-bundle-execution.md) | Add Local Gate For Planner Proof Bundle Execution | Accepted |
 
 ## Adding a new ADR
 

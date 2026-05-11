@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 45 report visual core contract completed on 2026-05-10
+**Status:** Phase 53 planner proof bundle execute-rerun gate completed with binding blocker on 2026-05-10
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -57,7 +57,19 @@ leaving default and mismatched-proof cleanup on the normal semantic path. Phase
 proof per cleaned object before passing the planner cleanup bridge. Phase 45
 closes the remaining report architecture drift by centralizing visual-core
 checks and routing ADR-0003 MCP robot-view capture through the shared semantic
-timeline mapping.
+timeline mapping. Phase 46 adds private proof request manifests and a local
+runner so completed ADR-0003 cleanup artifacts can be turned into real bound
+planner proof bundle runs without hand-matching aliases. Phase 47 makes that
+proof-generation handoff visible in the shared cleanup report. Phase 48 adds
+the corresponding visual report to the proof-bundle runner output. Phase 49
+adds a checker for that runner manifest/report pair. Phase 50 moves the MCP
+smoke demos onto the shared semantic cleanup loop. Phase 51 adds a dry-run
+harness for repeatable proof-bundle runner command generation. Phase 52 names
+the final cleanup rerun artifacts in runner manifests, reports, and checker
+gates. Phase 53 adds the named local-dev execute-rerun gate for bound proof
+bundles and final cleanup checker readiness. The local run executed five
+RBY1M/CuRobo proofs, but final cleanup readiness remains blocked because the
+sampled upstream tasks did not match the requested cleanup aliases.
 
 ## Why This Exists
 
@@ -859,7 +871,19 @@ completed:
   gsd-plan-phase 37-molmospaces-planner-cleanup-bridge-readiness
   gsd-execute-phase 37-molmospaces-planner-cleanup-bridge-readiness
   gsd-verify-work 37-molmospaces-planner-cleanup-bridge-readiness
+  gsd-plan-phase 50-molmospaces-mcp-smoke-shared-semantic-loop
+  gsd-execute-phase 50-molmospaces-mcp-smoke-shared-semantic-loop
+  gsd-verify-work 50-molmospaces-mcp-smoke-shared-semantic-loop
+  gsd-plan-phase 51-molmospaces-planner-proof-bundle-runner-harness
+  gsd-execute-phase 51-molmospaces-planner-proof-bundle-runner-harness
+  gsd-verify-work 51-molmospaces-planner-proof-bundle-runner-harness
+  gsd-plan-phase 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
+  gsd-execute-phase 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
+  gsd-verify-work 52-molmospaces-planner-proof-bundle-cleanup-rerun-artifacts
+  gsd-plan-phase 53-molmospaces-planner-proof-bundle-execute-rerun
+  gsd-execute-phase 53-molmospaces-planner-proof-bundle-execute-rerun
+  gsd-verify-work 53-molmospaces-planner-proof-bundle-execute-rerun
 
 next pipeline candidates:
-  plan actual planner-backed cleanup-loop primitive replacement after shared-loop integration
+  plan exact upstream sampled-task binding for cleanup proof requests
 ```

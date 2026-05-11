@@ -18,6 +18,8 @@
 # - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
 # - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
 # - just harness::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation evidence
+# - just harness::molmo-planner-proof-bundle-runner  proof-request dry-run handoff
+# - just harness::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
@@ -417,6 +419,89 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --require-advisory-scoring \
       --require-raw-fpv-observations \
       "{{output_dir}}/run_result.json"
+
+# ADR-0042 proof-bundle runner dry-run handoff. This proves fresh ADR-0003
+# cleanup artifacts produce checked planner proof commands without executing
+# local GPU planner probes.
+molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-runner-harness" seed="7" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    cleanup_dir="{{output_dir}}/cleanup"
+    bundle_dir="{{output_dir}}/proof_bundle"
+    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+      --seed "{{seed}}" \
+      --backend api_semantic_synthetic \
+      --task "{{task}}" \
+      --fixture-hint-mode room_only \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --output-dir "${cleanup_dir}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend api_semantic_synthetic \
+      --min-generated-mess-count 5 \
+      --require-advisory-scoring \
+      "${cleanup_dir}/run_result.json"
+    .venv/bin/python scripts/run_molmo_planner_proof_bundle_from_requests.py \
+      "${cleanup_dir}/run_result.json" \
+      --output-dir "${bundle_dir}" \
+      --runner-python .venv/bin/python \
+      --embodiment rby1m \
+      --probe-mode execute \
+      --steps 2 \
+      --timeout-s 600
+    .venv/bin/python scripts/check_molmo_planner_proof_bundle_runner_result.py \
+      "${bundle_dir}"
+
+# ADR-0044 local-dev proof-bundle execution gate. This executes real RBY1M/CuRobo
+# planner probes and reruns cleanup with their proof outputs, so keep it out of
+# default CI.
+molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-bundle-execute-rerun" seed="7" task="帮我收拾这个房间" generated_mess_count="10" min_generated_mess_count="5" steps="2" timeout_s="600":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    cleanup_dir="{{output_dir}}/cleanup"
+    bundle_dir="{{output_dir}}/proof_bundle"
+    rerun_dir="{{output_dir}}/cleanup_rerun"
+    torch_extensions_dir="{{output_dir}}/torch_extensions"
+    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+      --seed "{{seed}}" \
+      --backend api_semantic_synthetic \
+      --task "{{task}}" \
+      --fixture-hint-mode room_only \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --output-dir "${cleanup_dir}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend api_semantic_synthetic \
+      --min-generated-mess-count "{{min_generated_mess_count}}" \
+      --require-advisory-scoring \
+      "${cleanup_dir}/run_result.json"
+    .venv/bin/python scripts/run_molmo_planner_proof_bundle_from_requests.py \
+      "${cleanup_dir}/run_result.json" \
+      --output-dir "${bundle_dir}" \
+      --runner-python .venv/bin/python \
+      --embodiment rby1m \
+      --probe-mode execute \
+      --steps "{{steps}}" \
+      --timeout-s "{{timeout_s}}" \
+      --torch-extensions-dir "${torch_extensions_dir}" \
+      --execute-probes \
+      --rerun-cleanup \
+      --cleanup-output-dir "${rerun_dir}"
+    .venv/bin/python scripts/check_molmo_planner_proof_bundle_runner_result.py \
+      --require-proof-outputs \
+      --require-cleanup-rerun-output \
+      "${bundle_dir}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend api_semantic_synthetic \
+      --min-generated-mess-count "{{min_generated_mess_count}}" \
+      --require-advisory-scoring \
+      --require-planner-proof-attachment \
+      --require-planner-backed-cleanup-primitives \
+      --require-planner-cleanup-bridge-ready \
+      "${rerun_dir}/run_result.json"
 
 # ADR-0014 planner-backed manipulation proof gate. The default is a safe
 # config-import probe that records blocked-capability evidence; use
