@@ -10,6 +10,8 @@ INTEGRATION_MODULES = {
     "test_code_mcp_binding_smoke.py",
 }
 
+LAYER_DIRS = ("local", "slow", "integration", "contract", "regression", "unit")
+
 REGRESSION_NAME_PARTS = (
     "refactor_regression",
     "view_experiment",
@@ -49,7 +51,15 @@ def _layer_for_item(item: pytest.Item) -> str:
         if any(item.iter_markers(marker_name)):
             return marker_name
 
-    filename = Path(str(item.path)).name
+    path = Path(str(item.path))
+    try:
+        relative_parts = path.relative_to(Path(str(item.config.rootpath)) / "tests").parts
+    except ValueError:
+        relative_parts = ()
+    if relative_parts and relative_parts[0] in LAYER_DIRS:
+        return relative_parts[0]
+
+    filename = path.name
     stem = filename.removeprefix("test_").removesuffix(".py")
 
     if filename in INTEGRATION_MODULES:

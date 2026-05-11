@@ -16,9 +16,10 @@ gateway image is a third-party dependency we don't curate.
 Both seeders (``scripts/openclaw-bootstrap.sh`` for ``just chat::run`` and
 ``scripts/appliance_seed_openclaw.py`` for ``just appliance::run``) read
 this list as the single source of truth. A regression test in
-``tests/test_openclaw_bootstrap.py`` and ``tests/test_appliance_seed_openclaw.py``
-pins the contents of each rendered ``openclaw.json`` against ``ALLOWED``,
-so drift between the two paths is caught at lint-and-mock time.
+``tests/contract/openclaw/test_openclaw_bootstrap.py`` and
+``tests/contract/appliance/test_appliance_seed_openclaw.py`` pins the
+contents of each rendered ``openclaw.json`` against ``ALLOWED``, so drift
+between the two paths is caught at lint-and-mock time.
 
 Each entry below is paired with a one-line justification. Adding an entry
 requires a real reason; removing one should be probed first.

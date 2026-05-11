@@ -128,7 +128,7 @@ when we revisit in a future phase:
 
 To re-enable a broader list, lift the curation in
 `scripts/openclaw-bootstrap.sh` (the `EXTRA_MODELS_JSON` arrays) and
-rerun `tests/test_openclaw_bootstrap.py`.
+rerun `tests/contract/openclaw/test_openclaw_bootstrap.py`.
 
 ## Per-agent personalities (Phase 2.2)
 

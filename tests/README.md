@@ -1,9 +1,36 @@
 # Test Organization
 
-The suite is currently path-compatible with the historical flat
-`tests/test_*.py` layout. New organization should be expressed with pytest
-markers first, then file moves after recipes and docs no longer depend on exact
-paths.
+The suite is organized by confidence layer first and by domain second. The
+top-level folder controls the default pytest marker, while domain folders keep
+related tests close enough to scan.
+
+```text
+tests/
+  unit/
+    core/
+    examples/
+    games/
+    molmo_cleanup/
+    openclaw/
+    providers/
+    scripts/
+  contract/
+    appliance/
+    checkers/
+    dev_tools/
+    mcp/
+    molmo_cleanup/
+    openclaw/
+    regression/
+    reports/
+  regression/
+    refactor/
+    views/
+  integration/
+    coding_agent/
+  fixtures/
+  support/
+```
 
 ## Layers
 
@@ -25,8 +52,9 @@ paths.
 ./scripts/run_pytest_standalone.sh -m "not integration" -q
 ```
 
-`tests/conftest.py` auto-marks the legacy flat files. Prefer adding explicit
-markers or moving files in a focused follow-up when touching a module anyway.
+`tests/conftest.py` auto-marks tests from the top-level folder. It still has a
+filename fallback for any short-lived legacy flat files, but new tests should go
+directly into the right layer and domain folder.
 
 ## Keep Or Delete
 
