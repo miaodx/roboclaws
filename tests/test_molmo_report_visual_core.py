@@ -44,6 +44,24 @@ def test_visual_core_contract_rejects_raw_semantic_table() -> None:
         assert_cleanup_report_visual_core(report, require_semantic_subphases=True)
 
 
+def test_visual_core_contract_rejects_planner_diagnostic_style_drift() -> None:
+    report = """
+    <style>.diagnostic-view { background: #fff; }</style>
+    <h2>Before And After</h2>
+    <h2>Object Moves</h2>
+    <section><h2>Semantic Substeps</h2><ol class="phase-rail">
+      <li><span>nav</span><small>object</small></li>
+      <li><span>pick</span><small>object</small></li>
+      <li><span>nav</span><small>target</small></li>
+      <li><span>place</span><small>surface</small></li>
+    </ol></section>
+    <h2>Score</h2>
+    """
+
+    with pytest.raises(AssertionError):
+        assert_cleanup_report_visual_core(report, require_semantic_subphases=True)
+
+
 def test_robot_view_capture_for_tool_reuses_fixture_ids() -> None:
     capture = robot_view_capture_for_tool(
         "navigate_to_receptacle",

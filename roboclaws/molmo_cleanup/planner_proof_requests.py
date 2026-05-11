@@ -7,6 +7,13 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.planner_task_feasibility import (
+    grasp_feasibility_mitigation_decision,
+    grasp_feasibility_signature,
+    grasp_feasibility_signature_counts,
+    task_feasibility_blocker_kind,
+    task_feasibility_blocker_summary,
+)
 from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
 
 PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
@@ -243,6 +250,9 @@ def proof_bundle_run_manifest(
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    selection = proof_request_selection or proof_request_selection_from_summary(proof_requests)
+    summary = proof_result_summary or proof_result_summary_from_commands(commands)
+    prior_summary = prior_proof_result_summary or {}
     return {
         "schema": PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
         "cleanup_run_result": str(cleanup_run_result),
@@ -250,15 +260,18 @@ def proof_bundle_run_manifest(
         "proof_request_count": int(proof_requests.get("request_count") or 0),
         "ready_request_count": int(proof_requests.get("ready_count") or 0),
         "planner_scene": proof_requests.get("planner_scene") or {},
-        "proof_request_selection": proof_request_selection
-        or proof_request_selection_from_summary(proof_requests),
-        "prior_proof_result_summary": prior_proof_result_summary or {},
+        "proof_request_selection": selection,
+        "prior_proof_result_summary": prior_summary,
         "local_runtime_preflight": local_runtime_preflight or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,
-        "proof_result_summary": proof_result_summary
-        or proof_result_summary_from_commands(commands),
+        "proof_result_summary": summary,
+        "grasp_feasibility_mitigation_decision": grasp_feasibility_mitigation_decision(
+            prior_proof_result_summary=prior_summary,
+            proof_result_summary=summary,
+            proof_request_selection=selection,
+        ),
         "cleanup_command": cleanup_command or [],
         "cleanup_rerun": cleanup_rerun or {},
         "evidence_note": (
@@ -1615,6 +1628,8 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
             for item in results
             if item.get("task_feasibility_blocker_kind") == "grasp_feasibility"
         ),
+        "grasp_feasibility_signature_count": len(grasp_feasibility_signature_counts(results)),
+        "grasp_feasibility_signature_counts": grasp_feasibility_signature_counts(results),
         "worker_stage_event_count": sum(
             int(item.get("worker_stage_event_count") or 0) for item in results
         ),
@@ -1686,10 +1701,11 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     )
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
     task_sampler_failure_diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
-    task_feasibility_blocker_kind = _task_feasibility_blocker_kind(
+    blocker_kind = task_feasibility_blocker_kind(
         blockers,
         task_sampler_failure_diagnostics,
     )
+    grasp_signature = grasp_feasibility_signature(task_sampler_failure_diagnostics)
     requested_binding = evidence.get("requested_cleanup_primitive_binding") or {}
     sampled_binding = evidence.get("sampled_task_binding") or {}
     cleanup_binding = evidence.get("cleanup_primitive_binding") or {}
@@ -1710,11 +1726,12 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
                 cleanup_binding_blockers=cleanup_binding_blockers,
                 execution_attempted=bool(evidence.get("execution_attempted")),
             ),
-            "task_feasibility_blocker_kind": task_feasibility_blocker_kind,
-            "task_feasibility_blocker_summary": _task_feasibility_blocker_summary(
-                task_feasibility_blocker_kind,
+            "task_feasibility_blocker_kind": blocker_kind,
+            "task_feasibility_blocker_summary": task_feasibility_blocker_summary(
+                blocker_kind,
                 task_sampler_failure_diagnostics,
             ),
+            "grasp_feasibility_signature": grasp_signature,
             "visual_status": "views_recorded" if views else "no_views_recorded",
             "blockers": blockers,
             "cleanup_binding_blockers": cleanup_binding_blockers,
@@ -1797,43 +1814,6 @@ def _task_feasibility_status(
     if status == "blocked_capability":
         return "blocked"
     return "unknown"
-
-
-def _task_feasibility_blocker_kind(
-    blockers: list[dict[str, Any]],
-    task_sampler_failure_diagnostics: dict[str, Any],
-) -> str:
-    robot_placement_failures = int(
-        task_sampler_failure_diagnostics.get("robot_placement_failure_count") or 0
-    )
-    grasp_failures = int(task_sampler_failure_diagnostics.get("grasp_failure_count") or 0)
-    if robot_placement_failures:
-        return "robot_placement"
-    if grasp_failures:
-        return "grasp_feasibility"
-    codes = {str(item.get("code") or "") for item in blockers}
-    if "HouseInvalidForTask" in codes:
-        return "task_sampling"
-    return ""
-
-
-def _task_feasibility_blocker_summary(
-    blocker_kind: str,
-    task_sampler_failure_diagnostics: dict[str, Any],
-) -> str:
-    if blocker_kind == "robot_placement":
-        return (
-            f"{int(task_sampler_failure_diagnostics.get('robot_placement_failure_count') or 0)} "
-            "robot-placement failures"
-        )
-    if blocker_kind == "grasp_feasibility":
-        return (
-            f"{int(task_sampler_failure_diagnostics.get('grasp_failure_count') or 0)} "
-            "grasp failures; "
-            f"{int(task_sampler_failure_diagnostics.get('candidate_removal_count') or 0)} "
-            "candidate-removal calls"
-        )
-    return ""
 
 
 def _proof_views(base: Path, evidence: dict[str, Any]) -> list[dict[str, str]]:

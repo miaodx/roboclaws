@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 100 canonical runtime preflight import completed; next work is rotating proof sources or reducing the shared grasp-feasibility blocker
+**Status:** Phase 111 grasp cache routing decision completed; next work is implementing `Bread_1` grasp-cache mitigation or running separate unproven source-rotation requests without treating them as a cache fix
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -298,6 +298,86 @@ the runner writes a `local_runtime_blocked` manifest/report with
 Phase 100 corrects that preflight to the actual upstream package import
 (`molmo_spaces`) and records ready local preflight evidence with zero selected
 proof commands against the current seeded source plus prior memory.
+Phase 101 records the next source-rotation step. A seed 10 cleanup source
+artifact validated with 10 generated objects, 44 robot-view semantic steps, and
+10 ready proof requests. Prior-aware dry-run selection produced five commands
+(`proof_001`, `proof_003`, `proof_005`, `proof_008`, `proof_010`) while
+excluding five requests as `prior_task_feasibility_blocked`. The next slice
+should execute those selected commands locally, then only rerun cleanup if any
+selected proof becomes planner-backed and promotes cleanup binding.
+Phase 102 executed those five selected seed 10 proof commands locally with
+runtime preflight, RBY1M/CuRobo warmup, low memory, and wide placement. All
+five attempts produced proof outputs and diagnostic views, but every request
+blocked as `grasp_feasibility` with 17 grasp failures and 15 candidate-removal
+calls. No new planner-backed proof or cleanup-binding promotion was produced,
+so the next slice should target the shared grasp-feasibility blocker rather
+than rerunning cleanup.
+Phase 103 makes that repeated blocker easier to reason about before the next
+runtime experiment. Task-feasibility blocker naming moved into a shared planner
+module, proof result summaries now carry per-proof grasp signatures and grouped
+signature counts, and proof-bundle reports render a `Grasp Feasibility
+Signature Matrix`. The regenerated Phase 103 report groups all five Phase 102
+proof blockers into one repeated signature, so the next slice can target that
+shared blocker pattern directly.
+Phase 104 closes the seed 10 source pool after execution evidence. A
+post-execution fallback dry-run using the Phase 102 bundle as prior memory
+selects zero commands, excludes all ten seed 10 requests as grasp-feasibility
+blocked, generates zero fallback requests, and records
+`no_fallback_candidate_available` for all ten source requests. The next slice
+should either reduce the shared grasp-feasibility blocker or rotate to a new
+source with a different candidate strategy.
+Phase 105 closes the blocker-explanation gap inside the repeated
+grasp-feasibility signature. The planner probe now records whether each
+threshold-triggered `_remove_candidate_object()` call actually finds and
+removes the requested name from upstream `candidate_objects`, and shared
+planner/proof-bundle reports render effective-removal counts, candidate-name
+misses, threshold state, and removal-call deltas. The real Phase 105 probe
+confirmed the seed-10 bread-to-refrigerator blocker has 17 grasp failures, 15
+removal calls, 0 effective removals, and 15 candidate-name misses, so the next
+slice should target candidate identity binding, proof candidate source
+rotation, or a grasp-feasibility mitigation.
+Phase 106 closes the candidate identity binding slice. The exact cleanup
+sampler adapter now binds the live pickup candidate pool at
+`_select_pickup_object()` rather than reset-time, and shared planner/proof
+reports render the exact pickup action plus before/after candidate counts. The
+real Phase 106 bread-to-refrigerator rerun injected the requested bread alias,
+moving the pickup pool from 4 unrelated candidates to 1 exact candidate with 0
+grasp failures and 0 removal calls. The remaining blocker is now a direct
+`KeyError` invalid planner object name, so the next slice should fix proof
+candidate source / runtime object alias validity before another cleanup rerun.
+Phase 107 closes the stale scene evidence gap behind that invalid-alias result.
+The planner checker now has a `--require-cleanup-scene-bound` gate, shared
+reports render exact task config blockers, and the corrected local rerun uses
+the canonical seed-10 cleanup scene XML. With the valid scene bound, the
+requested bread alias exists: pickup binding moves the candidate pool from 17
+unrelated candidates to 1 exact candidate, robot placement succeeds with one
+diagnostic view, and the remaining blocker is one post-placement grasp failure
+with zero candidate-removal calls.
+Phase 108 preserves upstream grasp-threshold semantics after exact pickup
+binding. The adapter repeats the requested pickup candidate to a retry budget
+of 3 while keeping unrelated candidates out of the pool, and shared reports
+render that budget. The valid-scene rerun now records 3 grasp failures, one
+threshold crossing, 1 candidate-removal call, 1 effective removal, and 0
+candidate-name misses. The remaining blocker is cleanly the exact object's
+grasp feasibility.
+Phase 109 records grasp collision diagnostics for that exact-object blocker.
+The probe-local task-sampler adapter wraps upstream grasp loading and
+non-colliding mask calls, and shared reports expose cached-grasp count,
+collision-checked pose count, non-colliding count, and hook exceptions. The
+diagnostics are intended to separate missing-grasp-cache problems from zero
+collision-free-grasp problems before any mitigation is chosen. The valid-scene
+rerun classified the blocker as missing cached grasps for asset UID `Bread_1`:
+3 grasp-load attempts, 3 `ValueError` load failures, and 0 collision-mask
+checks.
+Phase 110 turns that blocker into a distinct proof-result signature subkind.
+Reports still classify the task blocker as `grasp_feasibility`, but the grouped
+signature matrix now shows `grasp_cache_missing`, grasp-load failure counts,
+collision-check counts, and missing asset IDs such as `Bread_1`.
+Phase 111 makes the routing decision explicit. Proof-bundle manifests and
+reports now render `Grasp Feasibility Mitigation Decision`, route the known
+`Bread_1` missing-cache blocker to `grasp_cache_mitigation`, and keep source
+rotation visible only as `available_for_unproven_requests` for different
+selected requests.
 
 ## Why This Exists
 

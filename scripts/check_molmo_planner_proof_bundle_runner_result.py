@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
     PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
+from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +101,9 @@ def _assert_runner_result(
     assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
     prior_proof_result_summary = data.get("prior_proof_result_summary") or {}
+    decision = data.get("grasp_feasibility_mitigation_decision") or {}
+    if decision:
+        _assert_grasp_mitigation_decision(decision, report_text)
     if prior_proof_result_summary:
         _assert_prior_proof_result_summary(prior_proof_result_summary, base, report_text)
     if proof_result_summary:
@@ -461,6 +465,7 @@ def _assert_proof_result_summary(
         int(summary.get("rby1m_config_import_timeout_count") or 0)
         == rby1m_config_import_timeout_count
     ), summary
+    _assert_grasp_signature_counts(summary, results, report_text)
     for item in results:
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
             assert item.get(key), item
@@ -510,10 +515,27 @@ def _assert_proof_result_summary(
                 assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
         if sampler_adapter:
             assert "Exact sampler adapter applied" in report_text, report_text[:500]
-            for key in ("planner_target_receptacle_id", "task_sampler_class"):
+            for key in ("planner_object_id", "planner_target_receptacle_id", "task_sampler_class"):
                 value = str(sampler_adapter.get(key) or "")
                 if value:
                     assert value in report_text, (key, report_text[:500])
+            pickup_binding = sampler_adapter.get("exact_pickup_candidate_binding") or {}
+            if pickup_binding:
+                assert "Exact pickup candidate action" in report_text, report_text[:500]
+                if pickup_binding.get("retry_budget") is not None:
+                    assert "Exact pickup retry budget" in report_text, report_text[:500]
+                for key in ("planner_object_id", "action"):
+                    value = str(pickup_binding.get(key) or "")
+                    if value:
+                        assert value in report_text, (key, report_text[:500])
+        cleanup_task_config = item.get("cleanup_task_config") or {}
+        config_blockers = cleanup_task_config.get("blockers") or []
+        if config_blockers:
+            assert "Exact task config blockers" in report_text, report_text[:500]
+            for blocker in config_blockers:
+                value = str(blocker.get("code") or "")
+                if value:
+                    assert value in report_text, (value, report_text[:500])
         task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
         if task_sampler_failure:
             placement_failure_keys = ("robot_placement_failure_count", "asset_failure_count")
@@ -531,9 +553,23 @@ def _assert_proof_result_summary(
             if grasp_failures:
                 assert "Post-placement grasp failures" in report_text, report_text[:500]
                 assert "Post-Placement Rejection Views" in report_text, report_text[:500]
+                if "candidate_effective_removal_count" in task_sampler_failure:
+                    assert "Post-placement effective removals" in report_text, report_text[:500]
+                if "candidate_name_miss_count" in task_sampler_failure:
+                    assert "Post-placement candidate name misses" in report_text, report_text[:500]
                 value = str(task_sampler_failure.get("grasp_failure_count") or "")
                 if value:
                     assert value in report_text, ("grasp_failure_count", report_text[:500])
+            if task_sampler_failure.get("grasp_load_attempts") or task_sampler_failure.get(
+                "grasp_collision_checks"
+            ):
+                assert "Grasp collision checks" in report_text, report_text[:500]
+                last_check = task_sampler_failure.get("last_grasp_collision_check") or {}
+                last_load = task_sampler_failure.get("last_grasp_load_attempt") or {}
+                for key in ("asset_uid", "noncolliding_grasp_count", "cached_grasp_count"):
+                    value = str(last_check.get(key) or last_load.get(key) or "")
+                    if value:
+                        assert value in report_text, (key, report_text[:500])
             last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
             if last_scene:
                 assert "Placement free-space fraction" in report_text, report_text[:500]
@@ -567,6 +603,7 @@ def _assert_prior_proof_result_summary(
     results = summary.get("results") or []
     assert isinstance(results, list), summary
     assert "Prior Proof Evidence" in report_text, report_text[:500]
+    _assert_grasp_signature_counts(summary, results, report_text)
     for item in results:
         assert isinstance(item, dict), summary
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
@@ -587,6 +624,70 @@ def _assert_prior_proof_result_summary(
                 "task_feasibility_blocker_kind",
                 report_text[:500],
             )
+
+
+def _assert_grasp_signature_counts(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    report_text: str,
+) -> None:
+    grasp_signature_counts = summary.get("grasp_feasibility_signature_counts") or []
+    if grasp_signature_counts:
+        assert int(summary.get("grasp_feasibility_signature_count") or 0) == len(
+            grasp_signature_counts
+        ), summary
+    else:
+        grasp_signature_counts = grasp_feasibility_signature_counts(results)
+    if not grasp_signature_counts:
+        return
+    assert "Grasp Feasibility Signature Matrix" in report_text, report_text[:500]
+    assert "Effective removals" in report_text, report_text[:500]
+    for signature in grasp_signature_counts:
+        assert signature.get("pattern_key"), signature
+        assert int(signature.get("count") or 0) > 0, signature
+        for value in [
+            signature.get("summary"),
+            signature.get("subkind"),
+            *(signature.get("request_ids") or []),
+            *(signature.get("object_names") or []),
+            *(signature.get("grasp_load_exception_asset_uids") or []),
+            *(signature.get("grasp_load_exception_types") or []),
+        ]:
+            if value:
+                assert str(value) in report_text, (signature, report_text[:500])
+
+
+def _assert_grasp_mitigation_decision(
+    decision: dict[str, Any],
+    report_text: str,
+) -> None:
+    assert decision.get("schema") == "planner_grasp_feasibility_mitigation_decision_v1", decision
+    assert decision.get("status") in {"not_applicable", "action_required"}, decision
+    assert decision.get("primary_route"), decision
+    assert decision.get("recommendation"), decision
+    assert "Grasp Feasibility Mitigation Decision" in report_text, report_text[:500]
+    for value in [
+        decision.get("status"),
+        decision.get("primary_route"),
+        decision.get("recommendation"),
+        decision.get("source_rotation_state"),
+        *(decision.get("missing_grasp_asset_uids") or []),
+        *(decision.get("grasp_load_exception_types") or []),
+    ]:
+        if value:
+            assert str(value) in report_text, (decision, report_text[:500])
+    for item in decision.get("signature_groups") or []:
+        assert isinstance(item, dict), decision
+        for value in [
+            item.get("source"),
+            item.get("subkind"),
+            item.get("summary"),
+            *(item.get("request_ids") or []),
+            *(item.get("object_names") or []),
+            *(item.get("grasp_load_exception_asset_uids") or []),
+        ]:
+            if value:
+                assert str(value) in report_text, (item, report_text[:500])
 
 
 def _assert_cleanup_rerun(

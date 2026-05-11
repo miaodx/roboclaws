@@ -23,6 +23,9 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
+from roboclaws.molmo_cleanup.planner_task_feasibility import (  # noqa: E402
+    grasp_feasibility_signature_counts,
+)
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
 
@@ -601,6 +604,7 @@ def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict
         generated_requests=generated_requests,
     )
     results = list(results_by_key.values())
+    grasp_signature_counts = grasp_feasibility_signature_counts(results)
     return {
         "schema": "merged_prior_planner_proof_result_summary_v1",
         "result_count": len(results),
@@ -621,6 +625,8 @@ def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict
             int(item.get("worker_stage_event_count") or 0) for item in results
         ),
         "view_artifact_count": sum(len(item.get("views") or []) for item in results),
+        "grasp_feasibility_signature_count": len(grasp_signature_counts),
+        "grasp_feasibility_signature_counts": grasp_signature_counts,
         "prior_manifest_count": len(summaries),
         "results": results,
         "fallback_generation": fallback_generation,

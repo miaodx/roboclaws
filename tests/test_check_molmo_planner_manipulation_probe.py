@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pytest
@@ -58,6 +59,7 @@ def _write_report_files(
     task_sampler_robot_placement_profile: bool = False,
     placement_scene_diagnostics: bool = False,
     post_placement_rejections: bool = False,
+    cleanup_config_blockers: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -71,6 +73,8 @@ def _write_report_files(
         body += "Runtime Diagnostics\n"
     if cleanup_binding:
         body += "Planner Probe Cleanup Binding\n"
+    if cleanup_config_blockers:
+        body += "Exact task config blockers\ncleanup_scene_xml_missing\n"
     if worker_stages:
         body += "Worker Stage Timeline\n"
     if curobo_cache:
@@ -184,6 +188,18 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     class FakeSampler:
         place_receptacle_name = None
 
+        def __init__(self) -> None:
+            self.candidate_objects = []
+
+        def reset(self):
+            self.candidate_objects = [
+                SimpleNamespace(name="pickup/body"),
+                SimpleNamespace(name="other/body"),
+            ]
+
+        def _select_pickup_object(self, env):
+            return [item.name for item in self.candidate_objects]
+
         def _get_place_target_candidates(self, env, pickup_obj_name, supporting_geom_id):
             return ["random/target"]
 
@@ -203,6 +219,7 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     result = runner._apply_exact_cleanup_task_sampler_adapter(
         sampler,
         {
+            "planner_object_id": "pickup/body",
             "planner_target_receptacle_id": "sink/body",
             "target_receptacle_id": "sink_01",
         },
@@ -212,6 +229,60 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     assert sampler._get_place_target_candidates(env, "pickup/body", 1) == ["sink/body"]
     assert sampler._prepare_place_target(env, "ignored", "pickup/body", None, 1) is True
     assert sampler.place_receptacle_name == "sink/body"
+    sampler.reset()
+    assert sampler._select_pickup_object(env) == ["pickup/body"] * 3
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"] * 3
+    binding = result["exact_pickup_candidate_binding"]
+    assert binding["action"] == "filtered_to_requested_candidate"
+    assert binding["retry_budget"] == 3
+    assert binding["retry_budget_applied"] is True
+    assert binding["requested_present_before"] is True
+    assert binding["candidate_count_before"] == 2
+    assert binding["candidate_count_after"] == 3
+
+
+def test_runner_exact_cleanup_task_sampler_adapter_injects_absent_pickup() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        def reset(self):
+            self.candidate_objects = [SimpleNamespace(name="other/body")]
+
+        def _select_pickup_object(self, env):
+            return [item.name for item in self.candidate_objects]
+
+        def _get_place_target_candidates(self, env, pickup_obj_name, supporting_geom_id):
+            return ["random/target"]
+
+        def _prepare_place_target(
+            self,
+            env,
+            place_target_name,
+            pickup_obj_name,
+            pickup_obj_pos,
+            supporting_geom_id,
+        ):
+            return True
+
+    sampler = FakeSampler()
+    result = runner._apply_exact_cleanup_task_sampler_adapter(
+        sampler,
+        {
+            "planner_object_id": "pickup/body",
+            "planner_target_receptacle_id": "sink/body",
+        },
+    )
+
+    sampler.reset()
+    assert sampler._select_pickup_object(None) == ["pickup/body"] * 3
+
+    assert [item.name for item in sampler.candidate_objects] == ["pickup/body"] * 3
+    binding = result["exact_pickup_candidate_binding"]
+    assert binding["action"] == "injected_requested_candidate_name"
+    assert binding["retry_budget"] == 3
+    assert binding["retry_budget_applied"] is True
+    assert binding["requested_present_before"] is False
+    assert binding["requested_present_after"] is True
 
 
 def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Path) -> None:
@@ -549,6 +620,86 @@ def test_runner_records_post_placement_grasp_rejections() -> None:
     assert diagnostics["grasp_failures"][-1]["candidate_count_after"] == 0
 
 
+def test_runner_records_ineffective_candidate_removal_calls() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        candidate_objects = [
+            SimpleNamespace(name="bread/body"),
+            SimpleNamespace(name="mug/body"),
+        ]
+
+        def __init__(self) -> None:
+            self._grasp_failure_counts: dict[str, int] = {}
+
+        def _remove_candidate_object(self, obj_name):
+            self.candidate_objects = [
+                item for item in self.candidate_objects if item.name != obj_name
+            ]
+
+        def report_grasp_failure(self, obj_name, max_failures=2):
+            self._grasp_failure_counts[obj_name] = self._grasp_failure_counts.get(obj_name, 0) + 1
+            if self._grasp_failure_counts[obj_name] > max_failures:
+                self._remove_candidate_object(obj_name)
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    sampler.report_grasp_failure("unknown/body", max_failures=0)
+
+    assert diagnostics["candidate_removal_count"] == 1
+    assert diagnostics["candidate_effective_removal_count"] == 0
+    assert diagnostics["candidate_name_miss_count"] == 1
+    removal = diagnostics["candidate_removals"][0]
+    assert removal["candidate_name_present_before"] is False
+    assert removal["effective_removal"] is False
+    assert diagnostics["grasp_failures"][0]["threshold_exceeded"] is True
+    assert diagnostics["grasp_failures"][0]["candidate_removal_call_count_delta"] == 1
+
+
+def test_runner_records_grasp_collision_diagnostics(monkeypatch: pytest.MonkeyPatch) -> None:
+    runner = _load_runner_module()
+    module = ModuleType("molmo_spaces.tasks.pick_task_sampler")
+
+    def load_grasps_for_object(object_name, num_grasps=50):
+        assert object_name == "asset-book"
+        assert num_grasps == 512
+        return "droid", np.zeros((4, 4, 4))
+
+    def get_noncolliding_grasp_mask(mj_model, mj_data, grasp_poses_world, batch_size):
+        assert batch_size == 64
+        assert len(grasp_poses_world) == 4
+        return np.array([False, False, True, False])
+
+    module.load_grasps_for_object = load_grasps_for_object
+    module.get_noncolliding_grasp_mask = get_noncolliding_grasp_mask
+    monkeypatch.setitem(sys.modules, "molmo_spaces.tasks.pick_task_sampler", module)
+
+    class FakeSampler:
+        config = SimpleNamespace(task_config=SimpleNamespace(pickup_obj_name="book/body"))
+
+        def _sample_and_place_robot(self, env):
+            return None
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    _, grasps = module.load_grasps_for_object("asset-book", 512)
+    module.get_noncolliding_grasp_mask(None, None, grasps, 64)
+
+    assert "grasp_collision_diagnostics" in diagnostics["hooks"]
+    assert diagnostics["grasp_load_attempt_count"] == 1
+    assert diagnostics["last_grasp_load_attempt"]["cached_grasp_count"] == 4
+    assert diagnostics["grasp_collision_check_count"] == 1
+    check = diagnostics["last_grasp_collision_check"]
+    assert check["asset_uid"] == "asset-book"
+    assert check["pickup_obj_name"] == "book/body"
+    assert check["grasp_pose_count"] == 4
+    assert check["noncolliding_grasp_count"] == 1
+    assert check["colliding_grasp_count"] == 3
+    assert check["zero_noncolliding"] is False
+
+
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
     checker = _load_checker_module()
     evidence = blocked_planner_probe_evidence(
@@ -573,6 +724,69 @@ def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -
     checker._assert_probe_result(data, tmp_path, accept_blocked_capability=True)
     with pytest.raises(AssertionError):
         checker._assert_probe_result(data, tmp_path, accept_blocked_capability=False)
+
+
+def test_checker_requires_cleanup_scene_bound_when_requested(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "physics blocked"}],
+        execution_attempted=True,
+    )
+    evidence["cleanup_task_config"] = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": str(scene_xml),
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+        "blockers": [],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(tmp_path, blocked=True, cleanup_binding=True),
+    }
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        require_cleanup_scene_bound=True,
+    )
+
+    evidence["cleanup_task_config"]["scene_xml"] = str(tmp_path / "missing.xml")
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            require_cleanup_scene_bound=True,
+        )
+
+    evidence["cleanup_task_config"]["scene_xml"] = str(scene_xml)
+    evidence["cleanup_task_config"]["blockers"] = [
+        {"code": "cleanup_scene_xml_missing", "message": "missing scene"}
+    ]
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        cleanup_binding=True,
+        cleanup_config_blockers=True,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            require_cleanup_scene_bound=True,
+        )
 
 
 def test_checker_rejects_api_semantic_as_planner_proof(tmp_path: Path) -> None:

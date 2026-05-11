@@ -95,6 +95,22 @@ one decision per file, sequential numbering, explicit status.
 | [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
 | [0085](0085-seed-generated-mess-pools-and-guard-local-proof-memory.md) | Seed Generated Mess Pools and Guard Local Proof Memory | Accepted |
 | [0086](0086-execute-seeded-selected-proof-commands.md) | Execute Seeded Selected Proof Commands | Accepted |
+| [0087](0087-capture-planner-failure-diagnostic-views.md) | Capture Planner Failure Diagnostic Views | Accepted |
+| [0088](0088-render-post-placement-rejection-views.md) | Render Post-Placement Rejection Views | Accepted |
+| [0089](0089-render-grasp-feasibility-blocker-matrix.md) | Render Grasp-Feasibility Blocker Matrix | Accepted |
+| [0090](0090-record-proof-bundle-local-runtime-preflight.md) | Record Proof-Bundle Local Runtime Preflight | Accepted |
+| [0091](0091-use-canonical-molmo-spaces-preflight-import.md) | Use Canonical MolmoSpaces Preflight Import | Accepted |
+| [0092](0092-record-seed10-source-rotation.md) | Record Seed 10 Source Rotation | Accepted |
+| [0093](0093-execute-seed10-selected-proof-commands.md) | Execute Seed 10 Selected Proof Commands | Accepted |
+| [0094](0094-render-grasp-feasibility-signature-matrix.md) | Render Grasp Feasibility Signature Matrix | Accepted |
+| [0095](0095-record-seed10-post-execution-fallback-exhaustion.md) | Record Seed 10 Post-Execution Fallback Exhaustion | Accepted |
+| [0096](0096-record-candidate-removal-effectiveness.md) | Record Candidate Removal Effectiveness | Accepted |
+| [0097](0097-bind-exact-pickup-candidate-pool.md) | Bind Exact Pickup Candidate Pool | Accepted |
+| [0098](0098-require-valid-cleanup-scene-binding.md) | Require Valid Cleanup Scene Binding | Accepted |
+| [0099](0099-preserve-exact-pickup-retry-budget.md) | Preserve Exact Pickup Retry Budget | Accepted |
+| [0100](0100-record-grasp-collision-diagnostics.md) | Record Grasp Collision Diagnostics | Accepted |
+| [0101](0101-classify-missing-grasp-cache-signatures.md) | Classify Missing Grasp Cache Signatures | Accepted |
+| [0102](0102-route-missing-grasp-cache-before-retry.md) | Route Missing Grasp Cache Before Retry | Accepted |
 
 ## Adding a new ADR
 

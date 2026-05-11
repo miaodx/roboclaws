@@ -258,6 +258,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
+    assert "diagnostic-view" not in html
+    assert "decision-card" not in html
 
 
 def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
@@ -916,6 +918,30 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "grasp_feasibility_signature": {
+                        "schema": "planner_grasp_feasibility_signature_v1",
+                        "kind": "grasp_feasibility",
+                        "subkind": "grasp_cache_missing",
+                        "pattern_key": "prior-grasp-cache-missing",
+                        "summary": (
+                            "3 grasp failures; 1 candidate-removal calls; "
+                            "3 grasp-load failures; missing grasp cache: PriorBread_1"
+                        ),
+                        "grasp_failure_count": 3,
+                        "candidate_removal_count": 1,
+                        "grasp_load_attempt_count": 3,
+                        "grasp_load_failure_count": 3,
+                        "grasp_collision_check_count": 0,
+                        "zero_noncolliding_grasp_check_count": 0,
+                        "grasp_load_exception_asset_uids": ["PriorBread_1"],
+                        "grasp_load_exception_types": ["ValueError"],
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 0,
+                        "place_robot_near_call_count": 1,
+                        "object_name_count": 1,
+                        "object_names": ["prior/pickup"],
+                        "image_artifact_count": 2,
+                    },
                     "views": [
                         {
                             "label": "initial",
@@ -960,6 +986,29 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "execution_attempted_count": 0,
             "task_feasibility_blocked_count": 1,
             "grasp_feasibility_blocked_count": 1,
+            "grasp_feasibility_signature_count": 1,
+            "grasp_feasibility_signature_counts": [
+                {
+                    "schema": "planner_grasp_feasibility_signature_group_v1",
+                    "pattern_key": "grasp=3;removals=1",
+                    "subkind": "grasp_cache_missing",
+                    "summary": (
+                        "3 grasp failures; 1 candidate-removal calls; "
+                        "3 grasp-load failures; missing grasp cache: Bread_1"
+                    ),
+                    "count": 1,
+                    "request_ids": ["proof_001"],
+                    "object_names": ["pickup/body"],
+                    "grasp_load_failure_count": 3,
+                    "grasp_collision_check_count": 0,
+                    "zero_noncolliding_grasp_check_count": 0,
+                    "grasp_load_exception_asset_uids": ["Bread_1"],
+                    "grasp_load_exception_types": ["ValueError"],
+                    "robot_placement_failure_count": 1,
+                    "place_robot_near_call_count": 1,
+                    "image_artifact_count": 2,
+                }
+            ],
             "worker_stage_event_count": 2,
             "last_worker_stage_counts": {"rby1m_config_import": 1},
             "view_artifact_count": 2,
@@ -981,6 +1030,30 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "task_feasibility_blocker_summary": (
                         "3 grasp failures; 1 candidate-removal calls"
                     ),
+                    "grasp_feasibility_signature": {
+                        "schema": "planner_grasp_feasibility_signature_v1",
+                        "kind": "grasp_feasibility",
+                        "subkind": "grasp_cache_missing",
+                        "pattern_key": "grasp=3;removals=1",
+                        "summary": (
+                            "3 grasp failures; 1 candidate-removal calls; "
+                            "3 grasp-load failures; missing grasp cache: Bread_1"
+                        ),
+                        "grasp_failure_count": 3,
+                        "candidate_removal_count": 1,
+                        "grasp_load_attempt_count": 3,
+                        "grasp_load_failure_count": 3,
+                        "grasp_collision_check_count": 0,
+                        "zero_noncolliding_grasp_check_count": 0,
+                        "grasp_load_exception_asset_uids": ["Bread_1"],
+                        "grasp_load_exception_types": ["ValueError"],
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 1,
+                        "place_robot_near_call_count": 1,
+                        "object_name_count": 1,
+                        "object_names": ["pickup/body"],
+                        "image_artifact_count": 2,
+                    },
                     "visual_status": "views_recorded",
                     "blockers": [
                         {"code": "HouseInvalidForTask", "message": "robot placement"},
@@ -1057,6 +1130,33 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 }
             ],
         },
+        "grasp_feasibility_mitigation_decision": {
+            "schema": "planner_grasp_feasibility_mitigation_decision_v1",
+            "status": "action_required",
+            "primary_route": "grasp_cache_mitigation",
+            "recommendation": "mitigate_missing_grasp_cache_before_retry",
+            "rationale": "Cached grasps could not be loaded for a requested asset.",
+            "source_rotation_state": "available_for_unproven_requests",
+            "selected_request_count": 1,
+            "excluded_request_count": 1,
+            "signature_group_count": 1,
+            "subkind_counts": {"grasp_cache_missing": 1},
+            "missing_grasp_asset_uids": ["Bread_1"],
+            "grasp_load_exception_types": ["ValueError"],
+            "evidence_request_ids": ["proof_001"],
+            "signature_groups": [
+                {
+                    "source": "proof_result_summary",
+                    "subkind": "grasp_cache_missing",
+                    "count": 1,
+                    "summary": "3 grasp-load failures; missing grasp cache: Bread_1",
+                    "request_ids": ["proof_001"],
+                    "object_names": ["pickup/body"],
+                    "grasp_load_exception_asset_uids": ["Bread_1"],
+                    "grasp_load_exception_types": ["ValueError"],
+                }
+            ],
+        },
         "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
     }
 
@@ -1069,6 +1169,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
     assert "Proof Request Selection" in html
+    assert "Grasp Feasibility Mitigation Decision" in html
+    assert "decision-card" in html
+    assert "grasp_cache_mitigation" in html
+    assert "mitigate_missing_grasp_cache_before_retry" in html
+    assert "available_for_unproven_requests" in html
     assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html
     assert "Proof Probe Results" in html
@@ -1114,6 +1219,13 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task feasibility" in html
     assert "blocked" in html
     assert "Grasp-feasible blocked" in html
+    assert "Grasp Feasibility Signature Matrix" in html
+    assert "Grasp-load failures" in html
+    assert "grasp_cache_missing" in html
+    assert "Bread_1" in html
+    assert "PriorBread_1" in html
+    assert "prior/pickup" in html
+    assert "Diagnostic views" in html
     assert "Task feasibility blocker" in html
     assert "grasp_feasibility" in html
     assert "3 grasp failures; 1 candidate-removal calls" in html
@@ -1493,6 +1605,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "scene_xml": "/tmp/scene.xml",
         "planner_object_id": "pickup/body",
         "planner_target_receptacle_id": "sink/body",
+        "blockers": [{"code": "cleanup_scene_xml_missing", "message": "missing stale scene"}],
     }
     run_result["manipulation_evidence"]["task_sampler_robot_placement_profile"] = {
         "schema": "planner_probe_task_sampler_robot_placement_profile_v1",
@@ -1518,7 +1631,19 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
         "applied": True,
         "task_sampler_class": "PickAndPlaceTaskSampler",
+        "planner_object_id": "pickup/body",
         "planner_target_receptacle_id": "sink/body",
+        "exact_pickup_candidate_binding": {
+            "schema": "planner_probe_exact_pickup_candidate_binding_v1",
+            "planner_object_id": "pickup/body",
+            "candidate_count_before": 17,
+            "candidate_count_after": 3,
+            "retry_budget": 3,
+            "retry_budget_applied": True,
+            "requested_present_before": False,
+            "requested_present_after": True,
+            "action": "injected_requested_candidate_name",
+        },
     }
     run_result["manipulation_evidence"]["task_sampler_failure_diagnostics"] = {
         "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
@@ -1535,6 +1660,9 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "robot_placement_failure_count": 1,
         "asset_failure_count": 1,
         "candidate_removal_count": 1,
+        "candidate_effective_removal_count": 0,
+        "candidate_name_miss_count": 1,
+        "grasp_threshold_exceeded_count": 1,
         "robot_placement_attempts": [
             {
                 "attempt_index": 1,
@@ -1551,6 +1679,53 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "reason": "robot placement failed",
             }
         ],
+        "grasp_load_attempt_count": 1,
+        "grasp_collision_check_count": 1,
+        "zero_noncolliding_grasp_check_count": 1,
+        "grasp_load_attempts": [
+            {
+                "schema": "planner_probe_grasp_load_attempt_v1",
+                "asset_uid": "asset-book",
+                "pickup_obj_name": "pickup/body",
+                "requested_grasp_count": 512,
+                "result": "loaded",
+                "gripper": "droid",
+                "cached_grasp_count": 512,
+            }
+        ],
+        "grasp_collision_checks": [
+            {
+                "schema": "planner_probe_grasp_collision_check_v1",
+                "asset_uid": "asset-book",
+                "pickup_obj_name": "pickup/body",
+                "grasp_pose_count": 512,
+                "batch_size": 64,
+                "result": "checked",
+                "noncolliding_grasp_count": 0,
+                "colliding_grasp_count": 512,
+                "zero_noncolliding": True,
+            }
+        ],
+        "last_grasp_load_attempt": {
+            "schema": "planner_probe_grasp_load_attempt_v1",
+            "asset_uid": "asset-book",
+            "pickup_obj_name": "pickup/body",
+            "requested_grasp_count": 512,
+            "result": "loaded",
+            "gripper": "droid",
+            "cached_grasp_count": 512,
+        },
+        "last_grasp_collision_check": {
+            "schema": "planner_probe_grasp_collision_check_v1",
+            "asset_uid": "asset-book",
+            "pickup_obj_name": "pickup/body",
+            "grasp_pose_count": 512,
+            "batch_size": 64,
+            "result": "checked",
+            "noncolliding_grasp_count": 0,
+            "colliding_grasp_count": 512,
+            "zero_noncolliding": True,
+        },
         "grasp_failure_count": 1,
         "grasp_failures": [
             {
@@ -1558,9 +1733,14 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 "count_before": 2,
                 "count_after": 3,
                 "max_failures": 2,
+                "threshold_exceeded": True,
+                "threshold_crossed": True,
                 "candidate_count_before": 1,
-                "candidate_count_after": 0,
-                "removed_candidate": True,
+                "candidate_count_after": 1,
+                "candidate_name_present_before": False,
+                "candidate_name_present_after": False,
+                "candidate_removal_call_count_delta": 1,
+                "removed_candidate": False,
             }
         ],
         "place_robot_near_calls": [
@@ -1618,7 +1798,16 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
                 {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
             ],
         },
-        "candidate_removals": [{"object_name": "pickup/body"}],
+        "candidate_removals": [
+            {
+                "object_name": "pickup/body",
+                "candidate_count_before": 1,
+                "candidate_count_after": 1,
+                "candidate_name_present_before": False,
+                "candidate_name_present_after": False,
+                "effective_removal": False,
+            }
+        ],
         "last_robot_placement_failure": {
             "pickup_obj_name": "pickup/body",
             "message": "Failed to place robot near object: pickup/body",
@@ -1665,15 +1854,28 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "relaxed" in html
     assert "place_robot_near max tries" in html
     assert "Exact task config applied" in html
+    assert "Exact task config blockers" in html
+    assert "cleanup_scene_xml_missing" in html
     assert "Exact sampler adapter class" in html
+    assert "Exact sampler adapter object" in html
+    assert "Exact pickup candidate action" in html
+    assert "Exact pickup retry budget" in html
+    assert "injected_requested_candidate_name" in html
     assert "PickAndPlaceTaskSampler" in html
     assert "Task Sampler Failure Diagnostics" in html
     assert "Placement failures" in html
     assert "Effective max tries" in html
     assert "Post-Placement Candidate Rejections" in html
+    assert "Grasp Collision Diagnostics" in html
+    assert "Non-colliding grasps" in html
+    assert "Zero non-colliding" in html
     assert "Post-Placement Rejection Views" in html
     assert "Post-placement rejection flow: pickup/body" in html
     assert "Removed by grasp threshold" in html
+    assert "Candidate Removal Effectiveness" in html
+    assert "Effective removals" in html
+    assert "Candidate name misses" in html
+    assert "Removal-call delta" in html
     assert "Placement Scene Diagnostics" in html
     assert "Free-space fraction" in html
     assert "0.000017" in html
@@ -1745,3 +1947,4 @@ def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(
     assert "Planner Probe Views" in html
     assert "Post Placement Attempt 001 Head Camera" in html
     assert 'src="planner_views/post_placement_attempt_001_head_camera.png"' in html
+    assert "diagnostic-view" in html

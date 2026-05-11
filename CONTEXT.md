@@ -138,6 +138,60 @@ object-target pairs as cards before the detailed blocker table, preserving the
 source request, match kind, and blocker summary.
 _Avoid_: table-only selection blocker review
 
+**Grasp-Feasibility Signature Matrix**:
+The proof-bundle result report view that groups repeated executed
+grasp-feasibility failures by their blocker pattern, such as identical grasp
+failure and candidate-removal counts across multiple proof requests.
+_Avoid_: treating grouped blockers as proof success
+
+**Candidate Removal Effectiveness**:
+Task-sampler diagnostic evidence that separates a grasp-threshold removal call
+from an actual candidate-pool mutation, including candidate-name presence
+before/after removal and effective-removal counts.
+_Avoid_: assuming candidate-removal calls mean the object was removed
+
+**Exact Pickup Candidate Binding**:
+Probe-local exact-scene sampler evidence that binds the upstream pickup
+candidate pool to the requested planner object immediately before pickup
+selection, recording before/after candidate counts, requested-name presence,
+and whether the requested candidate had to be injected.
+_Avoid_: reset-time candidate patch, unrelated candidate retry loop
+
+**Valid Cleanup Scene Binding**:
+Exact-scene proof evidence that the requested cleanup scene XML exists and was
+applied before task-sampler or alias blockers are interpreted.
+_Avoid_: default-scene fallback, stale scene path proof
+
+**Exact Pickup Retry Budget**:
+Probe-local exact sampler evidence that repeats the requested pickup candidate
+enough times for upstream grasp-failure threshold semantics to run, without
+reintroducing unrelated candidate objects.
+_Avoid_: one-attempt exact candidate collapse, unrelated retry pool
+
+**Grasp Collision Diagnostics**:
+Probe-local evidence from upstream grasp loading and collision masking: cached
+grasp count, collision-checked pose count, non-colliding count, and hook
+exceptions for the exact requested object.
+_Avoid_: opaque grasp-failure counts with no loader/collision-mask detail
+
+**Missing Grasp Cache Signature**:
+Proof-result summary evidence that keeps `grasp_feasibility` as the top-level
+blocker while classifying missing cached grasp files as a distinct subkind with
+failed asset UIDs.
+_Avoid_: grouping missing cache with zero non-colliding grasp checks
+
+**Grasp Cache Routing Decision**:
+Proof-bundle runner evidence that routes missing cached grasp assets to cache
+mitigation before exact retry while keeping source rotation state visible for
+separate unproven requests.
+_Avoid_: treating source rotation as if it mitigated a known missing cache asset
+
+**Post-Execution Fallback Exhaustion**:
+Proof-request selection evidence showing that, after executed proof results are
+used as prior memory, a source pool has no selected requests and no generated
+fallback requests left.
+_Avoid_: rerunning an exhausted source pool
+
 **Proof-Bundle Local Runtime Preflight**:
 The proof-bundle runner evidence that checks the configured MolmoSpaces Python
 runtime before real `--execute-probes` commands, rendering missing import or
@@ -148,6 +202,18 @@ _Avoid_: local-dev crash before manifest, treating runtime setup as proof failur
 The runtime preflight import name for upstream MolmoSpaces Python packages:
 `molmo_spaces`, not the colloquial project label `molmospaces`.
 _Avoid_: false blocked preflight from wrong package name
+
+**Seeded Source Rotation Evidence**:
+Local-dev evidence that a new MolmoSpaces generated-mess seed can produce a
+different exact-scene proof request pool while prior proof memory filters
+already covered or known-blocked requests before execution.
+_Avoid_: claiming selected dry-run commands as planner-backed proof
+
+**Seed 10 Selected Proof Execution**:
+Local-dev execution evidence for selected seed 10 proof commands. It can add
+planner-backed cleanup coverage only if a proof both passes and promotes cleanup
+binding; otherwise it is blocker evidence.
+_Avoid_: treating selected commands or executed blockers as cleanup success
 
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
@@ -296,6 +362,12 @@ The package-level validation contract that current-contract and ADR-0003
 checkers use to enforce one Cleanup Artifact Report section order and one
 semantic subphase display vocabulary.
 _Avoid_: Per-checker report string smoke test
+
+**Report Style Scope**:
+The rule that planner/proof diagnostic report styles are opt-in extras, while
+Cleanup Artifact Reports keep the base visual underlay used by current-contract
+and ADR-0003 cleanup demos.
+_Avoid_: planner diagnostics changing cleanup report visuals
 
 **Semantic Cleanup Subphase**:
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
@@ -584,6 +656,9 @@ _Avoid_: full cleanup replacement claim
 - A report may show **Private Evaluation** only after the run, separated from the **Agent View**.
 - A **Cleanup Artifact Report** should reuse the same report renderer across current-contract, ADR-0003, direct-agent, and OpenClaw dogfood runs.
 - A **Cleanup Artifact Report** should keep the **Report Visual Core** in a stable order even when new ADR-0003 evidence panels are added.
+- A **Cleanup Artifact Report** should keep **Report Style Scope** stable:
+  planner/proof diagnostics may add opt-in styles to their own reports, but
+  they must not change the cleanup report visual underlay.
 - A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
@@ -614,6 +689,19 @@ _Avoid_: full cleanup replacement claim
 - **Planner Primitive Target Binding** should be enforced before wiring a real object-specific RBY1M/CuRobo cleanup executor.
 - A **Probe-Backed Cleanup Primitive Executor** should reject generic standalone planner proof unless it names the cleanup object, target, and tool it executed.
 - **Planner Probe Cleanup Binding** should be emitted before the probe-backed executor is used for ADR-0003 cleanup subphases.
+- **Exact Pickup Candidate Binding** should happen at the live upstream pickup
+  selection point, not at reset-time, and should remain private proof evidence
+  rendered by the shared report underlay.
+- **Valid Cleanup Scene Binding** should be required before an exact-scene
+  proof blocker is interpreted as alias validity or task feasibility evidence.
+- **Exact Pickup Retry Budget** should preserve upstream grasp-threshold
+  semantics while keeping the candidate pool exact.
+- **Grasp Collision Diagnostics** should explain exact-object post-placement
+  failures before any grasp-feasibility mitigation is chosen.
+- **Missing Grasp Cache Signature** should keep missing asset data visible in
+  proof-result summaries before source rotation or cache mitigation.
+- **Grasp Cache Routing Decision** should make cache mitigation versus source
+  rotation explicit before another runtime proof attempt.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -920,3 +1008,68 @@ _Avoid_: full cleanup replacement claim
 - Phase 100 corrected the runtime preflight to the canonical upstream package
   import, `molmo_spaces`, and generated a ready local preflight report with
   zero selected proof commands.
+- Phase 101 added Seeded Source Rotation Evidence. A seed 10 MolmoSpaces
+  cleanup source artifact validated with 10 generated objects, 44 robot-view
+  semantic steps, and 10 ready proof requests. Prior-aware dry-run selection
+  picked five commands (`proof_001`, `proof_003`, `proof_005`, `proof_008`,
+  `proof_010`) and excluded five requests as `prior_task_feasibility_blocked`;
+  those selected commands still need a separate local execution phase before
+  any new planner-backed cleanup coverage is claimed.
+- Phase 102 added Seed 10 Selected Proof Execution. The five selected seed 10
+  proof commands executed with local runtime preflight, RBY1M/CuRobo warmup,
+  low memory, and wide placement. All five attempted proofs blocked as
+  `grasp_feasibility` with 17 grasp failures, 15 candidate-removal calls, and
+  one diagnostic view artifact each; none became planner-backed or promoted
+  cleanup binding.
+- Phase 103 added the Grasp-Feasibility Signature Matrix. Task-feasibility
+  blocker naming now lives in a shared planner module, proof result summaries
+  carry per-proof grasp signatures and grouped signature counts, proof-bundle
+  reports render the grouped matrix, and the checker validates the view. The
+  regenerated Phase 103 report groups the five Phase 102 blockers into one
+  repeated signature.
+- Phase 104 added Post-Execution Fallback Exhaustion for seed 10. With the
+  Phase 102 executed bundle as prior memory, the dry-run selected zero commands,
+  excluded all ten seed 10 requests as grasp-feasibility blockers, generated no
+  fallback requests, and recorded `no_fallback_candidate_available` for all ten
+  source requests.
+- Phase 105 added Candidate Removal Effectiveness. The planner probe now
+  records threshold-exceeded rows, candidate-removal call deltas,
+  candidate-name presence before/after removal, effective-removal counts, and
+  candidate-name misses; shared planner/proof-bundle reports render those
+  fields so the next runtime slice can distinguish ineffective candidate
+  removal from true grasp candidate exhaustion. A real Phase 105 RBY1M proof
+  rerun confirmed the repeated seed-10 blocker has 17 grasp failures, 15
+  removal calls, 0 effective removals, and 15 candidate-name misses.
+- Phase 106 added Exact Pickup Candidate Binding. The exact sampler adapter now
+  binds the live pickup candidate pool at `_select_pickup_object()` before
+  upstream selection and renders the binding action in shared reports. The real
+  Phase 106 rerun changed the blocker from 17 grasp failures / 15 ineffective
+  removals to a direct invalid planner-object `KeyError`, with candidate count
+  moving from 4 unrelated objects to the requested bread alias only.
+- Phase 107 added Valid Cleanup Scene Binding. The checker can now require the
+  cleanup scene XML to exist before accepting exact-scene evidence, and reports
+  render exact task config blockers. A corrected seed-10 rerun with the
+  canonical scene showed the requested bread alias exists: pickup binding moved
+  the pool from 17 unrelated candidates to 1 exact candidate, robot placement
+  succeeded, and the remaining blocker is one post-placement grasp failure
+  with zero candidate-removal calls.
+- Phase 108 added Exact Pickup Retry Budget. The exact sampler adapter now
+  repeats the requested pickup candidate to a retry budget of 3, preserving the
+  upstream default `max_failures=2` threshold path without restoring unrelated
+  candidates. The valid-scene rerun produced 3 grasp failures, 1 threshold
+  crossing, 1 effective candidate removal, and 0 candidate-name misses.
+- Phase 109 adds Grasp Collision Diagnostics. The task-sampler diagnostics
+  adapter records upstream grasp-load and non-colliding mask outcomes so the
+  remaining exact-object grasp-feasibility blocker can be classified as missing
+  cached grasps, zero collision-free grasps, or a hook exception. The valid-scene
+  rerun classified the exact bread blocker as missing cached grasps for
+  `Bread_1`: 3 grasp-load attempts, 3 `ValueError` load failures, and 0
+  collision-mask checks.
+- Phase 110 adds Missing Grasp Cache Signature. Proof-result summaries now keep
+  `task_feasibility_blocker_kind=grasp_feasibility` but add
+  `subkind=grasp_cache_missing`, failed grasp-load counts, and missing asset
+  IDs such as `Bread_1` to the grouped signature matrix.
+- Phase 111 adds Grasp Cache Routing Decision. Proof-bundle manifests and
+  reports now route `grasp_cache_missing` evidence for `Bread_1` to
+  `grasp_cache_mitigation` before exact retry, while keeping source rotation
+  visible as `available_for_unproven_requests` for unrelated selected requests.
