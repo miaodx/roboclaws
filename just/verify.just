@@ -102,8 +102,8 @@ molmo-prompt-cleanup:
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-prompt-cleanup
 
-# Real upstream MolmoSpaces/MuJoCo prompt-cleanup gate. Requires the isolated
-# Python 3.11 MolmoSpaces runtime; set ROBOCLAWS_MOLMOSPACES_PYTHON if needed.
+# Real upstream MolmoSpaces/MuJoCo prompt-cleanup gate. Requires the repo-local
+# uv MolmoSpaces runtime; set ROBOCLAWS_MOLMOSPACES_PYTHON only for overrides.
 molmo-real-cleanup:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -113,8 +113,8 @@ molmo-real-cleanup:
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-real-cleanup
 
-# Real upstream MolmoSpaces/MuJoCo robot visual gate. Requires the isolated
-# Python 3.11 MolmoSpaces runtime and local robot assets.
+# Real upstream MolmoSpaces/MuJoCo robot visual gate. Requires the repo-local
+# uv MolmoSpaces runtime and local robot assets.
 molmo-robot-visual:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -157,8 +157,8 @@ molmo-agent-bridge-visual:
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-agent-bridge-visual
 
-# ADR-0003 public/private cleanup gate. Requires the isolated Python 3.11
-# MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
+# ADR-0003 public/private cleanup gate. Requires the repo-local uv MolmoSpaces
+# runtime for the harness; focused tests use the synthetic backend.
 molmo-realworld-cleanup generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -170,7 +170,7 @@ molmo-realworld-cleanup generated_mess_count="10":
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-cleanup "1 2 3" "output/molmo-realworld-cleanup-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
-# ADR-0003 real-world MCP smoke-agent gate. Requires the isolated Python 3.11
+# ADR-0003 real-world MCP smoke-agent gate. Requires the repo-local uv
 # MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
 molmo-realworld-agent-mcp generated_mess_count="10":
     #!/usr/bin/env bash
@@ -218,7 +218,7 @@ molmo-realworld-openclaw-visual-dogfood-kit generated_mess_count="10":
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-openclaw-visual-dogfood-kit "7" "output/molmo-realworld-openclaw-visual-dogfood-kit" "帮我收拾这个房间" "{{generated_mess_count}}"
 
-# ADR-0013 raw FPV-only observation gate. Requires the isolated Python 3.11
+# ADR-0013 raw FPV-only observation gate. Requires the repo-local uv
 # MolmoSpaces runtime and local robot assets for the harness evidence.
 molmo-realworld-raw-fpv generated_mess_count="10":
     #!/usr/bin/env bash

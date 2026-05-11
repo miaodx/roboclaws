@@ -5,7 +5,8 @@
 #   harness/run.sh <run_id> <task_file> [time_cap_seconds]
 #
 # What it does:
-#   1. Starts a tmux session running `just code::cc` (Claude Code wired to MCP).
+#   1. Starts a tmux session running `just code::cc` (Claude Code wired to MCP,
+#      with the repo's default full-permission launch args).
 #   2. Sends a kickoff message: read SKILL.md + preflight + the task body.
 #   3. Polls .tmp/roboclaws-mcp/server.log for tool calls until either the
 #      `roboclaws__done` tool fires OR the time cap elapses.

@@ -28,6 +28,11 @@ The `code::cc` and `code::codex` recipes start the MCP server, wait for it to co
 up, register `roboclaws`, then launch Claude Code or Codex and clean up everything
 on exit.
 
+Both recipes default to full agent permissions for local demo operation:
+`code::codex` uses Codex's bypass-approvals-and-sandbox mode, and `code::cc`
+uses Claude Code's bypass-permissions mode. Run them only in a trusted local
+checkout.
+
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):
 

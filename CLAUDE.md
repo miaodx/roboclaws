@@ -1,6 +1,6 @@
 # Roboclaws
 
-Multiple VLM/OpenClaw agents controlling simulated robots in competition and cooperation. Python 3.10+, AI2-THOR simulation.
+Multiple VLM/OpenClaw agents controlling simulated robots in competition and cooperation. Python 3.12+, AI2-THOR simulation.
 
 ## Required reading
 
@@ -54,6 +54,13 @@ ruff format --check .
 pytest
 ```
 
+For real MolmoSpaces/MuJoCo demos, sync the declared extra into the same
+repo-local environment:
+
+```bash
+uv sync --extra dev --extra molmospaces
+```
+
 Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB; see `AGENTS.md` §1.3 for VLM key setup):
 
 ```bash
@@ -78,6 +85,12 @@ Code or OpenClaw workflows. Guarded recipes include `just code::cc`,
 `just appliance::run`, and OpenClaw local/integration verification gates. Switch
 to a non-work network first.
 
+Coding-agent permission default: run direct Codex / Claude Code demos through
+`just code::codex` or `just code::cc`. Those recipes launch with full local-demo
+permissions by default. New `just` recipes that launch Codex or Claude Code must
+reuse those wrappers or the same bypass-approval / bypass-sandbox flags; do not
+add bare `codex` or `claude` launches.
+
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line `just` install + tab completion. Modules:
 `openclaw`, `vlm`, `chat`, `appliance`, `dev` — each lives in `just/<module>.just`.
@@ -86,7 +99,7 @@ for the one-line `just` install + tab completion. Modules:
 
 - Ruff enforces style — do not duplicate linter rules here
 - Line length: 100
-- Target: Python 3.10
+- Target: Python 3.12
 - Type annotations on public APIs; `from __future__ import annotations` in all modules
 
 ## Architecture

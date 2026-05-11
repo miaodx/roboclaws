@@ -2,7 +2,7 @@
 
 [![CI (main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml)
 [![Live Smoke Reports](https://img.shields.io/badge/live%20smoke-GitHub%20Pages-0A66C2)](https://miaodx.com/roboclaws/)
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](./pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](./pyproject.toml)
 [![Install](https://img.shields.io/badge/install-uv%20recommended-5E5CE6)](https://docs.astral.sh/uv/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
@@ -47,7 +47,7 @@ contracts.
 ## Quick Start
 
 ```bash
-uv pip install -e ".[dev,openclaw]" || python -m pip install -e ".[dev,openclaw]"
+uv sync --extra dev --extra openclaw
 ```
 
 For real VLM/OpenClaw runs, load one provider key:

@@ -28,6 +28,7 @@ REPO_ROOT = _repo_root()
 JUST_DIR = REPO_ROOT / "just"
 CODE_JUST = JUST_DIR / "code.just"
 MCP_JUST = JUST_DIR / "mcp.just"
+HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
 
 # Matches an inter-recipe call to mcp::up and captures the trailing argument
 # list up to end-of-line. Excludes the recipe definition header.
@@ -83,3 +84,48 @@ def test_code_just_does_not_duplicate_mcp_lifecycle() -> None:
             f"code.just defines `{pattern.pattern}` but should delegate to "
             f"just/mcp.just. Move the lifecycle to mcp.just."
         )
+
+
+def test_code_agent_launches_default_to_full_permissions() -> None:
+    """Direct Codex / Claude Code just recipes should not launch in read-only mode."""
+    text = CODE_JUST.read_text(encoding="utf-8")
+
+    assert (
+        'codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox '
+        '--ask-for-approval never"'
+    ) in text
+    assert (
+        'claude_full_permission_args := "--dangerously-skip-permissions '
+        '--permission-mode bypassPermissions"'
+    ) in text
+    assert "codex {{codex_full_permission_args}}" in text
+    assert "claude {{claude_full_permission_args}}" in text
+    assert "codex --yolo" not in text
+    assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
+    assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
+
+
+def test_other_just_files_do_not_launch_bare_coding_agents() -> None:
+    """Keep future wrappers from bypassing the full-permission code recipes."""
+    for path in JUST_DIR.glob("*.just"):
+        if path == CODE_JUST:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if re.match(r"^(codex|claude)\s+mcp(\s|$)", stripped):
+                continue
+            assert not re.match(r"^(codex|claude)(\s|$)", stripped), (
+                f"{path.relative_to(JUST_DIR.parent)} launches a coding agent directly: "
+                f"{stripped!r}. Route through just code::codex / code::cc or use the "
+                "full-permission defaults from just/code.just."
+            )
+
+
+def test_navigator_harness_inherits_full_permission_code_recipe() -> None:
+    text = HARNESS_RUN.read_text(encoding="utf-8")
+
+    assert "just code::cc" in text
+    assert "default full-permission launch args" in text

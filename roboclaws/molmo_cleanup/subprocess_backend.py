@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,12 +19,12 @@ from roboclaws.molmo_cleanup.types import (
 )
 
 MOLMOSPACES_SUBPROCESS_BACKEND = "molmospaces_subprocess"
-DEFAULT_MOLMOSPACES_PYTHON = Path("/tmp/roboclaws-molmospaces-spike/.venv/bin/python")
+DEFAULT_MOLMOSPACES_PYTHON = Path(sys.executable)
 WORKER_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "molmospaces_subprocess_worker.py"
 
 
 class MolmoSpacesSubprocessBackend:
-    """Backend wrapper for the isolated Python 3.11 MolmoSpaces runtime."""
+    """Backend wrapper for the uv-managed MolmoSpaces runtime."""
 
     def __init__(
         self,
@@ -156,7 +157,7 @@ class MolmoSpacesSubprocessBackend:
     def _run_worker(self, command: str, *args: str) -> dict[str, Any]:
         if not self.python_executable.is_file():
             raise RuntimeError(
-                "MolmoSpaces Python 3.11 runtime is missing: "
+                "MolmoSpaces Python runtime is missing: "
                 f"{self.python_executable}. Set ROBOCLAWS_MOLMOSPACES_PYTHON."
             )
         completed = subprocess.run(

@@ -48,7 +48,7 @@ def test_parse_last_json_object_tolerates_upstream_stdout_noise() -> None:
 
 
 def test_subprocess_backend_reports_missing_runtime(tmp_path: Path) -> None:
-    with pytest.raises(RuntimeError, match="Python 3.11 runtime is missing"):
+    with pytest.raises(RuntimeError, match="Python runtime is missing"):
         MolmoSpacesSubprocessBackend(
             run_dir=tmp_path,
             python_executable=tmp_path / "missing-python",
