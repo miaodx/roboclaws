@@ -48,61 +48,61 @@ def _make_agent_state(agent_id: int, x: float = 0.0, z: float = 0.0) -> MagicMoc
 # ---------------------------------------------------------------------------
 
 
-def test_parse_args_defaults() -> None:
-    args = _parse_args([])
-    assert args.scene == "FloorPlan201"
-    assert args.agents == 2
-    assert args.steps == 200
-    assert args.model == "mock"
-    assert args.output_dir == "output/territory"
-    assert args.thor_server_timeout == 100.0
-    assert args.thor_server_start_timeout == 300.0
-    assert args.backend == "vlm"
-    assert args.gateway_url is None
-
-
-def test_parse_args_backend_openclaw() -> None:
-    args = _parse_args(["--backend", "openclaw"])
-    assert args.backend == "openclaw"
-
-
-def test_parse_args_backend_direct_accepted() -> None:
-    """'direct' is a deprecated alias for 'vlm'; parser must accept it."""
-    args = _parse_args(["--backend", "direct"])
-    assert args.backend == "direct"
-
-
-def test_parse_args_gateway_url() -> None:
-    args = _parse_args(["--backend", "openclaw", "--gateway-url", "http://custom:9999"])
-    assert args.gateway_url == "http://custom:9999"
-
-
-def test_parse_args_custom() -> None:
-    args = _parse_args(
-        [
-            "--scene",
-            "FloorPlan202",
-            "--agents",
-            "3",
-            "--steps",
-            "50",
-            "--model",
-            "gpt-4o-mini",
-            "--output-dir",
-            "/tmp/territory",
-            "--thor-server-timeout",
-            "240",
-            "--thor-server-start-timeout",
-            "420",
-        ]
-    )
-    assert args.scene == "FloorPlan202"
-    assert args.agents == 3
-    assert args.steps == 50
-    assert args.model == "gpt-4o-mini"
-    assert args.output_dir == "/tmp/territory"
-    assert args.thor_server_timeout == 240.0
-    assert args.thor_server_start_timeout == 420.0
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (
+            [],
+            {
+                "scene": "FloorPlan201",
+                "agents": 2,
+                "steps": 200,
+                "model": "mock",
+                "output_dir": "output/territory",
+                "thor_server_timeout": 100.0,
+                "thor_server_start_timeout": 300.0,
+                "backend": "vlm",
+                "gateway_url": None,
+            },
+        ),
+        (["--backend", "openclaw"], {"backend": "openclaw"}),
+        (["--backend", "direct"], {"backend": "direct"}),
+        (
+            ["--backend", "openclaw", "--gateway-url", "http://custom:9999"],
+            {"backend": "openclaw", "gateway_url": "http://custom:9999"},
+        ),
+        (
+            [
+                "--scene",
+                "FloorPlan202",
+                "--agents",
+                "3",
+                "--steps",
+                "50",
+                "--model",
+                "gpt-4o-mini",
+                "--output-dir",
+                "/tmp/territory",
+                "--thor-server-timeout",
+                "240",
+                "--thor-server-start-timeout",
+                "420",
+            ],
+            {
+                "scene": "FloorPlan202",
+                "agents": 3,
+                "steps": 50,
+                "model": "gpt-4o-mini",
+                "output_dir": "/tmp/territory",
+                "thor_server_timeout": 240.0,
+                "thor_server_start_timeout": 420.0,
+            },
+        ),
+    ],
+)
+def test_parse_args(argv: list[str], expected: dict[str, object]) -> None:
+    args = _parse_args(argv)
+    assert {name: getattr(args, name) for name in expected} == expected
 
 
 # ---------------------------------------------------------------------------
@@ -110,16 +110,16 @@ def test_parse_args_custom() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pos_to_world_idx_origin() -> None:
-    assert _pos_to_world_idx({"x": 0.0, "y": 0.9, "z": 0.0}) == (0, 0)
-
-
-def test_pos_to_world_idx_positive() -> None:
-    assert _pos_to_world_idx({"x": 0.50, "y": 0.9, "z": 0.75}) == (2, 3)
-
-
-def test_pos_to_world_idx_negative() -> None:
-    assert _pos_to_world_idx({"x": -0.25, "y": 0.9, "z": -0.50}) == (-1, -2)
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [
+        ({"x": 0.0, "y": 0.9, "z": 0.0}, (0, 0)),
+        ({"x": 0.50, "y": 0.9, "z": 0.75}, (2, 3)),
+        ({"x": -0.25, "y": 0.9, "z": -0.50}, (-1, -2)),
+    ],
+)
+def test_pos_to_world_idx(position: dict[str, float], expected: tuple[int, int]) -> None:
+    assert _pos_to_world_idx(position) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +156,7 @@ def mock_engine_cls():
 # ---------------------------------------------------------------------------
 
 
-def test_run_returns_summary(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_returns_summary_for_mock_provider(mock_engine_cls, tmp_path: Path) -> None:
     result = run_territory_game(
         scene="FloorPlan201",
         agent_count=2,
@@ -170,32 +170,12 @@ def test_run_returns_summary(mock_engine_cls, tmp_path: Path) -> None:
     assert "termination_reason" in result
     assert "vlm_cost_usd" in result
     assert "output_dir" in result
-
-
-def test_run_cells_claimed_has_both_agents(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_territory_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=10,
-        model="mock",
-        output_dir=str(tmp_path / "territory"),
-    )
     assert 0 in result["cells_claimed"]
     assert 1 in result["cells_claimed"]
-
-
-def test_run_cost_is_zero_for_mock(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_territory_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=10,
-        model="mock",
-        output_dir=str(tmp_path / "territory"),
-    )
     assert result["vlm_cost_usd"] == 0.0
 
 
-def test_run_creates_replay_json(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_persists_replay_and_final_map(mock_engine_cls, tmp_path: Path) -> None:
     out_dir = tmp_path / "territory"
     run_territory_game(
         scene="FloorPlan201",
@@ -205,17 +185,6 @@ def test_run_creates_replay_json(mock_engine_cls, tmp_path: Path) -> None:
         output_dir=str(out_dir),
     )
     assert (out_dir / "replay.json").exists()
-
-
-def test_run_creates_final_territory_map(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "territory"
-    run_territory_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=6,
-        model="mock",
-        output_dir=str(out_dir),
-    )
     assert (out_dir / "territory_final.png").exists()
 
 

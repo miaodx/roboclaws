@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -48,31 +49,41 @@ def _make_frame(value: int = 128) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def test_parse_args_defaults() -> None:
-    args = _parse_args([])
-    assert args.scene == "FloorPlan201"
-    assert args.steps == 50
-    assert args.model == "mock"
-    assert args.output_dir == "output/explore"
-
-
-def test_parse_args_custom() -> None:
-    args = _parse_args(
-        [
-            "--scene",
-            "FloorPlan202",
-            "--steps",
-            "10",
-            "--model",
-            "gpt-4o-mini",
-            "--output-dir",
-            "/tmp/x",
-        ]
-    )
-    assert args.scene == "FloorPlan202"
-    assert args.steps == 10
-    assert args.model == "gpt-4o-mini"
-    assert args.output_dir == "/tmp/x"
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (
+            [],
+            {
+                "scene": "FloorPlan201",
+                "steps": 50,
+                "model": "mock",
+                "output_dir": "output/explore",
+            },
+        ),
+        (
+            [
+                "--scene",
+                "FloorPlan202",
+                "--steps",
+                "10",
+                "--model",
+                "gpt-4o-mini",
+                "--output-dir",
+                "/tmp/x",
+            ],
+            {
+                "scene": "FloorPlan202",
+                "steps": 10,
+                "model": "gpt-4o-mini",
+                "output_dir": "/tmp/x",
+            },
+        ),
+    ],
+)
+def test_parse_args(argv: list[str], expected: dict[str, object]) -> None:
+    args = _parse_args(argv)
+    assert {name: getattr(args, name) for name in expected} == expected
 
 
 # ---------------------------------------------------------------------------
@@ -80,55 +91,48 @@ def test_parse_args_custom() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pos_to_world_idx_origin() -> None:
-    idx = _pos_to_world_idx({"x": 0.0, "y": 0.9, "z": 0.0})
-    assert idx == (0, 0)
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [
+        ({"x": 0.0, "y": 0.9, "z": 0.0}, (0, 0)),
+        ({"x": 0.50, "y": 0.9, "z": 0.75}, (2, 3)),
+        ({"x": -0.25, "y": 0.9, "z": -0.50}, (-1, -2)),
+    ],
+)
+def test_pos_to_world_idx(position: dict[str, float], expected: tuple[int, int]) -> None:
+    assert _pos_to_world_idx(position) == expected
 
 
-def test_pos_to_world_idx_positive() -> None:
-    # x=0.50, z=0.75 → ix=2, iz=3 (rounded to nearest 0.25)
-    idx = _pos_to_world_idx({"x": 0.50, "y": 0.9, "z": 0.75})
-    assert idx == (2, 3)
+@pytest.mark.parametrize(
+    ("world", "origin", "expected"),
+    [
+        ((0, 0), (0, 0), (_CENTER_ROW, _CENTER_COL)),
+        ((5, 3), (0, 0), (_CENTER_ROW + 3, _CENTER_COL + 5)),
+        ((10, 8), (10, 8), (_CENTER_ROW, _CENTER_COL)),
+    ],
+)
+def test_world_to_viz(
+    world: tuple[int, int],
+    origin: tuple[int, int],
+    expected: tuple[int, int],
+) -> None:
+    assert _world_to_viz(*world, *origin) == expected
 
 
-def test_pos_to_world_idx_negative() -> None:
-    idx = _pos_to_world_idx({"x": -0.25, "y": 0.9, "z": -0.50})
-    assert idx == (-1, -2)
-
-
-def test_world_to_viz_at_origin() -> None:
-    row, col = _world_to_viz(0, 0, 0, 0)
-    assert row == _CENTER_ROW
-    assert col == _CENTER_COL
-
-
-def test_world_to_viz_offset() -> None:
-    # ix=5, iz=3 relative to origin ix=0, iz=0 → col=CENTER+5, row=CENTER+3
-    row, col = _world_to_viz(5, 3, 0, 0)
-    assert col == _CENTER_COL + 5
-    assert row == _CENTER_ROW + 3
-
-
-def test_world_to_viz_with_origin_offset() -> None:
-    row, col = _world_to_viz(10, 8, 10, 8)
-    assert row == _CENTER_ROW
-    assert col == _CENTER_COL
-
-
-def test_in_bounds_centre() -> None:
-    assert _in_bounds(_CENTER_ROW, _CENTER_COL) is True
-
-
-def test_in_bounds_corners() -> None:
-    assert _in_bounds(0, 0) is True
-    assert _in_bounds(_GRID_ROWS - 1, _GRID_COLS - 1) is True
-
-
-def test_in_bounds_out_of_range() -> None:
-    assert _in_bounds(-1, 0) is False
-    assert _in_bounds(0, -1) is False
-    assert _in_bounds(_GRID_ROWS, 0) is False
-    assert _in_bounds(0, _GRID_COLS) is False
+@pytest.mark.parametrize(
+    ("row", "col", "expected"),
+    [
+        (_CENTER_ROW, _CENTER_COL, True),
+        (0, 0, True),
+        (_GRID_ROWS - 1, _GRID_COLS - 1, True),
+        (-1, 0, False),
+        (0, -1, False),
+        (_GRID_ROWS, 0, False),
+        (0, _GRID_COLS, False),
+    ],
+)
+def test_in_bounds(row: int, col: int, expected: bool) -> None:
+    assert _in_bounds(row, col) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -136,21 +140,13 @@ def test_in_bounds_out_of_range() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_frame_to_b64_returns_string() -> None:
+def test_frame_to_b64_returns_decodable_jpeg() -> None:
     frame = _make_frame(200)
     b64 = _frame_to_b64(frame)
-    assert isinstance(b64, str)
-    assert len(b64) > 0
-
-
-def test_frame_to_b64_is_valid_base64() -> None:
-    import base64
-
-    frame = _make_frame(100)
-    b64 = _frame_to_b64(frame)
-    # Must not raise
     decoded = base64.b64decode(b64)
-    assert len(decoded) > 0
+
+    assert isinstance(b64, str)
+    assert decoded.startswith(b"\xff\xd8\xff")
 
 
 def test_frame_to_b64_different_frames_differ() -> None:
@@ -182,7 +178,7 @@ def mock_engine_cls():
         yield MockCls
 
 
-def test_run_exploration_returns_summary(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_exploration_returns_summary_for_mock_provider(mock_engine_cls, tmp_path: Path) -> None:
     result = run_exploration(
         scene="FloorPlan201",
         steps=3,
@@ -193,29 +189,11 @@ def test_run_exploration_returns_summary(mock_engine_cls, tmp_path: Path) -> Non
     assert "cells_visited" in result
     assert "vlm_cost_usd" in result
     assert "output_dir" in result
-
-
-def test_run_exploration_cells_visited_positive(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_exploration(
-        scene="FloorPlan201",
-        steps=5,
-        model="mock",
-        output_dir=str(tmp_path / "explore"),
-    )
     assert result["cells_visited"] >= 1
-
-
-def test_run_exploration_cost_is_zero_for_mock(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_exploration(
-        scene="FloorPlan201",
-        steps=3,
-        model="mock",
-        output_dir=str(tmp_path / "explore"),
-    )
     assert result["vlm_cost_usd"] == 0.0
 
 
-def test_run_exploration_creates_replay_json(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_exploration_persists_replay_artifacts(mock_engine_cls, tmp_path: Path) -> None:
     out_dir = tmp_path / "explore"
     run_exploration(
         scene="FloorPlan201",
@@ -223,19 +201,10 @@ def test_run_exploration_creates_replay_json(mock_engine_cls, tmp_path: Path) ->
         model="mock",
         output_dir=str(out_dir),
     )
-    assert (out_dir / "replay.json").exists()
-
-
-def test_run_exploration_creates_agent_frames(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "explore"
-    run_exploration(
-        scene="FloorPlan201",
-        steps=3,
-        model="mock",
-        output_dir=str(out_dir),
-    )
     agent_frames = list((out_dir / "agent_frames").glob("*_agent0.png"))
-    assert len(agent_frames) == 3
+
+    assert (out_dir / "replay.json").exists()
+    assert len(agent_frames) == 4
 
 
 def test_run_exploration_engine_closed_on_completion(mock_engine_cls, tmp_path: Path) -> None:
