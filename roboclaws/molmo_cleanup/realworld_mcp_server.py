@@ -11,11 +11,17 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.manipulation_provenance import (
+    api_semantic_manipulation_evidence,
+)
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
     DEFAULT_REALWORLD_TASK,
+    RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
 )
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
@@ -57,6 +63,7 @@ def make_molmo_realworld_cleanup_mcp(
     agent_driven: bool | None = None,
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     fixture_hint_mode: str = "room_only",
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
@@ -70,6 +77,7 @@ def make_molmo_realworld_cleanup_mcp(
         agent_driven=agent_driven,
         task_prompt=task_prompt,
         fixture_hint_mode=fixture_hint_mode,
+        perception_mode=perception_mode,
         record_robot_views=record_robot_views,
     )
 
@@ -90,6 +98,7 @@ class RealWorldMolmoCleanupMCPServer:
         agent_driven: bool | None = None,
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",
+        perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
     ) -> None:
         self.run_dir = Path(run_dir)
@@ -106,12 +115,14 @@ class RealWorldMolmoCleanupMCPServer:
                 base_contract,
                 task_prompt=task_prompt,
                 fixture_hint_mode=fixture_hint_mode,
+                perception_mode=perception_mode,
             )
         self.contract = contract
         self.base_contract = contract.contract
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
+        self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
         if self.record_robot_views and not callable(
             getattr(self.base_contract.backend, "write_robot_views", None)
@@ -142,6 +153,7 @@ class RealWorldMolmoCleanupMCPServer:
             contract=REALWORLD_CONTRACT,
             policy=policy,
             agent_driven=self.agent_driven,
+            perception_mode=self.perception_mode,
         )
 
     def _register_tools(self) -> None:
@@ -260,6 +272,7 @@ class RealWorldMolmoCleanupMCPServer:
                 "error": str(exc),
             }
         response = self._augment_response(name, request, response)
+        response = self._attach_raw_fpv_artifact_if_needed(name, response)
         self._write_tool_response(name, response)
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
@@ -306,11 +319,19 @@ class RealWorldMolmoCleanupMCPServer:
             private_evaluation["generated_mess_count"],
         )
         private_evaluation["requested_generated_mess_count"] = requested_count
+        advisory_evaluation = build_advisory_evaluation(
+            score=done_response["score"],
+            scenario_id=self.scenario.scenario_id,
+        )
         agent_view_path = self.run_dir / "agent_view.json"
         private_evaluation_path = self.run_dir / "private_evaluation.json"
+        advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
         agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
         private_evaluation_path.write_text(
             json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
+        )
+        advisory_evaluation_path.write_text(
+            json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
         )
 
         run_result = {
@@ -326,12 +347,17 @@ class RealWorldMolmoCleanupMCPServer:
             "completion_status": done_response["score"]["completion_status"],
             "primitive_provenance": API_SEMANTIC_PROVENANCE,
             "primitive_provenance_summary": primitive_counts,
+            "manipulation_evidence": api_semantic_manipulation_evidence(
+                backend=_backend_name(self.base_contract.backend),
+                primitive_summary=primitive_counts,
+            ),
             "policy": self.policy,
             "planner": self.policy,
             "agent_driven": self.agent_driven,
             "policy_uses_private_truth": self.policy_uses_private_truth,
             "planner_uses_private_manifest": False,
             "fixture_hint_mode": self.fixture_hint_mode,
+            "perception_mode": self.perception_mode,
             "requested_generated_mess_count": requested_count,
             "generated_mess_count": private_evaluation["generated_mess_count"],
             "mcp_server": MCP_SERVER_NAME,
@@ -342,7 +368,9 @@ class RealWorldMolmoCleanupMCPServer:
             "semantic_substeps": substeps,
             "cleanup_plan": cleanup_plan,
             "agent_view": agent_view,
+            "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
             "private_evaluation": private_evaluation,
+            "advisory_evaluation": advisory_evaluation,
             "score": done_response["score"],
             "final_locations": done_response["final_locations"],
             "final_containment": done_response.get("final_containment", {}),
@@ -352,6 +380,7 @@ class RealWorldMolmoCleanupMCPServer:
             "artifacts": {
                 "agent_view": str(agent_view_path),
                 "private_evaluation": str(private_evaluation_path),
+                "advisory_evaluation": str(advisory_evaluation_path),
                 "trace": str(self.trace_path),
                 "before_snapshot": str(self._before_snapshot),
                 "after_snapshot": str(after_snapshot),
@@ -395,6 +424,41 @@ class RealWorldMolmoCleanupMCPServer:
             total_targets=done_response["score"]["total_targets"],
         )
         return self._done_result
+
+    def _attach_raw_fpv_artifact_if_needed(
+        self,
+        tool: str,
+        response: dict[str, Any],
+    ) -> dict[str, Any]:
+        if (
+            tool != "observe"
+            or self.perception_mode != RAW_FPV_ONLY_MODE
+            or not response.get("ok")
+            or not self.record_robot_views
+        ):
+            return response
+        raw = response.get("raw_fpv_observation")
+        if not isinstance(raw, dict):
+            return response
+        observation_id = str(raw.get("observation_id", ""))
+        if not observation_id:
+            return response
+        step = self._record_robot_view(
+            f"observe {observation_id}",
+            label_suffix=observation_id,
+        )
+        if step is None:
+            return response
+        attached = self.contract.attach_raw_fpv_observation_artifact(
+            observation_id,
+            views=step.get("views") or {},
+            robot_view_label=str(step.get("label", "")),
+        )
+        if attached is None:
+            return response
+        updated = dict(response)
+        updated["raw_fpv_observation"] = attached
+        return updated
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
         self._write_trace(tool="<runtime>", event=event, **data)
@@ -544,12 +608,13 @@ class RealWorldMolmoCleanupMCPServer:
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
         semantic_phase: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any] | None:
         if not self.record_robot_views:
-            return
+            return None
         writer = getattr(self.base_contract.backend, "write_robot_views", None)
         if not callable(writer):
             raise RuntimeError("robot view capture requires backend.write_robot_views")
+        previous_count = len(self.robot_view_steps)
         self._robot_view_index = record_robot_view_step(
             steps=self.robot_view_steps,
             backend=self.base_contract.backend,
@@ -561,6 +626,9 @@ class RealWorldMolmoCleanupMCPServer:
             focus_receptacle_id=focus_receptacle_id,
             semantic_phase=semantic_phase,
         )
+        if len(self.robot_view_steps) <= previous_count:
+            return None
+        return self.robot_view_steps[-1]
 
     def _write_tool_request(self, tool: str, request: dict[str, Any]) -> None:
         self._tool_event_counts[f"{tool}:request"] = (

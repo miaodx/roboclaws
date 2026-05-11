@@ -53,6 +53,10 @@ _Avoid_: Global movable-object inventory
 A harder future perception mode where the Cleanup Agent must infer movable objects directly from camera pixels without explicit detections.
 _Avoid_: v1 perception contract
 
+**Raw FPV Observation**:
+A public camera observation from the robot's first-person view, recorded without structured movable-object detections, categories, or support estimates.
+_Avoid_: hidden object list in image form
+
 **Metric Map**:
 A public map of rooms, walls, doors, driveable ways, and robot pose.
 _Avoid_: Semantic object oracle
@@ -161,6 +165,11 @@ _Avoid_: Per-demo report clone
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow
 
+**Planner-Backed Manipulation Proof**:
+Evidence that a MolmoSpaces robot manipulation planner policy actually executed
+robot actions and changed robot state, separate from semantic state edits.
+_Avoid_: planner class import, `api_semantic` success
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -170,6 +179,7 @@ _Avoid_: Raw tool log as visual flow
 - A **Scorer** judges **Tidy-Plausible Outcomes**, not only single correct destinations.
 - A **Scoring Policy** should be replaceable without changing what the **Cleanup Agent** is allowed to know.
 - A deterministic **Scoring Policy** is authoritative for v1; an **Advisory LLM Scorer** may be reported but must not decide pass/fail yet.
+- An **Advisory LLM Scorer** should be a post-run artifact, not Cleanup Agent input.
 - A **Cleanup Agent** may receive public map, landmark, and perception data.
 - A **Cleanup Agent** may receive a **Metric Map** before or during the run.
 - A **Cleanup Agent** must build any small-object **Agent-Built Semantic Map** from local observations.
@@ -202,6 +212,11 @@ _Avoid_: Raw tool log as visual flow
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
+- Advisory scoring/model checks should render in the shared **Cleanup Artifact Report** without changing deterministic scoring fields.
+- Raw FPV-only perception should be an explicit evidence mode on the ADR-0003 contract, not a replacement for the default visible-detection cleanup gate.
+- A **Raw FPV Observation** may include waypoint, room, observation id, and image artifact references, but not structured movable-object detections or private scoring truth.
+- **Planner-Backed Manipulation Proof** must require planner policy execution evidence, nonzero robot-state movement, and no `api_semantic` fallback.
+- `api_semantic` cleanup artifacts may be useful cleanup evidence, but must not satisfy **Planner-Backed Manipulation Proof**.
 
 ## Example Dialogue
 
@@ -255,4 +270,4 @@ _Avoid_: Raw tool log as visual flow
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate; actual planner-backed cleanup execution remains separate until a probe passes the strict proof checker.

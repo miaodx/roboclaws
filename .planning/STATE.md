@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 20 MolmoSpaces real-world OpenClaw clean policy completed on 2026-05-09; ADR-0003 MCP now rejects skipped semantic phases with public semantic-order guidance.
+stopped_at: Phase 22 MolmoSpaces real-world raw FPV perception completed on 2026-05-09; ADR-0003 artifacts now support raw FPV-only observation evidence.
 last_updated: "2026-05-09T00:00:00+08:00"
 last_activity: 2026-05-09
 progress:
-  total_phases: 15
-  completed_phases: 15
-  total_plans: 18
-  completed_plans: 18
+  total_phases: 17
+  completed_phases: 17
+  total_plans: 20
+  completed_plans: 20
   percent: 100
 ---
 
@@ -21,24 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 20 complete; remaining MolmoSpaces follow-ups are advisory scoring/model checks, raw FPV-only perception, planner-backed manipulation, and an optional live Gateway rerun against the stricter contract.
+**Current focus:** Phase 23 complete; strict planner-backed cleanup execution remains separate until a real planner probe passes `--require-planner-backed`.
 
 ## Current Position
 
-Phase: 20 (molmospaces-realworld-openclaw-clean-policy) — COMPLETE
-Plan: 1 of 1 complete — `20-01` implements ADR-0011 by enforcing the public
-semantic cleanup loop in `molmo_cleanup_realworld`.
-Status: `pick`, `place`, fridge `open_receptacle`, and `place_inside` now
-reject skipped semantic phases with public `semantic_order` guidance. Clean
-checker validation rejects nonzero semantic-order errors. Direct-agent and
-OpenClaw-labeled synthetic dogfood gates both pass with
-`semantic_order_errors=0`; the existing visual OpenClaw clean artifact still
-passes the strict clean visual checker.
-Last activity: 2026-05-09 - Completed Phase 20 semantic-loop enforcement and
-recorded verification evidence.
+Phase: 22 (molmospaces-realworld-raw-fpv-perception) — COMPLETE
+Plan: 1 of 1 complete — `22-01` implements ADR-0013 by adding a raw FPV-only
+perception evidence mode to ADR-0003 cleanup artifacts.
+Status: ADR-0003 deterministic and MCP artifacts now support
+`perception_mode=raw_fpv_only`, record public raw FPV observation rows, attach
+FPV image artifacts from the shared robot-view underlay, and render a Raw FPV
+Observations report panel. The checker can require raw-FPV evidence without
+claiming camera-only cleanup success.
+Last activity: 2026-05-09 - Completed Phase 23 planner-backed manipulation
+provenance/proof gate and recorded blocked-capability verification evidence.
 
 Progress: [##########] 100%
-(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Remaining MolmoSpaces work after that is advisory scoring/model checks, raw FPV-only perception, or planner-backed manipulation.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual OpenClaw evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate.)
 
 ## Performance Metrics
 
@@ -71,8 +70,8 @@ Progress: [##########] 100%
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 18, 19, 20
-- Trend: MolmoSpaces cleanup path now moved from OpenClaw Gateway viability to real RBY1M visual evidence and executable semantic-loop enforcement on the same ADR-0003 public contract.
+- Last 3 shipped phases: 19, 20, 21
+- Trend: MolmoSpaces cleanup path now moved from real RBY1M visual evidence to executable semantic-loop enforcement and advisory scoring/model-check artifacts on the same ADR-0003 public contract.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -94,6 +93,8 @@ Progress: [##########] 100%
 | Phase 18 P01 | ~2h | 5 tasks | 13 files |
 | Phase 19 P01 | ~2h | 5 tasks | 9 files |
 | Phase 20 P01 | ~1h | 5 tasks | 11 files |
+| Phase 21 P01 | ~1h | 5 tasks | 13 files |
+| Phase 22 P01 | ~1h | 5 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -178,6 +179,45 @@ Recent decisions affecting current work:
   semantic-order errors. Direct-agent and OpenClaw-labeled synthetic dogfood
   gates both pass with `semantic_order_errors=0`, and the existing real visual
   OpenClaw clean artifact still passes the strict clean visual checker.
+- **Phase 21 planning (2026-05-09):** ADR-0012 adds a non-authoritative
+  advisory scoring/model-check artifact. The default adapter should be
+  deterministic and CI-safe, write `advisory_evaluation.json`, render an
+  Advisory Review report panel, and never change deterministic pass/fail
+  fields.
+- **Phase 21 completion (2026-05-09):** ADR-0003 deterministic and MCP
+  artifacts now include non-authoritative advisory scoring with schema
+  `advisory_cleanup_scoring_v1`. The shared Cleanup Artifact Report renders an
+  Advisory Review panel, `scripts/check_molmo_realworld_cleanup_result.py`
+  supports `--require-advisory-scoring`, and the ADR-0003 harness recipes
+  require it for new artifacts.
+- **Phase 22 planning (2026-05-09):** ADR-0013 adds an evidence-mode raw
+  FPV-only observation contract for ADR-0003. The phase should keep the current
+  visible-detection mode as default, add `perception_mode=raw_fpv_only`, record
+  public raw FPV observation rows and FPV artifacts, render them through the
+  shared Cleanup Artifact Report, and checker-gate the evidence without
+  claiming clean camera-only cleanup success.
+- **Phase 22 completion (2026-05-09):** ADR-0003 deterministic and MCP paths now
+  support `perception_mode=raw_fpv_only`. Raw mode suppresses structured
+  movable-object detections and observed handles, records public
+  `raw_fpv_observations`, attaches FPV artifacts from the existing RBY1M
+  robot-view capture path, and renders a Raw FPV Observations report panel.
+  `just verify::molmo-realworld-raw-fpv` passed with 14 raw observations, 16
+  robot-view steps, full waypoint sweep, and expected cleanup failure because
+  camera-only object registration is not part of this slice.
+- **Phase 23 planning (2026-05-09):** ADR-0014 adds a planner-backed
+  manipulation provenance/proof gate. Existing cleanup primitives remain
+  `api_semantic`; the phase should add shared manipulation provenance metadata,
+  report rendering, a standalone MolmoSpaces planner probe, and a checker that
+  accepts blocked-capability evidence only when explicit while requiring real
+  planner execution evidence for the strict proof gate.
+- **Phase 23 completion (2026-05-09):** Current-contract and ADR-0003 cleanup
+  artifacts now include `manipulation_evidence` that makes `api_semantic`
+  execution explicit. The shared report underlay renders `Manipulation
+  Provenance`, and the standalone planner probe/checker path can record
+  blocked-capability evidence without satisfying strict planner proof. The
+  default `just verify::molmo-planner-manipulation-probe` gate passed with
+  `PickAndPlacePlannerPolicy` import evidence and
+  `status=blocked_capability`.
 - **Phase 15 planning (2026-05-09):** ADR-0005 makes the Generated Mess Set size
   explicit and configurable. The ADR-0003 real-world harness should use 10
   hidden generated objects as the default v1 evidence shape, while retaining the
@@ -327,10 +367,12 @@ None yet.
   completed visual agent bridge reporting, and Phase 14 completed ADR-0003
   public/private cleanup separation. Phase 15 completed larger hidden generated
   mess sets, Phase 16 completed the ADR-0003 MCP surface, and Phase 17
-  completed direct coding-agent dogfood on that surface. OpenClaw policy
-  evaluation on the ADR-0003 MCP contract, advisory scoring/model checks, raw
-  FPV-only perception, and planner-backed manipulation remain separate
-  follow-ups.
+  completed direct coding-agent dogfood on that surface. Phase 18 completed
+  synthetic OpenClaw Gateway viability, Phase 19 completed real visual OpenClaw
+  evidence, Phase 20 completed semantic-loop enforcement, Phase 21 completed
+  advisory scoring/model checks, and Phase 22 completed raw FPV-only perception
+  evidence. Camera-only model-policy cleanup and planner-backed manipulation
+  remain separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
 - **Environment split is real:** this local session had AI2-THOR available,
   VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase

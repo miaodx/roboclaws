@@ -14,6 +14,9 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
+from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
+    api_semantic_manipulation_evidence,
+)
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.policy import build_public_cleanup_plan  # noqa: E402
 from roboclaws.molmo_cleanup.report import (  # noqa: E402
@@ -291,6 +294,15 @@ def run_demo(
     write_trace_jsonl(trace_path, trace_events)
     semantic_timeline = build_semantic_substeps(trace_events, receptacles_by_id)
 
+    primitive_summary = {
+        API_SEMANTIC_PROVENANCE: sum(
+            1
+            for event in trace_events
+            if event.get("event") == "response"
+            and isinstance(event.get("response"), dict)
+            and event["response"].get("primitive_provenance") == API_SEMANTIC_PROVENANCE
+        )
+    }
     run_result = {
         "backend": backend,
         "scenario_id": scenario.scenario_id,
@@ -300,15 +312,11 @@ def run_demo(
         "terminate_reason": f"{planner} cleanup complete",
         "cleanup_status": done["cleanup_status"],
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
-        "primitive_provenance_summary": {
-            API_SEMANTIC_PROVENANCE: sum(
-                1
-                for event in trace_events
-                if event.get("event") == "response"
-                and isinstance(event.get("response"), dict)
-                and event["response"].get("primitive_provenance") == API_SEMANTIC_PROVENANCE
-            )
-        },
+        "primitive_provenance_summary": primitive_summary,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend=backend,
+            primitive_summary=primitive_summary,
+        ),
         "planner": planner,
         "planner_uses_private_manifest": uses_private_manifest,
         "scripted_reference_uses_private_manifest": uses_private_manifest

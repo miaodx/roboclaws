@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
+    RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
     forbidden_agent_view_keys,
@@ -116,6 +117,32 @@ def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
     assert agent_view["observed_objects"]
     assert "generated_mess_set" not in agent_view
     assert "acceptable_destination_sets" not in agent_view
+    _assert_no_forbidden_keys(agent_view)
+
+
+def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
+    contract = RealWorldCleanupContract(
+        MolmoCleanupToolContract(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    agent_view = contract.agent_view_payload()
+
+    assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
+    assert observation["structured_detections_available"] is False
+    assert observation["visible_object_detections"] == []
+    assert observation["raw_fpv_observation"]["observation_id"].startswith("raw_fpv_")
+    assert observation["raw_fpv_observation"]["image_artifacts"] == {}
+    assert agent_view["perception_mode"] == RAW_FPV_ONLY_MODE
+    assert agent_view["structured_detections_available"] is False
+    assert agent_view["observed_objects"] == []
+    assert agent_view["raw_fpv_observations"]
+    assert "support_estimate" not in str(agent_view["raw_fpv_observations"])
+    assert "target_receptacle_id" not in str(agent_view["raw_fpv_observations"])
+    _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(agent_view)
 
 

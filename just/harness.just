@@ -17,6 +17,8 @@
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
 # - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
 # - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
+# - just harness::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation evidence
+# - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -278,6 +280,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       --expect-seeds "${seed_csv}" \
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
+      --require-advisory-scoring \
       "{{output_dir}}"
 
 # ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
@@ -308,6 +311,7 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
       --expect-seeds "${seed_csv}" \
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
+      --require-advisory-scoring \
       "{{output_dir}}"
 
 # ADR-0003 direct-agent dogfood kit smoke. This does not launch Codex/Claude;
@@ -331,6 +335,7 @@ molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-ag
       --min-generated-mess-count 5 \
       --require-agent-driven \
       --require-clean-agent-run \
+      --require-advisory-scoring \
       "{{output_dir}}/run_result.json"
 
 # ADR-0003 OpenClaw dogfood kit smoke. This does not launch Gateway; it proves
@@ -354,6 +359,7 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
       --min-generated-mess-count 5 \
       --require-agent-driven \
       --require-openclaw-minimum \
+      --require-advisory-scoring \
       "{{output_dir}}/run_result.json"
 
 # ADR-0010 OpenClaw visual dogfood kit smoke. This does not launch Gateway; it
@@ -383,6 +389,50 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --require-openclaw-minimum \
       --require-clean-agent-run \
       --require-robot-views \
+      --require-advisory-scoring \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0013 raw FPV-only evidence harness. This intentionally proves perception
+# boundary and report artifacts, not camera-only cleanup success.
+molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harness" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --task "{{task}}" \
+      --fixture-hint-mode room_only \
+      --perception-mode raw_fpv_only \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-robot-views \
+      --require-advisory-scoring \
+      --require-raw-fpv-observations \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0014 planner-backed manipulation proof gate. The default is a safe
+# config-import probe that records blocked-capability evidence; use
+# --probe-mode execute plus the strict checker when local planner execution is
+# ready to be accepted as real manipulation proof.
+molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-probe-harness" embodiment="franka" probe_mode="config_import" steps="2":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py \
+      --output-dir "{{output_dir}}" \
+      --embodiment "{{embodiment}}" \
+      --probe-mode "{{probe_mode}}" \
+      --steps "{{steps}}"
+    .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py \
+      --accept-blocked-capability \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

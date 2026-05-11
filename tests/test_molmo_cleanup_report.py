@@ -2,8 +2,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
+from roboclaws.molmo_cleanup.manipulation_provenance import (
+    api_semantic_manipulation_evidence,
+    blocked_planner_probe_evidence,
+)
+from roboclaws.molmo_cleanup.report import (
+    render_cleanup_report,
+    render_planner_manipulation_report,
+    write_state_snapshot,
+)
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
 
@@ -23,7 +32,15 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     run_result = {
         "cleanup_status": score.status,
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend="api_semantic_synthetic",
+            primitive_summary={API_SEMANTIC_PROVENANCE: 1},
+        ),
         "score": score.to_dict(),
+        "advisory_evaluation": build_advisory_evaluation(
+            score=score.to_dict(),
+            scenario_id=scenario.scenario_id,
+        ),
     }
     trace_events = [
         {
@@ -50,8 +67,12 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     html = report_path.read_text(encoding="utf-8")
     assert "MolmoSpaces Cleanup Pilot" in html
     assert "api_semantic" in html
+    assert "Manipulation Provenance" in html
+    assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
     assert "Semantic acceptability" in html
+    assert "Advisory Review" in html
+    assert "authoritative=false" in html
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()
@@ -193,3 +214,111 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
+
+
+def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    fpv = tmp_path / "robot_views" / "raw.fpv.png"
+    fpv.parent.mkdir()
+    fpv.write_bytes(b"placeholder")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "failed",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "agent_view": {
+            "perception_mode": "raw_fpv_only",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "raw_fpv_only",
+                    "structured_detections_available": False,
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "perception_mode": "raw_fpv_only",
+                "structured_detections_available": False,
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Agent View" in html
+    assert "Raw FPV Observations" in html
+    assert "raw_fpv_001" in html
+    assert "robot_views/raw.fpv.png" in html
+    assert "support estimates" in html
+
+
+def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) -> None:
+    stdout = tmp_path / "planner_probe_stdout.txt"
+    stderr = tmp_path / "planner_probe_stderr.txt"
+    stdout.write_text("{}", encoding="utf-8")
+    stderr.write_text("", encoding="utf-8")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": blocked_planner_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="franka",
+            task="pick_and_place",
+            probe_mode="config_import",
+            blockers=[
+                {
+                    "code": "execution_not_attempted",
+                    "message": "Planner execution was not attempted.",
+                }
+            ],
+            upstream_policy_class="PickAndPlacePlannerPolicy",
+        ),
+        "artifacts": {
+            "stdout": str(stdout),
+            "stderr": str(stderr),
+        },
+    }
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+    html = report_path.read_text(encoding="utf-8")
+
+    assert "Planner-Backed Manipulation Probe" in html
+    assert "Manipulation Provenance" in html
+    assert "Capability Blockers" in html
+    assert "PickAndPlacePlannerPolicy" in html

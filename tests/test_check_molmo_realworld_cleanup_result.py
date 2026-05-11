@@ -206,6 +206,115 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
         )
 
 
+def test_checker_can_require_advisory_scoring(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="realworld_contract_smoke_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_clean_agent_run=True,
+        require_advisory_scoring=True,
+    )
+
+
+def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode="raw_fpv_only",
+    )
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    for name in ("raw.fpv.png", "raw.chase.png", "raw.map.png", "raw.verify.png"):
+        (robot_views / name).write_bytes(b"placeholder")
+    result["artifacts"]["robot_views"] = str(robot_views)
+    report = tmp_path / "report.html"
+    report.write_text(
+        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
+        encoding="utf-8",
+    )
+    for item in result["raw_fpv_observations"]:
+        item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
+    for item in result["agent_view"]["raw_fpv_observations"]:
+        item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
+    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["robot_view_steps"] = [
+        {
+            "action": "before",
+            "room_outline_count": 1,
+            "views": {
+                "fpv": "robot_views/raw.fpv.png",
+                "chase": "robot_views/raw.chase.png",
+                "map": "robot_views/raw.map.png",
+                "verify": "robot_views/raw.verify.png",
+            },
+            "focus": {"has_focus": False},
+        },
+        {
+            "action": "observe raw_fpv_001",
+            "room_outline_count": 1,
+            "views": {
+                "fpv": "robot_views/raw.fpv.png",
+                "chase": "robot_views/raw.chase.png",
+                "map": "robot_views/raw.map.png",
+                "verify": "robot_views/raw.verify.png",
+            },
+            "focus": {"has_focus": False},
+        },
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_robot_views=True,
+        require_raw_fpv_observations=True,
+    )
+
+
+def test_checker_rejects_raw_fpv_when_structured_detections_leak(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode="raw_fpv_only",
+    )
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    fpv = robot_views / "raw.fpv.png"
+    fpv.write_bytes(b"placeholder")
+    result["artifacts"]["robot_views"] = str(robot_views)
+    result["raw_fpv_observations"][0]["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
+    result["raw_fpv_observations"][0]["support_estimate"] = {"fixture_id": "sink_01"}
+    result["agent_view"]["raw_fpv_observations"] = result["raw_fpv_observations"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_raw_fpv_observations=True,
+        )
+
+
 def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
