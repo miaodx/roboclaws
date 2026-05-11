@@ -12,16 +12,15 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import logging
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.navigation_lifecycle import NavigationRunLifecycle
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
 
 log = logging.getLogger("coding-agent-nav-server")
@@ -78,10 +77,6 @@ def _print_setup(output_dir: Path, snapshots_dir: Path, url: str) -> None:
     sys.stdout.flush()
 
 
-def _write_run_result(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-
 def run_coding_agent_nav_server(
     *,
     scene: str,
@@ -92,12 +87,18 @@ def run_coding_agent_nav_server(
     print_setup: bool = True,
 ) -> dict[str, Any]:
     """Start the direct MCP server and block until done or Ctrl-C."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    snapshots_dir = _snapshots_dir(output_dir)
-    url = _mcp_url(host, port)
+    lifecycle = NavigationRunLifecycle(
+        scene=scene,
+        output_dir=output_dir,
+        host=host,
+        port=port,
+        agent_id=_AGENT_ID,
+    )
+    lifecycle.prepare_output_dir()
+    snapshots_dir = lifecycle.snapshots_dir
+    url = lifecycle.mcp_url
     engine: MultiAgentEngine | None = None
     mcp_server: RoboclawsMCPServer | None = None
-    started = time.monotonic()
     terminated_by = "unknown"
     error: str | None = None
 
@@ -139,24 +140,17 @@ def run_coding_agent_nav_server(
         snapshot_metrics = mcp_server.snapshot_metrics() if mcp_server is not None else {}
         if mcp_server is not None:
             mcp_server.write_runtime_event("direct_server_finished", terminated_by=terminated_by)
-        result: dict[str, Any] = {
-            "terminated_by": terminated_by,
-            "scene": scene,
-            "mcp_url": url,
-            "output_dir": str(output_dir),
-            "snapshots_dir": str(snapshots_dir),
-            "wallclock_s": round(time.monotonic() - started, 3),
-            "sim_server_metrics": snapshot_metrics,
-        }
-        if error is not None:
-            result["error"] = error
-        _write_run_result(output_dir / "run_result.json", result)
+        result = lifecycle.write_direct_run_result(
+            terminated_by=terminated_by,
+            snapshot_metrics=snapshot_metrics,
+            error=error,
+        )
         if mcp_server is not None:
             mcp_server.close()
         if engine is not None:
             engine.close()
 
-    return json.loads((output_dir / "run_result.json").read_text(encoding="utf-8"))
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

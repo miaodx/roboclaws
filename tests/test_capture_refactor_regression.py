@@ -86,6 +86,82 @@ def test_fake_suite_rows_append_and_preserve_unique_artifact_dirs(
     assert rows[0]["artifact_dir"] != rows[1]["artifact_dir"]
 
 
+def test_regression_suite_captures_normalized_success_row(tmp_path: Path) -> None:
+    def fake_capture(request: CaptureRequest, artifact_dir: Path) -> dict:
+        (artifact_dir / "marker.txt").write_text(request.scene, encoding="utf-8")
+        return {
+            "cells_visited": 8,
+            "variant": "map-v2+chase",
+            "model": "openclaw/agent-0",
+        }
+
+    suite = RegressionSuite(
+        name="fake-suite",
+        backend="openclaw",
+        game="navigation",
+        capture=fake_capture,
+        default_variant="fallback",
+    )
+    artifact_dir = tmp_path / "artifact"
+    request = CaptureRequest(
+        label="baseline-2026-04-23",
+        scene="FloorPlan201",
+        seed=1,
+        agents=2,
+        steps=5,
+        model="mock",
+        allow_local=True,
+    )
+
+    row = suite.capture_ok_row(
+        request=request,
+        artifact_dir=artifact_dir,
+        run_id="run-1",
+        elapsed_seconds=1.2349,
+    )
+
+    assert row["suite"] == "fake-suite"
+    assert row["backend"] == "openclaw"
+    assert row["game"] == "navigation"
+    assert row["model"] == "openclaw/agent-0"
+    assert row["variant"] == "map-v2+chase"
+    assert row["status"] == "ok"
+    assert row["cells_visited"] == 8
+    assert row["wallclock_seconds"] == 1.235
+
+
+def test_regression_suite_captures_normalized_error_row(tmp_path: Path) -> None:
+    suite = RegressionSuite(
+        name="fake-suite",
+        backend="vlm",
+        game="explore",
+        capture=lambda _request, _artifact_dir: {},
+        default_variant="map-v2+chase",
+    )
+    request = CaptureRequest(
+        label="baseline-2026-04-23",
+        scene="FloorPlan201",
+        seed=1,
+        agents=1,
+        steps=5,
+        model="mock",
+    )
+
+    row = suite.capture_error_row(
+        request=request,
+        artifact_dir=tmp_path / "artifact",
+        run_id="run-1",
+        exc=RuntimeError("boom"),
+        elapsed_seconds=2.5,
+    )
+
+    assert row["status"] == "error"
+    assert row["variant"] == "map-v2+chase"
+    assert row["error_kind"] == "RuntimeError"
+    assert row["error"] == "boom"
+    assert row["wallclock_seconds"] == 2.5
+
+
 def test_multiple_suites_run_in_deterministic_order_and_continue_after_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -181,7 +257,10 @@ def test_local_only_suites_require_allow_local_and_still_log_error_rows(
 def test_built_in_explore_suite_extracts_result_and_replay_summary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    seen_kwargs: dict[str, object] = {}
+
     def fake_run_exploration(**kwargs):
+        seen_kwargs.update(kwargs)
         out_dir = Path(kwargs["output_dir"])
         _write_replay(
             out_dir,
@@ -214,6 +293,7 @@ def test_built_in_explore_suite_extracts_result_and_replay_summary(
     assert metrics["cells_visited"] == 11
     assert metrics["total_steps"] == 7
     assert metrics["wallclock_seconds"] == 4.2
+    assert seen_kwargs["provider_seed"] == 1
 
 
 def test_openclaw_demo_suite_recovers_visited_cells_from_replay(
@@ -254,7 +334,10 @@ def test_openclaw_demo_suite_recovers_visited_cells_from_replay(
 def test_openclaw_autonomous_suite_extracts_structured_summary(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    seen_kwargs: dict[str, object] = {}
+
     def fake_run_autonomous(**kwargs):
+        seen_kwargs.update(kwargs)
         out_dir = Path(kwargs["output_dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "run_result.json").write_text(
@@ -285,6 +368,7 @@ def test_openclaw_autonomous_suite_extracts_structured_summary(
         return {"terminated_by": "done"}
 
     monkeypatch.setattr("roboclaws.regression._run_autonomous_navigation", fake_run_autonomous)
+    monkeypatch.setenv("OPENCLAW_GATEWAY_TOKEN", "token-123")
     metrics = _capture_openclaw_autonomous(
         CaptureRequest(
             label="baseline-2026-04-23",
@@ -302,6 +386,7 @@ def test_openclaw_autonomous_suite_extracts_structured_summary(
     assert metrics["transcript_source"] == "terminal-body"
     assert metrics["tool_calls_by_type"]["move"] == 2
     assert metrics["frames_unseen_by_agent"] == 1
+    assert seen_kwargs["skip_bootstrap"] is True
 
 
 def test_openclaw_autonomous_capture_raises_on_error_termination(

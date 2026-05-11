@@ -5,15 +5,17 @@ import time
 from typing import Any
 
 from roboclaws.core.action_decision import action_decision_from_fields
-from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
+from roboclaws.core.provider_safety import (
+    build_provider_status,
+    handle_provider_exception,
+    raise_if_provider_circuit_open,
+)
 from roboclaws.core.vlm import (
     _COST_PER_M,
     _SYSTEM_PROMPT,
-    ProviderHealthError,
     ProviderStatus,
     _build_agent_action_model,
     _maybe_open_circuit,
-    _record_call_failure,
     _record_call_success,
 )
 
@@ -50,11 +52,7 @@ class _AnthropicBase:
         images: list[str],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        if self._status.stop_reason:
-            raise ProviderHealthError(
-                f"{self._provider_name} provider circuit is open: {self._status.stop_reason}",
-                status=self.get_status(),
-            )
+        raise_if_provider_circuit_open(provider_name=self._provider_name, status=self._status)
 
         import json
 
@@ -100,66 +98,22 @@ class _AnthropicBase:
                 break
             except Exception as exc:  # pragma: no cover - concrete types depend on installed SDKs
                 last_exc = exc
-                transient = is_transient_provider_error(exc)
-                self._status.last_error = str(exc)
-                self._status.last_error_kind = exc.__class__.__name__
-                if transient:
-                    self._status.transient_errors += 1
-
-                if transient:
-                    projected_calls_with_retries = self._status.calls_with_retries
-                    if retries_this_call == 0:
-                        projected_calls_with_retries += 1
-                    if (
-                        self._status.max_calls_with_retries is not None
-                        and projected_calls_with_retries >= self._status.max_calls_with_retries
-                    ):
-                        self._status.calls_with_retries = projected_calls_with_retries
-                        self._status.stop_reason = "retrying_calls_budget_exceeded"
-                        _record_call_failure(
-                            self._status,
-                            duration_seconds=time.monotonic() - started,
-                            error=exc,
-                            had_retries=False,
-                        )
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {self._status.stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
-
-                    stop_reason = _maybe_open_circuit(self._status)
-                    if stop_reason:
-                        _record_call_failure(
-                            self._status,
-                            duration_seconds=time.monotonic() - started,
-                            error=exc,
-                            had_retries=retries_this_call > 0,
-                        )
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
-
-                if attempt == self._retry_attempts - 1 or not transient:
-                    _record_call_failure(
-                        self._status,
-                        duration_seconds=time.monotonic() - started,
-                        error=exc,
-                        had_retries=retries_this_call > 0,
-                    )
-                    stop_reason = _maybe_open_circuit(self._status)
-                    if stop_reason:
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
+                decision = handle_provider_exception(
+                    provider_name=self._provider_name,
+                    status=self._status,
+                    exc=exc,
+                    started=started,
+                    attempt=attempt,
+                    retry_attempts=self._retry_attempts,
+                    retries_this_call=retries_this_call,
+                    retry_backoff_base=1.0,
+                    retry_backoff_cap=4.0,
+                )
+                if not decision.should_retry:
                     raise
 
                 retries_this_call += 1
-                self._status.retry_events += 1
-                delay = retry_delay_seconds(attempt, base=1.0, cap=4.0)
-                self._status.total_retry_delay_seconds += delay
-                time.sleep(delay)
+                time.sleep(decision.delay_seconds or 0.0)
         else:  # pragma: no cover - loop always breaks or raises
             assert last_exc is not None
             raise last_exc
@@ -201,4 +155,4 @@ class AnthropicProvider(_AnthropicBase):
         self._cost = 0.0
         self._cost_table = _COST_PER_M.get(model, {"input": 3.00, "output": 15.00})
         self._provider_name = "anthropic"
-        self._status = ProviderStatus(provider_name=self._provider_name, model=model)
+        self._status = build_provider_status(provider_name=self._provider_name, model=model)

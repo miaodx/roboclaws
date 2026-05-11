@@ -11,15 +11,16 @@ from roboclaws.core.action_decision import (
     parse_action_decision,
 )
 from roboclaws.core.engine import NAVIGATION_ACTIONS
-from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
+from roboclaws.core.provider_safety import (
+    build_provider_status,
+    handle_provider_exception,
+    raise_if_provider_circuit_open,
+)
 from roboclaws.core.providers.anthropic import _AnthropicBase
 from roboclaws.core.vlm import (
     _COST_PER_M,
-    ProviderHealthError,
-    ProviderStatus,
     _build_agent_action_model,
     _maybe_open_circuit,
-    _record_call_failure,
     _record_call_success,
 )
 
@@ -35,23 +36,6 @@ _KIMI_SYSTEM_BASE = (
 def _kimi_timeout(default: float) -> float:
     env_timeout = os.environ.get(_KIMI_HTTP_TIMEOUT_ENV)
     return float(env_timeout) if env_timeout else default
-
-
-def _provider_status(
-    provider_name: str,
-    model: str,
-    *,
-    max_transient_errors: int | None,
-    max_calls_with_retries: int | None,
-    max_consecutive_failures: int | None,
-) -> ProviderStatus:
-    return ProviderStatus(
-        provider_name=provider_name,
-        model=model,
-        max_transient_errors=max_transient_errors,
-        max_calls_with_retries=max_calls_with_retries,
-        max_consecutive_failures=max_consecutive_failures,
-    )
 
 
 def _build_content(images: list[str], state: dict[str, Any]) -> list[dict[str, Any]]:
@@ -189,9 +173,9 @@ class KimiProvider(_AnthropicBase):
         self._cost_table = _COST_PER_M.get(model, _KIMI_DEFAULT_COST)
         self._provider_name = "kimi"
         self._agent_souls = agent_souls
-        self._status = _provider_status(
-            self._provider_name,
-            model,
+        self._status = build_provider_status(
+            provider_name=self._provider_name,
+            model=model,
             max_transient_errors=max_transient_errors,
             max_calls_with_retries=max_calls_with_retries,
             max_consecutive_failures=max_consecutive_failures,
@@ -249,9 +233,9 @@ class KimiCodingProvider:
         self._retry_backoff_cap = retry_backoff_cap
         self._reasoning_effort = reasoning_effort
         self.model = model
-        self._status = _provider_status(
-            self._provider_name,
-            model,
+        self._status = build_provider_status(
+            provider_name=self._provider_name,
+            model=model,
             max_transient_errors=max_transient_errors,
             max_calls_with_retries=max_calls_with_retries,
             max_consecutive_failures=max_consecutive_failures,
@@ -316,11 +300,7 @@ class KimiCodingProvider:
         images: list[str],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        if self._status.stop_reason:
-            raise ProviderHealthError(
-                f"{self._provider_name} provider circuit is open: {self._status.stop_reason}",
-                status=self.get_status(),
-            )
+        raise_if_provider_circuit_open(provider_name=self._provider_name, status=self._status)
 
         payload = self._build_payload(images, state)
         started = time.monotonic()
@@ -342,59 +322,19 @@ class KimiCodingProvider:
                 return result
             except Exception as exc:  # noqa: BLE001 - classify below
                 last_exc = exc
-                transient = is_transient_provider_error(exc)
-                self._status.last_error = str(exc)[:400]
-                self._status.last_error_kind = exc.__class__.__name__
-                if transient:
-                    self._status.transient_errors += 1
-
-                if transient:
-                    projected = self._status.calls_with_retries + (
-                        1 if retries_this_call == 0 else 0
-                    )
-                    if (
-                        self._status.max_calls_with_retries is not None
-                        and projected >= self._status.max_calls_with_retries
-                    ):
-                        self._status.calls_with_retries = projected
-                        self._status.stop_reason = "retrying_calls_budget_exceeded"
-                        _record_call_failure(
-                            self._status,
-                            duration_seconds=time.monotonic() - started,
-                            error=exc,
-                            had_retries=False,
-                        )
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {self._status.stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
-                    stop_reason = _maybe_open_circuit(self._status)
-                    if stop_reason:
-                        _record_call_failure(
-                            self._status,
-                            duration_seconds=time.monotonic() - started,
-                            error=exc,
-                            had_retries=retries_this_call > 0,
-                        )
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
-
-                if attempt == self._retry_attempts - 1 or not transient:
-                    _record_call_failure(
-                        self._status,
-                        duration_seconds=time.monotonic() - started,
-                        error=exc,
-                        had_retries=retries_this_call > 0,
-                    )
-                    stop_reason = _maybe_open_circuit(self._status)
-                    if stop_reason:
-                        raise ProviderHealthError(
-                            f"{self._provider_name} became unstable: {stop_reason}",
-                            status=self.get_status(),
-                        ) from exc
-                    if transient:
+                decision = handle_provider_exception(
+                    provider_name=self._provider_name,
+                    status=self._status,
+                    exc=exc,
+                    started=started,
+                    attempt=attempt,
+                    retry_attempts=self._retry_attempts,
+                    retries_this_call=retries_this_call,
+                    retry_backoff_base=self._retry_backoff_base,
+                    retry_backoff_cap=self._retry_backoff_cap,
+                )
+                if not decision.should_retry:
+                    if decision.transient:
                         # Retries exhausted on a transient error but the
                         # circuit breaker didn't fire — return a safe
                         # fallback action so the game keeps running instead
@@ -405,14 +345,7 @@ class KimiCodingProvider:
                     raise
 
                 retries_this_call += 1
-                self._status.retry_events += 1
-                delay = retry_delay_seconds(
-                    attempt,
-                    base=self._retry_backoff_base,
-                    cap=self._retry_backoff_cap,
-                )
-                self._status.total_retry_delay_seconds += delay
-                time.sleep(delay)
+                time.sleep(decision.delay_seconds or 0.0)
         # pragma: no cover — loop either returns or raises.
         assert last_exc is not None
         raise last_exc

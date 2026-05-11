@@ -7,15 +7,12 @@ from typing import Any
 
 from roboclaws.regression import (
     CaptureRequest,
-    LocalOnlySuiteError,
     append_jsonl,
     build_artifact_dir,
     build_run_id,
     get_suite,
-    normalize_capture_row,
     parse_csv,
     parse_int_csv,
-    seed_rng,
     validate_capture_label,
 )
 
@@ -86,40 +83,20 @@ def run_capture(
 
                 started = time.perf_counter()
                 try:
-                    if suite.local_dev_only and not allow_local:
-                        raise LocalOnlySuiteError(
-                            f"Suite {suite.name!r} is local-dev only. Re-run with --allow-local "
-                            "from a workstation session that satisfies AGENTS.md §1 and §7."
-                        )
-                    seed_rng(seed)
-                    metrics = dict(suite.capture(request, artifact_dir))
-                    variant = metrics.pop("variant", suite.default_variant)
-                    row_model = metrics.pop("model", request.model)
-                    metrics.setdefault("wallclock_seconds", round(time.perf_counter() - started, 3))
-                    row = normalize_capture_row(
-                        suite=suite,
+                    row = suite.capture_ok_row(
                         request=request,
                         artifact_dir=artifact_dir,
                         run_id=run_id,
-                        status="ok",
-                        variant=variant,
-                        model=str(row_model) if row_model is not None else request.model,
-                        extra=metrics,
+                        elapsed_seconds=time.perf_counter() - started,
                     )
                     successful_runs += 1
                 except Exception as exc:  # noqa: BLE001 - keep append-only history on failures
-                    row = normalize_capture_row(
-                        suite=suite,
+                    row = suite.capture_error_row(
                         request=request,
                         artifact_dir=artifact_dir,
                         run_id=run_id,
-                        status="error",
-                        variant=suite.default_variant,
-                        extra={
-                            "error_kind": exc.__class__.__name__,
-                            "error": str(exc),
-                            "wallclock_seconds": round(time.perf_counter() - started, 3),
-                        },
+                        exc=exc,
+                        elapsed_seconds=time.perf_counter() - started,
                     )
                     failed_runs += 1
 

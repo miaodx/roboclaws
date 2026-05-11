@@ -21,28 +21,34 @@ Three abstractions matter:
 2. **`VLMProvider`** — pluggable inference protocol. Each provider
    (Anthropic, OpenAI, Kimi, MiMo, NVIDIA, Mock) implements `get_action`
    (`roboclaws/core/vlm.py`).
-3. **`RoboclawsMCPServer`** — the `observe` / `move` / `done` tool surface
+3. **`RoboclawsMCPServer`** — the MCP tool surface
    that any external agent (OpenClaw skill, Codex, Claude Code) consumes
-   to drive a robot (`roboclaws/openclaw/mcp_server.py`).
+   to drive a robot (`roboclaws/mcp/server.py`).
 
 ![Architecture diagram](docs/architecture.svg)
 
 ## The MCP contract
 
-`roboclaws/openclaw/mcp_server.py` defines the canonical surface that
-external agents use. Three tools, structured-HTTP transport:
+`roboclaws/mcp/server.py` defines the canonical surface that external
+agents use over structured-HTTP transport:
 
 - **`observe(label="")`** — returns a structured agent state plus images
   (FPV, `map-v2` overhead, chase cam) or a text-bridge description for
   vision-light models. Labeled observes archive snapshots to disk and emit
-  `MEDIA:` hints the OpenClaw Control UI inlines. Implementation:
-  `mcp_server.py:382–477`.
+  `MEDIA:` hints the OpenClaw Control UI inlines.
+- **`observe_archived(label)`** — captures the same snapshot bundle to
+  disk without returning inline images. This keeps long multi-target runs
+  out of image-token debt when the agent only needs artifact paths.
 - **`move(direction, reason="", steps=1)`** — one navigation step (or up
   to 5). Returns `pose_delta`, `visited_count_here`, `collisions`, and a
   synthetic `human_message` if the agent has moved blind too many times.
-  Implementation: `mcp_server.py:479–590`.
+- **`scene_objects(filter_types="")`** — returns the full AI2-THOR object
+  inventory, optionally filtered by object type, so agents can plan
+  target-relative routes before moving.
+- **`goto(object_id, distance=1.0, face=True)`** — teleports to a reachable
+  cell near an object and optionally faces it. This is a high-leverage
+  adapter for object-photo tasks where grid-step navigation is incidental.
 - **`done(reason)`** — terminates the run cleanly. Idempotent.
-  Implementation: `mcp_server.py:592–604`.
 
 Every tool call writes a line to `<run_dir>/trace.jsonl`. The schema is a
 **frozen superset** of `tests/fixtures/trace_schema_reference.json` —
@@ -81,7 +87,7 @@ routing. The roboclaws side:
   via `ProviderStatus`.
 - `roboclaws/openclaw/skill.py` — `AI2THORNavigatorSkill`: wraps a
   provider with a SOUL preset for use as an OpenClaw skill.
-- `roboclaws/openclaw/vision_bridge.py` — `VisionBridge`: image-to-text
+- `roboclaws/mcp/text_bridge.py` — `VisionBridge`: image-to-text
   bridge for vision-light models (e.g., MiMo text variants).
 
 ### 3. Direct coding-agent driver
@@ -114,11 +120,11 @@ runbook: [`docs/railway-deploy.md`](docs/railway-deploy.md).
 | `roboclaws/games/territory.py` | `TerritoryGame`: adversarial cell-claiming. Tracks `cells_claimed`, `connectivity_ratio`, `blocking_events`. |
 | `roboclaws/games/coverage.py` | `CoverageGame`: cooperative coverage. Tracks `coverage_pct`, per-agent `contribution`, `work_balance`. |
 | `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
-| `roboclaws/openclaw/mcp_server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe` / `move` / `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings. |
+| `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
+| `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
 | `roboclaws/openclaw/bridge.py` | `OpenClawProvider`: VLMProvider that talks to a Gateway. |
 | `roboclaws/openclaw/transport.py` | `OpenClawBridge`: HTTP transport for the Gateway, retry policy. |
 | `roboclaws/openclaw/skill.py` | `AI2THORNavigatorSkill`: wraps a provider as an OpenClaw skill with SOUL injection. |
-| `roboclaws/openclaw/vision_bridge.py` | `VisionBridge`: image-to-text for vision-light models. |
 | `roboclaws/openclaw/reset_server.py` | HTTP `/reset` for appliance scene resets (loopback-only). |
 | `roboclaws/openclaw/diagnostics.py` | Replay-loading utilities (`load_replay_turn`). |
 | `examples/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
@@ -155,7 +161,7 @@ Two artifact pipelines coexist, one per drive style:
 - **Game runs** (`ReplayRecorder` in `core/replay.py`) — used by Mode 1.
   Produces `replay.json` + per-step PNG directories + optional GIF.
   Default output: `output/<game>/<timestamp>/`.
-- **MCP runs** (`mcp_server.py`) — used by Modes 2 / 3 / 4. Produces
+- **MCP runs** (`roboclaws/mcp/server.py`) — used by Modes 2 / 3 / 4. Produces
   `trace.jsonl` (one line per tool call), `run_result.json` on done, and
   labeled snapshots in `<run_dir>/snapshots/agent-<id>/`. Default output:
   `output/coding-agent-nav/<timestamp>/` (Mode 3) or

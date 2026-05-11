@@ -4,11 +4,12 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from roboclaws.regression import STABLE_PAIRING_KEYS
 
 PROVIDER_FAILURE_TERMINATIONS = {"provider_error", "provider_unstable"}
+PolicyCheck = Callable[[str, dict[str, Any], dict[str, Any]], list[dict[str, Any]]]
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,22 @@ class ThresholdPolicy:
     """Suite-specific regression thresholds."""
 
     name: str
+    compare_rows: PolicyCheck
+    exact_suites: tuple[str, ...] = ()
+    suite_prefixes: tuple[str, ...] = ()
+
+    def matches(self, suite: str) -> bool:
+        return suite in self.exact_suites or any(
+            suite.startswith(prefix) for prefix in self.suite_prefixes
+        )
+
+    def compare(
+        self,
+        suite: str,
+        baseline: dict[str, Any],
+        candidate: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        return self.compare_rows(suite, baseline, candidate)
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -209,6 +226,172 @@ def _status_check(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[d
     ]
 
 
+def _explore_vlm_checks(
+    suite: str,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        _check_min_delta(
+            metric="cells_visited",
+            baseline=_as_float(baseline.get("cells_visited")),
+            candidate=_as_float(candidate.get("cells_visited")),
+            max_drop=1.0,
+        ),
+        _check_max_pct_or_absolute(
+            metric="usd",
+            baseline=_as_float(baseline.get("usd")),
+            candidate=_as_float(candidate.get("usd")),
+            max_increase_ratio=0.25,
+            absolute_slack=0.01,
+        ),
+        _check_max_pct_or_absolute(
+            metric="wallclock_seconds",
+            baseline=_as_float(baseline.get("wallclock_seconds")),
+            candidate=_as_float(candidate.get("wallclock_seconds")),
+            max_increase_ratio=0.50,
+            absolute_slack=120.0,
+        ),
+    ]
+
+
+def _openclaw_demo_checks(
+    suite: str,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        _check_min_delta(
+            metric="visited_cells",
+            baseline=_as_float(baseline.get("visited_cells")),
+            candidate=_as_float(candidate.get("visited_cells")),
+            max_drop=1.0,
+        ),
+        _check_max_pct(
+            metric="usd",
+            baseline=_as_float(baseline.get("usd")),
+            candidate=_as_float(candidate.get("usd")),
+            max_increase_ratio=0.25,
+        ),
+        _check_max_pct(
+            metric="wallclock_seconds",
+            baseline=_as_float(baseline.get("wallclock_seconds")),
+            candidate=_as_float(candidate.get("wallclock_seconds")),
+            max_increase_ratio=0.50,
+        ),
+    ]
+
+
+def _territory_checks(
+    suite: str,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        _check_min_delta(
+            metric="cells_claimed_total",
+            baseline=_as_float(baseline.get("cells_claimed_total")),
+            candidate=_as_float(candidate.get("cells_claimed_total")),
+            max_drop=2.0,
+        ),
+        _check_max_delta(
+            metric="blocking_events",
+            baseline=_as_float(baseline.get("blocking_events")),
+            candidate=_as_float(candidate.get("blocking_events")),
+            max_increase=2.0,
+        ),
+        _check_no_new_provider_failure(baseline, candidate),
+    ]
+
+
+def _coverage_checks(
+    suite: str,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        _check_min_delta(
+            metric="coverage_fraction",
+            baseline=_as_float(baseline.get("coverage_fraction")),
+            candidate=_as_float(candidate.get("coverage_fraction")),
+            max_drop=0.05,
+        ),
+        _check_min_delta(
+            metric="work_balance",
+            baseline=_as_float(baseline.get("work_balance")),
+            candidate=_as_float(candidate.get("work_balance")),
+            max_drop=0.10,
+        ),
+        _check_max_pct(
+            metric="total_steps",
+            baseline=_as_float(baseline.get("total_steps")),
+            candidate=_as_float(candidate.get("total_steps")),
+            max_increase_ratio=0.20,
+        ),
+    ]
+
+
+def _openclaw_autonomous_checks(
+    suite: str,
+    baseline: dict[str, Any],
+    candidate: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [
+        _check_exact(
+            "transcript_source",
+            baseline.get("transcript_source"),
+            candidate.get("transcript_source"),
+        ),
+        _check_tool_call_tolerance(
+            baseline.get("tool_calls_by_type", {}),
+            candidate.get("tool_calls_by_type", {}),
+            tolerance=2,
+        ),
+        _check_max_delta(
+            metric="frames_unseen_by_agent",
+            baseline=_as_float(baseline.get("frames_unseen_by_agent")),
+            candidate=_as_float(candidate.get("frames_unseen_by_agent")),
+            max_increase=2.0,
+        ),
+    ]
+
+
+THRESHOLD_POLICIES: tuple[ThresholdPolicy, ...] = (
+    ThresholdPolicy(
+        name="explore-vlm",
+        compare_rows=_explore_vlm_checks,
+        exact_suites=("explore-vlm",),
+    ),
+    ThresholdPolicy(
+        name="openclaw-demo",
+        compare_rows=_openclaw_demo_checks,
+        exact_suites=("openclaw-demo",),
+    ),
+    ThresholdPolicy(
+        name="territory",
+        compare_rows=_territory_checks,
+        suite_prefixes=("territory-",),
+    ),
+    ThresholdPolicy(
+        name="coverage",
+        compare_rows=_coverage_checks,
+        suite_prefixes=("coverage-",),
+    ),
+    ThresholdPolicy(
+        name="openclaw-autonomous",
+        compare_rows=_openclaw_autonomous_checks,
+        exact_suites=("openclaw-autonomous",),
+    ),
+)
+
+
+def threshold_policy_for_suite(suite: str) -> ThresholdPolicy | None:
+    for policy in THRESHOLD_POLICIES:
+        if policy.matches(suite):
+            return policy
+    return None
+
+
 def _suite_checks(
     suite: str,
     baseline: dict[str, Any],
@@ -218,110 +401,9 @@ def _suite_checks(
     if status_checks:
         return status_checks
 
-    if suite == "explore-vlm":
-        return [
-            _check_min_delta(
-                metric="cells_visited",
-                baseline=_as_float(baseline.get("cells_visited")),
-                candidate=_as_float(candidate.get("cells_visited")),
-                max_drop=1.0,
-            ),
-            _check_max_pct_or_absolute(
-                metric="usd",
-                baseline=_as_float(baseline.get("usd")),
-                candidate=_as_float(candidate.get("usd")),
-                max_increase_ratio=0.25,
-                absolute_slack=0.01,
-            ),
-            _check_max_pct_or_absolute(
-                metric="wallclock_seconds",
-                baseline=_as_float(baseline.get("wallclock_seconds")),
-                candidate=_as_float(candidate.get("wallclock_seconds")),
-                max_increase_ratio=0.50,
-                absolute_slack=120.0,
-            ),
-        ]
-
-    if suite == "openclaw-demo":
-        return [
-            _check_min_delta(
-                metric="visited_cells",
-                baseline=_as_float(baseline.get("visited_cells")),
-                candidate=_as_float(candidate.get("visited_cells")),
-                max_drop=1.0,
-            ),
-            _check_max_pct(
-                metric="usd",
-                baseline=_as_float(baseline.get("usd")),
-                candidate=_as_float(candidate.get("usd")),
-                max_increase_ratio=0.25,
-            ),
-            _check_max_pct(
-                metric="wallclock_seconds",
-                baseline=_as_float(baseline.get("wallclock_seconds")),
-                candidate=_as_float(candidate.get("wallclock_seconds")),
-                max_increase_ratio=0.50,
-            ),
-        ]
-
-    if suite.startswith("territory-"):
-        return [
-            _check_min_delta(
-                metric="cells_claimed_total",
-                baseline=_as_float(baseline.get("cells_claimed_total")),
-                candidate=_as_float(candidate.get("cells_claimed_total")),
-                max_drop=2.0,
-            ),
-            _check_max_delta(
-                metric="blocking_events",
-                baseline=_as_float(baseline.get("blocking_events")),
-                candidate=_as_float(candidate.get("blocking_events")),
-                max_increase=2.0,
-            ),
-            _check_no_new_provider_failure(baseline, candidate),
-        ]
-
-    if suite.startswith("coverage-"):
-        return [
-            _check_min_delta(
-                metric="coverage_fraction",
-                baseline=_as_float(baseline.get("coverage_fraction")),
-                candidate=_as_float(candidate.get("coverage_fraction")),
-                max_drop=0.05,
-            ),
-            _check_min_delta(
-                metric="work_balance",
-                baseline=_as_float(baseline.get("work_balance")),
-                candidate=_as_float(candidate.get("work_balance")),
-                max_drop=0.10,
-            ),
-            _check_max_pct(
-                metric="total_steps",
-                baseline=_as_float(baseline.get("total_steps")),
-                candidate=_as_float(candidate.get("total_steps")),
-                max_increase_ratio=0.20,
-            ),
-        ]
-
-    if suite == "openclaw-autonomous":
-        return [
-            _check_exact(
-                "transcript_source",
-                baseline.get("transcript_source"),
-                candidate.get("transcript_source"),
-            ),
-            _check_tool_call_tolerance(
-                baseline.get("tool_calls_by_type", {}),
-                candidate.get("tool_calls_by_type", {}),
-                tolerance=2,
-            ),
-            _check_max_delta(
-                metric="frames_unseen_by_agent",
-                baseline=_as_float(baseline.get("frames_unseen_by_agent")),
-                candidate=_as_float(candidate.get("frames_unseen_by_agent")),
-                max_increase=2.0,
-            ),
-        ]
+    policy = threshold_policy_for_suite(suite)
+    if policy is not None:
+        return policy.compare(suite, baseline, candidate)
 
     return [
         {

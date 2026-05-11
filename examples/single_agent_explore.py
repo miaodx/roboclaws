@@ -116,6 +116,7 @@ def run_exploration(
     steps: int,
     model: str,
     output_dir: str,
+    provider_seed: int | None = None,
 ) -> dict[str, object]:
     """Run a single-agent exploration episode and save results to *output_dir*.
 
@@ -128,7 +129,10 @@ def run_exploration(
     Returns:
         Summary dict with keys ``cells_visited``, ``vlm_cost_usd``, ``output_dir``.
     """
-    provider = create_provider(model)
+    provider_kwargs = (
+        {"seed": provider_seed} if model == "mock" and provider_seed is not None else {}
+    )
+    provider = create_provider(model, **provider_kwargs)
     engine = MultiAgentEngine(scene=scene, agent_count=1, grid_size=_GRID_SIZE)
     viz = GameVisualizer(grid_rows=_GRID_ROWS, grid_cols=_GRID_COLS, cell_px=15, agent_count=1)
     recorder = ReplayRecorder(agent_count=1, game="explore")
