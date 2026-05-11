@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/MiaoDX/roboclaws.git
 cd roboclaws
-pip install -e ".[dev]"
+uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
 ```
 
 Run the linter and tests before every commit:
