@@ -122,7 +122,7 @@ context-length.
    page). `maxTokens` bumped 4 096 → 32 768 across all MiMo entries after
    a live probe confirmed the upstream accepts it (see above).
 2. ~~**Tests**: assert `contextWindow >= 131072` for every advertised model.~~
-   Done 2026-04-23: `tests/test_openclaw_bootstrap.py::`
+   Done 2026-04-23: `tests/contract/openclaw/test_openclaw_bootstrap.py::`
    `test_advertised_context_windows_clear_flush_headroom`. A regex over
    the raw bootstrap pulls every `"contextWindow":N` literal, so new
    provider branches are covered without teaching

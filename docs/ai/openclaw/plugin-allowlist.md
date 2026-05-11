@@ -68,8 +68,8 @@ regression test in each test file pins the rendered config against it.
 
    ```bash
    ./scripts/run_pytest_standalone.sh \
-     tests/test_openclaw_bootstrap.py \
-     tests/test_appliance_seed_openclaw.py -x -q
+     tests/contract/openclaw/test_openclaw_bootstrap.py \
+     tests/contract/appliance/test_appliance_seed_openclaw.py -x -q
    ```
 
 4. Live-probe by running `just appliance::run` (or `just chat::run`) and

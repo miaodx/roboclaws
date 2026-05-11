@@ -162,7 +162,7 @@ The two big learnings:
 ## When NOT to use the harness
 
 - **Code review for style/typing/refactor.** Use ruff + pyright + tests.
-- **Verifying a single tool's contract.** Use `pytest tests/test_mcp_server.py`.
+- **Verifying a single tool's contract.** Use `pytest tests/contract/mcp/test_mcp_server.py`.
 - **Quick interactive exploration.** Use `just code::cc` directly.
 - **Anything that doesn't have a reasonable "is it better?" metric.** The
   harness is a measurement instrument; without a metric, it's just an

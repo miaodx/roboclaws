@@ -53,12 +53,12 @@ mock:
 # L2: focused fixture/schema/report contracts.
 contract:
     {{standalone_pytest}} -q \
-      tests/test_refactor_regression_contracts.py \
-      tests/test_run_artifacts.py \
-      tests/test_capture_refactor_regression.py \
-      tests/test_analyze_refactor_regression.py \
-      tests/test_render_autonomous_replay.py \
-      tests/test_reporter.py
+      tests/contract/regression/test_refactor_regression_contracts.py \
+      tests/contract/reports/test_run_artifacts.py \
+      tests/regression/refactor/test_capture_refactor_regression.py \
+      tests/regression/refactor/test_analyze_refactor_regression.py \
+      tests/contract/reports/test_render_autonomous_replay.py \
+      tests/contract/reports/test_reporter.py
 
 # L3: mock-provider baseline/candidate refactor-regression harness.
 regression-mock baseline="" candidate="" scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
@@ -82,13 +82,13 @@ molmo-cleanup:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_scenario.py \
-      tests/test_molmo_cleanup_scoring.py \
-      tests/test_molmo_cleanup_backend.py \
-      tests/test_molmo_cleanup_mcp_contract.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_molmo_cleanup_demo.py \
-      tests/test_verify_just_recipes.py
+      tests/unit/molmo_cleanup/test_molmo_cleanup_scenario.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_scoring.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_backend.py \
+      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_contract.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-cleanup
 
 # Prompt-driven public-policy MolmoSpaces cleanup gate.
@@ -96,10 +96,10 @@ molmo-prompt-cleanup:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_policy.py \
-      tests/test_molmo_cleanup_semantic_acceptability.py \
-      tests/test_molmo_cleanup_demo.py \
-      tests/test_verify_just_recipes.py
+      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-prompt-cleanup
 
 # Real upstream MolmoSpaces/MuJoCo prompt-cleanup gate. Requires the isolated
@@ -108,9 +108,9 @@ molmo-real-cleanup:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_policy.py \
-      tests/test_molmo_cleanup_demo.py \
-      tests/test_verify_just_recipes.py
+      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-real-cleanup
 
 # Real upstream MolmoSpaces/MuJoCo robot visual gate. Requires the isolated
@@ -119,11 +119,11 @@ molmo-robot-visual:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_policy.py \
-      tests/test_molmo_cleanup_demo.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_molmo_cleanup_subprocess_backend.py \
-      tests/test_verify_just_recipes.py
+      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-robot-visual
 
 # Current-contract Molmo MCP bridge gate. Real Codex/Claude/OpenClaw dogfood is
@@ -133,13 +133,13 @@ molmo-agent-bridge:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_mcp_server.py \
-      tests/test_molmo_cleanup_semantic_acceptability.py \
-      tests/test_molmo_cleanup_agent_server.py \
-      tests/test_check_molmo_agent_bridge_result.py \
-      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_server.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_agent_server.py \
+      tests/contract/checkers/test_check_molmo_agent_bridge_result.py \
+      tests/contract/molmo_cleanup/test_molmo_mcp_smoke_shared_semantic_loop.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-agent-bridge
 
 # Current-contract Molmo MCP bridge visual gate. Requires the isolated Python
@@ -148,13 +148,13 @@ molmo-agent-bridge-visual:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_mcp_server.py \
-      tests/test_molmo_cleanup_semantic_acceptability.py \
-      tests/test_molmo_cleanup_agent_server.py \
-      tests/test_check_molmo_agent_bridge_result.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_molmo_cleanup_subprocess_backend.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_server.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_agent_server.py \
+      tests/contract/checkers/test_check_molmo_agent_bridge_result.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-agent-bridge-visual
 
 # ADR-0003 public/private cleanup gate. Requires the isolated Python 3.11
@@ -163,11 +163,11 @@ molmo-realworld-cleanup generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_contract.py \
-      tests/test_molmospaces_realworld_cleanup.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+      tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-cleanup "1 2 3" "output/molmo-realworld-cleanup-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # ADR-0003 real-world MCP smoke-agent gate. Requires the isolated Python 3.11
@@ -176,10 +176,10 @@ molmo-realworld-agent-mcp generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_mcp_server.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/molmo_cleanup/test_molmo_mcp_smoke_shared_semantic_loop.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-agent-mcp "1" "output/molmo-realworld-agent-mcp-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # ADR-0003 direct-agent dogfood kit gate. Real Codex/Claude/OpenClaw dogfood is
@@ -189,10 +189,10 @@ molmo-realworld-agent-dogfood-kit:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_agent_server.py \
-      tests/test_molmo_realworld_mcp_server.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+      tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-agent-dogfood-kit
 
 # ADR-0003 OpenClaw dogfood kit gate. Real Gateway dogfood is local evidence;
@@ -201,9 +201,9 @@ molmo-realworld-openclaw-dogfood-kit:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_mcp_server.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-openclaw-dogfood-kit
 
 # ADR-0010 OpenClaw visual dogfood kit gate. Real Gateway dogfood is local
@@ -212,10 +212,10 @@ molmo-realworld-openclaw-visual-dogfood-kit generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_mcp_server.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-openclaw-visual-dogfood-kit "7" "output/molmo-realworld-openclaw-visual-dogfood-kit" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # ADR-0013 raw FPV-only observation gate. Requires the isolated Python 3.11
@@ -224,11 +224,11 @@ molmo-realworld-raw-fpv generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_realworld_contract.py \
-      tests/test_molmo_realworld_mcp_server.py \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_check_molmo_realworld_cleanup_result.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+      tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-realworld-raw-fpv "7" "output/molmo-realworld-raw-fpv-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # ADR-0042 proof-bundle runner dry-run handoff. Real planner execution remains
@@ -237,9 +237,9 @@ molmo-planner-proof-bundle-runner:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_verify_just_recipes.py \
-      tests/test_run_molmo_planner_proof_bundle_from_requests.py \
-      tests/test_check_molmo_planner_proof_bundle_runner_result.py
+      tests/contract/dev_tools/test_verify_just_recipes.py \
+      tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py \
+      tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py
     just harness::molmo-planner-proof-bundle-runner
 
 # ADR-0044 local-dev proof-bundle execution gate. Requires local CUDA and
@@ -248,10 +248,10 @@ molmo-planner-proof-bundle-execute-rerun:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_verify_just_recipes.py \
-      tests/test_run_molmo_planner_proof_bundle_from_requests.py \
-      tests/test_check_molmo_planner_proof_bundle_runner_result.py \
-      tests/test_check_molmo_realworld_cleanup_result.py
+      tests/contract/dev_tools/test_verify_just_recipes.py \
+      tests/unit/scripts/test_run_molmo_planner_proof_bundle_from_requests.py \
+      tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py \
+      tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
     just harness::molmo-planner-proof-bundle-execute-rerun
 
 # ADR-0014 planner-backed manipulation proof gate. Default verification accepts
@@ -261,10 +261,10 @@ molmo-planner-manipulation-probe:
     #!/usr/bin/env bash
     set -euo pipefail
     {{standalone_pytest}} -q \
-      tests/test_molmo_cleanup_report.py \
-      tests/test_molmo_manipulation_provenance.py \
-      tests/test_check_molmo_planner_manipulation_probe.py \
-      tests/test_verify_just_recipes.py
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/unit/molmo_cleanup/test_molmo_manipulation_provenance.py \
+      tests/contract/checkers/test_check_molmo_planner_manipulation_probe.py \
+      tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-planner-manipulation-probe
 
 # Full local confidence ladder. This intentionally requires a navigator task
