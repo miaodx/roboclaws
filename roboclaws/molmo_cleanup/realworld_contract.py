@@ -16,10 +16,15 @@ DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
 VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
 RAW_FPV_ONLY_MODE = "raw_fpv_only"
+CAMERA_MODEL_POLICY_MODE = "camera_model_policy"
+CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
+CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
+SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
         VISIBLE_OBJECT_DETECTIONS_MODE,
         RAW_FPV_ONLY_MODE,
+        CAMERA_MODEL_POLICY_MODE,
     }
 )
 
@@ -88,6 +93,7 @@ class RealWorldCleanupContract:
         self._object_ids_by_handle: dict[str, str] = {}
         self._detections_by_handle: dict[str, dict[str, Any]] = {}
         self._raw_fpv_observations: list[dict[str, Any]] = []
+        self._camera_model_policy_events: list[dict[str, Any]] = []
         self._handled_handles: set[str] = set()
         self._held_handle: str | None = None
         self._current_object_handle: str | None = None
@@ -102,6 +108,7 @@ class RealWorldCleanupContract:
             "navigate_to_room",
             "navigate_to_waypoint",
             "observe",
+            "infer_camera_model_candidates",
             "inspect_visible_object",
             "navigate_to_object",
             "pick",
@@ -209,25 +216,41 @@ class RealWorldCleanupContract:
         if waypoint is None:
             return self._error("observe", "missing_waypoint")
         self._observed_waypoint_ids.add(str(waypoint["waypoint_id"]))
-        if self.perception_mode == RAW_FPV_ONLY_MODE:
-            raw_observation = self._record_raw_fpv_observation(waypoint)
+        if self.perception_mode in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
+            raw_observation = self._record_raw_fpv_observation(
+                waypoint,
+                perception_mode=self.perception_mode,
+            )
+            if self.perception_mode == CAMERA_MODEL_POLICY_MODE:
+                instruction = (
+                    "Camera model policy mode: call infer_camera_model_candidates "
+                    "with this observation_id to register model-labelled cleanup "
+                    "candidates. Built-in visible_object_detections remain empty."
+                )
+                perception_source = CAMERA_MODEL_POLICY_MODE
+                camera_model_available = True
+            else:
+                instruction = (
+                    "Raw FPV-only mode: infer any cleanup candidates from the FPV image. "
+                    "No structured movable-object detections, categories, support estimates, "
+                    "target labels, or generated mess truth are provided."
+                )
+                perception_source = RAW_FPV_ONLY_MODE
+                camera_model_available = False
             return self._ok(
                 "observe",
                 contract=REALWORLD_CONTRACT,
                 current_room_id=waypoint["room_id"],
                 waypoint_id=waypoint["waypoint_id"],
                 perception_mode=self.perception_mode,
-                perception_source=RAW_FPV_ONLY_MODE,
+                perception_source=perception_source,
                 structured_detections_available=False,
                 visible_object_detections=[],
                 raw_fpv_observation=raw_observation,
+                camera_model_policy_available=camera_model_available,
                 held_object_id=self._held_handle,
                 private_target_truth_included=False,
-                instruction=(
-                    "Raw FPV-only mode: infer any cleanup candidates from the FPV image. "
-                    "No structured movable-object detections, categories, support estimates, "
-                    "target labels, or generated mess truth are provided."
-                ),
+                instruction=instruction,
             )
         detections = self._visible_detections_for_waypoint(waypoint)
         return self._ok(
@@ -240,6 +263,63 @@ class RealWorldCleanupContract:
             visible_object_detections=detections,
             held_object_id=self._held_handle,
             perception_source="robot_local_visible_object_detections",
+            private_target_truth_included=False,
+        )
+
+    def infer_camera_model_candidates(
+        self,
+        observation_id: str | None = None,
+        *,
+        model_provenance: str = SIMULATED_CAMERA_MODEL_PROVENANCE,
+    ) -> dict[str, Any]:
+        if self.perception_mode != CAMERA_MODEL_POLICY_MODE:
+            return self._error(
+                "infer_camera_model_candidates",
+                "unsupported_perception_mode",
+                perception_mode=self.perception_mode,
+            )
+        raw_observation = self._raw_fpv_observation_by_id(observation_id)
+        if raw_observation is None:
+            return self._error(
+                "infer_camera_model_candidates",
+                "missing_raw_fpv_observation",
+                observation_id=observation_id or "",
+            )
+        waypoint = self._waypoint_by_id(str(raw_observation["waypoint_id"]))
+        if waypoint is None:
+            return self._error(
+                "infer_camera_model_candidates",
+                "missing_waypoint",
+                observation_id=str(raw_observation["observation_id"]),
+            )
+        candidates = self._camera_model_candidates_for_waypoint(
+            waypoint,
+            observation_id=str(raw_observation["observation_id"]),
+            model_provenance=model_provenance,
+        )
+        evidence = {
+            "schema": CAMERA_MODEL_POLICY_SCHEMA,
+            "perception_mode": CAMERA_MODEL_POLICY_MODE,
+            "observation_id": str(raw_observation["observation_id"]),
+            "waypoint_id": str(raw_observation["waypoint_id"]),
+            "room_id": str(raw_observation["room_id"]),
+            "model_provenance": model_provenance,
+            "candidate_count": len(candidates),
+            "registered_observed_handles": [str(item["object_id"]) for item in candidates],
+            "private_truth_included": False,
+            "policy_note": (
+                "Deterministic simulated camera-model evidence derived from the "
+                "current public raw FPV observation; not real VLM pixel inference."
+            ),
+        }
+        _assert_no_forbidden_agent_view_keys(evidence)
+        self._camera_model_policy_events.append(evidence)
+        return self._ok(
+            "infer_camera_model_candidates",
+            contract=REALWORLD_CONTRACT,
+            camera_model_policy=evidence,
+            camera_model_candidates=candidates,
+            visible_object_detections=[],
             private_target_truth_included=False,
         )
 
@@ -401,12 +481,32 @@ class RealWorldCleanupContract:
             "fixture_hints": self.fixture_hints(),
             "observed_objects": observed_objects,
             "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
+            "camera_model_policy_evidence": self.camera_model_policy_payload(),
             "observed_waypoint_ids": sorted(self._observed_waypoint_ids),
             "public_tool_names": self.public_tool_names(),
             "forbidden_private_fields_absent": True,
         }
         _assert_no_forbidden_agent_view_keys(payload)
         return payload
+
+    def camera_model_policy_payload(self) -> dict[str, Any]:
+        events = [dict(item) for item in self._camera_model_policy_events]
+        return {
+            "schema": CAMERA_MODEL_POLICY_SCHEMA,
+            "perception_mode": self.perception_mode,
+            "enabled": self.perception_mode == CAMERA_MODEL_POLICY_MODE,
+            "model_provenance": SIMULATED_CAMERA_MODEL_PROVENANCE
+            if self.perception_mode == CAMERA_MODEL_POLICY_MODE
+            else "",
+            "event_count": len(events),
+            "candidate_count": sum(int(item.get("candidate_count") or 0) for item in events),
+            "events": events,
+            "private_truth_included": False,
+            "policy_note": (
+                "Camera-model policy candidates must be explicitly labelled and "
+                "must not include private scoring truth."
+            ),
+        }
 
     def private_evaluation_payload(self, score: dict[str, Any]) -> dict[str, Any]:
         targets = self.scenario.private_manifest.targets
@@ -532,14 +632,68 @@ class RealWorldCleanupContract:
             detections.append(dict(detection))
         return sorted(detections, key=lambda item: str(item["object_id"]))
 
-    def _record_raw_fpv_observation(self, waypoint: dict[str, Any]) -> dict[str, Any]:
+    def _camera_model_candidates_for_waypoint(
+        self,
+        waypoint: dict[str, Any],
+        *,
+        observation_id: str,
+        model_provenance: str,
+    ) -> list[dict[str, Any]]:
+        locations = self.backend.object_locations()
+        fixture_ids = set(waypoint.get("fixture_ids") or [])
+        candidates = []
+        for obj in self.scenario.objects:
+            location_id = locations.get(obj.object_id)
+            if not location_id or location_id == "held_by_agent":
+                continue
+            fixture = self._fixtures.get(location_id)
+            if fixture is None:
+                continue
+            room_id = _room_id(str(fixture.get("room_area", "unknown")))
+            if room_id != waypoint["room_id"]:
+                continue
+            if fixture_ids and location_id not in fixture_ids:
+                continue
+            handle = self._handle_for_object(obj.object_id)
+            detection = {
+                "object_id": handle,
+                "category": obj.category,
+                "name": obj.name,
+                "current_room_id": room_id,
+                "visibility_confidence": _visibility_confidence(handle),
+                "image_bbox": _image_bbox(handle),
+                "perception_source": CAMERA_MODEL_POLICY_MODE,
+                "model_provenance": model_provenance,
+                "source_observation_id": observation_id,
+                "candidate_source": "raw_fpv_observation",
+                "support_estimate": {
+                    "fixture_id": location_id,
+                    "relation": _location_relation(obj.object_id, self.backend),
+                    "confidence": 0.68,
+                    "source": CAMERA_MODEL_POLICY_MODE,
+                    "perception_source": CAMERA_MODEL_POLICY_MODE,
+                    "model_provenance": model_provenance,
+                    "source_observation_id": observation_id,
+                },
+            }
+            _assert_no_forbidden_agent_view_keys(detection)
+            self._detections_by_handle[handle] = detection
+            candidates.append(dict(detection))
+        return sorted(candidates, key=lambda item: str(item["object_id"]))
+
+    def _record_raw_fpv_observation(
+        self,
+        waypoint: dict[str, Any],
+        *,
+        perception_mode: str = RAW_FPV_ONLY_MODE,
+    ) -> dict[str, Any]:
         observation_id = f"raw_fpv_{len(self._raw_fpv_observations) + 1:03d}"
         item = {
             "observation_id": observation_id,
             "waypoint_id": str(waypoint["waypoint_id"]),
             "room_id": str(waypoint["room_id"]),
             "held_object_id": self._held_handle,
-            "perception_mode": RAW_FPV_ONLY_MODE,
+            "perception_mode": perception_mode,
             "structured_detections_available": False,
             "image_artifacts": {},
             "artifact_status": "pending_robot_view_capture",
@@ -550,6 +704,14 @@ class RealWorldCleanupContract:
         }
         self._raw_fpv_observations.append(item)
         return dict(item)
+
+    def _raw_fpv_observation_by_id(self, observation_id: str | None) -> dict[str, Any] | None:
+        if observation_id:
+            for item in self._raw_fpv_observations:
+                if item.get("observation_id") == observation_id:
+                    return item
+            return None
+        return self._raw_fpv_observations[-1] if self._raw_fpv_observations else None
 
     def _realworld_metrics(
         self,

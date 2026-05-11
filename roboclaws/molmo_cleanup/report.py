@@ -7,7 +7,10 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from roboclaws.molmo_cleanup.semantic_timeline import display_semantic_subphases
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    display_semantic_subphases,
+    semantic_subphase_text,
+)
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 _COLORS = {
@@ -75,69 +78,52 @@ def render_cleanup_report(
     """Write a self-contained cleanup `report.html`."""
     run_dir.mkdir(parents=True, exist_ok=True)
     report_path = run_dir / "report.html"
-    moves = _extract_moves(trace_events)
-    score = run_result["score"]
-    restored_summary = f"{score['restored_count']}/{score['total_targets']}"
-    before_name = html.escape(before_snapshot.name)
-    after_name = html.escape(after_snapshot.name)
-    body = f"""
-    <section class="summary">
-      <div class="summary-head">
-        <p class="eyebrow">Cleanup artifact</p>
-        <h1>MolmoSpaces Cleanup Pilot</h1>
-      </div>
-      {_summary_metrics(run_result, score)}
-      <div class="badges">
-        {_badge("Scenario", scenario.scenario_id)}
-        {_badge("Backend", run_result.get("backend", "unknown"))}
-        {_badge("Contract", run_result.get("contract", "legacy"))}
-        {_badge("Status", run_result["cleanup_status"])}
-        {_badge("Restored", restored_summary)}
-        {_badge("Generated mess", _generated_mess_summary(run_result))}
-        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
-        {_badge("Agent driven", run_result.get("agent_driven", False))}
-        {_badge("Provenance", run_result["primitive_provenance"])}
-        {_badge("MCP server", run_result.get("mcp_server", "none"))}
-        {_robot_badge(run_result)}
-      </div>
-    </section>
-    {_current_contract_note(run_result)}
-    {_realworld_contract_note(run_result)}
-    {_manipulation_provenance_section(run_result)}
-    {_attached_planner_proof_section(run_result)}
-    {_cleanup_primitive_gate_section(run_result)}
-    <section class="panel">
-      <div class="section-heading">
-        <h2>Before And After</h2>
-      </div>
-      <div class="snapshots">
-        <figure>
-          <img src="{before_name}" alt="Before cleanup">
-          <figcaption>Before</figcaption>
-        </figure>
-        <figure>
-          <img src="{after_name}" alt="After cleanup">
-          <figcaption>After</figcaption>
-        </figure>
-      </div>
-    </section>
-    <section class="panel">
-      <h2>Object Moves</h2>
-      {_moves_table(moves)}
-    </section>
-    {_agent_view_section(run_result)}
-    {_raw_fpv_observations_section(run_result)}
-    {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
-    {_robot_timeline(robot_view_steps or [])}
-    <section class="panel">
-      <h2>Score</h2>
-      {_score_table(score)}
-    </section>
-    {_advisory_review_section(run_result)}
-    {_private_evaluation_section(run_result)}
-    """
+    body = "\n".join(
+        _cleanup_report_sections(
+            scenario=scenario,
+            run_result=run_result,
+            trace_events=trace_events,
+            before_snapshot=before_snapshot,
+            after_snapshot=after_snapshot,
+            robot_view_steps=robot_view_steps or [],
+        )
+    )
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
+
+
+def _cleanup_report_sections(
+    *,
+    scenario: CleanupScenario,
+    run_result: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    before_snapshot: Path,
+    after_snapshot: Path,
+    robot_view_steps: list[dict[str, Any]],
+) -> list[str]:
+    """Return the canonical Cleanup Artifact Report section sequence."""
+    moves = _extract_moves(trace_events)
+    score = run_result["score"]
+    return _present_sections(
+        [
+            _cleanup_summary_section(scenario=scenario, run_result=run_result, score=score),
+            _current_contract_note(run_result),
+            _realworld_contract_note(run_result),
+            _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
+            _object_moves_section(moves),
+            _semantic_steps_table(run_result.get("semantic_substeps") or []),
+            _robot_timeline(robot_view_steps),
+            _score_section(score),
+            _manipulation_provenance_section(run_result),
+            _attached_planner_proof_section(run_result),
+            _cleanup_primitive_gate_section(run_result),
+            _agent_view_section(run_result),
+            _raw_fpv_observations_section(run_result),
+            _camera_model_policy_section(run_result),
+            _advisory_review_section(run_result),
+            _private_evaluation_section(run_result),
+        ]
+    )
 
 
 def render_planner_manipulation_report(
@@ -172,12 +158,92 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
+    {_planner_probe_cuda_memory_section(evidence)}
+    {_planner_probe_curobo_memory_profile_section(evidence)}
+    {_planner_probe_curobo_extension_cache_section(evidence)}
+    {_planner_probe_warp_compatibility_section(evidence)}
+    {_planner_probe_worker_stages_section(evidence)}
     {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
+
+
+def _present_sections(sections: list[str]) -> list[str]:
+    return [section for section in sections if section]
+
+
+def _cleanup_summary_section(
+    *,
+    scenario: CleanupScenario,
+    run_result: dict[str, Any],
+    score: dict[str, Any],
+) -> str:
+    restored_summary = f"{score['restored_count']}/{score['total_targets']}"
+    return f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Cleanup artifact</p>
+        <h1>MolmoSpaces Cleanup Pilot</h1>
+      </div>
+      {_summary_metrics(run_result, score)}
+      <div class="badges">
+        {_badge("Scenario", scenario.scenario_id)}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Contract", run_result.get("contract", "legacy"))}
+        {_badge("Status", run_result["cleanup_status"])}
+        {_badge("Restored", restored_summary)}
+        {_badge("Generated mess", _generated_mess_summary(run_result))}
+        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+        {_badge("Agent driven", run_result.get("agent_driven", False))}
+        {_badge("Provenance", run_result["primitive_provenance"])}
+        {_badge("MCP server", run_result.get("mcp_server", "none"))}
+        {_robot_badge(run_result)}
+      </div>
+    </section>
+    """
+
+
+def _before_after_section(*, before_snapshot: Path, after_snapshot: Path) -> str:
+    before_name = html.escape(before_snapshot.name)
+    after_name = html.escape(after_snapshot.name)
+    return f"""
+    <section class="panel">
+      <div class="section-heading">
+        <h2>Before And After</h2>
+      </div>
+      <div class="snapshots">
+        <figure>
+          <img src="{before_name}" alt="Before cleanup">
+          <figcaption>Before</figcaption>
+        </figure>
+        <figure>
+          <img src="{after_name}" alt="After cleanup">
+          <figcaption>After</figcaption>
+        </figure>
+      </div>
+    </section>
+    """
+
+
+def _object_moves_section(moves: list[dict[str, Any]]) -> str:
+    return f"""
+    <section class="panel">
+      <h2>Object Moves</h2>
+      {_moves_table(moves)}
+    </section>
+    """
+
+
+def _score_section(score: dict[str, Any]) -> str:
+    return f"""
+    <section class="panel">
+      <h2>Score</h2>
+      {_score_table(score)}
+    </section>
+    """
 
 
 def _badge(label: str, value: Any) -> str:
@@ -344,7 +410,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
     for item in objects:
         object_id = html.escape(str(item.get("object_id", "")))
         for step in item.get("subphases") or []:
-            label = f"{step.get('label', '')}/{step.get('detail', '')}"
+            label = _display_subphase_from_evidence(step)
             rows.append(
                 "<tr>"
                 f"<td>{object_id}</td>"
@@ -441,6 +507,341 @@ def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
     )
 
 
+def _planner_probe_cuda_memory_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    cuda = diagnostics.get("cuda_memory") or {}
+    snapshots = _planner_probe_cuda_memory_snapshots(evidence)
+    if not cuda and not snapshots:
+        return ""
+    current = cuda.get("current_snapshot") or (snapshots[-1] if snapshots else {})
+    free_memory = _memory_pair(current.get("free_bytes"), current.get("total_bytes"))
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('CUDA', 'available' if cuda.get('available') else 'missing')}"
+        f"{_metric('Device count', cuda.get('device_count', 0))}"
+        f"{_metric('Current device', _cuda_device_label(current, cuda))}"
+        f"{_metric('Free memory', free_memory)}"
+        f"{_metric('Torch allocated', _format_bytes(current.get('torch_allocated_bytes')))}"
+        f"{_metric('Torch reserved', _format_bytes(current.get('torch_reserved_bytes')))}"
+        "</div>"
+    )
+    env_note = (
+        f"CUDA_VISIBLE_DEVICES={diagnostics.get('cuda_visible_devices_env', '')}; "
+        f"PYTORCH_CUDA_ALLOC_CONF={diagnostics.get('pytorch_cuda_alloc_conf_env', '')}"
+    )
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('elapsed_s', '')))}</td>"
+        f"<td>{html.escape(str(item.get('stage', '')))}</td>"
+        f"<td>{html.escape(_cuda_device_label(item, cuda))}</td>"
+        f"<td>{html.escape(_memory_pair(item.get('free_bytes'), item.get('total_bytes')))}</td>"
+        f"<td>{html.escape(_format_bytes(item.get('torch_allocated_bytes')))}</td>"
+        f"<td>{html.escape(_format_bytes(item.get('torch_reserved_bytes')))}</td>"
+        f"<td>{html.escape(str(item.get('error') or item.get('error_type') or ''))}</td>"
+        "</tr>"
+        for item in snapshots
+    )
+    if not rows:
+        rows = '<tr><td colspan="7">No stage snapshots recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Elapsed s</th><th>Stage</th>'
+        "<th>Device</th><th>Free / total</th><th>Torch allocated</th>"
+        "<th>Torch reserved</th><th>Error</th></tr></thead><tbody>"
+        + rows
+        + "</tbody></table></div>"
+    )
+    note = (
+        "CUDA memory headroom is runtime evidence only. OOM-blocked artifacts "
+        "still do not satisfy strict planner-backed cleanup readiness."
+    )
+    return (
+        '<section class="panel"><h2>CUDA Memory Headroom</h2>'
+        f'<p class="note">{html.escape(note)}</p>'
+        f'<p class="note">{html.escape(env_note)}</p>{metrics}{table}</section>'
+    )
+
+
+def _planner_probe_cuda_memory_snapshots(evidence: dict[str, Any]) -> list[dict[str, Any]]:
+    snapshots = list(evidence.get("cuda_memory_snapshots") or [])
+    if snapshots:
+        return snapshots
+    return [
+        item["cuda_memory"]
+        for item in evidence.get("worker_stage_events") or []
+        if item.get("event") == "cuda_memory_snapshot" and item.get("cuda_memory")
+    ]
+
+
+def _cuda_device_label(snapshot: dict[str, Any], diagnostics: dict[str, Any]) -> str:
+    device_name = snapshot.get("device_name")
+    if not device_name:
+        devices = diagnostics.get("devices") or []
+        current_index = snapshot.get("device_index", diagnostics.get("current_device_index"))
+        device = next((item for item in devices if item.get("index") == current_index), {})
+        device_name = device.get("name")
+    device_index = snapshot.get("device_index", diagnostics.get("current_device_index", ""))
+    if device_name:
+        return f"{device_index}: {device_name}"
+    return str(device_index)
+
+
+def _memory_pair(free_bytes: Any, total_bytes: Any) -> str:
+    if free_bytes is None and total_bytes is None:
+        return "unknown"
+    return f"{_format_bytes(free_bytes)} / {_format_bytes(total_bytes)}"
+
+
+def _format_bytes(value: Any) -> str:
+    if value in (None, ""):
+        return "unknown"
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    unit = units[0]
+    for unit in units:
+        if abs(amount) < 1024.0 or unit == units[-1]:
+            break
+        amount /= 1024.0
+    if unit == "B":
+        return str(int(amount))
+    return f"{amount:.1f} {unit}"
+
+
+def _planner_probe_curobo_memory_profile_section(evidence: dict[str, Any]) -> str:
+    profile = evidence.get("curobo_memory_profile") or {}
+    if not profile:
+        return ""
+    after = profile.get("after") or {}
+    policy = after.get("policy") or {}
+    planners = after.get("planners") or {}
+    first_planner = next(iter(planners.values()), {})
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Profile', profile.get('profile', 'unknown'))}"
+        f"{_metric('Applied', _yes_no(profile.get('applied')))}"
+        f"{_metric('Batch size', policy.get('batch_size', 'unknown'))}"
+        f"{_metric('Max batches', policy.get('max_batch_plan_attempts', 'unknown'))}"
+        f"{_metric('Collision avoidance', _yes_no(policy.get('enable_collision_avoidance')))}"
+        f"{_metric('Trajopt seeds', first_planner.get('num_trajopt_seeds', 'unknown'))}"
+        "</div>"
+    )
+    before = profile.get("before") or {}
+    rows = _curobo_profile_rows(
+        "policy",
+        before.get("policy") or {},
+        policy,
+        ("batch_size", "max_batch_plan_attempts", "enable_collision_avoidance"),
+    )
+    before_planners = before.get("planners") or {}
+    for planner_name, planner_after in sorted(planners.items()):
+        rows.extend(
+            _curobo_profile_rows(
+                f"{planner_name}_planner",
+                before_planners.get(planner_name) or {},
+                planner_after,
+                (
+                    "num_trajopt_seeds",
+                    "num_ik_seeds",
+                    "max_attempts",
+                    "trajopt_tsteps",
+                    "enable_finetune_trajopt",
+                ),
+            )
+        )
+    table_rows = "".join(rows) or '<tr><td colspan="4">No profile values recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Scope</th><th>Setting</th>'
+        f"<th>Before</th><th>After</th></tr></thead><tbody>{table_rows}</tbody></table></div>"
+    )
+    note = (
+        "CuRobo memory profile is probe-local runtime evidence. Tuning state is "
+        "visible before target readiness or cleanup primitive replacement is considered."
+    )
+    return (
+        '<section class="panel"><h2>CuRobo Memory Profile</h2>'
+        f'<p class="note">{html.escape(note)}</p>{metrics}{table}</section>'
+    )
+
+
+def _curobo_profile_rows(
+    scope: str,
+    before: dict[str, Any],
+    after: dict[str, Any],
+    keys: tuple[str, ...],
+) -> list[str]:
+    rows = []
+    for key in keys:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(scope)}</td>"
+            f"<td>{html.escape(key)}</td>"
+            f"<td>{html.escape(str(before.get(key, '')))}</td>"
+            f"<td>{html.escape(str(after.get(key, '')))}</td>"
+            "</tr>"
+        )
+    return rows
+
+
+def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    cache = diagnostics.get("curobo_extension_cache") or {}
+    extensions = cache.get("extensions") or {}
+    if not extensions:
+        return ""
+    rows = []
+    lock_count = 0
+    so_count = 0
+    for name, item in sorted(extensions.items()):
+        if item.get("lock_exists"):
+            lock_count += 1
+        if item.get("so_exists"):
+            so_count += 1
+        files = item.get("files") or []
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(name))}</td>"
+            f"<td>{html.escape(str(item.get('build_dir', '')))}</td>"
+            f"<td>{html.escape(_yes_no(item.get('so_exists')))}</td>"
+            f"<td>{html.escape(_yes_no(item.get('lock_exists')))}</td>"
+            f"<td>{len(files)}</td>"
+            f"<td>{html.escape(_curobo_cache_file_detail(files))}</td>"
+            "</tr>"
+        )
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Configured dir', cache.get('configured_dir') or 'default')}"
+        f"{_metric('Extensions', len(extensions))}"
+        f"{_metric('Compiled .so', f'{so_count}/{len(extensions)}')}"
+        f"{_metric('Locks', lock_count)}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Extension</th>'
+        "<th>Build dir</th><th>.so</th><th>Lock</th><th>Files</th><th>Detail</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    note = (
+        "CuRobo planner imports JIT-compile several Torch CUDA extensions. "
+        "This panel makes stale locks and missing binaries visible before strict readiness."
+    )
+    return (
+        '<section class="panel"><h2>CuRobo Extension Cache</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
+
+
+def _curobo_cache_file_detail(files: list[dict[str, Any]]) -> str:
+    if not files:
+        return ""
+    return "; ".join(f"{item.get('name')}:{item.get('size_bytes')}" for item in files[:6])
+
+
+def _yes_no(value: Any) -> str:
+    return "yes" if bool(value) else "no"
+
+
+def _planner_probe_warp_compatibility_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    warp = diagnostics.get("warp_compatibility") or {}
+    if not warp:
+        return ""
+    adapter = warp.get("adapter") or {}
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Warp', 'available' if warp.get('available') else 'missing')}"
+        f"{_metric('Version', warp.get('version') or 'unknown')}"
+        f"{_metric('warp.torch', _yes_no(warp.get('has_torch_attr')))}"
+        f"{_metric('Adapter applied', _yes_no(adapter.get('applied')))}"
+        "</div>"
+    )
+    rows = [
+        ("has_device_from_torch", warp.get("has_device_from_torch")),
+        ("has_from_torch", warp.get("has_from_torch")),
+        ("has_stream_from_torch", warp.get("has_stream_from_torch")),
+        ("adapter_reason", adapter.get("reason", "")),
+        ("adapter_provided", ", ".join(adapter.get("provided") or [])),
+    ]
+    table_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(name))}</td>"
+        f"<td>{html.escape(_yes_no(value) if isinstance(value, bool) else str(value))}</td>"
+        "</tr>"
+        for name, value in rows
+        if value not in (None, "", [])
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Signal</th><th>Value</th>'
+        "</tr></thead><tbody>" + table_rows + "</tbody></table></div>"
+    )
+    note = (
+        "Warp compatibility is probe-local runtime evidence. It makes any "
+        "adapter visible before strict RBY1M/CuRobo readiness is considered."
+    )
+    return (
+        '<section class="panel"><h2>Warp Compatibility</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
+
+
+def _planner_probe_worker_stages_section(evidence: dict[str, Any]) -> str:
+    events = evidence.get("worker_stage_events") or []
+    if not events:
+        return ""
+    rows = []
+    for item in events:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('elapsed_s', '')))}</td>"
+            f"<td>{html.escape(str(item.get('event', '')))}</td>"
+            f"<td>{html.escape(str(item.get('stage', '')))}</td>"
+            f"<td>{html.escape(_worker_stage_detail(item))}</td>"
+            "</tr>"
+        )
+    last_stage = evidence.get("last_worker_stage") or events[-1].get("stage")
+    note = (
+        "Worker stage events are emitted before expensive RBY1M/CuRobo warmup "
+        "and execution steps, so timeout artifacts preserve the last observed stage."
+    )
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Events', len(events))}"
+        f"{_metric('Last stage', last_stage or 'unknown')}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Elapsed s</th>'
+        "<th>Event</th><th>Stage</th><th>Detail</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel"><h2>Worker Stage Timeline</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{table}</section>'
+    )
+
+
+def _worker_stage_detail(item: dict[str, Any]) -> str:
+    details = []
+    for key in (
+        "embodiment",
+        "probe_mode",
+        "upstream_policy_class",
+        "steps",
+        "steps_executed",
+        "max_abs_qpos_delta",
+    ):
+        value = item.get(key)
+        if value not in (None, ""):
+            details.append(f"{key}={value}")
+    cuda_memory = item.get("cuda_memory")
+    if isinstance(cuda_memory, dict):
+        details.append(f"cuda_free={_format_bytes(cuda_memory.get('free_bytes'))}")
+        details.append(f"torch_reserved={_format_bytes(cuda_memory.get('torch_reserved_bytes'))}")
+    return "; ".join(details)
+
+
 def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:
     gate = run_result.get("rby1m_curobo_gate") or {}
     if not gate:
@@ -487,6 +888,14 @@ def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:
 
 def _execution_gate_label(gate: dict[str, Any]) -> str:
     return "attempted" if gate.get("execution_attempted") else "not attempted"
+
+
+def _display_subphase_from_evidence(step: dict[str, Any]) -> str:
+    label = step.get("label")
+    detail = step.get("detail")
+    if label and detail:
+        return f"{label}/{detail}"
+    return semantic_subphase_text(step.get("phase"))
 
 
 def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:
@@ -541,6 +950,29 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
             "detections, categories, support estimates, target labels, and generated "
             "mess truth are not present in Agent View.</p>"
         )
+    elif mode == "camera_model_policy":
+        rows = []
+        for item in observed:
+            support = item.get("support_estimate") or {}
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('category', '')))}</td>"
+                f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('model_provenance', '')))}</td>"
+                "</tr>"
+            )
+        if not rows:
+            observed_table = "<p>No camera-model candidates registered.</p>"
+        else:
+            observed_table = (
+                '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
+                "<th>Category</th><th>Support estimate</th><th>Raw observation</th>"
+                "<th>Model provenance</th></tr></thead><tbody>"
+                + "".join(rows)
+                + "</tbody></table></div>"
+            )
     else:
         rows = []
         for item in observed:
@@ -573,6 +1005,49 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
         f"{observed_table}</section>"
+    )
+
+
+def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("camera_model_policy_evidence") or (
+        (run_result.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+    )
+    if not evidence or not evidence.get("enabled"):
+        return ""
+    rows = []
+    for event in evidence.get("events") or []:
+        handles = ", ".join(str(item) for item in event.get("registered_observed_handles") or [])
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(event.get('observation_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('room_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('model_provenance', '')))}</td>"
+            f"<td>{html.escape(str(event.get('candidate_count', 0)))}</td>"
+            f"<td>{html.escape(handles)}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="5">No camera-model candidate events recorded.</td></tr>')
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Events', evidence.get('event_count', 0))}"
+        f"{_metric('Candidates', evidence.get('candidate_count', 0))}"
+        f"{_metric('Model', evidence.get('model_provenance', 'unknown'))}"
+        f"{_metric('Private truth', evidence.get('private_truth_included', 'unknown'))}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Observation</th>'
+        "<th>Room</th><th>Model provenance</th><th>Candidates</th><th>Handles</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    note = evidence.get("policy_note") or (
+        "Camera-model policy candidates are model-labelled public observations, "
+        "not private scoring truth."
+    )
+    return (
+        '<section class="panel camera-model-policy"><h2>Camera Model Policy</h2>'
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{table}</section>'
     )
 
 
@@ -722,7 +1197,12 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
 def _semantic_phase_summary(semantic_phase: Any) -> str:
     if not semantic_phase:
         return ""
-    return '<div class="semantic-badges">' + _badge("Semantic phase", semantic_phase) + "</div>"
+    displayed = semantic_subphase_text(semantic_phase)
+    raw = str(semantic_phase)
+    badges = _badge("Subphase", displayed)
+    if displayed != raw:
+        badges += _badge("Raw phase", raw)
+    return '<div class="semantic-badges">' + badges + "</div>"
 
 
 def _focus_summary(focus: dict[str, Any]) -> str:

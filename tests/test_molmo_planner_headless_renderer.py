@@ -102,6 +102,127 @@ def test_runtime_diagnostics_records_renderer_override(monkeypatch) -> None:
     assert diagnostics["pyopengl_platform_env"] == "egl"
 
 
+def test_cuda_memory_diagnostics_from_torch_records_headroom(monkeypatch) -> None:
+    probe = _load_probe_module()
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
+    class FakeCuda:
+        @staticmethod
+        def is_available() -> bool:
+            return True
+
+        @staticmethod
+        def device_count() -> int:
+            return 1
+
+        @staticmethod
+        def current_device() -> int:
+            return 0
+
+        @staticmethod
+        def get_device_properties(index: int) -> SimpleNamespace:
+            assert index == 0
+            return SimpleNamespace(
+                name="Fake GPU",
+                total_memory=1024,
+                major=8,
+                minor=9,
+            )
+
+        @staticmethod
+        def mem_get_info(index: int) -> tuple[int, int]:
+            assert index == 0
+            return 256, 1024
+
+        @staticmethod
+        def memory_allocated(index: int) -> int:
+            assert index == 0
+            return 512
+
+        @staticmethod
+        def memory_reserved(index: int) -> int:
+            assert index == 0
+            return 768
+
+        @staticmethod
+        def max_memory_allocated(index: int) -> int:
+            assert index == 0
+            return 640
+
+        @staticmethod
+        def max_memory_reserved(index: int) -> int:
+            assert index == 0
+            return 896
+
+    fake_torch = SimpleNamespace(
+        cuda=FakeCuda(),
+        version=SimpleNamespace(cuda="12.8"),
+    )
+
+    diagnostics = probe._cuda_memory_diagnostics_from_torch(fake_torch)
+    snapshot = probe._cuda_memory_snapshot_from_torch(fake_torch, "execute_policy_run_start")
+
+    assert diagnostics["available"] is True
+    assert diagnostics["device_count"] == 1
+    assert diagnostics["devices"][0]["compute_capability"] == "8.9"
+    assert diagnostics["cuda_visible_devices_env"] == "0"
+    assert diagnostics["pytorch_cuda_alloc_conf_env"] == "expandable_segments:True"
+    assert diagnostics["current_snapshot"]["free_bytes"] == 256
+    assert snapshot["stage"] == "execute_policy_run_start"
+    assert snapshot["free_bytes"] == 256
+    assert snapshot["torch_reserved_bytes"] == 768
+
+
+def test_rby1m_curobo_low_memory_profile_records_overrides() -> None:
+    probe = _load_probe_module()
+    left = SimpleNamespace(
+        num_trajopt_seeds=12,
+        num_ik_seeds=128,
+        max_attempts=15,
+        trajopt_tsteps=48,
+        enable_finetune_trajopt=True,
+    )
+    right = SimpleNamespace(
+        num_trajopt_seeds=12,
+        num_ik_seeds=128,
+        max_attempts=15,
+        trajopt_tsteps=48,
+        enable_finetune_trajopt=True,
+    )
+    config = SimpleNamespace(
+        policy_config=SimpleNamespace(
+            batch_size=4,
+            max_batch_plan_attempts=4,
+            enable_collision_avoidance=True,
+            left_curobo_planner_config=left,
+            right_curobo_planner_config=right,
+        )
+    )
+    args = Namespace(
+        rby1m_curobo_memory_profile="low",
+        curobo_policy_batch_size=None,
+        curobo_max_batch_plan_attempts=None,
+        curobo_num_trajopt_seeds=None,
+        curobo_num_ik_seeds=None,
+        curobo_max_attempts=None,
+        curobo_trajopt_tsteps=None,
+        curobo_disable_finetune_trajopt=False,
+    )
+
+    profile = probe._apply_rby1m_curobo_memory_profile(config, args)
+
+    assert profile["applied"] is True
+    assert profile["profile"] == "low"
+    assert profile["before"]["policy"]["batch_size"] == 4
+    assert profile["after"]["policy"]["batch_size"] == 1
+    assert profile["after"]["policy"]["enable_collision_avoidance"] is True
+    assert profile["after"]["planners"]["left"]["num_trajopt_seeds"] == 1
+    assert profile["after"]["planners"]["left"]["num_ik_seeds"] == 16
+    assert profile["after"]["planners"]["left"]["enable_finetune_trajopt"] is False
+    assert right.trajopt_tsteps == 24
+
+
 def test_process_output_text_handles_timeout_bytes() -> None:
     probe = _load_probe_module()
 
@@ -111,14 +232,55 @@ def test_process_output_text_handles_timeout_bytes() -> None:
     assert "\ufffd" in probe._process_output_text(b"\xff")
 
 
-def test_parse_last_json_object_preserves_timeout_diagnostics() -> None:
+def test_worker_payload_from_stdout_preserves_timeout_diagnostics() -> None:
     probe = _load_probe_module()
 
-    payload = probe._parse_last_json_object(
+    payload = probe._worker_payload_from_stdout(
         'log line\n{"event": "runtime_diagnostics", "runtime_diagnostics": {"renderer": true}}\n'
     )
 
-    assert payload == {
-        "event": "runtime_diagnostics",
-        "runtime_diagnostics": {"renderer": True},
+    assert payload["runtime_diagnostics"] == {"renderer": True}
+    assert payload["last_worker_stage"] == "runtime_diagnostics"
+    assert payload["worker_stage_events"][0]["event"] == "runtime_diagnostics"
+
+
+def test_curobo_extension_cache_entry_records_lock_and_binary(tmp_path: Path) -> None:
+    probe = _load_probe_module()
+    build_dir = tmp_path / "lbfgs_step_cu"
+    build_dir.mkdir()
+    (build_dir / "lbfgs_step_cu.so").write_bytes(b"binary")
+    (build_dir / "lock").write_text("", encoding="utf-8")
+    (build_dir / "build.ninja").write_text("rule build\n", encoding="utf-8")
+
+    entry = probe._curobo_extension_cache_entry("lbfgs_step_cu", build_dir)
+
+    assert entry["exists"] is True
+    assert entry["so_exists"] is True
+    assert entry["lock_exists"] is True
+    assert {item["name"] for item in entry["files"]} == {
+        "build.ninja",
+        "lbfgs_step_cu.so",
+        "lock",
     }
+
+
+def test_warp_torch_adapter_adds_minimal_namespace() -> None:
+    probe = _load_probe_module()
+
+    def device_from_torch(value: object) -> object:
+        return value
+
+    fake_warp = SimpleNamespace(
+        __version__="1.13.0",
+        device_from_torch=device_from_torch,
+        from_torch=lambda value: value,
+        stream_from_torch=lambda value: value,
+    )
+
+    adapter = probe._apply_warp_torch_adapter_to_module(fake_warp)
+    diagnostics = probe._warp_compatibility_from_module(fake_warp, adapter)
+
+    assert adapter["applied"] is True
+    assert fake_warp.torch.device_from_torch("cuda:0") == "cuda:0"
+    assert diagnostics["has_torch_attr"] is True
+    assert diagnostics["adapter"]["provided"] == ["warp.torch.device_from_torch"]

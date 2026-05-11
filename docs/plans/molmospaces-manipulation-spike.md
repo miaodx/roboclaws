@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 28 RBY1M CuRobo runtime gate completed on 2026-05-09
+**Status:** Phase 35 RBY1M CuRobo memory profile completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -23,8 +23,26 @@ and expose a per-subphase cleanup primitive gate. Current cleanup-loop
 subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
 gate before actual planner-backed cleanup primitive replacement. Current local
 RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
-before execution. Camera-only
-model-policy cleanup remains a separate follow-up.
+before execution. Phase 29 closes the camera-only model-policy cleanup follow-up.
+Phase 30 consolidated the shared Cleanup Artifact Report presentation so the
+visual core keeps the same review shape across current-contract and ADR-0003
+artifacts while still showing all contract-specific evidence. Phase 31 closed
+staged RBY1M/CuRobo warmup-readiness evidence; the local target runtime still
+times out at `rby1m_config_import`, so target execute-mode proof remains gated.
+Phase 32 isolates Torch/CuRobo extension-cache state for the next retry instead
+of mutating the global cache. It proves config import can reach
+`CuroboPickAndPlacePlannerPolicy` from an output-local cache; execute mode now
+blocks later on Warp API compatibility. Phase 33 plans a visible probe-local
+Warp adapter before retrying target execute mode; that retry reaches
+`execute_policy_run_start` and now blocks on CUDA memory pressure. Phase 34
+records CUDA memory headroom as first-class report evidence before any planner
+memory tuning or primitive replacement work; the latest target retry shows
+about 9.1 GiB free at `execute_policy_run_start` and about 284.7 MiB free at
+the OOM exception. Phase 35 adds a visible probe-local low-memory CuRobo
+profile before retrying target execute mode again. That retry passes strict
+standalone RBY1M/CuRobo planner-backed proof with nonzero robot-state movement;
+cleanup-loop primitives remain `api_semantic` until a follow-up replacement
+slice integrates target planner-backed primitives into the cleanup subphases.
 
 ## Why This Exists
 
@@ -799,9 +817,23 @@ completed:
   gsd-plan-phase 28-molmospaces-rby1m-curobo-runtime-gate
   gsd-execute-phase 28-molmospaces-rby1m-curobo-runtime-gate
   gsd-verify-work 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-plan-phase 29-molmospaces-camera-model-policy-cleanup
+  gsd-execute-phase 29-molmospaces-camera-model-policy-cleanup
+  gsd-verify-work 29-molmospaces-camera-model-policy-cleanup
+  gsd-plan-phase 30-molmospaces-report-underlay-consolidation
+  gsd-execute-phase 30-molmospaces-report-underlay-consolidation
+  gsd-verify-work 30-molmospaces-report-underlay-consolidation
+  gsd-plan-phase 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-execute-phase 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-verify-work 31-molmospaces-rby1m-curobo-warmup-readiness
+  gsd-plan-phase 32-molmospaces-rby1m-curobo-cache-isolation
+  gsd-execute-phase 32-molmospaces-rby1m-curobo-cache-isolation
+  gsd-verify-work 32-molmospaces-rby1m-curobo-cache-isolation
+  gsd-plan-phase 33-molmospaces-rby1m-warp-compatibility
+  gsd-execute-phase 33-molmospaces-rby1m-warp-compatibility
+  gsd-verify-work 33-molmospaces-rby1m-warp-compatibility
 
 next pipeline candidates:
-  plan RBY1M/CuRobo runtime enablement if strict target execution is required locally
-  plan actual planner-backed cleanup-loop primitive replacement
-  plan camera-only model-policy cleanup
+  plan RBY1M/CuRobo GPU memory headroom
+  plan actual planner-backed cleanup-loop primitive replacement after target execute-mode readiness
 ```
