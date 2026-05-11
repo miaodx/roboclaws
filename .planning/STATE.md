@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 134 MolmoSpaces canonical proof command tool order completed on 2026-05-10.
-last_updated: "2026-05-10T20:52:07+08:00"
-last_activity: 2026-05-10
+stopped_at: GSD closure artifact backfill completed for Phases 29-134 on 2026-05-11; Phase 134 remains the latest implementation phase.
+last_updated: "2026-05-11T13:22:38+08:00"
+last_activity: 2026-05-11
 progress:
-  total_phases: 120
-  completed_phases: 120
-  total_plans: 130
-  completed_plans: 130
-  percent: 100
+  total_phases: 135
+  completed_phases: 131
+  total_plans: 165
+  completed_plans: 152
+  percent: 92
 ---
 
 # Project State
@@ -21,13 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 134 makes proof-bundle executable cleanup tools, manifest rows, and report semantic rails share the same `nav, pick, nav, open?, place` order. Next work should execute the bounded `proof_001` two-step proof attempt, then rerun cleanup if the resulting proof has cleanup binding coverage.
+**Current focus:** Phase 134 makes proof-bundle executable cleanup tools, manifest rows, and report semantic rails share the same `nav, pick, nav, open?, place` order. The 2026-05-11 repair backfilled missing GSD `SUMMARY` and `VERIFICATION` artifacts for Phases 29-134 from their embedded plan evidence. Next implementation work should execute the bounded `proof_001` two-step proof attempt, then rerun cleanup if the resulting proof has cleanup binding coverage.
 
 ## Current Position
 
+**Current Phase:** 134
+**Current Phase Name:** MolmoSpaces canonical proof command tool order
+**Current Plan:** 1
+**Total Plans in Phase:** 1
+**Total Phases:** 135
+**Progress:** 92%
+
 Phase: 134 (molmospaces-canonical-proof-command-tool-order) - COMPLETE
 Plan: 1 of 1 complete - `134-01` canonicalizes cleanup tool order across proof commands, bindings, and report rails.
-Status: Phase 35 produced strict standalone target planner-backed proof with
+Status: GSD closure artifacts for Phases 29-134 were backfilled on
+2026-05-11 from existing committed plan evidence. `gsd-sdk query progress.bar`
+now reports 152/165 plans complete (92%). Remaining disk-level summary gaps are
+outside the MolmoSpaces Phase 29-134 implementation run: one Phase 02.4 plan,
+Phase 02.7, Phase 02.8, and Phase 04.
+
+Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
 one shared semantic cleanup driver. Phase 37 now joins that target proof with
