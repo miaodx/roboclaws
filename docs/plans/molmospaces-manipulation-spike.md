@@ -2,11 +2,12 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Capability spike completed; narrow GSD handoff is now allowed
+**Status:** Phase 7 prompt-driven cleanup demo shipped and verified on 2026-05-07
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
-**Workflow:** Matt-style plan first; optional `to-issues`; GSD now owns only
-the bounded fake-backend/scorer/direct-MCP cleanup slices described below
+**Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
+Phase 6 scaffold -> Phase 7 prompt-driven public cleanup. OpenClaw and real
+planner-backed manipulation remain deferred.
 
 ## Why This Exists
 
@@ -116,6 +117,81 @@ GSD handoff decision:
 - Do not make Roboclaws import MolmoSpaces at top level. Keep it behind an
   optional subprocess/extra or adapter boundary so the existing AI2-THOR paths
   and CI stay Python 3.10-safe.
+
+### Phase 6 Implementation Result - 2026-05-07
+
+The narrow GSD phase shipped the first cleanup artifact loop:
+
+- `roboclaws/molmo_cleanup/` defines the public/private scenario contract,
+  private scorer, API-semantic backend, direct-call MCP-style contract, and
+  report renderer.
+- `examples/molmospaces_cleanup_demo.py` runs a deterministic scripted cleanup
+  and writes `trace.jsonl`, `run_result.json`, `scenario.json`,
+  `private_manifest.json`, `before.png`, `after.png`, and `report.html`.
+- `just harness::molmo-cleanup` and `just verify::molmo-cleanup` are the focused
+  harness and verify gates for this pilot.
+- `.planning/phases/06-molmospaces-api-semantic-cleanup/06-VERIFICATION.md`
+  records the verification evidence.
+
+Latest harness result:
+
+| Field | Value |
+| --- | --- |
+| Artifact dir | `output/molmo-cleanup-harness/` |
+| Scenario | `molmo-cleanup-default-7` |
+| Cleanup status | `success` |
+| Restored objects | `5/5` |
+| Success threshold | `3/5` |
+| Primitive provenance | `api_semantic` |
+| Planner | `scripted_reference` |
+
+Boundary:
+
+- This is still not real robot manipulation. It proves the direct cleanup
+  artifact contract, private scoring, reports, and provenance labeling.
+- The scripted reference demo uses the private manifest to choose targets, so it
+  is harness proof of the contract, not autonomous policy performance.
+- MolmoSpaces itself remains behind a future optional Python 3.11 adapter or
+  subprocess boundary; this phase keeps the repo Python 3.10-safe.
+
+### Phase 7 Prompt-Driven Cleanup Result - 2026-05-07
+
+The follow-up GSD phase closed the gap between "scripted scaffold" and
+"prompt-driven cleanup proof" for the easy semantic scenario:
+
+- `roboclaws/molmo_cleanup/policy.py` defines a public-only cleanup policy that
+  consumes task text plus public `scene_objects` data.
+- `examples/molmospaces_cleanup_demo.py --planner public_heuristic --task
+  "帮我整理这个房间"` runs the cleanup loop without using the private manifest as
+  planner input.
+- `just harness::molmo-prompt-cleanup` and
+  `just verify::molmo-prompt-cleanup` are the focused prompt-proof gates.
+- `.planning/phases/07-molmospaces-prompt-driven-cleanup-demo/07-VERIFICATION.md`
+  records the verification evidence.
+
+Latest prompt harness result:
+
+| Field | Value |
+| --- | --- |
+| Artifact dir | `output/molmo-prompt-cleanup-harness/` |
+| Task prompt | `帮我整理这个房间` |
+| Scenario | `molmo-cleanup-default-7` |
+| Cleanup status | `success` |
+| Restored objects | `5/5` |
+| Success threshold | `3/5` |
+| Planner | `public_heuristic` |
+| Planner uses private manifest | `false` |
+| Primitive provenance | `api_semantic` |
+
+Boundary:
+
+- This is now prompt-driven through public room/tool state, not private-manifest
+  scripted planning.
+- It is still not a real VLM/OpenClaw policy and still not real robot
+  manipulation; primitive execution remains `api_semantic`.
+- The next meaningful pipeline stage is either a real coding-agent/OpenClaw
+  policy proof over this same public contract or a Python 3.11 MolmoSpaces
+  subprocess adapter.
 
 ## Upstream Findings
 
@@ -356,9 +432,9 @@ Pass criteria:
 
 ## Task Slices
 
-These are approved vertical slices. The capability spike above makes the first
-GSD handoff concrete enough to proceed, but only for the narrow
-`api_semantic` cleanup path.
+These are approved vertical slices. The capability spike made the first GSD
+handoff concrete enough to proceed for the narrow `api_semantic` cleanup path;
+Phase 7 then added the prompt-driven public-policy proof.
 
 1. **Cleanup capability spike**
    Completed locally on 2026-05-07. Keep the result in this plan as source
@@ -383,12 +459,17 @@ GSD handoff concrete enough to proceed, but only for the narrow
    and `report.html`. Keep failures visible in `run_result.json` and the
    report.
 
-5. **OpenClaw follow-up**
+5. **Prompt-driven public cleanup**
+   Completed in Phase 7. The prompt `帮我整理这个房间` now drives a public-only
+   cleanup policy using `observe` / `scene_objects` data, with
+   `planner_uses_private_manifest=false` in `run_result.json`.
+
+6. **OpenClaw follow-up**
    Reuse the working MCP surface through OpenClaw only after the direct cleanup
    demo is stable. Split this into a separate GSD phase if direct MCP cleanup is
    not stable quickly.
 
-6. **Docs and ADR**
+7. **Docs and ADR**
    Reframe README / ARCHITECTURE / technical design after evidence exists. Add
    an ADR that AI2-THOR remains baseline and MolmoSpaces is the next substrate
    for manipulation.
@@ -399,6 +480,7 @@ Cloud-testable checks:
 
 - Scenario JSON parsing and seed determinism.
 - Private manifest parsing and state-delta scoring.
+- Public cleanup policy inference from task text and public scene objects.
 - MCP tool request/response schemas with a fake MolmoSpaces backend.
 - Additive `trace.jsonl` and `run_result.json` fields.
 - Report rendering for before/after images, restored/missed table, trace
@@ -493,12 +575,21 @@ schema, and any regression found during local MolmoSpaces validation.
 | Make `帮我收拾这个房间` the first public proof instead of a separate pick/place milestone. | Accepted in office-hours follow-up. |
 | Split OpenClaw follow-up if direct cleanup is unstable. | Accepted as guidance. |
 
-## Next Workflow
+## Current Workflow State
 
 ```text
-optionally run to-issues
--> gsd-ingest-docs docs/plans/molmospaces-manipulation-spike.md
--> gsd-plan-phase <created MolmoSpaces cleanup phase>
--> gsd-execute-phase <phase>
--> gsd-verify-work <phase>
+completed:
+  gsd-ingest-docs docs/plans/molmospaces-manipulation-spike.md
+  gsd-plan-phase 06-molmospaces-api-semantic-cleanup
+  gsd-execute-phase 06-molmospaces-api-semantic-cleanup
+  gsd-verify-work 06-molmospaces-api-semantic-cleanup
+  gsd-plan-phase 07-molmospaces-prompt-driven-cleanup-demo
+  gsd-execute-phase 07-molmospaces-prompt-driven-cleanup-demo
+  gsd-verify-work 07-molmospaces-prompt-driven-cleanup-demo
+
+next pipeline candidates:
+  real coding-agent policy over the public contract
+  optional MolmoSpaces Python 3.11 adapter/subprocess
+  real RBY1M/Franka planner-backed manipulation proof
+  OpenClaw cleanup-agent integration
 ```
