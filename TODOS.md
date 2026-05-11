@@ -41,6 +41,15 @@ One entry = one self-contained missing item. Shipped phases are tracked under
   Investigate a bridge from current MCP/navigation contracts to ROS 2 Nav2,
   EasyNavigation, or another real navigation stack.
 
+- **Async route perception during cleanup navigation**
+  After the waypoint-honest cleanup flow is stable, add support for perception
+  events observed while moving between task locations, such as carrying an
+  object from room A to a target fixture in room B and noticing another cleanup
+  candidate along the route. The first implementation should define how
+  in-transit observations update the observed-handle worklist without
+  interrupting a held-object delivery, and how the report distinguishes route
+  observations from deliberate waypoint/fixture observations.
+
 - **Memory-depth ablation for territory control**
   Measure whether SOUL / MEMORY / FTS / vector memory helps short-horizon
   territory tasks across a small fixed configuration set.
