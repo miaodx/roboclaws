@@ -107,7 +107,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
     assert "Cleanup Primitive Gate" in html
-    assert "nav/object" in html
+    assert "<td>nav</td>" in html
+    assert "<td>object</td>" in html
     assert "mujoco_freejoint_qpos" in html
     assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
@@ -242,7 +243,7 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "<span>nav</span><small>target</small>" in html
     assert "<span>place</span><small>surface</small>" in html
     assert "Subphase" in html
-    assert "nav/target" in html
+    assert "Role" in html
     assert "object_done" not in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
@@ -584,7 +585,8 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
     ]
     positions = [html.index(heading) for heading in ordered_headings]
     assert positions == sorted(positions)
-    assert "place/surface" in html
+    assert "<td>place</td>" in html
+    assert "<td>surface</td>" in html
 
 
 def test_cleanup_report_renders_planner_proof_requests_before_agent_view(
@@ -711,10 +713,135 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
         "output_dir": str(tmp_path),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_request_selection": {
+            "schema": "planner_cleanup_proof_request_selection_v1",
+            "mode": "exclude_task_feasibility_blocked",
+            "ready_request_count": 1,
+            "selected_count": 1,
+            "excluded_count": 1,
+            "generated_fallback_request_count": 1,
+            "fallback_required": False,
+            "selected_request_ids": ["proof_001_fallback_01"],
+            "selected_requests": [
+                {
+                    "request_id": "proof_001_fallback_01",
+                    "request_type": "fallback_generated",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "prior_task_feasibility_status": "blocked",
+                }
+            ],
+            "excluded_requests": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                }
+            ],
+            "target_feasibility_blocker_count": 2,
+            "target_feasibility_blockers": [
+                {
+                    "kind": "source_request",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+                {
+                    "kind": "fallback_pair",
+                    "source_request_id": "proof_001",
+                    "object_alias": "pickup/body",
+                    "target_alias": "sink/body_alt",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_task_feasibility_status": "blocked",
+                    "last_worker_stage": "worker_exception",
+                    "prior_report": str(tmp_path / "prior-proof" / "report.html"),
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+            ],
+            "fallback_generation": {
+                "schema": "planner_cleanup_proof_request_fallback_generation_v1",
+                "status": "generated",
+                "enabled": True,
+                "generated_request_count": 1,
+                "discovered_alias_count": 1,
+                "filtered_alias_count": 1,
+                "filtered_pair_count": 1,
+                "generated_requests": [
+                    {
+                        "request_id": "proof_001_fallback_01",
+                        "source_request_id": "proof_001",
+                        "ready": True,
+                        "object_id": "observed_001",
+                        "target_receptacle_id": "sink_01",
+                        "planner_probe_args": {
+                            "--cleanup-object-id": "observed_001",
+                            "--cleanup-target-receptacle-id": "sink_01",
+                            "--cleanup-planner-object-id": "pickup/alt",
+                            "--cleanup-planner-target-receptacle-id": "sink/alt",
+                        },
+                        "fallback_request": {
+                            "source_request_id": "proof_001",
+                            "reason": "prior_task_feasibility_blocked",
+                            "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                        },
+                    }
+                ],
+                "discovered_aliases": [
+                    {
+                        "source_request_id": "proof_001",
+                        "axis": "target",
+                        "alias": "sink/body_alt",
+                        "derived_from": "proof_001_fallback_01",
+                        "invalid_alias": "Sink|1|2",
+                        "reason": "valid_name_sibling_from_prior_keyerror",
+                    }
+                ],
+                "filtered_aliases": [
+                    {
+                        "source_request_id": "proof_001",
+                        "axis": "target",
+                        "alias": "Sink|1|2",
+                        "reason": "not_exact_scene_runtime_alias",
+                    }
+                ],
+                "filtered_pairs": [
+                    {
+                        "source_request_id": "proof_001",
+                        "object_alias": "pickup/body",
+                        "target_alias": "sink/body_alt",
+                        "derived_from": "proof_001_fallback_02",
+                        "reason": "prior_task_feasibility_blocked_pair",
+                        "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                    }
+                ],
+            },
+        },
+        "warmup": {
+            "kind": "rby1m_curobo_config_import",
+            "output_dir": str(tmp_path / "warmup"),
+            "run_result": str(tmp_path / "warmup" / "run_result.json"),
+            "report": str(tmp_path / "warmup" / "report.html"),
+            "command": [
+                "python",
+                "probe.py",
+                "--probe-mode",
+                "config_import",
+                "--torch-extensions-dir",
+                str(tmp_path / "torch_extensions"),
+            ],
+        },
         "command_count": 1,
         "commands": [
             {
-                "request_id": "proof_001",
+                "request_id": "proof_001_fallback_01",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
                 "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
@@ -725,10 +852,75 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "--cleanup-object-id",
                     "observed_001",
                     "--cleanup-planner-target-receptacle-id",
-                    "sink/body",
+                    "sink/alt",
                 ],
             }
         ],
+        "proof_result_summary": {
+            "schema": "planner_cleanup_proof_result_summary_v1",
+            "expected_count": 1,
+            "result_count": 1,
+            "planner_backed_count": 0,
+            "blocked_count": 1,
+            "timeout_count": 1,
+            "rby1m_config_import_timeout_count": 1,
+            "missing_result_count": 0,
+            "cleanup_binding_promoted_count": 0,
+            "execution_attempted_count": 0,
+            "task_feasibility_blocked_count": 1,
+            "worker_stage_event_count": 2,
+            "last_worker_stage_counts": {"rby1m_config_import": 1},
+            "view_artifact_count": 2,
+            "results": [
+                {
+                    "request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
+                    "report": str(tmp_path / "proofs" / "001" / "report.html"),
+                    "run_result_exists": True,
+                    "report_exists": True,
+                    "status": "blocked_capability",
+                    "planner_backed": False,
+                    "cleanup_binding_promoted": False,
+                    "execution_attempted": False,
+                    "task_feasibility_status": "blocked",
+                    "visual_status": "views_recorded",
+                    "blockers": [
+                        {"code": "HouseInvalidForTask", "message": "robot placement"},
+                        {"code": "timeout", "message": "Probe exceeded 1.0s"},
+                    ],
+                    "cleanup_binding_blockers": [],
+                    "last_worker_stage": "rby1m_config_import",
+                    "worker_stage_event_count": 2,
+                    "worker_stage_events": [
+                        {"elapsed_s": 0.1, "event": "worker_start", "stage": "worker_start"},
+                        {
+                            "elapsed_s": 3.2,
+                            "event": "rby1m_config_import_start",
+                            "stage": "rby1m_config_import",
+                        },
+                    ],
+                    "stdout": str(tmp_path / "proofs" / "001" / "planner_probe_stdout.txt"),
+                    "stderr": str(tmp_path / "proofs" / "001" / "planner_probe_stderr.txt"),
+                    "requested_cleanup_primitive_binding": {
+                        "scene_xml": "/tmp/scene.xml",
+                        "planner_object_id": "pickup/body",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "views": [
+                        {
+                            "label": "initial",
+                            "path": str(tmp_path / "proofs" / "001" / "initial.png"),
+                        },
+                        {
+                            "label": "final",
+                            "path": str(tmp_path / "proofs" / "001" / "final.png"),
+                        },
+                    ],
+                }
+            ],
+        },
         "cleanup_command": ["python", "cleanup.py", "--planner-proof-run-result", "proof.json"],
     }
 
@@ -740,12 +932,54 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     html = report_path.read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
+    assert "Proof Request Selection" in html
     assert "Proof Probe Commands" in html
+    assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
     assert "dry_run" in html
     assert "proof_001" in html
+    assert "proof_001_fallback_01" in html
     assert "observed_001" in html
-    assert "sink/body" in html
+    assert "sink/alt" in html
+    assert "HouseInvalidForTask" in html
+    assert "Fallback status" in html
+    assert "generated" in html
+    assert "Fallback required" in html
+    assert "prior_task_feasibility_blocked" in html
+    assert "Generated Fallback Requests" in html
+    assert "Discovered Runtime Aliases" in html
+    assert "Discovered aliases" in html
+    assert "sink/body_alt" in html
+    assert "valid_name_sibling_from_prior_keyerror" in html
+    assert "Filtered Fallback Aliases" in html
+    assert "Filtered aliases" in html
+    assert "Sink|1|2" in html
+    assert "not_exact_scene_runtime_alias" in html
+    assert "Filtered Fallback Pairs" in html
+    assert "Filtered pairs" in html
+    assert "Target Feasibility Blockers" in html
+    assert "Target blockers" in html
+    assert "source_request" in html
+    assert "fallback_pair" in html
+    assert "worker_exception" in html
+    assert "pickup/body" in html
+    assert "sink/body_alt" in html
+    assert "prior_task_feasibility_blocked_pair" in html
+    assert "fallback_generated" in html
+    assert "RBY1M/CuRobo Warmup" in html
+    assert "config_import" in html
+    assert "torch_extensions" in html
+    assert "Task feasibility" in html
+    assert "blocked" in html
+    assert "Timeouts" in html
+    assert "Config-import timeouts" in html
+    assert "Last worker stage" in html
+    assert "rby1m_config_import" in html
+    assert "Worker stages" in html
+    assert "planner_probe_stdout.txt" in html
+    assert "planner_probe_stderr.txt" in html
+    assert "initial.png" in html
+    assert "final.png" in html
     assert "report.html" in html
     assert "--planner-proof-run-result" in html
 

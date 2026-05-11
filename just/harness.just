@@ -454,8 +454,8 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
       "${bundle_dir}"
 
 # ADR-0044 local-dev proof-bundle execution gate. This executes real RBY1M/CuRobo
-# planner probes and reruns cleanup with their proof outputs, so keep it out of
-# default CI.
+# planner probes against the real MolmoSpaces cleanup scene and reruns cleanup
+# with their proof outputs, so keep it out of default CI.
 molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-bundle-execute-rerun" seed="7" task="帮我收拾这个房间" generated_mess_count="10" min_generated_mess_count="5" steps="2" timeout_s="600":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -466,15 +466,18 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
     torch_extensions_dir="{{output_dir}}/torch_extensions"
     .venv/bin/python examples/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
-      --backend api_semantic_synthetic \
+      --backend molmospaces_subprocess \
       --task "{{task}}" \
       --fixture-hint-mode room_only \
+      --include-robot \
+      --record-robot-views \
       --generated-mess-count "{{generated_mess_count}}" \
       --output-dir "${cleanup_dir}"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
-      --expect-backend api_semantic_synthetic \
+      --expect-backend molmospaces_subprocess \
       --min-generated-mess-count "{{min_generated_mess_count}}" \
+      --require-robot-views \
       --require-advisory-scoring \
       "${cleanup_dir}/run_result.json"
     .venv/bin/python scripts/run_molmo_planner_proof_bundle_from_requests.py \
@@ -495,8 +498,9 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
       "${bundle_dir}"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
-      --expect-backend api_semantic_synthetic \
+      --expect-backend molmospaces_subprocess \
       --min-generated-mess-count "{{min_generated_mess_count}}" \
+      --require-robot-views \
       --require-advisory-scoring \
       --require-planner-proof-attachment \
       --require-planner-backed-cleanup-primitives \

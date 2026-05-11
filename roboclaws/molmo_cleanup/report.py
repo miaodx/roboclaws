@@ -8,6 +8,7 @@ from typing import Any
 from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    display_semantic_subphase,
     display_semantic_subphases,
     semantic_subphase_text,
 )
@@ -205,9 +206,22 @@ def render_planner_proof_bundle_runner_report(
     <section class="panel">
       <h2>Source Cleanup Artifact</h2>
       <p class="note">{html.escape(str(manifest.get("evidence_note", "")))}</p>
-      {_path_table([("Cleanup run result", manifest.get("cleanup_run_result", ""))])}
+      {
+        _path_table(
+            [
+                ("Cleanup run result", manifest.get("cleanup_run_result", "")),
+                (
+                    "Planner scene XML",
+                    (manifest.get("planner_scene") or {}).get("scene_xml", ""),
+                ),
+            ]
+        )
+    }
     </section>
+    {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {_proof_bundle_warmup_section(manifest.get("warmup") or {})}
     {_proof_bundle_commands_section(commands)}
+    {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
@@ -523,6 +537,7 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
                 "<tr>"
                 f"<td>{object_id}</td>"
                 f"<td>{html.escape(str(label))}</td>"
+                f"<td>{html.escape(str(step.get('detail', '')))}</td>"
                 f"<td>{html.escape(str(step.get('phase', '')))}</td>"
                 f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
                 f"<td>{html.escape(planner_evidence_summary)}</td>"
@@ -533,7 +548,8 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
             )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
-        "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
+        "<th>Display subphase</th><th>Subphase role</th><th>Raw phase</th>"
+        "<th>Primitive provenance</th>"
         "<th>Planner evidence</th><th>Binding</th><th>State sync</th>"
         "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
@@ -744,6 +760,456 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
     )
 
 
+def _proof_request_selection_section(selection: dict[str, Any]) -> str:
+    if not selection:
+        return ""
+    selected = selection.get("selected_requests") or []
+    excluded = selection.get("excluded_requests") or []
+    target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
+    raw_fallback_generation = selection.get("fallback_generation") or {}
+    fallback_generation = (
+        raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
+    )
+    generated = fallback_generation.get("generated_requests") or []
+    filtered_aliases = fallback_generation.get("filtered_aliases") or []
+    discovered_aliases = fallback_generation.get("discovered_aliases") or []
+    filtered_pairs = fallback_generation.get("filtered_pairs") or []
+    normalized_aliases = fallback_generation.get("normalized_aliases") or []
+    exhaustion_blockers = fallback_generation.get("exhaustion_blockers") or []
+    target_blocker_count = selection.get(
+        "target_feasibility_blocker_count",
+        len(target_feasibility_blockers),
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Mode', selection.get('mode', 'unknown'))}"
+        f"{_metric('Ready', selection.get('ready_request_count', 0))}"
+        f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
+        f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
+        f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
+        f"{_metric('Discovered aliases', len(discovered_aliases))}"
+        f"{_metric('Normalized aliases', len(normalized_aliases))}"
+        f"{_metric('Filtered aliases', len(filtered_aliases))}"
+        f"{_metric('Filtered pairs', len(filtered_pairs))}"
+        f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
+        f"{_metric('Exhaustion blockers', len(exhaustion_blockers))}"
+        f"{_metric('Target blockers', target_blocker_count)}"
+        f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
+        "</div>"
+    )
+    selected_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('request_type', 'source')))}</td>"
+        f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        "</tr>"
+        for item in selected
+        if isinstance(item, dict)
+    )
+    excluded_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+        "</tr>"
+        for item in excluded
+        if isinstance(item, dict)
+    )
+    if not selected_rows:
+        selected_rows = '<tr><td colspan="6">No proof requests selected.</td></tr>'
+    if not excluded_rows:
+        excluded_rows = '<tr><td colspan="6">No proof requests excluded.</td></tr>'
+    selected_table = (
+        '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
+        "<th>Prior feasibility</th>"
+        f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
+    )
+    excluded_table = (
+        '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
+        "<th>Prior feasibility</th><th>Prior blockers</th>"
+        f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
+    )
+    generated_table = _generated_fallback_requests_table(generated)
+    target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
+    discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
+    normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
+    filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
+    filtered_pairs_table = _filtered_fallback_pairs_table(filtered_pairs)
+    exhaustion_table = _fallback_exhaustion_blockers_table(exhaustion_blockers)
+    note = selection.get("evidence_note") or (
+        "Private proof request selection for local proof-bundle execution."
+    )
+    return (
+        '<section class="panel proof-request-selection">'
+        "<h2>Proof Request Selection</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}'
+        f"{selected_table}{excluded_table}{target_blockers_table}{generated_table}{discovered_table}"
+        f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+    )
+
+
+def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in generated:
+        if not isinstance(item, dict):
+            continue
+        fallback = item.get("fallback_request") or {}
+        args = item.get("planner_probe_args") or {}
+        source_request_id = fallback.get(
+            "source_request_id",
+            item.get("source_request_id", ""),
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+            f"<td>{html.escape(str(source_request_id))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(args.get('--cleanup-planner-object-id', '')))}</td>"
+            f"<td>{html.escape(str(args.get('--cleanup-planner-target-receptacle-id', '')))}</td>"
+            f"<td>{html.escape(str(fallback.get('reason', '')))}</td>"
+            f"<td>{html.escape(_blocker_codes(fallback.get('prior_blockers') or []))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="8">No generated fallback requests.</td></tr>')
+    return (
+        "<h3>Generated Fallback Requests</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
+        "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
+        "<th>Prior blockers</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _target_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or ""
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or ""
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(object_value))}</td>"
+            f"<td>{html.escape(str(target_value))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
+            f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="10">No target feasibility blockers recorded.</td></tr>')
+    return (
+        "<h3>Target Feasibility Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
+        "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
+        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _discovered_fallback_aliases_table(discovered_aliases: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in discovered_aliases:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('axis', '')))}</td>"
+            f"<td>{html.escape(str(item.get('alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('invalid_alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="6">No runtime aliases discovered.</td></tr>')
+    return (
+        "<h3>Discovered Runtime Aliases</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Axis</th><th>Alias</th><th>Derived from</th>"
+        "<th>Invalid alias</th><th>Reason</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _normalized_fallback_aliases_table(normalized_aliases: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in normalized_aliases:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('axis', '')))}</td>"
+            f"<td>{html.escape(str(item.get('alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('normalized_alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="5">No pickup root aliases normalized.</td></tr>')
+    return (
+        "<h3>Normalized Pickup Root Aliases</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Axis</th><th>Alias</th><th>Normalized alias</th><th>Reason</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _filtered_fallback_aliases_table(filtered_aliases: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in filtered_aliases:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('axis', '')))}</td>"
+            f"<td>{html.escape(str(item.get('alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="4">No fallback aliases filtered.</td></tr>')
+    return (
+        "<h3>Filtered Fallback Aliases</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Axis</th><th>Alias</th><th>Reason</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in filtered_pairs:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('object_alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_alias', '')))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
+            f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="9">No fallback alias pairs filtered.</td></tr>')
+    return (
+        "<h3>Filtered Fallback Pairs</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
+        "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
+        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _fallback_exhaustion_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('code', '')))}</td>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('message', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="3">No fallback exhaustion blockers recorded.</td></tr>')
+    return (
+        "<h3>Fallback Exhaustion Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Blocker</th><th>Evidence count</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _proof_bundle_warmup_section(warmup: dict[str, Any]) -> str:
+    if not warmup:
+        return ""
+    command = " ".join(str(part) for part in warmup.get("command") or [])
+    note = warmup.get("evidence_note") or (
+        "Optional local-dev warmup before proof commands. Strict per-proof "
+        "checkers remain authoritative."
+    )
+    return (
+        '<section class="panel proof-bundle-warmup">'
+        "<h2>RBY1M/CuRobo Warmup</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        + _path_table(
+            [
+                ("Warmup output", warmup.get("output_dir", "")),
+                ("Warmup run result", warmup.get("run_result", "")),
+                ("Warmup report", warmup.get("report", "")),
+            ]
+        )
+        + f"<pre><code>{html.escape(command)}</code></pre></section>"
+    )
+
+
+def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
+    return ", ".join(
+        str(item.get("code") or item.get("message") or "")
+        for item in blockers
+        if isinstance(item, dict)
+    )
+
+
+def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
+    if not summary:
+        return ""
+    results = summary.get("results") or []
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Expected', summary.get('expected_count', len(results)))}"
+        f"{_metric('Results', summary.get('result_count', 0))}"
+        f"{_metric('Planner-backed', summary.get('planner_backed_count', 0))}"
+        f"{_metric('Timeouts', summary.get('timeout_count', 0))}"
+        f"{_metric('Config-import timeouts', summary.get('rby1m_config_import_timeout_count', 0))}"
+        f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
+        f"{_metric('Execution attempted', summary.get('execution_attempted_count', 0))}"
+        f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
+        f"{_metric('Worker stage events', summary.get('worker_stage_event_count', 0))}"
+        f"{_metric('Views', summary.get('view_artifact_count', 0))}"
+        "</div>"
+    )
+    stage_counts = _last_worker_stage_counts_text(summary.get("last_worker_stage_counts") or {})
+    stage_counts_html = (
+        f'<p class="note">Last worker stages: {html.escape(stage_counts)}</p>'
+        if stage_counts
+        else ""
+    )
+    body = (
+        "".join(_proof_bundle_result_card(item) for item in results)
+        if results
+        else '<p class="note">No proof result rows recorded.</p>'
+    )
+    note = summary.get("evidence_note") or (
+        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
+    )
+    return (
+        '<section class="panel proof-bundle-results">'
+        "<h2>Proof Probe Results</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
+    )
+
+
+def _proof_bundle_result_card(item: dict[str, Any]) -> str:
+    blockers = list(item.get("blockers") or [])
+    binding_blockers = list(item.get("cleanup_binding_blockers") or [])
+    blocker_text = ", ".join(
+        str(blocker.get("code") or blocker.get("message") or "")
+        for blocker in [*blockers, *binding_blockers]
+        if isinstance(blocker, dict)
+    )
+    requested = item.get("requested_cleanup_primitive_binding") or {}
+    sampled = item.get("sampled_task_binding") or {}
+    config = item.get("cleanup_task_config") or {}
+    rows = [
+        ("Request", item.get("request_id", "")),
+        ("Object", item.get("object_id", "")),
+        ("Target", item.get("target_receptacle_id", "")),
+        ("Status", item.get("status", "")),
+        ("Task feasibility", item.get("task_feasibility_status", "")),
+        ("Cleanup binding promoted", _yes_no(item.get("cleanup_binding_promoted"))),
+        ("Execution attempted", _yes_no(item.get("execution_attempted"))),
+        ("Last worker stage", item.get("last_worker_stage", "")),
+        ("Worker stage events", item.get("worker_stage_event_count", "")),
+        ("Worker stages", _worker_stage_summary(item.get("worker_stage_events") or [])),
+        ("Probe stdout", item.get("stdout", "")),
+        ("Probe stderr", item.get("stderr", "")),
+        ("Proof run result", item.get("run_result", "")),
+        ("Proof report", item.get("report", "")),
+        ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Planner object alias", requested.get("planner_object_id", "")),
+        ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
+        ("Sampled pickup", sampled.get("pickup_obj_name", "")),
+        (
+            "Sampled target",
+            sampled.get("place_receptacle_name") or sampled.get("place_target_name") or "",
+        ),
+        ("Blockers", blocker_text),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value
+    )
+    views = item.get("views") or []
+    if views:
+        figures = "".join(
+            _view_figure(
+                view.get("path"),
+                f"{item.get('request_id', '')} {view.get('label', '')}",
+            )
+            for view in views
+            if isinstance(view, dict)
+        )
+        view_html = f'<div class="views">{figures}</div>'
+    else:
+        view_html = (
+            '<p class="note">No planner probe views recorded'
+            f" ({html.escape(str(item.get('visual_status', 'unknown')))}).</p>"
+        )
+    return (
+        '<article class="proof-result">'
+        f"<h3>{html.escape(str(item.get('request_id') or 'proof result'))}</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{table_rows}</tbody></table></div>{view_html}</article>"
+    )
+
+
+def _last_worker_stage_counts_text(counts: dict[str, Any]) -> str:
+    if not isinstance(counts, dict):
+        return ""
+    parts = []
+    for stage, count in sorted(counts.items()):
+        if stage:
+            parts.append(f"{stage}={count}")
+    return ", ".join(parts)
+
+
+def _worker_stage_summary(events: list[dict[str, Any]]) -> str:
+    parts = []
+    for item in events:
+        if not isinstance(item, dict):
+            continue
+        event = str(item.get("event") or "")
+        stage = str(item.get("stage") or "")
+        label = " -> ".join(dict.fromkeys(part for part in (event, stage) if part))
+        elapsed = item.get("elapsed_s")
+        if elapsed not in (None, ""):
+            label = f"{label} ({elapsed}s)" if label else f"{elapsed}s"
+        if label:
+            parts.append(label)
+    return "; ".join(parts)
+
+
 def _cleanup_rerun_command_section(command: list[str]) -> str:
     if not command:
         return (
@@ -810,9 +1276,28 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     requested = evidence.get("requested_cleanup_primitive_binding") or {}
     promoted = evidence.get("cleanup_primitive_binding") or {}
     blockers = evidence.get("cleanup_primitive_binding_blockers") or []
-    if not (sampled or requested or promoted or blockers):
+    cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+    if not (
+        sampled
+        or requested
+        or promoted
+        or blockers
+        or cleanup_task_config
+        or cleanup_task_sampler_adapter
+    ):
         return ""
     rows = [
+        ("Cleanup scene XML", cleanup_task_config.get("scene_xml", "")),
+        ("Exact task config applied", _yes_no(cleanup_task_config.get("applied"))),
+        (
+            "Exact sampler adapter applied",
+            _yes_no(cleanup_task_sampler_adapter.get("applied")),
+        ),
+        (
+            "Exact sampler adapter target",
+            cleanup_task_sampler_adapter.get("planner_target_receptacle_id", ""),
+        ),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
         (
             "Sampled target",
@@ -821,6 +1306,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         ("Requested object", requested.get("object_id", "")),
         ("Requested target", requested.get("target_receptacle_id", "")),
         ("Requested source", requested.get("source_receptacle_id", "")),
+        ("Requested scene XML", requested.get("scene_xml", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Requested tools", ", ".join(str(item) for item in requested.get("tools") or [])),
@@ -1302,9 +1788,8 @@ def _execution_gate_label(gate: dict[str, Any]) -> str:
 
 def _display_subphase_from_evidence(step: dict[str, Any]) -> str:
     label = step.get("label")
-    detail = step.get("detail")
-    if label and detail:
-        return f"{label}/{detail}"
+    if label:
+        return str(label)
     return semantic_subphase_text(step.get("phase"))
 
 
@@ -1607,10 +2092,13 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
 def _semantic_phase_summary(semantic_phase: Any) -> str:
     if not semantic_phase:
         return ""
-    displayed = semantic_subphase_text(semantic_phase)
     raw = str(semantic_phase)
-    badges = _badge("Subphase", displayed)
-    if displayed != raw:
+    displayed = display_semantic_subphase(semantic_phase)
+    if displayed is None:
+        badges = _badge("Subphase", raw)
+    else:
+        badges = _badge("Subphase", displayed["label"])
+        badges += _badge("Role", displayed["detail"])
         badges += _badge("Raw phase", raw)
     return '<div class="semantic-badges">' + badges + "</div>"
 

@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 53 planner proof bundle execute-rerun gate completed with binding blocker on 2026-05-10
+**Status:** Phase 75 target-feasibility blocker matrix completed; next work is upstream task-feasibility handling for target-side fallback pairs
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -69,7 +69,123 @@ the final cleanup rerun artifacts in runner manifests, reports, and checker
 gates. Phase 53 adds the named local-dev execute-rerun gate for bound proof
 bundles and final cleanup checker readiness. The local run executed five
 RBY1M/CuRobo proofs, but final cleanup readiness remains blocked because the
-sampled upstream tasks did not match the requested cleanup aliases.
+sampled upstream tasks did not match the requested cleanup aliases. Phase 54
+binds generated proof probes to the real cleanup scene XML and requested
+planner aliases from a `molmospaces_subprocess` cleanup artifact. Local
+exact-scene probes now reach upstream task sampling for the requested cleanup
+objects, and the remaining blocker has narrowed to `HouseInvalidForTask` /
+RBY1M robot placement infeasibility before sampled binding can promote. Phase
+55 makes executed proof-bundle runner reports summarize each generated proof's
+status, task-feasibility classification, cleanup binding promotion, blockers,
+proof report, and planner views so fallback-selection work can consume explicit
+bundle-level evidence. Phase 56 adds the first fallback-selection seam: a
+runner can consume a prior proof-bundle manifest, exclude requests already known
+to be RBY1M task-feasibility blocked, and report when alternate request
+generation is required.
+Phase 57 turns that fallback-required state into bounded private fallback
+requests by preserving the cleanup object/target IDs while varying planner
+aliases from observed-handle binding metadata. The runner report now renders
+the generated fallback request rows and commands, but real RBY1M/CuRobo
+execution still has to prove whether any generated request is feasible and can
+promote cleanup primitive binding.
+Phase 58 executed four generated fallback requests locally. The runner checker
+passed with required proof outputs, but all four probes reported
+`blocked_capability` with `timeout` at `rby1m_config_import`; no fallback reached
+task sampling, planner-backed proof, cleanup binding promotion, or planner view
+capture.
+Phase 59 resolves the remaining report-vocabulary drift from the original
+discussion: shared Cleanup Artifact Reports now use `nav`, `pick`, `nav`,
+optional `open`, and `place` as primary labels while keeping
+object/target/surface/inside as secondary role detail.
+Phase 60 makes generated fallback timeout evidence visible in the same
+proof-bundle runner report: the shared proof result summary now carries timeout
+counts, execution-attempted state, last worker stage, compact worker stage
+events, and stdout/stderr paths so local reports show `rby1m_config_import`
+timeouts without opening each per-proof artifact.
+Phase 61 adds an explicit visible RBY1M/CuRobo `config_import` warmup step to
+the proof-bundle runner. When enabled, the runner records the warmup command
+and artifacts, shares an output-local Torch extension cache with proof
+commands, renders the warmup in `report.html`, and validates it through the
+runner checker before the next generated-fallback retry.
+Phase 62 ran that warmed generated fallback bundle locally. Warmup succeeded
+through RBY1M/CuRobo config import, and the generated proofs no longer timed
+out. All four reached task sampling, then failed with `KeyError` invalid
+planner aliases (`ShelvingUnit|2|3`, `Book|surface|8|79`, `Sink|5|1|0`, and
+`Bowl|surface|8|77`). The next blocker is exact-scene fallback alias validity,
+not RBY1M/CuRobo warmup.
+Phase 63 adds that validity gate to fallback generation. The runner now filters
+upstream/display aliases containing `|` before creating executable proof
+commands, renders filtered aliases in `report.html`, and checks that evidence.
+The local dry-run filtered all four previously failing aliases and generated no
+fallback commands, so the next blocker is discovering or deriving additional
+exact-scene runtime aliases instead of retrying display IDs.
+Phase 64 mines prior exact-scene `KeyError` proof outputs for runtime sibling
+aliases from the valid-name list. The runner report now includes discovered
+runtime aliases, filtered display aliases, generated fallback request rows, and
+commands in one proof-bundle artifact. The Phase 64 dry-run generated four new
+fallback commands from five discovered runtime aliases, so the next local-dev
+slice is executing those commands.
+Phase 65 executed those discovered runtime-sibling fallback commands locally
+with RBY1M/CuRobo warmup. Warmup succeeded and all four proofs reached task
+sampling with no config-import timeouts, but none became planner-backed or
+promoted cleanup primitive binding. Target-sibling commands still block with
+`HouseInvalidForTask`, while object-sibling commands fail as non-root bodies.
+The next blocker is root-body alias validity and upstream task feasibility, not
+report generation or fallback command discovery.
+Phase 66 records that failed-candidate memory in the runner itself. Prior
+discovered aliases carry forward from executed bundle manifests, non-root body
+object aliases are filtered before command generation, and exact object/target
+pairs that already hit `HouseInvalidForTask` are filtered as prior
+task-feasibility-blocked pairs. The Phase 66 dry-run against the Phase 65
+manifest generated two remaining commands for the untried book runtime sibling
+and rendered discovered aliases, filtered aliases, filtered pairs, and commands
+in one runner report.
+Phase 67 executed those two remaining filtered fallback commands locally with
+RBY1M/CuRobo warmup and strict proof-output checking. Both proofs reached task
+sampling with no config-import timeout, but both failed with
+`AssertionError: Object is not a root body` for the untried book runtime
+sibling. The next blocker is deriving or validating pickup root-body aliases
+before creating more object-side fallback commands.
+Phase 68 carries prior filtered aliases and filtered pairs forward so the latest
+executed bundle manifest is a complete prior input. The dry-run against the
+Phase 67 manifest generated zero commands, rendered seven filtered aliases and
+two filtered pairs, and makes the next blocker explicit: the current fallback
+candidate pool is exhausted until pickup root-body aliases can be derived or
+validated from a better source.
+Phase 69 bakes the first root-body validity rule into fallback generation:
+object-axis runtime aliases with nonzero variants are filtered as
+`not_pickup_root_body_alias` before command generation, while target-axis
+runtime siblings remain eligible. A dry-run against the older Phase 62 KeyError
+evidence now generates only the two target-side commands and filters the
+object-side non-root variants up front.
+Phase 70 lets the proof-bundle runner consume multiple prior manifests at once.
+The dry-run using Phase 62 KeyError evidence plus Phase 68 carried
+failed-candidate memory generated zero commands while still rendering five
+discovered aliases, seven filtered aliases, and two filtered pairs. The current
+fallback pool is now exhausted without depending on a single chosen prior
+manifest.
+Phase 71 makes that exhausted pool explicit in the artifact schema and visual
+report. Generated fallback selection now reports `Fallback status: exhausted`
+when blocked requests remain but every candidate is filtered or unavailable,
+and the runner checker validates the status.
+Phase 72 adds the blocker summary for that exhausted state. The runner now
+renders `Fallback Exhaustion Blockers` with stable codes for pickup root-body
+alias gaps, target task-feasibility-blocked pairs, and source requests with no
+remaining generated candidate.
+Phase 73 handles the first object-side alias follow-up by normalizing non-root
+runtime aliases back to their variant-0 pickup root alias. The current dry-run
+shows those root aliases were already known, so the remaining generated
+fallback blocker is target-side task-feasibility rather than a missing pickup
+root alias source.
+Phase 74 makes that remaining target-side blocker reviewable. Filtered fallback
+pairs now carry the exact prior proof report/run-result paths and worker stage,
+and prior fallback attempts merge by request ID plus planner aliases so
+different runs do not overwrite distinct proof attempts.
+Phase 75 adds a `Target Feasibility Blockers` report view that joins blocked
+source requests and blocked generated fallback pairs into one table. The latest
+dry-run shows four target blockers: two source requests without prior proof
+links in the available evidence and two fallback pairs linked to Phase 65 proof
+reports with `worker_exception` stage.
 
 ## Why This Exists
 
@@ -883,7 +999,40 @@ completed:
   gsd-plan-phase 53-molmospaces-planner-proof-bundle-execute-rerun
   gsd-execute-phase 53-molmospaces-planner-proof-bundle-execute-rerun
   gsd-verify-work 53-molmospaces-planner-proof-bundle-execute-rerun
+  gsd-plan-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-execute-phase 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-verify-work 54-molmospaces-bind-proof-probes-to-cleanup-scene
+  gsd-plan-phase 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-execute-phase 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-verify-work 55-molmospaces-proof-bundle-result-feasibility-report
+  gsd-plan-phase 56-molmospaces-proof-request-feasibility-selection
+  gsd-execute-phase 56-molmospaces-proof-request-feasibility-selection
+  gsd-verify-work 56-molmospaces-proof-request-feasibility-selection
+  gsd-plan-phase 57-molmospaces-proof-request-fallback-generation
+  gsd-execute-phase 57-molmospaces-proof-request-fallback-generation
+  gsd-verify-work 57-molmospaces-proof-request-fallback-generation
+  gsd-plan-phase 58-molmospaces-generated-fallback-proof-execution
+  gsd-execute-phase 58-molmospaces-generated-fallback-proof-execution
+  gsd-verify-work 58-molmospaces-generated-fallback-proof-execution
+  gsd-plan-phase 59-molmospaces-plain-semantic-report-labels
+  gsd-execute-phase 59-molmospaces-plain-semantic-report-labels
+  gsd-verify-work 59-molmospaces-plain-semantic-report-labels
+  gsd-plan-phase 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-execute-phase 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-verify-work 60-molmospaces-fallback-timeout-stage-reporting
+  gsd-plan-phase 61-molmospaces-fallback-proof-warmup
+  gsd-execute-phase 61-molmospaces-fallback-proof-warmup
+  gsd-verify-work 61-molmospaces-fallback-proof-warmup
+  gsd-plan-phase 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-execute-phase 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-verify-work 62-molmospaces-warmed-generated-fallback-proof-execution
+  gsd-plan-phase 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-execute-phase 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-verify-work 63-molmospaces-exact-scene-fallback-alias-validation
+  gsd-plan-phase 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-execute-phase 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-verify-work 64-molmospaces-fallback-runtime-alias-discovery
 
 next pipeline candidates:
-  plan exact upstream sampled-task binding for cleanup proof requests
+  plan discovered runtime-alias fallback proof execution
 ```
