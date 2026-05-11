@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
+    grasp_cache_availability_preflight,
+    grasp_cache_generation_preflight,
     grasp_feasibility_mitigation_decision,
     grasp_feasibility_signature,
     grasp_feasibility_signature_counts,
@@ -161,3 +165,141 @@ def test_grasp_mitigation_decision_routes_missing_cache_before_retry() -> None:
     assert decision["missing_grasp_asset_uids"] == ["Bread_1"]
     assert decision["grasp_load_exception_types"] == ["ValueError"]
     assert decision["subkind_counts"] == {"grasp_cache_missing": 1}
+
+
+def test_grasp_cache_preflight_distinguishes_object_asset_from_missing_cache(
+    tmp_path: Path,
+) -> None:
+    object_dir = tmp_path / "objects" / "thor" / "20251117" / "Kitchen Objects" / "Bread"
+    object_dir.mkdir(parents=True)
+    (object_dir / "Bread_1.xml").write_text("<mujoco />", encoding="utf-8")
+    (object_dir / "Bread_1.obj").write_text("o Bread_1\n", encoding="utf-8")
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    assert preflight["schema"] == "planner_grasp_cache_availability_preflight_v1"
+    assert preflight["status"] == "missing_cache"
+    assert preflight["assets_dir_source"] == "argument"
+    assert preflight["assets_dir_resolved"] == str(tmp_path)
+    assert preflight["missing_cache_asset_count"] == 1
+    assert preflight["cache_missing_asset_uids"] == ["Bread_1"]
+    asset = preflight["assets"][0]
+    assert asset["asset_uid"] == "Bread_1"
+    assert asset["loader_file_status"] == "missing"
+    assert asset["object_asset_status"] == "present"
+    assert len(asset["candidate_grasp_files"]) == 3
+    assert asset["candidate_grasp_files"][0]["relative_path"] == (
+        "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"
+    )
+    assert asset["candidate_grasp_files"][1]["relative_path"] == (
+        "grasps/droid_objaverse/Bread_1/Bread_1_grasps_filtered.npz"
+    )
+    assert asset["candidate_grasp_files"][2]["relative_path"] == (
+        "grasps/rum/Bread_1/Bread_1_grasps_filtered.json"
+    )
+    assert asset["folder_probe_files"][0]["loader_role"] == "has_grasp_folder_only"
+    assert {item["kind"] for item in asset["object_asset_files"]} == {"xml", "obj"}
+
+
+def test_grasp_cache_preflight_resolves_runtime_symlink_root(tmp_path: Path) -> None:
+    assets_dir = tmp_path / "assets"
+    cache_dir = tmp_path / "cache" / "grasps" / "droid" / "20251116"
+    cache_dir.mkdir(parents=True)
+    (assets_dir / "grasps").mkdir(parents=True)
+    (assets_dir / "grasps" / "droid").symlink_to(cache_dir, target_is_directory=True)
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=assets_dir,
+        assets_dir_source="planner_scene",
+    )
+
+    probe = preflight["assets"][0]["candidate_grasp_files"][0]
+    assert preflight["assets_dir_source"] == "planner_scene"
+    assert probe["relative_path"] == "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"
+    assert probe["path"] == str(
+        assets_dir / "grasps" / "droid" / "Bread_1" / "Bread_1_grasps_filtered.npz"
+    )
+    assert probe["resolved_path"] == str(cache_dir / "Bread_1" / "Bread_1_grasps_filtered.npz")
+    assert probe["parent_resolved_path"] == str(cache_dir / "Bread_1")
+
+
+def test_grasp_cache_preflight_ready_when_rigid_loader_file_exists(tmp_path: Path) -> None:
+    import numpy as np
+
+    grasp_dir = tmp_path / "grasps" / "droid" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    np.savez(grasp_dir / "Bread_1_grasps_filtered.npz", transforms=np.zeros((1, 4, 4)))
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    assert preflight["status"] == "ready"
+    assert preflight["ready_asset_count"] == 1
+    assert preflight["missing_cache_asset_count"] == 0
+    assert preflight["cache_ready_asset_uids"] == ["Bread_1"]
+    assert preflight["assets"][0]["loader_file_status"] == "valid"
+    assert preflight["assets"][0]["object_asset_status"] == "missing"
+    assert preflight["assets"][0]["candidate_grasp_files"][0]["valid"] is True
+    assert preflight["assets"][0]["candidate_grasp_files"][0]["transform_count"] == 1
+
+
+def test_grasp_cache_preflight_rejects_empty_loader_file(tmp_path: Path) -> None:
+    import numpy as np
+
+    grasp_dir = tmp_path / "grasps" / "droid" / "Bread_1"
+    grasp_dir.mkdir(parents=True)
+    np.savez(grasp_dir / "Bread_1_grasps_filtered.npz", transforms=np.zeros((0,)))
+
+    preflight = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    probe = preflight["assets"][0]["candidate_grasp_files"][0]
+    assert preflight["status"] == "missing_cache"
+    assert preflight["ready_asset_count"] == 0
+    assert preflight["missing_cache_asset_count"] == 1
+    assert preflight["assets"][0]["loader_file_status"] == "present_but_invalid"
+    assert probe["exists"] is True
+    assert probe["valid"] is False
+    assert probe["validation_status"] == "empty"
+    assert probe["transform_count"] == 0
+
+
+def test_grasp_cache_generation_preflight_reports_missing_prerequisites(
+    tmp_path: Path,
+) -> None:
+    object_dir = tmp_path / "objects" / "thor" / "Kitchen Objects" / "Bread" / "Prefabs"
+    object_dir.mkdir(parents=True)
+    (object_dir / "Bread_1.xml").write_text("<mujoco />", encoding="utf-8")
+
+    availability = grasp_cache_availability_preflight(
+        {"missing_grasp_asset_uids": ["Bread_1"]},
+        assets_dir=tmp_path,
+    )
+
+    preflight = grasp_cache_generation_preflight(
+        availability,
+        output_dir=tmp_path / "runner",
+        molmospaces_python=None,
+    )
+
+    assert preflight["schema"] == "planner_grasp_cache_generation_preflight_v1"
+    assert preflight["status"] == "blocked"
+    assert preflight["asset_count"] == 1
+    assert preflight["blocker_count"] >= 1
+    assert preflight["assets"][0]["asset_uid"] == "Bread_1"
+    assert preflight["assets"][0]["object_xml_exists"] is True
+    assert preflight["assets"][0]["cache_target_relative_path"] == (
+        "grasps/droid/Bread_1/Bread_1_grasps_filtered.npz"
+    )
+    assert preflight["objects_list_path"].endswith("grasp_generation/rigid_objects_list.json")
+    assert any(
+        blocker["code"] == "molmospaces_python_not_configured" for blocker in preflight["blockers"]
+    )

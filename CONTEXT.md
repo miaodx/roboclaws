@@ -186,6 +186,34 @@ mitigation before exact retry while keeping source rotation state visible for
 separate unproven requests.
 _Avoid_: treating source rotation as if it mitigated a known missing cache asset
 
+**Grasp Cache Availability Preflight**:
+Proof-bundle runner evidence that probes the exact rigid grasp-cache files used
+by MolmoSpaces' object loader and distinguishes present object assets from
+missing loader-compatible grasp caches.
+_Avoid_: assuming an object asset cache implies cached rigid grasps exist
+
+**Runtime Assets Grasp Cache Preflight**:
+Grasp-cache availability evidence bound to the MolmoSpaces runtime `ASSETS_DIR`
+derived from the planner scene XML, including symlink-resolved cache targets.
+_Avoid_: displaying data-cache roots as if they were the loader root
+
+**Grasp Cache Validity Preflight**:
+Rigid grasp-cache evidence that parses candidate files and treats a loader file
+as ready only when it contains at least one transform.
+_Avoid_: treating empty NPZ/JSON files as a successful cache install
+
+**Grasp Filter Diagnostics**:
+Bounded local evidence that preserves MolmoSpaces rigid grasp intermediates and
+reruns perturbation-filter variants before cache installation.
+_Avoid_: relying on an empty filtered NPZ as the only failure signal
+
+**Grasp Initial Contact Diagnostics**:
+Bounded local evidence that sweeps rigid-grasp open-settle and approach-pose
+parameters against preserved generated candidates, recording initial object
+contacts, initial displacement, final gripper contacts, and nonzero success
+counts before any loader cache installation.
+_Avoid_: treating zero filtered transforms as an opaque perturbation failure
+
 **Post-Execution Fallback Exhaustion**:
 Proof-request selection evidence showing that, after executed proof results are
 used as prior memory, a source pool has no selected requests and no generated
@@ -350,7 +378,10 @@ _Avoid_: Per-demo report clone
 **Cleanup Report Artifact Adapter**:
 A small adapter whose interface starts from an existing cleanup `run_result.json`
 and rehydrates scenario, trace, snapshots, private manifest, and robot-view
-steps before delegating to the shared Cleanup Artifact Report underlay.
+steps before delegating to the shared Cleanup Artifact Report underlay. When an
+older ADR-0003 artifact has no `scenario.json`, the adapter uses only a minimal
+public scenario shell from `run_result.json` and does not fabricate objects or
+private targets.
 _Avoid_: second report renderer, manual stale HTML repair
 
 **Report Visual Core**:
@@ -372,6 +403,31 @@ _Avoid_: planner diagnostics changing cleanup report visuals
 **Semantic Cleanup Subphase**:
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow
+
+**Semantic Cleanup Vocabulary**:
+The package-level source of truth for raw cleanup phases, canonical cleanup
+phase sequences, report-facing subphase labels, loop variant strings, and
+focused robot-view action prefixes.
+_Avoid_: per-demo phase constants, checker-local visual vocabulary
+
+**Grasp Cache Generation Preflight**:
+Report-visible evidence for whether the upstream MolmoSpaces rigid grasp
+generator is locally runnable for a missing-cache asset, including object XML,
+loader cache target, Python prerequisites, Manifold executables, and proposed
+generation command.
+_Avoid_: failed invisible generation attempt, fake grasp cache
+
+**Grasp Generation Setup Runner**:
+The checked-in local-dev runner that installs rigid grasp-generation Python
+prerequisites, initializes/builds Manifold, and reruns the same generation
+preflight as its acceptance gate.
+_Avoid_: one-off shell setup that cannot be reproduced by the next agent
+
+**Grasp Cache Generation Runner**:
+The checked-in local-dev runner that turns a ready generation preflight into an
+upstream `run_rigid.py` attempt, validates the generated NPZ, installs only
+non-empty cache files, and renders command/install blockers.
+_Avoid_: copying unfiltered candidates or empty NPZ files into the loader cache
 
 **Planner-Backed Manipulation Proof**:
 Evidence that a MolmoSpaces robot manipulation planner policy actually executed
@@ -664,6 +720,9 @@ _Avoid_: full cleanup replacement claim
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
   secondary role detail, not as part of the primary **Semantic Cleanup
   Subphase** label.
+- **Semantic Cleanup Vocabulary** should be imported by the shared loop,
+  Cleanup Artifact Report, visual-core checks, and checkers instead of
+  redefined per demo.
 - A **Shared Semantic Cleanup Loop** should be the default object-level execution path for MolmoSpaces cleanup demos, with contract-specific perception and scoring layered around it.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
@@ -702,6 +761,20 @@ _Avoid_: full cleanup replacement claim
   proof-result summaries before source rotation or cache mitigation.
 - **Grasp Cache Routing Decision** should make cache mitigation versus source
   rotation explicit before another runtime proof attempt.
+- **Grasp Cache Availability Preflight** should record the droid,
+  droid-objaverse, and RUM rigid loader paths for a missing grasp asset before
+  generating or restoring cache data.
+- **Runtime Assets Grasp Cache Preflight** should derive `ASSETS_DIR` from the
+  planner scene XML and render symlink-resolved cache targets before a restore
+  or generation command is chosen.
+- **Grasp Cache Validity Preflight** should parse rigid loader files and require
+  nonzero transforms before marking a missing-cache asset ready.
+- **Grasp Cache Generation Preflight** should pass before running upstream
+  rigid grasp generation or installing generated cache output.
+- **Grasp Generation Setup Runner** should be used to make that preflight pass
+  instead of applying ad hoc local environment fixes.
+- **Grasp Cache Generation Runner** should install only a generated NPZ that
+  passes the nonzero-transform validation used by the availability preflight.
 - **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
 - A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 - A **Planner Proof Request Manifest** should be generated after cleanup from semantic substeps and private bindings, not by exposing planner aliases to the Cleanup Agent.
@@ -973,6 +1046,10 @@ _Avoid_: full cleanup replacement claim
 - Phase 93 added Cleanup Report Artifact Adapter. Existing cleanup artifacts now
   regenerate `report.html` from `run_result.json` through the shared report
   underlay, so stale ignored reports do not act like a second implementation.
+- Phase 120 closes the scenario-less report adapter gap. ADR-0003 visual
+  artifacts without `scenario.json` now regenerate through the same shared
+  underlay using a minimal public scenario shell, keeping the canonical
+  `nav, pick, nav, open?, place` report rhythm without inventing private truth.
 - Phase 94 added Seeded Source Pool and Proof Memory. MolmoSpaces generated-mess
   selection now uses the subprocess seed to rotate object identities while
   preserving semantic target fixtures, and proof-selection memory rejects local
@@ -1073,3 +1150,56 @@ _Avoid_: full cleanup replacement claim
   reports now route `grasp_cache_missing` evidence for `Bread_1` to
   `grasp_cache_mitigation` before exact retry, while keeping source rotation
   visible as `available_for_unproven_requests` for unrelated selected requests.
+- Phase 112 adds Grasp Cache Availability Preflight. Proof-bundle manifests and
+  reports now show that `Bread_1` object XML/OBJ assets are present locally but
+  the rigid loader-compatible grasp cache files are missing for droid,
+  droid-objaverse, and RUM sources.
+- Phase 113 adds Runtime Assets Grasp Cache Preflight. The preflight now derives
+  the runtime `ASSETS_DIR` from the planner scene XML and renders
+  symlink-resolved missing cache targets under the local versioned grasp cache.
+- Phase 114 adds Grasp Cache Validity Preflight. Reports now distinguish
+  existing-but-empty rigid loader files from valid cache data; the installed
+  droid `Bread_1` file is `present_but_invalid` with zero transforms.
+- Phase 115 adds Semantic Cleanup Vocabulary. `semantic_timeline.py` now owns
+  the raw phases, canonical surface/inside cleanup sequences, display labels,
+  focused action prefixes, and loop variants used by the shared semantic loop,
+  Cleanup Artifact Report, visual-core contract, and checkers.
+- Phase 116 adds Grasp Cache Generation Preflight. The proof-bundle runner now
+  renders the upstream rigid generation route for `Bread_1` and blocks visibly
+  on missing `sklearn`, missing `python-fcl`, and missing Manifold
+  `manifold`/`simplify` executables.
+- Phase 117 adds Grasp Generation Setup Runner. The local MolmoSpaces runtime
+  now has the rigid-path Python prerequisites and built Manifold executables,
+  and the proof-bundle generation preflight reports `ready` with zero blockers.
+- Phase 118 adds Grasp Cache Generation Runner. The generation path reaches
+  `Bread_1` candidate grasp generation, but upstream perturbation filtering
+  saves zero successful transforms, so install remains blocked and visible in
+  the generation report.
+- Phase 119 adds Grasp Filter Diagnostics. A bounded local diagnostic preserves
+  the combined/manifold/simplified mesh, generated candidates, per-variant
+  subsets, and filtered NPZ outputs. It generated 24 valid `Bread_1` candidates
+  and showed zero successful transforms for `initial_contact`,
+  `translation_shake`, and `upstream_like`, narrowing the next blocker to the
+  initial contact/pose path inside perturbation testing.
+- Phase 120 adds Report Artifact Scenario Fallback. Scenario-less ADR-0003
+  cleanup artifacts now regenerate from `run_result.json` through the shared
+  Cleanup Artifact Report adapter using a minimal public scenario shell, so
+  stale local `report.html` files do not imply multiple report implementations.
+- Phase 121 adds Grasp Initial Contact Diagnostics. A reusable MuJoCo sweep over
+  the 24 preserved `Bread_1` candidates shows the upstream-sign approach remains
+  zero-success, while positive-sign larger standoffs produce nonzero contacts
+  without initial object displacement; the best local variant is
+  `sign_1_dist_0.8_settle_1` with 9/24 successes.
+- Phase 122 adds Grasp Pose Policy Cache Generation. The same MuJoCo probe now
+  has cache-output mode, so the validated `sign_1_dist_0.8_settle_1` policy can
+  write loader-compatible object-relative TCP transforms without creating a
+  second approach implementation. The local run generated 9 valid transforms
+  from 24 candidates, installed them to the droid `Bread_1` loader cache after
+  generated-NPZ validation, and the post-install availability preflight returned
+  `ready`.
+- Phase 123 adds Cache-Ready Proof Rerun evidence. The warmed exact
+  `observed_001` to refrigerator proof now loads the installed `Bread_1` droid
+  cache (`cached_grasp_count=9`, `grasp_load_failure_count=0`) and finds two
+  non-colliding grasps, so the prior missing-cache blocker is cleared. The
+  proof remains `blocked_capability` because CuRobo reaches pre-grasp execution
+  with no planned trajectory.

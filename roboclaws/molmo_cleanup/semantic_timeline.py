@@ -4,18 +4,62 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+NAVIGATE_TO_OBJECT_PHASE = "navigate_to_object"
+PICK_PHASE = "pick"
+NAVIGATE_TO_RECEPTACLE_PHASE = "navigate_to_receptacle"
+OPEN_RECEPTACLE_PHASE = "open_receptacle"
+PLACE_PHASE = "place"
+PLACE_INSIDE_PHASE = "place_inside"
+OBJECT_DONE_PHASE = "object_done"
+
+CANONICAL_BASE_CLEANUP_PHASES = (
+    NAVIGATE_TO_OBJECT_PHASE,
+    PICK_PHASE,
+    NAVIGATE_TO_RECEPTACLE_PHASE,
+)
+CANONICAL_SURFACE_CLEANUP_PHASES = (*CANONICAL_BASE_CLEANUP_PHASES, PLACE_PHASE)
+CANONICAL_INSIDE_CLEANUP_PHASES = (
+    *CANONICAL_BASE_CLEANUP_PHASES,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_INSIDE_PHASE,
+)
+PLACE_CLEANUP_PHASES = (PLACE_PHASE, PLACE_INSIDE_PHASE)
+SEMANTIC_RESPONSE_PHASES = (
+    *CANONICAL_BASE_CLEANUP_PHASES,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_PHASE,
+    PLACE_INSIDE_PHASE,
+    OBJECT_DONE_PHASE,
+)
+SEMANTIC_RESPONSE_PHASE_SET = frozenset(SEMANTIC_RESPONSE_PHASES)
+FOCUSED_SEMANTIC_PHASES = (
+    *CANONICAL_BASE_CLEANUP_PHASES,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_PHASE,
+    PLACE_INSIDE_PHASE,
+)
+FOCUSED_SEMANTIC_ACTION_PREFIXES = tuple(f"{phase} " for phase in FOCUSED_SEMANTIC_PHASES)
+
 SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place"
 CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT = f"{SEMANTIC_LOOP_VARIANT}-object_done"
+SEMANTIC_LOOP_DISPLAY_TEXT = "nav, pick, nav, open when needed, place"
+SEMANTIC_LOOP_DISPLAY_NOTE = f"Canonical cleanup loop: {SEMANTIC_LOOP_DISPLAY_TEXT}."
 ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"
 
 SEMANTIC_SUBPHASE_LABELS = {
-    "navigate_to_object": ("nav", "object"),
-    "pick": ("pick", "object"),
-    "navigate_to_receptacle": ("nav", "target"),
-    "open_receptacle": ("open", "target"),
-    "place": ("place", "surface"),
-    "place_inside": ("place", "inside"),
+    NAVIGATE_TO_OBJECT_PHASE: ("nav", "object"),
+    PICK_PHASE: ("pick", "object"),
+    NAVIGATE_TO_RECEPTACLE_PHASE: ("nav", "target"),
+    OPEN_RECEPTACLE_PHASE: ("open", "target"),
+    PLACE_PHASE: ("place", "surface"),
+    PLACE_INSIDE_PHASE: ("place", "inside"),
 }
+CANONICAL_DISPLAY_SUBPHASES = tuple(
+    SEMANTIC_SUBPHASE_LABELS[phase] for phase in CANONICAL_BASE_CLEANUP_PHASES
+)
+CANONICAL_PLACE_DISPLAY_SUBPHASES = tuple(
+    SEMANTIC_SUBPHASE_LABELS[phase] for phase in PLACE_CLEANUP_PHASES
+)
 
 
 def record_robot_view_step(
@@ -83,7 +127,7 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": None,
             "semantic_phase": None,
         }
-    if tool == "navigate_to_object":
+    if tool == NAVIGATE_TO_OBJECT_PHASE:
         object_id = optional_str(response.get("object_id") or request.get("object_id"))
         return {
             "action": f"navigate_to_object {object_id}",
@@ -92,9 +136,9 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": optional_str(
                 response.get("source_receptacle_id") or response.get("location_id")
             ),
-            "semantic_phase": "navigate_to_object",
+            "semantic_phase": NAVIGATE_TO_OBJECT_PHASE,
         }
-    if tool == "pick":
+    if tool == PICK_PHASE:
         object_id = optional_str(response.get("object_id") or request.get("object_id"))
         return {
             "action": f"pick {object_id}",
@@ -103,9 +147,9 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": optional_str(
                 response.get("previous_location_id") or response.get("source_receptacle_id")
             ),
-            "semantic_phase": "pick",
+            "semantic_phase": PICK_PHASE,
         }
-    if tool == "navigate_to_receptacle":
+    if tool == NAVIGATE_TO_RECEPTACLE_PHASE:
         object_id = optional_str(response.get("object_id"))
         receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
@@ -113,9 +157,9 @@ def robot_view_capture_for_tool(
             "label_suffix": label_suffix("navigate_receptacle", receptacle_id),
             "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": receptacle_id,
-            "semantic_phase": "navigate_to_receptacle",
+            "semantic_phase": NAVIGATE_TO_RECEPTACLE_PHASE,
         }
-    if tool == "open_receptacle":
+    if tool == OPEN_RECEPTACLE_PHASE:
         object_id = optional_str(response.get("object_id"))
         receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
@@ -123,9 +167,9 @@ def robot_view_capture_for_tool(
             "label_suffix": label_suffix("open_receptacle", receptacle_id),
             "focus_object_id": transform_object_id(object_id),
             "focus_receptacle_id": receptacle_id,
-            "semantic_phase": "open_receptacle",
+            "semantic_phase": OPEN_RECEPTACLE_PHASE,
         }
-    if tool in {"place", "place_inside"}:
+    if tool in PLACE_CLEANUP_PHASES:
         object_id = optional_str(response.get("object_id"))
         receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
         return {
@@ -150,29 +194,21 @@ def semantic_substeps(
         if event.get("event") != "response":
             continue
         tool = str(event.get("tool", ""))
-        if tool not in {
-            "navigate_to_object",
-            "pick",
-            "navigate_to_receptacle",
-            "open_receptacle",
-            "place",
-            "place_inside",
-            "object_done",
-        }:
+        if tool not in SEMANTIC_RESPONSE_PHASE_SET:
             continue
         response = event.get("response")
         if not isinstance(response, dict):
             continue
         object_id = response.get("object_id") or active_object_id
-        if tool == "navigate_to_object" and response.get("object_id"):
+        if tool == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
             object_id = str(response["object_id"])
             active_object_id = object_id
-        elif tool == "pick" and response.get("ok") and response.get("object_id"):
+        elif tool == PICK_PHASE and response.get("ok") and response.get("object_id"):
             object_id = str(response["object_id"])
             active_object_id = object_id
-        elif tool in {"place", "place_inside"} and response.get("ok"):
+        elif tool in PLACE_CLEANUP_PHASES and response.get("ok"):
             active_object_id = None
-        elif tool == "object_done" and response.get("object_id"):
+        elif tool == OBJECT_DONE_PHASE and response.get("object_id"):
             object_id = str(response["object_id"])
 
         if not object_id:
@@ -290,7 +326,7 @@ def semantic_diagnostics(
     for item in substeps:
         phases = [str(step.get("phase")) for step in item.get("steps", [])]
         attempted_semantic_substeps += len(phases)
-        if "object_done" in phases:
+        if OBJECT_DONE_PHASE in phases:
             object_done_count += 1
         if has_complete_semantic_sequence(phases):
             complete_objects += 1
@@ -324,17 +360,17 @@ def semantic_diagnostics(
 
 
 def has_complete_semantic_sequence(phases: list[str]) -> bool:
-    if phases[:3] != ["navigate_to_object", "pick", "navigate_to_receptacle"]:
+    if phases[: len(CANONICAL_BASE_CLEANUP_PHASES)] != list(CANONICAL_BASE_CLEANUP_PHASES):
         return False
-    if phases[-1:] == ["object_done"]:
-        return "place" in phases or "place_inside" in phases
-    return phases[-1:] in (["place"], ["place_inside"])
+    if phases[-1:] == [OBJECT_DONE_PHASE]:
+        return any(phase in phases for phase in PLACE_CLEANUP_PHASES)
+    return phases[-1:] in ([PLACE_PHASE], [PLACE_INSIDE_PHASE])
 
 
 def fridge_sequence_ok(phases: list[str]) -> bool:
     try:
-        open_index = phases.index("open_receptacle")
-        place_index = phases.index("place_inside")
+        open_index = phases.index(OPEN_RECEPTACLE_PHASE)
+        place_index = phases.index(PLACE_INSIDE_PHASE)
     except ValueError:
         return False
     return open_index < place_index

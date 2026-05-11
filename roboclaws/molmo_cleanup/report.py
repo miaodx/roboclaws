@@ -10,6 +10,9 @@ from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    OBJECT_DONE_PHASE,
+    PLACE_CLEANUP_PHASES,
+    SEMANTIC_LOOP_DISPLAY_NOTE,
     display_semantic_subphase,
     display_semantic_subphases,
     semantic_subphase_text,
@@ -231,6 +234,16 @@ def render_planner_proof_bundle_runner_report(
             manifest.get("grasp_feasibility_mitigation_decision") or {}
         )
     }
+    {
+        _grasp_cache_availability_preflight_section(
+            manifest.get("grasp_cache_availability_preflight") or {}
+        )
+    }
+    {
+        _grasp_cache_generation_preflight_section(
+            manifest.get("grasp_cache_generation_preflight") or {}
+        )
+    }
     {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
@@ -254,6 +267,97 @@ def render_planner_proof_bundle_runner_report(
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
+def render_grasp_cache_generation_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for MolmoSpaces grasp cache generation attempts."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_cache_generation_summary_section(result),
+                _grasp_cache_generation_assets_section(result.get("assets") or []),
+                _grasp_cache_generation_command_section(result),
+                _grasp_cache_generation_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
+def render_grasp_pose_policy_cache_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for validated pose-policy cache generation."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_pose_policy_cache_summary_section(result),
+                _grasp_pose_policy_cache_policy_section(result.get("pose_policy") or {}),
+                _grasp_pose_policy_cache_artifacts_section(result),
+                _grasp_cache_generation_assets_section(result.get("assets") or []),
+                _grasp_cache_generation_command_section(result),
+                _grasp_cache_generation_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
+def render_grasp_filter_diagnostics_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for bounded grasp perturbation-filter diagnostics."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_filter_diagnostics_summary_section(result),
+                _grasp_filter_diagnostics_artifacts_section(result),
+                _grasp_filter_diagnostics_variants_section(result.get("variants") or []),
+                _grasp_filter_diagnostics_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
+    return report_path
+
+
+def render_grasp_initial_contact_diagnostics_report(
+    *,
+    output_dir: Path,
+    result: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for rigid-grasp initial-contact diagnostics."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    body = "\n".join(
+        _present_sections(
+            [
+                _grasp_initial_contact_summary_section(result),
+                _grasp_initial_contact_artifacts_section(result),
+                _grasp_initial_contact_variants_section(result.get("variants") or []),
+                _grasp_initial_contact_samples_section(result.get("best_variant") or {}),
+                _grasp_initial_contact_blockers_section(result.get("blockers") or []),
+            ]
+        )
+    )
     report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
 
@@ -789,6 +893,482 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
     )
 
 
+def _grasp_cache_generation_summary_section(result: dict[str, Any]) -> str:
+    return (
+        '<section class="summary grasp-cache-generation-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp cache generation artifact</p>'
+        "<h1>MolmoSpaces Grasp Cache Generation</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Assets', result.get('asset_count', 0))}"
+        f"{_metric('Blockers', result.get('blocker_count', 0))}"
+        f"{_metric('Ready', _yes_no(result.get('ready')))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Objects list', result.get('objects_list_path', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_assets_section(assets: list[dict[str, Any]]) -> str:
+    rows = []
+    for asset in assets:
+        generated = asset.get("generated_validation") or {}
+        installed = asset.get("installed_validation") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(asset.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(generated.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(generated.get('transform_count', 0)))}</td>"
+            f"<td>{html.escape(_yes_no(asset.get('installed')))}</td>"
+            f"<td>{html.escape(str(installed.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(installed.get('transform_count', 0)))}</td>"
+            f"<td>{html.escape(str(asset.get('generated_npz_path', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('cache_target_path', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        '<section class="panel grasp-cache-generation-assets">'
+        "<h2>Generated Cache Assets</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Generated status</th><th>Generated transforms</th>"
+        "<th>Installed</th><th>Installed status</th><th>Installed transforms</th>"
+        "<th>Generated NPZ</th><th>Cache target</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_command_section(result: dict[str, Any]) -> str:
+    command = " ".join(str(part) for part in result.get("command") or [])
+    command_result = result.get("command_result") or {}
+    if not command:
+        return ""
+    rows = [
+        ("Command status", command_result.get("status", "")),
+        ("Return code", command_result.get("returncode", "")),
+        ("Stdout tail", _tail_text(command_result.get("stdout", ""), limit=1600)),
+        ("Stderr tail", _tail_text(command_result.get("stderr", ""), limit=1600)),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    return (
+        '<section class="panel grasp-cache-generation-command">'
+        "<h2>Generation Command</h2>"
+        f"<pre><code>{html.escape(command)}</code></pre>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_cache_generation_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Generation Blockers</h2>'
+            '<p class="note">No generation blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-cache-generation-blockers">'
+        "<h2>Generation Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Asset</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_summary_section(result: dict[str, Any]) -> str:
+    return (
+        '<section class="summary grasp-filter-diagnostics-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp filter diagnostic artifact</p>'
+        "<h1>MolmoSpaces Grasp Filter Diagnostics</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Object', result.get('object_name', ''))}"
+        f"{_metric('Variants', result.get('variant_count', 0))}"
+        f"{_metric('Successful', result.get('successful_variant_count', 0))}"
+        f"{_metric('Blockers', result.get('blocker_count', 0))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Object XML', result.get('object_xml', ''))}"
+        f"{_badge('Artifacts', result.get('artifact_dir', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_artifacts_section(result: dict[str, Any]) -> str:
+    pipeline = result.get("pipeline") or {}
+    subset = result.get("candidate_subset") or {}
+    rows = [
+        ("Pipeline source", pipeline.get("source", "")),
+        ("Candidate grasps", pipeline.get("candidate_grasps_path", "")),
+        ("Candidate count", pipeline.get("candidate_count", "")),
+        ("Subset grasps", subset.get("subset_path", "")),
+        ("Requested subset", subset.get("requested_sample_size", "")),
+        ("Subset count", subset.get("subset_count", "")),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    command_rows = []
+    for command in pipeline.get("commands") or []:
+        result_row = command.get("result") or {}
+        command_text = " ".join(str(part) for part in command.get("command") or [])
+        output_tail = _tail_text(result_row.get("stderr") or result_row.get("stdout"), limit=500)
+        command_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(command.get('stage', '')))}</td>"
+            f"<td>{html.escape(str(result_row.get('status', '')))}</td>"
+            f"<td>{html.escape(str(result_row.get('returncode', '')))}</td>"
+            f"<td><code>{html.escape(command_text)}</code></td>"
+            f"<td>{html.escape(output_tail)}</td>"
+            "</tr>"
+        )
+    command_table = ""
+    if command_rows:
+        command_table = (
+            '<div class="table-wrap"><table><thead><tr>'
+            "<th>Stage</th><th>Status</th><th>Return</th><th>Command</th><th>Output tail</th>"
+            f"</tr></thead><tbody>{''.join(command_rows)}</tbody></table></div>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-artifacts">'
+        "<h2>Diagnostic Artifacts</h2>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        f"{command_table}"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_variants_section(variants: list[dict[str, Any]]) -> str:
+    if not variants:
+        return ""
+    rows = []
+    for variant in variants:
+        validation = variant.get("validation") or {}
+        command_result = variant.get("command_result") or {}
+        output_tail = _tail_text(
+            command_result.get("stderr") or command_result.get("stdout"), limit=500
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(variant.get('name', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('classification', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('num_shakes', '')))}</td>"
+            f"<td>{html.escape(_yes_no(variant.get('rotate')))}</td>"
+            f"<td>{html.escape(str(variant.get('successful_transform_count', 0)))}</td>"
+            f"<td>{html.escape(str(validation.get('validation_status', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('output_npz_path', '')))}</td>"
+            f"<td>{html.escape(output_tail)}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-variants">'
+        "<h2>Filter Variants</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Variant</th><th>Classification</th><th>Shakes</th><th>Rotate</th>"
+        "<th>Successful transforms</th><th>NPZ status</th><th>Output NPZ</th><th>Output tail</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_filter_diagnostics_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Filter Diagnostic Blockers</h2>'
+            '<p class="note">No filter diagnostic blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('variant', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-filter-diagnostics-blockers">'
+        "<h2>Filter Diagnostic Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Variant</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_pose_policy_cache_summary_section(result: dict[str, Any]) -> str:
+    policy = result.get("pose_policy") or {}
+    return (
+        '<section class="summary grasp-pose-policy-cache-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Pose-policy cache artifact</p>'
+        "<h1>MolmoSpaces Pose Policy Grasp Cache</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Object', result.get('object_name', ''))}"
+        f"{_metric('Candidates', result.get('candidate_count', 0))}"
+        f"{_metric('Generated transforms', result.get('successful_transform_count', 0))}"
+        f"{_metric('Installed', _yes_no((result.get('assets') or [{}])[0].get('installed')))}"
+        f"{_metric('Blockers', result.get('blocker_count', 0))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Policy', policy.get('name', ''))}"
+        f"{_badge('Install requested', _yes_no(result.get('install_requested')))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_pose_policy_cache_policy_section(policy: dict[str, Any]) -> str:
+    if not policy:
+        return ""
+    rows = [
+        ("Policy name", policy.get("name", "")),
+        ("Source", policy.get("source", "")),
+        ("Approach sign", policy.get("approach_sign", "")),
+        ("Approach distance", policy.get("approach_distance", "")),
+        ("Settle steps", policy.get("settle_steps", "")),
+        ("Source success count", policy.get("source_success_count", "")),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    return (
+        '<section class="panel grasp-pose-policy-cache-policy">'
+        "<h2>Pose Policy</h2>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_pose_policy_cache_artifacts_section(result: dict[str, Any]) -> str:
+    command_result = result.get("command_result") or {}
+    rows = [
+        ("Candidate grasps", result.get("candidate_grasps_path", "")),
+        ("Object XML", result.get("object_xml", "")),
+        ("Artifact dir", result.get("artifact_dir", "")),
+        ("Probe script", result.get("probe_script_path", "")),
+        ("Probe result", result.get("probe_output_path", "")),
+        ("Generated NPZ", result.get("generated_npz_path", "")),
+        ("Command status", command_result.get("status", "")),
+        ("Command return", command_result.get("returncode", "")),
+        (
+            "Command output tail",
+            _tail_text(command_result.get("stderr") or command_result.get("stdout"), limit=500),
+        ),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    return (
+        '<section class="panel grasp-pose-policy-cache-artifacts">'
+        "<h2>Cache Artifacts</h2>"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_summary_section(result: dict[str, Any]) -> str:
+    best = result.get("best_variant") or {}
+    return (
+        '<section class="summary grasp-initial-contact-result">'
+        '<div class="summary-head">'
+        '<p class="eyebrow">Grasp initial-contact artifact</p>'
+        "<h1>MolmoSpaces Grasp Initial Contact Diagnostics</h1>"
+        "</div>"
+        '<div class="metric-grid">'
+        f"{_metric('Status', result.get('status', ''))}"
+        f"{_metric('Object', result.get('object_name', ''))}"
+        f"{_metric('Candidates', result.get('candidate_count', 0))}"
+        f"{_metric('Variants', result.get('variant_count', 0))}"
+        f"{_metric('Successful variants', result.get('successful_variant_count', 0))}"
+        f"{_metric('Best success', best.get('success_count', 0))}"
+        "</div>"
+        '<div class="badges">'
+        f"{_badge('Schema', result.get('schema', 'unknown'))}"
+        f"{_badge('Best variant', best.get('name', ''))}"
+        f"{_badge('Best sign', best.get('approach_sign', ''))}"
+        f"{_badge('Best distance', best.get('approach_distance', ''))}"
+        f"{_badge('Best settle', best.get('settle_steps', ''))}"
+        f"{_badge('Assets symlink', _assets_symlink_summary(result.get('assets_symlink') or {}))}"
+        "</div>"
+        f'<p class="note">{html.escape(str(result.get("evidence_note") or ""))}</p>'
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_artifacts_section(result: dict[str, Any]) -> str:
+    command_result = result.get("command_result") or {}
+    rows = [
+        ("Candidate grasps", result.get("candidate_grasps_path", "")),
+        ("Object XML", result.get("object_xml", "")),
+        ("Artifact dir", result.get("artifact_dir", "")),
+        ("Probe script", result.get("probe_script_path", "")),
+        ("Probe result", result.get("probe_output_path", "")),
+        ("Command status", command_result.get("status", "")),
+        ("Command return", command_result.get("returncode", "")),
+        (
+            "Command output tail",
+            _tail_text(command_result.get("stderr") or command_result.get("stdout"), limit=500),
+        ),
+    ]
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in ("", None)
+    )
+    command = " ".join(str(part) for part in result.get("command") or [])
+    command_html = f'<p class="note"><code>{html.escape(command)}</code></p>' if command else ""
+    return (
+        '<section class="panel grasp-initial-contact-artifacts">'
+        "<h2>Diagnostic Artifacts</h2>"
+        f"{command_html}"
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th></tr></thead>'
+        f"<tbody>{table_rows}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_variants_section(variants: list[dict[str, Any]]) -> str:
+    if not variants:
+        return ""
+    rows = []
+    for variant in variants:
+        successful_indices = ", ".join(
+            str(i) for i in variant.get("successful_candidate_indices") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(variant.get('name', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('classification', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('approach_sign', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('approach_distance', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('settle_steps', '')))}</td>"
+            f"<td>{html.escape(str(variant.get('candidate_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('success_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('initial_contact_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('initial_displaced_count', 0)))}</td>"
+            f"<td>{html.escape(str(variant.get('avg_initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(str(variant.get('max_initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(successful_indices)}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-initial-contact-variants">'
+        "<h2>Approach Variants</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Variant</th><th>Classification</th><th>Sign</th><th>Distance</th>"
+        "<th>Settle</th><th>Candidates</th><th>Successes</th><th>Initial contacts</th>"
+        "<th>Initial displaced</th><th>Avg initial move</th><th>Max initial move</th>"
+        "<th>Successful candidates</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_samples_section(best: dict[str, Any]) -> str:
+    rows = []
+    for sample in best.get("sample_rows") or []:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(sample.get('candidate_index', '')))}</td>"
+            f"<td>{html.escape(_yes_no(sample.get('success')))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_contact_sides', [])))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_contact_pair_count', 0)))}</td>"
+            f"<td>{html.escape(str(sample.get('initial_displacement_m', 0.0)))}</td>"
+            f"<td>{html.escape(str(sample.get('final_contact_sides', [])))}</td>"
+            f"<td>{html.escape(str(sample.get('final_contact_pair_count', 0)))}</td>"
+            f"<td>{html.escape(str(sample.get('final_displacement_m', 0.0)))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        '<section class="panel grasp-initial-contact-samples">'
+        f"<h2>Best Variant Samples: {html.escape(str(best.get('name', '')))}</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Candidate</th><th>Success</th><th>Initial sides</th><th>Initial contacts</th>"
+        "<th>Initial move</th><th>Final sides</th><th>Final contacts</th><th>Final move</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _grasp_initial_contact_blockers_section(blockers: list[dict[str, Any]]) -> str:
+    if not blockers:
+        return (
+            '<section class="panel"><h2>Initial Contact Blockers</h2>'
+            '<p class="note">No initial-contact diagnostic blockers recorded.</p></section>'
+        )
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel grasp-initial-contact-blockers">'
+        "<h2>Initial Contact Blockers</h2>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "</section>"
+    )
+
+
+def _assets_symlink_summary(symlink: dict[str, Any]) -> str:
+    if not symlink:
+        return ""
+    return (
+        f"{symlink.get('status', '')}; path={symlink.get('path', '')}; "
+        f"target={symlink.get('target', '')}; created={_yes_no(symlink.get('created'))}"
+    )
+
+
 def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     if not selection:
         return ""
@@ -983,6 +1563,211 @@ def _decision_card(title: str, value: Any, detail: Any) -> str:
         f"<strong>{html.escape(str(value))}</strong>"
         f"<p>{html.escape(str(detail))}</p>"
         "</article>"
+    )
+
+
+def _grasp_cache_availability_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight:
+        return ""
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Assets', preflight.get('asset_count', 0))}"
+        f"{_metric('Ready assets', preflight.get('ready_asset_count', 0))}"
+        f"{_metric('Missing cache assets', preflight.get('missing_cache_asset_count', 0))}"
+        f"{_metric('Assets dir source', preflight.get('assets_dir_source', 'unknown'))}"
+        f"{_metric('Assets dir exists', preflight.get('assets_dir_exists', False))}"
+        "</div>"
+    )
+    path_rows = _path_table(
+        [
+            ("Assets dir", preflight.get("assets_dir", "")),
+            ("Resolved assets dir", preflight.get("assets_dir_resolved", "")),
+            ("Upstream loader", preflight.get("upstream_loader", "")),
+        ]
+    )
+    asset_rows = []
+    candidate_rows = []
+    object_rows = []
+    for asset in preflight.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        asset_uid = str(asset.get("asset_uid") or "")
+        asset_rows.append(
+            "<tr>"
+            f"<td>{html.escape(asset_uid)}</td>"
+            f"<td>{html.escape(str(asset.get('status', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('loader_file_status', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('object_asset_status', '')))}</td>"
+            "</tr>"
+        )
+        for probe in [
+            *(asset.get("candidate_grasp_files") or []),
+            *(asset.get("folder_probe_files") or []),
+        ]:
+            if not isinstance(probe, dict):
+                continue
+            candidate_rows.append(
+                "<tr>"
+                f"<td>{html.escape(asset_uid)}</td>"
+                f"<td>{html.escape(str(probe.get('source', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('loader_role', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('exists', False)))}</td>"
+                f"<td>{html.escape(str(probe.get('valid', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('transform_count', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('validation_status', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('size_bytes', 0)))}</td>"
+                f"<td>{html.escape(str(probe.get('relative_path', '')))}</td>"
+                f"<td>{html.escape(str(probe.get('resolved_path', '')))}</td>"
+                "</tr>"
+            )
+        for object_file in asset.get("object_asset_files") or []:
+            if not isinstance(object_file, dict):
+                continue
+            object_rows.append(
+                "<tr>"
+                f"<td>{html.escape(asset_uid)}</td>"
+                f"<td>{html.escape(str(object_file.get('kind', '')))}</td>"
+                f"<td>{html.escape(str(object_file.get('size_bytes', 0)))}</td>"
+                f"<td>{html.escape(str(object_file.get('relative_path', '')))}</td>"
+                f"<td>{html.escape(str(object_file.get('resolved_path', '')))}</td>"
+                "</tr>"
+            )
+    if not asset_rows:
+        asset_rows.append('<tr><td colspan="4">No missing grasp-cache assets.</td></tr>')
+    if not candidate_rows:
+        candidate_rows.append('<tr><td colspan="10">No grasp-cache file probes.</td></tr>')
+    asset_table = (
+        '<h3>Asset Status</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Status</th><th>Rigid loader file</th><th>Object asset</th>"
+        f"</tr></thead><tbody>{''.join(asset_rows)}</tbody></table></div>"
+    )
+    candidate_table = (
+        '<h3>Loader File Probes</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Source</th><th>Loader role</th><th>Exists</th>"
+        "<th>Valid</th><th>Transforms</th><th>Validation</th><th>Bytes</th>"
+        "<th>Relative path</th><th>Resolved path</th>"
+        f"</tr></thead><tbody>{''.join(candidate_rows)}</tbody></table></div>"
+    )
+    object_table = ""
+    if object_rows:
+        object_table = (
+            '<h3>Object Asset Probes</h3><div class="table-wrap"><table><thead><tr>'
+            "<th>Asset</th><th>Kind</th><th>Bytes</th><th>Relative path</th>"
+            "<th>Resolved path</th>"
+            f"</tr></thead><tbody>{''.join(object_rows)}</tbody></table></div>"
+        )
+    recommendation = str(preflight.get("mitigation_recommendation") or "")
+    recommendation_html = (
+        f'<p class="note">Recommendation: {html.escape(recommendation)}</p>'
+        if recommendation
+        else ""
+    )
+    note = preflight.get("evidence_note") or "Grasp cache availability preflight."
+    return (
+        '<section class="panel grasp-cache-preflight">'
+        "<h2>Grasp Cache Availability Preflight</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{path_rows}'
+        f"{recommendation_html}{asset_table}{candidate_table}{object_table}</section>"
+    )
+
+
+def _grasp_cache_generation_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight or preflight.get("status") == "not_applicable":
+        return ""
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Assets', preflight.get('asset_count', 0))}"
+        f"{_metric('Blockers', preflight.get('blocker_count', 0))}"
+        f"{_metric('Ready', _yes_no(preflight.get('ready')))}"
+        "</div>"
+    )
+    paths = _path_table(
+        [
+            ("MolmoSpaces Python", preflight.get("molmospaces_python", "")),
+            ("MolmoSpaces root", preflight.get("molmospaces_root", "")),
+            ("Assets dir", preflight.get("assets_dir", "")),
+            ("Objects list path", preflight.get("objects_list_path", "")),
+            ("Working dir", preflight.get("working_dir", "")),
+        ]
+    )
+    asset_rows = []
+    for asset in preflight.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
+        asset_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(asset.get('asset_uid', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('object_xml_exists', False)))}</td>"
+            f"<td>{html.escape(str(asset.get('object_xml', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('generated_npz_path', '')))}</td>"
+            f"<td>{html.escape(str(asset.get('cache_target_resolved_path', '')))}</td>"
+            "</tr>"
+        )
+    if not asset_rows:
+        asset_rows.append('<tr><td colspan="5">No grasp generation assets recorded.</td></tr>')
+    asset_table = (
+        '<h3>Generation Assets</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Asset</th><th>Object XML exists</th><th>Object XML</th>"
+        "<th>Generated NPZ</th><th>Loader cache target</th>"
+        f"</tr></thead><tbody>{''.join(asset_rows)}</tbody></table></div>"
+    )
+    check_rows = []
+    for check in preflight.get("checks") or []:
+        if not isinstance(check, dict):
+            continue
+        check_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(check.get('name', '')))}</td>"
+            f"<td>{html.escape(str(check.get('status', '')))}</td>"
+            f"<td>{html.escape(str(check.get('code', '')))}</td>"
+            f"<td>{html.escape(str(check.get('path') or check.get('resolved_path') or ''))}</td>"
+            f"<td>{html.escape(str(check.get('message') or check.get('stderr') or ''))}</td>"
+            "</tr>"
+        )
+    if not check_rows:
+        check_rows.append('<tr><td colspan="5">No generation checks recorded.</td></tr>')
+    check_table = (
+        '<h3>Prerequisite Checks</h3><div class="table-wrap"><table><thead><tr>'
+        "<th>Check</th><th>Status</th><th>Code</th><th>Path</th><th>Message</th>"
+        f"</tr></thead><tbody>{''.join(check_rows)}</tbody></table></div>"
+    )
+    blocker_rows = []
+    for blocker in preflight.get("blockers") or []:
+        if not isinstance(blocker, dict):
+            continue
+        blocker_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('name', '')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    blocker_table = (
+        '<p class="note">No generation blockers recorded.</p>'
+        if not blocker_rows
+        else (
+            '<h3>Generation Blockers</h3><div class="table-wrap"><table><thead><tr>'
+            "<th>Code</th><th>Check</th><th>Message</th>"
+            f"</tr></thead><tbody>{''.join(blocker_rows)}</tbody></table></div>"
+        )
+    )
+    command = " ".join(str(part) for part in preflight.get("command") or [])
+    command_html = f"<pre><code>{html.escape(command)}</code></pre>" if command else ""
+    recommendation = str(preflight.get("mitigation_recommendation") or "")
+    recommendation_html = (
+        f'<p class="note">Recommendation: {html.escape(recommendation)}</p>'
+        if recommendation
+        else ""
+    )
+    note = preflight.get("evidence_note") or "Grasp cache generation preflight."
+    return (
+        '<section class="panel grasp-cache-generation-preflight">'
+        "<h2>Grasp Cache Generation Preflight</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f"{metrics}{recommendation_html}{paths}{asset_table}{check_table}"
+        f"{blocker_table}<h3>Proposed Generation Command</h3>{command_html}</section>"
     )
 
 
@@ -1712,6 +2497,11 @@ def _worker_stage_summary(events: list[dict[str, Any]]) -> str:
         if label:
             parts.append(label)
     return "; ".join(parts)
+
+
+def _tail_text(value: Any, *, limit: int) -> str:
+    text = str(value or "")
+    return text[-limit:] if len(text) > limit else text
 
 
 def _cleanup_rerun_command_section(command: list[str]) -> str:
@@ -3421,14 +4211,14 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
         )
     return (
         '<section class="panel semantic-section"><h2>Semantic Substeps</h2>'
-        '<p class="note">Canonical cleanup loop: nav, pick, nav, open when needed, place.</p>'
+        f'<p class="note">{html.escape(SEMANTIC_LOOP_DISPLAY_NOTE)}</p>'
         '<div class="semantic-cards">' + "".join(cards) + "</div></section>"
     )
 
 
 def _semantic_readback(steps: list[dict[str, Any]]) -> str:
     candidates = [
-        step for step in steps if step.get("phase") in {"object_done", "place", "place_inside"}
+        step for step in steps if step.get("phase") in {OBJECT_DONE_PHASE, *PLACE_CLEANUP_PHASES}
     ]
     if not candidates:
         return "pending"

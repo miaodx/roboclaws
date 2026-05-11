@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_DISPLAY_SUBPHASES,
+    CANONICAL_PLACE_DISPLAY_SUBPHASES,
+)
+
 VISUAL_CORE_BASE_SECTIONS = ("Before And After", "Object Moves", "Score")
 VISUAL_CORE_SEMANTIC_SECTION = "Semantic Substeps"
 VISUAL_CORE_ROBOT_SECTION = "Robot View Timeline"
 VISUAL_CORE_AGENT_SECTION = "Agent View"
 VISUAL_CORE_PRIVATE_SECTION = "Private Evaluation"
 VISUAL_CORE_PLANNER_PROOF_REQUESTS_SECTION = "Planner Proof Requests"
-CANONICAL_SEMANTIC_SUBPHASES = (("nav", "object"), ("pick", "object"), ("nav", "target"))
-CANONICAL_PLACE_SUBPHASES = (("place", "surface"), ("place", "inside"))
 PLANNER_DIAGNOSTIC_STYLE_MARKERS = (
     "diagnostic-view",
     "diagnostic-visual",
@@ -76,12 +79,13 @@ def _assert_sections_in_order(report_text: str, sections: list[str]) -> None:
 
 def _assert_semantic_subphases(report_text: str) -> None:
     assert "phase-rail" in report_text, report_text[:500]
-    for label, detail in CANONICAL_SEMANTIC_SUBPHASES:
+    for label, detail in CANONICAL_DISPLAY_SUBPHASES:
         assert _has_subphase(report_text, label, detail), ((label, detail), report_text[:500])
     assert any(
-        _has_subphase(report_text, label, detail) for label, detail in CANONICAL_PLACE_SUBPHASES
+        _has_subphase(report_text, label, detail)
+        for label, detail in CANONICAL_PLACE_DISPLAY_SUBPHASES
     ), (
-        CANONICAL_PLACE_SUBPHASES,
+        CANONICAL_PLACE_DISPLAY_SUBPHASES,
         report_text[:500],
     )
 

@@ -4,6 +4,13 @@ import importlib.util
 import json
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_INSIDE_CLEANUP_PHASES,
+    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+    NAVIGATE_TO_OBJECT_PHASE,
+    OBJECT_DONE_PHASE,
+)
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_cleanup_demo.py"
 
@@ -32,9 +39,9 @@ def test_molmospaces_cleanup_demo_writes_success_artifacts(tmp_path: Path) -> No
     assert run_result["planner_uses_private_manifest"] is True
     assert run_result["score"]["restored_count"] == 5
     assert run_result["score"]["semantic_acceptability"]["accepted_count"] == 5
-    assert run_result["semantic_loop_variant"] == "navigate-pick-navigate-open-place-object_done"
-    assert run_result["semantic_substeps"][0]["steps"][0]["phase"] == "navigate_to_object"
-    assert any('"tool": "navigate_to_object"' in line for line in trace_lines)
+    assert run_result["semantic_loop_variant"] == CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT
+    assert run_result["semantic_substeps"][0]["steps"][0]["phase"] == NAVIGATE_TO_OBJECT_PHASE
+    assert any(f'"tool": "{NAVIGATE_TO_OBJECT_PHASE}"' in line for line in trace_lines)
     assert (tmp_path / "scenario.json").is_file()
     assert (tmp_path / "private_manifest.json").is_file()
     assert (tmp_path / "before.png").is_file()
@@ -78,12 +85,8 @@ def test_molmospaces_cleanup_demo_runs_public_prompt_planner(tmp_path: Path) -> 
     ]
     assert fridge_steps
     assert [step["phase"] for step in fridge_steps[0]["steps"]] == [
-        "navigate_to_object",
-        "pick",
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "place_inside",
-        "object_done",
+        *CANONICAL_INSIDE_CLEANUP_PHASES,
+        OBJECT_DONE_PHASE,
     ]
     assert result["final_containment"]["apple_01"]["location_relation"] == "inside"
     assert {action["object_id"] for action in result["cleanup_plan"]} == {

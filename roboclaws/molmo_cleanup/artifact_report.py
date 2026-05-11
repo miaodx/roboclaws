@@ -24,9 +24,15 @@ def rerender_cleanup_report_from_run_result(run_result_path: Path) -> Path:
     run_dir = run_result_path.parent
     run_result = _read_json(run_result_path)
     artifacts = run_result.get("artifacts") or {}
-    scenario = load_cleanup_scenario_artifact(
-        _resolve_artifact(run_dir, artifacts.get("scenario"), default_name="scenario.json")
+    scenario_path = _resolve_artifact(
+        run_dir,
+        artifacts.get("scenario"),
+        default_name="scenario.json",
     )
+    if scenario_path.is_file():
+        scenario = load_cleanup_scenario_artifact(scenario_path)
+    else:
+        scenario = cleanup_scenario_shell_from_run_result(run_result)
     trace_events = load_trace_events(
         _resolve_artifact(run_dir, artifacts.get("trace"), default_name="trace.jsonl")
     )
@@ -48,6 +54,29 @@ def rerender_cleanup_report_from_run_result(run_result_path: Path) -> Path:
         before_snapshot=before_snapshot,
         after_snapshot=after_snapshot,
         robot_view_steps=run_result.get("robot_view_steps") or [],
+    )
+
+
+def cleanup_scenario_shell_from_run_result(run_result: dict[str, Any]) -> CleanupScenario:
+    """Build the minimal public scenario needed to re-render an existing report.
+
+    Some ADR-0003 cleanup artifacts predate the `scenario.json` artifact but
+    still carry the public run identity, score, trace, snapshots, and robot
+    timeline in `run_result.json`. Regeneration should keep those artifacts on
+    the shared report underlay without fabricating objects or private targets.
+    """
+    scenario_id = str(run_result.get("scenario_id") or "unknown")
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=str(run_result.get("task_prompt") or ""),
+        seed=_int_or_zero(run_result.get("seed")),
+        objects=(),
+        receptacles=(),
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
     )
 
 
@@ -130,3 +159,10 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise ValueError(f"expected JSON object in {path}")
     return data
+
+
+def _int_or_zero(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0

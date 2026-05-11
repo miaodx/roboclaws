@@ -6,6 +6,16 @@ import json
 import math
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+    FOCUSED_SEMANTIC_ACTION_PREFIXES,
+    OBJECT_DONE_PHASE,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_INSIDE_PHASE,
+    fridge_sequence_ok,
+    has_complete_semantic_sequence,
+)
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate a MolmoSpaces cleanup run_result.")
@@ -132,23 +142,21 @@ def _assert_semantic_acceptability(data: dict, base: Path) -> None:
 
 
 def _assert_semantic_substeps(data: dict) -> None:
-    assert data.get("semantic_loop_variant") == "navigate-pick-navigate-open-place-object_done", (
-        data
-    )
+    assert data.get("semantic_loop_variant") == CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT, data
     semantic_substeps = data.get("semantic_substeps") or []
     assert semantic_substeps, data
     final_containment = data.get("final_containment") or {}
     saw_inside = False
     for item in semantic_substeps:
-        phases = [step.get("phase") for step in item.get("steps", [])]
-        assert phases[:3] == ["navigate_to_object", "pick", "navigate_to_receptacle"], item
-        assert phases[-1:] == ["object_done"], item
-        assert "place" in phases or "place_inside" in phases, item
+        phases = [str(step.get("phase") or "") for step in item.get("steps", [])]
+        assert has_complete_semantic_sequence(phases), item
+        assert phases[-1:] == [OBJECT_DONE_PHASE], item
         done_step = item["steps"][-1]
         assert done_step.get("matches_expected_location") is True, item
         if item.get("target_receptacle_category") == "Fridge":
-            assert "open_receptacle" in phases, item
-            assert "place_inside" in phases, item
+            assert OPEN_RECEPTACLE_PHASE in phases, item
+            assert PLACE_INSIDE_PHASE in phases, item
+            assert fridge_sequence_ok(phases), item
             containment = final_containment.get(item["object_id"]) or {}
             assert containment.get("contained_in") == item["target_receptacle_id"], item
             assert containment.get("location_relation") == "inside", item
@@ -159,16 +167,7 @@ def _assert_semantic_substeps(data: dict) -> None:
 
 
 def _is_focused_robot_action(action: str) -> bool:
-    return action.startswith(
-        (
-            "navigate_to_object ",
-            "pick ",
-            "navigate_to_receptacle ",
-            "open_receptacle ",
-            "place ",
-            "place_inside ",
-        )
-    )
+    return action.startswith(FOCUSED_SEMANTIC_ACTION_PREFIXES)
 
 
 def _assert_held_object_tracks_robot(step: dict) -> None:
