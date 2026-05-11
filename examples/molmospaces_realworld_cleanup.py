@@ -49,6 +49,8 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     REALWORLD_CONTRACT,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
+    cleanup_policy_trace_from_events,
+    real_robot_readiness_from_events,
 )
 from roboclaws.molmo_cleanup.report import (  # noqa: E402
     render_cleanup_report,
@@ -337,6 +339,12 @@ def run_realworld_cleanup(
     agent_view_path = output_dir / "agent_view.json"
     private_evaluation_path = output_dir / "private_evaluation.json"
     agent_view = contract.agent_view_payload()
+    cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
+    real_robot_readiness = real_robot_readiness_from_events(
+        agent_view=agent_view,
+        trace_events=trace_events,
+        robot_view_steps=robot_view_steps,
+    )
     private_evaluation = contract.private_evaluation_payload(done["score"])
     private_evaluation["requested_generated_mess_count"] = generated_mess_count
     advisory_evaluation = build_advisory_evaluation(
@@ -408,6 +416,8 @@ def run_realworld_cleanup(
         "semantic_substeps": substeps,
         "cleanup_primitive_evidence": cleanup_primitive_evidence,
         "planner_proof_requests": planner_proof_requests,
+        "cleanup_policy_trace": cleanup_policy_trace,
+        "real_robot_readiness": real_robot_readiness,
         "agent_view": agent_view,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
@@ -583,6 +593,24 @@ def _clean_visible_object(
         include_object_id_in_receptacle_request=False,
         include_object_id_in_target_requests=False,
     )
+    post_place_observation = _call_tool(
+        trace_events,
+        started_at,
+        "observe",
+        {},
+        contract.observe,
+        postprocess=lambda response: _attach_raw_fpv_robot_view(
+            response=response,
+            contract=contract,
+            base_contract=base_contract,
+            robot_view_steps=robot_view_steps,
+            output_dir=output_dir,
+            view_index_ref=[view_index],
+            record_robot_views=record_robot_views,
+        ),
+    )
+    if post_place_observation.get("ok"):
+        view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
 
     return view_index
 

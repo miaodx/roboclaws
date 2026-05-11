@@ -44,6 +44,67 @@ def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
     )
 
 
+def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_waypoint_honesty=True,
+        require_real_robot_alignment=True,
+    )
+
+
+def test_checker_rejects_waypoint_honesty_when_loop_is_survey_first(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result["cleanup_policy_trace"]["loop_style"] = "survey_first_cleanup_loop"
+    result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] = False
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_waypoint_honesty=True,
+        )
+
+
+def test_checker_rejects_real_robot_alignment_when_chase_is_policy_input(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result["agent_view"]["policy_view"]["chase_camera_policy_input"] = True
+    result["real_robot_readiness"]["policy_view_chase_excluded"] = False
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_real_robot_alignment=True,
+        )
+
+
 def test_checker_rejects_too_small_generated_mess_set(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

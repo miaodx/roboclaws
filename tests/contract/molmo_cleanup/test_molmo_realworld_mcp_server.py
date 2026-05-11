@@ -51,8 +51,12 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         server.close()
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
+    assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
     assert fixture_hints["fixture_hint_mode"] == "room_only"
+    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
+    assert "Runtime movable objects come only from observe" in fixture_hints["instruction"]
     assert observation["visible_object_detections"]
     assert observation["visible_object_detections"][0]["object_id"].startswith("observed_")
     assert "target_receptacle_id" not in json.dumps(observation)
@@ -114,11 +118,18 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert run_result["agent_view"]["observed_objects"]
+    assert run_result["cleanup_policy_trace"]["loop_style"] == "interleaved_cleanup_loop"
+    assert run_result["cleanup_policy_trace"]["post_place_observe_complete"] is True
+    assert run_result["real_robot_readiness"]["schema"] == "real_robot_readiness_v1"
+    assert run_result["real_robot_readiness"]["semantic_navigation_only"] is True
     assert "planner_object_id" not in json.dumps(run_result["agent_view"])
     assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
     assert "Planner Proof Requests" in report_text
+    assert "Waypoint Honesty & Cleanup Loop" in report_text
+    assert "Real-Robot Readiness" in report_text
+    assert "report_only_simulation_view" in report_text
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text
     assert '"tool": "scene_objects"' not in trace_text
