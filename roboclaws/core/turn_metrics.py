@@ -24,7 +24,7 @@ def encode_frame_to_b64_jpeg(
 ) -> tuple[str, dict[str, Any]]:
     """Encode one RGB frame to base64 JPEG and return payload metrics."""
     started = time.perf_counter()
-    image = Image.fromarray(frame, mode="RGB").resize((width, height), Image.Resampling.BILINEAR)
+    image = Image.fromarray(frame).resize((width, height), Image.Resampling.BILINEAR)
     buf = io.BytesIO()
     image.save(buf, format="JPEG", quality=quality)
     jpeg_bytes = buf.getvalue()

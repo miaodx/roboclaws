@@ -149,6 +149,18 @@ def test_frame_to_b64_returns_decodable_jpeg() -> None:
     assert decoded.startswith(b"\xff\xd8\xff")
 
 
+def test_frame_to_b64_avoids_deprecated_pillow_mode_warning(recwarn) -> None:
+    _frame_to_b64(_make_frame(200))
+
+    mode_warnings = [
+        warning
+        for warning in recwarn
+        if issubclass(warning.category, DeprecationWarning)
+        and "'mode' parameter is deprecated" in str(warning.message)
+    ]
+    assert mode_warnings == []
+
+
 def test_frame_to_b64_different_frames_differ() -> None:
     b64_a = _frame_to_b64(_make_frame(0))
     b64_b = _frame_to_b64(_make_frame(255))
