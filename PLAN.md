@@ -11,6 +11,7 @@ Use these sources instead:
 - GSD execution state: [`.planning/STATE.md`](.planning/STATE.md)
 - GSD phase details: [`.planning/phases/`](.planning/phases/)
 - Shipped history: [`docs/retrospectives/`](docs/retrospectives/)
+- Missing queued work: [`TODOS.md`](TODOS.md)
 
 Do not add new active phase content here. When a human-readable plan is needed,
 create or update `docs/plans/<slug>.md`; when execution starts, hand that plan
