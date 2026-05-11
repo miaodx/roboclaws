@@ -4,17 +4,27 @@ Multiple VLM/OpenClaw agents controlling simulated robots in competition and coo
 
 ## Required reading
 
-Before writing any code, read in order:
+Before writing any code, read only the orientation set in order:
 1. `README.md` (project orientation, what you can run, mode discovery)
 2. `ARCHITECTURE.md` (code map, four operating modes, MCP contract)
-3. `CLAUDE.md` (this file)
-4. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
-5. `docs/technical-design.md` (design rationale, scenario specs)
-6. `PLAN.md` (**active phase only**) and `.planning/STATE.md` (if it exists — GSD-managed state)
-7. `TODOS.md` (self-contained queued work)
+3. `STATUS.md` (human-facing current focus, next action, and source links)
+4. `CLAUDE.md` (this file)
+5. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
 
-Shipped-phase history lives under `docs/retrospectives/` — not required reading,
-but the best source for "why was this decided?" context on prior phases.
+Then follow the links in `STATUS.md` only as needed:
+
+- Read `.planning/STATE.md` and the current `.planning/phases/*` plan when
+  resuming or executing a GSD phase.
+- Read `docs/plans/<slug>.md` when shaping, reviewing, or handing off a
+  pre-GSD plan.
+- Read `docs/technical-design.md` when design rationale or scenario specs are
+  needed.
+- Read `CONTEXT.md` when domain vocabulary matters.
+- Read `TODOS.md` or `THOUGHTS.md` only when asked about parked work or future
+  ideas.
+
+Root `PLAN.md` is a legacy compatibility pointer, not an active plan. Shipped
+phase history lives under `docs/retrospectives/` and is not required reading.
 
 For navigator-skill / MCP-tool changes, also read `harness/PLAN.md` — the
 append-only logbook of scripted-loop runs that grades the skill on curated
@@ -142,15 +152,21 @@ see `docs/openclw/openclaw-local.md`.
 Use `hybrid-phase-pipeline` when available. It routes Matt-style shaping,
 gstack review, and GSD execution without making every task run every framework.
 
-One source of truth per stage:
+One source of truth per stage, with `STATUS.md` as the short human-facing
+dashboard:
 
+- Current orientation: `STATUS.md`.
 - Before execution: `docs/plans/*.md` or GitHub issues.
 - During execution: `.planning/STATE.md` and `.planning/phases/*`.
 - After shipping: summaries, verification reports, and retrospectives.
 
 Do not create `.planning/phases/*` for brainstorming. Once a phase is under GSD,
 execute and ship it with GSD unless the user explicitly changes the workflow.
-Current hybrid pilot: `docs/plans/molmospaces-manipulation-spike.md`.
+Root `PLAN.md` is retained only for compatibility and must not receive new
+active phase content. Current focus and active source links are in `STATUS.md`.
+During GSD closeout/verify/ship, update `STATUS.md` when current focus, latest
+phase, next action, or blocker changed; keep it short and do not mirror
+`.planning/STATE.md`.
 
 ## Agent skills
 

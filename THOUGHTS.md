@@ -3,6 +3,9 @@
 Ideas, parked work, and possible future directions that should not affect the
 current development roadmap until reviewed.
 
+This is scratch/backlog context, not current project status. For current focus,
+next action, and active source links, read [`STATUS.md`](STATUS.md).
+
 Use this file as the backlog for random ideas. If an item becomes concrete and
 worth doing soon, promote it to [`TODOS.md`](TODOS.md) with acceptance criteria
 and a clear queue position.
