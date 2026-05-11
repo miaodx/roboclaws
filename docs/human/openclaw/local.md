@@ -273,7 +273,7 @@ tools literally don't exist in the agent's surface anymore).
 Supersedes the Phase 2.5 `curl`-from-`exec` HTTP contract, which is gone
 entirely — `roboclaws/openclaw/sim_server.py` was deleted in plan 02.6-05 and
 no operator recipe here should mention it. The full lesson lives in
-[`../retrospectives/phase-2.6.md`](../retrospectives/phase-2.6.md).
+[`docs/retrospectives/phase-2.6.md`](../../retrospectives/phase-2.6.md).
 
 ### Install
 
@@ -363,7 +363,7 @@ clock on long autonomous runs. It is not the shipped default. Use it when you
 explicitly want HTTP chunk-level visibility, not the cleanest operator report.
 
 Live evidence for the winner/loser comparison lives in
-[`.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-LOCAL-PROBE-RESULTS.md`](../../.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-LOCAL-PROBE-RESULTS.md).
+[`.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-LOCAL-PROBE-RESULTS.md`](../../../.planning/phases/02.7-openclaw-intermediate-message-capture/02.7-LOCAL-PROBE-RESULTS.md).
 
 ### Gotchas
 
@@ -387,7 +387,7 @@ Bootstrap seeds the correct shape automatically. If you hand-edit
 `openclaw.json` and use `{"type": "http", ...}` the Gateway silently rejects
 the server and the agent won't see any MCP tools. Accepted `transport`
 values are `"streamable-http"` and `"sse"`. Internals spelunking lives in
-[`openclaw-gateway-internals.md`](openclaw-gateway-internals.md#mcp-config-in-openclawjson).
+[`gateway-internals.md`](gateway-internals.md#mcp-config-in-openclawjson).
 
 **3. Changing `mcp.servers` on a running Gateway triggers a container exit.**
 
@@ -428,7 +428,7 @@ curl -sf http://127.0.0.1:18789/readyz
 End-to-end evidence for this contract (6 probes covering MCP reachability,
 multimodal vision flow, tool-allowlist enforcement, full autonomous run,
 back-to-back workspace reset, and prompt-token overhead ratio) lives in
-[`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md).
+[`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`](../../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md).
 Linux-only bootstrap fallback (`--network host`) is still available if
 `--add-host=host.docker.internal:host-gateway` doesn't resolve on a specific
 machine: edit `scripts/openclaw-bootstrap.sh` locally and swap the

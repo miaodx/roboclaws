@@ -113,7 +113,7 @@ just harness::run photo-living-room
 just harness::history
 ```
 
-See [`harness/README.md`](../harness/README.md) for operational details
-and [`docs/harness-self-improvement-loop.md`](harness-self-improvement-loop.md)
+See [`harness/README.md`](../../harness/README.md) for operational details
+and [`docs/ai/harness/self-improvement-loop.md`](../ai/harness/self-improvement-loop.md)
 for design rationale and the worked example that produced the current
 tool surface.

@@ -6,7 +6,7 @@ will want on hand. Keeps you from re-spelunking `/app/dist/` every time.
 
 > Scope: this file is for contributors touching the
 > `roboclaws/openclaw/` bridge or `scripts/openclaw-bootstrap.sh`. End users
-> should reach for `docs/openclw/openclaw-local.md` instead.
+> should reach for `docs/human/openclaw/local.md` instead.
 
 ## How the Gateway loads config + models
 
@@ -191,7 +191,7 @@ multi-image reasoning on long autonomous runs. Full live-probed numbers
 in
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`.
 The Phase 2.6 lessons narrative lives in
-[`retrospectives/phase-2.6.md`](retrospectives/phase-2.6.md).
+[`docs/retrospectives/phase-2.6.md`](../../retrospectives/phase-2.6.md).
 
 ## Useful spelunking commands
 

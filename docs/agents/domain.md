@@ -6,16 +6,15 @@ This is a single-context repo.
 
 - `README.md` for project orientation and runnable modes.
 - `ARCHITECTURE.md` for the code map, operating modes, and MCP contract.
-- `docs/technical-design.md` for scenario design rationale and game rules.
+- `docs/human/technical-design.md` for scenario design rationale and game rules.
 - Relevant ADRs under `docs/adr/`.
 
-If a root `CONTEXT.md` is added later, read it before proposing issue titles,
-refactors, hypotheses, or tests. If `CONTEXT.md` does not exist, proceed
-silently.
+Read `docs/human/domain.md` before proposing issue titles, refactors,
+hypotheses, or tests.
 
 ## Layout
 
-- Global orientation docs live at the repo root and under `docs/`.
+- Human orientation docs live at the repo root and under `docs/human/`.
 - Architectural decisions live in `docs/adr/`.
 - No `CONTEXT-MAP.md` is used today.
 

@@ -1,7 +1,7 @@
 # OpenClaw plugin allow-list: why we pin it
 
 Captures *why* `openclaw.json` carries an explicit `plugins.allow` block and
-*how* to extend it safely. Companion to `openclw/openclaw-tool-profiles.md` — both
+*how* to extend it safely. Companion to `docs/ai/openclaw/tool-profiles.md` — both
 docs exist to keep image bumps from silently breaking startup.
 
 Audience: anyone bumping the `OPENCLAW_IMAGE_DEFAULT` pin, adding a new
@@ -29,7 +29,7 @@ Anything not on this list is hard-rejected by the gateway
 auto-enables a new plugin (Slack, webhook, voice-call, whatever) is filtered
 silently — no surprise install delay, no surprise outbound traffic.
 
-Source of truth: [`scripts/openclaw_plugin_allowlist.py`](../scripts/openclaw_plugin_allowlist.py).
+Source of truth: [`scripts/openclaw_plugin_allowlist.py`](../../../scripts/openclaw_plugin_allowlist.py).
 Both seeders (`openclaw-bootstrap.sh` for `just chat::run`,
 `appliance_seed_openclaw.py` for `just appliance::run`) read it, and a
 regression test in each test file pins the rendered config against it.

@@ -17,9 +17,9 @@ Then follow the links in `STATUS.md` only as needed:
   resuming or executing a GSD phase.
 - Read `docs/plans/<slug>.md` when shaping, reviewing, or handing off a
   pre-GSD plan.
-- Read `docs/technical-design.md` when design rationale or scenario specs are
+- Read `docs/human/technical-design.md` when design rationale or scenario specs are
   needed.
-- Read `CONTEXT.md` when domain vocabulary matters.
+- Read `docs/human/domain.md` when domain vocabulary matters.
 - Read `TODOS.md` or `THOUGHTS.md` only when asked about parked work or future
   ideas.
 
@@ -29,7 +29,7 @@ phase history lives under `docs/retrospectives/` and is not required reading.
 For navigator-skill / MCP-tool changes, also read `harness/PLAN.md` — the
 append-only logbook of scripted-loop runs that grades the skill on curated
 tasks. Each `## Run NNN` entry attributes a metric delta to one bounded
-change. See [`docs/harness-self-improvement-loop.md`](docs/harness-self-improvement-loop.md)
+change. See [`docs/ai/harness/self-improvement-loop.md`](docs/ai/harness/self-improvement-loop.md)
 for the design rationale and [`harness/README.md`](harness/README.md) for
 how to run another iteration (`just harness::run <task>`).
 
@@ -59,7 +59,7 @@ just chat::run                                   # OpenClaw Gateway + browser Co
 DEMO_PASSWORD=demo just appliance::run local      # hosted Railway-style appliance
 ```
 
-See [`docs/contributing.md`](docs/contributing.md#dev-tooling-uv-and-just)
+See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line `just` install + tab completion. Modules:
 `openclaw`, `vlm`, `chat`, `appliance`, `dev` — each lives in `just/<module>.just`.
 
@@ -130,7 +130,7 @@ Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavio
 
 Local preflight steps (key loading, Docker hygiene, ROS env stripping for
 pytest) live in `AGENTS.md` §1. For the OpenClaw Gateway path specifically,
-see `docs/openclw/openclaw-local.md`.
+see `docs/human/openclaw/local.md`.
 
 ## Design principles
 

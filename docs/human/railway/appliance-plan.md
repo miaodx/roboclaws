@@ -1,6 +1,6 @@
 # Railway OpenClaw Appliance Plan
 
-Operator runbook: [`railway-deploy.md`](railway-deploy.md).
+Operator runbook: [`deploy.md`](deploy.md).
 
 ## Summary
 

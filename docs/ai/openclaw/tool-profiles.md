@@ -133,6 +133,6 @@ Hash suffixes on these filenames rotate every image build — grep by basename.
 ## Related
 
 - `scripts/openclaw-bootstrap.sh:595` — where the `alsoAllow` splice lives
-- `docs/openclw/openclaw-gateway-internals.md` — broader Gateway image internals
-- `docs/openclw/openclaw-local.md` — local-dev recipe + live-probed model matrix
+- `docs/human/openclaw/gateway-internals.md` — broader Gateway image internals
+- `docs/human/openclaw/local.md` — local-dev recipe + live-probed model matrix
 - `TODOS.md` — the "benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding`" item

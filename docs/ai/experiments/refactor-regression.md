@@ -88,10 +88,10 @@ These suites are intentionally guarded and require `--allow-local`:
 That guard is load-bearing. The repo’s cloud/local split in `AGENTS.md` and
 `CLAUDE.md` is explicit: cloud-safe sessions can build and test the harness,
 but real Gateway / AI2-THOR / provider behavior must be refreshed on a local
-workstation. Follow [`docs/openclw/openclaw-local.md`](docs/openclw/openclaw-local.md) and the preflight
+workstation. Follow [`docs/human/openclaw/local.md`](../../human/openclaw/local.md) and the preflight
 steps in `AGENTS.md §1` before capturing those suites.
 
 ## Evidence
 
 The first real baseline-refresh evidence for this phase belongs in
-[04-LOCAL-PROBE-RESULTS](../.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md).
+[04-LOCAL-PROBE-RESULTS](../../../.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md).

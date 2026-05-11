@@ -19,9 +19,9 @@ Then follow the links in `STATUS.md` only as needed:
   resuming or executing a GSD phase.
 - Read `docs/plans/<slug>.md` when shaping, reviewing, or handing off a
   pre-GSD plan.
-- Read `docs/technical-design.md` when design rationale or scenario specs are
+- Read `docs/human/technical-design.md` when design rationale or scenario specs are
   needed.
-- Read `CONTEXT.md` when domain vocabulary matters.
+- Read `docs/human/domain.md` when domain vocabulary matters.
 - Read `TODOS.md` or `THOUGHTS.md` only when asked about parked work or future
   ideas.
 
@@ -131,7 +131,7 @@ just chat::run                                  # OpenClaw Gateway + browser Con
 DEMO_PASSWORD=demo just appliance::run local      # Railway-style hosted appliance
 ```
 
-See [`docs/contributing.md`](docs/contributing.md#dev-tooling-uv-and-just)
+See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line install + tab-completion setup. Modules:
 `openclaw`, `vlm`, `chat`, `appliance`, `dev` — each maps to a file in `just/`.
 
@@ -152,7 +152,7 @@ ruff format --check .
 2. **Use iTHOR scenes only**: ProcTHOR has multi-agent bugs (GitHub Issues #1169, #1265). Stick to FloorPlan1-430.
 3. **VLM output parsing must be robust**: VLMs sometimes return malformed JSON. Always wrap parsing in try/except with fallback to a safe action (e.g., `RotateRight`).
 4. **Image encoding**: Use JPEG quality 60-80 for VLM input to balance cost and quality. Resize to 320×240 or 640×480.
-5. **Cost guard**: Default to a cheap provider for development (Kimi/MiMo); switch to Claude/GPT-4o for final demos. See `docs/model-matrix.md` for current verified models. Example scripts should expose a `--model` flag and log cumulative API cost per game.
+5. **Cost guard**: Default to a cheap provider for development (Kimi/MiMo); switch to Claude/GPT-4o for final demos. See `docs/human/model-matrix.md` for current verified models. Example scripts should expose a `--model` flag and log cumulative API cost per game.
 
 ---
 
