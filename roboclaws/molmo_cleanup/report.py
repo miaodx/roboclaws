@@ -8,6 +8,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
     display_semantic_subphase,
     display_semantic_subphases,
@@ -165,6 +166,7 @@ def render_planner_manipulation_report(
     {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
     {_planner_probe_task_sampler_failure_section(evidence)}
     {_planner_probe_post_placement_rejection_section(evidence)}
+    {_planner_probe_grasp_collision_diagnostics_section(evidence)}
     {_planner_probe_placement_scene_diagnostics_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
@@ -176,7 +178,7 @@ def render_planner_manipulation_report(
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
-    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
 
 
@@ -224,6 +226,11 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {
+        _grasp_feasibility_mitigation_decision_section(
+            manifest.get("grasp_feasibility_mitigation_decision") or {}
+        )
+    }
     {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
     {
         _proof_bundle_results_section(
@@ -247,7 +254,7 @@ def render_planner_proof_bundle_runner_report(
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
-    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
 
 
@@ -894,6 +901,91 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     )
 
 
+def _grasp_feasibility_mitigation_decision_section(decision: dict[str, Any]) -> str:
+    if not decision:
+        return ""
+    missing_assets = ", ".join(
+        str(value) for value in decision.get("missing_grasp_asset_uids") or []
+    )
+    exception_types = ", ".join(
+        str(value) for value in decision.get("grasp_load_exception_types") or []
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', decision.get('status', 'unknown'))}"
+        f"{_metric('Primary route', decision.get('primary_route', 'unknown'))}"
+        f"{_metric('Source rotation', decision.get('source_rotation_state', 'unknown'))}"
+        f"{_metric('Selected requests', decision.get('selected_request_count', 0))}"
+        f"{_metric('Excluded requests', decision.get('excluded_request_count', 0))}"
+        f"{_metric('Signature groups', decision.get('signature_group_count', 0))}"
+        f"{_metric('Missing assets', missing_assets or 'none')}"
+        f"{_metric('Exception types', exception_types or 'none')}"
+        "</div>"
+    )
+    rows = []
+    for item in decision.get("signature_groups") or []:
+        if not isinstance(item, dict):
+            continue
+        row_missing_assets = ", ".join(
+            str(v) for v in item.get("grasp_load_exception_asset_uids") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source', '')))}</td>"
+            f"<td>{html.escape(str(item.get('subkind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('summary', '')))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('request_ids') or []))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('object_names') or []))}</td>"
+            f"<td>{html.escape(row_missing_assets)}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="7">No grasp-feasibility signature groups.</td></tr>')
+    table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Source</th><th>Subkind</th><th>Proofs</th><th>Summary</th>"
+        "<th>Requests</th><th>Planner objects</th><th>Missing grasp assets</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+    cards = "".join(
+        [
+            _decision_card(
+                "Recommendation",
+                decision.get("recommendation", "unknown"),
+                decision.get("rationale", ""),
+            ),
+            _decision_card(
+                "Cache path",
+                missing_assets or "No missing cache assets",
+                "Mitigate missing cached grasps before retrying the matching exact-scene asset.",
+            ),
+            _decision_card(
+                "Source rotation",
+                decision.get("source_rotation_state", "unknown"),
+                "Run selected unproven source-rotation requests separately from "
+                "known cache misses.",
+            ),
+        ]
+    )
+    return (
+        '<section class="panel grasp-mitigation-decision">'
+        "<h2>Grasp Feasibility Mitigation Decision</h2>"
+        '<p class="note">Routes grouped grasp-feasibility evidence before another runtime run.</p>'
+        f'{metrics}<div class="decision-cards">{cards}</div>{table}</section>'
+    )
+
+
+def _decision_card(title: str, value: Any, detail: Any) -> str:
+    return (
+        '<article class="decision-card">'
+        f"<h3>{html.escape(str(title))}</h3>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        f"<p>{html.escape(str(detail))}</p>"
+        "</article>"
+    )
+
+
 def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
     rows = []
     for item in generated:
@@ -1289,6 +1381,9 @@ def _proof_bundle_results_section(
         if stage_counts
         else ""
     )
+    grasp_signature_html = _proof_bundle_grasp_signature_section(
+        _summary_grasp_signature_counts(summary, results)
+    )
     body = (
         "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
@@ -1298,7 +1393,8 @@ def _proof_bundle_results_section(
     return (
         f'<section class="panel {html.escape(section_class)}">'
         f"<h2>{html.escape(title)}</h2>"
-        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}'
+        f"{grasp_signature_html}{body}</section>"
     )
 
 
@@ -1369,6 +1465,57 @@ def _summary_view_artifact_count(summary: dict[str, Any], results: list[dict[str
     return sum(len(item.get("views") or []) for item in results)
 
 
+def _summary_grasp_signature_counts(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    signatures = summary.get("grasp_feasibility_signature_counts") or []
+    if signatures:
+        return [item for item in signatures if isinstance(item, dict)]
+    return grasp_feasibility_signature_counts(results)
+
+
+def _proof_bundle_grasp_signature_section(signatures: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in signatures:
+        if not isinstance(item, dict):
+            continue
+        missing_grasp_assets = ", ".join(
+            str(v) for v in item.get("grasp_load_exception_asset_uids") or []
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('subkind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_effective_removal_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_name_miss_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('grasp_load_failure_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('grasp_collision_check_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('zero_noncolliding_grasp_check_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('robot_placement_failure_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('place_robot_near_call_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('image_artifact_count', '')))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('request_ids') or []))}</td>"
+            f"<td>{html.escape(', '.join(str(v) for v in item.get('object_names') or []))}</td>"
+            f"<td>{html.escape(missing_grasp_assets)}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return ""
+    return (
+        "<h3>Grasp Feasibility Signature Matrix</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Proofs</th><th>Subkind</th><th>Pattern</th><th>Effective removals</th>"
+        "<th>Candidate name misses</th><th>Grasp-load failures</th>"
+        "<th>Collision checks</th><th>Zero non-colliding checks</th>"
+        "<th>Robot placement failures</th>"
+        "<th>place_robot_near calls</th><th>Diagnostic views</th>"
+        "<th>Requests</th><th>Planner objects</th><th>Missing grasp assets</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
 def _has_result_blocker_code(item: dict[str, Any], code: str) -> bool:
     blockers = [*(item.get("blockers") or []), *(item.get("cleanup_binding_blockers") or [])]
     return any(
@@ -1387,13 +1534,29 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     requested = item.get("requested_cleanup_primitive_binding") or {}
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
+    config_blockers = _blocker_codes(config.get("blockers") or [])
     robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
     robot_placement_overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
     sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+    pickup_binding = sampler_adapter.get("exact_pickup_candidate_binding") or {}
     task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
     last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
     last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+    last_grasp_load = task_sampler_failure.get("last_grasp_load_attempt") or {}
+    last_grasp_collision = task_sampler_failure.get("last_grasp_collision_check") or {}
+    grasp_signature = item.get("grasp_feasibility_signature") or {}
     grasp_failures = task_sampler_failure.get("grasp_failures") or []
+    candidate_effective_removals = task_sampler_failure.get(
+        "candidate_effective_removal_count",
+        "",
+    )
+    candidate_name_misses = task_sampler_failure.get("candidate_name_miss_count", "")
+    missing_grasp_assets = ", ".join(
+        str(value) for value in grasp_signature.get("grasp_load_exception_asset_uids") or []
+    )
+    grasp_load_exception_types = ", ".join(
+        str(value) for value in grasp_signature.get("grasp_load_exception_types") or []
+    )
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
@@ -1412,12 +1575,23 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Exact task config blockers", config_blockers),
         ("Robot placement profile", robot_placement_profile.get("profile", "")),
         ("Robot placement profile applied", _yes_no(robot_placement_profile.get("applied"))),
         ("place_robot_near max tries", robot_placement_overrides.get("max_tries", "")),
         ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
         ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
+        ("Exact sampler adapter object", sampler_adapter.get("planner_object_id", "")),
         ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
+        ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        ("Exact pickup retry budget", pickup_binding.get("retry_budget", "")),
+        ("Exact pickup retry budget applied", _yes_no(pickup_binding.get("retry_budget_applied"))),
+        (
+            "Exact pickup requested present before",
+            _yes_no(pickup_binding.get("requested_present_before")),
+        ),
+        ("Exact pickup candidates before", pickup_binding.get("candidate_count_before", "")),
+        ("Exact pickup candidates after", pickup_binding.get("candidate_count_after", "")),
         (
             "Task sampler placement attempts",
             task_sampler_failure.get("robot_placement_attempt_count", ""),
@@ -1436,7 +1610,36 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
             last_scene_diagnostic.get("nearest_free_point_distance_m", ""),
         ),
         ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
+        ("Grasp feasibility subkind", grasp_signature.get("subkind", "")),
+        ("Grasp load attempts", task_sampler_failure.get("grasp_load_attempt_count", "")),
+        (
+            "Grasp load failures",
+            grasp_signature.get("grasp_load_failure_count")
+            or task_sampler_failure.get("grasp_load_failure_count", ""),
+        ),
+        ("Missing grasp assets", missing_grasp_assets),
+        ("Grasp load exception types", grasp_load_exception_types),
+        ("Grasp load cached grasps", last_grasp_load.get("cached_grasp_count", "")),
+        ("Grasp collision checks", task_sampler_failure.get("grasp_collision_check_count", "")),
+        (
+            "Zero non-colliding grasp checks",
+            grasp_signature.get("zero_noncolliding_grasp_check_count")
+            or task_sampler_failure.get("zero_noncolliding_grasp_check_count", ""),
+        ),
+        ("Grasp collision asset", last_grasp_collision.get("asset_uid", "")),
+        (
+            "Grasp collision non-colliding",
+            last_grasp_collision.get("noncolliding_grasp_count", ""),
+        ),
+        ("Grasp collision total", last_grasp_collision.get("grasp_pose_count", "")),
+        (
+            "Grasp collision zero non-colliding",
+            _yes_no(last_grasp_collision.get("zero_noncolliding")) if last_grasp_collision else "",
+        ),
         ("Post-placement grasp failures", task_sampler_failure.get("grasp_failure_count", "")),
+        ("Post-placement removal calls", task_sampler_failure.get("candidate_removal_count", "")),
+        ("Post-placement effective removals", candidate_effective_removals),
+        ("Post-placement candidate name misses", candidate_name_misses),
         ("Post-placement rejection rows", len(grasp_failures)),
         ("Task sampler last failure", last_robot_failure.get("message", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
@@ -1621,14 +1824,23 @@ def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
         diagnostics.get("candidate_removal_count"),
         len(diagnostics.get("candidate_removals") or []),
     )
-    max_value = max(grasp_count, removal_count, len(removed), 1)
+    effective_removal_count = (
+        _safe_int(diagnostics.get("candidate_effective_removal_count"), 0)
+        if "candidate_effective_removal_count" in diagnostics
+        else len(removed)
+    )
+    candidate_name_miss_count = _safe_int(diagnostics.get("candidate_name_miss_count"), 0)
+    threshold_exceeded_count = _safe_int(diagnostics.get("grasp_threshold_exceeded_count"), 0)
+    max_value = max(grasp_count, removal_count, effective_removal_count, 1)
     grasp_width = _scaled_bar_width(grasp_count, max_value)
     removal_width = _scaled_bar_width(removal_count, max_value)
-    removed_width = _scaled_bar_width(len(removed), max_value)
+    effective_width = _scaled_bar_width(effective_removal_count, max_value)
     stats = [
         ("Grasp failures", grasp_count),
-        ("Candidate removals", removal_count),
-        ("Removed by threshold", len(removed)),
+        ("Removal calls", removal_count),
+        ("Effective removals", effective_removal_count),
+        ("Candidate name misses", candidate_name_miss_count),
+        ("Threshold exceeded", threshold_exceeded_count),
         ("Candidate rows", len(grasp_failures)),
         ("Candidates before", first.get("candidate_count_before", "")),
         ("Candidates after", first.get("candidate_count_after", "")),
@@ -1658,16 +1870,16 @@ def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
         f'<rect x="150" y="79" width="{grasp_width}" height="14" rx="7" fill="#f97316"/>'
         '<text x="326" y="91" fill="#0f172a" font-size="12" text-anchor="end">'
         f"{grasp_count}</text>"
-        '<text x="24" y="128" fill="#334155" font-size="12">candidate removals</text>'
+        '<text x="24" y="128" fill="#334155" font-size="12">removal calls</text>'
         '<rect x="150" y="116" width="170" height="14" rx="7" fill="#fecaca"/>'
         f'<rect x="150" y="116" width="{removal_width}" height="14" rx="7" fill="#ef4444"/>'
         '<text x="326" y="128" fill="#0f172a" font-size="12" text-anchor="end">'
         f"{removal_count}</text>"
-        '<text x="24" y="165" fill="#334155" font-size="12">threshold removals</text>'
+        '<text x="24" y="165" fill="#334155" font-size="12">effective removals</text>'
         '<rect x="150" y="153" width="170" height="14" rx="7" fill="#e2e8f0"/>'
-        f'<rect x="150" y="153" width="{removed_width}" height="14" rx="7" fill="#64748b"/>'
+        f'<rect x="150" y="153" width="{effective_width}" height="14" rx="7" fill="#64748b"/>'
         '<text x="326" y="165" fill="#0f172a" font-size="12" text-anchor="end">'
-        f"{len(removed)}</text>"
+        f"{effective_removal_count}</text>"
         "</svg>"
         "</div>"
         f"<figcaption>Post-placement rejection flow: {html.escape(object_name)}</figcaption>"
@@ -1760,7 +1972,9 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     promoted = evidence.get("cleanup_primitive_binding") or {}
     blockers = evidence.get("cleanup_primitive_binding_blockers") or []
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    config_blockers = _blocker_codes(cleanup_task_config.get("blockers") or [])
     cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+    pickup_binding = cleanup_task_sampler_adapter.get("exact_pickup_candidate_binding") or {}
     if not (
         sampled
         or requested
@@ -1773,6 +1987,7 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
     rows = [
         ("Cleanup scene XML", cleanup_task_config.get("scene_xml", "")),
         ("Exact task config applied", _yes_no(cleanup_task_config.get("applied"))),
+        ("Exact task config blockers", config_blockers),
         (
             "Exact sampler adapter applied",
             _yes_no(cleanup_task_sampler_adapter.get("applied")),
@@ -1782,9 +1997,26 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
             cleanup_task_sampler_adapter.get("task_sampler_class", ""),
         ),
         (
+            "Exact sampler adapter object",
+            cleanup_task_sampler_adapter.get("planner_object_id", ""),
+        ),
+        (
             "Exact sampler adapter target",
             cleanup_task_sampler_adapter.get("planner_target_receptacle_id", ""),
         ),
+        ("Exact pickup candidate action", pickup_binding.get("action", "")),
+        ("Exact pickup retry budget", pickup_binding.get("retry_budget", "")),
+        ("Exact pickup retry budget applied", _yes_no(pickup_binding.get("retry_budget_applied"))),
+        (
+            "Exact pickup requested present before",
+            _yes_no(pickup_binding.get("requested_present_before")),
+        ),
+        (
+            "Exact pickup requested present after",
+            _yes_no(pickup_binding.get("requested_present_after")),
+        ),
+        ("Exact pickup candidates before", pickup_binding.get("candidate_count_before", "")),
+        ("Exact pickup candidates after", pickup_binding.get("candidate_count_after", "")),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
         (
             "Sampled target",
@@ -1960,7 +2192,13 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
         if isinstance(item, dict)
     )
     removal_rows = "".join(
-        f"<tr><td>{html.escape(str(item.get('object_name', '')))}</td></tr>"
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('effective_removal', '')))}</td>"
+        "</tr>"
         for item in candidate_removals
         if isinstance(item, dict)
     )
@@ -1985,6 +2223,8 @@ def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str
     if removal_rows:
         supporting_tables += (
             '<div class="table-wrap"><table><thead><tr><th>Removed candidate</th>'
+            "<th>Candidates before</th><th>Candidates after</th>"
+            "<th>Name present before</th><th>Effective removal</th>"
             f"</tr></thead><tbody>{removal_rows}</tbody></table></div>"
         )
     note = (
@@ -2068,6 +2308,101 @@ def _planner_probe_placement_scene_diagnostics_section(evidence: dict[str, Any])
     )
 
 
+def _planner_probe_grasp_collision_diagnostics_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    load_attempts = [
+        item for item in diagnostics.get("grasp_load_attempts") or [] if isinstance(item, dict)
+    ]
+    collision_checks = [
+        item for item in diagnostics.get("grasp_collision_checks") or [] if isinstance(item, dict)
+    ]
+    if not load_attempts and not collision_checks:
+        return ""
+    last_load = diagnostics.get("last_grasp_load_attempt") or (
+        load_attempts[-1] if load_attempts else {}
+    )
+    last_check = diagnostics.get("last_grasp_collision_check") or (
+        collision_checks[-1] if collision_checks else {}
+    )
+    load_count = diagnostics.get("grasp_load_attempt_count", len(load_attempts))
+    check_count = diagnostics.get("grasp_collision_check_count", len(collision_checks))
+    zero_noncolliding = _yes_no(last_check.get("zero_noncolliding")) if last_check else ""
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Grasp load attempts', load_count)}"
+        f"{_metric('Cached grasps', last_load.get('cached_grasp_count', ''))}"
+        f"{_metric('Collision checks', check_count)}"
+        f"{_metric('Non-colliding grasps', last_check.get('noncolliding_grasp_count', ''))}"
+        f"{_metric('Zero non-colliding', zero_noncolliding)}"
+        "</div>"
+    )
+    rows = [
+        ("Asset UID", last_check.get("asset_uid", "") or last_load.get("asset_uid", "")),
+        (
+            "Pickup object",
+            last_check.get("pickup_obj_name", "") or last_load.get("pickup_obj_name", ""),
+        ),
+        ("Requested grasp count", last_load.get("requested_grasp_count", "")),
+        ("Gripper", last_load.get("gripper", "")),
+        ("Grasp pose count", last_check.get("grasp_pose_count", "")),
+        ("Batch size", last_check.get("batch_size", "")),
+        ("Colliding grasps", last_check.get("colliding_grasp_count", "")),
+        ("Load exception", last_load.get("exception_type", "")),
+        ("Collision exception", last_check.get("exception_type", "")),
+    ]
+    load_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('requested_grasp_count', '')))}</td>"
+        f"<td>{html.escape(str(item.get('result', '')))}</td>"
+        f"<td>{html.escape(str(item.get('gripper', '')))}</td>"
+        f"<td>{html.escape(str(item.get('cached_grasp_count', '')))}</td>"
+        f"<td>{html.escape(str(item.get('exception_type', '')))}</td>"
+        "</tr>"
+        for item in load_attempts
+    )
+    load_table = (
+        "<h3>Grasp Load Attempts</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Asset UID</th>'
+        "<th>Requested grasps</th><th>Result</th><th>Gripper</th>"
+        "<th>Cached grasps</th><th>Exception</th></tr></thead>"
+        f"<tbody>{load_rows}</tbody></table></div>"
+        if load_rows
+        else ""
+    )
+    check_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('grasp_pose_count', '')))}</td>"
+        f"<td>{html.escape(str(item.get('noncolliding_grasp_count', '')))}</td>"
+        f"<td>{html.escape(str(item.get('colliding_grasp_count', '')))}</td>"
+        f"<td>{html.escape(str(item.get('zero_noncolliding', '')))}</td>"
+        f"<td>{html.escape(str(item.get('exception_type', '')))}</td>"
+        "</tr>"
+        for item in collision_checks
+    )
+    check_table = (
+        "<h3>Grasp Collision Checks</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Asset UID</th>'
+        "<th>Total grasps</th><th>Non-colliding</th><th>Colliding</th>"
+        "<th>Zero non-colliding</th><th>Exception</th></tr></thead>"
+        f"<tbody>{check_rows}</tbody></table></div>"
+        if check_rows
+        else ""
+    )
+    note = (
+        "Grasp collision diagnostics wrap the upstream grasp loader and "
+        "non-colliding grasp mask. They explain whether post-placement failure "
+        "comes from missing cached grasps or zero feasible collision-free grasps."
+    )
+    return (
+        '<section class="panel planner-probe-grasp-collision-diagnostics">'
+        "<h2>Grasp Collision Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{_field_table(rows)}'
+        f"{load_table}{check_table}</section>"
+    )
+
+
 def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) -> str:
     diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
     grasp_failures = diagnostics.get("grasp_failures") or []
@@ -2076,11 +2411,21 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
     removed = [
         item for item in grasp_failures if isinstance(item, dict) and item.get("removed_candidate")
     ]
+    effective_removals = (
+        _safe_int(diagnostics.get("candidate_effective_removal_count"), 0)
+        if "candidate_effective_removal_count" in diagnostics
+        else len(removed)
+    )
+    candidate_name_misses = _safe_int(diagnostics.get("candidate_name_miss_count"), 0)
+    threshold_exceeded = _safe_int(diagnostics.get("grasp_threshold_exceeded_count"), 0)
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Grasp failures', diagnostics.get('grasp_failure_count', len(grasp_failures)))}"
-        f"{_metric('Candidate removals', diagnostics.get('candidate_removal_count', 0))}"
+        f"{_metric('Candidate removal calls', diagnostics.get('candidate_removal_count', 0))}"
         f"{_metric('Removed by grasp threshold', len(removed))}"
+        f"{_metric('Effective removals', effective_removals)}"
+        f"{_metric('Candidate name misses', candidate_name_misses)}"
+        f"{_metric('Threshold exceeded rows', threshold_exceeded)}"
         "</div>"
     )
     rows = "".join(
@@ -2089,8 +2434,13 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
         f"<td>{html.escape(str(item.get('count_before', '')))}</td>"
         f"<td>{html.escape(str(item.get('count_after', '')))}</td>"
         f"<td>{html.escape(str(item.get('max_failures', '')))}</td>"
+        f"<td>{html.escape(str(item.get('threshold_exceeded', '')))}</td>"
+        f"<td>{html.escape(str(item.get('threshold_crossed', '')))}</td>"
         f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
         f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_removal_call_count_delta', '')))}</td>"
         f"<td>{html.escape(str(item.get('removed_candidate', '')))}</td>"
         "</tr>"
         for item in grasp_failures
@@ -2099,8 +2449,33 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
         "<th>Count before</th><th>Count after</th><th>Max failures</th>"
-        "<th>Candidates before</th><th>Candidates after</th><th>Removed</th></tr></thead>"
+        "<th>Threshold exceeded</th><th>Threshold crossed</th>"
+        "<th>Candidates before</th><th>Candidates after</th>"
+        "<th>Name present before</th><th>Name present after</th>"
+        "<th>Removal-call delta</th><th>Removed</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></div>"
+    )
+    removal_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_name_present_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('effective_removal', '')))}</td>"
+        "</tr>"
+        for item in diagnostics.get("candidate_removals") or []
+        if isinstance(item, dict)
+    )
+    removal_table = (
+        "<h3>Candidate Removal Effectiveness</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Candidates before</th><th>Candidates after</th>"
+        "<th>Name present before</th><th>Name present after</th>"
+        "<th>Effective removal</th></tr></thead>"
+        f"<tbody>{removal_rows}</tbody></table></div>"
+        if removal_rows
+        else ""
     )
     note = (
         "Post-placement candidate rejection diagnostics explain failures after "
@@ -2111,7 +2486,7 @@ def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) ->
         '<section class="panel planner-probe-post-placement-rejections">'
         "<h2>Post-Placement Candidate Rejections</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}'
-        f"{_post_placement_rejection_views(diagnostics)}{table}</section>"
+        f"{_post_placement_rejection_views(diagnostics)}{table}{removal_table}</section>"
     )
 
 
@@ -3119,7 +3494,8 @@ def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return moves
 
 
-def _wrap_html(body: str) -> str:
+def _wrap_html(body: str, *, extra_css: str = "") -> str:
+    extra_css_block = f"{extra_css.rstrip()}\n" if extra_css else ""
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -3223,77 +3599,7 @@ def _wrap_html(body: str) -> str:
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
-    .diagnostic-view {{
-      background: #ffffff;
-    }}
-    .diagnostic-visual {{
-      border-radius: 8px;
-      overflow: hidden;
-      background: #f8fafc;
-    }}
-    .diagnostic-visual svg {{
-      width: 100%;
-      height: auto;
-      display: block;
-    }}
-    .diagnostic-stats {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-      gap: 8px;
-      margin-top: 10px;
-    }}
-    .diagnostic-stat {{
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 8px;
-      background: #f8fafc;
-    }}
-    .diagnostic-stat small {{
-      display: block;
-      color: #64748b;
-      margin-bottom: 3px;
-    }}
-    .diagnostic-stat strong {{
-      color: #0f172a;
-    }}
-    .post-placement-rejection-views h3 {{
-      margin: 14px 0 8px;
-      font-size: 15px;
-    }}
-    .rejection-view .diagnostic-visual {{
-      background: #fff7ed;
-    }}
-    .grasp-blocker-matrix {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 10px;
-      margin-bottom: 12px;
-    }}
-    .grasp-blocker-card {{
-      border: 1px solid #fecaca;
-      border-radius: 8px;
-      padding: 12px;
-      background: #fff7f7;
-    }}
-    .grasp-blocker-route {{
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 8px;
-    }}
-    .grasp-blocker-route strong {{
-      overflow-wrap: anywhere;
-    }}
-    .grasp-blocker-route span {{
-      color: #64748b;
-      font-size: 12px;
-    }}
-    .grasp-blocker-card p {{
-      margin: 8px 0 0;
-      color: #475569;
-    }}
-    .raw-fpv-grid {{
+{extra_css_block}    .raw-fpv-grid {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 12px;
@@ -3362,6 +3668,100 @@ def _wrap_html(body: str) -> str:
 </head>
 <body><main>{body}</main></body>
 </html>
+"""
+
+
+def _planner_report_css() -> str:
+    return """    .diagnostic-view {
+      background: #ffffff;
+    }
+    .diagnostic-visual {
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+    }
+    .diagnostic-visual svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .diagnostic-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .diagnostic-stat {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8fafc;
+    }
+    .diagnostic-stat small {
+      display: block;
+      color: #64748b;
+      margin-bottom: 3px;
+    }
+    .diagnostic-stat strong {
+      color: #0f172a;
+    }
+    .post-placement-rejection-views h3 {
+      margin: 14px 0 8px;
+      font-size: 15px;
+    }
+    .rejection-view .diagnostic-visual {
+      background: #fff7ed;
+    }
+    .grasp-blocker-matrix {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .grasp-blocker-card {
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff7f7;
+    }
+    .grasp-blocker-route {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .grasp-blocker-route strong {
+      overflow-wrap: anywhere;
+    }
+    .grasp-blocker-route span {
+      color: #64748b;
+      font-size: 12px;
+    }
+    .grasp-blocker-card p {
+      margin: 8px 0 0;
+      color: #475569;
+    }
+    .decision-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin: 0 0 12px;
+    }
+    .decision-card {
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px;
+      background: #eff6ff;
+    }
+    .decision-card h3 { margin: 0 0 6px; font-size: 14px; color: #1e3a8a; }
+    .decision-card strong {
+      display: block;
+      color: #0f172a;
+      overflow-wrap: anywhere;
+      margin-bottom: 8px;
+    }
+    .decision-card p { margin: 0; color: #475569; }
 """
 
 

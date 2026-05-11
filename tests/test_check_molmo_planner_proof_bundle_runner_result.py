@@ -64,6 +64,33 @@ def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -
         ],
     }
     manifest["proof_result_summary"] = proof_result_summary_from_commands(manifest["commands"])
+    manifest["grasp_feasibility_mitigation_decision"] = {
+        "schema": "planner_grasp_feasibility_mitigation_decision_v1",
+        "status": "action_required",
+        "primary_route": "grasp_cache_mitigation",
+        "recommendation": "mitigate_missing_grasp_cache_before_retry",
+        "rationale": "Cached grasps could not be loaded for a requested asset.",
+        "source_rotation_state": "available_for_unproven_requests",
+        "selected_request_count": 1,
+        "excluded_request_count": 1,
+        "signature_group_count": 1,
+        "subkind_counts": {"grasp_cache_missing": 1},
+        "missing_grasp_asset_uids": ["PriorBread_1"],
+        "grasp_load_exception_types": ["ValueError"],
+        "evidence_request_ids": ["standalone_observed_001_to_shelf_01"],
+        "signature_groups": [
+            {
+                "source": "prior_proof_result_summary",
+                "subkind": "grasp_cache_missing",
+                "count": 1,
+                "summary": "17 grasp-load failures; missing grasp cache: PriorBread_1",
+                "request_ids": ["standalone_observed_001_to_shelf_01"],
+                "object_names": ["prior/pickup"],
+                "grasp_load_exception_asset_uids": ["PriorBread_1"],
+                "grasp_load_exception_types": ["ValueError"],
+            }
+        ],
+    }
     (tmp_path / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -403,6 +430,30 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
                 "task_feasibility_blocker_summary": (
                     "17 grasp failures; 15 candidate-removal calls"
                 ),
+                "grasp_feasibility_signature": {
+                    "schema": "planner_grasp_feasibility_signature_v1",
+                    "kind": "grasp_feasibility",
+                    "subkind": "grasp_cache_missing",
+                    "pattern_key": "prior-grasp-cache-missing",
+                    "summary": (
+                        "17 grasp failures; 15 candidate-removal calls; "
+                        "17 grasp-load failures; missing grasp cache: PriorBread_1"
+                    ),
+                    "grasp_failure_count": 17,
+                    "candidate_removal_count": 15,
+                    "grasp_load_attempt_count": 17,
+                    "grasp_load_failure_count": 17,
+                    "grasp_collision_check_count": 0,
+                    "zero_noncolliding_grasp_check_count": 0,
+                    "grasp_load_exception_asset_uids": ["PriorBread_1"],
+                    "grasp_load_exception_types": ["ValueError"],
+                    "robot_placement_attempt_count": 17,
+                    "robot_placement_failure_count": 0,
+                    "place_robot_near_call_count": 17,
+                    "object_name_count": 1,
+                    "object_names": ["prior/pickup"],
+                    "image_artifact_count": 1,
+                },
                 "views": [
                     {
                         "label": "final",
@@ -422,6 +473,7 @@ def test_checker_accepts_generated_fallback_commands(tmp_path: Path) -> None:
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert 'src="prior-proof/final.png"' in report
     assert f'src="{tmp_path}/prior-proof/final.png"' not in report
+    assert "PriorBread_1" in report
     checker._assert_runner_result(manifest, tmp_path)
 
 
