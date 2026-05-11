@@ -19,8 +19,9 @@ Three abstractions matter:
 1. **`MultiAgentEngine`** — wraps `ai2thor.controller.Controller`, owns
    the scene + cameras + per-agent state (`roboclaws/core/engine.py`).
 2. **`VLMProvider`** — pluggable inference protocol. Each provider
-   (Anthropic, OpenAI, Kimi, MiMo, NVIDIA, Mock) implements `get_action`
-   (`roboclaws/core/vlm.py`).
+   (Anthropic, OpenAI, Kimi, MiMo, NVIDIA, Mock) implements `get_action`.
+   The protocol and factory live in `roboclaws/core/vlm.py`; provider
+   implementations live in `roboclaws/core/providers/`.
 3. **`RoboclawsMCPServer`** — the MCP tool surface
    that any external agent (OpenClaw skill, Codex, Claude Code) consumes
    to drive a robot (`roboclaws/mcp/server.py`).
@@ -115,13 +116,14 @@ runbook: [`docs/railway-deploy.md`](docs/railway-deploy.md).
 | `roboclaws/core/engine.py` | `MultiAgentEngine`: AI2-THOR controller wrapper, owns scene + cameras (overhead orthographic + per-agent chase), reachable-positions cache. Public API: `step`, `reset`, `get_agent_state`, `get_overhead_frame`, `add_chase_cam`. |
 | `roboclaws/core/views.py` | View composition: `NavigationViewContext` (per-scene stable state) + `NavigationPromptBundle` (per-turn render). Outputs the `map-v2+chase` view variant — FPV + structured overhead + chase cam. |
 | `roboclaws/core/visualizer.py` | `GameVisualizer`: lower-level overhead/structured map rendering. Called by `views.py`. |
-| `roboclaws/core/vlm.py` | `VLMProvider` protocol + `create_provider()` factory. Concrete providers: `MockProvider`, `OpenAIProvider`, `KimiProvider`, `KimiCodingProvider`, `AnthropicProvider`, `NvidiaProvider`, `MimoProvider`. Tracks per-provider health via `ProviderStatus`. Owns SOUL loading (`load_agent_souls`). |
+| `roboclaws/core/vlm.py`, `roboclaws/core/providers/` | `VLMProvider` protocol + `create_provider()` factory, with concrete provider implementations split by backend. Tracks per-provider health via `ProviderStatus`. Owns SOUL loading (`load_agent_souls`). |
 | `roboclaws/core/replay.py` | `ReplayRecorder`: per-step capture (frames, overhead, prompt state, response). Persists to `replay.json` + per-step PNG dirs (`frames/`, `agent_frames/`, `overhead/`, `scene_views/`). Optional GIF. |
 | `roboclaws/games/territory.py` | `TerritoryGame`: adversarial cell-claiming. Tracks `cells_claimed`, `connectivity_ratio`, `blocking_events`. |
 | `roboclaws/games/coverage.py` | `CoverageGame`: cooperative coverage. Tracks `coverage_pct`, per-agent `contribution`, `work_balance`. |
 | `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
 | `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
 | `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
+| `roboclaws/molmo_cleanup/` | MolmoSpaces cleanup contracts and reports: public cleanup MCP tools, semantic cleanup loop, private evaluation separation, planner-proof attachment, grasp/cache diagnostics, and proof-bundle request/report helpers. |
 | `roboclaws/openclaw/bridge.py` | `OpenClawProvider`: VLMProvider that talks to a Gateway. |
 | `roboclaws/openclaw/transport.py` | `OpenClawBridge`: HTTP transport for the Gateway, retry policy. |
 | `roboclaws/openclaw/skill.py` | `AI2THORNavigatorSkill`: wraps a provider as an OpenClaw skill with SOUL injection. |
@@ -183,5 +185,7 @@ not) and power the `just chat::view` live viewer.
 | Railway appliance deploy (Mode 4) | [`docs/railway-deploy.md`](docs/railway-deploy.md) |
 | Verified models per provider | [`docs/model-matrix.md`](docs/model-matrix.md) |
 | Operating rules for any agent driving the robot | [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md) |
-| Active phase plan | `PLAN.md` (current) + `.planning/STATE.md` (GSD-managed) |
+| Current status and active source links | [`STATUS.md`](STATUS.md) |
+| Active GSD execution state | [`.planning/STATE.md`](.planning/STATE.md) |
+| Pre-GSD plans | [`docs/plans/`](docs/plans/) |
 | Shipped-phase history | `docs/retrospectives/` |
