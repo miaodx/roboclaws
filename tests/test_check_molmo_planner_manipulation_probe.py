@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -108,6 +109,92 @@ def test_runner_preserves_last_worker_stage_from_timeout_stdout() -> None:
         "runtime_diagnostics",
         "rby1m_config_import_start",
     ]
+
+
+def test_runner_configures_exact_cleanup_task_scene_and_aliases(tmp_path: Path) -> None:
+    runner = _load_runner_module()
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text("<mujoco/>", encoding="utf-8")
+    config = SimpleNamespace(
+        scene_dataset="procthor-10k",
+        data_split="train",
+        task_sampler_config=SimpleNamespace(
+            house_inds=[8],
+            samples_per_house=20,
+            max_tasks=10,
+            pickup_obj_name=None,
+            place_target_name=None,
+        ),
+        task_config=SimpleNamespace(
+            pickup_obj_name=None,
+            place_receptacle_name=None,
+            place_target_name=None,
+        ),
+        task_config_preset_exp="stale",
+        task_config_preset_scn="stale",
+    )
+    args = SimpleNamespace(
+        cleanup_scene_xml=str(scene_xml),
+        cleanup_object_id="observed_001",
+        cleanup_target_receptacle_id="sink_01",
+        cleanup_source_receptacle_id="counter_01",
+        cleanup_planner_object_id="pickup/body",
+        cleanup_planner_target_receptacle_id="sink/body",
+        cleanup_tools="pick,place",
+    )
+
+    result = runner._configure_exact_cleanup_task(config, args)
+
+    assert result["applied"] is True
+    assert config.scene_dataset == str(scene_xml)
+    assert config.data_split == "val"
+    assert config.task_sampler_config.house_inds == [0]
+    assert config.task_sampler_config.max_tasks == 1
+    assert config.task_config.pickup_obj_name == "pickup/body"
+    assert config.task_config.place_receptacle_name == "sink/body"
+    assert config.task_config_preset_exp is None
+    assert config.task_config_preset_scn is None
+
+
+def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
+    runner = _load_runner_module()
+
+    class FakeObjectManager:
+        def get_object_by_name(self, name: str) -> object:
+            assert name == "sink/body"
+            return object()
+
+    class FakeSampler:
+        place_receptacle_name = None
+
+        def _get_place_target_candidates(self, env, pickup_obj_name, supporting_geom_id):
+            return ["random/target"]
+
+        def _prepare_place_target(
+            self,
+            env,
+            place_target_name,
+            pickup_obj_name,
+            pickup_obj_pos,
+            supporting_geom_id,
+        ):
+            return False
+
+    sampler = FakeSampler()
+    env = SimpleNamespace(current_batch_index=0, object_managers=[FakeObjectManager()])
+
+    result = runner._apply_exact_cleanup_task_sampler_adapter(
+        sampler,
+        {
+            "planner_target_receptacle_id": "sink/body",
+            "target_receptacle_id": "sink_01",
+        },
+    )
+
+    assert result["applied"] is True
+    assert sampler._get_place_target_candidates(env, "pickup/body", 1) == ["sink/body"]
+    assert sampler._prepare_place_target(env, "ignored", "pickup/body", None, 1) is True
+    assert sampler.place_receptacle_name == "sink/body"
 
 
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
