@@ -6,9 +6,9 @@
 This document captures the **design rationale** for roboclaws: what
 problem it's solving, why scenarios are shaped the way they are, and
 which model strategy fits the constraints. For *how the code is
-organized*, see [`ARCHITECTURE.md`](../ARCHITECTURE.md). For *individual
+organized*, see [`ARCHITECTURE.md`](../../ARCHITECTURE.md). For *individual
 architectural decisions* (platform choice, deferred integrations), see
-[`docs/adr/`](adr/).
+[`docs/adr/`](../adr/).
 
 ## Project positioning
 
@@ -29,21 +29,21 @@ cooperation. This is the first.
 ## Technology selection
 
 The simulation platform is **AI2-THOR (iTHOR scenes)**. See
-[ADR-0001](adr/0001-use-ai2thor-for-phase-1.md) for the platform survey,
+[ADR-0001](../adr/0001-use-ai2thor-for-phase-1.md) for the platform survey,
 exclusion reasons (MolmoSpaces, Isaac Lab, ManiSkill3, Habitat 3.0), and
 the decision shape. **Isaac Lab is intentionally deferred** to Phase 3 —
-see [ADR-0002](adr/0002-defer-isaac-lab-to-phase-3.md).
+see [ADR-0002](../adr/0002-defer-isaac-lab-to-phase-3.md).
 
 For the OpenClaw integration shape, see
-[`docs/openclw/openclaw-local.md`](openclw/openclaw-local.md) and
-[`docs/openclw/openclaw-gateway-internals.md`](openclw/openclaw-gateway-internals.md).
+[`openclaw/local.md`](openclaw/local.md) and
+[`openclaw/gateway-internals.md`](openclaw/gateway-internals.md).
 For the direct coding-agent driver, see
-[`docs/coding-agent-nav-server.md`](coding-agent-nav-server.md).
+[`coding-agent-nav-server.md`](coding-agent-nav-server.md).
 
 ## Game scenario design
 
 Two scenarios drive the multi-agent demo. Both run on the same
-`MultiAgentEngine` (see [`ARCHITECTURE.md`](../ARCHITECTURE.md)) and the
+`MultiAgentEngine` (see [`ARCHITECTURE.md`](../../ARCHITECTURE.md)) and the
 same view system; what differs is rules + metrics + termination.
 
 ### Scenario A: Territory Control (adversarial)
@@ -125,12 +125,12 @@ The prompt is constructed once per agent per step in
 `roboclaws/games/territory.py` and `roboclaws/games/coverage.py`. The
 same shape is consumed by `RoboclawsMCPServer.observe` when an external
 coding agent drives the robot — see
-[`ARCHITECTURE.md`](../ARCHITECTURE.md) for the full contract.
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md) for the full contract.
 
 ### Model selection
 
 Per-provider verified models and their costs evolve fast — see
-[`docs/model-matrix.md`](model-matrix.md) for current data. As a stable
+[`model-matrix.md`](model-matrix.md) for current data. As a stable
 heuristic:
 
 - **Development**: a cheap provider (Kimi / MiMo / GPT-4o-mini). Fast

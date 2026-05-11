@@ -80,7 +80,7 @@ just chat::view
 ```
 
 > Recipes are run via [`just`](https://just.systems/) — see
-> [`docs/contributing.md`](docs/contributing.md) for the one-line install +
+> [`docs/human/contributing.md`](docs/human/contributing.md) for the one-line install +
 > tab-completion setup. `just --list` shows everything grouped by module.
 
 ### Let Codex or Claude Drive the Robot
@@ -103,7 +103,7 @@ Then start Codex or Claude Code in this repo and ask it to read
 `skills/ai2thor-navigator/SKILL.md`, call `roboclaws__observe` first, and
 use labeled observes as photos.
 
-Full guide: [docs/coding-agent-nav-server.md](docs/coding-agent-nav-server.md).
+Full guide: [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md).
 
 ## Live Reports
 
@@ -159,20 +159,16 @@ python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timesta
 
 ## Documentation Map
 
-- [Current status](STATUS.md) — short human-facing dashboard: current focus, next action, active source links
-- [Domain vocabulary](CONTEXT.md) — stable MolmoSpaces cleanup language
-- [Architecture](ARCHITECTURE.md) — code map, four operating modes, MCP contract
-- [Architecture Decision Records](docs/adr/) — atomic decisions (platform choice, deferred integrations)
-- [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md)
-- [OpenClaw demo guide](docs/openclw/openclaw-demo.md)
-- [OpenClaw local guide](docs/openclw/openclaw-local.md)
-- [OpenClaw Gateway internals](docs/openclw/openclaw-gateway-internals.md)
-- [Model matrix](docs/model-matrix.md)
-- [MolmoSpaces settings matrix](docs/molmospaces-settings.md)
-- [Railway deploy runbook](docs/railway-deploy.md)
-- [Railway appliance plan](docs/openclw/railway-openclaw-appliance-plan.md)
-- [Technical design](docs/technical-design.md)
-- [Contributing](docs/contributing.md)
+Human reviewers only need this small surface:
+
+- [README](README.md) — project orientation and runnable entrypoints
+- [Architecture](ARCHITECTURE.md) — code map, operating modes, and contracts
+- [Current status](STATUS.md) — focus, next action, blocker, and source links
+- [Human docs](docs/human/README.md) — domain vocabulary, setup, runbooks, and design context
+
+Other docs folders are AI-agent workspace, generated planning detail, evidence,
+or history. They are still checkable by agents, but they are not the normal
+human review surface.
 
 ## Related Projects
 

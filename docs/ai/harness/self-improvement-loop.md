@@ -6,7 +6,7 @@ A scripted loop that exercises the AI2-THOR navigator skill end-to-end on
 a curated task, captures structured metrics, and feeds the result back
 into a curated logbook so the **next** iteration starts with concrete
 ground to stand on. Operational quick-start lives in
-[`harness/README.md`](../harness/README.md); this document is the design
+[`harness/README.md`](../../../harness/README.md); this document is the design
 rationale.
 
 ## What problem this solves
@@ -174,9 +174,9 @@ chasing the next idea.
 
 ## See also
 
-- [`harness/README.md`](../harness/README.md) — operational quick-start.
-- [`harness/PLAN.md`](../harness/PLAN.md) — the actual run logbook.
-- [`docs/coding-agent-nav-server.md`](coding-agent-nav-server.md) — the
+- [`harness/README.md`](../../../harness/README.md) — operational quick-start.
+- [`harness/PLAN.md`](../../../harness/PLAN.md) — the actual run logbook.
+- [`docs/human/coding-agent-nav-server.md`](../../human/coding-agent-nav-server.md) — the
   underlying MCP path the harness drives.
-- [`skills/ai2thor-navigator/SKILL.md`](../skills/ai2thor-navigator/SKILL.md)
+- [`skills/ai2thor-navigator/SKILL.md`](../../../skills/ai2thor-navigator/SKILL.md)
   — the skill being measured.

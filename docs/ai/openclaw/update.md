@@ -8,7 +8,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
   - `scripts/openclaw-defaults.env` → `OPENCLAW_IMAGE_DEFAULT="ghcr.io/openclaw/openclaw:2026.4.26"`
 - [ ] If running CI manually, pass the candidate through env:
   - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26`
-- [ ] Check `docs/openclw/` for any release-specific assumptions tied to the previous tag.
+- [ ] Check `docs/human/openclaw/` and `docs/ai/openclaw/` for release-specific assumptions tied to the previous tag.
 
 ## 2) Pre-flight smoke (mandatory)
 
@@ -22,10 +22,10 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 
 ## 3) MCP + tool profile validation
 
-- [ ] Re-run MCP visibility check from `docs/openclw/openclaw-local.md` (initialize + `roboclaws__*` tool calls).
-- [ ] Re-run tool-profile diff described in `docs/openclw/openclaw-tool-profiles.md` against image artifacts.
+- [ ] Re-run MCP visibility check from `docs/human/openclaw/local.md` (initialize + `roboclaws__*` tool calls).
+- [ ] Re-run tool-profile diff described in `docs/ai/openclaw/tool-profiles.md` against image artifacts.
 - [ ] Verify `scripts/openclaw-bootstrap.sh` still emits `tools.alsoAllow: ["bundle-mcp"]` for agents.
-- [ ] Re-run plugin allowlist behavior probe from `docs/openclw/openclaw-plugin-allowlist.md`.
+- [ ] Re-run plugin allowlist behavior probe from `docs/ai/openclaw/plugin-allowlist.md`.
 - [ ] Validate startup logs with the new image:
   - plugin set matches expected allow-list
   - no provider/model fallback drift
@@ -44,7 +44,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 
 ## 5) Documentation sync
 
-- [ ] Update version references inside `docs/openclw/*.md` and linked checklists.
+- [ ] Update version references inside `docs/human/openclaw/*.md`, `docs/ai/openclaw/*.md`, and linked checklists.
 - [ ] Update any measured values that change with the new image (startup latency, plugin count, profile assertions).
 - [ ] Update release notes / planning notes if a behavior delta is blocking.
 

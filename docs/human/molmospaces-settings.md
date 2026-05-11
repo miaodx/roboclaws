@@ -128,16 +128,16 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 
 ## Source Docs
 
-- [ADR-0003](adr/0003-separate-cleanup-agent-view-from-private-evaluation.md):
+- [ADR-0003](../adr/0003-separate-cleanup-agent-view-from-private-evaluation.md):
   public Agent View vs private evaluation.
-- [ADR-0009](adr/0009-use-shared-molmo-cleanup-report-underlay.md):
+- [ADR-0009](../adr/0009-use-shared-molmo-cleanup-report-underlay.md):
   shared Molmo cleanup report underlay.
-- [ADR-0010](adr/0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md):
+- [ADR-0010](../adr/0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md):
   real visual OpenClaw evidence requirements.
-- [ADR-0013](adr/0013-add-raw-fpv-observation-mode-for-adr-0003-cleanup.md):
+- [ADR-0013](../adr/0013-add-raw-fpv-observation-mode-for-adr-0003-cleanup.md):
   raw FPV-only perception mode.
-- [ADR-0020](adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md):
+- [ADR-0020](../adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md):
   camera-model policy mode.
-- [ADR-0028](adr/0028-add-planner-cleanup-bridge-readiness-evidence.md):
+- [ADR-0028](../adr/0028-add-planner-cleanup-bridge-readiness-evidence.md):
   planner cleanup bridge readiness.
-- [`CONTEXT.md`](../CONTEXT.md): domain vocabulary and shipped-history notes.
+- [`domain.md`](domain.md): domain vocabulary and shipped-history notes.

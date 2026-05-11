@@ -1,12 +1,12 @@
 # OpenClaw Demo Guide
 
 Fastest path to the OpenClaw navigation demo:
-[`examples/openclaw_demo.py`](../examples/openclaw_demo.py).
+[`examples/openclaw_demo.py`](../../../examples/openclaw_demo.py).
 
 If you only want to prove "OpenClaw can drive the robot end-to-end", start
 here. If you want the broader local matrix (territory, coverage, interactive
 chat, autonomous MCP, provider/model comparisons), use
-[`openclaw-local.md`](./openclaw-local.md).
+[`local.md`](local.md).
 
 ## Prerequisites
 
@@ -92,9 +92,7 @@ OPENCLAW_GATEWAY_TOKEN="$TOKEN" \
   --output-dir output/openclaw/demo
 ```
 
-Then open:
-
-- [output/openclaw/demo/report.html](/home/mi/ws/gogo/roboclaws/output/openclaw/demo/report.html)
+Then open `output/openclaw/demo/report.html`.
 
 ### 3. Clean Up
 
@@ -133,5 +131,5 @@ First run is slow:
 ## Next Steps
 
 - Longer OpenClaw game demos: `just openclaw::run territory`, `just openclaw::run coverage`
-- Full local guide: [`openclaw-local.md`](./openclaw-local.md)
+- Full local guide: [`local.md`](local.md)
 - Autonomous MCP loop and split-model MiMo: `python examples/openclaw_nav_autonomous.py ...`

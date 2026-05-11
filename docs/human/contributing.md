@@ -92,7 +92,7 @@ you ever clone.
 ## Development topology: cloud + local
 
 Day-to-day work on this repo is split between two kinds of sessions, sized
-accordingly. The full playbook lives in [`AGENTS.md §7`](../AGENTS.md);
+accordingly. The full playbook lives in [`AGENTS.md §7`](../../AGENTS.md);
 contributors should read it before picking up work.
 
 | | Cloud session (Claude Code on the web) | Local session (your workstation) |

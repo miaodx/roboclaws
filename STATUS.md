@@ -26,12 +26,17 @@ The global cleanup bridge is still blocked until broader or stronger
 planner-backed proof evidence exists for cleanup primitives. The latest
 `proof_001` artifact is a dry-run command/report, not fresh runtime proof.
 
-## Authoritative Sources
+## Human Review Surface
 
-- Human dashboard: `STATUS.md`
+- Project orientation: `README.md`
+- Architecture and contracts: `ARCHITECTURE.md`
+- Current status: `STATUS.md`
+- Human docs: `docs/human/`
+
+## AI-Agent Sources
+
 - GSD execution state: `.planning/STATE.md`
 - Current phase details: follow the latest phase link in `.planning/STATE.md`
-- Domain vocabulary: `CONTEXT.md`
 - Pre-GSD plans: `docs/plans/`
 - Durable decisions: `docs/adr/`
 - Shipped history: `docs/retrospectives/`
@@ -66,6 +71,8 @@ Rules:
 - `STATUS.md` answers "what is happening now?"
 - `docs/plans/` owns pre-GSD plans.
 - `.planning/` is GSD-owned execution detail.
+- `docs/human/` is the human-readable doc set; other `docs/` folders are
+  primarily AI-agent evidence, generated planning detail, or history.
 - `docs/adr/` records durable decisions, not progress.
 - Root `PLAN.md` is a legacy compatibility pointer, not an active plan.
 - `TODOS.md` and `THOUGHTS.md` are parked-work surfaces, not current status.

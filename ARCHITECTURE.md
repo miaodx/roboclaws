@@ -2,7 +2,7 @@
 
 How the roboclaws codebase is organized. For *why* decisions were made
 (scenario design, technology choices, phase rationale), see
-[`docs/technical-design.md`](docs/technical-design.md). For *what you can
+[`docs/human/technical-design.md`](docs/human/technical-design.md). For *what you can
 run*, see [`README.md`](README.md).
 
 ## Bird's-eye view
@@ -107,7 +107,7 @@ AI2-THOR + xvfb + nginx + supervisord + the OpenClaw Gateway + the MCP
 server + `reset_server.py` (HTTP `/reset`). Public surface is nginx on
 `:8080` with auth via `OPENCLAW_TOKEN` / `DEMO_PASSWORD`. Env-driven
 config seeded by `scripts/appliance_seed_openclaw.py`. Full deploy
-runbook: [`docs/railway-deploy.md`](docs/railway-deploy.md).
+runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
 
 ## Code map
 
@@ -177,13 +177,13 @@ not) and power the `just chat::view` live viewer.
 
 | What you want | Where it lives |
 |---------------|----------------|
-| Scenario design rationale, VLM strategy, references | [`docs/technical-design.md`](docs/technical-design.md) |
+| Scenario design rationale, VLM strategy, references | [`docs/human/technical-design.md`](docs/human/technical-design.md) |
 | Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |
-| Direct coding-agent driver setup (Mode 3) | [`docs/coding-agent-nav-server.md`](docs/coding-agent-nav-server.md) |
-| OpenClaw local setup (Mode 2) | [`docs/openclw/openclaw-local.md`](docs/openclw/openclaw-local.md) |
-| OpenClaw Gateway internals | [`docs/openclw/openclaw-gateway-internals.md`](docs/openclw/openclaw-gateway-internals.md) |
-| Railway appliance deploy (Mode 4) | [`docs/railway-deploy.md`](docs/railway-deploy.md) |
-| Verified models per provider | [`docs/model-matrix.md`](docs/model-matrix.md) |
+| Direct coding-agent driver setup (Mode 3) | [`docs/human/coding-agent-nav-server.md`](docs/human/coding-agent-nav-server.md) |
+| OpenClaw local setup (Mode 2) | [`docs/human/openclaw/local.md`](docs/human/openclaw/local.md) |
+| OpenClaw Gateway internals | [`docs/human/openclaw/gateway-internals.md`](docs/human/openclaw/gateway-internals.md) |
+| Railway appliance deploy (Mode 4) | [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md) |
+| Verified models per provider | [`docs/human/model-matrix.md`](docs/human/model-matrix.md) |
 | Operating rules for any agent driving the robot | [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md) |
 | Current status and active source links | [`STATUS.md`](STATUS.md) |
 | Active GSD execution state | [`.planning/STATE.md`](.planning/STATE.md) |

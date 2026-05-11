@@ -1,7 +1,7 @@
 # Roboclaws Domain Context
 
 This file defines stable domain language. It is not project status. For current
-focus, next action, and active source links, read [`STATUS.md`](STATUS.md).
+focus, next action, and active source links, read [`STATUS.md`](../../STATUS.md).
 
 Keep this file short. Historical phase vocabulary and shipped implementation
 details belong in `.planning/`, `docs/adr/`, and `docs/retrospectives/`.
