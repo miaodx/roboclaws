@@ -214,6 +214,7 @@ def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
         "opened": response.get("opened"),
         "matches_expected_location": response.get("matches_expected_location"),
         "primitive_provenance": response.get("primitive_provenance"),
+        "state_mutation": response.get("state_mutation"),
     }
 
 

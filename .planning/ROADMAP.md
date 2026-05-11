@@ -37,7 +37,14 @@ advisory scoring/model-check artifact to the same shared report pipeline.
 Phase 22 starts the raw FPV-only perception branch with an evidence mode that
 records camera observations without structured movable-object detections. Phase
 23 adds a planner-backed manipulation provenance/proof gate so semantic cleanup
-state edits cannot be confused with real RBY1M/Franka planner execution.
+state edits cannot be confused with real RBY1M/Franka planner execution. Phase
+24 adds runtime diagnostics for strict planner probe blockers. Phase 25 closes
+standalone Franka planner proof with a probe-local headless renderer adapter;
+Phase 26 attached that strict proof to cleanup reports while preserving
+`api_semantic` cleanup-loop provenance. Phase 27 closes the per-subphase cleanup
+primitive gate that future real planner-backed cleanup execution must pass.
+Phase 28 closes the RBY1M/CuRobo runtime gate that must be ready before planner
+primitive replacement can depend on the target robot path.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -86,6 +93,11 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.22 MolmoSpaces real-world advisory scoring** - Phase 21 (completed 2026-05-09; non-authoritative advisory scoring/model-check artifact)
 - ✅ **v1.23 MolmoSpaces real-world raw FPV perception** - Phase 22 (completed 2026-05-09; evidence-mode camera observations without structured movable-object detections)
 - ✅ **v1.24 MolmoSpaces planner-backed manipulation proof gate** - Phase 23 (completed 2026-05-09; provenance/report/checker gate before real planner-backed cleanup claims)
+- ✅ **v1.25 MolmoSpaces planner runtime diagnostics** - Phase 24 (completed 2026-05-09; dependency/crash diagnostics for strict planner probe blockers)
+- ✅ **v1.26 MolmoSpaces planner headless renderer** - Phase 25 (completed 2026-05-09; probe-local EGL renderer adapter and strict Franka planner proof)
+- ✅ **v1.27 MolmoSpaces cleanup planner proof attachment** - Phase 26 (completed 2026-05-09; render strict planner proof inside cleanup reports without relabeling cleanup primitives)
+- ✅ **v1.28 MolmoSpaces cleanup planner-backed primitive gate** - Phase 27 (completed 2026-05-09; per-subphase evidence gate before real planner-backed cleanup primitive replacement)
+- ✅ **v1.29 MolmoSpaces RBY1M CuRobo runtime gate** - Phase 28 (completed 2026-05-09; target-robot runtime readiness gate before cleanup primitive replacement)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -107,9 +119,9 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
-- [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; real RBY1M/Franka planner-backed manipulation remains deferred.
+- [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; cleanup-loop primitives remain `api_semantic` even after the later Phase 25 standalone Franka proof.
 - [x] **Phase 7: MolmoSpaces prompt-driven cleanup demo** - Prompt `帮我整理这个房间` drives a public-only cleanup policy through the cleanup tool loop, without private-manifest planner access. Completed 2026-05-07; primitive execution remains `api_semantic`.
-- [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic` because planner-backed RBY1M/Franka pick/place is still unproven.
+- [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic`; later Phase 25 proves standalone Franka planner execution but not cleanup-loop integration.
 - [x] **Phase 9: MolmoSpaces FPV room plausibility** - Target-facing RBY1M FPV and same-room visual gates for focused manipulation steps. Completed 2026-05-08.
 - [x] **Phase 10: MolmoSpaces semantic substeps** - Object-level cleanup substeps, fridge open/place-inside semantics, and report timeline improvements. Completed 2026-05-08.
 - [x] **Phase 11: MolmoSpaces held-object carry visuals** - Held objects visually travel with RBY1M during semantic cleanup navigation. Completed 2026-05-08.
@@ -125,6 +137,11 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 21: MolmoSpaces real-world advisory scoring** - ADR-0012 non-authoritative advisory scoring/model-check artifact for ADR-0003 cleanup reports. Completed 2026-05-09.
 - [x] **Phase 22: MolmoSpaces real-world raw FPV perception** - ADR-0013 raw FPV-only observation evidence mode for ADR-0003 cleanup reports. Completed 2026-05-09.
 - [x] **Phase 23: MolmoSpaces planner-backed manipulation proof gate** - ADR-0014 provenance/report/checker boundary for real planner-backed manipulation evidence. Completed 2026-05-09.
+- [x] **Phase 24: MolmoSpaces planner runtime diagnostics** - ADR-0015 dependency/crash diagnostics for strict planner probe blockers. Completed 2026-05-09.
+- [x] **Phase 25: MolmoSpaces planner headless renderer** - ADR-0016 probe-local EGL renderer adapter for strict Franka planner proof. Completed 2026-05-09.
+- [x] **Phase 26: MolmoSpaces cleanup planner proof attachment** - ADR-0017 render strict standalone planner proof inside ADR-0003 cleanup reports while preserving `api_semantic` cleanup primitive provenance. Completed 2026-05-09.
+- [x] **Phase 27: MolmoSpaces cleanup planner-backed primitive gate** - ADR-0018 per-subphase gate for real planner-backed cleanup primitive evidence before replacement work. Completed 2026-05-09.
+- [x] **Phase 28: MolmoSpaces RBY1M CuRobo runtime gate** - ADR-0019 target-robot runtime readiness gate before planner-backed cleanup primitive replacement. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -457,7 +474,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 → 26 → 27 → 28
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -492,4 +509,10 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 20. MolmoSpaces real-world OpenClaw clean policy | v1.21 | 1/1 | Complete | 2026-05-09 |
 | 21. MolmoSpaces real-world advisory scoring | v1.22 | 1/1 | Complete | 2026-05-09 |
 | 22. MolmoSpaces real-world raw FPV perception | v1.23 | 1/1 | Complete | 2026-05-09 |
+| 23. MolmoSpaces planner-backed manipulation proof gate | v1.24 | 1/1 | Complete | 2026-05-09 |
+| 24. MolmoSpaces planner runtime diagnostics | v1.25 | 1/1 | Complete | 2026-05-09 |
+| 25. MolmoSpaces planner headless renderer | v1.26 | 1/1 | Complete | 2026-05-09 |
+| 26. MolmoSpaces cleanup planner proof attachment | v1.27 | 1/1 | Complete | 2026-05-09 |
+| 27. MolmoSpaces cleanup planner-backed primitive gate | v1.28 | 1/1 | Complete | 2026-05-09 |
+| 28. MolmoSpaces RBY1M CuRobo runtime gate | v1.29 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

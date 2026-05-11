@@ -104,6 +104,8 @@ def render_cleanup_report(
     {_current_contract_note(run_result)}
     {_realworld_contract_note(run_result)}
     {_manipulation_provenance_section(run_result)}
+    {_attached_planner_proof_section(run_result)}
+    {_cleanup_primitive_gate_section(run_result)}
     <section class="panel">
       <div class="section-heading">
         <h2>Before And After</h2>
@@ -169,6 +171,8 @@ def render_planner_manipulation_report(
     </section>
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
+    {_planner_probe_diagnostics_section(evidence)}
+    {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
     """
@@ -289,6 +293,98 @@ def _manipulation_provenance_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
+    proof = run_result.get("planner_backed_manipulation_proof") or {}
+    if not proof:
+        return ""
+    diagnostics = proof.get("runtime_diagnostics") or {}
+    images = proof.get("image_artifacts") or {}
+    note = (
+        proof.get("evidence_note")
+        or "Strict standalone planner-backed manipulation proof attached for review."
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', proof.get('status', 'unknown'))}"
+        f"{_metric('Embodiment', proof.get('embodiment', 'unknown'))}"
+        f"{_metric('Steps', proof.get('steps_executed', 'n/a'))}"
+        f"{_metric('Qpos delta', proof.get('max_abs_qpos_delta', 'n/a'))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Strict proof", proof.get("strict_proof_eligible", False)),
+            _badge("Planner backed", proof.get("planner_backed", False)),
+            _badge("Cleanup primitive", run_result.get("primitive_provenance", "unknown")),
+            _badge("Renderer adapter", diagnostics.get("renderer_adapter_enabled", False)),
+        )
+    )
+    views = (
+        '<div class="views">'
+        f"{_view_figure(images.get('initial'), 'Planner Initial')}"
+        f"{_view_figure(images.get('final'), 'Planner Final')}"
+        "</div>"
+    )
+    return (
+        '<section class="panel attached-planner-proof">'
+        "<h2>Attached Planner-Backed Proof</h2>"
+        f'<p class="note">{html.escape(str(note))} Cleanup object moves in this '
+        f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
+        "</p>"
+        f'{metrics}<div class="badges">{badges}</div>{views}</section>'
+    )
+
+
+def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("cleanup_primitive_evidence") or {}
+    if not evidence:
+        return ""
+    objects = evidence.get("objects") or []
+    rows = []
+    for item in objects:
+        object_id = html.escape(str(item.get("object_id", "")))
+        for step in item.get("subphases") or []:
+            label = f"{step.get('label', '')}/{step.get('detail', '')}"
+            rows.append(
+                "<tr>"
+                f"<td>{object_id}</td>"
+                f"<td>{html.escape(str(label))}</td>"
+                f"<td>{html.escape(str(step.get('phase', '')))}</td>"
+                f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
+                f"<td>{html.escape(str(step.get('state_mutation') or ''))}</td>"
+                "</tr>"
+            )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
+        "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', evidence.get('status', 'unknown'))}"
+        f"{_metric('Objects', evidence.get('object_count', 0))}"
+        f"{_metric('Subphases', evidence.get('subphase_count', 0))}"
+        f"{_metric('Blockers', len(evidence.get('blockers') or []))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Planner-backed cleanup", evidence.get("planner_backed", False)),
+            _badge("Strict proof", evidence.get("strict_proof_eligible", False)),
+        )
+    )
+    note = evidence.get("evidence_note") or (
+        "Strict cleanup primitive proof requires every displayed cleanup subphase "
+        "to be planner_backed."
+    )
+    return (
+        '<section class="panel cleanup-primitive-gate">'
+        "<h2>Cleanup Primitive Gate</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}</section>'
+    )
+
+
 def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
     artifacts = evidence.get("image_artifacts") or {}
     if not artifacts:
@@ -300,6 +396,97 @@ def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
         f"{_view_figure(artifacts.get('final'), 'Final')}"
         "</div></section>"
     )
+
+
+def _planner_probe_diagnostics_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("runtime_diagnostics") or {}
+    if not diagnostics:
+        return ""
+    modules = diagnostics.get("modules") or {}
+    rows = []
+    for module_name, module_info in sorted(modules.items()):
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(module_name))}</td>"
+            f"<td>{html.escape(str(module_info.get('available', False)))}</td>"
+            f"<td>{html.escape(str(module_info.get('version') or ''))}</td>"
+            "</tr>"
+        )
+    module_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Module</th><th>Available</th>'
+        "<th>Version</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    summary = (
+        f"python={diagnostics.get('python_version', '')}; "
+        f"executable={diagnostics.get('python_executable', '')}; "
+        f"faulthandler={diagnostics.get('faulthandler_enabled', False)}; "
+        f"renderer_adapter={diagnostics.get('renderer_adapter_enabled', False)}; "
+        f"renderer_device={diagnostics.get('renderer_device_id', '')}; "
+        f"MUJOCO_GL={diagnostics.get('mujoco_gl_env', '')}; "
+        f"PYOPENGL_PLATFORM={diagnostics.get('pyopengl_platform_env', '')}; "
+        f"CUDA_HOME={diagnostics.get('cuda_home_env', '')}; "
+        f"TORCH_CUDA_ARCH_LIST={diagnostics.get('torch_cuda_arch_list_env', '')}"
+    )
+    torch_info = diagnostics.get("torch") or {}
+    torch_summary = (
+        f"torch={torch_info.get('version', '')}; "
+        f"torch_cuda={torch_info.get('cuda_version', '')}; "
+        f"torch_cuda_available={torch_info.get('cuda_available', False)}; "
+        f"torch_cuda_home={torch_info.get('cpp_extension_cuda_home', '')}"
+    )
+    return (
+        '<section class="panel"><h2>Runtime Diagnostics</h2>'
+        f'<p class="note">{html.escape(summary)}</p>'
+        f'<p class="note">{html.escape(torch_summary)}</p>{module_table}</section>'
+    )
+
+
+def _rby1m_curobo_gate_section(run_result: dict[str, Any]) -> str:
+    gate = run_result.get("rby1m_curobo_gate") or {}
+    if not gate:
+        return ""
+    blockers = gate.get("blockers") or []
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+    )
+    if not rows:
+        rows = '<tr><td colspan="2">None</td></tr>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', gate.get('status', 'unknown'))}"
+        f"{_metric('Embodiment', gate.get('embodiment', 'unknown'))}"
+        f"{_metric('CuRobo', 'available' if gate.get('curobo_available') else 'missing')}"
+        f"{_metric('Execution', _execution_gate_label(gate))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("RBY1M CuRobo ready", gate.get("rby1m_curobo_ready", False)),
+            _badge("Planner backed", gate.get("planner_backed", False)),
+            _badge("Strict proof", gate.get("strict_proof_eligible", False)),
+        )
+    )
+    note = gate.get("evidence_note") or (
+        "RBY1M/CuRobo readiness requires target-robot planner execution."
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+        f"<th>Message</th></tr></thead><tbody>{rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel rby1m-curobo-gate">'
+        "<h2>RBY1M CuRobo Gate</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}</section>'
+    )
+
+
+def _execution_gate_label(gate: dict[str, Any]) -> str:
+    return "attempted" if gate.get("execution_attempted") else "not attempted"
 
 
 def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:
