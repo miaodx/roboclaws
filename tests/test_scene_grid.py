@@ -1,6 +1,29 @@
 from __future__ import annotations
 
-from roboclaws.core.scene_grid import SceneGrid, compute_world_bbox, default_scene_grid
+import pytest
+
+from roboclaws.core.scene_grid import (
+    SceneGrid,
+    compute_world_bbox,
+    default_scene_grid,
+    world_to_cell,
+)
+
+
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [
+        ({"x": 0.0, "y": 0.0, "z": 0.0}, (0, 0)),
+        ({"x": 0.25, "y": 0.0, "z": 0.50}, (1, 2)),
+        ({"x": -0.25, "y": 0.0, "z": 0.0}, (-1, 0)),
+        ({"x": 0.13, "y": 0.0, "z": 0.0}, (1, 0)),
+    ],
+)
+def test_world_to_cell_uses_project_grid_rounding(
+    position: dict[str, float],
+    expected: tuple[int, int],
+) -> None:
+    assert world_to_cell(position, grid_size=0.25) == expected
 
 
 def test_scene_grid_world_cell_roundtrip() -> None:

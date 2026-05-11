@@ -1,82 +1,20 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import numpy as np
 import pytest
 
-from roboclaws.core.engine import AgentState
 from roboclaws.core.vlm import MockProvider
 from roboclaws.games.territory import (
     TerritoryGame,
     TerritoryResult,
     _largest_connected_component,
-    _pos_to_cell,
 )
+from tests.support import game_fakes
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-GRID_SIZE = 0.25
-FRAME_SHAPE = (480, 640, 3)
-
-
-def _state(
-    agent_id: int,
-    x: float = 0.0,
-    z: float = 0.0,
-    success: bool = True,
-    rotation_y: float = 0.0,
-) -> AgentState:
-    return AgentState(
-        agent_id=agent_id,
-        frame=np.zeros(FRAME_SHAPE, dtype=np.uint8),
-        position={"x": x, "y": 0.0, "z": z},
-        rotation={"x": 0.0, "y": rotation_y, "z": 0.0},
-        camera_horizon=0.0,
-        last_action_success=success,
-        last_action_error="" if success else "Object blocking agent path",
-    )
-
-
-def _make_engine(agent_count: int = 2) -> MagicMock:
-    """Return a mock MultiAgentEngine with two agents at distinct starting cells."""
-    engine = MagicMock()
-    engine.agent_count = agent_count
-    # Agent i starts at x = i * GRID_SIZE
-    engine.get_all_agent_states.return_value = [
-        _state(i, x=i * GRID_SIZE) for i in range(agent_count)
-    ]
-    # step() returns the agent back at its original position by default
-    engine.step.side_effect = lambda agent_id, action, **kw: _state(
-        agent_id, x=agent_id * GRID_SIZE
-    )
-    engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, x=agent_id * GRID_SIZE)
-    return engine
-
-
-# ---------------------------------------------------------------------------
-# _pos_to_cell
-# ---------------------------------------------------------------------------
-
-
-def test_pos_to_cell_origin():
-    assert _pos_to_cell({"x": 0.0, "y": 0.0, "z": 0.0}, GRID_SIZE) == (0, 0)
-
-
-def test_pos_to_cell_positive():
-    assert _pos_to_cell({"x": 0.25, "y": 0.0, "z": 0.50}, GRID_SIZE) == (1, 2)
-
-
-def test_pos_to_cell_negative():
-    assert _pos_to_cell({"x": -0.25, "y": 0.0, "z": 0.0}, GRID_SIZE) == (-1, 0)
-
-
-def test_pos_to_cell_rounds_to_nearest():
-    # 0.13 / 0.25 = 0.52 → rounds to 1
-    assert _pos_to_cell({"x": 0.13, "y": 0.0, "z": 0.0}, GRID_SIZE) == (1, 0)
-
+GRID_SIZE = game_fakes.GRID_SIZE
+_state = game_fakes.make_agent_state
+_make_engine = game_fakes.make_mock_engine
 
 # ---------------------------------------------------------------------------
 # _largest_connected_component
@@ -128,7 +66,7 @@ def test_initial_positions_claimed():
 def test_initial_total_claimed_equals_agents_when_distinct():
     engine = _make_engine(agent_count=2)
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE)
-    assert len(game._claimed) == 2  # two distinct starting cells
+    assert game.get_state()["total_claimed"] == 2
 
 
 def test_no_double_claiming_same_start():
@@ -139,19 +77,15 @@ def test_no_double_claiming_same_start():
         _state(1, x=0.0),  # same cell as agent 0
     ]
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE)
-    # Cell (0, 0) must belong to agent 0
-    assert game._claimed[(0, 0)] == 0
-    assert (0, 0) not in game._agent_cells[1]
-    # Only one unique cell has been claimed
-    assert len(game._claimed) == 1
+
+    assert game.get_scores() == {0: 1, 1: 0}
+    assert game.get_state()["total_claimed"] == 1
 
 
 def test_three_agents_distinct_start():
     engine = _make_engine(agent_count=3)
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE)
-    assert len(game._claimed) == 3
-    for i in range(3):
-        assert game._agent_cells[i]
+    assert game.get_scores() == {0: 1, 1: 1, 2: 1}
 
 
 # ---------------------------------------------------------------------------
@@ -162,11 +96,11 @@ def test_three_agents_distinct_start():
 def test_round_robin_two_agents():
     engine = _make_engine(agent_count=2)
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
     game.step()
-    assert game._current_agent == 1
+    assert game.current_agent_id == 1
     game.step()
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
 
 
 def test_round_robin_three_agents():
@@ -174,9 +108,9 @@ def test_round_robin_three_agents():
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
     # Check one full round (0 → 1 → 2 → wraps to 0)
     for expected in [0, 1, 2]:
-        assert game._current_agent == expected
+        assert game.current_agent_id == expected
         game.step()
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +126,7 @@ def test_blocking_event_counted_on_failed_move():
     # Force a MoveAhead
     with patch.object(game.provider, "get_action", return_value={"action": "MoveAhead"}):
         game.step()
-    assert game._blocking_events == 1
+    assert game.get_state()["blocking_events"] == 1
 
 
 def test_failed_rotation_not_counted_as_blocking():
@@ -202,7 +136,7 @@ def test_failed_rotation_not_counted_as_blocking():
     # RotateLeft is not a movement action
     with patch.object(game.provider, "get_action", return_value={"action": "RotateLeft"}):
         game.step()
-    assert game._blocking_events == 0
+    assert game.get_state()["blocking_events"] == 0
 
 
 def test_blocking_event_increments_each_failed_move():
@@ -212,7 +146,7 @@ def test_blocking_event_increments_each_failed_move():
     with patch.object(game.provider, "get_action", return_value={"action": "MoveAhead"}):
         game.step()
         game.step()
-    assert game._blocking_events == 2
+    assert game.get_state()["blocking_events"] == 2
 
 
 def test_invalid_action_falls_back_to_rotate_right():
@@ -225,55 +159,28 @@ def test_invalid_action_falls_back_to_rotate_right():
 
 
 def test_failed_move_allows_different_escape_move():
-    engine = _make_engine(agent_count=2)
-    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
-    game._last_action_by_agent[0] = "MoveAhead"
+    engine = _make_engine(agent_count=1)
+    engine.step.side_effect = lambda agent_id, action, **kw: _state(agent_id, success=False)
     engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, success=False)
+    game = TerritoryGame(
+        engine,
+        MockProvider(seed=0),
+        grid_size=GRID_SIZE,
+        max_steps=5,
+        reachable_cells={(0, 0), (1, 0)},
+    )
+
+    with patch.object(game.provider, "get_action", return_value={"action": "MoveAhead"}):
+        game.step()
     with patch.object(game.provider, "get_action", return_value={"action": "MoveLeft"}):
         game.step()
-    engine.step.assert_called_once()
+
     assert engine.step.call_args.kwargs["action"] == "MoveLeft"
 
 
 # ---------------------------------------------------------------------------
-# State consistency
+# Public score consistency
 # ---------------------------------------------------------------------------
-
-
-def test_no_cell_double_claimed():
-    """A cell must never appear in two agents' cell sets."""
-    engine = _make_engine(agent_count=2)
-    counter = [0]
-
-    def step_fn(agent_id, action, **kw):
-        counter[0] += 1
-        return _state(agent_id, x=counter[0] * GRID_SIZE, z=0.0)
-
-    engine.step.side_effect = step_fn
-    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=20)
-    game.run()
-
-    all_cells = []
-    for cells in game._agent_cells.values():
-        all_cells.extend(cells)
-    assert len(all_cells) == len(set(all_cells)), "A cell is owned by more than one agent"
-
-
-def test_claimed_dict_consistent_with_agent_cells():
-    """_claimed and _agent_cells must agree on ownership for every cell."""
-    engine = _make_engine(agent_count=2)
-    counter = [0]
-
-    def step_fn(agent_id, action, **kw):
-        counter[0] += 1
-        return _state(agent_id, x=counter[0] * GRID_SIZE)
-
-    engine.step.side_effect = step_fn
-    game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
-    game.run()
-
-    for cell, owner in game._claimed.items():
-        assert cell in game._agent_cells[owner]
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +360,7 @@ def test_get_scores_sums_match_total_claimed():
     engine.step.side_effect = step_fn
     game = TerritoryGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
     game.run()
-    assert sum(game.get_scores().values()) == len(game._claimed)
+    assert sum(game.get_scores().values()) == game.get_state()["total_claimed"]
 
 
 # ---------------------------------------------------------------------------
@@ -588,12 +495,7 @@ def test_wall_clock_is_primed_by_decide_not_only_step() -> None:
         max_steps=100,
         max_wall_seconds=0.001,  # immediate expiry on next check
     )
-    assert game._wall_started_at is None, "fixture precondition"
     game.decide()
-    assert game._wall_started_at is not None, (
-        "decide() did not prime _wall_started_at — max_wall_seconds becomes "
-        "dead code for callers that drive the game outside step()"
-    )
     _t.sleep(0.01)
     assert game.is_over(), "wall clock should have fired after 0.01s"
     assert game.get_result().termination_reason == "time_limit"

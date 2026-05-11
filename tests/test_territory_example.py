@@ -11,37 +11,19 @@ import numpy as np
 import pytest
 
 from roboclaws.core.vlm import ProviderHealthError
+from tests.support import game_fakes
+
+configure_example_engine_instance = game_fakes.configure_example_engine_instance
+_make_agent_state = game_fakes.make_example_agent_state
+_make_frame = game_fakes.make_example_frame
 
 # Make the examples directory importable without a package install
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
 
 from territory_game import (  # noqa: E402
     _parse_args,
-    _pos_to_world_idx,
     run_territory_game,
 )
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-FRAME_SHAPE = (48, 64, 3)
-
-
-def _make_frame(value: int = 128) -> np.ndarray:
-    return np.full(FRAME_SHAPE, value, dtype=np.uint8)
-
-
-def _make_agent_state(agent_id: int, x: float = 0.0, z: float = 0.0) -> MagicMock:
-    s = MagicMock()
-    s.agent_id = agent_id
-    s.frame = _make_frame()
-    s.position = {"x": x, "y": 0.9, "z": z}
-    s.rotation = {"x": 0.0, "y": 0.0, "z": 0.0}
-    s.last_action_success = True
-    s.last_action_error = ""
-    return s
-
 
 # ---------------------------------------------------------------------------
 # Unit: _parse_args
@@ -106,23 +88,6 @@ def test_parse_args(argv: list[str], expected: dict[str, object]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Unit: coordinate helpers
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("position", "expected"),
-    [
-        ({"x": 0.0, "y": 0.9, "z": 0.0}, (0, 0)),
-        ({"x": 0.50, "y": 0.9, "z": 0.75}, (2, 3)),
-        ({"x": -0.25, "y": 0.9, "z": -0.50}, (-1, -2)),
-    ],
-)
-def test_pos_to_world_idx(position: dict[str, float], expected: tuple[int, int]) -> None:
-    assert _pos_to_world_idx(position) == expected
-
-
-# ---------------------------------------------------------------------------
 # Integration fixture
 # ---------------------------------------------------------------------------
 
@@ -131,23 +96,7 @@ def test_pos_to_world_idx(position: dict[str, float], expected: tuple[int, int])
 def mock_engine_cls():
     """Patch MultiAgentEngine to avoid launching AI2-THOR."""
     with patch("territory_game.MultiAgentEngine") as MockCls:
-        inst = MockCls.return_value
-        inst.agent_count = 2
-
-        a0 = _make_agent_state(0, x=0.0)
-        a1 = _make_agent_state(1, x=0.25)
-
-        inst.get_all_agent_states.return_value = [a0, a1]
-        inst.get_overhead_frame.return_value = _make_frame(80)
-        inst.get_agent_state.side_effect = lambda aid: [a0, a1][aid]
-        # step() always returns the same position (agents stay put → stale quickly)
-        inst.step.side_effect = lambda agent_id, action, **kw: [a0, a1][agent_id]
-        inst.add_chase_cam.return_value = 0
-        inst.update_chase_cam.return_value = None
-        inst.get_chase_cam_frame.return_value = _make_frame(60)
-        # Large reachable set so short tests terminate via max_steps or stale, not all_claimed
-        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
-
+        configure_example_engine_instance(MockCls.return_value)
         yield MockCls
 
 
@@ -344,17 +293,7 @@ def test_run_stops_cleanly_on_provider_health_error(mock_engine_cls, tmp_path: P
 def test_run_three_agents(tmp_path: Path) -> None:
     """Three-agent game runs to completion without error."""
     with patch("territory_game.MultiAgentEngine") as MockCls:
-        inst = MockCls.return_value
-        inst.agent_count = 3
-        agents = [_make_agent_state(i, x=i * 0.25) for i in range(3)]
-        inst.get_all_agent_states.return_value = agents
-        inst.get_overhead_frame.return_value = _make_frame(80)
-        inst.get_agent_state.side_effect = lambda aid: agents[aid]
-        inst.step.side_effect = lambda agent_id, action, **kw: agents[agent_id]
-        inst.add_chase_cam.return_value = 0
-        inst.update_chase_cam.return_value = None
-        inst.get_chase_cam_frame.return_value = _make_frame(60)
-        inst.get_reachable_positions.return_value = {(i, j) for i in range(20) for j in range(20)}
+        configure_example_engine_instance(MockCls.return_value, agent_count=3)
 
         result = run_territory_game(
             scene="FloorPlan201",

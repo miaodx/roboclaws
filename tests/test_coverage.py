@@ -1,73 +1,16 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import numpy as np
 import pytest
 
-from roboclaws.core.engine import AgentState
 from roboclaws.core.vlm import MockProvider
-from roboclaws.games.coverage import CoverageGame, CoverageResult, _pos_to_cell
+from roboclaws.games.coverage import CoverageGame, CoverageResult
+from tests.support import game_fakes
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-GRID_SIZE = 0.25
-FRAME_SHAPE = (480, 640, 3)
-
-
-def _state(
-    agent_id: int,
-    x: float = 0.0,
-    z: float = 0.0,
-    success: bool = True,
-    rotation_y: float = 0.0,
-) -> AgentState:
-    return AgentState(
-        agent_id=agent_id,
-        frame=np.zeros(FRAME_SHAPE, dtype=np.uint8),
-        position={"x": x, "y": 0.0, "z": z},
-        rotation={"x": 0.0, "y": rotation_y, "z": 0.0},
-        camera_horizon=0.0,
-        last_action_success=success,
-        last_action_error="" if success else "Object blocking agent path",
-    )
-
-
-def _make_engine(agent_count: int = 2) -> MagicMock:
-    """Return a mock MultiAgentEngine with agents at distinct starting cells."""
-    engine = MagicMock()
-    engine.agent_count = agent_count
-    engine.field_of_view = 90
-    # Agent i starts at x = i * GRID_SIZE
-    engine.get_all_agent_states.return_value = [
-        _state(i, x=i * GRID_SIZE) for i in range(agent_count)
-    ]
-    # step() returns the agent at its starting position by default
-    engine.step.side_effect = lambda agent_id, action, **kw: _state(
-        agent_id, x=agent_id * GRID_SIZE
-    )
-    engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, x=agent_id * GRID_SIZE)
-    return engine
-
-
-# ---------------------------------------------------------------------------
-# _pos_to_cell
-# ---------------------------------------------------------------------------
-
-
-def test_pos_to_cell_origin():
-    assert _pos_to_cell({"x": 0.0, "y": 0.0, "z": 0.0}, GRID_SIZE) == (0, 0)
-
-
-def test_pos_to_cell_positive():
-    assert _pos_to_cell({"x": 0.25, "y": 0.0, "z": 0.50}, GRID_SIZE) == (1, 2)
-
-
-def test_pos_to_cell_negative():
-    assert _pos_to_cell({"x": -0.25, "y": 0.0, "z": 0.0}, GRID_SIZE) == (-1, 0)
-
+GRID_SIZE = game_fakes.GRID_SIZE
+_state = game_fakes.make_agent_state
+_make_engine = game_fakes.make_mock_engine
 
 # ---------------------------------------------------------------------------
 # CoverageGame initialisation
@@ -95,17 +38,14 @@ def test_initial_same_start_single_cell():
     ]
     game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE)
     assert game.cells_covered() == 1
-    # Only agent 0 gets credit (first visitor)
-    assert game._contribution[0] == 1
-    assert game._contribution[1] == 0
+    assert game.get_result().contribution == {0: 1, 1: 0}
 
 
 def test_three_agents_distinct_start():
     engine = _make_engine(agent_count=3)
     game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE)
     assert game.cells_covered() == 3
-    for i in range(3):
-        assert game._contribution[i] == 1
+    assert game.get_result().contribution == {0: 1, 1: 1, 2: 1}
 
 
 # ---------------------------------------------------------------------------
@@ -139,20 +79,20 @@ def test_coverage_increases_monotonically():
 def test_round_robin_two_agents():
     engine = _make_engine(agent_count=2)
     game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
     game.step()
-    assert game._current_agent == 1
+    assert game.current_agent_id == 1
     game.step()
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
 
 
 def test_round_robin_three_agents():
     engine = _make_engine(agent_count=3)
     game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=10)
     for expected in [0, 1, 2]:
-        assert game._current_agent == expected
+        assert game.current_agent_id == expected
         game.step()
-    assert game._current_agent == 0
+    assert game.current_agent_id == 0
 
 
 # ---------------------------------------------------------------------------
@@ -245,13 +185,16 @@ def test_invalid_action_falls_back_to_rotate_right():
 
 
 def test_failed_move_allows_different_escape_move():
-    engine = _make_engine(agent_count=2)
-    game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
-    game._last_action_by_agent[0] = "MoveAhead"
+    engine = _make_engine(agent_count=1)
+    engine.step.side_effect = lambda agent_id, action, **kw: _state(agent_id, success=False)
     engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, success=False)
+    game = CoverageGame(engine, MockProvider(seed=0), grid_size=GRID_SIZE, max_steps=5)
+
+    with patch.object(game.provider, "get_action", return_value={"action": "MoveAhead"}):
+        game.step()
     with patch.object(game.provider, "get_action", return_value={"action": "MoveLeft"}):
         game.step()
-    engine.step.assert_called_once()
+
     assert engine.step.call_args.kwargs["action"] == "MoveLeft"
 
 
@@ -259,14 +202,11 @@ def test_fov_coverage_can_increase_without_movement():
     engine = _make_engine(agent_count=1)
     engine.get_all_agent_states.return_value = [_state(0, x=0.0, z=0.0)]
     engine.get_agent_state.side_effect = lambda agent_id: _state(agent_id, x=0.0, z=0.0)
-    engine.step.side_effect = lambda agent_id, action, **kw: AgentState(
+    engine.step.side_effect = lambda agent_id, action, **kw: _state(
         agent_id=agent_id,
-        frame=np.zeros(FRAME_SHAPE, dtype=np.uint8),
-        position={"x": 0.0, "y": 0.0, "z": 0.0},
-        rotation={"x": 0.0, "y": 90.0, "z": 0.0},
-        camera_horizon=0.0,
-        last_action_success=True,
-        last_action_error="",
+        x=0.0,
+        z=0.0,
+        rotation_y=90.0,
     )
     reachable_cells = {(0, 0), (0, 1), (1, 0)}
     game = CoverageGame(
@@ -616,7 +556,7 @@ def test_reachable_cells_sets_total_cells():
         max_steps=10,
         reachable_cells=reachable,
     )
-    assert game._total_cells == 25
+    assert game.get_state()["total_cells"] == 25
 
 
 def test_reachable_cells_explicit_total_cells_takes_precedence():
@@ -631,7 +571,7 @@ def test_reachable_cells_explicit_total_cells_takes_precedence():
         total_cells=99,
         reachable_cells=reachable,
     )
-    assert game._total_cells == 99
+    assert game.get_state()["total_cells"] == 99
 
 
 def test_reachable_cells_enables_coverage_termination():
@@ -692,12 +632,7 @@ def test_wall_clock_is_primed_by_decide_not_only_step() -> None:
         max_steps=100,
         max_wall_seconds=0.001,  # immediate expiry on next check
     )
-    assert game._wall_started_at is None, "fixture precondition"
     game.decide()
-    assert game._wall_started_at is not None, (
-        "decide() did not prime _wall_started_at — max_wall_seconds becomes "
-        "dead code for callers that drive the game outside step()"
-    )
     _t.sleep(0.01)
     assert game.is_over(), "wall clock should have fired after 0.01s"
     assert game.get_result().termination_reason == "time_limit"
