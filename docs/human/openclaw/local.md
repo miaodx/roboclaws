@@ -14,9 +14,11 @@ just openclaw::pull-image
 ## Prerequisites
 
 - Docker (Linux: rootless or regular; macOS: Docker Desktop).
-- An API key for one of the two supported upstream providers:
+- An API key for one of the supported upstream providers:
   - **`NV_API_KEY`** — NVIDIA NIM free tier (the bootstrap's default when
     this is set). Get one at <https://build.nvidia.com>.
+  - **`MIMO_TP_KEY`** — MiMo token-plan key. Used by the interactive chat
+    defaults and the appliance path.
   - **`KIMI_API_KEY`** — Moonshot/Kimi coding tier. Free (coding quota).
     Resolves via the Gateway plugin's alias to the current
     `kimi-for-coding` upstream, which is Kimi 2.6 as of this writing.
@@ -42,7 +44,7 @@ That one command does every first-run step: pulls the pinned image, creates
 a config volume, pre-creates the per-agent workspace + agent dirs,
 pre-seeds `openclaw.json` (with `chatCompletions.enabled = true` and an
 `agents.list` entry per agent), pre-seeds each agent's
-`auth-profiles.json` with your Kimi key, mounts the `ai2thor-navigator`
+`auth-profiles.json` with the selected provider key, mounts the `ai2thor-navigator`
 skill read-only into every agent's workspace, starts the Gateway, waits
 for `/readyz`, and finally probes `openclaw/agent-0` with a one-turn
 `PONG` call so if anything in the skill/auth/model chain is broken you
@@ -55,7 +57,7 @@ Useful overrides:
 
 | Var                 | Default                                   | Notes                                                           |
 |---------------------|-------------------------------------------|-----------------------------------------------------------------|
-| `PROVIDER`          | `nvidia` if `NV_API_KEY` set, else `kimi` | `nvidia` \| `kimi`.                                             |
+| `PROVIDER`          | `nvidia` if `NV_API_KEY`/`NVIDIA_API_KEY` is set, else `mimo` if `MIMO_TP_KEY` is set, else `kimi` | `nvidia` \| `mimo` \| `kimi`. |
 | `KIMI_PROVIDER_MODE` | `custom`                                 | Kimi only: `custom` (repo default) \| `plugin` (stock Gateway Kimi provider). |
 | `AGENTS`            | `2`                                       | Number of named agents (`1..8`).                                |
 | `AGENT_PREFIX`      | `agent-`                                  | Must match `--agent-prefix` on the demo.                        |
@@ -71,10 +73,10 @@ Useful overrides:
 | `CONTAINER`         | `openclaw-gateway`                        | Docker container name.                                          |
 | `VOLUME`            | `openclaw-gateway-config`                 | Docker volume holding `openclaw.json` + state.                  |
 
-The bootstrap ships a **deliberately narrow** provider list — just the two
-models verified end-to-end with the demo (FPV + overhead = 2 images per
-turn, so the model must be free, multi-image-capable, and cooperate with
-the Gateway's tool-bearing agent framework):
+The bootstrap ships a **deliberately narrow** provider list — only models
+verified or explicitly tracked for the demo surfaces. Navigation turns may send
+multiple images, so direct-vision models must be multi-image-capable and must
+cooperate with the Gateway's tool-bearing agent framework:
 
 | Provider | Default model                           | Upstream                                             | Free | Vision | Multi-image | Status          |
 |----------|-----------------------------------------|------------------------------------------------------|------|--------|-------------|-----------------|
@@ -82,7 +84,7 @@ the Gateway's tool-bearing agent framework):
 | `kimi`   | `anthropic_kimi/k2.6`                   | `https://api.kimi.com/coding/` (→ Kimi 2.6)          | yes  | yes    | yes         | verified        |
 | `mimo`   | `mimo_openai/mimo-v2-omni`              | `https://token-plan-cn.xiaomimimo.com/v1`            | ?    | yes    | yes         | vision+tools ✓  |
 | `mimo`   | `mimo_openai/mimo-v2.5-pro`             | `https://token-plan-cn.xiaomimimo.com/v1`            | ?    | no     | no          | text+tools ✓    |
-| `mimo` (anthropic) | `mimo_anthropic/mimo-v2-omni`  | `https://token-plan-cn.xiaomimimo.com/anthropic`    | ?    | ?      | ?           | untested        |
+| `mimo` (anthropic) | `mimo_anthropic/mimo-v2.5-pro` | `https://token-plan-cn.xiaomimimo.com/anthropic`    | ?    | no     | no          | text+tools only |
 
 > ℹ️ **MiMo model matrix** (probed 2026-04-23):
 > - `mimo-v2-omni`: vision (base64 inline images) ✓ + tool calls ✓ — use for navigation.
@@ -109,7 +111,7 @@ written under the agent workspace / OpenClaw media roots. Avoid ad-hoc `/tmp/*`
 paths inside the container: the Gateway's local-media allowlist rejects files
 outside its configured workspace/media/temp roots.
 
-### Why just these two
+### Why this list is narrow
 
 Kept short on purpose — every other free vision model we probed failed one
 of three constraints. History preserved here so this file is the record
@@ -255,20 +257,22 @@ docker volume rm openclaw-gateway-config
 The autonomous-loop path (`examples/openclaw_nav_autonomous.py`) flips the
 integration around: the Gateway still receives one long-running
 `POST /v1/chat/completions` kickoff, but the agent's only path back to the
-AI2-THOR engine is three **first-class MCP tools** exposed by a host-side
-FastMCP server. The agent sees them as:
+AI2-THOR engine is a small set of **first-class MCP tools** exposed by a
+host-side FastMCP server. The agent sees them as:
 
-- `roboclaws__observe()` — FPV + overhead PNG frames + structured state JSON
+- `roboclaws__observe(label="")` — FPV + map-v2 + chase frames plus structured state JSON
+- `roboclaws__observe_archived(label)` — persist FPV/map/chase snapshots without inlining images
 - `roboclaws__move(direction, reason)` — one physical step;
   `direction` is one of `MoveAhead`, `MoveBack`, `MoveLeft`, `MoveRight`,
   `RotateLeft`, `RotateRight`, `LookUp`, `LookDown`
+- `roboclaws__scene_objects(filter_types="")` — room-wide object inventory for target-relative planning
+- `roboclaws__goto(object_id, distance, face)` — teleport to a reachable cell near an object and optionally face it
 - `roboclaws__done(reason)` — end the run cleanly
 
-The agent runs under Gateway tool `profile: "minimal"`, so its complete tool
-list is exactly `session_status` plus the three above — no `exec`, no generic
+The agent runs under Gateway tool `profile: "minimal"`, so it gets the Gateway
+minimal built-ins plus the Roboclaws MCP tools above — no `exec`, no generic
 `image`, no `read`/`write`/`browser`. This is enforced at config time by the
-bootstrap script; no prompt-steering needed (and none should be added — the
-tools literally don't exist in the agent's surface anymore).
+bootstrap script; no prompt-steering needed.
 
 Supersedes the Phase 2.5 `curl`-from-`exec` HTTP contract, which is gone
 entirely — `roboclaws/openclaw/sim_server.py` was deleted in plan 02.6-05 and

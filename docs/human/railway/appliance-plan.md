@@ -54,11 +54,11 @@ Why this shape:
 - Add `scripts/appliance-run-interactive.sh` as the supervised Roboclaws
   process wrapper.
 - Add `railway.toml` and `.dockerignore`.
-- Add Make targets for local parity:
-  `make appliance-build`, `make appliance-run-local`, and
-  `make appliance-run-railway`.
-- Add `make appliance-tail` as the appliance equivalent of `make chat-tail`.
-  `make chat-tail` remains scoped to the standalone `make chat` Gateway
+- Add `just` recipes for local parity:
+  `just appliance::build`, `just appliance::run local`, and
+  `just appliance::run railway`.
+- Add `just appliance::tail` as the appliance equivalent of `just chat::tail`.
+  `just chat::tail` remains scoped to the standalone `just chat::run` Gateway
   container named `openclaw-gateway`.
 
 ## Runtime Configuration
@@ -90,8 +90,8 @@ Optional provider overrides remain available for local probing:
 Local parity smoke:
 
 ```bash
-make appliance-build
-DEMO_PASSWORD=demo make appliance-run-local
+just appliance::build
+DEMO_PASSWORD=demo just appliance::run local
 ```
 
 The local appliance target bind-mounts the host `$HOME/.ai2thor` cache into
@@ -102,14 +102,14 @@ directory.
 Railway-shape smoke:
 
 ```bash
-make appliance-build
-DEMO_PASSWORD=demo make appliance-run-railway
+just appliance::build
+DEMO_PASSWORD=demo just appliance::run railway
 ```
 
-`make appliance-run-railway` bind-mounts host `/data` into container `/data`
+`just appliance::run railway` bind-mounts host `/data` into container `/data`
 and runs with `HOME=/data`, matching Railway's runtime shape. Its AI2-THOR
 cache resolves to `/data/.ai2thor`. Override the host path with
-`make appliance-run-railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data` if
+`just appliance::run railway APPLIANCE_RAILWAY_DATA_DIR=/path/to/data` if
 needed.
 
 Then verify:
@@ -119,7 +119,7 @@ Then verify:
 - the Control UI accepts bearer token `demo` when `OPENCLAW_TOKEN` is unset
 - `http://localhost:8080/views/` shows the three-panel viewer
 - after `agent-0` calls `roboclaws__observe`, FPV/map/chase images refresh
-- `make appliance-tail` tails the Gateway session JSONL from the appliance
+- `just appliance::tail` tails the Gateway session JSONL from the appliance
   container
 
 Automated checks:

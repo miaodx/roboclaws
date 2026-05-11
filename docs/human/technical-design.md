@@ -12,14 +12,27 @@ architectural decisions* (platform choice, deferred integrations), see
 
 ## Project positioning
 
-Roboclaws is a thin, focused demo repository that validates "multiple
-OpenClaw / VLM agent instances simultaneously controlling multiple
-simulated robots for adversarial and cooperative tasks." Not a heavy
-framework — an experiment platform where giving a good model enough
-context lets it run autonomously.
+Roboclaws is a thin, focused demo repository for embodied-agent demos where
+the important thing is not just "the agent succeeded," but whether a reviewer
+can see what happened and trust the claim being made.
 
-**Core hypothesis:** if a VLM can see the simulation camera feed, it can
-make reasonable navigation and strategic decisions to control a robot.
+There are now two project threads:
+
+- **AI2-THOR navigation** validates "multiple OpenClaw / VLM agent instances
+  simultaneously controlling multiple simulated robots for adversarial and
+  cooperative tasks." Not a heavy framework — an experiment platform where
+  giving a good model enough context lets it run autonomously.
+- **MolmoSpaces cleanup/proof** validates household cleanup artifact honesty:
+  the Cleanup Agent gets a public Agent View, the Scorer keeps private truth
+  private, semantic simulator mutations stay labeled `api_semantic`, and
+  physical manipulation claims require planner-backed RBY1M/CuRobo proof.
+
+**Core navigation hypothesis:** if a VLM can see the simulation camera feed,
+it can make reasonable navigation and strategic decisions to control a robot.
+
+**Core cleanup/proof hypothesis:** a cleanup demo is only useful if it separates
+what the agent was allowed to know, how the scene was semantically changed, and
+which robot manipulation substeps have real planner-backed evidence.
 
 **Community differentiation:** as of April 2026, no one in the OpenClaw
 community has publicly demonstrated multiple OpenClaw instances
@@ -28,17 +41,27 @@ cooperation. This is the first.
 
 ## Technology selection
 
-The simulation platform is **AI2-THOR (iTHOR scenes)**. See
-[ADR-0001](../adr/0001-use-ai2thor-for-phase-1.md) for the platform survey,
-exclusion reasons (MolmoSpaces, Isaac Lab, ManiSkill3, Habitat 3.0), and
-the decision shape. **Isaac Lab is intentionally deferred** to Phase 3 —
-see [ADR-0002](../adr/0002-defer-isaac-lab-to-phase-3.md).
+The navigation platform is **AI2-THOR (iTHOR scenes)**. See
+[ADR-0001](../adr/0001-use-ai2thor-for-phase-1.md) for the original
+navigation-platform survey and the decision shape. **Isaac Lab is intentionally
+deferred** to Phase 3 — see [ADR-0002](../adr/0002-defer-isaac-lab-to-phase-3.md).
+
+The cleanup/proof platform is **MolmoSpaces** with a real upstream MuJoCo scene
+when local runtime assets are available. This was not the Phase 1 navigation
+choice, but it became the right layer for household cleanup because it exposes
+movable objects, receptacles, semantic state, RBY1M robot views, and planner
+proof hooks that AI2-THOR does not provide.
 
 For the OpenClaw integration shape, see
 [`openclaw/local.md`](openclaw/local.md) and
 [`openclaw/gateway-internals.md`](openclaw/gateway-internals.md).
 For the direct coding-agent driver, see
 [`coding-agent-nav-server.md`](coding-agent-nav-server.md).
+
+For cleanup/proof settings, see
+[`molmospaces-settings.md`](molmospaces-settings.md). For the vocabulary that
+keeps Agent View, Private Evaluation, Scorer, and planner-backed proof claims
+separate, see [`domain.md`](domain.md).
 
 ## Game scenario design
 
@@ -94,6 +117,30 @@ connected component / total claimed), blocking-event count.
 
 **Metrics:** total steps to reach 95% coverage, work balance (per-agent
 coverage contribution ratio), emergent division-of-labor signals.
+
+## Cleanup scenario design
+
+MolmoSpaces cleanup demos are structured around a different failure mode than
+navigation games. In navigation, the main risk is that an agent gets lost,
+collides, or fails to coordinate. In cleanup, the main risk is that an artifact
+quietly uses private information or semantic state edits while looking like a
+real robot manipulation result.
+
+The cleanup stack therefore keeps four surfaces separate:
+
+- **Agent View** — public map, room-level fixture hints, waypoint observations,
+  observed object handles, support estimates, and cleanup tools.
+- **Private Evaluation** — hidden generated mess set and acceptable-destination
+  truth used only after the run ends.
+- **Semantic Cleanup Timeline** — the visible `nav -> pick -> nav -> open? -> place`
+  rhythm shared by reports and proof requests.
+- **Planner Proof Evidence** — optional local RBY1M/CuRobo proof bundles that
+  can promote exact matching cleanup substeps from `api_semantic` to
+  `planner_backed`.
+
+This is why the current status can say the cleanup bridge is blocked even when
+the visual report is clean: clean semantic cleanup and planner-backed
+manipulation proof are intentionally separate gates.
 
 ## VLM strategy
 
