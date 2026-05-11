@@ -43,6 +43,7 @@ run task cap="900":
 
 # Explicit name for the coding-agent / AI2-THOR navigator harness.
 navigator task cap="900":
+    bash scripts/network_status.sh --assert-off-work "Claude Code navigator harness"
     bash harness/run-next.sh "{{task}}" "{{cap}}"
 
 # Capture and compare refactor-regression suites.
@@ -64,6 +65,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
         allow_args=()
         ;;
       local-openclaw|openclaw)
+        bash scripts/network_status.sh --assert-off-work "OpenClaw regression harness"
         suites="openclaw-demo,territory-openclaw,coverage-openclaw,openclaw-autonomous"
         allow_args=(--allow-local)
         ;;

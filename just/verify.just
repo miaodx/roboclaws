@@ -70,6 +70,7 @@ local-sim scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
 
 # L5: local OpenClaw/Gateway/provider harness.
 local-openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
+    bash scripts/network_status.sh --assert-off-work "OpenClaw verification gate"
     just harness::openclaw "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
 
 # L6: coding-agent navigator harness.

@@ -57,6 +57,23 @@ uv sync --extra dev
 If a new optional-extras group is needed (e.g. `[openclaw]` for the MCP server),
 install it with `uv sync --extra dev --extra openclaw`.
 
+### 1.1.1 Work-network guard
+
+Claude Code and OpenClaw Gateway runs are not allowed on the work network. The
+work network is detected by reachability of `https://api-router.evad.mioffice.cn/`.
+Check the current network before those workflows with:
+
+```bash
+just dev::network-status
+```
+
+If that command reports `network: work`, do not run `just code::cc`,
+`just harness::navigator`, `just openclaw::*`, `just chat::run`,
+`just appliance::run`, or OpenClaw integration/local verification gates. Those
+recipes are guarded and should fail before launching when the work-network probe
+is reachable. Switch to a non-work network before running Claude Code or
+OpenClaw workflows.
+
 ### 1.2 Verify AI2-THOR is available
 
 ```bash

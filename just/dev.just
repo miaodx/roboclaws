@@ -19,6 +19,11 @@ standalone_pytest := "./scripts/run_pytest_standalone.sh"
 default:
     @just --list dev
 
+# Show whether this host appears to be on the office work network.
+[group('network')]
+network-status:
+    @bash scripts/network_status.sh
+
 install-hooks:
     @git config core.hooksPath .githooks
     @echo "==> git hooks installed (core.hooksPath = .githooks)"
@@ -51,10 +56,12 @@ test kind="all":
         ;;
 
       integration)
+        bash scripts/network_status.sh --assert-off-work "OpenClaw integration tests"
         {{standalone_pytest}} -m integration -q --durations=10
         ;;
 
       all)
+        bash scripts/network_status.sh --assert-off-work "OpenClaw live/integration tests"
         OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '\"')"
         if [[ -z "${OPENCLAW_DEFAULT_IMAGE}" ]]; then
           echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2

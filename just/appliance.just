@@ -24,6 +24,8 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    bash scripts/network_status.sh --assert-off-work "OpenClaw appliance run"
+
     container="{{default_container}}"
     local_data_volume="{{default_local_data_volume}}"
     railway_data_dir="{{default_railway_data_dir}}"
