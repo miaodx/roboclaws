@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 123 cache-ready proof rerun completed; next work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
+**Status:** Phase 134 canonical proof command tool order completed; bounded proof commands now preserve `nav, pick, nav, open?, place` before execution while the full bridge remains blocked
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -434,6 +434,63 @@ Phase 123 reruns the exact `observed_001` proof against that cache. The warmed
 run proves the task sampler now loads 9 `Bread_1` grasps and finds 2
 non-colliding grasps, clearing the cache blocker; the remaining blocker is
 CuRobo pre-grasp trajectory generation (`no planned trajectory`).
+Phase 124 focuses the cleanup report Robot View Timeline. ADR-0003 raw FPV
+scan captures remain available in Raw FPV Observations, but the first-pass
+Robot View Timeline no longer buries semantic cleanup subphases under
+`observe raw_fpv_*` cards, so visual reports keep the same rhythm as
+`output/molmo-agent-bridge-visual-codex/report.html`.
+Phase 125 preserves CuRobo policy exception context through the planner probe
+artifact seam. The top-level `manipulation_evidence` now retains the applied
+CuRobo memory profile, sampled task binding, promoted cleanup binding,
+binding blockers, and policy primitive phase/trajectory state when a policy
+exception fires; the shared planner report renders `Policy Exception
+Diagnostics`. The warmed exact proof rerun did not reproduce the pre-grasp
+failure and returned `planner_backed` for one execution step with a nonzero
+robot-state delta.
+Phase 126 consumes the Phase 125 exact proof in the ADR-0003 cleanup primitive
+path. The bound `observed_001` refrigerator cleanup now renders as
+planner-backed for `nav, pick, nav, open, place_inside`, while unmatched
+objects remain `api_semantic`; the Cleanup Primitive Gate and Planner Cleanup
+Bridge stay blocked at the run level until all cleanup objects have matching
+planner proof coverage.
+Phase 127 makes the strength of those attached proofs explicit. Planner proof
+attachments and bundles now share one proof-quality module, reports render
+`Proof Quality`, and the ADR-0003 checker can require a minimum executed-step
+horizon before treating future artifacts as stronger than the current
+one-step-motion evidence.
+Phase 128 reuses that proof-quality module across the rest of the proof report
+pipeline. Standalone planner-probe reports and proof-bundle runner reports now
+render the same `Planner Proof Quality` tiers as cleanup reports, and their
+checkers can require minimum proof-quality horizons.
+Phase 129 makes prior-covered proof selection honor that same quality horizon.
+The runner can require a stricter minimum executed-step count before old
+planner-backed cleanup-bound proof memory suppresses a request, so one-step
+proofs remain compatible by default but can be reselected for stronger runs.
+Phase 130 closes the remaining report-command ambiguity. The generic report
+generation entrypoint now detects Molmo cleanup run directories and
+`run_result.json` paths and delegates to the Cleanup Report Artifact Adapter
+instead of the older replay reporter, keeping the shared semantic visual
+underlay on the `nav, pick, nav, open?, place` path.
+Phase 131 makes stronger proof intent visible before execution. Proof-bundle
+manifests and dry-run reports now render a Proof Execution Horizon section with
+requested command steps, command quality target, prior-covered coverage floor,
+and blockers when generated commands cannot satisfy the stricter coverage
+horizon.
+Phase 132 keeps proof command rows on the same semantic visual underlay.
+Generated proof commands now retain cleanup tools and render display-ready
+`nav, pick, nav, open?, place` subphase rails in the proof-bundle runner report,
+so stricter local proof attempts show both command-strength intent and
+cleanup-loop intent before execution.
+Phase 133 makes that stricter local proof attempt bounded. The proof-bundle
+runner accepts repeatable `--request-id` filters, records requested/matched/
+unavailable/missing IDs, and renders `Request ID Filter`; the Phase 126 stricter
+dry-run now selects only `proof_001` when asked.
+Phase 134 closes the remaining command/report semantic drift. Cleanup tool
+lists now normalize through one shared canonical order for proof requests,
+observed-handle bindings, probe command arguments, probe-side parsed bindings,
+and promoted cleanup primitive bindings, so the executable `--cleanup-tools`
+flag matches the `nav, pick, nav, open?, place` report rail before bounded
+proof execution.
 
 ## Why This Exists
 
@@ -1313,8 +1370,27 @@ completed:
   gsd-plan-phase 95-molmospaces-seeded-selected-proof-execution
   gsd-execute-phase 95-molmospaces-seeded-selected-proof-execution
   gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
+  gsd-plan-phase 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-execute-phase 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-verify-work 129-molmospaces-prior-covered-proof-quality-horizon
+  gsd-plan-phase 130-molmospaces-report-generation-router
+  gsd-execute-phase 130-molmospaces-report-generation-router
+  gsd-verify-work 130-molmospaces-report-generation-router
+  gsd-plan-phase 131-molmospaces-proof-execution-horizon-report
+  gsd-execute-phase 131-molmospaces-proof-execution-horizon-report
+  gsd-verify-work 131-molmospaces-proof-execution-horizon-report
+  gsd-plan-phase 132-molmospaces-proof-command-semantic-subphases
+  gsd-execute-phase 132-molmospaces-proof-command-semantic-subphases
+  gsd-verify-work 132-molmospaces-proof-command-semantic-subphases
+  gsd-plan-phase 133-molmospaces-proof-bundle-request-filter
+  gsd-execute-phase 133-molmospaces-proof-bundle-request-filter
+  gsd-verify-work 133-molmospaces-proof-bundle-request-filter
+  gsd-plan-phase 134-molmospaces-canonical-proof-command-tool-order
+  gsd-execute-phase 134-molmospaces-canonical-proof-command-tool-order
+  gsd-verify-work 134-molmospaces-canonical-proof-command-tool-order
 
 next pipeline candidates:
-  rotate proof sources or diagnose/reduce the shared RBY1M grasp-feasibility
-  blocker before another cleanup rerun
+  execute the bounded proof_001 two-step local proof attempt, then rerun cleanup
+  if the resulting proof has cleanup binding coverage; otherwise record the
+  exact blocker before expanding beyond observed_001
 ```

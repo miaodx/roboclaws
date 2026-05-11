@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
 )
@@ -17,6 +18,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     proof_result_summary_from_commands,
     write_planner_proof_requests,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import canonical_cleanup_tool_sequence
 
 
 def test_planner_proof_requests_preserve_bound_probe_args(tmp_path: Path) -> None:
@@ -135,6 +137,72 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "--task-sampler-robot-placement-profile" in command
     assert "relaxed" in command
     assert commands[0]["run_result"].endswith("run_result.json")
+
+
+def test_build_probe_commands_rewrites_cleanup_tools_in_semantic_order(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "open_receptacle",
+                    "place_inside",
+                ],
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-target-receptacle-id": "sink_01",
+                    "--cleanup-tools": (
+                        "navigate_to_object,navigate_to_receptacle,"
+                        "open_receptacle,pick,place_inside"
+                    ),
+                    "--cleanup-planner-object-id": "pickup/body",
+                    "--cleanup-planner-target-receptacle-id": "sink/body",
+                },
+            }
+        ],
+        "planner_scene": {},
+    }
+
+    commands = build_probe_commands(
+        manifest=manifest,
+        output_dir=tmp_path,
+        runner_python=Path("python"),
+        probe_script=Path("probe.py"),
+    )
+
+    command = commands[0]["command"]
+    cleanup_tools_arg = command[command.index("--cleanup-tools") + 1]
+    assert cleanup_tools_arg == (
+        "navigate_to_object,pick,navigate_to_receptacle,open_receptacle,place_inside"
+    )
+    assert commands[0]["tools"] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+    ]
+
+
+def test_canonical_cleanup_tool_sequence_uses_semantic_order() -> None:
+    assert canonical_cleanup_tool_sequence(
+        "navigate_to_object,navigate_to_receptacle,open_receptacle,pick,place_inside"
+    ) == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+    ]
 
 
 def test_build_probe_warmup_command_uses_config_import_and_shared_cache(
@@ -864,6 +932,66 @@ def test_proof_request_selection_normalizes_non_root_alias_into_generated_reques
     }
 
 
+def test_proof_request_selection_reselects_prior_covered_below_quality_horizon() -> None:
+    evidence = planner_backed_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        steps_requested=1,
+        steps_executed=1,
+        max_abs_qpos_delta=0.01,
+    )
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "status": "planner_backed",
+                "planner_backed": True,
+                "cleanup_binding_promoted": True,
+                "task_feasibility_status": "ready",
+                "steps_executed": 1,
+                "max_abs_qpos_delta": 0.01,
+                "proof_quality": evidence["proof_quality"],
+            }
+        ]
+    }
+
+    one_step_selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=1,
+    )
+    two_step_selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_prior_covered=True,
+        prior_covered_min_proof_steps=2,
+    )
+
+    assert one_step_selection["covered_request_count"] == 1
+    assert one_step_selection["selected_count"] == 0
+    assert two_step_selection["covered_request_count"] == 0
+    assert two_step_selection["selected_request_ids"] == ["proof_001"]
+    assert two_step_selection["selected_requests"][0]["prior_proof_quality"] == "one_step_motion"
+    assert two_step_selection["selected_requests"][0]["prior_steps_executed"] == 1
+
+
 def test_proof_request_selection_discovers_runtime_alias_siblings_from_keyerror() -> None:
     manifest = {
         "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
@@ -1451,7 +1579,9 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["missing_result_count"] == 1
     assert summary["task_feasibility_blocked_count"] == 1
     assert summary["view_artifact_count"] == 2
+    assert summary["proof_quality_summary"]["quality_tier_counts"] == {"unknown": 1}
     result = summary["results"][0]
+    assert result["proof_quality"]["quality_tier"] == "unknown"
     assert result["task_feasibility_status"] == "blocked"
     assert result["task_feasibility_blocker_kind"] == "robot_placement"
     assert result["task_feasibility_blocker_summary"] == "1 robot-placement failures"
@@ -1480,6 +1610,54 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     )
     assert result["views"][0]["path"].endswith("planner_views/final.png")
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
+
+
+def test_proof_result_summary_carries_planner_proof_quality(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    views_dir = proof_dir / "planner_views"
+    views_dir.mkdir(parents=True)
+    (views_dir / "initial.png").write_bytes(b"initial")
+    (views_dir / "final.png").write_bytes(b"final")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "planner_backed",
+                "manipulation_evidence": planner_backed_probe_evidence(
+                    backend="molmospaces_subprocess",
+                    embodiment="rby1m",
+                    task="pick_and_place",
+                    probe_mode="execute",
+                    upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+                    steps_requested=2,
+                    steps_executed=2,
+                    max_abs_qpos_delta=0.01,
+                    image_artifacts={
+                        "initial": "planner_views/initial.png",
+                        "final": "planner_views/final.png",
+                    },
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = proof_result_summary_from_commands(
+        [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "sink_01",
+                "run_result": str(proof_dir / "run_result.json"),
+                "report": str(proof_dir / "report.html"),
+            }
+        ]
+    )
+
+    result = summary["results"][0]
+    assert result["proof_quality"]["quality_tier"] == "multi_step_motion"
+    assert result["steps_executed"] == 2
+    assert summary["proof_quality_summary"]["quality_tier_counts"] == {"multi_step_motion": 1}
 
 
 def test_proof_result_summary_classifies_grasp_feasibility_blocker(tmp_path: Path) -> None:

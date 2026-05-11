@@ -8,8 +8,13 @@ import os
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    validate_planner_proof_quality_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA,
     PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
     PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
 )
@@ -26,6 +31,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-selected-requests", type=int)
     parser.add_argument("--max-selected-requests", type=int)
     parser.add_argument("--require-prior-covered-exclusion", action="store_true")
+    parser.add_argument("--require-proof-execution-horizon", action="store_true")
+    parser.add_argument("--require-proof-quality", action="store_true")
+    parser.add_argument("--require-planner-backed-proof-min-steps", type=int, default=None)
     return parser.parse_args()
 
 
@@ -41,6 +49,9 @@ def main() -> None:
         min_selected_requests=args.min_selected_requests,
         max_selected_requests=args.max_selected_requests,
         require_prior_covered_exclusion=args.require_prior_covered_exclusion,
+        require_proof_execution_horizon=args.require_proof_execution_horizon,
+        require_proof_quality=args.require_proof_quality,
+        planner_backed_proof_min_steps=args.require_planner_backed_proof_min_steps,
     )
     print(f"molmo-planner-proof-bundle-runner ok: {path}")
 
@@ -54,6 +65,9 @@ def _assert_runner_result(
     min_selected_requests: int | None = None,
     max_selected_requests: int | None = None,
     require_prior_covered_exclusion: bool = False,
+    require_proof_execution_horizon: bool = False,
+    require_proof_quality: bool = False,
+    planner_backed_proof_min_steps: int | None = None,
 ) -> None:
     assert data.get("schema") == PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA, data
     assert data.get("status") in {
@@ -72,6 +86,11 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    proof_execution_horizon = data.get("proof_execution_horizon") or {}
+    if proof_execution_horizon:
+        _assert_proof_execution_horizon(proof_execution_horizon, report_text)
+    elif require_proof_execution_horizon:
+        raise AssertionError("proof_execution_horizon is required")
     local_runtime_preflight = data.get("local_runtime_preflight") or {}
     if local_runtime_preflight:
         _assert_local_runtime_preflight(local_runtime_preflight, report_text)
@@ -119,6 +138,8 @@ def _assert_runner_result(
             base,
             report_text,
             require_outputs=require_proof_outputs,
+            require_quality=require_proof_quality,
+            planner_backed_min_steps=planner_backed_proof_min_steps,
         )
     elif require_proof_outputs:
         raise AssertionError("proof_result_summary is required with --require-proof-outputs")
@@ -148,6 +169,34 @@ def _assert_runner_report(report_text: str) -> None:
         "Cleanup Rerun Command",
     ):
         assert heading in report_text, (heading, report_text[:500])
+
+
+def _assert_proof_execution_horizon(horizon: dict[str, Any], report_text: str) -> None:
+    assert horizon.get("schema") == PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA, horizon
+    assert horizon.get("status") in {"aligned", "command_steps_below_coverage_horizon"}, horizon
+    assert int(horizon.get("command_steps") or 0) >= 0, horizon
+    assert int(horizon.get("prior_covered_min_proof_steps") or 0) >= 1, horizon
+    assert str(horizon.get("command_quality_target") or "") in {
+        "unknown",
+        "one_step_motion",
+        "multi_step_motion",
+    }, horizon
+    assert str(horizon.get("prior_covered_quality_floor") or "") in {
+        "one_step_motion",
+        "multi_step_motion",
+    }, horizon
+    assert "Proof Execution Horizon" in report_text, report_text[:500]
+    for value in (
+        horizon.get("status"),
+        horizon.get("command_quality_target"),
+        horizon.get("prior_covered_quality_floor"),
+    ):
+        _assert_report_contains(str(value), report_text)
+    for blocker in horizon.get("blockers") or []:
+        if not isinstance(blocker, dict):
+            continue
+        _assert_report_contains(str(blocker.get("code") or ""), report_text)
+        _assert_report_contains(str(blocker.get("message") or ""), report_text)
 
 
 def _assert_local_runtime_preflight(preflight: dict[str, Any], report_text: str) -> None:
@@ -230,6 +279,16 @@ def _assert_command(
     command_text = " ".join(str(part) for part in command)
     assert "--output-dir" in command, command
     assert "--cleanup-object-id" in command, command
+    semantic_subphases = item.get("semantic_subphases") or []
+    if semantic_subphases:
+        assert "Semantic subphases" in report_text, report_text[:500]
+        for subphase in semantic_subphases:
+            if not isinstance(subphase, dict):
+                continue
+            for key in ("phase", "label", "detail"):
+                value = str(subphase.get(key) or "")
+                if value:
+                    _assert_report_contains(value, report_text, key)
     for value in (
         item["request_id"],
         item["object_id"],
@@ -258,6 +317,17 @@ def _assert_proof_request_selection(
     assert int(selection.get("selected_count") or 0) == len(command_ids), selection
     assert "Proof Request Selection" in report_text, report_text[:500]
     assert "Generated Fallback Requests" in report_text, report_text[:500]
+    request_filter = selection.get("request_filter") or {}
+    if isinstance(request_filter, dict) and request_filter.get("enabled"):
+        assert "Request ID Filter" in report_text, report_text[:500]
+        requested = [str(item) for item in request_filter.get("requested_request_ids") or []]
+        matched = [str(item) for item in request_filter.get("matched_request_ids") or []]
+        unavailable = [str(item) for item in request_filter.get("unavailable_request_ids") or []]
+        assert int(request_filter.get("requested_count") or 0) == len(requested), selection
+        assert int(request_filter.get("matched_count") or 0) == len(matched), selection
+        assert int(request_filter.get("unavailable_count") or 0) == len(unavailable), selection
+        for request_id in requested:
+            assert request_id in report_text, (request_id, report_text[:500])
     for item in selection.get("selected_requests") or []:
         for key in ("request_id", "object_id", "target_receptacle_id"):
             assert item.get(key), item
@@ -449,6 +519,8 @@ def _assert_proof_result_summary(
     report_text: str,
     *,
     require_outputs: bool,
+    require_quality: bool = False,
+    planner_backed_min_steps: int | None = None,
 ) -> None:
     assert summary.get("schema") == PLANNER_PROOF_RESULT_SUMMARY_SCHEMA, summary
     assert int(summary.get("expected_count") or 0) == len(commands), summary
@@ -472,6 +544,13 @@ def _assert_proof_result_summary(
         == rby1m_config_import_timeout_count
     ), summary
     _assert_grasp_signature_counts(summary, results, report_text)
+    if require_quality or planner_backed_min_steps is not None:
+        _assert_proof_quality_summary(
+            summary,
+            results,
+            report_text,
+            planner_backed_min_steps=planner_backed_min_steps,
+        )
     for item in results:
         for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
             assert item.get(key), item
@@ -507,6 +586,10 @@ def _assert_proof_result_summary(
                 "task_feasibility_blocker_summary",
                 report_text[:500],
             )
+        quality = item.get("proof_quality") or {}
+        if quality:
+            assert "Proof quality" in report_text, report_text[:500]
+            assert str(quality.get("quality_tier") or "") in report_text, report_text[:500]
         sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
         robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
         if robot_placement_profile:
@@ -597,6 +680,29 @@ def _assert_proof_result_summary(
                 value = str(event.get(key) or "")
                 if value:
                     assert value in report_text, (event, report_text[:500])
+
+
+def _assert_proof_quality_summary(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    report_text: str,
+    *,
+    planner_backed_min_steps: int | None,
+) -> None:
+    proof_quality_summary = summary.get("proof_quality_summary") or {}
+    assert proof_quality_summary.get("schema") == "planner_proof_quality_summary_v1", summary
+    assert "Planner Proof Quality" in report_text, report_text[:500]
+    assert "Proof Quality" in report_text, report_text[:500]
+    for item in results:
+        if not item.get("run_result_exists"):
+            continue
+        quality = planner_proof_quality_evidence(item)
+        assert quality.get("schema") == "planner_proof_quality_v1", item
+        if planner_backed_min_steps is not None and item.get("planner_backed"):
+            validate_planner_proof_quality_evidence(
+                quality,
+                min_steps_executed=planner_backed_min_steps,
+            )
 
 
 def _assert_prior_proof_result_summary(

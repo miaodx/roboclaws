@@ -10,6 +10,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
+    planner_backed_probe_evidence,
 )
 from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
@@ -331,6 +332,123 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "raw_fpv_001" in html
     assert "robot_views/raw.fpv.png" in html
     assert "support estimates" in html
+
+
+def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    robot_dir = tmp_path / "robot_views"
+    robot_dir.mkdir()
+    for name in ("raw.fpv.png", "nav.fpv.png", "after.fpv.png"):
+        (robot_dir / name).write_bytes(b"placeholder")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "semantic_substeps": [
+            {
+                "object_id": "observed_001",
+                "source_receptacle_id": "counter_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {"phase": "navigate_to_object"},
+                    {"phase": "pick"},
+                    {"phase": "navigate_to_receptacle"},
+                    {"phase": "place", "location_id": "sink_01"},
+                ],
+            }
+        ],
+        "agent_view": {
+            "perception_mode": "raw_fpv_only",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "raw_fpv_only",
+                    "structured_detections_available": False,
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "perception_mode": "raw_fpv_only",
+                "structured_detections_available": False,
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "before",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+            {
+                "label": "0001_raw_fpv_001",
+                "action": "observe raw_fpv_001",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/raw.fpv.png"},
+                "focus": {},
+            },
+            {
+                "action": "navigate_to_object observed_001",
+                "semantic_phase": "navigate_to_object",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+            {
+                "action": "after",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/after.fpv.png"},
+                "focus": {},
+            },
+        ],
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    timeline_html = html[html.index("<h2>Robot View Timeline</h2>") : html.index("<h2>Score</h2>")]
+    raw_fpv_html = html[html.index("<h2>Raw FPV Observations</h2>") :]
+    assert "navigate_to_object observed_001" in timeline_html
+    assert "Subphase: <strong>nav</strong>" in timeline_html
+    assert "observe raw_fpv_001" not in timeline_html
+    assert "robot_views/raw.fpv.png" not in timeline_html
+    assert "raw_fpv_001" in raw_fpv_html
+    assert "robot_views/raw.fpv.png" in raw_fpv_html
 
 
 def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
@@ -716,6 +834,16 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
         "output_dir": str(tmp_path),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_execution_horizon": {
+            "schema": "planner_cleanup_proof_execution_horizon_v1",
+            "status": "aligned",
+            "command_steps": 2,
+            "command_quality_target": "multi_step_motion",
+            "prior_covered_min_proof_steps": 1,
+            "prior_covered_quality_floor": "one_step_motion",
+            "blockers": [],
+            "evidence_note": "requested horizon",
+        },
         "proof_request_selection": {
             "schema": "planner_cleanup_proof_request_selection_v1",
             "mode": "exclude_task_feasibility_blocked",
@@ -962,6 +1090,18 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "request_id": "proof_001_fallback_01",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "place",
+                ],
+                "semantic_subphases": [
+                    {"phase": "navigate_to_object", "label": "nav", "detail": "object"},
+                    {"phase": "pick", "label": "pick", "detail": "object"},
+                    {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
+                    {"phase": "place", "label": "place", "detail": "surface"},
+                ],
                 "run_result": str(tmp_path / "proofs" / "001" / "run_result.json"),
                 "report": str(tmp_path / "proofs" / "001" / "report.html"),
                 "command": [
@@ -1096,6 +1236,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "robot_placement_failure_count": 1,
                         "asset_failure_count": 1,
                         "grasp_failure_count": 3,
+                        "candidate_name_miss_count": 0,
                         "grasp_failures": [
                             {
                                 "object_name": "pickup/body",
@@ -1360,6 +1501,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     html = report_path.read_text(encoding="utf-8")
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
+    assert "Proof Execution Horizon" in html
+    assert "multi_step_motion" in html
     assert "Proof Request Selection" in html
     assert "Grasp Feasibility Mitigation Decision" in html
     assert "decision-card" in html
@@ -1376,6 +1519,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "available_for_unproven_requests" in html
     assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html
+    assert "Semantic subphases" in html
+    assert "surface / place" in html
     assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
     assert "dry_run" in html
@@ -1450,6 +1595,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task sampler placement failures" in html
     assert "Task sampler asset failures" in html
     assert "Post-placement grasp failures" in html
+    assert "Post-placement candidate name misses" in html
     assert "Post-Placement Rejection Views" in html
     assert "Post-placement rejection flow: pickup/body" in html
     assert "Placement free-space fraction" in html
@@ -1525,6 +1671,9 @@ def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
 
     html = report_path.read_text(encoding="utf-8")
     assert "Attached Planner-Backed Proof" in html
+    assert "Proof Quality" in html
+    assert "multi_step_motion" in html
+    assert "Containment proven" in html
     assert "Planner Initial" in html
     assert "Planner Final" in html
     assert "Cleanup object moves" in html
@@ -1587,6 +1736,8 @@ def test_cleanup_report_renders_attached_planner_proof_bundle(tmp_path: Path) ->
 
     html = report_path.read_text(encoding="utf-8")
     assert "Attached Planner-Backed Proofs" in html
+    assert "Proof Quality" in html
+    assert "multi_step_motion=2" in html
     assert "proof_001 Planner Initial" in html
     assert "proof_002 Planner Final" in html
     assert "observed_001" in html
@@ -2038,6 +2189,28 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
         "planner_target_receptacle_id": "sink/body",
         "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
     }
+    run_result["manipulation_evidence"]["policy_exception_context"] = {
+        "schema": "planner_probe_policy_exception_context_v1",
+        "stage": "execute_policy_run",
+        "steps_requested": 1,
+        "exception_type": "ValueError",
+        "message": "_execute_trajectory was called with no planned trajectory",
+        "failure_kind": "curobo_no_planned_trajectory",
+        "no_planned_trajectory": True,
+        "policy_class": "PickAndPlacePlannerPolicy",
+        "policy_current_phase": "pre_grasp",
+        "action_primitive_count": 1,
+        "action_primitives": [
+            {
+                "index": 0,
+                "primitive_class": "PickAndPlacePrimitive",
+                "current_phase": "pre_grasp",
+                "planned_trajectory_present": True,
+                "planned_trajectory_len": 0,
+                "trajectory_index": 0,
+            }
+        ],
+    }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -2046,6 +2219,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
+    assert "Planner Proof Quality" in html
     assert "Runtime Diagnostics" in html
     assert "Planner Probe Diagnostic Views" in html
     assert "Task sampler diagnostic: pickup/body" in html
@@ -2059,6 +2233,7 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Exact sampler adapter class" in html
     assert "Exact sampler adapter object" in html
     assert "Exact pickup candidate action" in html
+
     assert "Exact pickup retry budget" in html
     assert "injected_requested_candidate_name" in html
     assert "PickAndPlaceTaskSampler" in html
@@ -2088,6 +2263,11 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "navigate_to_receptacle" in html
     assert "CUDA Memory Headroom" in html
     assert "CuRobo Memory Profile" in html
+    assert "Policy Exception Diagnostics" in html
+    assert "curobo_no_planned_trajectory" in html
+    assert "_execute_trajectory was called with no planned trajectory" in html
+    assert "pre_grasp" in html
+    assert "Trajectory len" in html
     assert "CuRobo Extension Cache" in html
     assert "lbfgs_step_cu" in html
     assert "Warp Compatibility" in html
@@ -2110,6 +2290,42 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html
+
+
+def test_planner_manipulation_probe_report_renders_proof_quality(tmp_path: Path) -> None:
+    views = tmp_path / "planner_views"
+    views.mkdir()
+    (views / "initial.png").write_bytes(b"initial")
+    (views / "final.png").write_bytes(b"final")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": planner_backed_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="rby1m",
+            task="pick_and_place",
+            probe_mode="execute",
+            upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+            steps_requested=2,
+            steps_executed=2,
+            max_abs_qpos_delta=0.01,
+            image_artifacts={
+                "initial": "planner_views/initial.png",
+                "final": "planner_views/final.png",
+            },
+        ),
+        "artifacts": {},
+    }
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+    html = report_path.read_text(encoding="utf-8")
+
+    assert "Planner Proof Quality" in html
+    assert "multi_step_motion" in html
+    assert "Containment proven" in html
+    assert "Planner Probe Views" in html
 
 
 def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(

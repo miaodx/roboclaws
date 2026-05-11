@@ -384,9 +384,21 @@ public scenario shell from `run_result.json` and does not fabricate objects or
 private targets.
 _Avoid_: second report renderer, manual stale HTML repair
 
+**Cleanup Report Generation Router**:
+The artifact-path entrypoint that detects MolmoSpaces cleanup run directories or
+`run_result.json` files and routes them to the **Cleanup Report Artifact
+Adapter** instead of the older generic replay reporter.
+_Avoid_: using AI2-THOR replay report UI for Molmo cleanup artifacts
+
 **Report Visual Core**:
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture
+
+**Focused Robot View Timeline**:
+The Robot View Timeline view inside the Report Visual Core after raw FPV scan
+captures are kept in Raw FPV Observations instead of mixed into the first-pass
+cleanup action review.
+_Avoid_: perception scan log as primary cleanup timeline
 
 **Report Visual Core Contract**:
 The package-level validation contract that current-contract and ADR-0003
@@ -443,6 +455,48 @@ _Avoid_: general renderer abstraction
 A strict standalone planner-backed manipulation proof rendered alongside a
 cleanup artifact, without changing the cleanup loop's own primitive provenance.
 _Avoid_: planner-backed cleanup
+
+**Planner Proof Quality Evidence**:
+Reusable proof-strength classification for attached planner proofs, separating
+one-step robot motion, multi-step robot motion, and containment-level proof
+from the lower-level `steps_executed` and `max_abs_qpos_delta` fields.
+_Avoid_: implicit proof strength, report-only quality labels
+
+**Planner Proof Quality Report Reuse**:
+The rule that standalone planner-probe reports, proof-bundle runner reports,
+and cleanup reports all render **Planner Proof Quality Evidence** through the
+same quality tiers.
+_Avoid_: separate proof-strength labels per report surface
+
+**Proof-Quality Coverage Horizon**:
+The proof-request selection rule that a prior planner-backed cleanup-bound proof
+only counts as covered when its **Planner Proof Quality Evidence** reaches the
+requested executed-step horizon.
+_Avoid_: one-step stale proof memory suppressing stricter proof reruns
+
+**Proof Execution Horizon**:
+The proof-bundle runner's pre-execution record of command step count, command
+quality target, prior-covered minimum step floor, and blocker rows when the
+command horizon cannot satisfy the requested coverage horizon.
+_Avoid_: hidden mismatch between selected proof horizon and generated command steps
+
+**Proof Command Semantic Subphases**:
+The proof-bundle runner command-row view that carries raw cleanup tools and
+display-ready `nav, pick, nav, open?, place` subphase labels before local proof
+execution.
+_Avoid_: shell-only proof command rows detached from the cleanup visual underlay
+
+**Canonical Proof Command Tool Order**:
+The rule that cleanup tool lists in proof request bindings, proof command
+arguments, and promoted cleanup bindings preserve `nav, pick, nav, open?, place`
+semantic order instead of alphabetical set order.
+_Avoid_: report rails saying `nav, pick, nav` while executable
+`--cleanup-tools` says `nav, nav, open, pick`
+
+**Proof Bundle Request Filter**:
+The proof-bundle runner's explicit request-id selection path for bounded local
+proof attempts against one cleanup request before wider bundle execution.
+_Avoid_: broad multi-command local proof runs when one request should be tested first
 
 **Planner-Backed Cleanup Primitive Gate**:
 A per-cleanup-subphase evidence gate that checks whether the cleanup loop's own
@@ -720,6 +774,9 @@ _Avoid_: full cleanup replacement claim
 - A **Cleanup Artifact Report** should keep object/target/surface/inside as
   secondary role detail, not as part of the primary **Semantic Cleanup
   Subphase** label.
+- A **Cleanup Artifact Report** should keep raw FPV scan captures in Raw FPV
+  Observations, not in the first-pass **Focused Robot View Timeline**, when the
+  dedicated raw FPV panel exists.
 - **Semantic Cleanup Vocabulary** should be imported by the shared loop,
   Cleanup Artifact Report, visual-core checks, and checkers instead of
   redefined per demo.
@@ -735,6 +792,12 @@ _Avoid_: full cleanup replacement claim
 - Planner runtime blockers should be reported as dependency/runtime diagnostics, not inferred from sparse shell failures.
 - A **Headless Planner Renderer Adapter** may help reach planner execution in local probes, but it is not itself **Planner-Backed Manipulation Proof**.
 - An **Attached Planner Proof** may make planner capability visible in a cleanup report, but cleanup object moves remain `api_semantic` unless the cleanup loop actually calls planner-backed primitives.
+- An **Attached Planner Proof** should include **Planner Proof Quality
+  Evidence**, so reports and checkers can distinguish `one_step_motion` from
+  multi-step pick/place progress or full containment.
+- **Planner Proof Quality Report Reuse** should keep individual proof reports,
+  proof-bundle runner reports, and cleanup reports on the same proof-strength
+  vocabulary before stricter proof gates are raised.
 - A **Planner-Backed Cleanup Primitive Gate** should reject `api_semantic` cleanup subphases as strict planner-backed cleanup execution, while allowing explicit blocked-capability evidence until real primitives exist.
 - An **RBY1M CuRobo Runtime Gate** should reject standalone Franka planner proof as target cleanup runtime readiness, while allowing explicit blocked-capability evidence when CuRobo is missing.
 - **RBY1M CuRobo Warmup Readiness** should record worker stages before treating a timeout as actionable evidence.
@@ -1203,3 +1266,62 @@ _Avoid_: full cleanup replacement claim
   non-colliding grasps, so the prior missing-cache blocker is cleared. The
   proof remains `blocked_capability` because CuRobo reaches pre-grasp execution
   with no planned trajectory.
+- Phase 124 adds Focused Report Timeline behavior. ADR-0003 raw FPV scan
+  captures remain in `run_result.json`, Agent View, and Raw FPV Observations,
+  but the primary Robot View Timeline now focuses on before/after and semantic
+  cleanup action views so ADR-0003 artifacts keep the same first-pass visual
+  rhythm as `output/molmo-agent-bridge-visual-codex/report.html`.
+- Phase 125 adds CuRobo Policy Exception Context. The planner probe worker
+  exception path now preserves the low-memory CuRobo profile, sampled cleanup
+  task binding, promoted cleanup primitive binding, empty-or-nonempty binding
+  blockers, and structured policy primitive state in top-level
+  `manipulation_evidence`; reports render this as `Policy Exception
+  Diagnostics`, and the checker can require it with
+  `--require-policy-exception-context`. The warmed exact proof rerun at
+  `output/debug-phase125-curobo-pregrasp-exception-context/run_result.json`
+  returned `planner_backed` with `steps_executed=1`,
+  `max_abs_qpos_delta=0.018310936580938183`, preserved CuRobo profile and exact
+  cleanup binding, and no cleanup binding blockers, so the prior pre-grasp
+  failure did not reproduce in the Phase 125 run.
+- Phase 126 consumes that Phase 125 proof in the ADR-0003 cleanup primitive
+  path. The checker now accepts bound inside-target cleanup objects that require
+  `nav, pick, nav, open, place_inside`; the rerun at
+  `output/debug-phase126-phase125-bound-proof-cleanup-rerun/run_result.json`
+  marks `observed_001` to refrigerator planner-backed for 5 subphases while
+  leaving 37 unmatched subphases `api_semantic`, so the report shows attached
+  proof views, Cleanup Primitive Gate, Planner Cleanup Bridge, and a globally
+  blocked bridge rather than a premature full cleanup claim.
+- Phase 127 adds Planner Proof Quality Evidence. Attached planner proofs and
+  proof bundles now classify proof strength through one shared module; cleanup
+  reports render `Proof Quality`, and the ADR-0003 checker can require both
+  proof-quality evidence and a minimum executed-step horizon before stronger
+  cleanup claims are accepted.
+- Phase 128 adds Planner Proof Quality Report Reuse. Planner-backed probe
+  evidence now embeds proof quality, standalone proof reports and proof-bundle
+  runner reports render `Planner Proof Quality`, and both probe and runner
+  checkers can require minimum proof-quality horizons.
+- Phase 129 adds Proof-Quality Coverage Horizon selection. Prior-covered proof
+  memory now honors a requested minimum executed-step horizon before suppressing
+  a proof request, so one-step motion evidence can be reselected for stricter
+  multi-step proof runs while default one-step workflows remain compatible.
+- Phase 130 adds the Cleanup Report Generation Router. Generic report
+  generation now detects Molmo cleanup run directories and `run_result.json`
+  paths and delegates to the shared Cleanup Report Artifact Adapter, so cleanup
+  artifacts keep the `nav, pick, nav, open?, place` visual underlay even when
+  callers use the broader report-generation entrypoint.
+- Phase 131 adds Proof Execution Horizon reports. Proof-bundle manifests and
+  runner reports now show requested command steps, command quality target,
+  prior-covered coverage floor, and misalignment blockers before local proof
+  execution; the runner checker can require that view.
+- Phase 132 adds Proof Command Semantic Subphases. Generated proof command rows
+  now keep cleanup tools and render a `nav, pick, nav, open?, place` semantic
+  rail in the proof-bundle runner report, with checker coverage for the view.
+- Phase 133 adds Proof Bundle Request Filter. The runner now accepts repeatable
+  `--request-id` flags, records requested/matched/unavailable/missing IDs, and
+  renders a `Request ID Filter` report view so stricter local proof attempts can
+  be bounded to one cleanup request.
+- Phase 134 adds Canonical Proof Command Tool Order. Cleanup tool lists now
+  normalize through the shared semantic order for observed-handle bindings,
+  probe command arguments, probe-side parsed bindings, and promoted cleanup
+  primitive bindings, so the executable command matches the report rail before
+  bounded proof execution.

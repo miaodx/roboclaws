@@ -56,10 +56,12 @@ def _write_report_files(
     warp_compatibility: bool = False,
     cuda_memory: bool = False,
     curobo_memory_profile: bool = False,
+    policy_exception: bool = False,
     task_sampler_robot_placement_profile: bool = False,
     placement_scene_diagnostics: bool = False,
     post_placement_rejections: bool = False,
     cleanup_config_blockers: bool = False,
+    proof_quality: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -73,6 +75,8 @@ def _write_report_files(
         body += "Runtime Diagnostics\n"
     if cleanup_binding:
         body += "Planner Probe Cleanup Binding\n"
+    if proof_quality:
+        body += "Planner Proof Quality\nProof Quality\nmulti_step_motion\n"
     if cleanup_config_blockers:
         body += "Exact task config blockers\ncleanup_scene_xml_missing\n"
     if worker_stages:
@@ -85,6 +89,15 @@ def _write_report_files(
         body += "CUDA Memory Headroom\n"
     if curobo_memory_profile:
         body += "CuRobo Memory Profile\n"
+    if policy_exception:
+        body += (
+            "Policy Exception Diagnostics\n"
+            "curobo_no_planned_trajectory\n"
+            "execute_policy_run\n"
+            "ValueError\n"
+            "PickAndPlacePrimitive\n"
+            "pre_grasp\n"
+        )
     if task_sampler_robot_placement_profile:
         body += "Task Sampler Robot Placement Profile\nrelaxed\n50\n"
     if placement_scene_diagnostics:
@@ -836,6 +849,42 @@ def test_checker_accepts_strict_planner_backed_evidence(tmp_path: Path) -> None:
     checker._assert_probe_result(data, tmp_path, require_planner_backed=True)
 
 
+def test_checker_can_require_planner_probe_proof_quality(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": planner_backed_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="franka",
+            task="pick_and_place",
+            probe_mode="execute",
+            upstream_policy_class="PickAndPlacePlannerPolicy",
+            steps_requested=2,
+            steps_executed=2,
+            max_abs_qpos_delta=0.01,
+        ),
+        "artifacts": _write_report_files(tmp_path, proof_quality=True),
+    }
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        require_planner_backed=True,
+        require_proof_quality=True,
+        require_proof_min_steps=2,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            require_planner_backed=True,
+            require_proof_quality=True,
+            require_proof_min_steps=3,
+        )
+
+
 def test_checker_requires_cleanup_binding_report_when_evidence_exists(tmp_path: Path) -> None:
     checker = _load_checker_module()
     evidence = planner_backed_probe_evidence(
@@ -1243,6 +1292,75 @@ def test_checker_requires_curobo_memory_profile_report_when_requested(
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
             require_curobo_memory_profile=True,
+        )
+
+
+def test_checker_requires_policy_exception_context_report_when_requested(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[
+            {
+                "code": "ValueError",
+                "message": "_execute_trajectory was called with no planned trajectory",
+            }
+        ],
+        execution_attempted=True,
+    )
+    evidence["policy_exception_context"] = {
+        "schema": "planner_probe_policy_exception_context_v1",
+        "stage": "execute_policy_run",
+        "exception_type": "ValueError",
+        "failure_kind": "curobo_no_planned_trajectory",
+        "action_primitives": [
+            {
+                "primitive_class": "PickAndPlacePrimitive",
+                "current_phase": "pre_grasp",
+                "planned_trajectory_present": True,
+                "planned_trajectory_len": 0,
+                "trajectory_index": 0,
+            }
+        ],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            policy_exception=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+        require_policy_exception_context=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        policy_exception=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+            require_policy_exception_context=True,
         )
 
 

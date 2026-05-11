@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
 from roboclaws.molmo_cleanup.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
+    proof_execution_horizon,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
@@ -35,6 +37,13 @@ def test_checker_accepts_valid_runner_artifact(tmp_path: Path) -> None:
     manifest = _write_runner_artifact(tmp_path)
 
     checker._assert_runner_result(manifest, tmp_path)
+
+
+def test_checker_can_require_proof_execution_horizon(tmp_path: Path) -> None:
+    checker = _load_checker()
+    manifest = _write_runner_artifact(tmp_path)
+
+    checker._assert_runner_result(manifest, tmp_path, require_proof_execution_horizon=True)
 
 
 def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -> None:
@@ -821,6 +830,7 @@ def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> 
                 "task_sampler_failure_diagnostics": {
                     "grasp_failure_count": 17,
                     "candidate_removal_count": 15,
+                    "candidate_name_miss_count": 0,
                     "grasp_failures": [
                         {
                             "object_name": "pickup/body",
@@ -842,6 +852,61 @@ def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> 
     assert "Post-placement rejection flow: pickup/body" in report
     assert "Task sampler placement failures" not in report
     checker._assert_runner_result(manifest, tmp_path)
+
+
+def test_checker_can_require_proof_quality_for_planner_backed_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker()
+    manifest = _runner_manifest(tmp_path)
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_sink_01"
+    views_dir = proof_dir / "planner_views"
+    views_dir.mkdir(parents=True)
+    (views_dir / "initial.png").write_bytes(b"initial")
+    (views_dir / "final.png").write_bytes(b"final")
+    (proof_dir / "report.html").write_text("<h1>proof</h1>", encoding="utf-8")
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "planner_backed",
+                "manipulation_evidence": planner_backed_probe_evidence(
+                    backend="molmospaces_subprocess",
+                    embodiment="rby1m",
+                    task="pick_and_place",
+                    probe_mode="execute",
+                    upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+                    steps_requested=2,
+                    steps_executed=2,
+                    max_abs_qpos_delta=0.01,
+                    image_artifacts={
+                        "initial": "planner_views/initial.png",
+                        "final": "planner_views/final.png",
+                    },
+                ),
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_manifest_and_report(tmp_path, manifest)
+
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "Planner Proof Quality" in report
+    assert "multi_step_motion" in report
+    checker._assert_runner_result(
+        manifest,
+        tmp_path,
+        require_proof_outputs=True,
+        require_proof_quality=True,
+        planner_backed_proof_min_steps=2,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_runner_result(
+            manifest,
+            tmp_path,
+            require_proof_outputs=True,
+            require_proof_quality=True,
+            planner_backed_proof_min_steps=3,
+        )
 
 
 def test_checker_requires_timeout_stage_evidence_in_report(tmp_path: Path) -> None:
@@ -1005,12 +1070,28 @@ def _runner_manifest(base: Path) -> dict[str, object]:
         "output_dir": str(base),
         "proof_request_count": 1,
         "ready_request_count": 1,
+        "proof_execution_horizon": proof_execution_horizon(
+            command_steps=2,
+            prior_covered_min_proof_steps=1,
+        ),
         "command_count": 1,
         "commands": [
             {
                 "request_id": "proof_001",
                 "object_id": "observed_001",
                 "target_receptacle_id": "sink_01",
+                "tools": [
+                    "navigate_to_object",
+                    "pick",
+                    "navigate_to_receptacle",
+                    "place",
+                ],
+                "semantic_subphases": [
+                    {"phase": "navigate_to_object", "label": "nav", "detail": "object"},
+                    {"phase": "pick", "label": "pick", "detail": "object"},
+                    {"phase": "navigate_to_receptacle", "label": "nav", "detail": "target"},
+                    {"phase": "place", "label": "place", "detail": "surface"},
+                ],
                 "output_dir": str(proof_dir),
                 "run_result": str(proof_dir / "run_result.json"),
                 "report": str(proof_dir / "report.html"),

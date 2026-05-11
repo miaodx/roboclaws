@@ -9,6 +9,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
 )
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    validate_planner_proof_quality_evidence,
+)
 
 PLANNER_PROOF_ATTACHMENT_SCHEMA = "planner_backed_cleanup_attachment_v1"
 
@@ -57,6 +61,7 @@ def attach_planner_proof(
     cleanup_binding = _cleanup_primitive_binding(evidence)
     if cleanup_binding:
         attachment["cleanup_primitive_binding"] = cleanup_binding
+    attachment["proof_quality"] = planner_proof_quality_evidence(attachment)
     return attachment
 
 
@@ -69,6 +74,10 @@ def validate_planner_proof_attachment(attachment: dict[str, Any]) -> None:
     assert attachment.get("strict_proof_eligible") is True, attachment
     assert int(attachment.get("steps_executed") or 0) >= 1, attachment
     assert float(attachment.get("max_abs_qpos_delta") or 0.0) > 0.0, attachment
+    validate_planner_proof_quality_evidence(
+        planner_proof_quality_evidence(attachment),
+        min_steps_executed=1,
+    )
     images = attachment.get("image_artifacts") or {}
     assert images.get("initial"), attachment
     assert images.get("final"), attachment

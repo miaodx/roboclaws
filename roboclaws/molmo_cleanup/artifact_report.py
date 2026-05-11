@@ -57,6 +57,54 @@ def rerender_cleanup_report_from_run_result(run_result_path: Path) -> Path:
     )
 
 
+def rerender_cleanup_report_from_artifact_path(path: Path) -> Path:
+    """Regenerate a cleanup report from either a run directory or run_result path."""
+    return rerender_cleanup_report_from_run_result(cleanup_run_result_path(path))
+
+
+def rerender_cleanup_reports_from_run_results(run_result_paths: list[Path]) -> list[Path]:
+    """Regenerate multiple cleanup reports through the same run-result adapter."""
+    return [rerender_cleanup_report_from_run_result(path) for path in run_result_paths]
+
+
+def rerender_cleanup_reports_from_artifact_paths(paths: list[Path]) -> list[Path]:
+    """Regenerate multiple cleanup reports from run directories or run_result paths."""
+    return [rerender_cleanup_report_from_artifact_path(path) for path in paths]
+
+
+def cleanup_run_result_path(path: Path) -> Path:
+    """Resolve a cleanup run directory or run_result path to `run_result.json`."""
+    path = Path(path)
+    if path.is_dir():
+        return path / "run_result.json"
+    return path
+
+
+def is_cleanup_run_result_artifact(path: Path) -> bool:
+    """Return whether a path points at a Molmo cleanup run-result artifact."""
+    run_result_path = cleanup_run_result_path(path)
+    if not run_result_path.is_file():
+        return False
+    try:
+        run_result = _read_json(run_result_path)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return False
+    return is_cleanup_run_result(run_result)
+
+
+def is_cleanup_run_result(run_result: dict[str, Any]) -> bool:
+    """Return whether a run_result payload has the cleanup report contract shape."""
+    return (
+        isinstance(run_result.get("score"), dict)
+        and isinstance(run_result.get("semantic_substeps"), list)
+        and (
+            "cleanup_status" in run_result
+            or run_result.get("mcp_server") == "molmo_cleanup"
+            or str(run_result.get("contract") or "").startswith(("current_contract", "realworld"))
+        )
+    )
+
+
 def cleanup_scenario_shell_from_run_result(run_result: dict[str, Any]) -> CleanupScenario:
     """Build the minimal public scenario needed to re-render an existing report.
 

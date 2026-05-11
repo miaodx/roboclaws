@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.planner_proof_bundle import (
     planner_proof_attachment_for_target,
     validate_planner_proof_bundle,
 )
+from roboclaws.molmo_cleanup.planner_proof_quality import planner_proof_quality_evidence
 
 
 def test_attach_planner_proof_validates_and_copies_strict_images(tmp_path: Path) -> None:
@@ -39,6 +40,8 @@ def test_attach_planner_proof_validates_and_copies_strict_images(tmp_path: Path)
     assert attachment["strict_proof_eligible"] is True
     assert attachment["steps_executed"] == 2
     assert attachment["max_abs_qpos_delta"] == 0.01
+    assert attachment["proof_quality"]["quality_tier"] == "multi_step_motion"
+    assert attachment["proof_quality"]["containment_proven"] is False
     assert (cleanup_dir / attachment["image_artifacts"]["initial"]).is_file()
     assert (cleanup_dir / attachment["image_artifacts"]["final"]).is_file()
 
@@ -71,6 +74,26 @@ def test_attach_planner_proof_preserves_cleanup_primitive_binding(tmp_path: Path
     )
 
     assert attachment["cleanup_primitive_binding"] == binding
+    assert attachment["proof_quality"]["cleanup_primitive_binding_present"] is True
+
+
+def test_attach_planner_proof_classifies_one_step_motion(tmp_path: Path) -> None:
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        steps_executed=1,
+        max_abs_qpos_delta=0.018,
+    )
+
+    attachment = attach_planner_proof(
+        proof_run_result_path=proof_path,
+        cleanup_run_dir=tmp_path / "cleanup",
+    )
+
+    quality = planner_proof_quality_evidence(attachment)
+    assert quality["quality_tier"] == "one_step_motion"
+    assert quality["one_step_motion"] is True
+    assert quality["multi_step_motion"] is False
+    assert quality["containment_proven"] is False
 
 
 def test_attach_planner_proof_bundle_keeps_distinct_bound_proofs(tmp_path: Path) -> None:
@@ -100,6 +123,7 @@ def test_attach_planner_proof_bundle_keeps_distinct_bound_proofs(tmp_path: Path)
     validate_planner_proof_bundle(bundle)
     assert bundle["schema"] == PLANNER_PROOF_BUNDLE_SCHEMA
     assert bundle["proof_count"] == 2
+    assert bundle["proof_quality_summary"]["quality_tier_counts"] == {"multi_step_motion": 2}
     attachments = bundle["attachments"]
     assert attachments[0]["proof_id"] == "proof_001"
     assert attachments[1]["proof_id"] == "proof_002"
@@ -120,6 +144,8 @@ def _write_strict_planner_proof(
     base: Path,
     *,
     cleanup_binding: dict[str, object] | None = None,
+    steps_executed: int = 2,
+    max_abs_qpos_delta: float = 0.01,
 ) -> Path:
     base.mkdir(parents=True)
     views = base / "planner_views"
@@ -133,8 +159,8 @@ def _write_strict_planner_proof(
         probe_mode="execute",
         upstream_policy_class="PickAndPlacePlannerPolicy",
         steps_requested=2,
-        steps_executed=2,
-        max_abs_qpos_delta=0.01,
+        steps_executed=steps_executed,
+        max_abs_qpos_delta=max_abs_qpos_delta,
         image_artifacts={
             "initial": "planner_views/initial_wrist_camera.png",
             "final": "planner_views/final_wrist_camera.png",

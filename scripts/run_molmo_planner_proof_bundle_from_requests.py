@@ -20,6 +20,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_probe_commands,
     build_probe_warmup_command,
     proof_bundle_run_manifest,
+    proof_execution_horizon,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
@@ -73,11 +74,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prior-planner-probe-run-result", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
     parser.add_argument(
+        "--request-id",
+        dest="request_ids",
+        action="append",
+        help="Limit proof-bundle command generation to the named request id. Repeatable.",
+    )
+    parser.add_argument(
         "--exclude-prior-covered",
         action="store_true",
         help=(
             "Exclude requests that already have prior planner-backed proof with "
             "cleanup binding promoted."
+        ),
+    )
+    parser.add_argument(
+        "--prior-covered-min-proof-steps",
+        type=int,
+        default=1,
+        help=(
+            "Minimum executed proof steps required before a prior planner-backed "
+            "cleanup binding counts as covered."
         ),
     )
     parser.add_argument("--generate-fallback-requests", action="store_true")
@@ -109,8 +125,10 @@ def main() -> None:
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
         prior_planner_probe_run_result=args.prior_planner_probe_run_result,
+        request_ids=args.request_ids,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
         exclude_prior_covered=args.exclude_prior_covered,
+        prior_covered_min_proof_steps=args.prior_covered_min_proof_steps,
         generate_fallback_requests=args.generate_fallback_requests,
         fallback_alias_limit=args.fallback_alias_limit,
     )
@@ -148,8 +166,10 @@ def run_from_cleanup_result(
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
     prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
+    request_ids: Sequence[str] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
+    prior_covered_min_proof_steps: int = 1,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -164,8 +184,10 @@ def run_from_cleanup_result(
     proof_request_selection = proof_request_selection_from_summary(
         requests,
         prior_proof_result_summary=prior_summary,
+        include_request_ids=request_ids,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
         exclude_prior_covered=exclude_prior_covered,
+        prior_covered_min_proof_steps=prior_covered_min_proof_steps,
         generate_fallback_requests=generate_fallback_requests,
         fallback_alias_limit=fallback_alias_limit,
     )
@@ -206,6 +228,10 @@ def run_from_cleanup_result(
         rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
         task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         request_selection=proof_request_selection,
+    )
+    requested_horizon = proof_execution_horizon(
+        command_steps=steps,
+        prior_covered_min_proof_steps=prior_covered_min_proof_steps,
     )
     local_runtime_preflight = _local_runtime_preflight(
         molmospaces_python=molmospaces_python,
@@ -253,6 +279,7 @@ def run_from_cleanup_result(
         commands=commands,
         warmup=warmup,
         local_runtime_preflight=local_runtime_preflight,
+        proof_execution_horizon=requested_horizon,
         proof_request_selection=proof_request_selection,
         prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,

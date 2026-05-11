@@ -4,8 +4,12 @@ import json
 from pathlib import Path
 
 from roboclaws.molmo_cleanup.artifact_report import (
+    is_cleanup_run_result_artifact,
     load_cleanup_scenario_artifact,
+    rerender_cleanup_report_from_artifact_path,
     rerender_cleanup_report_from_run_result,
+    rerender_cleanup_reports_from_artifact_paths,
+    rerender_cleanup_reports_from_run_results,
 )
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario, write_scenario_bundle
@@ -198,6 +202,101 @@ def test_rerender_cleanup_report_from_run_result_handles_missing_scenario_artifa
     assert "<span>nav</span><small>object</small>" in report_text
     assert "Subphase: <strong>nav</strong>" in report_text
     assert "nav/object" not in report_text
+
+
+def test_rerender_cleanup_reports_from_run_results_reuses_single_adapter(
+    tmp_path: Path,
+) -> None:
+    first = _write_minimal_run_result(tmp_path / "first")
+    second = _write_minimal_run_result(tmp_path / "second")
+
+    report_paths = rerender_cleanup_reports_from_run_results([first, second])
+
+    assert report_paths == [first.parent / "report.html", second.parent / "report.html"]
+    for report_path in report_paths:
+        assert_cleanup_report_visual_core(
+            report_path.read_text(encoding="utf-8"),
+            require_semantic_subphases=True,
+        )
+
+
+def test_rerender_cleanup_report_from_artifact_path_accepts_run_directory(
+    tmp_path: Path,
+) -> None:
+    run_result = _write_minimal_run_result(tmp_path / "run")
+
+    assert is_cleanup_run_result_artifact(run_result.parent)
+
+    report_path = rerender_cleanup_report_from_artifact_path(run_result.parent)
+
+    assert report_path == run_result.parent / "report.html"
+    assert_cleanup_report_visual_core(
+        report_path.read_text(encoding="utf-8"),
+        require_semantic_subphases=True,
+    )
+
+
+def test_rerender_cleanup_reports_from_artifact_paths_reuses_directory_adapter(
+    tmp_path: Path,
+) -> None:
+    first = _write_minimal_run_result(tmp_path / "first")
+    second = _write_minimal_run_result(tmp_path / "second")
+
+    report_paths = rerender_cleanup_reports_from_artifact_paths([first.parent, second])
+
+    assert report_paths == [first.parent / "report.html", second.parent / "report.html"]
+
+
+def _write_minimal_run_result(run_dir: Path) -> Path:
+    run_dir.mkdir()
+    trace_events = _semantic_trace(
+        object_id="observed_001",
+        source_receptacle_id="table_01",
+        target_receptacle_id="sink_01",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(json.dumps(event, sort_keys=True) for event in trace_events) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "before.png").write_bytes(b"before")
+    (run_dir / "after.png").write_bytes(b"after")
+    run_result = {
+        "backend": "test",
+        "cleanup_status": "success",
+        "contract": "current_contract",
+        "primitive_provenance": "api_semantic",
+        "scenario_id": "scenario_from_run_result",
+        "score": {
+            "status": "success",
+            "restored_count": 1,
+            "total_targets": 1,
+            "success_threshold": 1,
+            "restored_object_ids": ["observed_001"],
+            "missed_object_ids": [],
+            "object_results": [],
+        },
+        "semantic_substeps": [
+            {
+                "object_id": "observed_001",
+                "source_receptacle_id": "table_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {"phase": "navigate_to_object"},
+                    {"phase": "pick"},
+                    {"phase": "navigate_to_receptacle"},
+                    {"phase": "place", "location_id": "sink_01"},
+                ],
+            }
+        ],
+        "artifacts": {
+            "trace": "trace.jsonl",
+            "before_snapshot": "before.png",
+            "after_snapshot": "after.png",
+        },
+    }
+    run_result_path = run_dir / "run_result.json"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+    return run_result_path
 
 
 def _semantic_trace(
