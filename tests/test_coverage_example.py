@@ -48,61 +48,61 @@ def _make_agent_state(agent_id: int, x: float = 0.0, z: float = 0.0) -> MagicMoc
 # ---------------------------------------------------------------------------
 
 
-def test_parse_args_defaults() -> None:
-    args = _parse_args([])
-    assert args.scene == "FloorPlan201"
-    assert args.agents == 2
-    assert args.steps == 200
-    assert args.model == "mock"
-    assert args.output_dir == "output/coverage"
-    assert args.thor_server_timeout == 100.0
-    assert args.thor_server_start_timeout == 300.0
-    assert args.backend == "vlm"
-    assert args.gateway_url is None
-
-
-def test_parse_args_backend_openclaw() -> None:
-    args = _parse_args(["--backend", "openclaw"])
-    assert args.backend == "openclaw"
-
-
-def test_parse_args_backend_direct_accepted() -> None:
-    """'direct' is a deprecated alias for 'vlm'; parser must accept it."""
-    args = _parse_args(["--backend", "direct"])
-    assert args.backend == "direct"
-
-
-def test_parse_args_gateway_url() -> None:
-    args = _parse_args(["--backend", "openclaw", "--gateway-url", "http://custom:9999"])
-    assert args.gateway_url == "http://custom:9999"
-
-
-def test_parse_args_custom() -> None:
-    args = _parse_args(
-        [
-            "--scene",
-            "FloorPlan205",
-            "--agents",
-            "3",
-            "--steps",
-            "50",
-            "--model",
-            "gpt-4o-mini",
-            "--output-dir",
-            "/tmp/coverage",
-            "--thor-server-timeout",
-            "240",
-            "--thor-server-start-timeout",
-            "420",
-        ]
-    )
-    assert args.scene == "FloorPlan205"
-    assert args.agents == 3
-    assert args.steps == 50
-    assert args.model == "gpt-4o-mini"
-    assert args.output_dir == "/tmp/coverage"
-    assert args.thor_server_timeout == 240.0
-    assert args.thor_server_start_timeout == 420.0
+@pytest.mark.parametrize(
+    ("argv", "expected"),
+    [
+        (
+            [],
+            {
+                "scene": "FloorPlan201",
+                "agents": 2,
+                "steps": 200,
+                "model": "mock",
+                "output_dir": "output/coverage",
+                "thor_server_timeout": 100.0,
+                "thor_server_start_timeout": 300.0,
+                "backend": "vlm",
+                "gateway_url": None,
+            },
+        ),
+        (["--backend", "openclaw"], {"backend": "openclaw"}),
+        (["--backend", "direct"], {"backend": "direct"}),
+        (
+            ["--backend", "openclaw", "--gateway-url", "http://custom:9999"],
+            {"backend": "openclaw", "gateway_url": "http://custom:9999"},
+        ),
+        (
+            [
+                "--scene",
+                "FloorPlan205",
+                "--agents",
+                "3",
+                "--steps",
+                "50",
+                "--model",
+                "gpt-4o-mini",
+                "--output-dir",
+                "/tmp/coverage",
+                "--thor-server-timeout",
+                "240",
+                "--thor-server-start-timeout",
+                "420",
+            ],
+            {
+                "scene": "FloorPlan205",
+                "agents": 3,
+                "steps": 50,
+                "model": "gpt-4o-mini",
+                "output_dir": "/tmp/coverage",
+                "thor_server_timeout": 240.0,
+                "thor_server_start_timeout": 420.0,
+            },
+        ),
+    ],
+)
+def test_parse_args(argv: list[str], expected: dict[str, object]) -> None:
+    args = _parse_args(argv)
+    assert {name: getattr(args, name) for name in expected} == expected
 
 
 # ---------------------------------------------------------------------------
@@ -110,16 +110,16 @@ def test_parse_args_custom() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pos_to_world_idx_origin() -> None:
-    assert _pos_to_world_idx({"x": 0.0, "y": 0.9, "z": 0.0}) == (0, 0)
-
-
-def test_pos_to_world_idx_positive() -> None:
-    assert _pos_to_world_idx({"x": 0.50, "y": 0.9, "z": 0.75}) == (2, 3)
-
-
-def test_pos_to_world_idx_negative() -> None:
-    assert _pos_to_world_idx({"x": -0.25, "y": 0.9, "z": -0.50}) == (-1, -2)
+@pytest.mark.parametrize(
+    ("position", "expected"),
+    [
+        ({"x": 0.0, "y": 0.9, "z": 0.0}, (0, 0)),
+        ({"x": 0.50, "y": 0.9, "z": 0.75}, (2, 3)),
+        ({"x": -0.25, "y": 0.9, "z": -0.50}, (-1, -2)),
+    ],
+)
+def test_pos_to_world_idx(position: dict[str, float], expected: tuple[int, int]) -> None:
+    assert _pos_to_world_idx(position) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -127,23 +127,13 @@ def test_pos_to_world_idx_negative() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_draw_progression_chart_creates_file(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cells_history", [[0, 1, 2, 3, 4], [], [5]])
+def test_draw_progression_chart_writes_png(cells_history: list[int], tmp_path: Path) -> None:
     out = tmp_path / "chart.png"
-    _draw_progression_chart([0, 1, 2, 3, 4], out)
+    _draw_progression_chart(cells_history, out)
+
     assert out.exists()
     assert out.stat().st_size > 0
-
-
-def test_draw_progression_chart_empty_list(tmp_path: Path) -> None:
-    out = tmp_path / "chart.png"
-    _draw_progression_chart([], out)
-    assert out.exists()
-
-
-def test_draw_progression_chart_single_value(tmp_path: Path) -> None:
-    out = tmp_path / "chart.png"
-    _draw_progression_chart([5], out)
-    assert out.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -179,7 +169,7 @@ def mock_engine_cls():
 # ---------------------------------------------------------------------------
 
 
-def test_run_returns_summary(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_returns_summary_for_mock_provider(mock_engine_cls, tmp_path: Path) -> None:
     result = run_coverage_game(
         scene="FloorPlan201",
         agent_count=2,
@@ -194,91 +184,13 @@ def test_run_returns_summary(mock_engine_cls, tmp_path: Path) -> None:
     assert "termination_reason" in result
     assert "vlm_cost_usd" in result
     assert "output_dir" in result
-
-
-def test_run_contribution_has_all_agents(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=10,
-        model="mock",
-        output_dir=str(tmp_path / "coverage"),
-    )
     assert 0 in result["contribution"]
     assert 1 in result["contribution"]
-
-
-def test_run_cost_is_zero_for_mock(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=10,
-        model="mock",
-        output_dir=str(tmp_path / "coverage"),
-    )
     assert result["vlm_cost_usd"] == 0.0
-
-
-def test_run_work_balance_in_range(mock_engine_cls, tmp_path: Path) -> None:
-    result = run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=10,
-        model="mock",
-        output_dir=str(tmp_path / "coverage"),
-    )
     assert 0.0 <= result["work_balance"] <= 1.0
 
 
-def test_run_creates_replay_json(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "coverage"
-    run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=6,
-        model="mock",
-        output_dir=str(out_dir),
-    )
-    assert (out_dir / "replay.json").exists()
-
-
-def test_run_creates_coverage_final_png(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "coverage"
-    run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=6,
-        model="mock",
-        output_dir=str(out_dir),
-    )
-    assert (out_dir / "coverage_final.png").exists()
-
-
-def test_run_creates_progression_chart(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "coverage"
-    run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=6,
-        model="mock",
-        output_dir=str(out_dir),
-    )
-    assert (out_dir / "coverage_progression.png").exists()
-
-
-def test_run_creates_work_balance_json(mock_engine_cls, tmp_path: Path) -> None:
-    out_dir = tmp_path / "coverage"
-    run_coverage_game(
-        scene="FloorPlan201",
-        agent_count=2,
-        steps=6,
-        model="mock",
-        output_dir=str(out_dir),
-    )
-    assert (out_dir / "work_balance.json").exists()
-
-
-def test_run_work_balance_json_content(mock_engine_cls, tmp_path: Path) -> None:
+def test_run_persists_replay_visuals_and_work_balance(mock_engine_cls, tmp_path: Path) -> None:
     out_dir = tmp_path / "coverage"
     run_coverage_game(
         scene="FloorPlan201",
@@ -288,6 +200,11 @@ def test_run_work_balance_json_content(mock_engine_cls, tmp_path: Path) -> None:
         output_dir=str(out_dir),
     )
     data = json.loads((out_dir / "work_balance.json").read_text())
+
+    assert (out_dir / "replay.json").exists()
+    assert (out_dir / "coverage_final.png").exists()
+    assert (out_dir / "coverage_progression.png").exists()
+    assert (out_dir / "work_balance.json").exists()
     assert "cells_covered" in data
     assert "work_balance" in data
     assert "contribution" in data
