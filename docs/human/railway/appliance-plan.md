@@ -12,6 +12,7 @@ The public Railway service exposes:
 
 - `/` - OpenClaw Control UI / webchat
 - `/views/` - live Roboclaws FPV + map-v2 + chase-cam viewer
+- `/reset` - unauthenticated scene/snapshot reset endpoint
 - `/health` - unauthenticated Railway healthcheck
 
 The container runs one AI2-THOR session and one OpenClaw agent (`agent-0`) at a
@@ -26,6 +27,7 @@ supervisord
 |-- Xvfb :99
 |-- OpenClaw Gateway              127.0.0.1:18789
 |-- Roboclaws MCP + AI2-THOR      127.0.0.1:18788
+|-- Roboclaws reset endpoint      127.0.0.1:18790
 |-- 3-view snapshot viewer        127.0.0.1:8787
 `-- nginx public proxy             0.0.0.0:$PORT
 ```
@@ -35,13 +37,14 @@ Why this shape:
 - Gateway, MCP, viewer, and Xvfb are separate long-running processes; FastAPI
   would become a custom supervisor if it tried to own them.
 - nginx is enough for the v1 public front door: route traffic, proxy
-  WebSockets/SSE, and serve `/health`.
-- A custom Python API can be added later if we need reset buttons, per-user
-  locks, or richer session state.
+  WebSockets/SSE, serve `/health`, and proxy `/reset` to the loopback reset
+  listener.
+- A custom Python API can still be added later if we need per-user locks or
+  richer session state.
 
 ## Implementation Changes
 
-- Add `Dockerfile.railway` based on `ghcr.io/openclaw/openclaw:2026.4.14`.
+- Add `Dockerfile.railway` based on `ghcr.io/openclaw/openclaw:2026.4.25-beta.11`.
   It installs Python, Xvfb/Mesa software rendering, nginx, supervisor, and uses
   `uv sync --frozen --no-dev --extra openclaw` from the checked-in `uv.lock`
   for Roboclaws dependencies.
@@ -53,6 +56,8 @@ Why this shape:
 - Add `deploy/railway/supervisord.conf` and `deploy/railway/nginx.conf.template`.
 - Add `scripts/appliance-run-interactive.sh` as the supervised Roboclaws
   process wrapper.
+- Run `roboclaws/openclaw/reset_server.py` from the supervised interactive
+  process and route nginx `/reset` to `127.0.0.1:18790/reset`.
 - Add `railway.toml` and `.dockerignore`.
 - Add `just` recipes for local parity:
   `just appliance::build`, `just appliance::run local`, and
@@ -118,6 +123,7 @@ Then verify:
 - `http://localhost:8080/` shows OpenClaw Control UI
 - the Control UI accepts bearer token `demo` when `OPENCLAW_TOKEN` is unset
 - `http://localhost:8080/views/` shows the three-panel viewer
+- `http://localhost:8080/reset` clears scene state and viewer snapshots
 - after `agent-0` calls `roboclaws__observe`, FPV/map/chase images refresh
 - `just appliance::tail` tails the Gateway session JSONL from the appliance
   container

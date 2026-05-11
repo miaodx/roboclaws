@@ -17,8 +17,8 @@ Last full audit: 2026-04-23 (bootstrap `fd2b878`).
 
 ## Gateway flush-threshold formula
 
-From `/app/dist/agent-runner.runtime-DXJczOHi.js` in the pinned Gateway
-image (`ghcr.io/openclaw/openclaw:2026.4.14`):
+From the Gateway runtime in the pinned Gateway image
+(`ghcr.io/openclaw/openclaw:2026.4.25-beta.11`):
 
 ```
 effective_flush_threshold = contextWindow - reserveTokensFloor - softThresholdTokens

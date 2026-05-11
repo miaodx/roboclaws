@@ -7,7 +7,7 @@ tools. This path does not use the OpenClaw Gateway.
 ## Start the Server
 
 ```bash
-uv pip install -e ".[dev,openclaw]" || python -m pip install -e ".[dev,openclaw]"
+uv sync --extra dev --extra openclaw
 python examples/coding_agent_nav_server.py --scene FloorPlan201
 ```
 
@@ -71,7 +71,7 @@ chair-1 or sofa-1. When finished, summarize the labels and call roboclaws__done.
 Runs write to:
 
 ```text
-output/coding-agent-nav/<timestamp>/
+output/runs/<timestamp>/
 ```
 
 Important files:
@@ -83,7 +83,7 @@ Important files:
 To score a chair/sofa photo run:
 
 ```bash
-python scripts/check_photo_task.py --run-dir output/coding-agent-nav/<timestamp>
+python scripts/check_photo_task.py --run-dir output/runs/<timestamp>
 ```
 
 ## Notes
