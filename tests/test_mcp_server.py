@@ -330,6 +330,63 @@ def test_observe_text_bridge_failure_returns_safe_text_shape(
     assert "Vision bridge unavailable" in result[1]
 
 
+def test_call_tool_exposes_mcp_facing_navigation_contracts(
+    engine: FakeEngine, tmp_path: Path
+) -> None:
+    engine.all_objects = [
+        {
+            "objectId": "Chair|1",
+            "objectType": "Chair",
+            "name": "Chair_1",
+            "position": {"x": 1.5, "y": 0.0, "z": -2.0},
+            "axisAlignedBoundingBox": {
+                "center": {"x": 1.5, "y": 0.5, "z": -2.0},
+                "size": {"x": 0.5, "y": 1.0, "z": 0.5},
+            },
+            "visible": True,
+        }
+    ]
+    snap_dir = tmp_path / "snapshots"
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path / "run",
+        port=0,
+        snapshots_dir=snap_dir,
+    )
+    try:
+        observe_result = srv.call_tool("observe")
+        assert isinstance(observe_result, list)
+        assert len(observe_result) == 4
+
+        archived_result = srv.call_tool("observe_archived", label="chair-1")
+        assert archived_result["label"] == "chair-1"
+        assert set(archived_result["snapshot_paths"]) == {"fpv", "map", "chase"}
+
+        move_result = srv.call_tool("move", direction="MoveAhead", reason="clear", steps=1)
+        assert move_result["result"] == "ok"
+        assert move_result["step"] == 1
+
+        objects_result = srv.call_tool("scene_objects", filter_types="Chair")
+        assert objects_result["count"] == 1
+        assert objects_result["objects"][0]["objectId"] == "Chair|1"
+
+        goto_result = srv.call_tool("goto", object_id="Chair|1", distance=1.0, face=True)
+        assert goto_result["result"] == "ok"
+        assert goto_result["object_id"] == "Chair|1"
+
+        done_result = srv.call_tool("done", reason="goal reached")
+        assert done_result["final"] is True
+        assert done_result["reason"] == "goal reached"
+    finally:
+        srv.close()
+
+
+def test_call_tool_rejects_unknown_mcp_tool_name(server: RoboclawsMCPServer) -> None:
+    with pytest.raises(ValueError, match="unknown MCP tool"):
+        server.call_tool("snapshot")
+
+
 def test_move_valid_direction_steps_engine(server: RoboclawsMCPServer, engine: FakeEngine) -> None:
     response = server._do_move("MoveAhead", "clear hallway")
     assert engine.calls_step == [(0, "MoveAhead")]

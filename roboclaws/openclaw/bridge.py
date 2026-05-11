@@ -5,8 +5,10 @@ lives in :mod:`roboclaws.openclaw.transport`.  This module exposes the
 high-level :class:`OpenClawProvider` (a VLMProvider-compatible wrapper) and
 the :func:`build_openclaw_provider_or_die` convenience factory.
 
-All public names from transport are re-exported here so existing callers that
-``from roboclaws.openclaw.bridge import OpenClawBridge`` keep working.
+The long-standing public compatibility exports are kept here
+(``OpenClawBridge``, ``RunResult``, and ``TranscriptMessage``). Transcript
+recovery internals live in :mod:`roboclaws.openclaw.transcript_recovery` and
+are intentionally not re-exported from this provider adapter.
 """
 
 from __future__ import annotations
@@ -26,16 +28,6 @@ from roboclaws.openclaw.transport import (
     OpenClawUnavailable,
     RunResult,
     TranscriptMessage,
-    _extract_content,
-    _extract_text_blocks,
-    _is_terminal_stop_reason,
-    _ndarray_to_data_url,
-    _parse_action,
-    _SessionStoreCapture,
-    _StartRunCapture,
-    _timestamp_to_epoch_seconds,
-    _warn_invalid_action,
-    _warn_malformed,
 )
 
 __all__ = [
@@ -44,16 +36,6 @@ __all__ = [
     "OpenClawUnavailable",
     "RunResult",
     "TranscriptMessage",
-    "_SessionStoreCapture",
-    "_StartRunCapture",
-    "_extract_content",
-    "_extract_text_blocks",
-    "_is_terminal_stop_reason",
-    "_ndarray_to_data_url",
-    "_parse_action",
-    "_timestamp_to_epoch_seconds",
-    "_warn_invalid_action",
-    "_warn_malformed",
     "build_openclaw_provider_or_die",
 ]
 

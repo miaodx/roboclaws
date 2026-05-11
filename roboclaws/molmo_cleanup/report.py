@@ -69,6 +69,7 @@ def render_cleanup_report(
     trace_events: list[dict[str, Any]],
     before_snapshot: Path,
     after_snapshot: Path,
+    robot_view_steps: list[dict[str, Any]] | None = None,
 ) -> Path:
     """Write a self-contained cleanup `report.html`."""
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -83,10 +84,12 @@ def render_cleanup_report(
       <h1>MolmoSpaces Cleanup Pilot</h1>
       <div class="badges">
         {_badge("Scenario", scenario.scenario_id)}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
         {_badge("Planner", run_result.get("planner", "unknown"))}
         {_badge("Provenance", run_result["primitive_provenance"])}
+        {_robot_badge(run_result)}
       </div>
     </section>
     <section class="snapshots">
@@ -103,6 +106,8 @@ def render_cleanup_report(
       <h2>Object Moves</h2>
       {_moves_table(moves)}
     </section>
+    {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
+    {_robot_timeline(robot_view_steps or [])}
     <section>
       <h2>Score</h2>
       {_score_table(score)}
@@ -116,6 +121,113 @@ def _badge(label: str, value: Any) -> str:
     return (
         f'<span class="badge">{html.escape(str(label))}: '
         f"<strong>{html.escape(str(value))}</strong></span>"
+    )
+
+
+def _robot_badge(run_result: dict[str, Any]) -> str:
+    robot_name = run_result.get("robot_name")
+    if not robot_name:
+        return ""
+    return _badge("Robot", robot_name)
+
+
+def _robot_timeline(steps: list[dict[str, Any]]) -> str:
+    if not steps:
+        return ""
+    cards = []
+    for index, step in enumerate(steps, start=1):
+        views = step.get("views", {})
+        pose = step.get("robot_pose") or {}
+        focus = step.get("focus") or {}
+        semantic_phase = step.get("semantic_phase")
+        pose_text = (
+            f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
+            f"theta={pose.get('theta', '?')} head_pitch={pose.get('head_pitch', '?')}"
+        )
+        cards.append(
+            '<article class="robot-step">'
+            f"<h3>{index}. {html.escape(str(step.get('action', step.get('label', 'step'))))}</h3>"
+            f'<p class="pose">{html.escape(pose_text)}</p>'
+            f"{_semantic_phase_summary(semantic_phase)}"
+            f"{_focus_summary(focus)}"
+            f"{_robot_evidence_summary(step)}"
+            '<div class="views">'
+            f"{_view_figure(views.get('fpv'), 'FPV')}"
+            f"{_view_figure(views.get('chase'), 'Chase')}"
+            f"{_view_figure(views.get('map'), 'Map')}"
+            f"{_view_figure(views.get('verify'), 'Verification') if focus.get('has_focus') else ''}"
+            "</div>"
+            "</article>"
+        )
+    return (
+        "<section><h2>Robot View Timeline</h2>"
+        '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
+        "The map and verification panels are report artifacts from public MuJoCo state, "
+        "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
+    )
+
+
+def _semantic_phase_summary(semantic_phase: Any) -> str:
+    if not semantic_phase:
+        return ""
+    return '<div class="semantic-badges">' + _badge("Semantic phase", semantic_phase) + "</div>"
+
+
+def _focus_summary(focus: dict[str, Any]) -> str:
+    if not focus.get("has_focus"):
+        return ""
+    bits = []
+    if focus.get("object_label"):
+        bits.append(_badge("Object", focus["object_label"]))
+    if focus.get("receptacle_label"):
+        bits.append(_badge("Target", focus["receptacle_label"]))
+    if focus.get("provenance"):
+        bits.append(_badge("Focus provenance", focus["provenance"]))
+    return '<div class="focus-badges">' + "".join(bits) + "</div>"
+
+
+def _robot_evidence_summary(step: dict[str, Any]) -> str:
+    pose = step.get("robot_pose") or {}
+    focus = step.get("focus") or {}
+    bits = []
+    if pose.get("theta_source"):
+        bits.append(_badge("Theta", pose["theta_source"]))
+    if pose.get("head_pitch_source"):
+        bits.append(_badge("Head pitch", pose["head_pitch_source"]))
+    if pose.get("target_room_id"):
+        relation = "same room" if pose.get("same_room_as_target") else "room mismatch"
+        room_text = f"{relation} ({pose.get('robot_room_id')} -> {pose.get('target_room_id')})"
+        bits.append(_badge("Room", room_text))
+    if focus.get("has_focus"):
+        fpv_visibility = focus.get("fpv_visibility") or {}
+        if fpv_visibility.get("status") == "ok":
+            fpv_visible = (
+                f"object {fpv_visibility.get('object_pixels', 0)} px, "
+                f"target {fpv_visibility.get('receptacle_pixels', 0)} px"
+            )
+            bits.append(_badge("FPV visibility", fpv_visible))
+        visibility = focus.get("visibility") or {}
+        if visibility.get("status") == "ok":
+            visible = (
+                f"object {visibility.get('object_pixels', 0)} px, "
+                f"target {visibility.get('receptacle_pixels', 0)} px"
+            )
+            bits.append(_badge("Verify visibility", visible))
+    if not bits:
+        return ""
+    return '<div class="evidence-badges">' + "".join(bits) + "</div>"
+
+
+def _view_figure(path: Any, label: str) -> str:
+    if not path:
+        return ""
+    escaped_path = html.escape(str(path))
+    escaped_label = html.escape(label)
+    return (
+        "<figure>"
+        f'<img src="{escaped_path}" alt="{escaped_label} view">'
+        f"<figcaption>{escaped_label}</figcaption>"
+        "</figure>"
     )
 
 
@@ -138,6 +250,39 @@ def _moves_table(moves: list[dict[str, Any]]) -> str:
     )
 
 
+def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
+    if not semantic_substeps:
+        return ""
+    rows = []
+    for item in semantic_substeps:
+        phases = " -> ".join(str(step.get("phase", "")) for step in item.get("steps", []))
+        done_step = next(
+            (step for step in item.get("steps", []) if step.get("phase") == "object_done"),
+            {},
+        )
+        readback = str(done_step.get("location_id") or "")
+        relation = str(done_step.get("location_relation") or "")
+        contained_in = done_step.get("contained_in")
+        if contained_in:
+            readback = f"{readback} ({relation}: {contained_in})"
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(phases)}</td>"
+            f"<td>{html.escape(readback)}</td>"
+            "</tr>"
+        )
+    return (
+        "<section><h2>Semantic Substeps</h2>"
+        "<table><thead><tr><th>Object</th><th>From</th><th>To</th>"
+        "<th>Phases</th><th>Readback</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></section>"
+    )
+
+
 def _score_table(score: dict[str, Any]) -> str:
     rows = []
     for row in score["object_results"]:
@@ -157,7 +302,7 @@ def _score_table(score: dict[str, Any]) -> str:
 def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     moves: list[dict[str, Any]] = []
     for event in trace_events:
-        if event.get("tool") != "place" or event.get("event") != "response":
+        if event.get("tool") not in {"place", "place_inside"} or event.get("event") != "response":
             continue
         response = event.get("response")
         if isinstance(response, dict) and response.get("ok"):
@@ -198,6 +343,27 @@ def _wrap_html(body: str) -> str:
     }}
     img {{ width: 100%; height: auto; display: block; }}
     figcaption {{ margin-top: 8px; color: #565f70; font-size: 14px; }}
+    .note {{ color: #565f70; margin: 0 0 12px; }}
+    .robot-step {{
+      background: #fff;
+      border: 1px solid #d9dde6;
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }}
+    .robot-step h3 {{ font-size: 16px; margin: 0 0 4px; }}
+    .pose {{ margin: 0 0 10px; color: #565f70; font-size: 13px; }}
+    .semantic-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
+    .semantic-badges .badge {{ font-size: 13px; padding: 5px 8px; background: #eef6ff; }}
+    .focus-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
+    .focus-badges .badge {{ font-size: 13px; padding: 5px 8px; }}
+    .evidence-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px; }}
+    .evidence-badges .badge {{ font-size: 12px; padding: 4px 7px; background: #f8fafc; }}
+    .views {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px;
+    }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d9dde6; }}
     th, td {{
       padding: 9px 10px;

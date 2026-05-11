@@ -8,6 +8,8 @@
 # - just harness::run <task>          run one iteration on a task
 # - just harness::navigator <task>    explicit navigator-harness alias
 # - just harness::molmo-cleanup       deterministic MolmoSpaces cleanup artifact
+# - just harness::molmo-real-cleanup  real MolmoSpaces/MuJoCo cleanup artifact
+# - just harness::molmo-robot-visual  real MolmoSpaces/RBY1M visual artifact
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -131,6 +133,48 @@ molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" t
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
+      "{{output_dir}}/run_result.json"
+
+# Prompt-driven public-policy cleanup against a real upstream MolmoSpaces/MuJoCo scene.
+molmo-real-cleanup seed="7" output_dir="output/molmo-real-cleanup-harness" task="帮我整理这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --planner public_heuristic \
+      --task "{{task}}" \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+      --require-public-planner \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --require-semantic-substeps \
+      "{{output_dir}}/run_result.json"
+
+# Real upstream MolmoSpaces cleanup with an actual RBY1M robot, FPV/chase/map,
+# and a reviewable HTML timeline.
+molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task="帮我整理这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --planner public_heuristic \
+      --task "{{task}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+      --require-public-planner \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-robot rby1m \
+      --require-robot-views \
+      --require-semantic-substeps \
       "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.

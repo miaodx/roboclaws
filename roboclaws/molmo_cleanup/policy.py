@@ -26,14 +26,29 @@ _CATEGORY_TARGET_KEYWORDS: dict[str, tuple[str, ...]] = {
     "linen": ("laundry hamper", "hamper"),
     "food": ("fridge", "refrigerator"),
     "toy": ("toy bin", "bin"),
+    "cup": ("sink",),
+    "mug": ("sink",),
+    "plate": ("sink",),
+    "bowl": ("sink",),
+    "newspaper": ("shelvingunit", "bookshelf", "shelf", "desk"),
+    "apple": ("fridge", "refrigerator"),
+    "bread": ("fridge", "refrigerator"),
+    "egg": ("fridge", "refrigerator"),
+    "potato": ("fridge", "refrigerator"),
+    "lettuce": ("fridge", "refrigerator"),
+    "remotecontrol": ("tvstand", "tv stand"),
+    "pillow": ("bed", "sofa"),
+    "teddybear": ("bed", "sofa"),
 }
 
 _NAME_TARGET_KEYWORDS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("mug", "cup", "plate", "dish"), ("sink",)),
-    (("book", "paperback"), ("bookshelf", "shelf")),
+    (("book", "paperback"), ("shelvingunit", "bookshelf", "shelf", "desk")),
     (("towel", "linen", "cloth"), ("laundry hamper", "hamper")),
-    (("apple", "food", "fruit"), ("fridge", "refrigerator")),
+    (("apple", "food", "fruit", "egg", "bread", "potato"), ("fridge", "refrigerator")),
     (("toy",), ("toy bin", "bin")),
+    (("remote",), ("tvstand", "tv stand")),
+    (("pillow", "teddy"), ("bed", "sofa")),
 )
 
 

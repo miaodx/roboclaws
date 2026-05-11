@@ -17,7 +17,9 @@ surface supports it cleanly. Phase 3 (Isaac Lab) is deferred indefinitely.
 Phase 6 is the MolmoSpaces cleanup scaffold: a narrow, provenance-labeled
 `api_semantic` cleanup loop that keeps AI2-THOR as the baseline while proving
 the first room-cleanup artifact contract. Phase 7 builds on it with a
-prompt-driven public-policy cleanup proof for `帮我整理这个房间`.
+prompt-driven public-policy cleanup proof for `帮我整理这个房间`. Phase 8 moves
+that proof onto a real upstream MolmoSpaces/MuJoCo scene through the isolated
+Python 3.11 subprocess backend while keeping `api_semantic` provenance explicit.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -50,6 +52,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.6 Iterative Codebase Simplification** - Phase 5 (completed 2026-04-23; 18 target files simplified, global pytest+ruff green, net -203 lines across targets)
 - ✅ **v1.7 MolmoSpaces cleanup pilot** - Phase 6 (completed 2026-05-07; api-semantic cleanup contracts, scorer, direct MCP/demo artifacts; real planner-backed manipulation deferred)
 - ✅ **v1.8 MolmoSpaces prompt cleanup** - Phase 7 (completed 2026-05-07; public-policy prompt proof for `帮我整理这个房间`; real planner-backed manipulation deferred)
+- ✅ **v1.9 MolmoSpaces real subprocess cleanup** - Phase 8 (completed 2026-05-07; real upstream MolmoSpaces/MuJoCo scene, Python 3.11 subprocess runtime, public prompt loop, `api_semantic` MuJoCo state mutation)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -73,6 +76,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
 - [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; real RBY1M/Franka planner-backed manipulation remains deferred.
 - [x] **Phase 7: MolmoSpaces prompt-driven cleanup demo** - Prompt `帮我整理这个房间` drives a public-only cleanup policy through the cleanup tool loop, without private-manifest planner access. Completed 2026-05-07; primitive execution remains `api_semantic`.
+- [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic` because planner-backed RBY1M/Franka pick/place is still unproven.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
