@@ -20,9 +20,23 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (  # noqa: E402
 )
 from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
+    planner_backed_cleanup_manipulation_evidence,
 )
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
+    planner_cleanup_bridge_evidence,
+)
+from roboclaws.molmo_cleanup.planner_primitive_executor import (  # noqa: E402
+    PlannerBackedCleanupContractAdapter,
+)
+from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (  # noqa: E402
+    ProbeBackedCleanupPrimitiveExecutor,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
+from roboclaws.molmo_cleanup.planner_proof_bundle import (  # noqa: E402
+    attach_planner_proof_bundle,
+    planner_proof_attachment_for_target,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -39,11 +53,15 @@ from roboclaws.molmo_cleanup.report import (  # noqa: E402
     write_trace_jsonl,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+    run_semantic_cleanup_loop,
+)
 from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
     primitive_provenance_counts,
     record_robot_view_step,
+    robot_view_capture_for_tool,
     semantic_substeps,
 )
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
@@ -80,7 +98,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
-    parser.add_argument("--planner-proof-run-result", type=Path)
+    parser.add_argument(
+        "--planner-proof-run-result",
+        type=Path,
+        action="append",
+        help=(
+            "Attach a strict planner proof run_result.json. Repeat to provide "
+            "one bound proof per cleanup object."
+        ),
+    )
+    parser.add_argument(
+        "--use-planner-proof-for-cleanup-primitives",
+        action="store_true",
+        help=(
+            "Opt in to using attached bound planner proof as cleanup primitive executor "
+            "evidence when it matches the current observed handle and target."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -97,6 +131,8 @@ def run_realworld_cleanup(
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
     planner_proof_run_result: Path | None = None,
+    planner_proof_run_results: list[Path] | None = None,
+    use_planner_proof_for_cleanup_primitives: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -107,6 +143,14 @@ def run_realworld_cleanup(
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    planner_proof_paths = _planner_proof_paths(
+        planner_proof_run_result=planner_proof_run_result,
+        planner_proof_run_results=planner_proof_run_results,
+    )
+    if use_planner_proof_for_cleanup_primitives and not planner_proof_paths:
+        raise ValueError(
+            "use_planner_proof_for_cleanup_primitives requires planner_proof_run_result"
+        )
 
     backend_instance: Any | None = None
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -128,6 +172,17 @@ def run_realworld_cleanup(
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
     )
+    planner_proof_evidence: dict[str, Any] | None = None
+    if len(planner_proof_paths) == 1:
+        planner_proof_evidence = attach_planner_proof(
+            proof_run_result_path=planner_proof_paths[0],
+            cleanup_run_dir=output_dir,
+        )
+    elif len(planner_proof_paths) > 1:
+        planner_proof_evidence = attach_planner_proof_bundle(
+            proof_run_result_paths=planner_proof_paths,
+            cleanup_run_dir=output_dir,
+        )
     trace_events: list[dict[str, Any]] = []
     started_at = time.time()
 
@@ -231,6 +286,9 @@ def run_realworld_cleanup(
                 output_dir=output_dir,
                 view_index=view_index,
                 record_robot_views=record_robot_views,
+                planner_proof_evidence=(
+                    planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
+                ),
             )
             handled_handles.add(handle)
             agent_memory["decisions"].append(
@@ -294,6 +352,21 @@ def run_realworld_cleanup(
     cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
 
     primitive_summary = primitive_provenance_counts(trace_events)
+    cleanup_primitives_planner_backed = cleanup_primitive_evidence.get("planner_backed") is True
+    run_primitive_provenance = (
+        "planner_backed" if cleanup_primitives_planner_backed else API_SEMANTIC_PROVENANCE
+    )
+    manipulation_evidence = (
+        planner_backed_cleanup_manipulation_evidence(
+            backend=backend,
+            primitive_summary=primitive_summary,
+        )
+        if cleanup_primitives_planner_backed
+        else api_semantic_manipulation_evidence(
+            backend=backend,
+            primitive_summary=primitive_summary,
+        )
+    )
     public_tool_counts = _tool_event_counts(trace_events)
     run_result = {
         "backend": backend,
@@ -306,17 +379,15 @@ def run_realworld_cleanup(
         "terminate_reason": f"{policy_name} complete",
         "cleanup_status": done["cleanup_status"],
         "completion_status": done["score"]["completion_status"],
-        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "primitive_provenance": run_primitive_provenance,
         "primitive_provenance_summary": primitive_summary,
-        "manipulation_evidence": api_semantic_manipulation_evidence(
-            backend=backend,
-            primitive_summary=primitive_summary,
-        ),
+        "manipulation_evidence": manipulation_evidence,
         "policy": policy_name,
         "planner": policy_name,
         "agent_driven": False,
         "policy_uses_private_truth": False,
         "planner_uses_private_manifest": False,
+        "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
         "requested_generated_mess_count": generated_mess_count,
@@ -364,10 +435,11 @@ def run_realworld_cleanup(
         run_result["view_variant"] = ROBOT_VIEW_VARIANT
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
-    if planner_proof_run_result is not None:
-        run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
-            proof_run_result_path=planner_proof_run_result,
-            cleanup_run_dir=output_dir,
+    if planner_proof_evidence is not None:
+        run_result["planner_backed_manipulation_proof"] = planner_proof_evidence
+        run_result["planner_cleanup_bridge_evidence"] = planner_cleanup_bridge_evidence(
+            planner_proof_attachment=run_result["planner_backed_manipulation_proof"],
+            cleanup_primitive_evidence=cleanup_primitive_evidence,
         )
         run_result["artifacts"]["planner_proof_views"] = str(output_dir / "planner_proof")
 
@@ -437,145 +509,71 @@ def _clean_visible_object(
     output_dir: Path,
     view_index: int,
     record_robot_views: bool,
+    planner_proof_evidence: dict[str, Any] | None = None,
 ) -> int:
     handle = str(detection["object_id"])
     target_fixture_id = str(target_fixture["fixture_id"])
-    support = detection.get("support_estimate") or {}
-    focus_object_id = _internal_object_id(contract, handle)
-    source_fixture_id = support.get("fixture_id")
 
-    navigate_object = _call_tool(
-        trace_events,
-        started_at,
-        "navigate_to_object",
-        {"object_id": handle},
-        lambda selected=handle: contract.navigate_to_object(selected),
-    )
-    if record_robot_views:
+    def record_loop_robot_view(
+        tool: str,
+        request: dict[str, Any],
+        response: dict[str, Any],
+    ) -> None:
+        nonlocal view_index
+        if not record_robot_views or not response.get("ok"):
+            return
+        capture = robot_view_capture_for_tool(
+            tool,
+            request,
+            response,
+            object_id_transform=lambda value: (
+                _internal_object_id(contract, value) if value is not None else None
+            ),
+        )
+        if capture is None:
+            return
         view_index = record_robot_view_step(
             steps=robot_view_steps,
             backend=base_contract.backend,
             output_dir=output_dir,
             index=view_index,
-            label_suffix=f"navigate_object_{handle}",
-            action=f"navigate_to_object {handle}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=str(source_fixture_id) if source_fixture_id else None,
-            semantic_phase="navigate_to_object",
+            action=str(capture["action"]),
+            label_suffix=str(capture["label_suffix"]),
+            focus_object_id=capture.get("focus_object_id"),
+            focus_receptacle_id=capture.get("focus_receptacle_id"),
+            semantic_phase=capture.get("semantic_phase"),
         )
-    if not navigate_object.get("ok"):
-        return view_index
 
-    pick = _call_tool(
-        trace_events,
-        started_at,
-        "pick",
-        {"object_id": handle},
-        lambda selected=handle: contract.pick(selected),
+    loop_contract = _cleanup_loop_contract_for_target(
+        contract=contract,
+        planner_proof_evidence=planner_proof_evidence,
+        object_id=handle,
+        target_receptacle_id=target_fixture_id,
     )
-    if record_robot_views:
-        view_index = record_robot_view_step(
-            steps=robot_view_steps,
-            backend=base_contract.backend,
-            output_dir=output_dir,
-            index=view_index,
-            label_suffix=f"pick_{handle}",
-            action=f"pick {handle}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=str(source_fixture_id) if source_fixture_id else None,
-            semantic_phase="pick",
-        )
-    if not pick.get("ok"):
-        return view_index
 
-    navigate_receptacle = _call_tool(
-        trace_events,
-        started_at,
-        "navigate_to_receptacle",
-        {"receptacle_id": target_fixture_id},
-        lambda selected=target_fixture_id: contract.navigate_to_receptacle(selected),
+    run_semantic_cleanup_loop(
+        targets=[
+            {
+                "object_id": handle,
+                "target_receptacle_id": target_fixture_id,
+                "target_receptacle": target_fixture,
+            }
+        ],
+        contract=loop_contract,
+        call_tool=lambda tool, request, fn: _call_tool(
+            trace_events,
+            started_at,
+            tool,
+            request,
+            fn,
+        ),
+        record_tool_view=record_loop_robot_view,
+        target_request_key="fixture_id",
+        include_object_id_in_receptacle_request=False,
+        include_object_id_in_target_requests=False,
     )
-    if record_robot_views:
-        view_index = record_robot_view_step(
-            steps=robot_view_steps,
-            backend=base_contract.backend,
-            output_dir=output_dir,
-            index=view_index,
-            label_suffix=f"navigate_receptacle_{target_fixture_id}",
-            action=f"navigate_to_receptacle {target_fixture_id}",
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=target_fixture_id,
-            semantic_phase="navigate_to_receptacle",
-        )
-    if not navigate_receptacle.get("ok"):
-        return view_index
-
-    if _requires_inside_place(target_fixture):
-        _call_tool(
-            trace_events,
-            started_at,
-            "open_receptacle",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.open_receptacle(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"open_receptacle_{target_fixture_id}",
-                action=f"open_receptacle {target_fixture_id}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="open_receptacle",
-            )
-        _call_tool(
-            trace_events,
-            started_at,
-            "place_inside",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.place_inside(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"place_inside_{handle}",
-                action=f"place_inside {handle}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="place_inside",
-            )
-    else:
-        _call_tool(
-            trace_events,
-            started_at,
-            "place",
-            {"fixture_id": target_fixture_id},
-            lambda selected=target_fixture_id: contract.place(selected),
-        )
-        if record_robot_views:
-            view_index = record_robot_view_step(
-                steps=robot_view_steps,
-                backend=base_contract.backend,
-                output_dir=output_dir,
-                index=view_index,
-                label_suffix=f"place_{handle}",
-                action=f"place {handle}",
-                focus_object_id=focus_object_id,
-                focus_receptacle_id=target_fixture_id,
-                semantic_phase="place",
-            )
 
     return view_index
-
-
-def _requires_inside_place(fixture: dict[str, Any]) -> bool:
-    text = f"{fixture.get('category', '')} {fixture.get('name', '')}".lower()
-    return "fridge" in text or "refrigerator" in text
 
 
 def _write_snapshot(
@@ -598,6 +596,45 @@ def _write_snapshot(
 
 def _internal_object_id(contract: RealWorldCleanupContract, handle: str) -> str | None:
     return contract._internal_object_id(handle)
+
+
+def _cleanup_loop_contract_for_target(
+    *,
+    contract: RealWorldCleanupContract,
+    planner_proof_evidence: dict[str, Any] | None,
+    object_id: str,
+    target_receptacle_id: str,
+) -> Any:
+    if planner_proof_evidence is None:
+        return contract
+    planner_proof_attachment = planner_proof_attachment_for_target(
+        planner_proof_evidence,
+        object_id=object_id,
+        target_receptacle_id=target_receptacle_id,
+    )
+    if planner_proof_attachment is None:
+        return contract
+    executor = ProbeBackedCleanupPrimitiveExecutor(
+        planner_proof_attachment,
+        executor_name="probe_backed_realworld_cleanup_executor",
+    )
+    return PlannerBackedCleanupContractAdapter(
+        contract,
+        executor=executor,
+        executor_name="probe_backed_realworld_cleanup_executor",
+    )
+
+
+def _planner_proof_paths(
+    *,
+    planner_proof_run_result: Path | None,
+    planner_proof_run_results: list[Path] | None,
+) -> list[Path]:
+    paths = []
+    if planner_proof_run_result is not None:
+        paths.append(planner_proof_run_result)
+    paths.extend(planner_proof_run_results or [])
+    return paths
 
 
 def _call_tool(
@@ -694,7 +731,8 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
-        planner_proof_run_result=args.planner_proof_run_result,
+        planner_proof_run_results=args.planner_proof_run_result,
+        use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

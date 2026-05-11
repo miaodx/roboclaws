@@ -248,11 +248,7 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     for name in ("raw.fpv.png", "raw.chase.png", "raw.map.png", "raw.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
     result["artifacts"]["robot_views"] = str(robot_views)
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     for item in result["raw_fpv_observations"]:
         item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
     for item in result["agent_view"]["raw_fpv_observations"]:
@@ -315,6 +311,210 @@ def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
         min_generated_mess_count=5,
         require_planner_proof_attachment=True,
     )
+
+
+def test_checker_accepts_blocked_planner_cleanup_bridge(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+    )
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    bridge = result["planner_cleanup_bridge_evidence"]
+    assert bridge["status"] == "blocked_capability"
+    assert bridge["target_runtime_ready"] is True
+    assert bridge["cleanup_primitives_ready"] is False
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_planner_proof_attachment=True,
+        accept_blocked_planner_cleanup_primitives=True,
+        accept_blocked_planner_cleanup_bridge=True,
+    )
+
+
+def test_realworld_cleanup_can_use_matching_probe_backed_executor(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+        cleanup_binding={
+            "schema": "planner_probe_cleanup_primitive_binding_v1",
+            "object_id": "observed_001",
+            "target_receptacle_id": "toy_bin_01",
+            "source_receptacle_id": "coffee_table_01",
+            "planner_object_id": "pickup/body",
+            "planner_target_receptacle_id": "dropoff/body",
+            "tools": [
+                "navigate_to_object",
+                "pick",
+                "navigate_to_receptacle",
+                "place",
+            ],
+        },
+    )
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+        use_planner_proof_for_cleanup_primitives=True,
+    )
+
+    assert result["cleanup_status"] == "success"
+    assert result["planner_proof_cleanup_executor_enabled"] is True
+    evidence = result["cleanup_primitive_evidence"]
+    assert evidence["status"] == "blocked_capability"
+    bounded_object = next(
+        item for item in evidence["objects"] if item["object_id"] == "observed_001"
+    )
+    assert bounded_object["planner_backed"] is True
+    assert bounded_object["strict_proof_eligible"] is True
+    for step in bounded_object["subphases"]:
+        assert step["primitive_provenance"] == "planner_backed"
+        assert step["planner_backed"] is True
+        assert step["strict_proof_eligible"] is True
+    normal_object = next(
+        item for item in evidence["objects"] if item["object_id"] == "observed_002"
+    )
+    assert normal_object["planner_backed"] is False
+    assert {step["primitive_provenance"] for step in normal_object["subphases"]} == {"api_semantic"}
+    bridge = result["planner_cleanup_bridge_evidence"]
+    assert bridge["target_runtime_ready"] is True
+    assert bridge["cleanup_primitives_ready"] is False
+    report = (cleanup_dir / "report.html").read_text(encoding="utf-8")
+    assert "Cleanup Primitive Gate" in report
+    assert "Planner Cleanup Bridge" in report
+
+
+def test_realworld_cleanup_mismatched_probe_binding_keeps_semantic_path(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+        cleanup_binding={
+            "schema": "planner_probe_cleanup_primitive_binding_v1",
+            "object_id": "observed_999",
+            "target_receptacle_id": "toy_bin_01",
+            "tools": [
+                "navigate_to_object",
+                "pick",
+                "navigate_to_receptacle",
+                "place",
+            ],
+        },
+    )
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "cleanup",
+        seed=7,
+        planner_proof_run_result=proof_path,
+        use_planner_proof_for_cleanup_primitives=True,
+    )
+
+    assert result["cleanup_status"] == "success"
+    assert result["planner_proof_cleanup_executor_enabled"] is True
+    primitive_summary = result["cleanup_primitive_evidence"]["primitive_provenance_summary"]
+    assert set(primitive_summary) == {"api_semantic"}
+    assert result["cleanup_primitive_evidence"]["planner_backed"] is False
+    assert result["planner_cleanup_bridge_evidence"]["cleanup_primitives_ready"] is False
+
+
+def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_paths = [
+        _write_strict_planner_proof(
+            tmp_path / f"proof-{binding['object_id']}",
+            embodiment="rby1m",
+            upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+            curobo_available=True,
+            cleanup_binding=binding,
+        )
+        for binding in _seed7_cleanup_bindings()
+    ]
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_results=proof_paths,
+        use_planner_proof_for_cleanup_primitives=True,
+    )
+
+    assert result["cleanup_status"] == "success"
+    assert result["primitive_provenance"] == "planner_backed"
+    assert result["cleanup_primitive_evidence"]["status"] == "planner_backed"
+    assert result["planner_cleanup_bridge_evidence"]["status"] == "planner_backed"
+    assert result["planner_backed_manipulation_proof"]["schema"] == (
+        "planner_backed_cleanup_proof_bundle_v1"
+    )
+    assert result["planner_backed_manipulation_proof"]["proof_count"] == 5
+    report = (cleanup_dir / "report.html").read_text(encoding="utf-8")
+    assert "Attached Planner-Backed Proofs" in report
+    assert "proof_001 Planner Initial" in report
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_planner_proof_attachment=True,
+        require_planner_backed_cleanup_primitives=True,
+        require_planner_cleanup_bridge_ready=True,
+    )
+
+
+def test_checker_rejects_current_cleanup_when_bridge_ready_required(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(
+        tmp_path / "proof",
+        embodiment="rby1m",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        curobo_available=True,
+    )
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            cleanup_dir,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_cleanup_bridge_ready=True,
+        )
 
 
 def test_checker_accepts_blocked_cleanup_primitive_gate(tmp_path: Path) -> None:
@@ -453,11 +653,7 @@ def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None
     robot_views.mkdir()
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
@@ -489,11 +685,7 @@ def test_checker_openclaw_minimum_robot_views_allows_partial_visual_actions(
     robot_views.mkdir()
     for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
         (robot_views / name).write_bytes(b"placeholder")
-    report = tmp_path / "report.html"
-    report.write_text(
-        report.read_text(encoding="utf-8") + "\n<section><h2>Robot View Timeline</h2></section>",
-        encoding="utf-8",
-    )
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
     result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
     result["artifacts"]["robot_views"] = str(robot_views)
     result["robot_view_steps"] = [
@@ -549,7 +741,69 @@ def _robot_step(action: str) -> dict[str, object]:
     }
 
 
-def _write_strict_planner_proof(base: Path) -> Path:
+def _seed7_cleanup_bindings() -> list[dict[str, object]]:
+    return [
+        _cleanup_binding("observed_001", "coffee_table_01", "toy_bin_01", ["place"]),
+        _cleanup_binding("observed_002", "sofa_01", "sink_01", ["place"]),
+        _cleanup_binding(
+            "observed_003",
+            "armchair_01",
+            "laundry_hamper_01",
+            ["place"],
+        ),
+        _cleanup_binding("observed_005", "floor_01", "bookshelf_01", ["place"]),
+        _cleanup_binding(
+            "observed_006",
+            "desk_01",
+            "fridge_01",
+            ["open_receptacle", "place_inside"],
+        ),
+    ]
+
+
+def _cleanup_binding(
+    object_id: str,
+    source_receptacle_id: str,
+    target_receptacle_id: str,
+    target_tools: list[str],
+) -> dict[str, object]:
+    return {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "source_receptacle_id": source_receptacle_id,
+        "planner_object_id": f"{object_id}/body",
+        "planner_target_receptacle_id": f"{target_receptacle_id}/body",
+        "tools": [
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            *target_tools,
+        ],
+    }
+
+
+def _insert_robot_timeline_before_score(report: Path) -> None:
+    report_text = report.read_text(encoding="utf-8")
+    robot_timeline = (
+        '\n<section class="panel robot-timeline"><h2>Robot View Timeline</h2></section>'
+    )
+    score_marker = '<section class="panel">\n      <h2>Score</h2>'
+    if score_marker in report_text:
+        report_text = report_text.replace(score_marker, robot_timeline + "\n" + score_marker)
+    else:
+        report_text += robot_timeline
+    report.write_text(report_text, encoding="utf-8")
+
+
+def _write_strict_planner_proof(
+    base: Path,
+    *,
+    embodiment: str = "franka",
+    upstream_policy_class: str = "PickAndPlacePlannerPolicy",
+    curobo_available: bool = False,
+    cleanup_binding: dict[str, object] | None = None,
+) -> Path:
     base.mkdir(parents=True)
     views = base / "planner_views"
     views.mkdir()
@@ -557,10 +811,10 @@ def _write_strict_planner_proof(base: Path) -> Path:
     (views / "final_wrist_camera.png").write_bytes(b"final")
     evidence = planner_backed_probe_evidence(
         backend="molmospaces_subprocess",
-        embodiment="franka",
+        embodiment=embodiment,
         task="pick_and_place",
         probe_mode="execute",
-        upstream_policy_class="PickAndPlacePlannerPolicy",
+        upstream_policy_class=upstream_policy_class,
         steps_requested=2,
         steps_executed=2,
         max_abs_qpos_delta=0.01,
@@ -569,7 +823,12 @@ def _write_strict_planner_proof(base: Path) -> Path:
             "final": "planner_views/final_wrist_camera.png",
         },
     )
-    evidence["runtime_diagnostics"] = {"renderer_adapter_enabled": True}
+    evidence["runtime_diagnostics"] = {
+        "renderer_adapter_enabled": True,
+        "modules": {"curobo": {"available": curobo_available}},
+    }
+    if cleanup_binding is not None:
+        evidence["cleanup_primitive_binding"] = cleanup_binding
     path = base / "run_result.json"
     path.write_text(
         json.dumps(

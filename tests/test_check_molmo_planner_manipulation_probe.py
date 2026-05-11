@@ -46,6 +46,7 @@ def _write_report_files(
     *,
     blocked: bool = False,
     diagnostics: bool = False,
+    cleanup_binding: bool = False,
     rby1m_gate: bool = False,
     worker_stages: bool = False,
     curobo_cache: bool = False,
@@ -63,6 +64,8 @@ def _write_report_files(
         body += "Capability Blockers\n"
     if diagnostics:
         body += "Runtime Diagnostics\n"
+    if cleanup_binding:
+        body += "Planner Probe Cleanup Binding\n"
     if worker_stages:
         body += "Worker Stage Timeline\n"
     if curobo_cache:
@@ -177,6 +180,44 @@ def test_checker_accepts_strict_planner_backed_evidence(tmp_path: Path) -> None:
         "artifacts": _write_report_files(tmp_path),
     }
 
+    checker._assert_probe_result(data, tmp_path, require_planner_backed=True)
+
+
+def test_checker_requires_cleanup_binding_report_when_evidence_exists(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    evidence = planner_backed_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        upstream_policy_class="CuroboPickAndPlacePlannerPolicy",
+        steps_requested=2,
+        steps_executed=2,
+        max_abs_qpos_delta=0.01,
+    )
+    evidence["sampled_task_binding"] = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "pickup/body",
+        "place_receptacle_name": "sink/body",
+    }
+    evidence["cleanup_primitive_binding"] = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "pickup/body",
+        "target_receptacle_id": "sink/body",
+        "tools": ["pick", "place"],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(tmp_path),
+    }
+
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(data, tmp_path, require_planner_backed=True)
+
+    data["artifacts"] = _write_report_files(tmp_path, cleanup_binding=True)
     checker._assert_probe_result(data, tmp_path, require_planner_backed=True)
 
 

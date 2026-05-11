@@ -7,6 +7,8 @@ import math
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate a Molmo agent-bridge run_result.")
@@ -69,6 +71,12 @@ def _assert_common(data: dict[str, Any], base: Path) -> None:
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     assert "current_contract" in report_text, report_text[:500]
     assert "ADR-0003" in report_text, report_text[:500]
+    assert_cleanup_report_visual_core(
+        report_text,
+        require_semantic_subphases=bool(data.get("semantic_substeps"))
+        and data.get("cleanup_status") == "success",
+        require_robot_timeline=bool(data.get("robot_view_steps")),
+    )
 
 
 def _assert_clean_agent_run(data: dict[str, Any], base: Path) -> None:

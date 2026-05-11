@@ -30,6 +30,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     blocked_planner_probe_evidence,
     planner_backed_probe_evidence,
 )
+from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (  # noqa: E402
+    PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
+)
 from roboclaws.molmo_cleanup.rby1m_curobo_gate import (  # noqa: E402
     rby1m_curobo_gate_from_planner_probe,
 )
@@ -119,6 +122,48 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--curobo-max-attempts", type=int, default=None)
     parser.add_argument("--curobo-trajopt-tsteps", type=int, default=None)
     parser.add_argument("--curobo-disable-finetune-trajopt", action="store_true")
+    parser.add_argument(
+        "--cleanup-object-id",
+        default="",
+        help=(
+            "Optional cleanup object id that the sampled planner task must match before "
+            "emitting cleanup primitive binding."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup-target-receptacle-id",
+        default="",
+        help=(
+            "Optional cleanup target receptacle id that the sampled planner task must match "
+            "before emitting target-side cleanup primitive binding."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup-source-receptacle-id",
+        default="",
+        help="Optional source receptacle id to record in promoted cleanup primitive binding.",
+    )
+    parser.add_argument(
+        "--cleanup-planner-object-id",
+        default="",
+        help=(
+            "Optional planner-facing pickup object name used for sampled-task matching while "
+            "cleanup-object-id remains the cleanup-facing id."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup-planner-target-receptacle-id",
+        default="",
+        help=(
+            "Optional planner-facing place receptacle name used for sampled-task matching "
+            "while cleanup-target-receptacle-id remains the cleanup-facing id."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup-tools",
+        default="",
+        help="Comma-separated cleanup tools covered by the requested binding.",
+    )
     parser.add_argument("--steps", type=int, default=2)
     parser.add_argument("--timeout-s", type=float, default=180.0)
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)
@@ -151,6 +196,12 @@ def main() -> None:
         curobo_max_attempts=args.curobo_max_attempts,
         curobo_trajopt_tsteps=args.curobo_trajopt_tsteps,
         curobo_disable_finetune_trajopt=args.curobo_disable_finetune_trajopt,
+        cleanup_object_id=args.cleanup_object_id,
+        cleanup_target_receptacle_id=args.cleanup_target_receptacle_id,
+        cleanup_source_receptacle_id=args.cleanup_source_receptacle_id,
+        cleanup_planner_object_id=args.cleanup_planner_object_id,
+        cleanup_planner_target_receptacle_id=args.cleanup_planner_target_receptacle_id,
+        cleanup_tools=args.cleanup_tools,
         steps=args.steps,
         timeout_s=args.timeout_s,
     )
@@ -181,6 +232,12 @@ def run_probe(
     curobo_max_attempts: int | None,
     curobo_trajopt_tsteps: int | None,
     curobo_disable_finetune_trajopt: bool,
+    cleanup_object_id: str,
+    cleanup_target_receptacle_id: str,
+    cleanup_source_receptacle_id: str,
+    cleanup_planner_object_id: str,
+    cleanup_planner_target_receptacle_id: str,
+    cleanup_tools: str,
     steps: int,
     timeout_s: float,
 ) -> dict[str, Any]:
@@ -254,6 +311,24 @@ def run_probe(
     _append_optional_int_arg(command, "--curobo-trajopt-tsteps", curobo_trajopt_tsteps)
     if curobo_disable_finetune_trajopt:
         command.append("--curobo-disable-finetune-trajopt")
+    _append_optional_str_arg(command, "--cleanup-object-id", cleanup_object_id)
+    _append_optional_str_arg(
+        command,
+        "--cleanup-target-receptacle-id",
+        cleanup_target_receptacle_id,
+    )
+    _append_optional_str_arg(
+        command,
+        "--cleanup-source-receptacle-id",
+        cleanup_source_receptacle_id,
+    )
+    _append_optional_str_arg(command, "--cleanup-planner-object-id", cleanup_planner_object_id)
+    _append_optional_str_arg(
+        command,
+        "--cleanup-planner-target-receptacle-id",
+        cleanup_planner_target_receptacle_id,
+    )
+    _append_optional_str_arg(command, "--cleanup-tools", cleanup_tools)
     try:
         completed = subprocess.run(
             command,
@@ -882,6 +957,7 @@ def _probe_franka(args: argparse.Namespace) -> dict[str, Any]:
                     probe_mode=args.probe_mode,
                     renderer_device_id=args.renderer_device_id,
                 ),
+                requested_cleanup_binding=_requested_cleanup_primitive_binding(args),
             )
         )
     return payload
@@ -935,6 +1011,7 @@ def _probe_rby1m(args: argparse.Namespace) -> dict[str, Any]:
                     probe_mode=args.probe_mode,
                     renderer_device_id=args.renderer_device_id,
                 ),
+                requested_cleanup_binding=_requested_cleanup_primitive_binding(args),
             )
         )
         _emit_worker_event(
@@ -953,6 +1030,7 @@ def _execute_policy_probe(
     steps: int,
     *,
     renderer_device_id: int | None,
+    requested_cleanup_binding: dict[str, Any],
 ) -> dict[str, Any]:
     import numpy as np
     from molmo_spaces.utils.test_utils import run_task_for_steps_with_observations
@@ -972,7 +1050,19 @@ def _execute_policy_probe(
     _emit_worker_event("execute_task_sampler_reset_done", stage="execute_task_sampler_reset")
     _emit_worker_event("execute_task_sample_start", stage="execute_task_sample")
     task = task_sampler.sample_task()
-    _emit_worker_event("execute_task_sample_done", stage="execute_task_sample")
+    sampled_task_binding = _sampled_task_binding(task)
+    cleanup_binding_result = _cleanup_primitive_binding_from_sampled_task(
+        requested_cleanup_binding,
+        sampled_task_binding,
+    )
+    _emit_worker_event(
+        "execute_task_sample_done",
+        stage="execute_task_sample",
+        sampled_task_binding=sampled_task_binding,
+        requested_cleanup_primitive_binding=requested_cleanup_binding,
+        cleanup_primitive_binding=cleanup_binding_result.get("cleanup_primitive_binding"),
+        cleanup_primitive_binding_blockers=cleanup_binding_result.get("blockers", []),
+    )
     _emit_worker_event("execute_task_reset_start", stage="execute_task_reset")
     task.reset()
     _emit_worker_event("execute_task_reset_done", stage="execute_task_reset")
@@ -1027,7 +1117,142 @@ def _execute_policy_probe(
         "image_artifacts": image_artifacts,
         "policy_phases": [item.get_current_phase() for item in policy.action_primitives],
         "renderer_adapter": renderer_adapter,
+        "sampled_task_binding": sampled_task_binding,
+        "requested_cleanup_primitive_binding": requested_cleanup_binding,
+        "cleanup_primitive_binding": cleanup_binding_result.get("cleanup_primitive_binding"),
+        "cleanup_primitive_binding_blockers": cleanup_binding_result.get("blockers", []),
     }
+
+
+def _sampled_task_binding(task: Any) -> dict[str, Any]:
+    task_config = getattr(getattr(task, "config", None), "task_config", None)
+    pickup_obj_name = str(getattr(task_config, "pickup_obj_name", "") or "")
+    place_receptacle_name = str(getattr(task_config, "place_receptacle_name", "") or "")
+    place_target_name = str(getattr(task_config, "place_target_name", "") or "")
+    binding = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": pickup_obj_name,
+        "place_receptacle_name": place_receptacle_name,
+        "place_target_name": place_target_name,
+    }
+    description = getattr(task, "get_task_description", None)
+    if callable(description):
+        try:
+            binding["task_description"] = str(description())
+        except Exception as exc:  # pragma: no cover - diagnostic only
+            binding["task_description_error"] = f"{type(exc).__name__}: {exc}"
+    return binding
+
+
+def _requested_cleanup_primitive_binding(args: argparse.Namespace) -> dict[str, Any]:
+    object_id = str(getattr(args, "cleanup_object_id", "") or "")
+    target_receptacle_id = str(getattr(args, "cleanup_target_receptacle_id", "") or "")
+    source_receptacle_id = str(getattr(args, "cleanup_source_receptacle_id", "") or "")
+    planner_object_id = str(getattr(args, "cleanup_planner_object_id", "") or "")
+    planner_target_receptacle_id = str(
+        getattr(args, "cleanup_planner_target_receptacle_id", "") or ""
+    )
+    tools = _cleanup_tools_from_arg(str(getattr(args, "cleanup_tools", "") or ""))
+    requested = bool(
+        object_id
+        or target_receptacle_id
+        or source_receptacle_id
+        or planner_object_id
+        or planner_target_receptacle_id
+        or tools
+    )
+    return {
+        "schema": PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
+        "requested": requested,
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "source_receptacle_id": source_receptacle_id,
+        "planner_object_id": planner_object_id,
+        "planner_target_receptacle_id": planner_target_receptacle_id,
+        "tools": tools,
+    }
+
+
+def _cleanup_primitive_binding_from_sampled_task(
+    requested: dict[str, Any],
+    sampled: dict[str, Any],
+) -> dict[str, Any]:
+    if not requested.get("requested"):
+        return {
+            "requested": False,
+            "promoted": False,
+            "cleanup_primitive_binding": None,
+            "blockers": [],
+        }
+    blockers = []
+    requested_object = str(requested.get("object_id") or "")
+    requested_planner_object = str(requested.get("planner_object_id") or requested_object)
+    sampled_object = str(sampled.get("pickup_obj_name") or "")
+    if requested_planner_object != sampled_object:
+        blockers.append(
+            {
+                "code": "cleanup_binding_object_mismatch",
+                "message": (
+                    f"Requested planner object_id={requested_planner_object} does not match "
+                    f"sampled pickup_obj_name={sampled_object}."
+                ),
+            }
+        )
+    requested_target = str(requested.get("target_receptacle_id") or "")
+    requested_planner_target = str(
+        requested.get("planner_target_receptacle_id") or requested_target
+    )
+    sampled_target = str(
+        sampled.get("place_receptacle_name") or sampled.get("place_target_name") or ""
+    )
+    if requested_planner_target and requested_planner_target != sampled_target:
+        blockers.append(
+            {
+                "code": "cleanup_binding_target_mismatch",
+                "message": (
+                    f"Requested planner target_receptacle_id={requested_planner_target} "
+                    "does not match "
+                    f"sampled place_receptacle_name={sampled_target}."
+                ),
+            }
+        )
+    tools = list(requested.get("tools") or [])
+    if not tools:
+        blockers.append(
+            {
+                "code": "cleanup_binding_missing_tools",
+                "message": "Requested cleanup binding must include at least one tool.",
+            }
+        )
+    if blockers:
+        return {
+            "requested": True,
+            "promoted": False,
+            "cleanup_primitive_binding": None,
+            "blockers": blockers,
+            "sampled_task_binding": sampled,
+            "requested_cleanup_primitive_binding": requested,
+        }
+    return {
+        "requested": True,
+        "promoted": True,
+        "cleanup_primitive_binding": {
+            "schema": PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
+            "object_id": requested_object,
+            "target_receptacle_id": requested_target,
+            "source_receptacle_id": str(requested.get("source_receptacle_id") or ""),
+            "tools": sorted(set(str(tool) for tool in tools)),
+            "planner_object_id": requested_planner_object,
+            "planner_target_receptacle_id": requested_planner_target,
+            "sampled_task_binding": sampled,
+            "evidence_note": "Requested cleanup primitive binding matched sampled planner task.",
+        },
+        "blockers": [],
+    }
+
+
+def _cleanup_tools_from_arg(value: str) -> list[str]:
+    return sorted({item.strip() for item in value.split(",") if item.strip()})
 
 
 def _renderer_device_id_for_probe(
@@ -1162,6 +1387,18 @@ def _write_probe_result(
         evidence["cuda_memory_snapshots"] = worker_payload["cuda_memory_snapshots"]
     if worker_payload.get("curobo_memory_profile"):
         evidence["curobo_memory_profile"] = worker_payload["curobo_memory_profile"]
+    if worker_payload.get("sampled_task_binding"):
+        evidence["sampled_task_binding"] = worker_payload["sampled_task_binding"]
+    if worker_payload.get("requested_cleanup_primitive_binding"):
+        evidence["requested_cleanup_primitive_binding"] = worker_payload[
+            "requested_cleanup_primitive_binding"
+        ]
+    if worker_payload.get("cleanup_primitive_binding"):
+        evidence["cleanup_primitive_binding"] = worker_payload["cleanup_primitive_binding"]
+    if worker_payload.get("cleanup_primitive_binding_blockers"):
+        evidence["cleanup_primitive_binding_blockers"] = worker_payload[
+            "cleanup_primitive_binding_blockers"
+        ]
     worker_stage_events = list(worker_payload.get("worker_stage_events") or [])
     if worker_stage_events:
         evidence["worker_stage_events"] = worker_stage_events
@@ -1296,6 +1533,11 @@ def _process_output_text(value: str | bytes | None) -> str:
 
 def _append_optional_int_arg(command: list[str], name: str, value: int | None) -> None:
     if value is not None:
+        command.extend([name, str(value)])
+
+
+def _append_optional_str_arg(command: list[str], name: str, value: str | None) -> None:
+    if value:
         command.extend([name, str(value)])
 
 

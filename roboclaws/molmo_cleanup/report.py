@@ -117,6 +117,7 @@ def _cleanup_report_sections(
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
             _cleanup_primitive_gate_section(run_result),
+            _planner_cleanup_bridge_section(run_result),
             _agent_view_section(run_result),
             _raw_fpv_observations_section(run_result),
             _camera_model_policy_section(run_result),
@@ -157,6 +158,7 @@ def render_planner_manipulation_report(
     </section>
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
+    {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
@@ -363,6 +365,8 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
     proof = run_result.get("planner_backed_manipulation_proof") or {}
     if not proof:
         return ""
+    if proof.get("schema") == "planner_backed_cleanup_proof_bundle_v1":
+        return _attached_planner_proof_bundle_section(run_result, proof)
     diagnostics = proof.get("runtime_diagnostics") or {}
     images = proof.get("image_artifacts") or {}
     note = (
@@ -401,6 +405,65 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def _attached_planner_proof_bundle_section(
+    run_result: dict[str, Any],
+    bundle: dict[str, Any],
+) -> str:
+    attachments = [item for item in bundle.get("attachments") or [] if isinstance(item, dict)]
+    if not attachments:
+        return ""
+    note = (
+        bundle.get("evidence_note")
+        or "Multiple strict standalone planner-backed manipulation proofs attached."
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', bundle.get('status', 'unknown'))}"
+        f"{_metric('Proofs', bundle.get('proof_count', len(attachments)))}"
+        f"{_metric('Cleanup primitive', run_result.get('primitive_provenance', 'unknown'))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Strict proof bundle", bundle.get("strict_proof_eligible", False)),
+            _badge("Planner backed", bundle.get("planner_backed", False)),
+        )
+    )
+    rows = []
+    views = []
+    for attachment in attachments:
+        proof_id = str(attachment.get("proof_id") or "proof")
+        binding = attachment.get("cleanup_primitive_binding") or {}
+        images = attachment.get("image_artifacts") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(proof_id)}</td>"
+            f"<td>{html.escape(str(binding.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(binding.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(attachment.get('embodiment', 'unknown')))}</td>"
+            f"<td>{html.escape(str(attachment.get('steps_executed', 'n/a')))}</td>"
+            "</tr>"
+        )
+        views.append(
+            '<div class="proof-view-pair">'
+            f"{_view_figure(images.get('initial'), f'{proof_id} Planner Initial')}"
+            f"{_view_figure(images.get('final'), f'{proof_id} Planner Final')}"
+            "</div>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Proof</th><th>Object</th>'
+        "<th>Target</th><th>Embodiment</th><th>Steps</th></tr></thead><tbody>"
+        f"{''.join(rows)}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel attached-planner-proof">'
+        "<h2>Attached Planner-Backed Proofs</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{table}'
+        f'<div class="views">{"".join(views)}</div></section>'
+    )
+
+
 def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
     evidence = run_result.get("cleanup_primitive_evidence") or {}
     if not evidence:
@@ -411,18 +474,25 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
         object_id = html.escape(str(item.get("object_id", "")))
         for step in item.get("subphases") or []:
             label = _display_subphase_from_evidence(step)
+            planner_evidence = step.get("planner_primitive_evidence") or {}
+            planner_evidence_summary = _planner_primitive_evidence_summary(planner_evidence)
+            binding_summary = _planner_primitive_binding_summary(step)
             rows.append(
                 "<tr>"
                 f"<td>{object_id}</td>"
                 f"<td>{html.escape(str(label))}</td>"
                 f"<td>{html.escape(str(step.get('phase', '')))}</td>"
                 f"<td>{html.escape(str(step.get('primitive_provenance', '')))}</td>"
+                f"<td>{html.escape(planner_evidence_summary)}</td>"
+                f"<td>{html.escape(binding_summary)}</td>"
+                f"<td>{html.escape(str(step.get('state_sync_provenance') or ''))}</td>"
                 f"<td>{html.escape(str(step.get('state_mutation') or ''))}</td>"
                 "</tr>"
             )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Object</th>'
         "<th>Display subphase</th><th>Raw phase</th><th>Primitive provenance</th>"
+        "<th>Planner evidence</th><th>Binding</th><th>State sync</th>"
         "<th>State mutation</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     metrics = (
@@ -451,6 +521,86 @@ def _cleanup_primitive_gate_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def _planner_primitive_evidence_summary(evidence: Any) -> str:
+    if not isinstance(evidence, dict) or not evidence:
+        return ""
+    executor = str(evidence.get("executor") or "unknown")
+    status = str(evidence.get("status") or "unknown")
+    payload = evidence.get("evidence") if isinstance(evidence.get("evidence"), dict) else {}
+    run_id = str(payload.get("planner_run_id") or payload.get("run_id") or "")
+    if run_id:
+        return f"{executor} {status} {run_id}"
+    return f"{executor} {status}"
+
+
+def _planner_primitive_binding_summary(step: dict[str, Any]) -> str:
+    if not step.get("planner_primitive_evidence"):
+        return ""
+    object_match = step.get("object_id_matches")
+    target_match = step.get("target_receptacle_id_matches")
+    if object_match is True and target_match is True:
+        return "object+target"
+    if object_match is True:
+        return "object"
+    failures = []
+    if object_match is False:
+        failures.append("object mismatch")
+    if target_match is False:
+        failures.append("target mismatch")
+    return ", ".join(failures)
+
+
+def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("planner_cleanup_bridge_evidence") or {}
+    if not evidence:
+        return ""
+    target = evidence.get("target_runtime") or {}
+    cleanup = evidence.get("cleanup_primitives") or {}
+    blockers = evidence.get("blockers") or []
+    blocker_rows = "".join(
+        (
+            "<tr>"
+            f"<td>{html.escape(str(item.get('code', '')))}</td>"
+            f"<td>{html.escape(str(item.get('message', '')))}</td>"
+            "</tr>"
+        )
+        for item in blockers
+    )
+    if blocker_rows:
+        blockers_table = (
+            '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+            "<th>Message</th></tr></thead><tbody>"
+            f"{blocker_rows}</tbody></table></div>"
+        )
+    else:
+        blockers_table = '<p class="note">No bridge blockers recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', evidence.get('status', 'unknown'))}"
+        f"{_metric('Target proof', target.get('embodiment', 'missing'))}"
+        f"{_metric('Cleanup gate', cleanup.get('status', 'missing'))}"
+        f"{_metric('Subphases', cleanup.get('subphase_count', 0))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Target RBY1M/CuRobo ready", evidence.get("target_runtime_ready", False)),
+            _badge("Cleanup primitives ready", evidence.get("cleanup_primitives_ready", False)),
+            _badge("Bridge ready", evidence.get("planner_backed", False)),
+        )
+    )
+    note = evidence.get("evidence_note") or (
+        "Planner cleanup bridge readiness joins target runtime proof with cleanup subphase "
+        "primitive provenance."
+    )
+    return (
+        '<section class="panel planner-cleanup-bridge">'
+        "<h2>Planner Cleanup Bridge</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div>{blockers_table}</section>'
+    )
+
+
 def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
     artifacts = evidence.get("image_artifacts") or {}
     if not artifacts:
@@ -461,6 +611,75 @@ def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
         f"{_view_figure(artifacts.get('initial'), 'Initial')}"
         f"{_view_figure(artifacts.get('final'), 'Final')}"
         "</div></section>"
+    )
+
+
+def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
+    sampled = evidence.get("sampled_task_binding") or {}
+    requested = evidence.get("requested_cleanup_primitive_binding") or {}
+    promoted = evidence.get("cleanup_primitive_binding") or {}
+    blockers = evidence.get("cleanup_primitive_binding_blockers") or []
+    if not (sampled or requested or promoted or blockers):
+        return ""
+    rows = [
+        ("Sampled pickup", sampled.get("pickup_obj_name", "")),
+        (
+            "Sampled target",
+            sampled.get("place_receptacle_name") or sampled.get("place_target_name") or "",
+        ),
+        ("Requested object", requested.get("object_id", "")),
+        ("Requested target", requested.get("target_receptacle_id", "")),
+        ("Requested source", requested.get("source_receptacle_id", "")),
+        ("Planner object alias", requested.get("planner_object_id", "")),
+        ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
+        ("Requested tools", ", ".join(str(item) for item in requested.get("tools") or [])),
+        ("Promoted object", promoted.get("object_id", "")),
+        ("Promoted target", promoted.get("target_receptacle_id", "")),
+        ("Promoted planner object", promoted.get("planner_object_id", "")),
+        ("Promoted planner target", promoted.get("planner_target_receptacle_id", "")),
+        ("Promoted tools", ", ".join(str(item) for item in promoted.get("tools") or [])),
+    ]
+    binding_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value
+    )
+    if not binding_rows:
+        binding_rows = '<tr><td colspan="2">No cleanup binding values recorded.</td></tr>'
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+    )
+    if blocker_rows:
+        blocker_table = (
+            '<div class="table-wrap"><table><thead><tr><th>Blocker</th>'
+            f"<th>Message</th></tr></thead><tbody>{blocker_rows}</tbody></table></div>"
+        )
+    else:
+        blocker_table = '<p class="note">No cleanup binding blockers recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requested', _yes_no(requested.get('requested')))}"
+        f"{_metric('Promoted', _yes_no(bool(promoted)))}"
+        f"{_metric('Blockers', len(blockers))}"
+        "</div>"
+    )
+    note = (
+        "Planner probe cleanup binding joins a requested cleanup primitive to the "
+        "sampled upstream pickup/place task. Exact match is required before this "
+        "can feed cleanup primitive executor evidence."
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{binding_rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel planner-probe-cleanup-binding">'
+        "<h2>Planner Probe Cleanup Binding</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{table}{blocker_table}</section>'
     )
 
 
