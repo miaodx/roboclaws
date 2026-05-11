@@ -650,6 +650,96 @@ def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
     assert "planner_proof/final.png" in html
 
 
+def test_cleanup_report_renders_attached_planner_proof_bundle(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    for proof_id in ("proof_001", "proof_002"):
+        proof_dir = tmp_path / "planner_proof" / proof_id
+        proof_dir.mkdir(parents=True)
+        (proof_dir / "initial.png").write_bytes(b"initial")
+        (proof_dir / "final.png").write_bytes(b"final")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": score.status,
+        "primitive_provenance": "planner_backed",
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend="api_semantic_synthetic",
+            primitive_summary={"planner_backed": 8},
+        ),
+        "score": score.to_dict(),
+        "planner_backed_manipulation_proof": {
+            "schema": "planner_backed_cleanup_proof_bundle_v1",
+            "status": "planner_backed",
+            "primitive_provenance": "planner_backed",
+            "planner_backed": True,
+            "strict_proof_eligible": True,
+            "proof_count": 2,
+            "attachments": [
+                _proof_attachment("proof_001", "observed_001", "sink_01"),
+                _proof_attachment("proof_002", "observed_002", "toy_bin_01"),
+            ],
+        },
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Attached Planner-Backed Proofs" in html
+    assert "proof_001 Planner Initial" in html
+    assert "proof_002 Planner Final" in html
+    assert "observed_001" in html
+    assert "toy_bin_01" in html
+    assert "planner_proof/proof_001/initial.png" in html
+    assert "planner_proof/proof_002/final.png" in html
+
+
+def _proof_attachment(proof_id: str, object_id: str, target_id: str) -> dict[str, object]:
+    return {
+        "schema": "planner_backed_cleanup_attachment_v1",
+        "proof_id": proof_id,
+        "status": "planner_backed",
+        "primitive_provenance": "planner_backed",
+        "planner_backed": True,
+        "strict_proof_eligible": True,
+        "embodiment": "rby1m",
+        "task": "pick_and_place",
+        "probe_mode": "execute",
+        "upstream_policy_class": "CuroboPickAndPlacePlannerPolicy",
+        "steps_executed": 2,
+        "max_abs_qpos_delta": 0.01,
+        "runtime_diagnostics": {"modules": {"curobo": {"available": True}}},
+        "image_artifacts": {
+            "initial": f"planner_proof/{proof_id}/initial.png",
+            "final": f"planner_proof/{proof_id}/final.png",
+        },
+        "cleanup_primitive_binding": {
+            "schema": "planner_probe_cleanup_primitive_binding_v1",
+            "object_id": object_id,
+            "target_receptacle_id": target_id,
+            "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+        },
+    }
+
+
 def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) -> None:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -826,6 +916,31 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             },
         },
     }
+    run_result["manipulation_evidence"]["sampled_task_binding"] = {
+        "schema": "planner_probe_sampled_task_binding_v1",
+        "pickup_obj_name": "pickup/body",
+        "place_receptacle_name": "sink/body",
+        "place_target_name": "sink/body",
+    }
+    run_result["manipulation_evidence"]["requested_cleanup_primitive_binding"] = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "requested": True,
+        "object_id": "pickup/body",
+        "target_receptacle_id": "sink/body",
+        "source_receptacle_id": "counter/body",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
+    run_result["manipulation_evidence"]["cleanup_primitive_binding"] = {
+        "schema": "planner_probe_cleanup_primitive_binding_v1",
+        "object_id": "pickup/body",
+        "target_receptacle_id": "sink/body",
+        "source_receptacle_id": "counter/body",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+        "tools": ["navigate_to_object", "pick", "navigate_to_receptacle", "place"],
+    }
     run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
@@ -835,6 +950,11 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "Planner Probe Cleanup Binding" in html
+    assert "pickup/body" in html
+    assert "sink/body" in html
+    assert "Planner object alias" in html
+    assert "navigate_to_receptacle" in html
     assert "CUDA Memory Headroom" in html
     assert "CuRobo Memory Profile" in html
     assert "CuRobo Extension Cache" in html

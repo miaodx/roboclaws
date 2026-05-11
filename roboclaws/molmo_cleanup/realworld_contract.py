@@ -6,6 +6,9 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.planner_observed_binding import (
+    observed_handle_planner_binding,
+)
 from roboclaws.molmo_cleanup.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
@@ -332,6 +335,22 @@ class RealWorldCleanupContract:
             contract=REALWORLD_CONTRACT,
             detection=dict(detection),
             private_target_truth_included=False,
+        )
+
+    def planner_observed_handle_binding(
+        self,
+        object_id: str,
+        target_receptacle_id: str,
+        *,
+        source_receptacle_id: str = "",
+        tools: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[str, Any]:
+        return observed_handle_planner_binding(
+            self,
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            source_receptacle_id=source_receptacle_id,
+            tools=tools,
         )
 
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:

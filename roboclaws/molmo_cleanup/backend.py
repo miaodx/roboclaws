@@ -65,6 +65,45 @@ class ApiSemanticCleanupBackend:
             receptacles=[item.to_public_dict() for item in self.scenario.receptacles],
         )
 
+    def planner_task_binding(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
+        from roboclaws.molmo_cleanup.planner_observed_binding import (
+            backend_planner_task_binding,
+        )
+
+        obj = self._known_objects.get(object_id)
+        receptacle = self._known_receptacles.get(receptacle_id)
+        if obj is None or receptacle is None:
+            blockers = []
+            if obj is None:
+                blockers.append(
+                    {
+                        "code": "planner_binding_object_missing",
+                        "message": f"Object {object_id} is not present in backend state.",
+                    }
+                )
+            if receptacle is None:
+                blockers.append(
+                    {
+                        "code": "planner_binding_receptacle_missing",
+                        "message": (f"Receptacle {receptacle_id} is not present in backend state."),
+                    }
+                )
+            return {
+                "schema": "backend_planner_task_binding_v1",
+                "ok": False,
+                "status": "blocked_capability",
+                "object_id": object_id,
+                "target_receptacle_id": receptacle_id,
+                "blockers": blockers,
+            }
+        return backend_planner_task_binding(
+            object_id=object_id,
+            target_receptacle_id=receptacle_id,
+            source_receptacle_id=str(self._locations.get(object_id) or ""),
+            pickup_obj_name=obj.object_id,
+            place_receptacle_name=receptacle.receptacle_id,
+        )
+
     def goto(self, receptacle_id: str) -> dict[str, Any]:
         self._count("goto")
         return self._navigate_to_receptacle("goto", receptacle_id)

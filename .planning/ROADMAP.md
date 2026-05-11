@@ -62,7 +62,27 @@ primitive replacement; the latest target retry shows the OOM occurs during
 CuRobo trajectory planning after PyTorch reservation grows to about 9.9 GiB.
 Phase 35 adds a visible probe-local low-memory CuRobo profile for the next
 target execute retry; that retry now passes strict standalone RBY1M/CuRobo
-planner-backed proof with nonzero robot-state movement.
+planner-backed proof with nonzero robot-state movement. Phase 36 consolidated
+the duplicated current-contract and ADR-0003 object cleanup loops behind one
+shared semantic driver before planner-backed primitive replacement begins.
+Phase 37 added explicit planner cleanup bridge-readiness evidence so reports
+distinguish target RBY1M/CuRobo runtime readiness from cleanup subphases that
+still remain `api_semantic`. Phase 38 added the strict planner-backed cleanup
+primitive executor seam behind that shared driver. Phase 39 tightens that seam
+so planner primitive evidence must bind to the exact cleanup object and target.
+Phase 40 adds the probe-backed executor adapter that accepts only bound
+RBY1M/CuRobo proof, keeping generic standalone target proof blocked as cleanup
+primitive evidence. Phase 41 makes the actual planner probe emit sampled-task
+binding and promote cleanup binding only on exact request/sample match. The
+Phase 42 splits ADR-0003 observed-handle cleanup IDs from planner sampled-task
+aliases so matching proof can later flow through the real cleanup primitive
+executor. Phase 43 wires that executor into the shared semantic cleanup loop
+for a bounded object/subphase attempt before any full multi-object replacement
+claim. Phase 44 broadens that path to proof bundles so a full cleanup artifact
+can select one bound proof per cleaned object before claiming bridge readiness.
+Phase 45 tightens the shared report architecture by making current-contract and
+ADR-0003 checkers enforce one visual-core contract and by removing the remaining
+duplicated ADR-0003 MCP robot-view semantic mapping.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -123,6 +143,16 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.34 MolmoSpaces RBY1M Warp compatibility** - Phase 33 (completed 2026-05-09; probe-local Warp API adapter before target execute-mode retry)
 - ✅ **v1.35 MolmoSpaces RBY1M CUDA memory headroom** - Phase 34 (completed 2026-05-09; stage-local CUDA memory evidence for target execute-mode OOM)
 - ✅ **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (completed 2026-05-09; visible low-memory CuRobo retry profile and strict target proof)
+- ✅ **v1.37 MolmoSpaces shared semantic cleanup loop** - Phase 36 (completed 2026-05-09; one reusable `nav -> pick -> nav -> open? -> place` driver across cleanup demos)
+- ✅ **v1.38 MolmoSpaces planner cleanup bridge readiness** - Phase 37 (completed 2026-05-09; explicit bridge evidence joining target proof and cleanup subphase provenance)
+- ✅ **v1.39 MolmoSpaces planner-backed cleanup primitive executor** - Phase 38 (completed 2026-05-09; strict executor seam before object-specific cleanup primitive replacement)
+- ✅ **v1.40 MolmoSpaces planner primitive target binding** - Phase 39 (completed 2026-05-09; object/target-bound primitive evidence before real executor wiring)
+- ✅ **v1.41 MolmoSpaces probe-backed cleanup primitive executor** - Phase 40 (completed 2026-05-09; adapter from bound RBY1M/CuRobo proof to primitive executor evidence)
+- ✅ **v1.42 MolmoSpaces planner probe cleanup binding** - Phase 41 (completed 2026-05-09; sampled-task binding diagnostics and exact-match cleanup binding promotion)
+- ✅ **v1.43 MolmoSpaces observed handle planner binding** - Phase 42 (completed 2026-05-09; private observed-handle to planner sampled-task alias binding)
+- ✅ **v1.44 MolmoSpaces bounded planner cleanup executor** - Phase 43 (completed 2026-05-09; opt-in probe-backed executor wiring for bounded cleanup subphases)
+- ✅ **v1.45 MolmoSpaces planner proof bundle cleanup** - Phase 44 (completed 2026-05-10; one bound proof per cleaned object for bridge-ready full cleanup artifacts)
+- ✅ **v1.46 MolmoSpaces report visual core contract** - Phase 45 (completed 2026-05-10; shared visual-core checks and MCP robot-view semantic reuse)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -174,6 +204,16 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 33: MolmoSpaces RBY1M Warp compatibility** - ADR-0024 probe-local Warp API adapter and visible compatibility evidence before target execute-mode retry. Completed 2026-05-09; execute mode reaches `execute_policy_run` and blocks on CUDA OOM.
 - [x] **Phase 34: MolmoSpaces RBY1M CUDA memory headroom** - ADR-0025 stage-local CUDA/PyTorch memory evidence for target execute-mode OOM before planner memory tuning or cleanup primitive replacement. Completed 2026-05-09; execute mode still blocks inside CuRobo trajectory planning before robot-state movement.
 - [x] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM. Completed 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof passes under the visible low-memory profile.
+- [x] **Phase 36: MolmoSpaces shared semantic cleanup loop** - ADR-0027 shared object-level cleanup loop driver for current-contract and ADR-0003 demos before planner-backed primitive replacement. Completed 2026-05-09.
+- [x] **Phase 37: MolmoSpaces planner cleanup bridge readiness** - ADR-0028 bridge evidence for target RBY1M/CuRobo proof plus cleanup primitive subphase provenance before actual primitive replacement. Completed 2026-05-09.
+- [x] **Phase 38: MolmoSpaces planner-backed cleanup primitive executor** - ADR-0029 strict per-call executor seam for planner-backed cleanup subphases behind the shared semantic cleanup loop. Completed 2026-05-09.
+- [x] **Phase 39: MolmoSpaces planner primitive target binding** - ADR-0030 object/target binding for planner primitive evidence before real object-specific executor wiring. Completed 2026-05-09.
+- [x] **Phase 40: MolmoSpaces probe-backed cleanup primitive executor** - ADR-0031 adapter that converts only bound target RBY1M/CuRobo proof into cleanup primitive executor evidence. Completed 2026-05-09.
+- [x] **Phase 41: MolmoSpaces planner probe cleanup binding** - ADR-0032 sampled-task binding diagnostics and exact-match cleanup primitive binding promotion in planner probe artifacts. Completed 2026-05-09.
+- [x] **Phase 42: MolmoSpaces observed handle planner binding** - ADR-0033 private mapping from ADR-0003 observed handles to planner sampled-task aliases while preserving cleanup-facing IDs for executor matching. Completed 2026-05-09.
+- [x] **Phase 43: MolmoSpaces bounded planner cleanup executor** - ADR-0034 opt-in wiring that lets a matching probe-backed proof drive bounded shared-loop cleanup subphases. Completed 2026-05-09; default and mismatched-proof runs remain `api_semantic`, and full multi-object planner-backed cleanup remains a follow-up.
+- [x] **Phase 44: MolmoSpaces planner proof bundle cleanup** - ADR-0035 multiple bound proof attachments selected per observed handle/target so a full cleanup artifact can pass the existing planner primitive and bridge gates. Completed 2026-05-10; this proves artifact proof coverage, not live generation of every proof.
+- [x] **Phase 45: MolmoSpaces report visual core contract** - ADR-0036 shared report visual-core checker plus ADR-0003 MCP robot-view semantic mapping reuse. Completed 2026-05-10; stale ignored reports now fail until regenerated with the shared visual core.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

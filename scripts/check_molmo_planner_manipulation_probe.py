@@ -92,6 +92,13 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    if (
+        evidence.get("sampled_task_binding")
+        or evidence.get("requested_cleanup_primitive_binding")
+        or evidence.get("cleanup_primitive_binding")
+        or evidence.get("cleanup_primitive_binding_blockers")
+    ):
+        assert "Planner Probe Cleanup Binding" in report_text, report_text[:500]
     if require_curobo_extension_cache:
         diagnostics = evidence.get("runtime_diagnostics") or {}
         cache = diagnostics.get("curobo_extension_cache") or {}

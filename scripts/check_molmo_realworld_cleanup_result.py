@@ -10,8 +10,16 @@ from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
+from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
+    validate_planner_cleanup_bridge_evidence,
+)
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     validate_planner_proof_attachment,
+)
+from roboclaws.molmo_cleanup.planner_proof_bundle import (
+    PLANNER_PROOF_BUNDLE_SCHEMA,
+    planner_proof_attachments,
+    validate_planner_proof_bundle,
 )
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -21,6 +29,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
+from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
     SEMANTIC_LOOP_VARIANT,
     has_complete_semantic_sequence,
@@ -48,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
     parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
+    parser.add_argument("--accept-blocked-planner-cleanup-bridge", action="store_true")
+    parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     return parser.parse_args()
 
 
@@ -91,6 +102,8 @@ def main() -> None:
             require_planner_backed_cleanup_primitives=(
                 args.require_planner_backed_cleanup_primitives
             ),
+            accept_blocked_planner_cleanup_bridge=(args.accept_blocked_planner_cleanup_bridge),
+            require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -126,6 +139,8 @@ def _assert_result(
     require_planner_proof_attachment: bool = False,
     accept_blocked_planner_cleanup_primitives: bool = False,
     require_planner_backed_cleanup_primitives: bool = False,
+    accept_blocked_planner_cleanup_bridge: bool = False,
+    require_planner_cleanup_bridge_ready: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -184,6 +199,13 @@ def _assert_result(
     if enforce_success or data.get("semantic_substeps"):
         assert "Semantic Substeps" in report_text, report_text[:500]
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    assert_cleanup_report_visual_core(
+        report_text,
+        require_semantic_subphases=enforce_success or bool(data.get("semantic_substeps")),
+        require_robot_timeline=require_robot_views,
+        require_agent_view=True,
+        require_private_evaluation=True,
+    )
     if require_openclaw_minimum:
         _assert_openclaw_minimum(data)
     if require_clean_agent_run:
@@ -204,6 +226,13 @@ def _assert_result(
             report_text,
             accept_blocked=accept_blocked_planner_cleanup_primitives,
             require_planner_backed=require_planner_backed_cleanup_primitives,
+        )
+    if accept_blocked_planner_cleanup_bridge or require_planner_cleanup_bridge_ready:
+        _assert_planner_cleanup_bridge(
+            data,
+            report_text,
+            accept_blocked=accept_blocked_planner_cleanup_bridge,
+            require_ready=require_planner_cleanup_bridge_ready,
         )
 
 
@@ -314,11 +343,24 @@ def _assert_trace_is_public(trace_path: Path) -> None:
         assert payload.get("tool") != "scene_objects", payload
         if payload.get("tool") == "done":
             continue
-        _assert_no_forbidden_keys(payload)
-        response = payload.get("response")
+        public_payload = _without_internal_proof_evidence(payload)
+        _assert_no_forbidden_keys(public_payload)
+        response = public_payload.get("response")
         if isinstance(response, dict):
             assert "objects" not in response, response
             assert "scene_objects" not in response, response
+
+
+def _without_internal_proof_evidence(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: _without_internal_proof_evidence(value)
+            for key, value in payload.items()
+            if key != "planner_primitive_evidence"
+        }
+    if isinstance(payload, list):
+        return [_without_internal_proof_evidence(value) for value in payload]
+    return payload
 
 
 def _assert_robot_views(
@@ -436,19 +478,33 @@ def _assert_planner_proof_attachment(
     base: Path,
     report_text: str,
 ) -> None:
-    assert data.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, data
+    assert data.get("primitive_provenance") in {
+        API_SEMANTIC_PROVENANCE,
+        "planner_backed",
+    }, data
     evidence = data.get("manipulation_evidence") or {}
-    assert evidence.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, evidence
+    assert evidence.get("primitive_provenance") in {
+        API_SEMANTIC_PROVENANCE,
+        "planner_backed",
+    }, evidence
     attachment = data.get("planner_backed_manipulation_proof") or {}
-    validate_planner_proof_attachment(attachment)
-    for value in (attachment.get("image_artifacts") or {}).values():
-        path = _resolve_path(base, str(value))
-        assert path.is_file(), path
-        assert path.stat().st_size > 0, path
-    assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
+    if attachment.get("schema") == PLANNER_PROOF_BUNDLE_SCHEMA:
+        validate_planner_proof_bundle(attachment)
+        proof_attachments = planner_proof_attachments(attachment)
+        assert "Attached Planner-Backed Proofs" in report_text, report_text[:500]
+    else:
+        validate_planner_proof_attachment(attachment)
+        proof_attachments = [attachment]
+        assert "Attached Planner-Backed Proof" in report_text, report_text[:500]
+    for proof in proof_attachments:
+        for value in (proof.get("image_artifacts") or {}).values():
+            path = _resolve_path(base, str(value))
+            assert path.is_file(), path
+            assert path.stat().st_size > 0, path
     assert "Planner Initial" in report_text, report_text[:500]
     assert "Planner Final" in report_text, report_text[:500]
-    assert "Cleanup object moves" in report_text, report_text[:500]
+    if attachment.get("schema") != PLANNER_PROOF_BUNDLE_SCHEMA:
+        assert "Cleanup object moves" in report_text, report_text[:500]
 
 
 def _assert_cleanup_primitive_gate(
@@ -469,6 +525,24 @@ def _assert_cleanup_primitive_gate(
     assert "pick/object" in report_text, report_text[:500]
     assert "nav/target" in report_text, report_text[:500]
     if require_planner_backed:
+        assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
+
+
+def _assert_planner_cleanup_bridge(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    accept_blocked: bool = False,
+    require_ready: bool = False,
+) -> None:
+    evidence = data.get("planner_cleanup_bridge_evidence") or {}
+    validate_planner_cleanup_bridge_evidence(
+        evidence,
+        accept_blocked_capability=accept_blocked,
+        require_ready=require_ready,
+    )
+    assert "Planner Cleanup Bridge" in report_text, report_text[:500]
+    if require_ready:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
 
 

@@ -165,6 +165,12 @@ _Avoid_: Per-demo report clone
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
 _Avoid_: Evidence panel order as report architecture
 
+**Report Visual Core Contract**:
+The package-level validation contract that current-contract and ADR-0003
+checkers use to enforce one Cleanup Artifact Report section order and one
+semantic subphase display vocabulary.
+_Avoid_: Per-checker report string smoke test
+
 **Semantic Cleanup Subphase**:
 A report-facing label for one step in the object cleanup loop: `nav`, `pick`, `nav`, optional `open`, then `place`.
 _Avoid_: Raw tool log as visual flow
@@ -210,6 +216,38 @@ _Avoid_: traceback-only OOM diagnosis
 Recorded probe-local CuRobo policy and planner memory-related overrides, including requested profile, effective batch/seed/attempt/timestep settings, and whether collision avoidance remains enabled.
 _Avoid_: hidden planner tuning
 
+**Shared Semantic Cleanup Loop**:
+The package-level execution path for the object cleanup sequence `nav, pick, nav, open?, place`, reused by MolmoSpaces cleanup demos before planner-backed primitives are attached.
+_Avoid_: per-demo hand-rolled cleanup loop
+
+**Planner Cleanup Bridge Readiness**:
+Evidence that joins attached target planner proof with per-subphase cleanup primitive provenance, showing whether planner-backed cleanup replacement is actually ready.
+_Avoid_: standalone proof implies cleanup execution
+
+**Planner-Backed Cleanup Primitive Executor**:
+The strict execution seam behind the shared semantic cleanup loop. It can mark a cleanup subphase as `planner_backed` only after per-call planner execution evidence exists for that exact `nav`, `pick`, `nav`, `open`, or `place` step.
+_Avoid_: relabeled semantic state sync
+
+**Planner Primitive Target Binding**:
+The rule that planner primitive evidence must match the semantic cleanup object, and target-side evidence must match the target receptacle, before a subphase is strict-ready.
+_Avoid_: generic tool-level proof
+
+**Probe-Backed Cleanup Primitive Executor**:
+The adapter that can convert a strict target RBY1M/CuRobo planner proof attachment into cleanup primitive executor evidence only when that proof carries matching cleanup primitive binding.
+_Avoid_: standalone target proof as primitive proof
+
+**Planner Probe Cleanup Binding**:
+The planner-probe artifact fields that record the sampled upstream pickup/place task and promote cleanup primitive binding only when a requested cleanup object and target exactly match.
+_Avoid_: unverified handle mapping
+
+**Observed Handle Planner Binding**:
+Private runtime evidence that maps an ADR-0003 Observed Object Handle plus public target fixture to planner-facing pickup/place names, while keeping cleanup primitive binding keyed by the observed handle.
+_Avoid_: exposing planner aliases in Agent View
+
+**Bounded Planner Cleanup Executor**:
+An opt-in cleanup harness path that uses a probe-backed planner executor only for cleanup subphases whose observed handle and target match the attached planner proof binding.
+_Avoid_: full cleanup replacement claim
+
 ## Relationships
 
 - A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
@@ -251,6 +289,7 @@ _Avoid_: hidden planner tuning
 - A **Cleanup Artifact Report** should keep the **Report Visual Core** in a stable order even when new ADR-0003 evidence panels are added.
 - A **Cleanup Artifact Report** may omit Robot View Timeline only when no robot views were recorded.
 - A **Cleanup Artifact Report** should display **Semantic Cleanup Subphases** as `nav -> pick -> nav -> open? -> place`, while raw trace artifacts keep full tool names.
+- A **Shared Semantic Cleanup Loop** should be the default object-level execution path for MolmoSpaces cleanup demos, with contract-specific perception and scoring layered around it.
 - Real visual OpenClaw cleanup evidence should include Robot View Timeline with FPV, chase, map, and verification images from the MolmoSpaces/RBY1M backend.
 - Clean OpenClaw cleanup evidence should enforce the semantic loop as executable MCP contract behavior, not prompt-only advice.
 - Advisory scoring/model checks should render in the shared **Cleanup Artifact Report** without changing deterministic scoring fields.
@@ -269,6 +308,14 @@ _Avoid_: hidden planner tuning
 - **CUDA Memory Headroom Evidence** should be recorded before tuning RBY1M/CuRobo planner memory settings or treating a target execute-mode OOM as a generic failure.
 - **Warp Compatibility Evidence** should be visible before a shimmed target planner probe can be used as readiness evidence.
 - **CuRobo Memory Profile Evidence** should be visible before a tuned RBY1M/CuRobo planner probe is used to assess target runtime readiness.
+- A **Shared Semantic Cleanup Loop** should be in place before replacing cleanup primitives, so planner-backed `nav`, `pick`, `open`, and `place` implementations have one integration point.
+- **Planner Cleanup Bridge Readiness** should require both target RBY1M/CuRobo proof and planner-backed cleanup subphases; if either side is missing, the bridge remains blocked capability.
+- A **Planner-Backed Cleanup Primitive Executor** should be the only path that changes cleanup subphase provenance from `api_semantic` to `planner_backed`.
+- **Planner Primitive Target Binding** should be enforced before wiring a real object-specific RBY1M/CuRobo cleanup executor.
+- A **Probe-Backed Cleanup Primitive Executor** should reject generic standalone planner proof unless it names the cleanup object, target, and tool it executed.
+- **Planner Probe Cleanup Binding** should be emitted before the probe-backed executor is used for ADR-0003 cleanup subphases.
+- **Observed Handle Planner Binding** should keep public cleanup IDs and planner sampled-task aliases separate before real ADR-0003 cleanup subphases use probe-backed executor evidence.
+- A **Bounded Planner Cleanup Executor** should be proven before claiming full multi-object planner-backed cleanup replacement.
 
 ## Example Dialogue
 
@@ -322,4 +369,4 @@ _Avoid_: hidden planner tuning
 - The current-contract bridge should use Codex for the primary dogfood loop and Claude Code for a post-hardening compatibility smoke.
 - OpenClaw acceptance for the current-contract bridge should require MCP tool-use viability and a useful trace; full 5/5 cleanup success is a stretch goal.
 - Report visual parity is a shared-underlay requirement. If a synthetic run lacks robot images, that is an evidence-mode difference, not a reason to create a second report implementation.
-- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Phase 27 closed the per-subphase cleanup primitive gate. Phase 28 closed the RBY1M/CuRobo runtime gate; actual RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout before execution. Phase 29 closed the camera-only model-policy cleanup follow-up with shared-underlay synthetic and real MolmoSpaces/RBY1M visual artifacts. Phase 30 closed the report visual-core consolidation so future evidence panels cannot create another visual implementation. Phase 31 closed staged RBY1M/CuRobo warmup-readiness evidence; the 300-second local run still timed out at `rby1m_config_import`, so actual planner-backed cleanup-loop primitive replacement remains gated on target execute-mode readiness. Phase 32 closed isolated CuRobo extension-cache evidence; config import now succeeds from an output-local cache, but execute mode blocks at `AttributeError: module 'warp' has no attribute 'torch'`. Phase 33 closed visible probe-local Warp compatibility; execute mode now reaches `execute_policy_run` and blocks on CUDA memory.
+- Phase 19 closed the real MolmoSpaces/RBY1M visual Gateway artifact gap for OpenClaw. Phase 20 closed the contract-level clean-policy gap by enforcing the public semantic loop; live Gateway can still be rerun against the stricter contract as evidence. Phase 21 closed the advisory scoring/model-check follow-up with non-authoritative report artifacts. Phase 22 closed the raw FPV-only perception evidence slice. Phase 23 closed the planner-backed manipulation provenance/proof gate. Phase 24 closed planner runtime diagnostics for strict-proof blockers. Phase 25 closed the headless renderer adapter and produced a passing strict Franka planner proof. Phase 26 closed the attached-proof report gap by rendering that strict proof inside ADR-0003 cleanup reports without relabeling cleanup-loop primitives. Phase 27 closed the per-subphase cleanup primitive gate. Phase 28 closed the RBY1M/CuRobo runtime gate; actual RBY1M planner execution remained blocked by CuRobo JIT/config-import timeout before execution. Phase 29 closed the camera-only model-policy cleanup follow-up with shared-underlay synthetic and real MolmoSpaces/RBY1M visual artifacts. Phase 30 closed the report visual-core consolidation so future evidence panels cannot create another visual implementation. Phase 31 closed staged RBY1M/CuRobo warmup-readiness evidence. Phase 32 closed isolated CuRobo extension-cache evidence. Phase 33 closed visible probe-local Warp compatibility. Phase 34 captured CUDA memory headroom for the target execute-mode OOM. Phase 35 closed visible low-memory RBY1M/CuRobo profile retry evidence and produced strict standalone target planner-backed proof. Phase 36 closed the duplicated cleanup-loop architecture by routing current-contract and ADR-0003 demos through one shared semantic cleanup driver. Phase 37 closed explicit planner cleanup bridge-readiness evidence: target runtime readiness is true with the Phase 35 proof attached, but bridge status remains blocked until cleanup subphases stop using `api_semantic`. Phase 38 closed the strict planner-backed cleanup primitive executor seam. Phase 39 closed object/target binding for planner primitive evidence. Phase 40 closed the probe-backed executor adapter that keeps generic target proof blocked unless a proof carries matching cleanup primitive binding. Phase 41 closed sampled-task binding at the real probe source and promotes cleanup primitive binding only on exact request/sample match. Phase 42 closed private observed-handle to planner-alias binding so the remaining executor path can use ADR-0003 handles without losing exact upstream task matching. Phase 43 closed bounded opt-in executor wiring so matching proof can drive one observed-handle cleanup attempt through planner-backed subphase evidence without claiming full multi-object replacement. Phase 44 closed proof-bundle coverage so full cleanup artifacts can require one matching proof per cleaned object before the bridge reports ready.

@@ -6,6 +6,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.planner_observed_binding import (
+    backend_planner_task_binding_from_state,
+)
 from roboclaws.molmo_cleanup.types import (
     CleanupObject,
     CleanupReceptacle,
@@ -106,6 +109,13 @@ class MolmoSpacesSubprocessBackend:
                 item for item in result["objects"] if item.get("category") == category
             ]
         return result
+
+    def planner_task_binding(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
+        return backend_planner_task_binding_from_state(
+            self._read_state(),
+            object_id=object_id,
+            target_receptacle_id=receptacle_id,
+        )
 
     def goto(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("goto", "--receptacle-id", receptacle_id)

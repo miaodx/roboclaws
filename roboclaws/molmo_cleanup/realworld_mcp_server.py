@@ -37,6 +37,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     cleanup_plan_from_semantic_substeps,
     primitive_provenance_counts,
     record_robot_view_step,
+    robot_view_capture_for_tool,
     semantic_diagnostics,
     semantic_substeps,
 )
@@ -565,70 +566,15 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> None:
         if not self.record_robot_views or not response.get("ok"):
             return
-        capture = self._robot_view_capture(tool, request, response)
+        capture = robot_view_capture_for_tool(
+            tool,
+            request,
+            response,
+            object_id_transform=self._internal_object_id,
+        )
         if capture is None:
             return
         self._record_robot_view(**capture)
-
-    def _robot_view_capture(
-        self,
-        tool: str,
-        request: dict[str, Any],
-        response: dict[str, Any],
-    ) -> dict[str, str | None] | None:
-        if tool == "navigate_to_object":
-            handle = _optional_str(response.get("object_id") or request.get("object_id"))
-            return {
-                "action": f"navigate_to_object {handle}",
-                "label_suffix": _label_suffix("navigate_object", handle),
-                "focus_object_id": self._internal_object_id(handle),
-                "focus_receptacle_id": _optional_str(
-                    response.get("source_receptacle_id") or response.get("location_id")
-                ),
-                "semantic_phase": "navigate_to_object",
-            }
-        if tool == "pick":
-            handle = _optional_str(response.get("object_id") or request.get("object_id"))
-            return {
-                "action": f"pick {handle}",
-                "label_suffix": _label_suffix("pick", handle),
-                "focus_object_id": self._internal_object_id(handle),
-                "focus_receptacle_id": _optional_str(
-                    response.get("previous_location_id") or response.get("source_receptacle_id")
-                ),
-                "semantic_phase": "pick",
-            }
-        if tool == "navigate_to_receptacle":
-            handle = _optional_str(response.get("object_id"))
-            fixture_id = _optional_str(response.get("fixture_id") or request.get("fixture_id"))
-            return {
-                "action": f"navigate_to_receptacle {fixture_id}",
-                "label_suffix": _label_suffix("navigate_receptacle", fixture_id),
-                "focus_object_id": self._internal_object_id(handle),
-                "focus_receptacle_id": fixture_id,
-                "semantic_phase": "navigate_to_receptacle",
-            }
-        if tool == "open_receptacle":
-            handle = _optional_str(response.get("object_id"))
-            fixture_id = _optional_str(response.get("fixture_id") or request.get("fixture_id"))
-            return {
-                "action": f"open_receptacle {fixture_id}",
-                "label_suffix": _label_suffix("open_receptacle", fixture_id),
-                "focus_object_id": self._internal_object_id(handle),
-                "focus_receptacle_id": fixture_id,
-                "semantic_phase": "open_receptacle",
-            }
-        if tool in {"place", "place_inside"}:
-            handle = _optional_str(response.get("object_id"))
-            fixture_id = _optional_str(response.get("fixture_id") or request.get("fixture_id"))
-            return {
-                "action": f"{tool} {handle}",
-                "label_suffix": _label_suffix(tool, handle),
-                "focus_object_id": self._internal_object_id(handle),
-                "focus_receptacle_id": fixture_id,
-                "semantic_phase": tool,
-            }
-        return None
 
     def _internal_object_id(self, handle: str | None) -> str | None:
         if handle is None:
@@ -702,13 +648,6 @@ class RealWorldMolmoCleanupMCPServer:
         ]
 
 
-def _optional_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _json_safe(value: Any) -> Any:
     try:
         json.dumps(value)
@@ -759,10 +698,3 @@ def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
             return True
     except OSError:
         return False
-
-
-def _label_suffix(prefix: str, value: str | None) -> str:
-    if not value:
-        return prefix
-    safe_value = "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)
-    return f"{prefix}_{safe_value}"

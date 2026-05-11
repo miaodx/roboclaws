@@ -17,6 +17,7 @@ def attach_planner_proof(
     *,
     proof_run_result_path: Path,
     cleanup_run_dir: Path,
+    attachment_id: str | None = None,
 ) -> dict[str, Any]:
     """Validate and copy a strict planner proof into a cleanup run directory."""
     proof_path = Path(proof_run_result_path)
@@ -26,11 +27,13 @@ def attach_planner_proof(
         proof_base=proof_path.parent,
         cleanup_run_dir=cleanup_run_dir,
         image_artifacts=evidence.get("image_artifacts") or {},
+        attachment_id=attachment_id,
     )
     runtime = evidence.get("runtime_diagnostics") or {}
     worker_payload = evidence.get("worker_payload") or {}
-    return {
+    attachment = {
         "schema": PLANNER_PROOF_ATTACHMENT_SCHEMA,
+        "proof_id": attachment_id or "",
         "source_run_result": str(proof_path),
         "contract": proof.get("contract"),
         "status": PLANNER_BACKED_PROVENANCE,
@@ -51,6 +54,10 @@ def attach_planner_proof(
             "review. Cleanup-loop object moves keep their own primitive provenance."
         ),
     }
+    cleanup_binding = _cleanup_primitive_binding(evidence)
+    if cleanup_binding:
+        attachment["cleanup_primitive_binding"] = cleanup_binding
+    return attachment
 
 
 def validate_planner_proof_attachment(attachment: dict[str, Any]) -> None:
@@ -100,9 +107,12 @@ def _copy_proof_images(
     proof_base: Path,
     cleanup_run_dir: Path,
     image_artifacts: dict[str, str],
+    attachment_id: str | None = None,
 ) -> dict[str, str]:
     copied: dict[str, str] = {}
     destination_dir = cleanup_run_dir / "planner_proof"
+    if attachment_id:
+        destination_dir = destination_dir / attachment_id
     destination_dir.mkdir(parents=True, exist_ok=True)
     for key in ("initial", "final"):
         value = image_artifacts.get(key)
@@ -124,3 +134,10 @@ def _resolve_path(base: Path, value: str) -> Path:
     if path.is_absolute():
         return path
     return base / path
+
+
+def _cleanup_primitive_binding(evidence: dict[str, Any]) -> dict[str, Any]:
+    raw = (
+        evidence.get("cleanup_primitive_binding") or evidence.get("planner_primitive_binding") or {}
+    )
+    return dict(raw) if isinstance(raw, dict) else {}
