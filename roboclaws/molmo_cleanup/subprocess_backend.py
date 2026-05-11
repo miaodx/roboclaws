@@ -32,6 +32,7 @@ class MolmoSpacesSubprocessBackend:
         scene_index: int = 0,
         include_robot: bool = False,
         robot_name: str = "rby1m",
+        generated_mess_count: int = 5,
     ) -> None:
         self.run_dir = run_dir
         self.state_path = run_dir / "molmospaces_backend_state.json"
@@ -45,6 +46,8 @@ class MolmoSpacesSubprocessBackend:
             scene_source,
             "--scene-index",
             str(scene_index),
+            "--generated-mess-count",
+            str(generated_mess_count),
         ]
         if include_robot:
             init_args.extend(["--include-robot", "--robot-name", robot_name])
@@ -58,6 +61,10 @@ class MolmoSpacesSubprocessBackend:
         self.model_stats = result["model_stats"]
         self.scene_xml = result["scene_xml"]
         self.metadata_object_count = result["metadata_object_count"]
+        self.requested_generated_mess_count = int(
+            result.get("requested_generated_mess_count", generated_mess_count)
+        )
+        self.generated_mess_count = int(result.get("generated_mess_count", 0))
         self.robot = result.get("robot")
 
     @property
@@ -209,6 +216,7 @@ def _scenario_from_worker_payload(
                 name=str(item["name"]),
                 room_area=str(item.get("room_area", "unknown")),
                 kind=str(item.get("kind", "receptacle")),
+                category=str(item["category"]) if item.get("category") is not None else None,
             )
             for item in public["receptacles"]
         ),

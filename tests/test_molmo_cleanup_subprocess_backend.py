@@ -6,6 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.molmo_cleanup.generated_mess import (
+    generated_mess_success_threshold,
+    select_generated_mess_targets,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -41,6 +45,30 @@ def test_subprocess_backend_reports_missing_runtime(tmp_path: Path) -> None:
             run_dir=tmp_path,
             python_executable=tmp_path / "missing-python",
         )
+
+
+def test_worker_select_targets_honors_requested_generated_count() -> None:
+    receptacles = [
+        {"receptacle_id": "sink_01", "category": "Sink"},
+        {"receptacle_id": "shelf_01", "category": "ShelvingUnit"},
+        {"receptacle_id": "fridge_01", "category": "Fridge"},
+        {"receptacle_id": "tvstand_01", "category": "TVStand"},
+        {"receptacle_id": "bed_01", "category": "Bed"},
+    ]
+    objects = (
+        [{"object_id": f"mug_{index:02d}", "category": "Mug"} for index in range(3)]
+        + [{"object_id": f"book_{index:02d}", "category": "Book"} for index in range(3)]
+        + [{"object_id": f"apple_{index:02d}", "category": "Apple"} for index in range(3)]
+        + [{"object_id": f"remote_{index:02d}", "category": "RemoteControl"} for index in range(3)]
+        + [{"object_id": f"pillow_{index:02d}", "category": "Pillow"} for index in range(3)]
+    )
+
+    selected = select_generated_mess_targets(objects, receptacles, target_count=10)
+
+    assert len(selected) == 10
+    assert len({item["object_id"] for item in selected}) == 10
+    assert all(item["target_receptacle_id"] for item in selected)
+    assert generated_mess_success_threshold(10) == 7
 
 
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:

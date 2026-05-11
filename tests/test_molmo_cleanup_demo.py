@@ -31,6 +31,7 @@ def test_molmospaces_cleanup_demo_writes_success_artifacts(tmp_path: Path) -> No
     assert run_result["planner"] == "scripted_reference"
     assert run_result["planner_uses_private_manifest"] is True
     assert run_result["score"]["restored_count"] == 5
+    assert run_result["score"]["semantic_acceptability"]["accepted_count"] == 5
     assert run_result["semantic_loop_variant"] == "navigate-pick-navigate-open-place-object_done"
     assert run_result["semantic_substeps"][0]["steps"][0]["phase"] == "navigate_to_object"
     assert any('"tool": "navigate_to_object"' in line for line in trace_lines)
@@ -69,6 +70,7 @@ def test_molmospaces_cleanup_demo_runs_public_prompt_planner(tmp_path: Path) -> 
     assert result["planner"] == "public_heuristic"
     assert result["planner_uses_private_manifest"] is False
     assert result["score"]["restored_count"] == 5
+    assert result["score"]["semantic_acceptability"]["accepted_count"] == 5
     fridge_steps = [
         item
         for item in result["semantic_substeps"]

@@ -85,13 +85,19 @@ def render_cleanup_report(
       <div class="badges">
         {_badge("Scenario", scenario.scenario_id)}
         {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Contract", run_result.get("contract", "legacy"))}
         {_badge("Status", run_result["cleanup_status"])}
         {_badge("Restored", restored_summary)}
-        {_badge("Planner", run_result.get("planner", "unknown"))}
+        {_badge("Generated mess", _generated_mess_summary(run_result))}
+        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+        {_badge("Agent driven", run_result.get("agent_driven", False))}
         {_badge("Provenance", run_result["primitive_provenance"])}
+        {_badge("MCP server", run_result.get("mcp_server", "none"))}
         {_robot_badge(run_result)}
       </div>
     </section>
+    {_current_contract_note(run_result)}
+    {_realworld_contract_note(run_result)}
     <section class="snapshots">
       <figure>
         <img src="{before_name}" alt="Before cleanup">
@@ -106,12 +112,14 @@ def render_cleanup_report(
       <h2>Object Moves</h2>
       {_moves_table(moves)}
     </section>
+    {_agent_view_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
     <section>
       <h2>Score</h2>
       {_score_table(score)}
     </section>
+    {_private_evaluation_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -129,6 +137,124 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     if not robot_name:
         return ""
     return _badge("Robot", robot_name)
+
+
+def _generated_mess_summary(run_result: dict[str, Any]) -> str:
+    actual = run_result.get("generated_mess_count")
+    requested = run_result.get("requested_generated_mess_count")
+    if actual is None:
+        return "n/a"
+    if requested is None or requested == actual:
+        return actual
+    return f"{actual} actual / {requested} requested"
+
+
+def _current_contract_note(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "current_contract":
+        return ""
+    shortcuts = ", ".join(str(item) for item in run_result.get("current_contract_shortcuts", []))
+    note = (
+        "Current-contract bridge run. Global scene_objects is intentionally "
+        "available for agent/tool viability dogfood; this artifact does not "
+        "satisfy ADR-0003 robot-local perception."
+    )
+    if shortcuts:
+        note += f" Shortcut(s): {shortcuts}."
+    return f'<section><p class="note">{html.escape(note)}</p></section>'
+
+
+def _realworld_contract_note(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    note = (
+        "ADR-0003 real-world-style cleanup run. The Agent View is limited to "
+        "metric map, room-level fixture hints, and robot-local observed object "
+        "handles. Private Evaluation is shown only after the run."
+    )
+    return f'<section><p class="note">{html.escape(note)}</p></section>'
+
+
+def _agent_view_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    agent_view = run_result.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    observed = agent_view.get("observed_objects") or []
+    waypoints = metric_map.get("inspection_waypoints") or []
+    rooms = fixture_hints.get("rooms") or []
+    rows = []
+    for item in observed:
+        support = item.get("support_estimate") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
+            f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+            "</tr>"
+        )
+    observed_table = (
+        "<p>No objects observed.</p>"
+        if not rows
+        else "<table><thead><tr><th>Observed handle</th><th>Category</th>"
+        "<th>Room</th><th>Support estimate</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+    summary = (
+        f"{len(metric_map.get('rooms') or [])} public rooms, "
+        f"{len(rooms)} fixture-hint room rows, {len(waypoints)} inspection waypoints, "
+        f"{len(observed)} observed object handles."
+    )
+    return (
+        "<section><h2>Agent View</h2>"
+        f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
+        "acceptable destination sets, is_misplaced labels, or global movable-object "
+        "inventory are present here.</p>"
+        f"{observed_table}</section>"
+    )
+
+
+def _private_evaluation_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    private = run_result.get("private_evaluation") or {}
+    targets = private.get("generated_mess_set") or []
+    destinations = private.get("acceptable_destination_sets") or {}
+    rows = []
+    for object_id in targets:
+        destination_text = ", ".join(str(item) for item in destinations.get(object_id, []))
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(object_id))}</td>"
+            f"<td>{html.escape(destination_text)}</td>"
+            "</tr>"
+        )
+    table = (
+        "<table><thead><tr><th>Generated mess object</th>"
+        "<th>Acceptable destination set</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
+    summary = (
+        f"Generated mess count {private.get('generated_mess_count', 0)}"
+        f"{_requested_generated_text(private)}; "
+        f"mess restoration rate {private.get('mess_restoration_rate', 0)}; "
+        f"sweep coverage rate {private.get('sweep_coverage_rate', 0)}; "
+        f"disturbance count {private.get('disturbance_count', 0)}."
+    )
+    return (
+        "<section><h2>Private Evaluation</h2>"
+        f'<p class="note">{html.escape(summary)}</p>{table}</section>'
+    )
+
+
+def _requested_generated_text(private: dict[str, Any]) -> str:
+    requested = private.get("requested_generated_mess_count")
+    if requested is None:
+        return ""
+    return f" (requested {requested})"
 
 
 def _robot_timeline(steps: list[dict[str, Any]]) -> str:
@@ -286,17 +412,42 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
 def _score_table(score: dict[str, Any]) -> str:
     rows = []
     for row in score["object_results"]:
+        exact_private_match = row.get("exact_private_match", row.get("restored", False))
+        semantic_level = row.get("semantic_acceptability", "unknown")
+        semantic_reason = row.get("semantic_reason", "")
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(row['object_id']))}</td>"
             f"<td>{html.escape(str(row['actual_location_id']))}</td>"
-            f"<td>{'yes' if row['restored'] else 'no'}</td>"
+            f"<td>{'yes' if exact_private_match else 'no'}</td>"
+            f"<td>{html.escape(str(semantic_level))}</td>"
+            f"<td>{html.escape(str(semantic_reason))}</td>"
             "</tr>"
         )
+    semantic_summary = _semantic_acceptability_summary(score)
     return (
-        "<table><thead><tr><th>Object</th><th>Final location</th><th>Restored</th>"
+        semantic_summary + "<table><thead><tr><th>Object</th><th>Final location</th>"
+        "<th>Exact private match</th><th>Semantic acceptability</th><th>Reason</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
     )
+
+
+def _semantic_acceptability_summary(score: dict[str, Any]) -> str:
+    semantic = score.get("semantic_acceptability")
+    if not isinstance(semantic, dict):
+        return ""
+    counts = semantic.get("counts") or {}
+    accepted = semantic.get("accepted_count", 0)
+    total = semantic.get("total_targets", score.get("total_targets", 0))
+    parts = [
+        f"accepted {accepted}/{total}",
+        f"preferred {counts.get('preferred', 0)}",
+        f"acceptable {counts.get('acceptable', 0)}",
+        f"questionable {counts.get('questionable', 0)}",
+        f"wrong {counts.get('wrong', 0)}",
+        f"unknown {counts.get('unknown', 0)}",
+    ]
+    return f'<p class="note">Semantic acceptability: {html.escape(", ".join(parts))}.</p>'
 
 
 def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:

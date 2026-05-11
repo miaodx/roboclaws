@@ -25,6 +25,17 @@ from roboclaws.molmo_cleanup.scenario import (  # noqa: E402
     build_cleanup_scenario,
     write_scenario_bundle,
 )
+from roboclaws.molmo_cleanup.semantic_acceptability import (  # noqa: E402
+    annotate_score_with_semantic_acceptability,
+)
+from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
+    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+    ROBOT_VIEW_VARIANT,
+    record_robot_view_step,
+)
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    semantic_substeps as build_semantic_substeps,
+)
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -131,21 +142,18 @@ def run_demo(
     }
 
     view_index = 3
-    semantic_substeps: list[dict[str, Any]] = []
     for action_index, action in enumerate(cleanup_plan, start=1):
         object_id = action["object_id"]
         target_receptacle_id = action["receptacle_id"]
         source_receptacle_id = initial_locations.get(object_id, "")
-        object_steps: list[dict[str, Any]] = []
 
-        response = _call_tool(
+        _call_tool(
             trace_events,
             started_at,
             "navigate_to_object",
             {"object_id": object_id, "source_receptacle_id": source_receptacle_id},
             lambda selected_object=object_id: contract.navigate_to_object(selected_object),
         )
-        _record_semantic_step(object_steps, "navigate_to_object", response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
@@ -159,14 +167,13 @@ def run_demo(
             )
             view_index += 1
 
-        response = _call_tool(
+        _call_tool(
             trace_events,
             started_at,
             "pick",
             {"object_id": object_id},
             lambda selected_object=object_id: contract.pick(selected_object),
         )
-        _record_semantic_step(object_steps, "pick", response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
@@ -180,14 +187,13 @@ def run_demo(
             )
             view_index += 1
 
-        response = _call_tool(
+        _call_tool(
             trace_events,
             started_at,
             "navigate_to_receptacle",
             {"object_id": object_id, "receptacle_id": target_receptacle_id},
             lambda target=target_receptacle_id: contract.navigate_to_receptacle(target),
         )
-        _record_semantic_step(object_steps, "navigate_to_receptacle", response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
@@ -204,14 +210,13 @@ def run_demo(
         target_receptacle = receptacles_by_id.get(target_receptacle_id, {})
         place_tool = "place_inside" if _requires_inside_place(target_receptacle) else "place"
         if place_tool == "place_inside":
-            response = _call_tool(
+            _call_tool(
                 trace_events,
                 started_at,
                 "open_receptacle",
                 {"object_id": object_id, "receptacle_id": target_receptacle_id},
                 lambda target=target_receptacle_id: contract.open_receptacle(target),
             )
-            _record_semantic_step(object_steps, "open_receptacle", response)
             if record_robot_views:
                 _record_robot_views(
                     robot_view_steps,
@@ -225,7 +230,7 @@ def run_demo(
                 )
                 view_index += 1
 
-        response = _call_tool(
+        _call_tool(
             trace_events,
             started_at,
             place_tool,
@@ -234,7 +239,6 @@ def run_demo(
                 contract.place_inside(target) if tool == "place_inside" else contract.place(target)
             ),
         )
-        _record_semantic_step(object_steps, place_tool, response)
         if record_robot_views:
             _record_robot_views(
                 robot_view_steps,
@@ -248,7 +252,7 @@ def run_demo(
             )
             view_index += 1
 
-        response = _call_tool(
+        _call_tool(
             trace_events,
             started_at,
             "object_done",
@@ -258,16 +262,6 @@ def run_demo(
                 target,
             ),
         )
-        _record_semantic_step(object_steps, "object_done", response)
-        semantic_substeps.append(
-            {
-                "object_id": object_id,
-                "source_receptacle_id": source_receptacle_id,
-                "target_receptacle_id": target_receptacle_id,
-                "target_receptacle_category": _receptacle_category(target_receptacle),
-                "steps": object_steps,
-            }
-        )
 
     done = _call_tool(
         trace_events,
@@ -276,6 +270,7 @@ def run_demo(
         {"reason": f"{planner} cleanup complete"},
         lambda: contract.done(f"{planner} cleanup complete"),
     )
+    score = annotate_score_with_semantic_acceptability(done["score"], scenario)
 
     after_snapshot = _write_snapshot(
         backend=backend,
@@ -294,6 +289,7 @@ def run_demo(
         )
     trace_path = output_dir / "trace.jsonl"
     write_trace_jsonl(trace_path, trace_events)
+    semantic_timeline = build_semantic_substeps(trace_events, receptacles_by_id)
 
     run_result = {
         "backend": backend,
@@ -319,9 +315,9 @@ def run_demo(
         if planner == SCRIPTED_REFERENCE
         else False,
         "cleanup_plan": cleanup_plan,
-        "semantic_loop_variant": "navigate-pick-navigate-open-place-object_done",
-        "semantic_substeps": semantic_substeps,
-        "score": done["score"],
+        "semantic_loop_variant": CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
+        "semantic_substeps": semantic_timeline,
+        "score": score,
         "final_locations": done["final_locations"],
         "final_containment": done.get("final_containment", {}),
         "tool_event_counts": done["tool_event_counts"],
@@ -344,7 +340,7 @@ def run_demo(
             run_result["robot"] = backend_instance.robot
             run_result["robot_name"] = backend_instance.robot.get("robot_name")
     if robot_view_steps:
-        run_result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+        run_result["view_variant"] = ROBOT_VIEW_VARIANT
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     report_path = render_cleanup_report(
@@ -413,29 +409,6 @@ def _receptacle_category(receptacle: dict[str, Any]) -> str:
     return ""
 
 
-def _record_semantic_step(
-    steps: list[dict[str, Any]],
-    phase: str,
-    response: dict[str, Any],
-) -> None:
-    steps.append(
-        {
-            "phase": phase,
-            "tool": response.get("tool"),
-            "ok": response.get("ok"),
-            "object_id": response.get("object_id"),
-            "receptacle_id": response.get("receptacle_id"),
-            "source_receptacle_id": response.get("source_receptacle_id"),
-            "location_id": response.get("location_id"),
-            "contained_in": response.get("contained_in"),
-            "location_relation": response.get("location_relation"),
-            "opened": response.get("opened"),
-            "matches_expected_location": response.get("matches_expected_location"),
-            "primitive_provenance": response.get("primitive_provenance"),
-        }
-    )
-
-
 def _write_snapshot(
     *,
     backend: str,
@@ -465,39 +438,25 @@ def _record_robot_views(
     focus_receptacle_id: str | None = None,
     semantic_phase: str | None = None,
 ) -> None:
-    result = contract.backend.write_robot_views(
-        output_dir / "robot_views",
-        label=label,
+    index, label_suffix = _split_robot_view_label(label, len(steps))
+    record_robot_view_step(
+        steps=steps,
+        backend=contract.backend,
+        output_dir=output_dir,
+        index=index,
+        label_suffix=label_suffix,
+        action=action,
         focus_object_id=focus_object_id,
         focus_receptacle_id=focus_receptacle_id,
-    )
-    if not result.get("ok"):
-        raise RuntimeError(f"robot view capture failed: {result}")
-    steps.append(
-        {
-            "label": label,
-            "action": action,
-            "robot_pose": result.get("robot_pose"),
-            "robot_trajectory_count": len(result.get("robot_trajectory", [])),
-            "view_variant": result.get("view_variant"),
-            "view_provenance": result.get("view_provenance"),
-            "focus": result.get("focus"),
-            "semantic_phase": semantic_phase,
-            "room_outline_count": result.get("room_outline_count"),
-            "views": _relative_view_paths(output_dir, result["views"]),
-        }
+        semantic_phase=semantic_phase,
     )
 
 
-def _relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:
-    relative = {}
-    for key, value in views.items():
-        path = Path(value)
-        try:
-            relative[key] = str(path.relative_to(output_dir))
-        except ValueError:
-            relative[key] = str(path)
-    return relative
+def _split_robot_view_label(label: str, fallback_index: int) -> tuple[int, str]:
+    prefix, separator, suffix = label.partition("_")
+    if separator and prefix.isdigit():
+        return int(prefix), suffix
+    return fallback_index, label
 
 
 def _call_tool(
