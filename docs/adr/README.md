@@ -119,6 +119,21 @@ one decision per file, sequential numbering, explicit status.
 | [0108](0108-setup-grasp-generation-prerequisites-before-cache-generation.md) | Setup Grasp Generation Prerequisites Before Cache Generation | Accepted |
 | [0109](0109-report-grasp-cache-generation-and-install-blockers.md) | Report Grasp Cache Generation And Install Blockers | Accepted |
 | [0110](0110-preserve-grasp-filter-intermediates-and-variant-diagnostics.md) | Preserve Grasp Filter Intermediates And Variant Diagnostics | Accepted |
+| [0111](0111-regenerate-scenario-less-cleanup-artifacts.md) | Regenerate Scenario-Less Cleanup Artifacts | Accepted |
+| [0112](0112-record-grasp-initial-contact-diagnostics.md) | Record Grasp Initial Contact Diagnostics | Accepted |
+| [0113](0113-generate-grasp-cache-with-validated-pose-policy.md) | Generate Grasp Cache With Validated Pose Policy | Accepted |
+| [0114](0114-record-cache-ready-proof-rerun.md) | Record Cache-Ready Proof Rerun | Accepted |
+| [0115](0115-focus-cleanup-report-robot-timeline-on-subphases.md) | Focus Cleanup Report Robot Timeline On Subphases | Accepted |
+| [0116](0116-preserve-curobo-policy-exception-context.md) | Preserve CuRobo Policy Exception Context | Accepted |
+| [0117](0117-consume-phase125-proof-in-cleanup-primitive-path.md) | Consume Phase 125 Proof In Cleanup Primitive Path | Accepted |
+| [0118](0118-record-planner-proof-quality-tier.md) | Record Planner Proof Quality Tier | Accepted |
+| [0119](0119-render-planner-proof-quality-across-probe-reports.md) | Render Planner Proof Quality Across Probe Reports | Accepted |
+| [0120](0120-honor-proof-quality-horizon-in-prior-covered-selection.md) | Honor Proof Quality Horizon In Prior Covered Selection | Accepted |
+| [0121](0121-route-molmo-cleanup-report-generation-through-shared-adapter.md) | Route Molmo Cleanup Report Generation Through Shared Adapter | Accepted |
+| [0122](0122-render-proof-execution-horizon-in-runner-reports.md) | Render Proof Execution Horizon In Runner Reports | Accepted |
+| [0123](0123-render-proof-command-semantic-subphases.md) | Render Proof Command Semantic Subphases | Accepted |
+| [0124](0124-bound-proof-bundle-runs-by-request-id.md) | Bound Proof Bundle Runs By Request ID | Accepted |
+| [0125](0125-canonicalize-proof-command-cleanup-tool-order.md) | Canonicalize Proof Command Cleanup Tool Order | Accepted |
 
 ## Adding a new ADR
 

@@ -53,6 +53,13 @@ def generate(
     replay_dir = Path(replay_dir)
     manifest_path = replay_dir / "replay.json"
     if not manifest_path.exists():
+        molmo_report = _try_generate_molmo_cleanup_report(
+            replay_dir,
+            output_path=output_path,
+            auto_open=auto_open,
+        )
+        if molmo_report is not None:
+            return molmo_report
         raise FileNotFoundError(f"replay.json not found in {replay_dir}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     section = _build_run_section(replay_dir, manifest, run_id="run")
@@ -62,6 +69,31 @@ def generate(
     if auto_open:
         webbrowser.open(out_path.as_uri())
     return out_path
+
+
+def _try_generate_molmo_cleanup_report(
+    artifact_path: Path,
+    *,
+    output_path: str | Path | None,
+    auto_open: bool,
+) -> Path | None:
+    """Route Molmo cleanup artifacts through their shared cleanup report adapter."""
+    from roboclaws.molmo_cleanup.artifact_report import (
+        is_cleanup_run_result_artifact,
+        rerender_cleanup_report_from_artifact_path,
+    )
+
+    if not is_cleanup_run_result_artifact(artifact_path):
+        return None
+    if output_path is not None:
+        raise ValueError(
+            "Molmo cleanup reports are regenerated next to run_result.json so "
+            "relative robot-view assets stay valid; omit output_path."
+        )
+    report_path = rerender_cleanup_report_from_artifact_path(artifact_path)
+    if auto_open:
+        webbrowser.open(report_path.as_uri())
+    return report_path
 
 
 def compare(

@@ -5,21 +5,26 @@ import argparse
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.artifact_report import rerender_cleanup_report_from_run_result
+from roboclaws.molmo_cleanup.artifact_report import (
+    rerender_cleanup_reports_from_artifact_paths,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Regenerate a MolmoSpaces cleanup report through the shared underlay."
     )
-    parser.add_argument("run_result", type=Path)
+    parser.add_argument("artifact", type=Path, nargs="+", help="run_result.json path or run dir")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    report_path = rerender_cleanup_report_from_run_result(args.run_result)
-    print(json.dumps({"report": str(report_path)}))
+    report_paths = rerender_cleanup_reports_from_artifact_paths(args.artifact)
+    payload = {"reports": [str(path) for path in report_paths]}
+    if len(report_paths) == 1:
+        payload["report"] = str(report_paths[0])
+    print(json.dumps(payload))
 
 
 if __name__ == "__main__":

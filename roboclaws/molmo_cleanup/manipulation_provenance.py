@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.planner_proof_quality import planner_proof_quality_evidence
 
 MANIPULATION_PROVENANCE_SCHEMA = "molmo_manipulation_provenance_v1"
 MANIPULATION_PROBE_CONTRACT = "planner_backed_manipulation_probe_v1"
@@ -104,7 +105,7 @@ def planner_backed_probe_evidence(
     max_abs_qpos_delta: float,
     image_artifacts: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    return {
+    evidence = {
         "schema": MANIPULATION_PROVENANCE_SCHEMA,
         "status": PLANNER_BACKED_PROVENANCE,
         "primitive_provenance": PLANNER_BACKED_PROVENANCE,
@@ -128,6 +129,8 @@ def planner_backed_probe_evidence(
         ),
         "strict_proof_requirements": planner_backed_proof_requirements(),
     }
+    evidence["proof_quality"] = planner_proof_quality_evidence(evidence)
+    return evidence
 
 
 def planner_backed_proof_requirements() -> list[str]:

@@ -12,6 +12,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
 )
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    validate_planner_proof_quality_evidence,
+)
 from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
     validate_rby1m_curobo_gate,
@@ -32,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-cuda-memory", action="store_true")
     parser.add_argument("--require-curobo-memory-profile", action="store_true")
     parser.add_argument("--require-cleanup-scene-bound", action="store_true")
+    parser.add_argument("--require-policy-exception-context", action="store_true")
+    parser.add_argument("--require-proof-quality", action="store_true")
+    parser.add_argument("--require-proof-min-steps", type=int, default=None)
     return parser.parse_args()
 
 
@@ -51,6 +58,9 @@ def main() -> None:
         require_cuda_memory=args.require_cuda_memory,
         require_curobo_memory_profile=args.require_curobo_memory_profile,
         require_cleanup_scene_bound=args.require_cleanup_scene_bound,
+        require_policy_exception_context=args.require_policy_exception_context,
+        require_proof_quality=args.require_proof_quality,
+        require_proof_min_steps=args.require_proof_min_steps,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -68,6 +78,9 @@ def _assert_probe_result(
     require_cuda_memory: bool = False,
     require_curobo_memory_profile: bool = False,
     require_cleanup_scene_bound: bool = False,
+    require_policy_exception_context: bool = False,
+    require_proof_quality: bool = False,
+    require_proof_min_steps: int | None = None,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -82,6 +95,12 @@ def _assert_probe_result(
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     assert "Planner-Backed Manipulation Probe" in report_text, report_text[:500]
     assert "Manipulation Provenance" in report_text, report_text[:500]
+    if require_proof_quality or require_proof_min_steps is not None:
+        _assert_proof_quality(
+            evidence,
+            report_text,
+            min_steps_executed=require_proof_min_steps or 1,
+        )
     if evidence.get("runtime_diagnostics"):
         assert "Runtime Diagnostics" in report_text, report_text[:500]
         cache = (evidence.get("runtime_diagnostics") or {}).get("curobo_extension_cache") or {}
@@ -95,6 +114,9 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    policy_exception_context = evidence.get("policy_exception_context") or {}
+    if policy_exception_context:
+        _assert_policy_exception_context_report(policy_exception_context, report_text)
     robot_placement_profile = evidence.get("task_sampler_robot_placement_profile") or {}
     if robot_placement_profile:
         assert "Task Sampler Robot Placement Profile" in report_text, report_text[:500]
@@ -207,6 +229,9 @@ def _assert_probe_result(
         assert profile, evidence
         assert profile.get("applied") is True, profile
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    if require_policy_exception_context:
+        assert policy_exception_context, evidence
+        _assert_policy_exception_context_report(policy_exception_context, report_text)
     if evidence.get("worker_stage_events"):
         assert evidence.get("last_worker_stage"), evidence
         assert "Worker Stage Timeline" in report_text, report_text[:500]
@@ -250,6 +275,19 @@ def _assert_planner_backed(data: dict[str, Any], evidence: dict[str, Any]) -> No
     assert evidence.get("upstream_policy_class"), evidence
 
 
+def _assert_proof_quality(
+    evidence: dict[str, Any],
+    report_text: str,
+    *,
+    min_steps_executed: int,
+) -> None:
+    quality = planner_proof_quality_evidence(evidence)
+    validate_planner_proof_quality_evidence(quality, min_steps_executed=min_steps_executed)
+    assert "Planner Proof Quality" in report_text, report_text[:500]
+    assert "Proof Quality" in report_text, report_text[:500]
+    assert str(quality.get("quality_tier") or "") in report_text, report_text[:500]
+
+
 def _assert_cleanup_scene_bound(evidence: dict[str, Any]) -> None:
     config = evidence.get("cleanup_task_config") or {}
     assert config.get("applied") is True, config
@@ -278,6 +316,22 @@ def _assert_rby1m_curobo_gate(
         require_ready=require_ready,
     )
     assert "RBY1M CuRobo Gate" in report_text, report_text[:500]
+
+
+def _assert_policy_exception_context_report(
+    context: dict[str, Any],
+    report_text: str,
+) -> None:
+    assert "Policy Exception Diagnostics" in report_text, report_text[:500]
+    for key in ("failure_kind", "stage", "exception_type"):
+        value = str(context.get(key) or "")
+        if value:
+            assert value in report_text, (key, report_text[:500])
+    for primitive in context.get("action_primitives") or []:
+        for key in ("primitive_class", "current_phase"):
+            value = str(primitive.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
 
 
 def _resolve_path(base: Path, value: str) -> Path:

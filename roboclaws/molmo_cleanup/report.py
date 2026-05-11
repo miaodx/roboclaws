@@ -8,6 +8,11 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    format_quality_tier_counts,
+    planner_proof_quality_evidence,
+    planner_proof_quality_summary,
+)
 from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
     OBJECT_DONE_PHASE,
@@ -118,7 +123,7 @@ def _cleanup_report_sections(
             _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
             _object_moves_section(moves),
             _semantic_steps_table(run_result.get("semantic_substeps") or []),
-            _robot_timeline(robot_view_steps),
+            _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
             _score_section(score),
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
@@ -143,6 +148,7 @@ def render_planner_manipulation_report(
     run_dir.mkdir(parents=True, exist_ok=True)
     report_path = run_dir / "report.html"
     evidence = run_result.get("manipulation_evidence") or {}
+    quality = planner_proof_quality_evidence(evidence)
     body = f"""
     <section class="summary">
       <div class="summary-head">
@@ -153,7 +159,10 @@ def render_planner_manipulation_report(
         {_metric("Status", run_result.get("status", "unknown"))}
         {_metric("Embodiment", evidence.get("embodiment", "unknown"))}
         {_metric("Policy", evidence.get("upstream_policy_class", "unknown"))}
+        {_metric("Proof Quality", quality.get("quality_tier", "unknown"))}
+        {_metric("Steps", evidence.get("steps_executed", "n/a"))}
         {_metric("Qpos delta", evidence.get("max_abs_qpos_delta", "n/a"))}
+        {_metric("Containment proven", "yes" if quality.get("containment_proven") else "no")}
       </div>
       <div class="badges">
         {_badge("Contract", run_result.get("contract", "unknown"))}
@@ -164,6 +173,7 @@ def render_planner_manipulation_report(
       </div>
     </section>
     {_manipulation_provenance_section(run_result)}
+    {_planner_probe_quality_section(evidence)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_cleanup_binding_section(evidence)}
     {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
@@ -174,6 +184,7 @@ def render_planner_manipulation_report(
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
+    {_planner_probe_policy_exception_section(evidence)}
     {_planner_probe_curobo_extension_cache_section(evidence)}
     {_planner_probe_warp_compatibility_section(evidence)}
     {_planner_probe_worker_stages_section(evidence)}
@@ -183,6 +194,34 @@ def render_planner_manipulation_report(
     """
     report_path.write_text(_wrap_html(body, extra_css=_planner_report_css()), encoding="utf-8")
     return report_path
+
+
+def _planner_probe_quality_section(evidence: dict[str, Any]) -> str:
+    if not evidence:
+        return ""
+    quality = planner_proof_quality_evidence(evidence)
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Proof Quality', quality.get('quality_tier', 'unknown'))}"
+        f"{_metric('Steps', quality.get('steps_executed', 0))}"
+        f"{_metric('Qpos delta', quality.get('max_abs_qpos_delta', 0.0))}"
+        f"{_metric('Containment proven', 'yes' if quality.get('containment_proven') else 'no')}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("One-step motion", quality.get("one_step_motion", False)),
+            _badge("Multi-step motion", quality.get("multi_step_motion", False)),
+            _badge("Object state evidence", quality.get("object_state_evidence_present", False)),
+        )
+    )
+    note = quality.get("evidence_note") or ""
+    return (
+        '<section class="panel planner-proof-quality">'
+        "<h2>Planner Proof Quality</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f'{metrics}<div class="badges">{badges}</div></section>'
+    )
 
 
 def render_planner_proof_bundle_runner_report(
@@ -228,6 +267,7 @@ def render_planner_proof_bundle_runner_report(
         )
     }
     </section>
+    {_proof_execution_horizon_section(manifest.get("proof_execution_horizon") or {})}
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
     {
         _grasp_feasibility_mitigation_decision_section(
@@ -558,6 +598,7 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         return _attached_planner_proof_bundle_section(run_result, proof)
     diagnostics = proof.get("runtime_diagnostics") or {}
     images = proof.get("image_artifacts") or {}
+    quality = planner_proof_quality_evidence(proof)
     note = (
         proof.get("evidence_note")
         or "Strict standalone planner-backed manipulation proof attached for review."
@@ -566,14 +607,17 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         '<div class="metric-grid">'
         f"{_metric('Status', proof.get('status', 'unknown'))}"
         f"{_metric('Embodiment', proof.get('embodiment', 'unknown'))}"
+        f"{_metric('Proof Quality', quality.get('quality_tier', 'unknown'))}"
         f"{_metric('Steps', proof.get('steps_executed', 'n/a'))}"
         f"{_metric('Qpos delta', proof.get('max_abs_qpos_delta', 'n/a'))}"
+        f"{_metric('Containment proven', 'yes' if quality.get('containment_proven') else 'no')}"
         "</div>"
     )
     badges = "".join(
         (
             _badge("Strict proof", proof.get("strict_proof_eligible", False)),
             _badge("Planner backed", proof.get("planner_backed", False)),
+            _badge("Multi-step motion", quality.get("multi_step_motion", False)),
             _badge("Cleanup primitive", run_result.get("primitive_provenance", "unknown")),
             _badge("Renderer adapter", diagnostics.get("renderer_adapter_enabled", False)),
         )
@@ -590,6 +634,9 @@ def _attached_planner_proof_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(str(note))} Cleanup object moves in this '
         f"artifact remain {html.escape(str(run_result.get('primitive_provenance', 'unknown')))}."
         "</p>"
+        f'<p class="note"><strong>Proof Quality:</strong> '
+        f"{html.escape(str(quality.get('quality_tier', 'unknown')))}. "
+        f"{html.escape(str(quality.get('evidence_note', '')))}</p>"
         f'{metrics}<div class="badges">{badges}</div>{views}</section>'
     )
 
@@ -601,6 +648,11 @@ def _attached_planner_proof_bundle_section(
     attachments = [item for item in bundle.get("attachments") or [] if isinstance(item, dict)]
     if not attachments:
         return ""
+    quality_summary = (
+        bundle.get("proof_quality_summary")
+        if isinstance(bundle.get("proof_quality_summary"), dict)
+        else planner_proof_quality_summary(attachments)
+    )
     note = (
         bundle.get("evidence_note")
         or "Multiple strict standalone planner-backed manipulation proofs attached."
@@ -609,6 +661,8 @@ def _attached_planner_proof_bundle_section(
         '<div class="metric-grid">'
         f"{_metric('Status', bundle.get('status', 'unknown'))}"
         f"{_metric('Proofs', bundle.get('proof_count', len(attachments)))}"
+        f"{_metric('Proof Quality', format_quality_tier_counts(quality_summary))}"
+        f"{_metric('Min steps', quality_summary.get('min_steps_executed', 0))}"
         f"{_metric('Cleanup primitive', run_result.get('primitive_provenance', 'unknown'))}"
         "</div>"
     )
@@ -624,13 +678,16 @@ def _attached_planner_proof_bundle_section(
         proof_id = str(attachment.get("proof_id") or "proof")
         binding = attachment.get("cleanup_primitive_binding") or {}
         images = attachment.get("image_artifacts") or {}
+        quality = planner_proof_quality_evidence(attachment)
         rows.append(
             "<tr>"
             f"<td>{html.escape(proof_id)}</td>"
             f"<td>{html.escape(str(binding.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(binding.get('target_receptacle_id', '')))}</td>"
             f"<td>{html.escape(str(attachment.get('embodiment', 'unknown')))}</td>"
+            f"<td>{html.escape(str(quality.get('quality_tier', 'unknown')))}</td>"
             f"<td>{html.escape(str(attachment.get('steps_executed', 'n/a')))}</td>"
+            f"<td>{html.escape(str(quality.get('containment_proven', False)))}</td>"
             "</tr>"
         )
         views.append(
@@ -641,13 +698,18 @@ def _attached_planner_proof_bundle_section(
         )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Proof</th><th>Object</th>'
-        "<th>Target</th><th>Embodiment</th><th>Steps</th></tr></thead><tbody>"
+        "<th>Target</th><th>Embodiment</th><th>Quality</th><th>Steps</th>"
+        "<th>Containment proven</th></tr></thead><tbody>"
         f"{''.join(rows)}</tbody></table></div>"
     )
     return (
         '<section class="panel attached-planner-proof">'
         "<h2>Attached Planner-Backed Proofs</h2>"
         f'<p class="note">{html.escape(str(note))}</p>'
+        f'<p class="note"><strong>Proof Quality:</strong> '
+        f"{html.escape(format_quality_tier_counts(quality_summary))}. "
+        "Attached planner proofs classify robot-motion strength separately from "
+        "final cleanup containment.</p>"
         f'{metrics}<div class="badges">{badges}</div>{table}'
         f'<div class="views">{"".join(views)}</div></section>'
     )
@@ -874,6 +936,7 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{_command_semantic_subphases(item)}</td>"
             f"<td>{html.escape(str(item.get('run_result', '')))}</td>"
             f"<td>{html.escape(str(item.get('report', '')))}</td>"
             f"<td><code>{html.escape(command)}</code></td>"
@@ -881,8 +944,10 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>#</th><th>Request</th>'
-        "<th>Object</th><th>Target</th><th>Proof run result</th><th>Proof report</th>"
-        "<th>Command</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        "<th>Object</th><th>Target</th><th>Semantic subphases</th>"
+        "<th>Proof run result</th><th>Proof report</th><th>Command</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
     return (
         '<section class="panel proof-bundle-commands">'
@@ -891,6 +956,28 @@ def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
         "the referenced proof artifact passes the strict planner probe checker.</p>"
         f"{table}</section>"
     )
+
+
+def _command_semantic_subphases(item: dict[str, Any]) -> str:
+    subphases = item.get("semantic_subphases") or []
+    if not subphases:
+        return ""
+    rail_items = []
+    for subphase in subphases:
+        if not isinstance(subphase, dict):
+            continue
+        label = str(subphase.get("label") or "")
+        detail = str(subphase.get("detail") or "")
+        phase = str(subphase.get("phase") or "")
+        rail_items.append(
+            "<li>"
+            f"<span>{html.escape(label)}</span>"
+            f"<small>{html.escape(detail)} / {html.escape(phase)}</small>"
+            "</li>"
+        )
+    if not rail_items:
+        return ""
+    return '<ol class="phase-rail command-phase-rail">' + "".join(rail_items) + "</ol>"
 
 
 def _grasp_cache_generation_summary_section(result: dict[str, Any]) -> str:
@@ -1376,6 +1463,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     excluded = selection.get("excluded_requests") or []
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
     grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
+    request_filter = selection.get("request_filter") or {}
+    request_filter = request_filter if isinstance(request_filter, dict) else {}
     raw_fallback_generation = selection.get("fallback_generation") or {}
     fallback_generation = (
         raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
@@ -1398,9 +1487,11 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
         f"{_metric('Ready', selection.get('ready_request_count', 0))}"
+        f"{_metric('Candidate ready', selection.get('candidate_request_count', 0))}"
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
         f"{_metric('Covered', selection.get('covered_request_count', 0))}"
+        f"{_metric('Coverage min steps', selection.get('prior_covered_min_proof_steps', 1))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
         f"{_metric('Normalized aliases', len(normalized_aliases))}"
@@ -1421,6 +1512,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_proof_quality', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_steps_executed', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         "</tr>"
@@ -1434,6 +1527,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('reason', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_proof_quality', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_steps_executed', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
@@ -1443,22 +1538,25 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="8">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="10">No proof requests selected.</td></tr>'
     if not excluded_rows:
-        excluded_rows = '<tr><td colspan="9">No proof requests excluded.</td></tr>'
+        excluded_rows = '<tr><td colspan="11">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
-        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior match</th>"
+        "<th>Prior feasibility</th><th>Prior quality</th><th>Prior steps</th>"
+        "<th>Prior blocker</th><th>Prior match</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
         '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
-        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior detail</th>"
-        "<th>Prior match</th><th>Prior blockers</th>"
+        "<th>Prior feasibility</th><th>Prior quality</th><th>Prior steps</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th>"
+        "<th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
+    request_filter_table = _request_filter_table(request_filter)
     generated_table = _generated_fallback_requests_table(generated)
     target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
     grasp_blockers_matrix = _grasp_feasibility_blocker_matrix(grasp_feasibility_blockers)
@@ -1475,9 +1573,79 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{target_blockers_table}"
+        f"{request_filter_table}{selected_table}{excluded_table}{target_blockers_table}"
         f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
+    )
+
+
+def _request_filter_table(request_filter: dict[str, Any]) -> str:
+    if not request_filter.get("enabled"):
+        return ""
+    requested = [str(item) for item in request_filter.get("requested_request_ids") or []]
+    matched = {str(item) for item in request_filter.get("matched_request_ids") or []}
+    missing = {str(item) for item in request_filter.get("missing_request_ids") or []}
+    rows = []
+    for request_id in requested:
+        if request_id in matched:
+            status = "matched_ready"
+        elif request_id in missing:
+            status = "missing"
+        else:
+            status = "unavailable"
+        rows.append(f"<tr><td>{html.escape(request_id)}</td><td>{html.escape(status)}</td></tr>")
+    if not rows:
+        rows.append('<tr><td colspan="2">No request ids requested.</td></tr>')
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requested', request_filter.get('requested_count', len(requested)))}"
+        f"{_metric('Matched', request_filter.get('matched_count', len(matched)))}"
+        f"{_metric('Unavailable', request_filter.get('unavailable_count', 0))}"
+        f"{_metric('Missing', request_filter.get('missing_count', len(missing)))}"
+        "</div>"
+    )
+    note = request_filter.get("evidence_note") or "Explicit request-id filter."
+    return (
+        "<h3>Request ID Filter</h3>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}'
+        '<div class="table-wrap"><table><thead><tr><th>Request</th><th>Status</th>'
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _proof_execution_horizon_section(horizon: dict[str, Any]) -> str:
+    if not horizon:
+        return ""
+    blockers = horizon.get("blockers") or []
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', horizon.get('status', 'unknown'))}"
+        f"{_metric('Command steps', horizon.get('command_steps', 0))}"
+        f"{_metric('Command target', horizon.get('command_quality_target', 'unknown'))}"
+        f"{_metric('Coverage min steps', horizon.get('prior_covered_min_proof_steps', 1))}"
+        f"{_metric('Coverage floor', horizon.get('prior_covered_quality_floor', 'unknown'))}"
+        "</div>"
+    )
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    if not blocker_rows:
+        blocker_rows = '<tr><td colspan="2">No proof execution horizon blockers.</td></tr>'
+    blockers_table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Code</th><th>Message</th>"
+        f"</tr></thead><tbody>{blocker_rows}</tbody></table></div>"
+    )
+    return (
+        '<section class="panel proof-execution-horizon">'
+        "<h2>Proof Execution Horizon</h2>"
+        f'<p class="note">{html.escape(str(horizon.get("evidence_note", "")))}</p>'
+        f"{metrics}{blockers_table}</section>"
     )
 
 
@@ -2145,11 +2313,15 @@ def _proof_bundle_results_section(
     config_import_timeout_count = _summary_config_import_timeout_count(summary, results)
     binding_promoted_count = _summary_metric(summary, results, "cleanup_binding_promoted_count")
     execution_attempted_count = _summary_metric(summary, results, "execution_attempted_count")
+    proof_quality_summary = summary.get("proof_quality_summary") or planner_proof_quality_summary(
+        item for item in results if item.get("run_result_exists")
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Expected', summary.get('expected_count', len(results)))}"
         f"{_metric('Results', summary.get('result_count', 0))}"
         f"{_metric('Planner-backed', planner_backed_count)}"
+        f"{_metric('Proof Quality', format_quality_tier_counts(proof_quality_summary))}"
         f"{_metric('Timeouts', _summary_timeout_count(summary, results))}"
         f"{_metric('Config-import timeouts', config_import_timeout_count)}"
         f"{_metric('Binding promoted', binding_promoted_count)}"
@@ -2169,6 +2341,7 @@ def _proof_bundle_results_section(
     grasp_signature_html = _proof_bundle_grasp_signature_section(
         _summary_grasp_signature_counts(summary, results)
     )
+    proof_quality_html = _proof_bundle_quality_summary_section(proof_quality_summary)
     body = (
         "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
@@ -2179,8 +2352,23 @@ def _proof_bundle_results_section(
         f'<section class="panel {html.escape(section_class)}">'
         f"<h2>{html.escape(title)}</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}'
-        f"{grasp_signature_html}{body}</section>"
+        f"{proof_quality_html}{grasp_signature_html}{body}</section>"
     )
+
+
+def _proof_bundle_quality_summary_section(summary: dict[str, Any]) -> str:
+    if not summary or int(summary.get("proof_count") or 0) == 0:
+        return ""
+    rows = [
+        ("Proof quality tiers", format_quality_tier_counts(summary)),
+        ("Lowest quality tier", summary.get("lowest_quality_tier", "")),
+        ("Min steps", summary.get("min_steps_executed", "")),
+        ("Max steps", summary.get("max_steps_executed", "")),
+        ("Max qpos delta", summary.get("max_abs_qpos_delta", "")),
+        ("Any containment proven", _yes_no(summary.get("any_containment_proven"))),
+        ("All containment proven", _yes_no(summary.get("all_containment_proven"))),
+    ]
+    return "<h3>Planner Proof Quality</h3>" + _field_table(rows)
 
 
 def _summary_metric(
@@ -2347,6 +2535,13 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
         ("Object", item.get("object_id", "")),
         ("Target", item.get("target_receptacle_id", "")),
         ("Status", item.get("status", "")),
+        ("Proof quality", (item.get("proof_quality") or {}).get("quality_tier", "")),
+        ("Steps executed", item.get("steps_executed", "")),
+        ("Qpos delta", item.get("max_abs_qpos_delta", "")),
+        (
+            "Containment proven",
+            _yes_no((item.get("proof_quality") or {}).get("containment_proven")),
+        ),
         ("Task feasibility", item.get("task_feasibility_status", "")),
         ("Task feasibility blocker", item.get("task_feasibility_blocker_kind", "")),
         ("Task feasibility detail", item.get("task_feasibility_blocker_summary", "")),
@@ -2439,7 +2634,7 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     table_rows = "".join(
         f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
         for label, value in rows
-        if value
+        if value not in (None, "", [], {})
     )
     views = item.get("views") or []
     if views:
@@ -3559,6 +3754,63 @@ def _curobo_profile_rows(
     return rows
 
 
+def _planner_probe_policy_exception_section(evidence: dict[str, Any]) -> str:
+    context = evidence.get("policy_exception_context") or {}
+    if not context:
+        return ""
+    primitives = context.get("action_primitives") or []
+    summary = (
+        '<div class="metric-grid">'
+        f"{_metric('Failure kind', context.get('failure_kind', 'unknown'))}"
+        f"{_metric('Stage', context.get('stage', 'unknown'))}"
+        f"{_metric('Exception', context.get('exception_type', 'unknown'))}"
+        f"{_metric('No planned trajectory', _yes_no(context.get('no_planned_trajectory')))}"
+        f"{_metric('Steps requested', context.get('steps_requested', 'unknown'))}"
+        f"{_metric('Primitives', context.get('action_primitive_count', len(primitives)))}"
+        "</div>"
+    )
+    message = str(context.get("message") or "")
+    rows = []
+    for primitive in primitives:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(primitive.get('index', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('primitive_class', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('current_phase', '')))}</td>"
+            f"<td>{html.escape(_yes_no(primitive.get('planned_trajectory_present')))}</td>"
+            f"<td>{html.escape(str(primitive.get('planned_trajectory_len', '')))}</td>"
+            f"<td>{html.escape(str(primitive.get('trajectory_index', '')))}</td>"
+            "</tr>"
+        )
+    table_rows = "".join(rows) or '<tr><td colspan="6">No action primitives recorded.</td></tr>'
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Primitive</th>'
+        "<th>Current phase</th><th>Planned trajectory</th><th>Trajectory len</th>"
+        f"<th>Trajectory index</th></tr></thead><tbody>{table_rows}</tbody></table></div>"
+    )
+    detail_rows = "".join(
+        f"<tr><td>{html.escape(label)}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in (
+            ("Policy class", context.get("policy_class") or ""),
+            ("Policy phase", context.get("policy_current_phase") or ""),
+            ("Message", message),
+        )
+    )
+    details = (
+        '<div class="table-wrap"><table><thead><tr><th>Signal</th><th>Value</th>'
+        f"</tr></thead><tbody>{detail_rows}</tbody></table></div>"
+    )
+    note = (
+        "Policy exception diagnostics preserve the planner primitive state at the "
+        "target-runtime failure point, before the artifact is collapsed into a "
+        "blocked-capability result."
+    )
+    return (
+        '<section class="panel"><h2>Policy Exception Diagnostics</h2>'
+        f'<p class="note">{html.escape(note)}</p>{summary}{details}{table}</section>'
+    )
+
+
 def _planner_probe_curobo_extension_cache_section(evidence: dict[str, Any]) -> str:
     diagnostics = evidence.get("runtime_diagnostics") or {}
     cache = diagnostics.get("curobo_extension_cache") or {}
@@ -4068,6 +4320,30 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
     )
 
 
+def _visual_core_robot_view_steps(
+    run_result: dict[str, Any],
+    steps: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not _has_raw_fpv_observations(run_result):
+        return steps
+    return [step for step in steps if not _is_raw_fpv_observation_step(step)]
+
+
+def _has_raw_fpv_observations(run_result: dict[str, Any]) -> bool:
+    observations = run_result.get("raw_fpv_observations") or (
+        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+    )
+    return bool(observations)
+
+
+def _is_raw_fpv_observation_step(step: dict[str, Any]) -> bool:
+    if step.get("semantic_phase"):
+        return False
+    action = str(step.get("action") or "")
+    label = str(step.get("label") or "")
+    return action.startswith("observe raw_fpv_") or "_raw_fpv_" in f"_{label}"
+
+
 def _semantic_phase_summary(semantic_phase: Any) -> str:
     if not semantic_phase:
         return ""
@@ -4444,6 +4720,7 @@ def _wrap_html(body: str, *, extra_css: str = "") -> str:
     }}
     .phase-rail span {{ display: block; font-weight: 750; color: #1f5f58; }}
     .phase-rail small {{ display: block; margin-top: 2px; color: #687789; }}
+    .command-phase-rail {{ min-width: 280px; }}
     .readback {{ margin: 10px 0 0; color: #565f70; font-size: 13px; overflow-wrap: anywhere; }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; }}
     th, td {{

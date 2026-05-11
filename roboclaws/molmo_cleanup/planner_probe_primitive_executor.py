@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.planner_primitive_executor import (
 from roboclaws.molmo_cleanup.planner_proof_attachment import (
     PLANNER_PROOF_ATTACHMENT_SCHEMA,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import canonical_cleanup_tool_sequence
 
 PLANNER_PROBE_PRIMITIVE_EXECUTOR_SCHEMA = "planner_probe_cleanup_primitive_executor_v1"
 PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA = "planner_probe_cleanup_primitive_binding_v1"
@@ -261,4 +262,4 @@ def _binding_tools(binding: Mapping[str, Any]) -> list[str]:
     else:
         tool = binding.get("tool")
         tools = [str(tool)] if tool else []
-    return sorted(set(tools))
+    return canonical_cleanup_tool_sequence(tools)

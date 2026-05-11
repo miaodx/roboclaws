@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 123 MolmoSpaces cache-ready proof rerun completed on 2026-05-10.
-last_updated: "2026-05-10T00:00:00+08:00"
+stopped_at: Phase 134 MolmoSpaces canonical proof command tool order completed on 2026-05-10.
+last_updated: "2026-05-10T20:52:07+08:00"
 last_activity: 2026-05-10
 progress:
-  total_phases: 111
-  completed_phases: 111
-  total_plans: 119
-  completed_plans: 119
+  total_phases: 120
+  completed_phases: 120
+  total_plans: 130
+  completed_plans: 130
   percent: 100
 ---
 
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 123 proved the `Bread_1` cache now loads; the next manipulation blocker is CuRobo pre-grasp trajectory generation.
+**Current focus:** Phase 134 makes proof-bundle executable cleanup tools, manifest rows, and report semantic rails share the same `nav, pick, nav, open?, place` order. Next work should execute the bounded `proof_001` two-step proof attempt, then rerun cleanup if the resulting proof has cleanup binding coverage.
 
 ## Current Position
 
-Phase: 123 (molmospaces-cache-ready-proof-rerun) - COMPLETE
-Plan: 1 of 1 complete - `123-01` reruns the exact proof against the valid cache and records the next planner blocker.
+Phase: 134 (molmospaces-canonical-proof-command-tool-order) - COMPLETE
+Plan: 1 of 1 complete - `134-01` canonicalizes cleanup tool order across proof commands, bindings, and report rails.
 Status: Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
 blockers. Phase 36 routed current-contract and ADR-0003 object cleanup through
@@ -366,19 +366,62 @@ the droid `Bread_1` loader cache, and revalidated cache availability as ready.
 Phase 123 reruns the exact cache-ready `observed_001` proof. The warmed run
 loads 9 cached `Bread_1` grasps, finds 2 non-colliding grasps, matches the exact
 cleanup binding, and blocks later at CuRobo pre-grasp trajectory generation.
-Last activity: 2026-05-10 - Completed Phase 123 cache-ready proof rerun.
+Phase 124 focuses the cleanup report Robot View Timeline. ADR-0003 raw FPV
+scan captures stay in `run_result.json`, Agent View, and Raw FPV Observations,
+but the visual-core timeline now emphasizes before/after plus semantic cleanup
+actions so ADR-0003 reports match the current-contract visual rhythm.
+Phase 125 preserves CuRobo policy exception context and reruns the warmed exact
+`observed_001` proof. The real run returned `planner_backed` for one execution
+step with `max_abs_qpos_delta=0.018310936580938183`, preserved the CuRobo
+profile and exact cleanup binding at top level, and did not reproduce the
+pre-grasp no-planned-trajectory exception.
+Phase 126 consumes the Phase 125 proof in the final ADR-0003 cleanup primitive
+path. `observed_001` to refrigerator is planner-backed for `nav`, `pick`,
+`nav`, `open`, and `place_inside`; the remaining 37 unmatched subphases stay
+`api_semantic`, so the Cleanup Primitive Gate and Planner Cleanup Bridge remain
+blocked at the run level.
+Phase 127 adds Planner Proof Quality Evidence so attachments, bundles, reports,
+and checkers classify proof strength through one shared module. The current
+Phase 125 proof is now explicitly one-step motion evidence, not a full
+pick/place or containment claim.
+Phase 128 reuses that quality vocabulary across standalone planner probes and
+proof-bundle runner reports. Individual proof reports, runner summaries, and
+cleanup reports now render the same proof-strength tiers.
+Phase 129 makes prior-covered selection proof-quality-aware. One-step prior
+proof memory still satisfies the default horizon, but stricter proof-bundle runs
+can reselect that request until a prior proof reaches the requested step count.
+Phase 130 routes report generation for Molmo cleanup run directories and
+`run_result.json` files through the shared Cleanup Report Artifact Adapter even
+when callers use the generic report entrypoint.
+Phase 131 renders the requested proof execution horizon in proof-bundle
+manifests and runner reports, including command steps, quality target,
+prior-covered coverage floor, and blockers when command generation is below the
+requested proof horizon.
+Phase 132 renders generated proof command cleanup tools as display-ready
+semantic subphase rails, so dry-run proof reports show the shared
+`nav, pick, nav, open?, place` intent before local execution.
+Phase 133 adds explicit request-id filtering to the proof-bundle runner. The
+bounded Phase 126 stricter dry-run selects only `proof_001`, renders
+`Request ID Filter`, and passes the runner checker with max selected requests
+set to 1.
+Phase 134 canonicalizes cleanup tool ordering across proof request bindings,
+probe-side parsing, promoted cleanup primitive bindings, and proof command
+construction. The bounded `proof_001` dry-run now emits the same
+`nav, pick, nav, open?, place` order in `--cleanup-tools`, manifest `tools`, and
+the report semantic rail.
+Last activity: 2026-05-10 - Completed Phase 134 canonical proof command tool order.
 
 Progress: [##########] 100%
-Next blocker: diagnose CuRobo pre-grasp trajectory generation for the loaded
-`Bread_1` grasp set; cache loading and exact cleanup binding are no longer the
-active blockers.
+Next blocker: execute the bounded `proof_001` two-step local proof attempt with
+canonical command tools, then rerun cleanup if the resulting proof has cleanup
+binding coverage.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 123 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 123)
+- Total plans completed: 134 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 134)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -405,8 +448,36 @@ active blockers.
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 121, 122, 123
+- Last 3 shipped phases: 132, 133, 134
 - Trend: MolmoSpaces cleanup path now has ADR-0003 cleanup reports that attach strict planner proof without changing cleanup primitive provenance, a strict per-subphase gate for future planner-backed cleanup primitives, a target RBY1M/CuRobo runtime gate, a camera-only model-policy cleanup path, one canonical report visual core shared across the demos, staged RBY1M/CuRobo warmup-readiness evidence, isolated CuRobo extension-cache evidence, visible Warp compatibility evidence, measured CUDA memory headroom evidence, strict standalone RBY1M/CuRobo planner-backed proof under a visible low-memory profile, one shared semantic cleanup driver, explicit planner cleanup bridge-readiness evidence, a strict per-call executor seam for planner-backed cleanup primitives, object/target binding for that evidence, a probe-backed executor adapter that blocks generic standalone proof, planner probe diagnostics that promote cleanup binding only on exact request/sample match, private observed-handle to planner-alias binding, bounded opt-in executor wiring for one matching cleanup object, proof-bundle coverage for full synthetic cleanup gate readiness, a shared visual-core checker that rejects stale report shapes, private planner-proof request manifests for repeatable local proof-bundle generation, report visibility for those private proof requests, visual proof-bundle runner command reports, a checker for runner manifest/report integrity, shared-loop reuse in the MCP smoke demos, a dry-run harness for the proof-bundle runner, cleanup-rerun artifact tracking for executed bundle flows, a local execute-rerun gate, exact cleanup-scene proof binding, proof-bundle result summaries, proof request feasibility selection that skips prior infeasible requests before reruns, generated fallback proof requests that turn blocked source requests into private alternate planner-alias commands, local execution evidence showing those generated fallbacks time out at RBY1M config import before proof or binding, bundle-level timeout-stage reporting so those failures remain visible in the shared runner report, a visible shared-cache warmup step for generated fallback retries, local warmed execution evidence moving the blocker from config-import timeout to invalid exact-scene planner aliases, exact-scene fallback alias filtering that reports display aliases without generating invalid proof commands, runtime alias discovery that mines prior KeyError valid-name lists into new exact-scene fallback commands, local execution evidence showing those runtime-sibling commands reach task sampling but still block on task feasibility or non-root-body alias validity before proof, binding, or views, failed-candidate memory that prevents retrying known non-root aliases and prior task-feasibility-blocked alias pairs, filtered fallback execution evidence showing the remaining book runtime sibling is also non-root, filter carry-forward that preserves the exhausted fallback pool across manifests, pickup root-variant filtering that prevents future object-side non-root retries from older KeyError evidence, prior proof evidence merge so alias discovery and failed-candidate memory can be selected together from multiple manifests, explicit fallback exhaustion status in runner manifests/reports/checkers, stable fallback exhaustion blocker summaries that name root-body alias gaps, target task-feasibility-blocked pairs, and no-candidate source requests, pickup root alias normalization that proves the current object-side root aliases are already derivable, target feasibility proof links that preserve distinct prior fallback attempts across colliding generated IDs, a target feasibility blocker matrix that joins source and fallback blockers in one report view, task-sampler exception context that proves the exact sampler adapter was applied before warmed `HouseInvalidForTask` failures, task-sampler failure diagnostics that expose repeated Book_23 robot-placement failures, a relaxed task-sampler placement profile proving the actual upstream placement calls now receive `max_tries=50` while the exact Book_23 request remains infeasible, placement scene diagnostics showing the original infeasibility is driven by low local map free space around the exact object, a wide placement profile showing robot placement can clear while `HouseInvalidForTask` remains downstream, post-placement rejection diagnostics showing that downstream blocker is repeated grasp/candidate rejection, proof-result classification making that blocker machine-readable as `grasp_feasibility`, selection memory preserving that blocker through excluded requests, generated fallback provenance, filtered fallback pairs, and report blocker views, cleanup-pair proof memory keeping those filters attached across regenerated request IDs, standalone prior proof ingest bringing Phase 81-style planner-probe artifacts into the same selection interface as prior proof-bundle manifests, prior proof evidence reporting that keeps consumed prior diagnostics and planner-view artifacts visible in the runner report, selected proof candidate execution showing both current source requests are grasp-infeasible, nested prior proof evidence carry-forward so later runner generations preserve older blocker evidence from a single manifest input, planner-object proof memory so broader source artifacts can select new exact-scene commands without retrying known internal blocked pairs, broader selected proof execution showing one selected broader candidate is strict planner-backed with cleanup binding and views, broader bound proof cleanup rerun proving that one matching cleanup object can consume that proof while unmatched objects remain api-semantic and bridge-blocked, prior covered proof memory preventing that solved proof from being selected again, local runtime preflight that catches missing MolmoSpaces runtimes before proof execution, seed 10 source-rotation evidence, seed 10 selected proof execution showing all five selected requests are still grasp-feasibility blocked, grasp-feasibility signature grouping that collapses repeated executed blocker patterns into one reviewable matrix, seed 10 fallback exhaustion showing no generated fallback candidates remain under current rules, a grasp-cache routing decision that sends `Bread_1` missing-cache evidence to cache mitigation while keeping source rotation separate for unproven requests, a grasp-cache availability preflight that proves the `Bread_1` object asset exists while rigid loader cache files are absent, a runtime-assets preflight that resolves the missing loader paths through the MolmoSpaces symlink root, a validity preflight that rejects the installed empty `Bread_1` NPZ as `present_but_invalid`, semantic vocabulary centralization for `nav, pick, nav, open?, place`, a report-visible grasp generation preflight, reusable local setup that turns generation prerequisites ready, a generation/install report that exposes the remaining zero-success perturbation filter blocker, bounded filter diagnostics showing that even no-shake/no-rotate initial contact saves zero transforms for the generated `Bread_1` subset, a positive-standoff initial-contact sweep with 9/24 successes, scenario-less cleanup report regeneration through the same visual underlay, a validated droid `Bread_1` loader cache with 9 installed transforms, and a cache-ready exact proof rerun that clears grasp loading but exposes CuRobo pre-grasp trajectory planning as the next blocker.
+- Phase 125 update: the warmed exact proof no longer reproduces the pre-grasp
+  no-planned-trajectory blocker and passes the strict planner-probe checker as
+  `planner_backed` for one execution step.
+- Phase 126 update: the Phase 125 proof is now consumed by the final ADR-0003
+  cleanup primitive path for the inside-target `observed_001` refrigerator
+  sequence. The artifact is intentionally mixed and bridge-blocked because the
+  remaining cleanup objects still lack matching planner proof coverage.
+- Phase 127 update: attached planner proofs now carry Planner Proof Quality
+  Evidence, reports render `Proof Quality`, and checker gates can require a
+  minimum executed-step horizon before stronger cleanup claims are accepted.
+- Phase 128 update: standalone planner-probe reports and proof-bundle runner
+  reports now render the same proof-quality tiers, and their checkers can
+  require proof-quality evidence before accepting stricter proof horizons.
+- Phase 129 update: prior-covered proof selection now requires prior proof
+  quality to meet the requested coverage horizon before suppressing a request.
+- Phase 130 update: generic report generation now detects Molmo cleanup
+  artifacts and delegates to the shared Cleanup Report Artifact Adapter.
+- Phase 131 update: proof-bundle runner manifests and reports now render Proof
+  Execution Horizon details before local execution, and the runner checker can
+  require that view.
+- Phase 132 update: proof-bundle command rows now carry cleanup tools and
+  render display-ready semantic subphase rails in the shared cleanup vocabulary.
+- Phase 133 update: proof-bundle runs can now be filtered to explicit
+  `--request-id` values, and reports/checkers show requested, matched,
+  unavailable, and missing IDs.
+- Phase 134 update: cleanup tool ordering now normalizes through the shared
+  semantic timeline helper so proof command flags, manifest rows, and report
+  rails all preserve `nav, pick, nav, open?, place`.
 - Report label note: Phase 59 makes `nav, pick, nav, open?, place` the primary
   Cleanup Artifact Report vocabulary and keeps object/target/surface/inside as
   secondary role detail.
@@ -1041,14 +1112,20 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-05-10T00:00:00+08:00
-Stopped at: Phase 123 MolmoSpaces cache-ready proof rerun completed.
-The next manipulation implementation should diagnose CuRobo pre-grasp trajectory
-generation for the now-loaded `Bread_1` grasp set.
+Last session: 2026-05-10T20:52:07+08:00
+Stopped at: Phase 134 MolmoSpaces canonical proof command tool order completed.
+The next manipulation implementation should execute the bounded `proof_001`
+two-step local proof attempt with canonical command tools, then rerun cleanup if
+the resulting proof has cleanup binding coverage. Report generation routes
+Molmo cleanup artifacts to the shared visual underlay, prior-covered selection
+can reselect one-step proof memory when a higher horizon is requested,
+proof-bundle dry-run reports expose command quality plus semantic subphase
+intent, request filtering keeps the next local proof attempt to one selected
+command, and executable `--cleanup-tools` now matches the report rail.
 Latest phase artifacts are
-`docs/adr/0114-record-cache-ready-proof-rerun.md`,
-`docs/plans/molmospaces-cache-ready-proof-rerun.md`, and
-`.planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cache-ready-proof-rerun-PLAN.md`.
+`docs/adr/0125-canonicalize-proof-command-cleanup-tool-order.md`,
+`docs/plans/molmospaces-canonical-proof-command-tool-order.md`, and
+`.planning/phases/134-molmospaces-canonical-proof-command-tool-order/134-01-canonical-proof-command-tool-order-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1057,7 +1134,9 @@ Latest executed cleanup artifact:
 Latest executed standalone proof artifact:
 `output/debug-phase109-grasp-collision-diagnostics/run_result.json`.
 Latest proof-bundle dry-run artifact:
-`output/debug-phase117-grasp-generation-prereqs/proof_bundle_run_manifest.json`.
+`output/debug-phase134-canonical-tool-order-dry-run/proof_bundle_run_manifest.json`.
+Latest proof-bundle dry-run report:
+`output/debug-phase134-canonical-tool-order-dry-run/report.html`.
 Latest grasp-cache generation artifact:
 `output/debug-phase118-grasp-cache-generation-min/generation_result.json`.
 Latest grasp-cache generation report:
@@ -1082,7 +1161,18 @@ Latest cache-ready exact proof artifact:
 `output/debug-phase123-cache-ready-proof001-warmed-rerun/run_result.json`.
 Latest cache-ready exact proof report:
 `output/debug-phase123-cache-ready-proof001-warmed-rerun/report.html`.
-Resume file: .planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cache-ready-proof-rerun-PLAN.md
+Latest planner-backed exact proof artifact:
+`output/debug-phase125-curobo-pregrasp-exception-context/run_result.json`.
+Latest planner-backed exact proof report:
+`output/debug-phase125-curobo-pregrasp-exception-context/report.html`.
+Latest bound-proof cleanup rerun artifact:
+`output/debug-phase126-phase125-bound-proof-cleanup-rerun/run_result.json`.
+Latest bound-proof cleanup rerun report:
+`output/debug-phase126-phase125-bound-proof-cleanup-rerun/report.html`.
+Latest focused cleanup report examples:
+`output/molmo-agent-bridge-visual-codex/report.html` and
+`output/molmo-realworld-report-underlay-visual/report.html`.
+Resume file: .planning/phases/134-molmospaces-canonical-proof-command-tool-order/134-01-canonical-proof-command-tool-order-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1090,6 +1180,7 @@ Resume file: .planning/phases/123-molmospaces-cache-ready-proof-rerun/123-01-cac
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 123 MolmoSpaces cache-ready proof rerun is
-complete; next manipulation work should diagnose CuRobo pre-grasp trajectory
-generation after valid `Bread_1` grasp loading.
+**Active Phase:** None. Phase 134 MolmoSpaces canonical proof command tool order
+is complete; the next proof-bundle execution can target only `proof_001` with
+canonical cleanup tools while the global cleanup bridge remains blocked until
+broader or stronger proof evidence exists.

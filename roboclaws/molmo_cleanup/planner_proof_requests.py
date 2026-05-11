@@ -3,10 +3,15 @@ from __future__ import annotations
 import ast
 import json
 import re
+from collections.abc import Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.planner_proof_quality import (
+    planner_proof_quality_evidence,
+    planner_proof_quality_summary,
+)
 from roboclaws.molmo_cleanup.planner_task_feasibility import (
     grasp_cache_availability_preflight,
     grasp_cache_generation_preflight,
@@ -16,12 +21,16 @@ from roboclaws.molmo_cleanup.planner_task_feasibility import (
     task_feasibility_blocker_kind,
     task_feasibility_blocker_summary,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    SEMANTIC_SUBPHASE_LABELS,
+    canonical_cleanup_tool_sequence,
+)
 
 PLANNER_PROOF_REQUESTS_SCHEMA = "planner_cleanup_proof_requests_v1"
 PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA = "planner_cleanup_proof_bundle_run_manifest_v1"
 PLANNER_PROOF_RESULT_SUMMARY_SCHEMA = "planner_cleanup_proof_result_summary_v1"
 PLANNER_PROOF_REQUEST_SELECTION_SCHEMA = "planner_cleanup_proof_request_selection_v1"
+PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA = "planner_cleanup_proof_execution_horizon_v1"
 PLANNER_PROOF_REQUEST_FALLBACK_GENERATION_SCHEMA = (
     "planner_cleanup_proof_request_fallback_generation_v1"
 )
@@ -170,13 +179,19 @@ def build_probe_commands(
         scene_xml = str((manifest.get("planner_scene") or {}).get("scene_xml") or "")
         if scene_xml:
             command.extend(["--cleanup-scene-xml", scene_xml])
-        for flag, value in sorted((request.get("planner_probe_args") or {}).items()):
+        tools = _request_tools(request)
+        planner_probe_args = dict(request.get("planner_probe_args") or {})
+        if tools:
+            planner_probe_args["--cleanup-tools"] = ",".join(tools)
+        for flag, value in sorted(planner_probe_args.items()):
             command.extend([str(flag), str(value)])
         commands.append(
             {
                 "request_id": request.get("request_id"),
                 "object_id": request.get("object_id"),
                 "target_receptacle_id": request.get("target_receptacle_id"),
+                "tools": tools,
+                "semantic_subphases": _semantic_subphase_entries(tools),
                 "output_dir": str(proof_dir),
                 "run_result": str(proof_dir / "run_result.json"),
                 "report": str(proof_dir / "report.html"),
@@ -238,6 +253,51 @@ def build_probe_warmup_command(
     }
 
 
+def proof_execution_horizon(
+    *,
+    command_steps: int,
+    prior_covered_min_proof_steps: int,
+) -> dict[str, Any]:
+    """Describe the proof-strength target requested by a proof-bundle run."""
+    command_steps = max(0, int(command_steps))
+    coverage_min_steps = max(1, int(prior_covered_min_proof_steps))
+    blockers: list[dict[str, Any]] = []
+    status = "aligned"
+    if command_steps < coverage_min_steps:
+        status = "command_steps_below_coverage_horizon"
+        blockers.append(
+            {
+                "code": "command_steps_below_coverage_horizon",
+                "message": (
+                    f"Probe commands request {command_steps} steps, below the "
+                    f"prior-covered minimum of {coverage_min_steps} steps."
+                ),
+            }
+        )
+    return {
+        "schema": PLANNER_PROOF_EXECUTION_HORIZON_SCHEMA,
+        "status": status,
+        "command_steps": command_steps,
+        "command_quality_target": _quality_target_for_steps(command_steps),
+        "prior_covered_min_proof_steps": coverage_min_steps,
+        "prior_covered_quality_floor": _quality_target_for_steps(coverage_min_steps),
+        "blockers": blockers,
+        "evidence_note": (
+            "Requested proof-strength horizon for generated proof commands. "
+            "This records the intended proof tier before local execution; strict "
+            "proof results remain authoritative after execution."
+        ),
+    }
+
+
+def _quality_target_for_steps(steps: int) -> str:
+    if steps >= 2:
+        return "multi_step_motion"
+    if steps >= 1:
+        return "one_step_motion"
+    return "unknown"
+
+
 def proof_bundle_run_manifest(
     *,
     cleanup_run_result: Path,
@@ -246,6 +306,7 @@ def proof_bundle_run_manifest(
     commands: list[dict[str, Any]],
     warmup: dict[str, Any] | None = None,
     local_runtime_preflight: dict[str, Any] | None = None,
+    proof_execution_horizon: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
     prior_proof_result_summary: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
@@ -279,6 +340,7 @@ def proof_bundle_run_manifest(
         "proof_request_selection": selection,
         "prior_proof_result_summary": prior_summary,
         "local_runtime_preflight": local_runtime_preflight or {},
+        "proof_execution_horizon": proof_execution_horizon or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,
@@ -315,14 +377,29 @@ def proof_request_selection_from_summary(
     proof_requests: dict[str, Any],
     *,
     prior_proof_result_summary: dict[str, Any] | None = None,
+    include_request_ids: Sequence[str] | None = None,
     exclude_task_feasibility_blocked: bool = False,
     exclude_prior_covered: bool = False,
+    prior_covered_min_proof_steps: int = 1,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
     """Select ready proof requests, optionally excluding known infeasible requests."""
-    ready_requests = [
+    prior_covered_min_proof_steps = max(1, int(prior_covered_min_proof_steps))
+    requested_ids = _normalized_request_ids(include_request_ids)
+    all_requests = [request for request in proof_requests.get("requests") or []]
+    all_ready_requests = [
         request for request in proof_requests.get("requests") or [] if request.get("ready")
+    ]
+    request_filter = _request_id_filter(
+        requested_ids=requested_ids,
+        requests=all_requests,
+        ready_requests=all_ready_requests,
+    )
+    ready_requests = [
+        request
+        for request in all_ready_requests
+        if not requested_ids or str(request.get("request_id") or "") in set(requested_ids)
     ]
     prior_summary = prior_proof_result_summary or {}
     prior_results = _prior_results_by_request_id(prior_summary)
@@ -350,7 +427,10 @@ def proof_request_selection_from_summary(
             prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
             prior_results_by_planner_object_target=prior_results_by_planner_object_target,
         )
-        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(prior_result):
+        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(
+            prior_result,
+            min_proof_steps=prior_covered_min_proof_steps,
+        ):
             excluded.append(
                 _excluded_request(
                     request,
@@ -417,16 +497,20 @@ def proof_request_selection_from_summary(
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
+            include_request_ids=bool(requested_ids),
             exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
             exclude_prior_covered=exclude_prior_covered,
             generate_fallback_requests=generate_fallback_requests,
         ),
-        "ready_request_count": len(ready_requests),
+        "ready_request_count": len(all_ready_requests),
+        "candidate_request_count": len(ready_requests),
+        "request_filter": request_filter,
         "selected_count": len(selected),
         "excluded_count": len(excluded),
         "covered_request_count": sum(
             1 for item in excluded if item.get("reason") == "prior_planner_proof_covered"
         ),
+        "prior_covered_min_proof_steps": prior_covered_min_proof_steps,
         "generated_fallback_request_count": len(generated),
         "fallback_required": fallback_required,
         "selected_request_ids": [item["request_id"] for item in selected],
@@ -448,21 +532,66 @@ def proof_request_selection_from_summary(
 
 def _proof_request_selection_mode(
     *,
+    include_request_ids: bool,
     exclude_task_feasibility_blocked: bool,
     exclude_prior_covered: bool,
     generate_fallback_requests: bool,
 ) -> str:
     if exclude_task_feasibility_blocked and exclude_prior_covered and generate_fallback_requests:
-        return "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
-    if exclude_task_feasibility_blocked and exclude_prior_covered:
-        return "exclude_task_feasibility_blocked_and_prior_covered"
-    if exclude_task_feasibility_blocked and generate_fallback_requests:
-        return "exclude_task_feasibility_blocked_with_fallbacks"
-    if exclude_task_feasibility_blocked:
-        return "exclude_task_feasibility_blocked"
-    if exclude_prior_covered:
-        return "exclude_prior_covered"
-    return "all_ready"
+        mode = "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
+    elif exclude_task_feasibility_blocked and exclude_prior_covered:
+        mode = "exclude_task_feasibility_blocked_and_prior_covered"
+    elif exclude_task_feasibility_blocked and generate_fallback_requests:
+        mode = "exclude_task_feasibility_blocked_with_fallbacks"
+    elif exclude_task_feasibility_blocked:
+        mode = "exclude_task_feasibility_blocked"
+    elif exclude_prior_covered:
+        mode = "exclude_prior_covered"
+    else:
+        mode = "all_ready"
+    if include_request_ids:
+        if mode == "all_ready":
+            return "request_id_filter"
+        return f"request_id_filter_and_{mode}"
+    return mode
+
+
+def _normalized_request_ids(request_ids: Sequence[str] | None) -> list[str]:
+    if not request_ids:
+        return []
+    return _unique_nonempty_values([str(item).strip() for item in request_ids])
+
+
+def _request_id_filter(
+    *,
+    requested_ids: list[str],
+    requests: list[dict[str, Any]],
+    ready_requests: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not requested_ids:
+        return {
+            "enabled": False,
+            "requested_request_ids": [],
+            "matched_request_ids": [],
+            "unavailable_request_ids": [],
+        }
+    request_ids = {str(item.get("request_id") or "") for item in requests}
+    ready_ids = {str(item.get("request_id") or "") for item in ready_requests}
+    matched = [request_id for request_id in requested_ids if request_id in ready_ids]
+    unavailable = [request_id for request_id in requested_ids if request_id not in ready_ids]
+    missing = [request_id for request_id in requested_ids if request_id not in request_ids]
+    return {
+        "enabled": True,
+        "requested_request_ids": requested_ids,
+        "requested_count": len(requested_ids),
+        "matched_request_ids": matched,
+        "matched_count": len(matched),
+        "unavailable_request_ids": unavailable,
+        "unavailable_count": len(unavailable),
+        "missing_request_ids": missing,
+        "missing_count": len(missing),
+        "evidence_note": ("Explicit proof request filter for bounded local proof-bundle runs."),
+    }
 
 
 def _selected_request_ids(request_selection: dict[str, Any] | None) -> set[str] | None:
@@ -644,8 +773,34 @@ def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:
     )
 
 
-def _prior_result_has_cleanup_binding_coverage(item: dict[str, Any]) -> bool:
-    return bool(item.get("planner_backed")) and bool(item.get("cleanup_binding_promoted"))
+def _prior_result_has_cleanup_binding_coverage(
+    item: dict[str, Any],
+    *,
+    min_proof_steps: int,
+) -> bool:
+    if not bool(item.get("planner_backed")) or not bool(item.get("cleanup_binding_promoted")):
+        return False
+    if min_proof_steps <= 1 and not _has_prior_quality_inputs(item):
+        return True
+    quality = planner_proof_quality_evidence(item)
+    return (
+        bool(quality.get("one_step_motion"))
+        and int(quality.get("steps_executed") or 0) >= min_proof_steps
+        and float(quality.get("max_abs_qpos_delta") or 0.0) > 0.0
+    )
+
+
+def _has_prior_quality_inputs(item: dict[str, Any]) -> bool:
+    return any(
+        key in item
+        for key in (
+            "proof_quality",
+            "steps_executed",
+            "max_abs_qpos_delta",
+            "containment_proven",
+            "object_state_evidence",
+        )
+    )
 
 
 def _selected_request(
@@ -679,6 +834,8 @@ def _selected_request(
     match_kind = prior_result_match_kind or str(fallback.get("prior_result_match_kind") or "")
     if match_kind:
         item["prior_result_match_kind"] = match_kind
+    if prior_result:
+        item.update(_prior_result_evidence_fields(prior_result))
     return item
 
 
@@ -791,6 +948,7 @@ def _grasp_feasibility_blockers(
 
 
 def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
+    quality = planner_proof_quality_evidence(result)
     return {
         "prior_run_result": str(result.get("run_result") or ""),
         "prior_report": str(result.get("report") or ""),
@@ -798,6 +956,9 @@ def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
         "prior_stderr": str(result.get("stderr") or ""),
         "last_worker_stage": str(result.get("last_worker_stage") or ""),
         "execution_attempted": bool(result.get("execution_attempted")),
+        "prior_proof_quality": str(quality.get("quality_tier") or ""),
+        "prior_steps_executed": int(quality.get("steps_executed") or 0),
+        "prior_max_abs_qpos_delta": float(quality.get("max_abs_qpos_delta") or 0.0),
     }
 
 
@@ -1632,6 +1793,9 @@ def _unique_nonempty_values(values: list[str]) -> list[str]:
 def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[str, Any]:
     """Summarize generated proof outputs without replacing strict proof validation."""
     results = [_proof_result_from_command(item) for item in commands]
+    proof_quality_summary = planner_proof_quality_summary(
+        item for item in results if item.get("run_result_exists")
+    )
     return {
         "schema": PLANNER_PROOF_RESULT_SUMMARY_SCHEMA,
         "expected_count": len(commands),
@@ -1665,6 +1829,7 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
         ),
         "last_worker_stage_counts": _last_worker_stage_counts(results),
         "view_artifact_count": sum(len(item.get("views") or []) for item in results),
+        "proof_quality_summary": proof_quality_summary,
         "results": results,
         "evidence_note": (
             "Bundle-level summary of generated proof artifacts. Strict per-proof "
@@ -1696,6 +1861,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
         "last_worker_stage": "",
         "worker_stage_event_count": 0,
         "worker_stage_events": [],
+        "steps_executed": 0,
+        "max_abs_qpos_delta": 0.0,
+        "proof_quality": {},
         "stdout": "",
         "stderr": "",
         "views": [],
@@ -1742,6 +1910,7 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     planner_backed = data.get("status") == "planner_backed"
     views = _proof_views(base, evidence)
     worker_stage_events = _compact_worker_stage_events(evidence.get("worker_stage_events") or [])
+    proof_quality = planner_proof_quality_evidence(evidence)
     result.update(
         {
             "status": str(data.get("status") or "unknown"),
@@ -1768,6 +1937,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
             "last_worker_stage": str(evidence.get("last_worker_stage") or ""),
             "worker_stage_event_count": len(worker_stage_events),
             "worker_stage_events": worker_stage_events,
+            "steps_executed": int(proof_quality.get("steps_executed") or 0),
+            "max_abs_qpos_delta": float(proof_quality.get("max_abs_qpos_delta") or 0.0),
+            "proof_quality": proof_quality,
             "stdout": _proof_artifact_path(base, artifacts, "stdout"),
             "stderr": _proof_artifact_path(base, artifacts, "stderr"),
             "cleanup_task_config": cleanup_task_config,
@@ -1963,11 +2135,35 @@ def _planner_scene(contract: Any) -> dict[str, Any]:
 
 
 def _cleanup_tools(steps: list[dict[str, Any]]) -> list[str]:
+    return canonical_cleanup_tool_sequence(
+        [
+            phase
+            for phase in (str(step.get("phase") or "") for step in steps)
+            if phase in SEMANTIC_SUBPHASE_LABELS
+        ]
+    )
+
+
+def _request_tools(request: dict[str, Any]) -> list[str]:
+    raw_tools = request.get("tools") or []
+    if isinstance(raw_tools, str):
+        values = raw_tools.split(",")
+    else:
+        values = [str(item) for item in raw_tools if str(item)]
+    if not values:
+        cleanup_tools = _planner_arg(request.get("planner_probe_args") or {}, "--cleanup-tools")
+        values = cleanup_tools.split(",") if cleanup_tools else []
     return [
-        phase
-        for phase in (str(step.get("phase") or "") for step in steps)
-        if phase in SEMANTIC_SUBPHASE_LABELS
+        tool for tool in canonical_cleanup_tool_sequence(values) if tool in SEMANTIC_SUBPHASE_LABELS
     ]
+
+
+def _semantic_subphase_entries(tools: list[str]) -> list[dict[str, str]]:
+    entries = []
+    for phase in tools:
+        label, detail = SEMANTIC_SUBPHASE_LABELS[phase]
+        entries.append({"phase": phase, "label": label, "detail": detail})
+    return entries
 
 
 def _request_blockers(request: dict[str, Any]) -> list[dict[str, Any]]:

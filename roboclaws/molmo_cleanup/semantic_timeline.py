@@ -23,6 +23,12 @@ CANONICAL_INSIDE_CLEANUP_PHASES = (
     OPEN_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
 )
+CANONICAL_CLEANUP_TOOL_ORDER = (
+    *CANONICAL_BASE_CLEANUP_PHASES,
+    OPEN_RECEPTACLE_PHASE,
+    PLACE_PHASE,
+    PLACE_INSIDE_PHASE,
+)
 PLACE_CLEANUP_PHASES = (PLACE_PHASE, PLACE_INSIDE_PHASE)
 SEMANTIC_RESPONSE_PHASES = (
     *CANONICAL_BASE_CLEANUP_PHASES,
@@ -60,6 +66,26 @@ CANONICAL_DISPLAY_SUBPHASES = tuple(
 CANONICAL_PLACE_DISPLAY_SUBPHASES = tuple(
     SEMANTIC_SUBPHASE_LABELS[phase] for phase in PLACE_CLEANUP_PHASES
 )
+
+
+def canonical_cleanup_tool_sequence(tools: Any) -> list[str]:
+    """Return cleanup tools in report/command semantic order, preserving unknowns."""
+    if isinstance(tools, str):
+        raw_tools = tools.split(",")
+    else:
+        raw_tools = list(tools or [])
+    seen = set()
+    requested = []
+    for item in raw_tools:
+        tool = str(item).strip()
+        if not tool or tool in seen:
+            continue
+        seen.add(tool)
+        requested.append(tool)
+    requested_set = set(requested)
+    ordered = [tool for tool in CANONICAL_CLEANUP_TOOL_ORDER if tool in requested_set]
+    ordered.extend(tool for tool in requested if tool not in CANONICAL_CLEANUP_TOOL_ORDER)
+    return ordered
 
 
 def record_robot_view_step(

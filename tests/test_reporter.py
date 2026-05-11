@@ -15,6 +15,7 @@ from roboclaws.core.reporter import (
     compare,
     generate,
 )
+from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -86,6 +87,90 @@ def _write_replay(
         provider_status={"provider_name": "kimi", "retry_events": 2, "transient_errors": 2},
     )
     return replay_dir
+
+
+def _write_molmo_cleanup_artifact(run_dir: Path) -> Path:
+    run_dir.mkdir(parents=True)
+    trace_events = [
+        {
+            "event": "response",
+            "tool": "navigate_to_object",
+            "response": {
+                "ok": True,
+                "object_id": "observed_001",
+                "source_receptacle_id": "table_01",
+            },
+        },
+        {
+            "event": "response",
+            "tool": "pick",
+            "response": {"ok": True, "object_id": "observed_001"},
+        },
+        {
+            "event": "response",
+            "tool": "navigate_to_receptacle",
+            "response": {
+                "ok": True,
+                "object_id": "observed_001",
+                "receptacle_id": "sink_01",
+            },
+        },
+        {
+            "event": "response",
+            "tool": "place",
+            "response": {
+                "ok": True,
+                "object_id": "observed_001",
+                "receptacle_id": "sink_01",
+                "location_id": "sink_01",
+                "primitive_provenance": "api_semantic",
+            },
+        },
+    ]
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(json.dumps(event, sort_keys=True) for event in trace_events) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "before.png").write_bytes(b"before")
+    (run_dir / "after.png").write_bytes(b"after")
+    run_result = {
+        "backend": "molmospaces_subprocess",
+        "cleanup_status": "success",
+        "contract": "current_contract",
+        "mcp_server": "molmo_cleanup",
+        "primitive_provenance": "api_semantic",
+        "scenario_id": "report_router_scenario",
+        "score": {
+            "status": "success",
+            "restored_count": 1,
+            "total_targets": 1,
+            "success_threshold": 1,
+            "restored_object_ids": ["observed_001"],
+            "missed_object_ids": [],
+            "object_results": [],
+        },
+        "semantic_substeps": [
+            {
+                "object_id": "observed_001",
+                "source_receptacle_id": "table_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {"phase": "navigate_to_object"},
+                    {"phase": "pick"},
+                    {"phase": "navigate_to_receptacle"},
+                    {"phase": "place", "location_id": "sink_01"},
+                ],
+            }
+        ],
+        "artifacts": {
+            "trace": "trace.jsonl",
+            "before_snapshot": "before.png",
+            "after_snapshot": "after.png",
+        },
+    }
+    run_result_path = run_dir / "run_result.json"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+    return run_result_path
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +294,32 @@ class TestGenerate:
         out = generate(replay_dir)
         assert out.exists()
         assert "<!DOCTYPE html>" in out.read_text()
+
+    def test_molmo_cleanup_run_dir_routes_to_shared_underlay(self, tmp_path: Path) -> None:
+        run_result = _write_molmo_cleanup_artifact(tmp_path / "molmo")
+
+        out = generate(run_result.parent)
+
+        content = out.read_text(encoding="utf-8")
+        assert out == run_result.parent / "report.html"
+        assert "MolmoSpaces Cleanup Pilot" in content
+        assert "Latest Agent Decisions" not in content
+        assert_cleanup_report_visual_core(content, require_semantic_subphases=True)
+
+    def test_molmo_cleanup_run_result_routes_to_shared_underlay(self, tmp_path: Path) -> None:
+        run_result = _write_molmo_cleanup_artifact(tmp_path / "molmo")
+
+        out = generate(run_result)
+
+        content = out.read_text(encoding="utf-8")
+        assert out == run_result.parent / "report.html"
+        assert_cleanup_report_visual_core(content, require_semantic_subphases=True)
+
+    def test_molmo_cleanup_route_rejects_custom_output_path(self, tmp_path: Path) -> None:
+        run_result = _write_molmo_cleanup_artifact(tmp_path / "molmo")
+
+        with pytest.raises(ValueError, match="relative robot-view assets"):
+            generate(run_result.parent, output_path=tmp_path / "custom.html")
 
 
 # ---------------------------------------------------------------------------

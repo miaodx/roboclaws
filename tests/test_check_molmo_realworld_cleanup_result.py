@@ -310,7 +310,34 @@ def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
         require_planner_proof_attachment=True,
+        require_planner_proof_quality=True,
+        require_planner_proof_min_steps=2,
     )
+
+
+def test_checker_rejects_attached_proof_below_min_steps(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(tmp_path / "proof", steps_executed=1)
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            cleanup_dir,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_proof_attachment=True,
+            require_planner_proof_quality=True,
+            require_planner_proof_min_steps=2,
+        )
 
 
 def test_checker_accepts_blocked_planner_cleanup_bridge(tmp_path: Path) -> None:
@@ -497,6 +524,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         min_generated_mess_count=5,
         require_planner_proof_attachment=True,
         require_planner_backed_cleanup_primitives=True,
+        require_bound_planner_cleanup_objects=["observed_006:fridge_01"],
         require_planner_cleanup_bridge_ready=True,
     )
 
@@ -815,6 +843,8 @@ def _write_strict_planner_proof(
     upstream_policy_class: str = "PickAndPlacePlannerPolicy",
     curobo_available: bool = False,
     cleanup_binding: dict[str, object] | None = None,
+    steps_executed: int = 2,
+    max_abs_qpos_delta: float = 0.01,
 ) -> Path:
     base.mkdir(parents=True)
     views = base / "planner_views"
@@ -828,8 +858,8 @@ def _write_strict_planner_proof(
         probe_mode="execute",
         upstream_policy_class=upstream_policy_class,
         steps_requested=2,
-        steps_executed=2,
-        max_abs_qpos_delta=0.01,
+        steps_executed=steps_executed,
+        max_abs_qpos_delta=max_abs_qpos_delta,
         image_artifacts={
             "initial": "planner_views/initial_wrist_camera.png",
             "final": "planner_views/final_wrist_camera.png",
