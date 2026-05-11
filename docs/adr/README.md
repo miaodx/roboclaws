@@ -11,6 +11,9 @@ one decision per file, sequential numbering, explicit status.
 |---|-------|--------|
 | [0001](0001-use-ai2thor-for-phase-1.md) | Use AI2-THOR for Phase 1 | Accepted |
 | [0002](0002-defer-isaac-lab-to-phase-3.md) | Defer Isaac Lab integration to Phase 3 | Accepted |
+| [0003](0003-separate-cleanup-agent-view-from-private-evaluation.md) | Separate Cleanup Agent View From Private Evaluation | Accepted |
+| [0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md) | Use Separate MCP Servers For AI2-THOR And Molmo Cleanup | Accepted |
+| [0005](0005-use-configurable-generated-mess-set-size.md) | Use Configurable Generated Mess Set Size | Accepted |
 
 ## Adding a new ADR
 

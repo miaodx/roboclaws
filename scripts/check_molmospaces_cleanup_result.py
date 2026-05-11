@@ -16,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-robot")
     parser.add_argument("--require-robot-views", action="store_true")
     parser.add_argument("--require-semantic-substeps", action="store_true")
+    parser.add_argument("--require-semantic-acceptability", action="store_true")
     return parser.parse_args()
 
 
@@ -40,6 +41,8 @@ def main() -> None:
         assert data.get("planner_uses_private_manifest") is False, data
     if args.require_semantic_substeps:
         _assert_semantic_substeps(data)
+    if args.require_semantic_acceptability:
+        _assert_semantic_acceptability(data, args.run_result.parent)
     assert score["restored_count"] >= score["success_threshold"], data
     artifacts = data["artifacts"]
     for key in ("trace", "before_snapshot", "after_snapshot", "report"):
@@ -104,6 +107,28 @@ def main() -> None:
                     assert int(visibility.get("object_pixels") or 0) > 0, step
         assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
     print(f"molmo-cleanup ok: {args.run_result} -> {report}")
+
+
+def _assert_semantic_acceptability(data: dict, base: Path) -> None:
+    score = data.get("score") or {}
+    semantic = score.get("semantic_acceptability") or {}
+    assert semantic.get("accepted_count") is not None, data
+    assert semantic.get("total_targets") == score.get("total_targets"), data
+    rows = score.get("object_results") or []
+    assert rows, data
+    for row in rows:
+        assert "exact_private_match" in row, row
+        assert row.get("semantic_acceptability") in {
+            "preferred",
+            "acceptable",
+            "questionable",
+            "wrong",
+            "unknown",
+        }, row
+        assert row.get("semantic_reason"), row
+    artifacts = data.get("artifacts") or {}
+    report = _resolve_path(base, artifacts.get("report", ""))
+    assert "Semantic acceptability" in report.read_text(encoding="utf-8"), data
 
 
 def _assert_semantic_substeps(data: dict) -> None:

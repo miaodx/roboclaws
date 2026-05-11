@@ -15,6 +15,9 @@
 # - just verify::molmo-prompt-cleanup  prompt-driven public cleanup proof
 # - just verify::molmo-real-cleanup    real MolmoSpaces/MuJoCo cleanup proof
 # - just verify::molmo-robot-visual    real MolmoSpaces/RBY1M visual proof
+# - just verify::molmo-agent-bridge    current-contract Molmo MCP bridge proof
+# - just verify::molmo-agent-bridge-visual  current-contract MCP bridge visual proof
+# - just verify::molmo-realworld-cleanup  ADR-0003 public/private cleanup proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -85,6 +88,7 @@ molmo-prompt-cleanup:
     set -euo pipefail
     {{standalone_pytest}} -q \
       tests/test_molmo_cleanup_policy.py \
+      tests/test_molmo_cleanup_semantic_acceptability.py \
       tests/test_molmo_cleanup_demo.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-prompt-cleanup
@@ -112,6 +116,49 @@ molmo-robot-visual:
       tests/test_molmo_cleanup_subprocess_backend.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-robot-visual
+
+# Current-contract Molmo MCP bridge gate. Real Codex/Claude/OpenClaw dogfood is
+# local-operator evidence; this focused gate proves the server, skill, reports,
+# checker, and rule-based comparison stay wired.
+molmo-agent-bridge:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_mcp_server.py \
+      tests/test_molmo_cleanup_semantic_acceptability.py \
+      tests/test_molmo_cleanup_agent_server.py \
+      tests/test_check_molmo_agent_bridge_result.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-agent-bridge
+
+# Current-contract Molmo MCP bridge visual gate. Requires the isolated Python
+# 3.11 MolmoSpaces runtime and local robot assets.
+molmo-agent-bridge-visual:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_mcp_server.py \
+      tests/test_molmo_cleanup_semantic_acceptability.py \
+      tests/test_molmo_cleanup_agent_server.py \
+      tests/test_check_molmo_agent_bridge_result.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_molmo_cleanup_subprocess_backend.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-agent-bridge-visual
+
+# ADR-0003 public/private cleanup gate. Requires the isolated Python 3.11
+# MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
+molmo-realworld-cleanup generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_contract.py \
+      tests/test_molmospaces_realworld_cleanup.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-cleanup "1 2 3" "output/molmo-realworld-cleanup-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

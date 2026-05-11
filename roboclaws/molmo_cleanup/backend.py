@@ -4,6 +4,9 @@ from collections import Counter
 from typing import Any
 
 from roboclaws.molmo_cleanup.scoring import score_cleanup
+from roboclaws.molmo_cleanup.semantic_acceptability import (
+    annotate_score_with_semantic_acceptability,
+)
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -199,11 +202,15 @@ class ApiSemanticCleanupBackend:
     def done(self, reason: str = "") -> dict[str, Any]:
         self._count("done")
         score = score_cleanup(self._locations, self.scenario.private_manifest)
+        annotated_score = annotate_score_with_semantic_acceptability(
+            score.to_dict(),
+            self.scenario,
+        )
         return self._ok(
             "done",
             reason=reason,
             cleanup_status=score.status,
-            score=score.to_dict(),
+            score=annotated_score,
             final_locations=self.object_locations(),
             final_containment=dict(self._containment),
             tool_event_counts=dict(self.tool_event_counts),

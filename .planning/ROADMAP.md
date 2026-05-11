@@ -20,6 +20,11 @@ the first room-cleanup artifact contract. Phase 7 builds on it with a
 prompt-driven public-policy cleanup proof for `帮我整理这个房间`. Phase 8 moves
 that proof onto a real upstream MolmoSpaces/MuJoCo scene through the isolated
 Python 3.11 subprocess backend while keeping `api_semantic` provenance explicit.
+Phases 9-14 add visual reviewability, semantic substeps, carried-object visual
+consistency, current-contract agent bridge evidence, and the ADR-0003
+public/private real-world cleanup boundary. Phase 15 scales that ADR-0003
+hidden Generated Mess Set from the historical five-object fixture to the v1
+lower bound of 10 generated objects.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -53,6 +58,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.7 MolmoSpaces cleanup pilot** - Phase 6 (completed 2026-05-07; api-semantic cleanup contracts, scorer, direct MCP/demo artifacts; real planner-backed manipulation deferred)
 - ✅ **v1.8 MolmoSpaces prompt cleanup** - Phase 7 (completed 2026-05-07; public-policy prompt proof for `帮我整理这个房间`; real planner-backed manipulation deferred)
 - ✅ **v1.9 MolmoSpaces real subprocess cleanup** - Phase 8 (completed 2026-05-07; real upstream MolmoSpaces/MuJoCo scene, Python 3.11 subprocess runtime, public prompt loop, `api_semantic` MuJoCo state mutation)
+- ✅ **v1.10 MolmoSpaces FPV room plausibility** - Phase 9 (completed 2026-05-08; target-facing FPV and same-room visual checks)
+- ✅ **v1.11 MolmoSpaces semantic substeps** - Phase 10 (completed 2026-05-08; object-level semantic timeline and fridge containment)
+- ✅ **v1.12 MolmoSpaces held-object visuals** - Phase 11 (completed 2026-05-08; carried-object visual consistency during navigation)
+- ✅ **v1.13 MolmoSpaces current-contract agent bridge** - Phase 12 (completed 2026-05-08; Codex/Claude/OpenClaw tool viability on the current contract)
+- ✅ **v1.14 MolmoSpaces agent bridge visual results** - Phase 13 (completed 2026-05-08; reviewable bridge reports)
+- ✅ **v1.15 MolmoSpaces real-world cleanup harness** - Phase 14 (completed 2026-05-09; ADR-0003 public/private contract and visual parity)
+- ✅ **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (completed 2026-05-09; ADR-0005 configurable hidden generated object count with real 10-object evidence)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -77,6 +89,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; real RBY1M/Franka planner-backed manipulation remains deferred.
 - [x] **Phase 7: MolmoSpaces prompt-driven cleanup demo** - Prompt `帮我整理这个房间` drives a public-only cleanup policy through the cleanup tool loop, without private-manifest planner access. Completed 2026-05-07; primitive execution remains `api_semantic`.
 - [x] **Phase 8: MolmoSpaces real subprocess cleanup** - Prompt `帮我整理这个房间` runs through the public cleanup loop against upstream `procthor-10k-val` scene 0 loaded by the isolated Python 3.11 MolmoSpaces runtime. Completed 2026-05-07; `backend=molmospaces_subprocess`, primitive execution remains `api_semantic` because planner-backed RBY1M/Franka pick/place is still unproven.
+- [x] **Phase 9: MolmoSpaces FPV room plausibility** - Target-facing RBY1M FPV and same-room visual gates for focused manipulation steps. Completed 2026-05-08.
+- [x] **Phase 10: MolmoSpaces semantic substeps** - Object-level cleanup substeps, fridge open/place-inside semantics, and report timeline improvements. Completed 2026-05-08.
+- [x] **Phase 11: MolmoSpaces held-object carry visuals** - Held objects visually travel with RBY1M during semantic cleanup navigation. Completed 2026-05-08.
+- [x] **Phase 12: MolmoSpaces current-contract agent bridge** - FastMCP bridge for Codex, Claude Code, and OpenClaw Gateway on the current five-object cleanup contract. Completed 2026-05-08.
+- [x] **Phase 13: MolmoSpaces agent bridge visual results** - Current-contract agent bridge reports include robot-view images and semantic mid-phase rows. Completed 2026-05-08.
+- [x] **Phase 14: MolmoSpaces real-world cleanup harness** - ADR-0003 public/private contract with Agent View, Private Evaluation, deterministic sweep baseline, and visual parity. Completed 2026-05-09.
+- [x] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -409,7 +428,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -429,4 +448,12 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 5. Iterative codebase simplification | v1.6 | 9/9 | Complete | 2026-04-23 |
 | 6. MolmoSpaces api-semantic cleanup pilot | v1.7 | 4/4 | Complete | 2026-05-07 |
 | 7. MolmoSpaces prompt-driven cleanup demo | v1.8 | 2/2 | Complete | 2026-05-07 |
+| 8. MolmoSpaces real subprocess cleanup | v1.9 | 1/1 | Complete | 2026-05-07 |
+| 9. MolmoSpaces FPV room plausibility | v1.10 | 1/1 | Complete | 2026-05-08 |
+| 10. MolmoSpaces semantic substeps | v1.11 | 1/1 | Complete | 2026-05-08 |
+| 11. MolmoSpaces held-object carry visuals | v1.12 | 1/1 | Complete | 2026-05-08 |
+| 12. MolmoSpaces current-contract agent bridge | v1.13 | 1/1 | Complete | 2026-05-08 |
+| 13. MolmoSpaces agent bridge visual results | v1.14 | 1/1 | Complete | 2026-05-08 |
+| 14. MolmoSpaces real-world cleanup harness | v1.15 | 1/1 | Complete | 2026-05-09 |
+| 15. MolmoSpaces Generated Mess Set scale | v1.16 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

@@ -1,10 +1,62 @@
 # MolmoSpaces Current-Contract Agent Bridge
 
-**Status:** Draft
+**Status:** Implemented 2026-05-08; visual follow-up completed in Phase 13
 **Created:** 2026-05-08
 **Source:** `grill-with-docs` discussion, `CONTEXT.md`, ADR-0004
 **Workflow intent:** Insert this bridge before implementing the ADR-0003
 real-world-style cleanup harness.
+
+## Implementation Result
+
+Implemented under GSD Phase 12:
+`.planning/phases/12-molmospaces-current-contract-agent-bridge/`.
+
+Shipped current-contract bridge artifacts:
+
+- `roboclaws/molmo_cleanup/mcp_server.py`
+- `examples/molmo_cleanup_agent_server.py`
+- `skills/molmo-cleanup/SKILL.md`
+- `scripts/run_molmo_agent_bridge_smoke.py`
+- `scripts/check_molmo_agent_bridge_result.py`
+- `just harness::molmo-agent-bridge`
+- `just verify::molmo-agent-bridge`
+
+Local dogfood evidence from 2026-05-08:
+
+| Driver | Artifact | Result | Notes |
+| --- | --- | --- | --- |
+| Rule-based public heuristic | `output/molmo-agent-bridge-rule/run_result.json` | `success`, 5/5 restored | Baseline comparison artifact. |
+| Contract smoke through MCP wrapper | `output/molmo-agent-bridge-harness/run_result.json` | `success`, 5/5 restored | Cheap non-agent smoke, no private truth. |
+| Codex direct MCP | `output/molmo-agent-bridge-codex/run_result.json` | `success`, 5/5 restored | Clean run: 0 stale references, 5 `object_done`. |
+| Claude Code direct MCP | `output/molmo-agent-bridge-claude/run_result.json` | `success`, 5/5 restored | Clean run: 0 stale references, 5 `object_done`. |
+| OpenClaw Gateway | `output/molmo-agent-bridge-openclaw/run_result.json` | `success`, 5/5 restored | Useful trace and full score. One stale object-id attempt was recovered; skill/tool instructions were hardened afterward. |
+
+All artifacts are labeled `contract=current_contract`; this bridge still does
+not satisfy ADR-0003 because global `scene_objects` remains intentionally
+available.
+
+## Visual Follow-Up Result
+
+Implemented under GSD Phase 13:
+`.planning/phases/13-molmospaces-agent-bridge-visual-results/`.
+
+Phase 13 fixed the report-quality gap that made agent bridge reports look unlike
+`output/molmo-robot-visual-harness/report.html`: bridge runs can now record
+RBY1M robot-view images and semantic mid-phase rows.
+
+Local visual evidence from 2026-05-08:
+
+| Driver | Artifact | Result | Notes |
+| --- | --- | --- | --- |
+| Rule-based public heuristic | `output/molmo-agent-bridge-visual-rule/run_result.json` | `success`, 5/5 restored | Baseline visual report with 25 robot-view timeline steps. |
+| Contract smoke through MCP wrapper | `output/molmo-agent-bridge-visual-harness/run_result.json` | `success`, 5/5 restored | Cheap non-agent visual smoke, checker-validated against the rule result. |
+| Codex direct MCP | `output/molmo-agent-bridge-visual-codex/run_result.json` | `success`, 4/5 restored | Visual checker passed; one private scorer miss from a public semantic choice. |
+| Claude Code direct MCP | `output/molmo-agent-bridge-visual-claude/run_result.json` | `success`, 4/5 restored | Visual checker passed; bowl placement was plausible but not private scorer truth. |
+| OpenClaw Gateway | `output/molmo-agent-bridge-visual-openclaw/run_result.json` | `success`, 3/5 restored | Visual checker passed; all five semantic loops completed, two private scorer misses. |
+
+The visual follow-up intentionally keeps the same current-contract boundary:
+agent runs are useful for reviewing MCP/tool behavior and visual evidence, but
+the hidden scorer target map still belongs only to the deterministic baseline.
 
 ## Problem
 
