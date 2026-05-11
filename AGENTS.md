@@ -254,7 +254,9 @@ Root `PLAN.md` is retained only for compatibility and must not receive new
 active phase content. Current focus and the active source links are in
 `STATUS.md`. During GSD closeout/verify/ship, update `STATUS.md` when current
 focus, latest phase, next action, or blocker changed; keep it short and do not
-mirror `.planning/STATE.md`.
+mirror `.planning/STATE.md`. For parallel standalone terminal work, use one
+task-owned file under `docs/status/active/` instead of editing `STATUS.md` for
+routine progress.
 
 ## Agent skills
 
