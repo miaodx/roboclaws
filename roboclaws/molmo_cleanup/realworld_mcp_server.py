@@ -29,6 +29,8 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
+    cleanup_policy_trace_from_events,
+    real_robot_readiness_from_events,
 )
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
@@ -310,8 +312,9 @@ class RealWorldMolmoCleanupMCPServer:
         augmented = dict(response)
         if tool == "metric_map":
             augmented["instruction"] = (
-                "Use inspection_waypoints to sweep rooms. Call navigate_to_waypoint "
-                "then observe. Use only observed_* object handles returned by observe."
+                "inspection_waypoints are static map/fixture coverage candidates, "
+                "not mess hints. Prefer navigate_to_waypoint -> observe -> clean "
+                "visible observed_* candidates before continuing the sweep."
             )
         if tool == "observe" and self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
@@ -321,8 +324,14 @@ class RealWorldMolmoCleanupMCPServer:
             )
         if tool == "fixture_hints":
             augmented["instruction"] = (
-                "Use room-level fixture ids and affordances as public landmarks. "
-                "Acceptable destination sets and target receptacles are private."
+                "Use room-level fixture ids and affordances as static public landmarks. "
+                "Runtime movable objects come only from observe; acceptable destination "
+                "sets and generated mess truth are private."
+            )
+        if tool in {"place", "place_inside"} and augmented.get("ok"):
+            augmented["instruction"] = (
+                "After placing the held object, call observe once in the current "
+                "room/fixture area before choosing the next object or waypoint."
             )
         return augmented
 
@@ -347,6 +356,12 @@ class RealWorldMolmoCleanupMCPServer:
         diagnostics["premature_done_source"] = "sweep_coverage_rate"
         primitive_counts = primitive_provenance_counts(trace_events)
         agent_view = self.contract.agent_view_payload()
+        cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
+        real_robot_readiness = real_robot_readiness_from_events(
+            agent_view=agent_view,
+            trace_events=trace_events,
+            robot_view_steps=self.robot_view_steps,
+        )
         private_evaluation = self.contract.private_evaluation_payload(done_response["score"])
         requested_count = getattr(
             self.base_contract.backend,
@@ -404,6 +419,8 @@ class RealWorldMolmoCleanupMCPServer:
             "cleanup_primitive_evidence": cleanup_primitive_evidence,
             "planner_proof_requests": planner_proof_requests,
             "cleanup_plan": cleanup_plan,
+            "cleanup_policy_trace": cleanup_policy_trace,
+            "real_robot_readiness": real_robot_readiness,
             "agent_view": agent_view,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
             "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),

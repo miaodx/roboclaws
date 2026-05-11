@@ -4,7 +4,9 @@ from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
+    CLEANUP_WORKLIST_SCHEMA,
     RAW_FPV_ONLY_MODE,
+    REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     RealWorldCleanupContract,
@@ -34,6 +36,54 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(fixture_hints)
     _assert_no_forbidden_keys(observation)
+
+
+def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
+    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+    waypoint = {}
+    waypoint_nav = {}
+    observation = {}
+    detection = None
+    for candidate in metric_map["inspection_waypoints"]:
+        waypoint = candidate
+        waypoint_nav = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        detections = observation["visible_object_detections"]
+        if detections:
+            detection = detections[0]
+            break
+    assert detection is not None
+    fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert fixture is not None
+    object_nav = contract.navigate_to_object(detection["object_id"])
+    assert contract.pick(detection["object_id"])["ok"] is True
+    receptacle_nav = contract.navigate_to_receptacle(str(fixture["fixture_id"]))
+    agent_view = contract.agent_view_payload()
+
+    assert metric_map["schema"] == REAL_ROBOT_MAP_BUNDLE_SCHEMA
+    assert metric_map["frame_id"] == "map"
+    assert metric_map["origin"] == {"x": 0.0, "y": 0.0, "yaw": 0.0}
+    assert metric_map["occupancy_values"] == {"unknown": -1, "free": 0, "occupied": 100}
+    assert waypoint["frame_id"] == "map"
+    assert waypoint["purpose"] == "fixture_coverage"
+    assert waypoint["waypoint_source"] == "static_map_coverage"
+    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
+    assert fixture_hints["contains_runtime_observations"] is False
+    assert "observations" not in fixture_hints
+    assert waypoint_nav["navigation_backend"] == "api_semantic"
+    assert waypoint_nav["pose_source"] == "inspection_waypoint"
+    assert object_nav["navigation_backend"] == "api_semantic"
+    assert object_nav["pose_source"] == "latest_observation"
+    assert object_nav["requires_reobserve"] is False
+    assert receptacle_nav["navigation_backend"] == "api_semantic"
+    assert receptacle_nav["pose_source"] == "fixture_semantic_map"
+    assert agent_view["policy_view"]["chase_camera_policy_input"] is False
+    assert agent_view["cleanup_worklist"]["schema"] == CLEANUP_WORKLIST_SCHEMA
+    assert agent_view["cleanup_worklist"]["objects"][0]["state"] == "held"
+    _assert_no_forbidden_keys(agent_view)
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:

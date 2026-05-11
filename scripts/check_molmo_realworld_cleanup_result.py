@@ -30,6 +30,10 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
     CAMERA_MODEL_POLICY_SCHEMA,
+    CLEANUP_POLICY_TRACE_SCHEMA,
+    CLEANUP_WORKLIST_SCHEMA,
+    REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+    REAL_ROBOT_READINESS_SCHEMA,
     REALWORLD_CONTRACT,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
@@ -96,6 +100,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--accept-blocked-planner-cleanup-bridge", action="store_true")
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
+    parser.add_argument("--require-waypoint-honesty", action="store_true")
+    parser.add_argument("--require-real-robot-alignment", action="store_true")
     return parser.parse_args()
 
 
@@ -147,6 +153,8 @@ def main() -> None:
             ),
             accept_blocked_planner_cleanup_bridge=(args.accept_blocked_planner_cleanup_bridge),
             require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
+            require_waypoint_honesty=args.require_waypoint_honesty,
+            require_real_robot_alignment=args.require_real_robot_alignment,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -188,6 +196,8 @@ def _assert_result(
     require_mixed_planner_cleanup_primitives: bool = False,
     accept_blocked_planner_cleanup_bridge: bool = False,
     require_planner_cleanup_bridge_ready: bool = False,
+    require_waypoint_honesty: bool = False,
+    require_real_robot_alignment: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -301,6 +311,10 @@ def _assert_result(
             accept_blocked=accept_blocked_planner_cleanup_bridge,
             require_ready=require_planner_cleanup_bridge_ready,
         )
+    if require_waypoint_honesty:
+        _assert_waypoint_honesty(data, report_text)
+    if require_real_robot_alignment:
+        _assert_real_robot_alignment(data, report_text)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -355,6 +369,13 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
     assert "fixture_hints" in agent_view, agent_view
     assert "observed_objects" in agent_view, agent_view
     assert "objects" not in agent_view.get("metric_map", {}), agent_view
+    worklist = agent_view.get("cleanup_worklist") or {}
+    if worklist:
+        assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
+        assert worklist.get("waypoint_source") == "static_map_fixture_coverage", worklist
+    policy_view = agent_view.get("policy_view") or {}
+    if policy_view:
+        assert policy_view.get("chase_camera_policy_input") is False, policy_view
     _assert_no_forbidden_keys(agent_view)
     if agent_view.get("perception_mode") == "raw_fpv_only":
         assert agent_view.get("structured_detections_available") is False, agent_view
@@ -688,6 +709,88 @@ def _assert_planner_cleanup_bridge(
     assert "Planner Cleanup Bridge" in report_text, report_text[:500]
     if require_ready:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
+
+
+def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
+    agent_view = data.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    assert metric_map.get("schema") == REAL_ROBOT_MAP_BUNDLE_SCHEMA, metric_map
+    assert metric_map.get("public_contract_note"), metric_map
+    forbidden_words = ("mess", "target", "acceptable")
+    waypoints = metric_map.get("inspection_waypoints") or []
+    assert waypoints, metric_map
+    for waypoint in waypoints:
+        assert waypoint.get("waypoint_source") in {
+            "static_map_coverage",
+            "fixture_coverage",
+            "static_map_fixture_coverage",
+        }, waypoint
+        assert waypoint.get("purpose"), waypoint
+        label_text = f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()
+        assert not any(word in label_text for word in forbidden_words), waypoint
+    worklist = agent_view.get("cleanup_worklist") or {}
+    assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
+    assert worklist.get("objects"), worklist
+    assert worklist.get("waypoints"), worklist
+    trace = data.get("cleanup_policy_trace") or {}
+    assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
+    assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
+    assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
+    assert trace.get("first_cleanup_before_full_survey") is True, trace
+    assert trace.get("post_place_observe_complete") is True, trace
+    assert int(trace.get("post_place_observe_count") or 0) >= int(
+        trace.get("placed_object_count") or 0
+    ), trace
+    assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
+    assert "static_map_fixture_coverage" in report_text, report_text[:500]
+    assert "post_place_observe" in report_text, report_text[:500]
+
+
+def _assert_real_robot_alignment(data: dict[str, Any], report_text: str) -> None:
+    agent_view = data.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    assert metric_map.get("schema") == REAL_ROBOT_MAP_BUNDLE_SCHEMA, metric_map
+    for key in (
+        "frame_id",
+        "map_id",
+        "map_version",
+        "resolution_m",
+        "origin",
+        "width",
+        "height",
+        "occupancy_values",
+        "robot_pose",
+    ):
+        assert key in metric_map, metric_map
+    waypoints = metric_map.get("inspection_waypoints") or []
+    assert waypoints, metric_map
+    for waypoint in waypoints:
+        for key in ("frame_id", "x", "y", "yaw", "room_id", "label", "visited", "purpose"):
+            assert key in waypoint, waypoint
+    assert fixture_hints.get("schema") == "static_fixture_semantic_map_v1", fixture_hints
+    assert fixture_hints.get("contains_runtime_observations") is False, fixture_hints
+    assert "observations" not in fixture_hints, fixture_hints
+    for room in fixture_hints.get("rooms") or []:
+        for fixture in room.get("fixtures") or []:
+            assert fixture.get("fixture_id"), fixture
+            assert fixture.get("affordances"), fixture
+            assert fixture.get("pose", {}).get("frame_id") == "map", fixture
+            assert "observed_objects" not in fixture, fixture
+    policy_view = agent_view.get("policy_view") or {}
+    assert policy_view.get("chase_camera_policy_input") is False, policy_view
+    assert not any("chase" in str(item).lower() for item in policy_view.get("allowed_inputs", []))
+    readiness = data.get("real_robot_readiness") or {}
+    assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
+    assert readiness.get("map_bundle_fields_present") is True, readiness
+    assert readiness.get("pose_stamped_waypoints") is True, readiness
+    assert readiness.get("static_fixture_semantic_map") is True, readiness
+    assert readiness.get("policy_view_chase_excluded") is True, readiness
+    assert readiness.get("semantic_navigation_only") is True, readiness
+    assert readiness.get("real_robot_ready") is False, readiness
+    assert readiness.get("navigation_backend_summary", {}).get(API_SEMANTIC_PROVENANCE), readiness
+    assert "Real-Robot Readiness" in report_text, report_text[:500]
+    assert "report_only_simulation_view" in report_text, report_text[:500]
 
 
 def _has_planner_proof_requests(data: dict[str, Any]) -> bool:

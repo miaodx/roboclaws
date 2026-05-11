@@ -137,6 +137,7 @@ def _drive_public_sweep(server: Any, *, policy: str) -> None:
             if support.get("fixture_id") == fixture_id:
                 continue
             _clean_handle(server, handle=handle, fixture=target_fixture)
+            server.call_tool("observe")
             handled_handles.add(handle)
 
 

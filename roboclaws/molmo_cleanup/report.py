@@ -124,6 +124,8 @@ def _cleanup_report_sections(
             _object_moves_section(moves),
             _semantic_steps_table(run_result.get("semantic_substeps") or []),
             _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
+            _cleanup_policy_trace_section(run_result),
+            _real_robot_readiness_section(run_result),
             _score_section(score),
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
@@ -4067,6 +4069,7 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
     fixture_hints = agent_view.get("fixture_hints") or {}
     observed = agent_view.get("observed_objects") or []
     raw_observations = agent_view.get("raw_fpv_observations") or []
+    worklist = agent_view.get("cleanup_worklist") or {}
     waypoints = metric_map.get("inspection_waypoints") or []
     rooms = fixture_hints.get("rooms") or []
     mode = agent_view.get("perception_mode", "visible_object_detections")
@@ -4130,7 +4133,126 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
-        f"{observed_table}</section>"
+        f"{_worklist_summary_table(worklist)}{observed_table}</section>"
+    )
+
+
+def _worklist_summary_table(worklist: dict[str, Any]) -> str:
+    objects = worklist.get("objects") or []
+    if not objects:
+        return ""
+    rows = []
+    for item in objects:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('state', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_fixture_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_fixture_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('last_waypoint_id', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        "<h3>Observed Handle Lifecycle</h3>"
+        '<div class="table-wrap"><table><thead><tr><th>Handle</th><th>State</th>'
+        "<th>Category</th><th>Seen at fixture</th><th>Public candidate fixture</th>"
+        "<th>Last waypoint</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+
+
+def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
+    trace = run_result.get("cleanup_policy_trace") or {}
+    if not trace:
+        return ""
+    rows = []
+    for item in trace.get("events") or []:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('index', '')))}</td>"
+            f"<td>{html.escape(str(item.get('tool', '')))}</td>"
+            f"<td>{html.escape(str(item.get('role', '')))}</td>"
+            f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('fixture_id', '')))}</td>"
+            "</tr>"
+        )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Waypoint source', trace.get('waypoint_source', 'unknown'))}"
+        f"{_metric('Loop style', trace.get('loop_style', 'unknown'))}"
+        f"{_metric('Waypoint observes', trace.get('scan_observe_count', 0))}"
+        f"{_metric('Cleanup actions', trace.get('cleanup_action_count', 0))}"
+        f"{_metric('Post-place observes', trace.get('post_place_observe_count', 0))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge(
+                "First cleanup before full survey",
+                trace.get("first_cleanup_before_full_survey", False),
+            ),
+            _badge("Post-place observe complete", trace.get("post_place_observe_complete", False)),
+        )
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Tool</th>'
+        "<th>Role</th><th>Waypoint</th><th>Object</th><th>Fixture</th></tr></thead>"
+        "<tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel cleanup-policy-trace">'
+        "<h2>Waypoint Honesty & Cleanup Loop</h2>"
+        '<p class="note">inspection_waypoints are static_map_fixture_coverage inputs. '
+        "Coverage scans, cleanup actions, and post-place observes are labelled so "
+        "reviewers can tell whether the run was interleaved or survey-first.</p>"
+        f'{metrics}<div class="badges">{badges}</div>{table}</section>'
+    )
+
+
+def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
+    readiness = run_result.get("real_robot_readiness") or {}
+    if not readiness:
+        return ""
+    blockers = "".join(
+        f"<li>{html.escape(str(item))}</li>" for item in readiness.get("blocked_capabilities") or []
+    )
+    nav_summary = ", ".join(
+        f"{key}={value}"
+        for key, value in (readiness.get("navigation_backend_summary") or {}).items()
+    )
+    pose_summary = ", ".join(
+        f"{key}={value}" for key, value in (readiness.get("pose_source_summary") or {}).items()
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', readiness.get('status', 'unknown'))}"
+        f"{_metric('Map bundle', readiness.get('map_bundle_schema', 'unknown'))}"
+        f"{_metric('Navigation backends', nav_summary or 'none')}"
+        f"{_metric('Pose sources', pose_summary or 'none')}"
+        f"{_metric('Report-only sim views', readiness.get('report_only_simulation_view_count', 0))}"
+        "</div>"
+    )
+    badges = "".join(
+        (
+            _badge("Map shape", readiness.get("map_bundle_fields_present", False)),
+            _badge("PoseStamped waypoints", readiness.get("pose_stamped_waypoints", False)),
+            _badge("Static fixtures only", readiness.get("static_fixture_semantic_map", False)),
+            _badge(
+                "Chase excluded from policy",
+                readiness.get("policy_view_chase_excluded", False),
+            ),
+            _badge("Semantic navigation only", readiness.get("semantic_navigation_only", False)),
+        )
+    )
+    return (
+        '<section class="panel real-robot-readiness">'
+        "<h2>Real-Robot Readiness</h2>"
+        '<p class="note">This section checks contract shape, not live ROS/Nav2. '
+        "Current semantic simulator navigation remains api_semantic; chase imagery is "
+        "labelled report_only_simulation_view and is not a policy input.</p>"
+        f'{metrics}<div class="badges">{badges}</div>'
+        f'<ul class="requirements">{blockers}</ul></section>'
     )
 
 
@@ -4315,6 +4437,7 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
     return (
         '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
         '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
+        "Chase is a report_only_simulation_view, not policy input. "
         "The map and verification panels are report artifacts from public MuJoCo state, "
         "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
     )
