@@ -35,8 +35,20 @@ how to run another iteration (`just harness::run <task>`).
 
 ## Build & test
 
+Use the repo-local `.venv/` as the canonical Python environment. It is managed
+by `uv` from `pyproject.toml` / `uv.lock`, and demos should not rely on hidden
+external virtualenvs under `/tmp` or another repo. If a demo needs MolmoSpaces,
+MuJoCo, OpenClaw, or other extra dependencies, add or use a declared
+`pyproject.toml` extra and install it into this checkout's `.venv/`.
+Use `uv sync` for declared project environments and `uv pip install` only for
+explicit local one-off installs. Do not use plain `pip install` for repo setup.
+
+For git worktrees, keep a separate `.venv/` at each worktree root. That keeps
+branch-specific dependency changes isolated while preserving the same
+uv-managed workflow everywhere.
+
 ```bash
-pip install -e ".[dev]"
+uv sync --extra dev
 ruff check .
 ruff format --check .
 pytest

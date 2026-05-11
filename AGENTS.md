@@ -37,13 +37,25 @@ If instructions conflict, priority is:
 
 ### 1.1 Install dependencies
 
+Roboclaws uses one repo-local Python environment per checkout/worktree:
+`.venv/`, managed by `uv` from `pyproject.toml` and `uv.lock`. Treat that
+folder as the canonical runtime for demos, tests, and scripts. Do not depend on
+hidden external virtualenvs under `/tmp` or another repo for normal demo
+operation. If a demo needs a new package, optional extra, or newer Python floor,
+update `pyproject.toml` / `uv.lock` and rebuild or sync this repo's `.venv/`.
+Use `uv sync` for declared project environments and `uv pip install` only for
+explicit local one-off installs. Do not use plain `pip install` for repo setup.
+
+For git worktrees, keep one `.venv/` at the root of each worktree. Do not share
+one worktree's `.venv/` with another worktree; each checkout should be
+self-contained.
+
 ```bash
-uv --version && uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-Prefer `uv` when available — it's faster and already used for the venv at `.venv/`.
 If a new optional-extras group is needed (e.g. `[openclaw]` for the MCP server),
-install it with `uv pip install -e ".[dev,openclaw]"`.
+install it with `uv sync --extra dev --extra openclaw`.
 
 ### 1.2 Verify AI2-THOR is available
 
