@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
+
+from roboclaws.molmo_cleanup.manipulation_provenance import (
+    MANIPULATION_PROBE_CONTRACT,
+    PLANNER_BACKED_PROVENANCE,
+    planner_backed_probe_evidence,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
@@ -286,6 +293,82 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
 
 
+def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    proof_path = _write_strict_planner_proof(tmp_path / "proof")
+    cleanup_dir = tmp_path / "cleanup"
+
+    result = demo.run_realworld_cleanup(
+        output_dir=cleanup_dir,
+        seed=7,
+        planner_proof_run_result=proof_path,
+    )
+
+    assert result["primitive_provenance"] == "api_semantic"
+    checker._assert_result(
+        result,
+        cleanup_dir,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_planner_proof_attachment=True,
+    )
+
+
+def test_checker_accepts_blocked_cleanup_primitive_gate(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        accept_blocked_planner_cleanup_primitives=True,
+    )
+    assert result["cleanup_primitive_evidence"]["status"] == "blocked_capability"
+
+
+def test_checker_rejects_current_cleanup_when_planner_primitives_required(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_backed_cleanup_primitives=True,
+        )
+
+
+def test_checker_rejects_missing_required_planner_proof(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_planner_proof_attachment=True,
+        )
+
+
 def test_checker_rejects_raw_fpv_when_structured_detections_leak(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -418,3 +501,39 @@ def _robot_step(action: str) -> dict[str, object]:
             "visibility": {"status": "ok"},
         },
     }
+
+
+def _write_strict_planner_proof(base: Path) -> Path:
+    base.mkdir(parents=True)
+    views = base / "planner_views"
+    views.mkdir()
+    (views / "initial_wrist_camera.png").write_bytes(b"initial")
+    (views / "final_wrist_camera.png").write_bytes(b"final")
+    evidence = planner_backed_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="franka",
+        task="pick_and_place",
+        probe_mode="execute",
+        upstream_policy_class="PickAndPlacePlannerPolicy",
+        steps_requested=2,
+        steps_executed=2,
+        max_abs_qpos_delta=0.01,
+        image_artifacts={
+            "initial": "planner_views/initial_wrist_camera.png",
+            "final": "planner_views/final_wrist_camera.png",
+        },
+    )
+    evidence["runtime_diagnostics"] = {"renderer_adapter_enabled": True}
+    path = base / "run_result.json"
+    path.write_text(
+        json.dumps(
+            {
+                "contract": MANIPULATION_PROBE_CONTRACT,
+                "status": PLANNER_BACKED_PROVENANCE,
+                "primitive_provenance": PLANNER_BACKED_PROVENANCE,
+                "manipulation_evidence": evidence,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path

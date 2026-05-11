@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 22 raw FPV-only perception slice shipped and verified on 2026-05-09
+**Status:** Phase 28 RBY1M CuRobo runtime gate completed on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -14,8 +14,17 @@ Phase 14 ADR-0003 public/private cleanup -> Phase 15 Generated Mess Set scale
 -> Phase 16 ADR-0003 MCP -> Phase 17 direct-agent dogfood -> Phase 18
 synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
 -> Phase 20 clean-policy semantic-loop hardening -> Phase 21 advisory scoring
--> Phase 22 raw FPV-only perception evidence. Real planner-backed manipulation
-remains deferred.
+-> Phase 22 raw FPV-only perception evidence -> Phase 23 planner-backed
+manipulation provenance/proof gate -> Phase 24 planner runtime diagnostics ->
+Phase 25 planner headless renderer -> Phase 26 cleanup planner proof
+attachment -> Phase 27 cleanup planner-backed primitive gate. Cleanup reports
+now render the strict standalone Franka proof beside ADR-0003 cleanup artifacts
+and expose a per-subphase cleanup primitive gate. Current cleanup-loop
+subphases remain `api_semantic`; Phase 28 adds the RBY1M CuRobo target-runtime
+gate before actual planner-backed cleanup primitive replacement. Current local
+RBY1M planner execution remains blocked by CuRobo JIT/config-import timeout
+before execution. Camera-only
+model-policy cleanup remains a separate follow-up.
 
 ## Why This Exists
 
@@ -775,7 +784,24 @@ completed:
   gsd-plan-phase 23-molmospaces-planner-backed-manipulation-proof
   gsd-execute-phase 23-molmospaces-planner-backed-manipulation-proof
   gsd-verify-work 23-molmospaces-planner-backed-manipulation-proof
+  gsd-plan-phase 24-molmospaces-planner-runtime-diagnostics
+  gsd-execute-phase 24-molmospaces-planner-runtime-diagnostics
+  gsd-verify-work 24-molmospaces-planner-runtime-diagnostics
+  gsd-plan-phase 25-molmospaces-planner-headless-renderer
+  gsd-execute-phase 25-molmospaces-planner-headless-renderer
+  gsd-verify-work 25-molmospaces-planner-headless-renderer
+  gsd-plan-phase 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-execute-phase 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-verify-work 26-molmospaces-cleanup-planner-proof-attachment
+  gsd-plan-phase 27-molmospaces-cleanup-planner-backed-primitives
+  gsd-execute-phase 27-molmospaces-cleanup-planner-backed-primitives
+  gsd-verify-work 27-molmospaces-cleanup-planner-backed-primitives
+  gsd-plan-phase 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-execute-phase 28-molmospaces-rby1m-curobo-runtime-gate
+  gsd-verify-work 28-molmospaces-rby1m-curobo-runtime-gate
 
 next pipeline candidates:
-  real RBY1M/Franka planner-backed cleanup execution after the proof gate passes
+  plan RBY1M/CuRobo runtime enablement if strict target execution is required locally
+  plan actual planner-backed cleanup-loop primitive replacement
+  plan camera-only model-policy cleanup
 ```

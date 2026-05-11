@@ -4,9 +4,15 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+    cleanup_primitive_evidence_from_substeps,
+)
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
+)
+from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
+    rby1m_curobo_gate_from_planner_probe,
 )
 from roboclaws.molmo_cleanup.report import (
     render_cleanup_report,
@@ -54,6 +60,37 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
             },
         }
     ]
+    run_result["cleanup_primitive_evidence"] = cleanup_primitive_evidence_from_substeps(
+        [
+            {
+                "object_id": "mug_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {
+                        "phase": "navigate_to_object",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "pick",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "navigate_to_receptacle",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                    },
+                    {
+                        "phase": "place",
+                        "status": "ok",
+                        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                        "state_mutation": "mujoco_freejoint_qpos",
+                    },
+                ],
+            }
+        ]
+    )
 
     report_path = render_cleanup_report(
         run_dir=tmp_path,
@@ -68,6 +105,9 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "MolmoSpaces Cleanup Pilot" in html
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
+    assert "Cleanup Primitive Gate" in html
+    assert "nav/object" in html
+    assert "mujoco_freejoint_qpos" in html
     assert "does not prove planner-backed robot manipulation" in html
     assert "mug_01" in html
     assert "Semantic acceptability" in html
@@ -286,6 +326,70 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "support estimates" in html
 
 
+def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    proof_dir = tmp_path / "planner_proof"
+    proof_dir.mkdir()
+    (proof_dir / "initial.png").write_bytes(b"initial")
+    (proof_dir / "final.png").write_bytes(b"final")
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "manipulation_evidence": api_semantic_manipulation_evidence(
+            backend="api_semantic_synthetic",
+            primitive_summary={API_SEMANTIC_PROVENANCE: 1},
+        ),
+        "score": score.to_dict(),
+        "planner_backed_manipulation_proof": {
+            "schema": "planner_backed_cleanup_attachment_v1",
+            "status": "planner_backed",
+            "primitive_provenance": "planner_backed",
+            "planner_backed": True,
+            "strict_proof_eligible": True,
+            "embodiment": "franka",
+            "steps_executed": 2,
+            "max_abs_qpos_delta": 0.01,
+            "runtime_diagnostics": {"renderer_adapter_enabled": True},
+            "image_artifacts": {
+                "initial": "planner_proof/initial.png",
+                "final": "planner_proof/final.png",
+            },
+        },
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Attached Planner-Backed Proof" in html
+    assert "Planner Initial" in html
+    assert "Planner Final" in html
+    assert "Cleanup object moves" in html
+    assert "api_semantic" in html
+    assert "planner_proof/initial.png" in html
+    assert "planner_proof/final.png" in html
+
+
 def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) -> None:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -314,11 +418,43 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "stderr": str(stderr),
         },
     }
+    run_result["manipulation_evidence"]["runtime_diagnostics"] = {
+        "python_executable": "/tmp/molmospaces/.venv/bin/python",
+        "python_version": "3.11.8",
+        "faulthandler_enabled": True,
+        "renderer_adapter_enabled": True,
+        "renderer_device_id": 0,
+        "mujoco_gl_env": "egl",
+        "pyopengl_platform_env": "egl",
+        "cuda_home_env": "/usr/local/cuda",
+        "torch_cuda_arch_list_env": "8.9",
+        "torch": {
+            "available": True,
+            "version": "2.7.1+cu128",
+            "cuda_version": "12.8",
+            "cuda_available": True,
+            "cpp_extension_cuda_home": "/usr/local/cuda",
+        },
+        "modules": {
+            "curobo": {"available": False, "version": None},
+            "molmo_spaces": {"available": True, "version": "0.1.0"},
+        },
+    }
+    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
     html = report_path.read_text(encoding="utf-8")
 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
+    assert "Runtime Diagnostics" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
+    assert "faulthandler=True" in html
+    assert "renderer_adapter=True" in html
+    assert "MUJOCO_GL=egl" in html
+    assert "CUDA_HOME=/usr/local/cuda" in html
+    assert "torch_cuda_available=True" in html
+    assert "curobo" in html
+    assert "RBY1M CuRobo Gate" in html
+    assert "wrong_embodiment" in html
