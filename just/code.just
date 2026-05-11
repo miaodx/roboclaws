@@ -15,6 +15,8 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    bash scripts/network_status.sh --assert-off-work "Claude Code direct MCP run"
+
     if ! command -v codex >/dev/null 2>&1; then
       echo "error: codex command not found; install or activate Codex before running code:cc" >&2
       exit 1

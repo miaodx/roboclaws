@@ -71,6 +71,13 @@ just chat::run                                   # OpenClaw Gateway + browser Co
 DEMO_PASSWORD=demo just appliance::run local      # hosted Railway-style appliance
 ```
 
+Work-network restriction: if `just dev::network-status` reports `network: work`
+(the probe can reach `https://api-router.evad.mioffice.cn/`), do not run Claude
+Code or OpenClaw workflows. Guarded recipes include `just code::cc`,
+`just harness::navigator`, OpenClaw Gateway recipes, `just chat::run`,
+`just appliance::run`, and OpenClaw local/integration verification gates. Switch
+to a non-work network first.
+
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line `just` install + tab completion. Modules:
 `openclaw`, `vlm`, `chat`, `appliance`, `dev` — each lives in `just/<module>.just`.

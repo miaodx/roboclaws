@@ -20,6 +20,8 @@ pull-image:
     #!/usr/bin/env bash
     set -euo pipefail
 
+    bash scripts/network_status.sh --assert-off-work "OpenClaw image pull"
+
     OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '"')"
     if [[ -z "$OPENCLAW_DEFAULT_IMAGE" ]]; then
       echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
@@ -55,6 +57,8 @@ pull-image:
 run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw/{{game}}" agent_souls="" max_wall_seconds="0" personality_probe="" photo_output_dir="output/openclaw-photo-task" photo_max_moves="200" photo_wall_budget="900" photo_scene="FloorPlan201":
     #!/usr/bin/env bash
     set -euo pipefail
+
+    bash scripts/network_status.sh --assert-off-work "OpenClaw Gateway run"
 
     bootstrap_cmd=(env PROVIDER="{{provider}}" AGENTS="{{agents}}")
     if [[ -n "{{agent_souls}}" ]]; then
@@ -213,6 +217,7 @@ gateway action="up" token_file=".openclaw-token" provider="kimi" agents="2":
 
     case "{{action}}" in
       up)
+        bash scripts/network_status.sh --assert-off-work "OpenClaw Gateway"
         TOKEN=$(
           env \
             PROVIDER="{{provider}}" \

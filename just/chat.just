@@ -28,6 +28,8 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
     #!/usr/bin/env bash
     set -euo pipefail
 
+    bash scripts/network_status.sh --assert-off-work "OpenClaw chat run"
+
     run_args=("--provider" "{{provider}}")
     if [[ -n "{{model}}" ]]; then
       run_args+=("--model" "{{model}}")
