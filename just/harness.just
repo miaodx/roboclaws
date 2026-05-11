@@ -26,6 +26,7 @@
 # - just harness::history             show the cross-run summary from PLAN.md
 
 set working-directory := '..'
+timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"
 
 default:
     @just --list harness
@@ -125,55 +126,67 @@ openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
 molmo-cleanup seed="7" output_dir="output/molmo-cleanup-harness":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-semantic-acceptability \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # Prompt-driven public-policy MolmoSpaces cleanup harness.
 molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" task="帮我整理这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --planner public_heuristic \
       --task "{{task}}" \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
       --require-semantic-acceptability \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # Prompt-driven public-policy cleanup against a real upstream MolmoSpaces/MuJoCo scene.
 molmo-real-cleanup seed="7" output_dir="output/molmo-real-cleanup-harness" task="帮我整理这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --planner public_heuristic \
       --task "{{task}}" \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --require-semantic-substeps \
       --require-semantic-acceptability \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # Real upstream MolmoSpaces cleanup with an actual RBY1M robot, FPV/chase/map,
 # and a reviewable HTML timeline.
 molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task="帮我整理这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
@@ -182,7 +195,7 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
       --include-robot \
       --robot-name rby1m \
       --record-robot-views \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
@@ -191,7 +204,7 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
       --require-robot-views \
       --require-semantic-substeps \
       --require-semantic-acceptability \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # Current-contract Molmo MCP bridge smoke. This runs the existing public
 # rule-based cleanup once, then drives the same semantic tool loop through the
@@ -199,23 +212,28 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
 molmo-agent-bridge seed="7" output_dir="output/molmo-agent-bridge-harness" rule_dir="output/molmo-agent-bridge-rule" task="帮我整理这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}" "{{rule_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    rule_run_dir="{{rule_dir}}/${stamp}"
+    mkdir -p "$run_dir" "$rule_run_dir"
+    echo "==> run dir: ${run_dir}"
+    echo "==> rule dir: ${rule_run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --planner public_heuristic \
       --task "{{task}}" \
-      --output-dir "{{rule_dir}}"
+      --output-dir "$rule_run_dir"
     .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
       --seed "{{seed}}" \
       --task "{{task}}" \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
       --expect-policy contract_smoke_agent \
       --require-agent-driven \
       --require-clean \
       --require-semantic-acceptability \
-      --compare-rule-result "{{rule_dir}}/run_result.json" \
-      "{{output_dir}}/run_result.json"
+      --compare-rule-result "${rule_run_dir}/run_result.json" \
+      "${run_dir}/run_result.json"
 
 # Current-contract Molmo MCP bridge visual harness. This uses the real
 # MolmoSpaces subprocess backend plus RBY1M robot-view capture, then compares the
@@ -223,7 +241,12 @@ molmo-agent-bridge seed="7" output_dir="output/molmo-agent-bridge-harness" rule_
 molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-harness" rule_dir="output/molmo-agent-bridge-visual-rule" task="帮我整理这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}" "{{rule_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    rule_run_dir="{{rule_dir}}/${stamp}"
+    mkdir -p "$run_dir" "$rule_run_dir"
+    echo "==> run dir: ${run_dir}"
+    echo "==> rule dir: ${rule_run_dir}"
     .venv/bin/python examples/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
@@ -232,7 +255,7 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --include-robot \
       --robot-name rby1m \
       --record-robot-views \
-      --output-dir "{{rule_dir}}"
+      --output-dir "$rule_run_dir"
     .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
       --seed "{{seed}}" \
       --task "{{task}}" \
@@ -240,7 +263,7 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --include-robot \
       --robot-name rby1m \
       --record-robot-views \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
       --expect-policy contract_smoke_agent \
       --expect-backend molmospaces_subprocess \
@@ -249,8 +272,8 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --require-clean \
       --require-robot-views \
       --require-semantic-acceptability \
-      --compare-rule-result "{{rule_dir}}/run_result.json" \
-      "{{output_dir}}/run_result.json"
+      --compare-rule-result "${rule_run_dir}/run_result.json" \
+      "${run_dir}/run_result.json"
 
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited
@@ -261,9 +284,12 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
 molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_root="{{output_dir}}/${stamp}"
+    mkdir -p "$run_root"
+    echo "==> run root: ${run_root}"
     for seed in {{seeds}}; do
-      run_dir="{{output_dir}}/seed-${seed}"
+      run_dir="${run_root}/seed-${seed}"
       .venv/bin/python examples/molmospaces_realworld_cleanup.py \
         --seed "${seed}" \
         --backend molmospaces_subprocess \
@@ -283,7 +309,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
       --require-advisory-scoring \
-      "{{output_dir}}"
+      "${run_root}"
 
 # ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
 # contract through MCP tools: metric_map, fixture_hints, waypoint observe, and
@@ -291,9 +317,12 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
 molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_root="{{output_dir}}/${stamp}"
+    mkdir -p "$run_root"
+    echo "==> run root: ${run_root}"
     for seed in {{seeds}}; do
-      run_dir="{{output_dir}}/seed-${seed}"
+      run_dir="${run_root}/seed-${seed}"
       .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
         --seed "${seed}" \
         --backend molmospaces_subprocess \
@@ -314,7 +343,7 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
       --require-advisory-scoring \
-      "{{output_dir}}"
+      "${run_root}"
 
 # ADR-0003 direct-agent dogfood kit smoke. This does not launch Codex/Claude;
 # it proves the stricter skill/server/checker path against the synthetic backend
@@ -322,13 +351,16 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
 molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-agent-dogfood-kit" task="帮我收拾这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
       --policy realworld_contract_smoke_agent \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend api_semantic_synthetic \
@@ -338,7 +370,7 @@ molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-ag
       --require-agent-driven \
       --require-clean-agent-run \
       --require-advisory-scoring \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # ADR-0003 OpenClaw dogfood kit smoke. This does not launch Gateway; it proves
 # the OpenClaw-labeled artifact shape and minimum checker before a local Gateway
@@ -346,13 +378,16 @@ molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-ag
 molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld-openclaw-dogfood-kit" task="帮我收拾这个房间":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
       --policy openclaw_agent \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend api_semantic_synthetic \
@@ -362,7 +397,7 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
       --require-agent-driven \
       --require-openclaw-minimum \
       --require-advisory-scoring \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # ADR-0010 OpenClaw visual dogfood kit smoke. This does not launch Gateway; it
 # proves OpenClaw-labeled ADR-0003 artifacts still render the real
@@ -370,7 +405,10 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
 molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-realworld-openclaw-visual-dogfood-kit" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
@@ -380,7 +418,7 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --include-robot \
       --robot-name rby1m \
       --record-robot-views \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
@@ -392,14 +430,17 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --require-clean-agent-run \
       --require-robot-views \
       --require-advisory-scoring \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # ADR-0013 raw FPV-only evidence harness. This intentionally proves perception
 # boundary and report artifacts, not camera-only cleanup success.
 molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harness" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python examples/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
@@ -410,7 +451,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --include-robot \
       --robot-name rby1m \
       --record-robot-views \
-      --output-dir "{{output_dir}}"
+      --output-dir "$run_dir"
     .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
@@ -418,7 +459,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --require-robot-views \
       --require-advisory-scoring \
       --require-raw-fpv-observations \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # ADR-0042 proof-bundle runner dry-run handoff. This proves fresh ADR-0003
 # cleanup artifacts produce checked planner proof commands without executing
@@ -426,9 +467,12 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
 molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-runner-harness" seed="7" task="帮我收拾这个房间" generated_mess_count="10":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
-    cleanup_dir="{{output_dir}}/cleanup"
-    bundle_dir="{{output_dir}}/proof_bundle"
+    stamp="$({{timestamp_cmd}})"
+    run_root="{{output_dir}}/${stamp}"
+    cleanup_dir="${run_root}/cleanup"
+    bundle_dir="${run_root}/proof_bundle"
+    mkdir -p "$run_root"
+    echo "==> run root: ${run_root}"
     .venv/bin/python examples/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
@@ -459,11 +503,14 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
 molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-bundle-execute-rerun" seed="7" task="帮我收拾这个房间" generated_mess_count="10" min_generated_mess_count="5" steps="2" timeout_s="600":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
-    cleanup_dir="{{output_dir}}/cleanup"
-    bundle_dir="{{output_dir}}/proof_bundle"
-    rerun_dir="{{output_dir}}/cleanup_rerun"
-    torch_extensions_dir="{{output_dir}}/torch_extensions"
+    stamp="$({{timestamp_cmd}})"
+    run_root="{{output_dir}}/${stamp}"
+    cleanup_dir="${run_root}/cleanup"
+    bundle_dir="${run_root}/proof_bundle"
+    rerun_dir="${run_root}/cleanup_rerun"
+    torch_extensions_dir="${run_root}/torch_extensions"
+    mkdir -p "$run_root"
+    echo "==> run root: ${run_root}"
     .venv/bin/python examples/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
@@ -514,15 +561,18 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
 molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-probe-harness" embodiment="franka" probe_mode="config_import" steps="2":
     #!/usr/bin/env bash
     set -euo pipefail
-    rm -rf "{{output_dir}}"
+    stamp="$({{timestamp_cmd}})"
+    run_dir="{{output_dir}}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
     .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py \
-      --output-dir "{{output_dir}}" \
+      --output-dir "$run_dir" \
       --embodiment "{{embodiment}}" \
       --probe-mode "{{probe_mode}}" \
       --steps "{{steps}}"
     .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py \
       --accept-blocked-capability \
-      "{{output_dir}}/run_result.json"
+      "${run_dir}/run_result.json"
 
 # List task files available under harness/tasks/.
 list-tasks:
