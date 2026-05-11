@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 02.4 is no longer blocked; on 2026-04-24 the legacy multi-variant experiment was superseded and runtime support standardized on map-v2+chase only. Phase 02.7 is the next queued milestone work.
-last_updated: "2026-04-24T02:36:14Z"
-last_activity: 2026-04-24
+stopped_at: Phase 11 MolmoSpaces held-object carry visuals completed on 2026-05-08; next MolmoSpaces follow-up is real coding-agent/OpenClaw policy or planner-backed RBY1M/Franka manipulation.
+last_updated: "2026-05-08T17:15:00+08:00"
+last_activity: 2026-05-08
 progress:
-  total_phases: 4
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_phases: 9
+  completed_phases: 7
+  total_plans: 10
+  completed_plans: 10
   percent: 100
 ---
 
@@ -21,23 +21,23 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 02.7 — openclaw-intermediate-message-capture (next queued phase)
+**Current focus:** Phase 11 — molmospaces-held-object-carry-visuals (completed; next queued MolmoSpaces work not yet planned)
 
 ## Current Position
 
-Phase: 02.4 (view-experiment-ab) — CLOSED / SUPERSEDED
-Plan: 4 of 4 closed — `02.4-01` through `02.4-03` shipped the shared view system; `02.4-04` was superseded on 2026-04-24 when product direction was locked to `map-v2+chase` only.
-Status: Shared view primitives, chase-cam support, example rollout, `NvidiaProvider`, `examples/view_experiment.py`, and `scripts/analyze_view_experiment.py` remain in the repo. The product/runtime surface no longer supports `baseline` or `map-v2`; the main examples now use only `map-v2+chase`, matching the shipped Phase 02.6 autonomous path. `docs/view-experiment-2026-04.md` records the superseding decision.
-Last activity: 2026-04-24 - Collapsed runtime support back to `map-v2+chase` only and synced roadmap/state docs
+Phase: 11 (molmospaces-held-object-carry-visuals) — COMPLETE
+Plan: 1 of 1 closed — `11-01` makes held objects follow RBY1M by updating their real MuJoCo free-joint qpos whenever semantic navigation/opening changes the robot pose, and tightens the robot visual checker to require carried-object FPV evidence.
+Status: The prompt `帮我整理这个房间` still runs through the public cleanup loop against upstream `procthor-10k-val` scene index 0 loaded by the isolated Python 3.11 runtime. The real subprocess backend records `backend=molmospaces_subprocess`, `planner_uses_private_manifest=false`, `primitive_provenance=api_semantic`, and held-object navigation mutations as `robot_base_qpos+held_object_freejoint_qpos`. The RBY1M visual harness records 25 FPV/chase/map/verification rows; all five `navigate_to_receptacle` rows now show the carried object in FPV with robot-relative position error <= 0.000001.
+Last activity: 2026-05-08 - Verified `just verify::molmo-robot-visual` with 5/5 restored objects, public planner use, apple fridge containment, held-object FPV pixels on all carried navigation rows, and required artifacts under `output/molmo-robot-visual-harness/`
 
 Progress: [##########] 100%
-(Phase 02.4 is no longer waiting on a local overnight sweep. The historical multi-variant study was superseded by product direction, so the next queued milestone work is Phase 02.7.)
+(Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Remaining MolmoSpaces work is future policy/planner scope, not a blocker.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 21 (18 historical retrofit + 3 completed in Phase 02.4)
+- Total plans completed: 28 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11 MolmoSpaces plans)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -52,11 +52,17 @@ Progress: [##########] 100%
 | 2.2. Long-running OpenClaw games | 3 | n/a | n/a |
 | 2.3. Digest pin (declined) | 1 | n/a | n/a |
 | 2.4. View-experiment A/B | 3 | n/a | n/a |
+| 6. MolmoSpaces cleanup pilot | 4 | n/a | n/a |
+| 7. MolmoSpaces prompt cleanup | 2 | n/a | n/a |
+| 8. MolmoSpaces real subprocess cleanup | 1 | ~2h | ~2h |
+| 9. MolmoSpaces FPV room plausibility | 1 | ~2h | ~2h |
+| 10. MolmoSpaces semantic substeps | 1 | ~2h | ~2h |
+| 11. MolmoSpaces held-object carry visuals | 1 | ~1h | ~1h |
 
 **Recent Trend:**
 
-- Last 3 shipped phases: 2.2, 2.3 (declined), 2.6
-- Trend: Stable; Phase 02.4 is now closed by decision, with the runtime standardized on `map-v2+chase` and the next queued work moved to Phase 02.7
+- Last 3 shipped phases: 9, 10, 11
+- Trend: MolmoSpaces cleanup path now moved from real upstream MolmoSpaces/MuJoCo subprocess proof to reviewable RBY1M visual evidence, semantic object-level cleanup evidence, and carried-object visual consistency.
 
 *Updated after each plan completion — prior entries are one-time ingest backfill.*
 | Phase 02.6 P02 | 25min | 3 tasks | 2 files |
@@ -65,6 +71,10 @@ Progress: [##########] 100%
 | Phase 02.6 P05 | 7min  | 1 task  | 3 files (2 deleted, 1 edited) |
 | Phase 02.6 P06 | 32min | 6 tasks | 2 files |
 | Phase 02.6 P07 | 20min | 3 tasks | 3 files |
+| Phase 08 P01 | ~2h | 4 tasks | 18 files |
+| Phase 09 P01 | ~2h | 4 tasks | 10 files |
+| Phase 10 P01 | ~2h | 4 tasks | 18 files |
+| Phase 11 P01 | ~1h | 4 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -73,6 +83,34 @@ Progress: [##########] 100%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
+- **Phase 08 completion (2026-05-07):** The MolmoSpaces cleanup definition of
+  done now requires and has evidence for `backend=molmospaces_subprocess`, an
+  isolated Python 3.11 runtime, upstream `procthor-10k-val` scene loading, real
+  metadata/object-state readback, public-only prompt planning for
+  `帮我整理这个房间`, scorer-only private manifest use, and the required
+  `before.png` / `after.png` / `trace.jsonl` / `run_result.json` /
+  `report.html` artifacts. Provenance remains `api_semantic` because the worker
+  mutates real MuJoCo free-joint `qpos`; reserve `real` for future
+  RBY1M/Franka planner-backed pick/place.
+- **Phase 09 completion (2026-05-08):** RBY1M FPV orientation now uses
+  target-facing base yaw for horizontal direction and a separately recorded
+  target-framing head pitch for camera readability. Same-room stand-off
+  selection is checked against MuJoCo room outlines, and the visual gate now
+  requires positive FPV target pixels on focused manipulation steps.
+- **Phase 10 completion (2026-05-08):** Cleanup execution is now recorded as
+  object-level semantic substeps. Fridge cleanup opens the real articulated
+  fridge joint, places the apple with `place_inside`, and records final
+  containment/readback as `location_relation=inside`. Robot timeline rows now
+  include semantic phase badges, and non-focused context rows no longer show a
+  misleading Verification panel. `primitive_provenance=api_semantic` remains
+  correct because these commands mutate real MuJoCo state but are not
+  planner-backed RBY1M/Franka pick/place.
+- **Phase 11 completion (2026-05-08):** Held objects now visually travel with
+  RBY1M during semantic cleanup navigation. `navigate_to_receptacle` and
+  fridge `open_receptacle` update the held object's real MuJoCo free-joint qpos
+  to the robot-relative held pose, and the visual checker requires positive FPV
+  object pixels plus robot-relative position evidence on carried navigation
+  rows. This remains `api_semantic`, not planner-backed robot manipulation.
 - **Phase 02.4 planning (2026-04-21):** GSD decomposition starts with `examples/openclaw_demo.py` (single-agent push-model navigation) before territory/coverage. Phase scope remains the full A/B study; only the execution order changed.
 - **Phase 02.4 execution checkpoint (2026-04-21):** Plans `02.4-01` through `02.4-03` are complete and the cloud-safe slice of `02.4-04` (`scripts/analyze_view_experiment.py` plus synthetic-data coverage) is implemented. The actual Kimi/NVIDIA sweep and `docs/view-experiment-2026-04.md` remain local-dev only and are tracked in issue #70.
 - **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
@@ -119,9 +157,17 @@ None yet.
 
 ### Blockers/Concerns
 
-- No active blocker at the moment. Phase 02.4 is closed by decision; Phase 02.7 is the next queued milestone work.
+- No active blocker for the MolmoSpaces cleanup definition of done. Phase 08
+  completed the real-scene subprocess proof, Phase 09 completed the
+  target-facing FPV / same-room visual-review follow-up, Phase 10 completed
+  the semantic substep / fridge containment / report-row follow-up, and Phase 11
+  completed the held-object carry visual follow-up. Future OpenClaw policy and
+  planner-backed manipulation are separate follow-ups.
 - **Known Phase 02.6 artifact gap (now planned as Phase 02.7):** Autonomous artifacts currently show tool traffic plus the final assistant message, but not the intermediate assistant transcript. This is a queued follow-up, not a blocker for the already-shipped 02.6 MCP loop.
-- **Environment split is real:** `uv run` had `ai2thor` available in the repo environment, but this session did not have an exported VLM key. No claims about real provider behavior or experiment outcome were made from cloud.
+- **Environment split is real:** this local session had AI2-THOR available,
+  VLM keys in `.env`, and the isolated Python 3.11 MolmoSpaces runtime. Phase
+  08 makes claims only about real MolmoSpaces/MuJoCo scene loading and
+  semantic state mutation, not about real VLM/OpenClaw behavior.
 
 > **Resolved 2026-04-20:** The two WARNINGs initially carried from
 > `.planning/INGEST-CONFLICTS.md` (image-payload contract, coverage
@@ -148,9 +194,11 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-04-22T07:11:32Z
-Stopped at: Phase 02.4 still blocked on issue #70 for the full sweep/write-up; latest local note is `.planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md`, Phase 5 is now complete under `.planning/phases/05-iterative-codebase-simplification/`, and Phase 02.7 remains planned under `.planning/phases/`
-Resume file: .planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLAN.md
+Last session: 2026-05-08T17:15:00+08:00
+Stopped at: Phase 11 MolmoSpaces held-object carry visuals is complete. Latest
+evidence is `.planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md`
+and `output/molmo-robot-visual-harness/run_result.json`.
+Resume file: .planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md
 
 ## Dual-Stack Workflow
 
@@ -158,4 +206,6 @@ Resume file: .planning/LOCAL-2026-04-22-phase-2.4-review-and-2.6-view-bridge-PLA
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** 02.4 (view-experiment-ab) — 3/4 plans complete; blocked on local-dev issue #70 after local review/bridge follow-up — 2026-04-22T07:11:32Z
+**Active Phase:** 11 (molmospaces-held-object-carry-visuals) — complete; next
+MolmoSpaces phase should be opened only for real coding-agent/OpenClaw policy or
+planner-backed RBY1M/Franka manipulation — 2026-05-08T17:15:00+08:00

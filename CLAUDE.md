@@ -137,32 +137,20 @@ see `docs/openclw/openclaw-local.md`.
 - macOS may need additional AI2-THOR rendering configuration
 - `controller.step()` is synchronous, one agent per call — game engine uses turn-based stepping
 
-## Workflow: gstack for pre-plan, GSD for execution
+## Planning workflow
 
-This repo uses two complementary skill families:
+Use `hybrid-phase-pipeline` when available. It routes Matt-style shaping,
+gstack review, and GSD execution without making every task run every framework.
 
-- **gstack** (pre-plan, review, ship) — `/office-hours`, `/plan-ceo-review`,
-  `/plan-eng-review`, `/autoplan`, `/review`, `/ship`. Produces strategic
-  reviews, reviewed plan drafts, and PRs. Plan files are plain markdown
-  (e.g., `PLAN.md`, `docs/plans/*.md`); gstack is agnostic about layout.
-- **GSD** (phase execution) — `/gsd-plan-phase`, `/gsd-execute-phase`,
-  `/gsd-verify-work`, `/gsd-ship`, `/gsd-quick`, `/gsd-debug`. Owns the
-  `.planning/` directory and the phase lifecycle (context → plan →
-  execute → verify → summary). Manages `.planning/phases/XX-name/` artifacts.
+One source of truth per stage:
 
-**Handoff rule of thumb:**
-- Rough idea, strategic direction, architecture review, scope decisions →
-  gstack (`/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/autoplan`)
-- Once a plan is reviewed and approved → GSD (`/gsd-plan-phase` to structure
-  it into `.planning/phases/XX-name/`, then `/gsd-execute-phase`)
-- Small fixes, doc edits, quick experiments → `/gsd-quick` or `/gsd-fast`
-- Debug loops → `/gsd-debug`
-- Shipping → `/ship` (gstack) if no phase is under GSD, else `/gsd-ship`
+- Before execution: `docs/plans/*.md` or GitHub issues.
+- During execution: `.planning/STATE.md` and `.planning/phases/*`.
+- After shipping: summaries, verification reports, and retrospectives.
 
-Active phase work lives in `.planning/STATE.md` (GSD-managed) and the active
-phase directory under `.planning/phases/`. Top-level `PLAN.md` holds the
-current active phase only; shipped-phase history (Phase 2.0–2.4) is archived
-under `docs/retrospectives/`.
+Do not create `.planning/phases/*` for brainstorming. Once a phase is under GSD,
+execute and ship it with GSD unless the user explicitly changes the workflow.
+Current hybrid pilot: `docs/plans/molmospaces-manipulation-spike.md`.
 
 ## Agent skills
 

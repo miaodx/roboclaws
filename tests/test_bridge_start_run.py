@@ -9,8 +9,8 @@ from roboclaws.openclaw.bridge import (
     OpenClawBridge,
     OpenClawUnavailable,
     TranscriptMessage,
-    _SessionStoreCapture,
 )
+from roboclaws.openclaw.transcript_recovery import SessionStoreCapture
 
 
 def _mock_response(status_code: int = 200, json_body: dict | None = None) -> MagicMock:
@@ -160,7 +160,7 @@ def test_start_run_wipes_workspace_state_before_post() -> None:
 
 def test_start_run_timeout_uses_session_store_transcript_fallback() -> None:
     bridge = OpenClawBridge()
-    session_store_capture = _SessionStoreCapture(
+    session_store_capture = SessionStoreCapture(
         session_id="new-session",
         session_file="/home/node/.openclaw/agents/agent-0/sessions/new-session.jsonl",
         transcript_messages=[

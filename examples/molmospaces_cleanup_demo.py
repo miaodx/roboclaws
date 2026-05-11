@@ -25,10 +25,15 @@ from roboclaws.molmo_cleanup.scenario import (  # noqa: E402
     build_cleanup_scenario,
     write_scenario_bundle,
 )
+from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    MolmoSpacesSubprocessBackend,
+)
 
 DEFAULT_PROMPT = "帮我整理这个房间"
 SCRIPTED_REFERENCE = "scripted_reference"
 PUBLIC_HEURISTIC = "public_heuristic"
+SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -38,10 +43,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--restore-count", type=int, default=5)
     parser.add_argument("--task", default=DEFAULT_PROMPT)
     parser.add_argument(
+        "--backend",
+        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND),
+        default=SYNTHETIC_BACKEND,
+    )
+    parser.add_argument(
         "--planner",
         choices=(SCRIPTED_REFERENCE, PUBLIC_HEURISTIC),
         default=SCRIPTED_REFERENCE,
     )
+    parser.add_argument("--include-robot", action="store_true")
+    parser.add_argument("--robot-name", default="rby1m")
+    parser.add_argument("--record-robot-views", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -52,22 +65,44 @@ def run_demo(
     restore_count: int = 5,
     planner: str = SCRIPTED_REFERENCE,
     task_prompt: str = DEFAULT_PROMPT,
+    backend: str = SYNTHETIC_BACKEND,
+    include_robot: bool = False,
+    robot_name: str = "rby1m",
+    record_robot_views: bool = False,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    scenario = build_cleanup_scenario(seed=seed)
+    backend_instance: Any | None = None
+    if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
+        raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
+    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+        backend_instance = MolmoSpacesSubprocessBackend(
+            run_dir=output_dir,
+            seed=seed,
+            include_robot=include_robot,
+            robot_name=robot_name,
+        )
+        scenario = backend_instance.scenario
+    else:
+        scenario = build_cleanup_scenario(seed=seed)
     paths = write_scenario_bundle(output_dir, scenario)
-    contract = MolmoCleanupToolContract(scenario)
+    contract = MolmoCleanupToolContract(scenario, backend=backend_instance)
     trace_events: list[dict[str, Any]] = []
     started_at = time.time()
 
-    before_snapshot = write_state_snapshot(
-        scenario,
-        contract.backend.object_locations(),
-        output_dir / "before.png",
+    before_snapshot = _write_snapshot(
+        backend=backend,
+        contract=contract,
+        scenario=scenario,
+        output_path=output_dir / "before.png",
         title="Before cleanup",
     )
+    robot_view_steps: list[dict[str, Any]] = []
+    if record_robot_views:
+        _record_robot_views(robot_view_steps, contract, output_dir, "0000_before", "before")
 
     _call_tool(trace_events, started_at, "observe", {}, contract.observe)
+    if record_robot_views:
+        _record_robot_views(robot_view_steps, contract, output_dir, "0001_observe", "observe")
     scene_objects = _call_tool(
         trace_events,
         started_at,
@@ -75,6 +110,14 @@ def run_demo(
         {},
         contract.scene_objects,
     )
+    if record_robot_views:
+        _record_robot_views(
+            robot_view_steps,
+            contract,
+            output_dir,
+            "0002_scene_objects",
+            "scene_objects",
+        )
     cleanup_plan, uses_private_manifest = _build_cleanup_plan(
         planner=planner,
         task_prompt=task_prompt,
@@ -82,30 +125,148 @@ def run_demo(
         scenario=scenario,
         restore_count=restore_count,
     )
+    initial_locations = _object_locations_from_scene_objects(scene_objects)
+    receptacles_by_id = {
+        str(item["receptacle_id"]): item for item in scene_objects.get("receptacles", [])
+    }
 
-    for action in cleanup_plan:
+    view_index = 3
+    semantic_substeps: list[dict[str, Any]] = []
+    for action_index, action in enumerate(cleanup_plan, start=1):
         object_id = action["object_id"]
         target_receptacle_id = action["receptacle_id"]
-        _call_tool(
+        source_receptacle_id = initial_locations.get(object_id, "")
+        object_steps: list[dict[str, Any]] = []
+
+        response = _call_tool(
             trace_events,
             started_at,
-            "goto",
-            {"object_id": object_id, "receptacle_id": target_receptacle_id},
-            lambda target=target_receptacle_id: contract.goto(target),
+            "navigate_to_object",
+            {"object_id": object_id, "source_receptacle_id": source_receptacle_id},
+            lambda selected_object=object_id: contract.navigate_to_object(selected_object),
         )
-        _call_tool(
+        _record_semantic_step(object_steps, "navigate_to_object", response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_navigate_object_{action_index}",
+                f"navigate_to_object {object_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=source_receptacle_id or None,
+                semantic_phase="navigate_to_object",
+            )
+            view_index += 1
+
+        response = _call_tool(
             trace_events,
             started_at,
             "pick",
             {"object_id": object_id},
             lambda selected_object=object_id: contract.pick(selected_object),
         )
-        _call_tool(
+        _record_semantic_step(object_steps, "pick", response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_pick_{action_index}",
+                f"pick {object_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=source_receptacle_id or None,
+                semantic_phase="pick",
+            )
+            view_index += 1
+
+        response = _call_tool(
             trace_events,
             started_at,
-            "place",
+            "navigate_to_receptacle",
+            {"object_id": object_id, "receptacle_id": target_receptacle_id},
+            lambda target=target_receptacle_id: contract.navigate_to_receptacle(target),
+        )
+        _record_semantic_step(object_steps, "navigate_to_receptacle", response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_navigate_receptacle_{action_index}",
+                f"navigate_to_receptacle {target_receptacle_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
+                semantic_phase="navigate_to_receptacle",
+            )
+            view_index += 1
+
+        target_receptacle = receptacles_by_id.get(target_receptacle_id, {})
+        place_tool = "place_inside" if _requires_inside_place(target_receptacle) else "place"
+        if place_tool == "place_inside":
+            response = _call_tool(
+                trace_events,
+                started_at,
+                "open_receptacle",
+                {"object_id": object_id, "receptacle_id": target_receptacle_id},
+                lambda target=target_receptacle_id: contract.open_receptacle(target),
+            )
+            _record_semantic_step(object_steps, "open_receptacle", response)
+            if record_robot_views:
+                _record_robot_views(
+                    robot_view_steps,
+                    contract,
+                    output_dir,
+                    f"{view_index:04d}_open_receptacle_{action_index}",
+                    f"open_receptacle {target_receptacle_id}",
+                    focus_object_id=object_id,
+                    focus_receptacle_id=target_receptacle_id,
+                    semantic_phase="open_receptacle",
+                )
+                view_index += 1
+
+        response = _call_tool(
+            trace_events,
+            started_at,
+            place_tool,
             {"receptacle_id": target_receptacle_id},
-            lambda target=target_receptacle_id: contract.place(target),
+            lambda target=target_receptacle_id, tool=place_tool: (
+                contract.place_inside(target) if tool == "place_inside" else contract.place(target)
+            ),
+        )
+        _record_semantic_step(object_steps, place_tool, response)
+        if record_robot_views:
+            _record_robot_views(
+                robot_view_steps,
+                contract,
+                output_dir,
+                f"{view_index:04d}_{place_tool}_{action_index}",
+                f"{place_tool} {object_id}",
+                focus_object_id=object_id,
+                focus_receptacle_id=target_receptacle_id,
+                semantic_phase=place_tool,
+            )
+            view_index += 1
+
+        response = _call_tool(
+            trace_events,
+            started_at,
+            "object_done",
+            {"object_id": object_id, "receptacle_id": target_receptacle_id},
+            lambda selected_object=object_id, target=target_receptacle_id: contract.object_done(
+                selected_object,
+                target,
+            ),
+        )
+        _record_semantic_step(object_steps, "object_done", response)
+        semantic_substeps.append(
+            {
+                "object_id": object_id,
+                "source_receptacle_id": source_receptacle_id,
+                "target_receptacle_id": target_receptacle_id,
+                "target_receptacle_category": _receptacle_category(target_receptacle),
+                "steps": object_steps,
+            }
         )
 
     done = _call_tool(
@@ -116,28 +277,53 @@ def run_demo(
         lambda: contract.done(f"{planner} cleanup complete"),
     )
 
-    after_snapshot = write_state_snapshot(
-        scenario,
-        contract.backend.object_locations(),
-        output_dir / "after.png",
+    after_snapshot = _write_snapshot(
+        backend=backend,
+        contract=contract,
+        scenario=scenario,
+        output_path=output_dir / "after.png",
         title="After cleanup",
     )
+    if record_robot_views:
+        _record_robot_views(
+            robot_view_steps,
+            contract,
+            output_dir,
+            f"{view_index:04d}_after",
+            "after",
+        )
     trace_path = output_dir / "trace.jsonl"
     write_trace_jsonl(trace_path, trace_events)
 
     run_result = {
+        "backend": backend,
         "scenario_id": scenario.scenario_id,
+        "seed": seed,
         "task_prompt": task_prompt,
+        "final_status": done["cleanup_status"],
+        "terminate_reason": f"{planner} cleanup complete",
         "cleanup_status": done["cleanup_status"],
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "primitive_provenance_summary": {
+            API_SEMANTIC_PROVENANCE: sum(
+                1
+                for event in trace_events
+                if event.get("event") == "response"
+                and isinstance(event.get("response"), dict)
+                and event["response"].get("primitive_provenance") == API_SEMANTIC_PROVENANCE
+            )
+        },
         "planner": planner,
         "planner_uses_private_manifest": uses_private_manifest,
         "scripted_reference_uses_private_manifest": uses_private_manifest
         if planner == SCRIPTED_REFERENCE
         else False,
         "cleanup_plan": cleanup_plan,
+        "semantic_loop_variant": "navigate-pick-navigate-open-place-object_done",
+        "semantic_substeps": semantic_substeps,
         "score": done["score"],
         "final_locations": done["final_locations"],
+        "final_containment": done.get("final_containment", {}),
         "tool_event_counts": done["tool_event_counts"],
         "artifacts": {
             "scenario": str(paths["scenario"]),
@@ -146,6 +332,21 @@ def run_demo(
             "after_snapshot": str(after_snapshot),
         },
     }
+    if backend_instance is not None:
+        run_result["molmospaces_runtime"] = {
+            "python_executable": str(backend_instance.python_executable),
+            "runtime": backend_instance.runtime,
+            "model_stats": backend_instance.model_stats,
+            "scene_xml": backend_instance.scene_xml,
+            "metadata_object_count": backend_instance.metadata_object_count,
+        }
+        if getattr(backend_instance, "robot", None) is not None:
+            run_result["robot"] = backend_instance.robot
+            run_result["robot_name"] = backend_instance.robot.get("robot_name")
+    if robot_view_steps:
+        run_result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+        run_result["robot_view_steps"] = robot_view_steps
+        run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     report_path = render_cleanup_report(
         run_dir=output_dir,
         scenario=scenario,
@@ -153,6 +354,7 @@ def run_demo(
         trace_events=trace_events,
         before_snapshot=before_snapshot,
         after_snapshot=after_snapshot,
+        robot_view_steps=robot_view_steps,
     )
     run_result["artifacts"]["report"] = str(report_path)
     run_result_path = output_dir / "run_result.json"
@@ -189,6 +391,115 @@ def _build_cleanup_plan(
     raise ValueError(f"unknown cleanup planner: {planner}")
 
 
+def _object_locations_from_scene_objects(scene_objects: dict[str, Any]) -> dict[str, str]:
+    return {
+        str(item["object_id"]): str(item.get("location_id", ""))
+        for item in scene_objects.get("objects", [])
+    }
+
+
+def _requires_inside_place(receptacle: dict[str, Any]) -> bool:
+    return _receptacle_category(receptacle) == "Fridge"
+
+
+def _receptacle_category(receptacle: dict[str, Any]) -> str:
+    category = str(receptacle.get("category", ""))
+    if category:
+        return category
+    name = str(receptacle.get("name", "")).lower()
+    receptacle_id = str(receptacle.get("receptacle_id", "")).lower()
+    if "fridge" in name or "refrigerator" in name or "fridge" in receptacle_id:
+        return "Fridge"
+    return ""
+
+
+def _record_semantic_step(
+    steps: list[dict[str, Any]],
+    phase: str,
+    response: dict[str, Any],
+) -> None:
+    steps.append(
+        {
+            "phase": phase,
+            "tool": response.get("tool"),
+            "ok": response.get("ok"),
+            "object_id": response.get("object_id"),
+            "receptacle_id": response.get("receptacle_id"),
+            "source_receptacle_id": response.get("source_receptacle_id"),
+            "location_id": response.get("location_id"),
+            "contained_in": response.get("contained_in"),
+            "location_relation": response.get("location_relation"),
+            "opened": response.get("opened"),
+            "matches_expected_location": response.get("matches_expected_location"),
+            "primitive_provenance": response.get("primitive_provenance"),
+        }
+    )
+
+
+def _write_snapshot(
+    *,
+    backend: str,
+    contract: MolmoCleanupToolContract,
+    scenario: Any,
+    output_path: Path,
+    title: str,
+) -> Path:
+    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+        return contract.backend.write_snapshot(output_path, title=title)
+    return write_state_snapshot(
+        scenario,
+        contract.backend.object_locations(),
+        output_path,
+        title=title,
+    )
+
+
+def _record_robot_views(
+    steps: list[dict[str, Any]],
+    contract: MolmoCleanupToolContract,
+    output_dir: Path,
+    label: str,
+    action: str,
+    *,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
+    semantic_phase: str | None = None,
+) -> None:
+    result = contract.backend.write_robot_views(
+        output_dir / "robot_views",
+        label=label,
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
+    )
+    if not result.get("ok"):
+        raise RuntimeError(f"robot view capture failed: {result}")
+    steps.append(
+        {
+            "label": label,
+            "action": action,
+            "robot_pose": result.get("robot_pose"),
+            "robot_trajectory_count": len(result.get("robot_trajectory", [])),
+            "view_variant": result.get("view_variant"),
+            "view_provenance": result.get("view_provenance"),
+            "focus": result.get("focus"),
+            "semantic_phase": semantic_phase,
+            "room_outline_count": result.get("room_outline_count"),
+            "views": _relative_view_paths(output_dir, result["views"]),
+        }
+    )
+
+
+def _relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:
+    relative = {}
+    for key, value in views.items():
+        path = Path(value)
+        try:
+            relative[key] = str(path.relative_to(output_dir))
+        except ValueError:
+            relative[key] = str(path)
+    return relative
+
+
 def _call_tool(
     events: list[dict[str, Any]],
     started_at: float,
@@ -221,6 +532,10 @@ def main(argv: list[str] | None = None) -> None:
         restore_count=args.restore_count,
         planner=args.planner,
         task_prompt=args.task,
+        backend=args.backend,
+        include_robot=args.include_robot,
+        robot_name=args.robot_name,
+        record_robot_views=args.record_robot_views,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
 

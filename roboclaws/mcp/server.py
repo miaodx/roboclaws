@@ -333,7 +333,7 @@ class RoboclawsMCPServer:
             label when the operator asks you to "show me what you see" in
             the chat tab; omit it when you are only looking for yourself.
             """
-            return server._do_observe(label=label)
+            return server.call_tool("observe", label=label)
 
         @self._mcp.tool()
         def observe_archived(label: str) -> dict:
@@ -371,7 +371,7 @@ class RoboclawsMCPServer:
             need to revisit a frame later, read the snapshot path with
             your filesystem tool instead of re-issuing `observe()`.
             """
-            return server._do_observe_archived(label)
+            return server.call_tool("observe_archived", label=label)
 
         @self._mcp.tool()
         def move(direction: str, reason: str = "", steps: int = 1) -> dict:
@@ -385,7 +385,7 @@ class RoboclawsMCPServer:
             agent has moved without observing, a `warning` field nudges it
             to call `observe` before the next move.
             """
-            return server._do_move(direction, reason, steps=steps)
+            return server.call_tool("move", direction=direction, reason=reason, steps=steps)
 
         @self._mcp.tool()
         def scene_objects(filter_types: str = "") -> dict:
@@ -418,7 +418,7 @@ class RoboclawsMCPServer:
                 3. For each: navigate, frame, ``observe_archived(label=...)``.
                 4. ``done(reason="captured ...")``.
             """
-            return server._do_scene_objects(filter_types)
+            return server.call_tool("scene_objects", filter_types=filter_types)
 
         @self._mcp.tool()
         def goto(object_id: str, distance: float = 1.0, face: bool = True) -> dict:
@@ -447,7 +447,7 @@ class RoboclawsMCPServer:
             call ``goto(object_id=...)`` per target. Verify framing with
             one ``observe`` before capturing with ``observe_archived``.
             """
-            return server._do_goto(object_id, distance=distance, face=face)
+            return server.call_tool("goto", object_id=object_id, distance=distance, face=face)
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
@@ -475,11 +475,40 @@ class RoboclawsMCPServer:
 
             Sets the server's done_event so the host loop can shut down.
             """
-            return server._do_done(reason)
+            return server.call_tool("done", reason=reason)
 
     # ------------------------------------------------------------------
     # Tool implementations (tests call these directly)
     # ------------------------------------------------------------------
+
+    def call_tool(self, name: str, **kwargs: Any) -> Any:
+        """Invoke a navigation tool by its external MCP-facing name.
+
+        FastMCP registration is a thin adapter over this dispatcher, and tests
+        can use it to exercise the same tool names/argument shapes agents see
+        without binding a real HTTP server.
+        """
+        if name == "observe":
+            return self._do_observe(label=str(kwargs.get("label", "")))
+        if name == "observe_archived":
+            return self._do_observe_archived(str(kwargs.get("label", "")))
+        if name == "move":
+            return self._do_move(
+                str(kwargs.get("direction", "")),
+                str(kwargs.get("reason", "")),
+                steps=int(kwargs.get("steps", 1)),
+            )
+        if name == "scene_objects":
+            return self._do_scene_objects(str(kwargs.get("filter_types", "")))
+        if name == "goto":
+            return self._do_goto(
+                str(kwargs.get("object_id", "")),
+                distance=float(kwargs.get("distance", 1.0)),
+                face=bool(kwargs.get("face", True)),
+            )
+        if name == "done":
+            return self._do_done(str(kwargs.get("reason", "")))
+        raise ValueError(f"unknown MCP tool {name!r}")
 
     def _do_observe(self, label: str = "") -> list:
         request_payload = {"label": label} if label else {}

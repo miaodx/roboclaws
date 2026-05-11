@@ -2,12 +2,14 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 7 prompt-driven cleanup demo shipped and verified on 2026-05-07
+**Status:** Phase 11 held-object carry visuals shipped and verified on 2026-05-08
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
-Phase 6 scaffold -> Phase 7 prompt-driven public cleanup. OpenClaw and real
-planner-backed manipulation remain deferred.
+Phase 6 scaffold -> Phase 7 prompt-driven public cleanup -> Phase 8 real
+MolmoSpaces/MuJoCo subprocess cleanup -> Phase 9 RBY1M visual plausibility ->
+Phase 10 semantic cleanup substeps -> Phase 11 held-object carry visuals.
+OpenClaw and real planner-backed manipulation remain deferred.
 
 ## Why This Exists
 
@@ -192,6 +194,163 @@ Boundary:
 - The next meaningful pipeline stage is either a real coding-agent/OpenClaw
   policy proof over this same public contract or a Python 3.11 MolmoSpaces
   subprocess adapter.
+
+### Phase 8 Real MolmoSpaces Subprocess Result - 2026-05-07
+
+The follow-up GSD phase closed the fake/shim/backend gap in the prompt cleanup
+artifact:
+
+- `roboclaws/molmo_cleanup/subprocess_backend.py` shells the Python 3.10 repo
+  process into the isolated Python 3.11 MolmoSpaces runtime at
+  `/tmp/roboclaws-molmospaces-spike/.venv/bin/python`.
+- `scripts/molmospaces_subprocess_worker.py` loads upstream
+  `procthor-10k-val` scene index 0 through MolmoSpaces resource installation,
+  then loads the resulting MJCF into MuJoCo.
+- The worker builds public `observe` / `scene_objects` data from real
+  MolmoSpaces scene metadata plus MuJoCo state readback, while the private
+  manifest remains scorer-only.
+- `place` uses `api_semantic` direct MuJoCo free-joint `qpos` mutation against
+  the loaded real scene. This is not planner-backed robot manipulation, so it is
+  deliberately not labeled `real`.
+- `just harness::molmo-real-cleanup` and `just verify::molmo-real-cleanup` are
+  the focused real-runtime gates.
+- `.planning/phases/08-molmospaces-real-subprocess-cleanup/08-VERIFICATION.md`
+  records the verification evidence.
+
+Latest real-runtime harness result:
+
+| Field | Value |
+| --- | --- |
+| Artifact dir | `output/molmo-real-cleanup-harness/` |
+| Backend | `molmospaces_subprocess` |
+| Runtime | Python `3.11.14`, MuJoCo `3.4.0` |
+| Scene | upstream `procthor-10k-val` scene index `0` |
+| Scene stats | 140 metadata objects, 415 MuJoCo bodies, 3492 geoms, 129 joints |
+| Task prompt | `帮我整理这个房间` |
+| Cleanup status | `success` |
+| Restored objects | `5/5` |
+| Success threshold | `3/5` |
+| Planner | `public_heuristic` |
+| Planner uses private manifest | `false` |
+| Primitive provenance | `api_semantic` |
+| Required artifacts | `before.png`, `after.png`, `trace.jsonl`, `run_result.json`, `report.html` |
+
+Boundary:
+
+- This now satisfies the real upstream MolmoSpaces/MuJoCo scene requirement for
+  the semantic cleanup proof.
+- It still does not prove RBY1M/Franka planner-backed pick/place. Future
+  artifacts may use `primitive_provenance="real"` only after that planner-backed
+  path is proven.
+- It is still a deterministic public heuristic, not an OpenClaw/VLM policy.
+  OpenClaw integration remains a separate follow-up.
+
+### Phase 9 RBY1M Visual Plausibility Result - 2026-05-08
+
+The follow-up GSD phase made the real MolmoSpaces run reviewable from the
+robot's perspective:
+
+- `--include-robot --robot-name rby1m --record-robot-views` adds FPV, chase,
+  map, and public verification views for the cleanup timeline.
+- Target-facing base yaw and target-framing head pitch make focused FPV frames
+  face the current object or receptacle.
+- Same-room stand-off selection is checked against MuJoCo room outlines.
+- `just verify::molmo-robot-visual` is the focused RBY1M visual gate.
+- `.planning/phases/09-molmospaces-fpv-room-plausibility/09-VERIFICATION.md`
+  records the verification evidence.
+
+Boundary:
+
+- This is still `api_semantic` manipulation, not planner-backed robot
+  pick/place.
+- The visual verification camera is a public MuJoCo state-report aid, not a
+  private manifest view.
+
+### Phase 10 Semantic Cleanup Substeps Result - 2026-05-08
+
+The follow-up GSD phase replaced the coarse cleanup loop with object-level
+semantic substeps:
+
+- Each target records `navigate_to_object -> pick -> navigate_to_receptacle ->
+  place/place_inside -> object_done`.
+- Fridge targets record `open_receptacle` before `place_inside`.
+- The apple is placed inside the real fridge state, with final containment
+  recorded as `contained_in=<fridge id>` and `location_relation=inside`.
+- `run_result.json` records `semantic_loop_variant`,
+  `semantic_substeps`, and `final_containment`.
+- The robot report shows semantic phase badges and suppresses the misleading
+  Verification panel for non-focused `before`, `observe`, `scene_objects`, and
+  `after` rows.
+- `just harness::molmo-real-cleanup` and `just verify::molmo-robot-visual`
+  both pass with `backend=molmospaces_subprocess`, `planner=public_heuristic`,
+  and `planner_uses_private_manifest=false`.
+- `.planning/phases/10-molmospaces-semantic-substeps/10-VERIFICATION.md`
+  records the verification evidence.
+
+Latest semantic-substep harness result:
+
+| Field | Value |
+| --- | --- |
+| Real artifact dir | `output/molmo-real-cleanup-harness/` |
+| Robot visual artifact dir | `output/molmo-robot-visual-harness/` |
+| Backend | `molmospaces_subprocess` |
+| Runtime | Python `3.11.14`, MuJoCo `3.4.0` |
+| Task prompt | `帮我整理这个房间` |
+| Cleanup status | `success` |
+| Restored objects | `5/5` |
+| Planner | `public_heuristic` |
+| Planner uses private manifest | `false` |
+| Primitive provenance | `api_semantic` |
+| Semantic loop | `navigate-pick-navigate-open-place-object_done` |
+| Robot view steps | `25` |
+| Apple final relation | `inside` refrigerator |
+
+Boundary:
+
+- This completes the current public semantic cleanup demo. It still does not
+  prove RBY1M/Franka planner-backed pick/place, so `primitive_provenance="real"`
+  remains deferred.
+- It is still a deterministic public heuristic, not a real VLM/OpenClaw policy.
+
+### Phase 11 Held-Object Carry Visuals Result - 2026-05-08
+
+The follow-up GSD phase fixed the mismatch where the semantic state said an
+object was held, but the rendered object stayed at the pickup pose while RBY1M
+navigated to the target receptacle:
+
+- `navigate_to_receptacle` now moves the held object's real MuJoCo free-joint
+  qpos to a robot-relative held pose whenever RBY1M changes pose.
+- `open_receptacle` does the same after moving RBY1M to the opened-fridge access
+  pose, so the held apple follows the robot before `place_inside`.
+- Tool responses record
+  `state_mutation=robot_base_qpos+held_object_freejoint_qpos` for carried
+  navigation and
+  `mujoco_receptacle_joint_qpos+robot_base_qpos+held_object_freejoint_qpos` for
+  fridge opening.
+- The visual checker now requires held-object `navigate_to_receptacle` rows to
+  have positive FPV object pixels and verifies the object position is the
+  expected robot-relative held pose.
+- `.planning/phases/11-molmospaces-held-object-carry-visuals/11-VERIFICATION.md`
+  records the verification evidence.
+
+Latest carried-object visual evidence from
+`output/molmo-robot-visual-harness/run_result.json`:
+
+| Row | Object | FPV object pixels | Robot-relative error |
+| --- | --- | ---: | ---: |
+| `0005_navigate_receptacle_1` | Apple | `1917` | `0.0` |
+| `0010_navigate_receptacle_2` | Book | `22602` | `0.0` |
+| `0014_navigate_receptacle_3` | Bowl | `18569` | `0.000001` |
+| `0018_navigate_receptacle_4` | Pillow | `38946` | `0.0` |
+| `0022_navigate_receptacle_5` | RemoteControl | `3798` | `0.0` |
+
+Boundary:
+
+- This improves visual/semantic consistency for the `api_semantic` demo. It is
+  still not planner-backed RBY1M/Franka manipulation, so
+  `primitive_provenance="real"` remains deferred.
+- The planner remains deterministic `public_heuristic` and public-only:
+  `planner_uses_private_manifest=false`.
 
 ## Upstream Findings
 
@@ -464,12 +623,24 @@ Phase 7 then added the prompt-driven public-policy proof.
    cleanup policy using `observe` / `scene_objects` data, with
    `planner_uses_private_manifest=false` in `run_result.json`.
 
-6. **OpenClaw follow-up**
+6. **Real MolmoSpaces subprocess cleanup**
+   Completed in Phase 8. The prompt `帮我整理这个房间` now runs through the same
+   public cleanup loop against a real upstream MolmoSpaces/MuJoCo scene loaded
+   by the isolated Python 3.11 runtime, with
+   `backend=molmospaces_subprocess` in `run_result.json`.
+
+7. **RBY1M visual cleanup and semantic substeps**
+   Completed in Phases 9 and 10. The real subprocess cleanup now has
+   RBY1M FPV/chase/map/verification views, target-facing robot orientation,
+   same-room pose evidence, and object-level semantic substeps including
+   fridge open/place-inside containment.
+
+8. **OpenClaw follow-up**
    Reuse the working MCP surface through OpenClaw only after the direct cleanup
    demo is stable. Split this into a separate GSD phase if direct MCP cleanup is
    not stable quickly.
 
-7. **Docs and ADR**
+9. **Docs and ADR**
    Reframe README / ARCHITECTURE / technical design after evidence exists. Add
    an ADR that AI2-THOR remains baseline and MolmoSpaces is the next substrate
    for manipulation.
@@ -586,10 +757,18 @@ completed:
   gsd-plan-phase 07-molmospaces-prompt-driven-cleanup-demo
   gsd-execute-phase 07-molmospaces-prompt-driven-cleanup-demo
   gsd-verify-work 07-molmospaces-prompt-driven-cleanup-demo
+  gsd-plan-phase 08-molmospaces-real-subprocess-cleanup
+  gsd-execute-phase 08-molmospaces-real-subprocess-cleanup
+  gsd-verify-work 08-molmospaces-real-subprocess-cleanup
+  gsd-plan-phase 09-molmospaces-fpv-room-plausibility
+  gsd-execute-phase 09-molmospaces-fpv-room-plausibility
+  gsd-verify-work 09-molmospaces-fpv-room-plausibility
+  gsd-plan-phase 10-molmospaces-semantic-substeps
+  gsd-execute-phase 10-molmospaces-semantic-substeps
+  gsd-verify-work 10-molmospaces-semantic-substeps
 
 next pipeline candidates:
   real coding-agent policy over the public contract
-  optional MolmoSpaces Python 3.11 adapter/subprocess
   real RBY1M/Franka planner-backed manipulation proof
   OpenClaw cleanup-agent integration
 ```

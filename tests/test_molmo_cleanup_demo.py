@@ -26,10 +26,14 @@ def test_molmospaces_cleanup_demo_writes_success_artifacts(tmp_path: Path) -> No
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
 
     assert result["cleanup_status"] == "success"
+    assert result["backend"] == "api_semantic_synthetic"
     assert run_result["primitive_provenance"] == "api_semantic"
     assert run_result["planner"] == "scripted_reference"
     assert run_result["planner_uses_private_manifest"] is True
     assert run_result["score"]["restored_count"] == 5
+    assert run_result["semantic_loop_variant"] == "navigate-pick-navigate-open-place-object_done"
+    assert run_result["semantic_substeps"][0]["steps"][0]["phase"] == "navigate_to_object"
+    assert any('"tool": "navigate_to_object"' in line for line in trace_lines)
     assert (tmp_path / "scenario.json").is_file()
     assert (tmp_path / "private_manifest.json").is_file()
     assert (tmp_path / "before.png").is_file()
@@ -60,10 +64,26 @@ def test_molmospaces_cleanup_demo_runs_public_prompt_planner(tmp_path: Path) -> 
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
 
     assert result["cleanup_status"] == "success"
+    assert result["backend"] == "api_semantic_synthetic"
     assert result["task_prompt"] == "帮我整理这个房间"
     assert result["planner"] == "public_heuristic"
     assert result["planner_uses_private_manifest"] is False
     assert result["score"]["restored_count"] == 5
+    fridge_steps = [
+        item
+        for item in result["semantic_substeps"]
+        if item["target_receptacle_category"] == "Fridge"
+    ]
+    assert fridge_steps
+    assert [step["phase"] for step in fridge_steps[0]["steps"]] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place_inside",
+        "object_done",
+    ]
+    assert result["final_containment"]["apple_01"]["location_relation"] == "inside"
     assert {action["object_id"] for action in result["cleanup_plan"]} == {
         "mug_01",
         "book_01",

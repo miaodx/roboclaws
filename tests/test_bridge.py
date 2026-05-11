@@ -13,8 +13,6 @@ from roboclaws.openclaw.bridge import (
     OpenClawBridge,
     OpenClawProvider,
     OpenClawUnavailable,
-    _extract_text_blocks,
-    _timestamp_to_epoch_seconds,
 )
 
 # ---------------------------------------------------------------------------
@@ -259,19 +257,12 @@ def test_bridge_step_raises_on_401():
     bridge.close()
 
 
-def test_extract_text_blocks_joins_text_and_ignores_other_blocks() -> None:
-    content = [
-        {"type": "text", "text": "Checking"},
-        {"type": "toolCall", "name": "roboclaws__observe"},
-        {"type": "text", "text": " session"},
-    ]
-    assert _extract_text_blocks(content) == "Checking session"
+def test_bridge_module_does_not_reexport_transcript_recovery_helpers() -> None:
+    import roboclaws.openclaw.bridge as bridge_module
 
-
-def test_timestamp_to_epoch_seconds_parses_utc_z_suffix() -> None:
-    parsed = _timestamp_to_epoch_seconds("2026-04-22T08:02:22.466Z")
-    assert parsed is not None
-    assert parsed == pytest.approx(1776844942.466, rel=0.0, abs=0.001)
+    assert not hasattr(bridge_module, "_SessionStoreCapture")
+    assert not hasattr(bridge_module, "_is_terminal_stop_reason")
+    assert not hasattr(bridge_module, "_timestamp_to_epoch_seconds")
 
 
 def test_bridge_step_raises_on_5xx():
