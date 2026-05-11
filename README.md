@@ -167,6 +167,7 @@ python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timesta
 - [OpenClaw local guide](docs/openclw/openclaw-local.md)
 - [OpenClaw Gateway internals](docs/openclw/openclaw-gateway-internals.md)
 - [Model matrix](docs/model-matrix.md)
+- [MolmoSpaces settings matrix](docs/molmospaces-settings.md)
 - [Railway deploy runbook](docs/railway-deploy.md)
 - [Railway appliance plan](docs/railway-openclaw-appliance-plan.md)
 - [Technical design](docs/technical-design.md)

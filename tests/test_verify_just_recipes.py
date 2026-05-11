@@ -93,6 +93,39 @@ def test_harness_exposes_named_execution_rigs() -> None:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
 
 
+def test_molmo_harness_output_roots_keep_timestamped_runs() -> None:
+    text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    assert 'timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"' in text
+    recipe_names = (
+        "molmo-cleanup",
+        "molmo-prompt-cleanup",
+        "molmo-real-cleanup",
+        "molmo-robot-visual",
+        "molmo-agent-bridge",
+        "molmo-agent-bridge-visual",
+        "molmo-realworld-cleanup",
+        "molmo-realworld-agent-mcp",
+        "molmo-realworld-agent-dogfood-kit",
+        "molmo-realworld-openclaw-dogfood-kit",
+        "molmo-realworld-openclaw-visual-dogfood-kit",
+        "molmo-realworld-raw-fpv",
+        "molmo-planner-proof-bundle-runner",
+        "molmo-planner-proof-bundle-execute-rerun",
+        "molmo-planner-manipulation-probe",
+    )
+    for recipe_name in recipe_names:
+        recipe = re.search(
+            rf"^{recipe_name}[\s\S]*?(?=^# |\Z)",
+            text,
+            re.MULTILINE,
+        )
+        assert recipe is not None, recipe_name
+        body = recipe.group(0)
+        assert re.search(r'stamp="\$\(\{\{\s*timestamp_cmd\s*\}\}\)"', body), recipe_name
+        assert 'rm -rf "{{output_dir}}"' not in body, recipe_name
+
+
 def test_openclaw_visual_kit_uses_real_visual_backend_and_checker() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
