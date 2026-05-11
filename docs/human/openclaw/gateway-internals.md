@@ -1,6 +1,6 @@
 # OpenClaw Gateway — internals notes for maintainers
 
-Pointers into the pinned Gateway image (`ghcr.io/openclaw/openclaw:2026.4.14`)
+Pointers into the pinned Gateway image (`ghcr.io/openclaw/openclaw:2026.4.25-beta.11`)
 that were useful when building Phase 2.1 and that future phases (2.2, 2.5)
 will want on hand. Keeps you from re-spelunking `/app/dist/` every time.
 
@@ -117,7 +117,8 @@ AI2-THOR engine through first-class `roboclaws__*` MCP tools over
 streamable-http, not via the Phase 2.5 `exec`-and-`curl` contract. The current
 host server exposes `observe`, `observe_archived`, `move`, `scene_objects`,
 `goto`, and `done`. The Gateway's MCP loader lives at
-`/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (image `2026.4.14`) and
+`/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (originally probed on an
+older content-hash; re-grep the bundle on the current image) and
 expects this exact shape under `mcp.servers.<name>`:
 
 ```jsonc
@@ -182,8 +183,8 @@ convention regardless of the transport. Phase 2.6 acceptance criteria
 ### Context-overhead
 
 Under `profile: minimal` plus the Roboclaws MCP surface, historical per-turn
-prompt overhead was roughly 43% smaller than under `profile: coding` against the pinned
-`ghcr.io/openclaw/openclaw:2026.4.14` image (live measurement: 6,440
+prompt overhead was roughly 43% smaller than under `profile: coding` in the
+Phase 2.6 live probe (measurement: 6,440
 tokens vs 11,335 tokens — ratio 0.568, measured with the Phase 2.6 tool set).
 That saves budget for Kimi's
 multi-image reasoning on long autonomous runs. Full live-probed numbers
@@ -199,11 +200,11 @@ The Phase 2.6 lessons narrative lives in
 
 ```bash
 # Dump a dist file
-docker run --rm ghcr.io/openclaw/openclaw:2026.4.14 sh -lc \
+docker run --rm ghcr.io/openclaw/openclaw:2026.4.25-beta.11 sh -lc \
   'cat /app/dist/<file>.js' | head -200
 
 # Find a symbol
-docker run --rm ghcr.io/openclaw/openclaw:2026.4.14 sh -lc \
+docker run --rm ghcr.io/openclaw/openclaw:2026.4.25-beta.11 sh -lc \
   'grep -rnE "<pattern>" /app/dist/ 2>/dev/null' | head -20
 
 # Live-inspect a running Gateway's openclaw.json (auth token lives here)

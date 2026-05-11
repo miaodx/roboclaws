@@ -8,6 +8,7 @@ Public routes:
 
 - `/` - OpenClaw Control UI / webchat
 - `/views/` - Roboclaws FPV + map-v2 + chase-cam viewer
+- `/reset` - unauthenticated scene/snapshot reset endpoint
 - `/health` - unauthenticated Railway healthcheck
 
 ## Before Deploying
@@ -24,6 +25,7 @@ Then open:
 - `http://127.0.0.1:8080/health`
 - `http://127.0.0.1:8080/`
 - `http://127.0.0.1:8080/views/`
+- `http://127.0.0.1:8080/reset`
 
 For local appliance chat logs:
 
@@ -127,6 +129,7 @@ Unity build if `just chat::run` already downloaded it.
    https://<railway-domain>/health
    https://<railway-domain>/
    https://<railway-domain>/views/
+   https://<railway-domain>/reset
    ```
 
 ## OpenClaw Token
@@ -157,6 +160,13 @@ Credential behavior:
 
 Local `just appliance::run local` defaults `DEMO_PASSWORD` to `demo`, so the
 local bearer token is `demo` unless overridden.
+
+## Reset Endpoint
+
+`/reset` is intentionally unauthenticated, like `/views/`. It reloads the
+AI2-THOR scene and clears the viewer snapshot directory through the loopback
+`ResetServer` on `127.0.0.1:18790`; it does not grant access to the OpenClaw
+Control UI or robot-driving tools.
 
 ## Expected First Boot Behavior
 

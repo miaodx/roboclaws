@@ -282,7 +282,7 @@ no operator recipe here should mention it. The full lesson lives in
 ### Install
 
 ```bash
-pip install -e ".[openclaw,dev]"   # pulls mcp[cli]>=1.27
+uv sync --extra dev --extra openclaw   # pulls mcp[cli]>=1.27 into .venv/
 ```
 
 ### Env vars

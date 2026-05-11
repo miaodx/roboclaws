@@ -122,7 +122,7 @@ routing. The roboclaws side:
 `examples/coding_agent_nav_server.py`. Boots `MultiAgentEngine` +
 `RoboclawsMCPServer` over HTTP. No Gateway, no VLM key needed
 server-side — the coding agent (Codex / Claude Code) is the model.
-Output: `output/coding-agent-nav/<timestamp>/`. Operating instructions
+Output: `output/runs/<timestamp>/` unless `--output-dir` is passed. Operating instructions
 for the agent itself live in
 [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md).
 
@@ -224,7 +224,7 @@ Two artifact pipelines coexist, one per drive style:
 - **MCP runs** (`roboclaws/mcp/server.py`) — used by Modes 2 / 3 / 4. Produces
   `trace.jsonl` (one line per tool call), `run_result.json` on done, and
   labeled snapshots in `<run_dir>/snapshots/agent-<id>/`. Default output:
-  `output/coding-agent-nav/<timestamp>/` (Mode 3) or
+  `output/runs/<timestamp>/` (Mode 3) or
   `output/openclaw-*/<timestamp>/` (Mode 2).
 
 The `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks

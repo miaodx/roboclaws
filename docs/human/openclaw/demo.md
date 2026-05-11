@@ -22,7 +22,7 @@ Recommended first-run prep:
 
 ```bash
 cd /home/mi/ws/gogo/roboclaws
-uv pip install -e ".[dev,openclaw]"
+uv sync --extra dev --extra openclaw
 .venv/bin/python -c "import ai2thor; print(f'ai2thor {ai2thor.__version__} ok')"
 ```
 
@@ -129,7 +129,7 @@ env | rg 'KIMI_API_KEY|NV_API_KEY|MIMO_TP_KEY'
 First run is slow:
 
 - AI2-THOR may download a Unity build (~1 GB)
-- Docker may need to pull `ghcr.io/openclaw/openclaw:2026.4.14`
+- Docker may need to pull `ghcr.io/openclaw/openclaw:2026.4.25-beta.11`
 
 ## Next Steps
 

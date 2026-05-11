@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/MiaoDX/roboclaws.git
 cd roboclaws
-uv pip install -e ".[dev]" || python -m pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 Run the linter and tests before every commit:
@@ -23,7 +23,7 @@ binaries with no system-package dependencies — install once, forget.
 
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
-| [`uv`](https://docs.astral.sh/uv/) | fast pip/venv replacement | `uv pip install -e ".[dev,openclaw]"` is ~10× faster than pip |
+| [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev --extra openclaw` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock` |
 | [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw::run nav`, `just chat::run provider=kimi`) |
 
 ### Install
