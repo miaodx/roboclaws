@@ -2,6 +2,9 @@
 #
 # Test split invariant:
 #   - test-fast        : what the pre-commit hook runs (no Docker, no real provider).
+#   - test-unit        : fast isolated public-API behavior tests.
+#   - test-contract    : public schema/tool/report/recipe compatibility tests.
+#   - test-regression  : known-bug and artifact-regression coverage.
 #   - test-integration : what the post-merge hook runs in background
 #                        (Docker-gated tests + anything touching a real
 #                        model provider).
@@ -35,6 +38,18 @@ test kind="all":
         {{standalone_pytest}} -m "not integration" -q --durations=5
         ;;
 
+      unit)
+        {{standalone_pytest}} -m unit -q --durations=5
+        ;;
+
+      contract)
+        {{standalone_pytest}} -m contract -q --durations=5
+        ;;
+
+      regression)
+        {{standalone_pytest}} -m regression -q --durations=5
+        ;;
+
       integration)
         {{standalone_pytest}} -m integration -q --durations=10
         ;;
@@ -60,7 +75,7 @@ test kind="all":
         ;;
 
       *)
-        echo "error: unknown test kind '{{kind}}' (expected fast|integration|all)" >&2
+        echo "error: unknown test kind '{{kind}}' (expected fast|unit|contract|regression|integration|all)" >&2
         exit 1
         ;;
     esac
