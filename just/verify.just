@@ -11,6 +11,8 @@
 # - just verify::local-sim         real AI2-THOR regression harness
 # - just verify::local-openclaw    real OpenClaw/Gateway regression harness
 # - just verify::navigator <task>  coding-agent navigator harness
+# - just verify::molmo-cleanup     MolmoSpaces cleanup contract + harness
+# - just verify::molmo-prompt-cleanup  prompt-driven public cleanup proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -60,6 +62,30 @@ local-openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock
 # L6: coding-agent navigator harness.
 navigator task cap="900":
     just harness::navigator "{{task}}" "{{cap}}"
+
+# Focused MolmoSpaces cleanup pilot gate.
+molmo-cleanup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_scenario.py \
+      tests/test_molmo_cleanup_scoring.py \
+      tests/test_molmo_cleanup_backend.py \
+      tests/test_molmo_cleanup_mcp_contract.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_molmo_cleanup_demo.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-cleanup
+
+# Prompt-driven public-policy MolmoSpaces cleanup gate.
+molmo-prompt-cleanup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_cleanup_policy.py \
+      tests/test_molmo_cleanup_demo.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-prompt-cleanup
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.
