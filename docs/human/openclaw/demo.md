@@ -38,10 +38,13 @@ just openclaw::run nav
 ```
 `just openclaw::run nav` is the canonical command.
 
-Artifacts:
+Artifacts for the default `just openclaw::run nav` recipe:
 
-- `output/openclaw/demo/replay.gif`
-- `output/openclaw/demo/report.html`
+- `output/openclaw/nav/replay.gif`
+- `output/openclaw/nav/report.html`
+
+The CI/manual examples below still pass `--output-dir output/openclaw/demo`
+explicitly, so those runs write to `output/openclaw/demo/`.
 
 ## Manual Flow
 

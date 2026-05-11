@@ -112,14 +112,17 @@ issue #50 for the template.
 
 ## CI overview
 
-Up to three jobs run on every push / PR (the third only when the Railway secret
-is configured):
+CI has one required fast job plus several push-to-`main` smoke/report jobs:
 
 | Job | Trigger | Purpose |
 |-----|---------|---------|
 | `lint-and-mock` | every push + PR | ruff lint, format check, pytest, mock-engine HTML demo |
 | `real-model-smoke` | push to `main` only | 100-step Kimi + real AI2-THOR territory + coverage games |
-| `openclaw-railway-smoke` | push to `main` only (`continue-on-error`) | 3-step ping against a user-deployed Railway OpenClaw Gateway |
+| `openclaw-smoke` | push to `main` only (`continue-on-error`) | ephemeral Gateway + Kimi navigation smoke |
+| `territory-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed territory smoke |
+| `coverage-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed coverage smoke |
+| `photo-task-smoke` | push to `main` with `[photo-smoke]` in the commit message | chair/sofa photo-task smoke scored by `scripts/check_photo_task.py` |
+| `publish-pages` | push to `main` after required smoke inputs | publishes mock, real-model, and available OpenClaw reports to GitHub Pages |
 
 ## Secrets required for CI
 

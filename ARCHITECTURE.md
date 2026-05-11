@@ -7,14 +7,23 @@ run*, see [`README.md`](README.md).
 
 ## Bird's-eye view
 
-Roboclaws wraps AI2-THOR's multi-agent simulator behind a small set of
-abstractions and exposes them through four operating modes. The shared
-center is `MultiAgentEngine` (one process, one Unity controller, N
-agents). Modes differ only in what *drives* the engine: a Python game
-loop, a remote OpenClaw Gateway, a coding agent over MCP, or a Railway
-appliance bundling all of the above.
+Roboclaws has two embodied-demo stacks that share one review philosophy:
+make agent behavior visible, separate public agent inputs from private
+evaluation, and keep proof claims tied to artifacts.
 
-Three abstractions matter:
+1. **AI2-THOR navigation stack** — multi-agent navigation, territory, coverage,
+   OpenClaw Gateway demos, coding-agent MCP control, and the Railway appliance.
+   The shared center is `MultiAgentEngine` (one process, one Unity controller,
+   N agents). Modes differ in what *drives* that engine: a Python game loop,
+   a remote OpenClaw Gateway, a coding agent over MCP, or the hosted appliance.
+2. **MolmoSpaces cleanup/proof stack** — household cleanup scenarios,
+   public/private Agent View contracts, shared cleanup reports, RBY1M robot-view
+   timelines, and local RBY1M/CuRobo proof-bundle generation. The shared center
+   is `RealWorldCleanupContract`: it defines what the Cleanup Agent may see,
+   what stays private for scoring, and which cleanup substeps can later be
+   bound to planner-backed manipulation proof.
+
+The navigation stack has three core abstractions:
 
 1. **`MultiAgentEngine`** — wraps `ai2thor.controller.Controller`, owns
    the scene + cameras + per-agent state (`roboclaws/core/engine.py`).
@@ -26,9 +35,26 @@ Three abstractions matter:
    that any external agent (OpenClaw skill, Codex, Claude Code) consumes
    to drive a robot (`roboclaws/mcp/server.py`).
 
+The cleanup/proof stack has four core abstractions:
+
+1. **`RealWorldCleanupContract`** — public cleanup-agent surface: metric map,
+   fixture hints, waypoint observations, observed object handles, object/receptacle
+   actions, and private scoring separation (`roboclaws/molmo_cleanup/realworld_contract.py`).
+2. **Semantic cleanup loop + report underlay** — deterministic cleanup policy,
+   semantic substep timeline, Agent View, Private Evaluation, advisory scoring,
+   and visual report rendering (`roboclaws/molmo_cleanup/semantic_cleanup_loop.py`,
+   `roboclaws/molmo_cleanup/report.py`).
+3. **Planner-proof request and bundle flow** — turns completed cleanup substeps
+   into private bound proof requests, dry-run manifests, local execution reports,
+   and optional cleanup reruns (`roboclaws/molmo_cleanup/planner_proof_requests.py`,
+   `scripts/run_molmo_planner_proof_bundle_from_requests.py`).
+4. **Planner-backed primitive gate** — adapters and checkers that decide whether
+   a cleanup subphase is still `api_semantic` or has exact-scene RBY1M/CuRobo
+   proof for the requested object/target binding.
+
 ![Architecture diagram](docs/architecture.svg)
 
-## The MCP contract
+## Navigation MCP contract
 
 `roboclaws/mcp/server.py` defines the canonical surface that external
 agents use over structured-HTTP transport:
@@ -61,7 +87,7 @@ of the threat model (see `.planning/phases/02.6-openclaw-mcp-tools-integration/`
 threat T-02.6-01); changing the bind address requires a deliberate
 decision, not a one-liner.
 
-## Four operating modes
+## AI2-THOR Operating Modes
 
 All four reuse the same `MultiAgentEngine` core. They differ in what
 boots first and what mediates between the engine and the model.
@@ -77,7 +103,7 @@ to `output/<game>/<timestamp>/` via `ReplayRecorder`.
 
 ### 2. OpenClaw Gateway
 
-`just chat`, `just openclaw::nav`. Routes through a Gateway docker
+`just chat::run`, `just openclaw::run nav`. Routes through a Gateway docker
 container (default `:18789`) that handles auth, sessions, and model
 routing. The roboclaws side:
 
@@ -109,6 +135,29 @@ server + `reset_server.py` (HTTP `/reset`). Public surface is nginx on
 config seeded by `scripts/appliance_seed_openclaw.py`. Full deploy
 runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
 
+## MolmoSpaces Cleanup Flow
+
+The MolmoSpaces side is a separate embodied-cleanup flow rather than a fifth
+AI2-THOR mode. It exists to answer a different question: when a household
+cleanup artifact says "the robot cleaned this up," which parts were semantic
+simulator state edits, and which parts have planner-backed RBY1M/CuRobo proof?
+
+The normal path is:
+
+1. A generated mess scenario creates a hidden set of moved objects.
+2. The Cleanup Agent receives the public contract: metric map, room-level
+   fixture hints, waypoint observations, and observed object handles.
+3. The semantic cleanup loop records `nav -> pick -> nav -> open? -> place`
+   substeps and writes one shared Cleanup Artifact Report.
+4. Private scoring evaluates the final scene with hidden acceptable-destination
+   truth that the agent never saw.
+5. Planner-proof request generation turns completed semantic substeps into
+   bound local proof commands. Proof-bundle runner reports then show whether
+   RBY1M/CuRobo execution actually produced planner-backed cleanup binding.
+
+Operator-facing settings and recommended recipes live in
+[`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md).
+
 ## Code map
 
 | Path | Role |
@@ -123,7 +172,12 @@ runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
 | `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
 | `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
 | `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
-| `roboclaws/molmo_cleanup/` | MolmoSpaces cleanup contracts and reports: public cleanup MCP tools, semantic cleanup loop, private evaluation separation, planner-proof attachment, grasp/cache diagnostics, and proof-bundle request/report helpers. |
+| `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
+| `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
+| `roboclaws/molmo_cleanup/report.py`, `report_visual_core.py` | Shared Cleanup Artifact Report renderer: Agent View, Private Evaluation, semantic substeps, robot timeline, planner proof, and bridge readiness sections. |
+| `roboclaws/molmo_cleanup/planner_proof_requests.py` | Converts cleanup substeps into private bound planner-proof requests, proof-bundle manifests, selection memory, fallback filtering, and cleanup rerun commands. |
+| `roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`, `planner_primitive_executor.py` | Executor adapters for promoting exact matching planner probe evidence into planner-backed cleanup primitive provenance. |
+| `roboclaws/molmo_cleanup/grasp_*`, `rby1m_curobo_gate.py` | Local proof diagnostics for RBY1M/CuRobo runtime readiness, grasp-cache validity/generation, and task feasibility blockers. |
 | `roboclaws/openclaw/bridge.py` | `OpenClawProvider`: VLMProvider that talks to a Gateway. |
 | `roboclaws/openclaw/transport.py` | `OpenClawBridge`: HTTP transport for the Gateway, retry policy. |
 | `roboclaws/openclaw/skill.py` | `AI2THORNavigatorSkill`: wraps a provider as an OpenClaw skill with SOUL injection. |
@@ -132,6 +186,10 @@ runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
 | `examples/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
 | `examples/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
 | `examples/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
+| `examples/molmospaces_cleanup_demo.py`, `examples/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry points: synthetic/current-contract cleanup and ADR-0003 public/private real-world cleanup. |
+| `examples/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. |
+| `scripts/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
+| `scripts/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
 | `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
 | `skills/ai2thor-navigator/SKILL.md` | Operating instructions for any agent driving the robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
 | `scripts/` | Supporting tooling: bootstrap, scoring (`check_photo_task.py`), replay rendering (`render_autonomous_replay.py`), appliance config (`appliance_seed_openclaw.py`), regression harnesses. |
@@ -178,6 +236,8 @@ not) and power the `just chat::view` live viewer.
 | What you want | Where it lives |
 |---------------|----------------|
 | Scenario design rationale, VLM strategy, references | [`docs/human/technical-design.md`](docs/human/technical-design.md) |
+| MolmoSpaces cleanup settings and proof boundaries | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
+| Domain vocabulary for cleanup/proof language | [`docs/human/domain.md`](docs/human/domain.md) |
 | Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |
 | Direct coding-agent driver setup (Mode 3) | [`docs/human/coding-agent-nav-server.md`](docs/human/coding-agent-nav-server.md) |
 | OpenClaw local setup (Mode 2) | [`docs/human/openclaw/local.md`](docs/human/openclaw/local.md) |

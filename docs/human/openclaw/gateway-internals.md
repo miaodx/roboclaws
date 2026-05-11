@@ -113,9 +113,10 @@ under the Gateway's agent framework in its default config.
 ## MCP config in openclaw.json
 
 Phase 2.6 added an MCP tool surface — the autonomous-loop agent reaches the
-AI2-THOR engine through three first-class MCP tools (`roboclaws__observe`,
-`roboclaws__move`, `roboclaws__done`) over streamable-http, not via the
-Phase 2.5 `exec`-and-`curl` contract. The Gateway's MCP loader lives at
+AI2-THOR engine through first-class `roboclaws__*` MCP tools over
+streamable-http, not via the Phase 2.5 `exec`-and-`curl` contract. The current
+host server exposes `observe`, `observe_archived`, `move`, `scene_objects`,
+`goto`, and `done`. The Gateway's MCP loader lives at
 `/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (image `2026.4.14`) and
 expects this exact shape under `mcp.servers.<name>`:
 
@@ -160,9 +161,9 @@ accepts exactly three values: `"minimal"`, `"coding"`, or `"messaging"`
 
 - `minimal` — `session_status` + `update_plan` only, plus whatever MCP
   servers expose. No `exec`, no `read`/`write`, no generic `image`, no
-  `browser`, no `web_fetch`. Phase 2.6 uses this; live probe 3 in
-  `02.6-LOCAL-PROBE-RESULTS.md` confirms the agent enumerates exactly 4
-  tools (`session_status` + three `roboclaws__*`) under this profile.
+  `browser`, no `web_fetch`. Phase 2.6 uses this profile; the old live probe
+  saw the then-current three Roboclaws MCP tools, while the current host server
+  adds `observe_archived`, `scene_objects`, and `goto`.
 - `coding` — the default if `tools` is unset. ~25 tools including the
   escape hatches (`exec`, fs, `image`, `browser`). Correct for general agent
   work; wrong for autonomous AI2-THOR navigation — Phase 2.5 proved the
@@ -180,10 +181,11 @@ convention regardless of the transport. Phase 2.6 acceptance criteria
 
 ### Context-overhead
 
-Under `profile: minimal` + three MCP tools, per-turn prompt overhead is
-roughly 43% smaller than under `profile: coding` against the pinned
+Under `profile: minimal` plus the Roboclaws MCP surface, historical per-turn
+prompt overhead was roughly 43% smaller than under `profile: coding` against the pinned
 `ghcr.io/openclaw/openclaw:2026.4.14` image (live measurement: 6,440
-tokens vs 11,335 tokens — ratio 0.568). That saves budget for Kimi's
+tokens vs 11,335 tokens — ratio 0.568, measured with the Phase 2.6 tool set).
+That saves budget for Kimi's
 multi-image reasoning on long autonomous runs. Full live-probed numbers
 + the spike-vs-live baseline comparison live in
 `.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`
