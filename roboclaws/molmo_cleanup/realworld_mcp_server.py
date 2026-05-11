@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 )
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
+from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -335,6 +336,12 @@ class RealWorldMolmoCleanupMCPServer:
         substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
         cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
         cleanup_plan = cleanup_plan_from_semantic_substeps(substeps)
+        planner_proof_requests_path = self.run_dir / "planner_proof_requests.json"
+        planner_proof_requests = write_planner_proof_requests(
+            output_path=planner_proof_requests_path,
+            contract=self.contract,
+            substeps=substeps,
+        )
         diagnostics = semantic_diagnostics(trace_events, substeps, done_response)
         diagnostics["premature_done"] = done_response["score"].get("sweep_coverage_rate", 0) < 0.90
         diagnostics["premature_done_source"] = "sweep_coverage_rate"
@@ -395,6 +402,7 @@ class RealWorldMolmoCleanupMCPServer:
             "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
             "semantic_substeps": substeps,
             "cleanup_primitive_evidence": cleanup_primitive_evidence,
+            "planner_proof_requests": planner_proof_requests,
             "cleanup_plan": cleanup_plan,
             "agent_view": agent_view,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
@@ -411,6 +419,7 @@ class RealWorldMolmoCleanupMCPServer:
                 "agent_view": str(agent_view_path),
                 "private_evaluation": str(private_evaluation_path),
                 "advisory_evaluation": str(advisory_evaluation_path),
+                "planner_proof_requests": str(planner_proof_requests_path),
                 "trace": str(self.trace_path),
                 "before_snapshot": str(self._before_snapshot),
                 "after_snapshot": str(after_snapshot),

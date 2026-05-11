@@ -23,6 +23,8 @@
 # - just verify::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit proof
 # - just verify::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0010 OpenClaw visual report proof
 # - just verify::molmo-realworld-raw-fpv  ADR-0013 raw FPV-only observation proof
+# - just verify::molmo-planner-proof-bundle-runner  proof-request dry-run handoff
+# - just verify::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just verify::molmo-planner-manipulation-probe  ADR-0014 planner manipulation proof gate
 # - just verify::full-local <task> all local gates, including navigator
 
@@ -134,6 +136,7 @@ molmo-agent-bridge:
       tests/test_molmo_cleanup_semantic_acceptability.py \
       tests/test_molmo_cleanup_agent_server.py \
       tests/test_check_molmo_agent_bridge_result.py \
+      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
       tests/test_molmo_cleanup_report.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-agent-bridge
@@ -174,6 +177,7 @@ molmo-realworld-agent-mcp generated_mess_count="10":
     {{standalone_pytest}} -q \
       tests/test_molmo_realworld_mcp_server.py \
       tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_molmo_mcp_smoke_shared_semantic_loop.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-realworld-agent-mcp "1" "output/molmo-realworld-agent-mcp-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
 
@@ -225,6 +229,29 @@ molmo-realworld-raw-fpv generated_mess_count="10":
       tests/test_check_molmo_realworld_cleanup_result.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-realworld-raw-fpv "7" "output/molmo-realworld-raw-fpv-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
+
+# ADR-0042 proof-bundle runner dry-run handoff. Real planner execution remains
+# an explicit local-dev follow-up outside this default verify gate.
+molmo-planner-proof-bundle-runner:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_verify_just_recipes.py \
+      tests/test_run_molmo_planner_proof_bundle_from_requests.py \
+      tests/test_check_molmo_planner_proof_bundle_runner_result.py
+    just harness::molmo-planner-proof-bundle-runner
+
+# ADR-0044 local-dev proof-bundle execution gate. Requires local CUDA and
+# MolmoSpaces/RBY1M/CuRobo runtime; not part of default CI.
+molmo-planner-proof-bundle-execute-rerun:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_verify_just_recipes.py \
+      tests/test_run_molmo_planner_proof_bundle_from_requests.py \
+      tests/test_check_molmo_planner_proof_bundle_runner_result.py \
+      tests/test_check_molmo_realworld_cleanup_result.py
+    just harness::molmo-planner-proof-bundle-execute-rerun
 
 # ADR-0014 planner-backed manipulation proof gate. Default verification accepts
 # explicit blocked-capability evidence; strict planner-backed proof uses the

@@ -118,6 +118,7 @@ def _cleanup_report_sections(
             _attached_planner_proof_section(run_result),
             _cleanup_primitive_gate_section(run_result),
             _planner_cleanup_bridge_section(run_result),
+            _planner_proof_requests_section(run_result),
             _agent_view_section(run_result),
             _raw_fpv_observations_section(run_result),
             _camera_model_policy_section(run_result),
@@ -168,6 +169,47 @@ def render_planner_manipulation_report(
     {_rby1m_curobo_gate_section(run_result)}
     {_planner_probe_blockers_section(evidence)}
     {_planner_probe_artifacts_section(run_result)}
+    """
+    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    return report_path
+
+
+def render_planner_proof_bundle_runner_report(
+    *,
+    output_dir: Path,
+    manifest: dict[str, Any],
+) -> Path:
+    """Write a reviewable report for proof-bundle runner command manifests."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    report_path = output_dir / "report.html"
+    commands = manifest.get("commands") or []
+    cleanup_command = manifest.get("cleanup_command") or []
+    cleanup_rerun = manifest.get("cleanup_rerun") or {}
+    body = f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Proof bundle runner artifact</p>
+        <h1>Planner Proof Bundle Runner</h1>
+      </div>
+      <div class="metric-grid">
+        {_metric("Status", manifest.get("status", "unknown"))}
+        {_metric("Proof requests", manifest.get("proof_request_count", 0))}
+        {_metric("Ready requests", manifest.get("ready_request_count", 0))}
+        {_metric("Commands", manifest.get("command_count", len(commands)))}
+      </div>
+      <div class="badges">
+        {_badge("Schema", manifest.get("schema", "unknown"))}
+        {_badge("Output dir", manifest.get("output_dir", output_dir))}
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Source Cleanup Artifact</h2>
+      <p class="note">{html.escape(str(manifest.get("evidence_note", "")))}</p>
+      {_path_table([("Cleanup run result", manifest.get("cleanup_run_result", ""))])}
+    </section>
+    {_proof_bundle_commands_section(commands)}
+    {_cleanup_rerun_command_section(cleanup_command)}
+    {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -598,6 +640,155 @@ def _planner_cleanup_bridge_section(run_result: dict[str, Any]) -> str:
         "<h2>Planner Cleanup Bridge</h2>"
         f'<p class="note">{html.escape(str(note))}</p>'
         f'{metrics}<div class="badges">{badges}</div>{blockers_table}</section>'
+    )
+
+
+def _planner_proof_requests_section(run_result: dict[str, Any]) -> str:
+    manifest = run_result.get("planner_proof_requests") or {}
+    if not manifest:
+        return ""
+    requests = manifest.get("requests") or []
+    rows = "".join(_planner_proof_request_row(request) for request in requests)
+    if rows:
+        table = (
+            '<div class="table-wrap"><table><thead><tr>'
+            "<th>Request</th><th>Status</th><th>Object</th><th>Source</th>"
+            "<th>Target</th><th>Tools</th><th>Planner object</th>"
+            "<th>Planner target</th><th>Blockers</th></tr></thead><tbody>"
+            f"{rows}</tbody></table></div>"
+        )
+    else:
+        table = '<p class="note">No planner proof requests recorded.</p>'
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Requests', manifest.get('request_count', len(requests)))}"
+        f"{_metric('Ready', manifest.get('ready_count', 0))}"
+        f"{_metric('Blocked', len(manifest.get('blockers') or []))}"
+        "</div>"
+    )
+    note = manifest.get("evidence_note") or (
+        "Private post-run handoff for local planner proof generation; not Agent View."
+    )
+    return (
+        '<section class="panel planner-proof-requests">'
+        "<h2>Planner Proof Requests</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>'
+        f"{metrics}{table}</section>"
+    )
+
+
+def _planner_proof_request_row(request: dict[str, Any]) -> str:
+    binding = request.get("binding") if isinstance(request.get("binding"), dict) else {}
+    probe_args = request.get("planner_probe_args") or {}
+    planner_object = (
+        binding.get("planner_object_id") or probe_args.get("--cleanup-planner-object-id") or ""
+    )
+    planner_target = (
+        binding.get("planner_target_receptacle_id")
+        or probe_args.get("--cleanup-planner-target-receptacle-id")
+        or ""
+    )
+    blockers = ", ".join(
+        str(item.get("code") or item.get("message") or "")
+        for item in request.get("blockers") or []
+        if isinstance(item, dict)
+    )
+    tools = ", ".join(str(item) for item in request.get("tools") or [])
+    status = "ready" if request.get("ready") else "blocked"
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(request.get('request_id', '')))}</td>"
+        f"<td>{html.escape(status)}</td>"
+        f"<td>{html.escape(str(request.get('object_id', '')))}</td>"
+        f"<td>{html.escape(str(request.get('source_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(str(request.get('target_receptacle_id', '')))}</td>"
+        f"<td>{html.escape(tools)}</td>"
+        f"<td>{html.escape(str(planner_object))}</td>"
+        f"<td>{html.escape(str(planner_target))}</td>"
+        f"<td>{html.escape(blockers)}</td>"
+        "</tr>"
+    )
+
+
+def _proof_bundle_commands_section(commands: list[dict[str, Any]]) -> str:
+    if not commands:
+        return (
+            '<section class="panel"><h2>Proof Probe Commands</h2>'
+            '<p class="note">No ready proof requests produced probe commands.</p></section>'
+        )
+    rows = []
+    for index, item in enumerate(commands, start=1):
+        command = " ".join(str(part) for part in item.get("command") or [])
+        rows.append(
+            "<tr>"
+            f"<td>{index}</td>"
+            f"<td>{html.escape(str(item.get('request_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('run_result', '')))}</td>"
+            f"<td>{html.escape(str(item.get('report', '')))}</td>"
+            f"<td><code>{html.escape(command)}</code></td>"
+            "</tr>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Request</th>'
+        "<th>Object</th><th>Target</th><th>Proof run result</th><th>Proof report</th>"
+        "<th>Command</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel proof-bundle-commands">'
+        "<h2>Proof Probe Commands</h2>"
+        '<p class="note">Command evidence only. A command row is not planner proof until '
+        "the referenced proof artifact passes the strict planner probe checker.</p>"
+        f"{table}</section>"
+    )
+
+
+def _cleanup_rerun_command_section(command: list[str]) -> str:
+    if not command:
+        return (
+            '<section class="panel"><h2>Cleanup Rerun Command</h2>'
+            '<p class="note">No cleanup rerun command recorded. Use --rerun-cleanup with '
+            "--execute-probes to record one.</p></section>"
+        )
+    command_text = " ".join(str(part) for part in command)
+    return (
+        '<section class="panel"><h2>Cleanup Rerun Command</h2>'
+        '<p class="note">This command consumes generated proof run results as a bundle.</p>'
+        f"<pre><code>{html.escape(command_text)}</code></pre></section>"
+    )
+
+
+def _cleanup_rerun_artifact_section(cleanup_rerun: dict[str, Any]) -> str:
+    if not cleanup_rerun:
+        return (
+            '<section class="panel"><h2>Cleanup Rerun Artifact</h2>'
+            '<p class="note">No cleanup rerun artifact recorded.</p></section>'
+        )
+    return (
+        '<section class="panel cleanup-rerun-artifact">'
+        "<h2>Cleanup Rerun Artifact</h2>"
+        '<p class="note">Final cleanup rerun outputs produced after proof commands '
+        "have generated strict planner proof run results.</p>"
+        + _path_table(
+            [
+                ("Cleanup rerun output", cleanup_rerun.get("output_dir", "")),
+                ("Cleanup rerun run result", cleanup_rerun.get("run_result", "")),
+                ("Cleanup rerun report", cleanup_rerun.get("report", "")),
+            ]
+        )
+        + "</section>"
+    )
+
+
+def _path_table(rows: list[tuple[str, Any]]) -> str:
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
+        "</tr></thead><tbody>" + table_rows + "</tbody></table></div>"
     )
 
 
