@@ -92,11 +92,61 @@ def _assert_probe_result(
             assert "CUDA Memory Headroom" in report_text, report_text[:500]
     if evidence.get("curobo_memory_profile"):
         assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    robot_placement_profile = evidence.get("task_sampler_robot_placement_profile") or {}
+    if robot_placement_profile:
+        assert "Task Sampler Robot Placement Profile" in report_text, report_text[:500]
+        profile = str(robot_placement_profile.get("profile") or "")
+        if profile:
+            assert profile in report_text, (
+                "task_sampler_robot_placement_profile",
+                report_text[:500],
+            )
+        overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
+        max_tries = str(overrides.get("max_tries") or "")
+        if max_tries:
+            assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
+    task_sampler_failure = evidence.get("task_sampler_failure_diagnostics") or {}
+    image_artifacts = evidence.get("image_artifacts") or {}
+    if image_artifacts:
+        assert "Planner Probe Views" in report_text, report_text[:500]
+        for label, value in image_artifacts.items():
+            path = _resolve_path(base, str(value))
+            assert path.is_file(), path
+            assert str(value) in report_text, (label, report_text[:500])
+    elif task_sampler_failure:
+        assert "Planner Probe Diagnostic Views" in report_text, report_text[:500]
+    if task_sampler_failure:
+        assert "Task Sampler Failure Diagnostics" in report_text, report_text[:500]
+        if task_sampler_failure.get("placement_scene_diagnostics"):
+            assert "Placement Scene Diagnostics" in report_text, report_text[:500]
+            last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+            for key in ("target_name", "valid_free_point_count"):
+                value = str(last_scene.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+        if task_sampler_failure.get("grasp_failures"):
+            assert "Post-Placement Candidate Rejections" in report_text, report_text[:500]
+            assert "Post-Placement Rejection Views" in report_text, report_text[:500]
+            for item in task_sampler_failure.get("grasp_failures") or []:
+                value = str(item.get("object_name") or "")
+                if value:
+                    assert value in report_text, ("grasp_failures", report_text[:500])
+        for key in ("task_sampler_class",):
+            value = str(task_sampler_failure.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
+        for item in task_sampler_failure.get("robot_placement_attempts") or []:
+            for key in ("pickup_obj_name", "message"):
+                value = str(item.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
     if (
         evidence.get("sampled_task_binding")
         or evidence.get("requested_cleanup_primitive_binding")
         or evidence.get("cleanup_primitive_binding")
         or evidence.get("cleanup_primitive_binding_blockers")
+        or evidence.get("cleanup_task_config")
+        or evidence.get("cleanup_task_sampler_adapter")
     ):
         assert "Planner Probe Cleanup Binding" in report_text, report_text[:500]
     if require_curobo_extension_cache:

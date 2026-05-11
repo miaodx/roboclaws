@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 75 target-feasibility blocker matrix completed; next work is upstream task-feasibility handling for target-side fallback pairs
+**Status:** Phase 100 canonical runtime preflight import completed; next work is rotating proof sources or reducing the shared grasp-feasibility blocker
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -186,6 +186,118 @@ source requests and blocked generated fallback pairs into one table. The latest
 dry-run shows four target blockers: two source requests without prior proof
 links in the available evidence and two fallback pairs linked to Phase 65 proof
 reports with `worker_exception` stage.
+Phase 76 preserves exact task-sampler exception context in planner-probe worker
+failures. A warmed local probe reached `execute_task_sample_start`, failed with
+real `HouseInvalidForTask`, and still carried exact cleanup task config, exact
+sampler adapter state, requested cleanup binding, and worker-stage evidence
+into the report/checker path.
+Phase 77 captures the upstream sampler failure mode behind that exception. The
+warmed local report renders `Task Sampler Failure Diagnostics` with 17
+robot-placement attempts, 17 asset failures for `Book_23`, and repeated
+`RobotPlacementError` for
+`book_be4d759484637aeb579b28e6a954b18d_1_0_8`.
+Phase 78 adds a visible task-sampler robot-placement profile. The warmed local
+report proves the relaxed profile changed the actual `place_robot_near` calls
+from requested `max_tries=10` to effective `max_tries=50`, with radius
+`[0.0, 1.2]`, safety radius `0.15`, and visibility disabled. The request still
+blocks with 17 placement failures, so the next blocker is deeper scene-level
+robot placement feasibility for `Book_23`, not hidden sampler defaults.
+Phase 79 adds placement scene diagnostics. The warmed local report now shows
+that exact `Book_23` has low local free space: 2,231 valid free map points in
+the `[0.0, 1.2]m` sampling annulus, a 0.012326 free-space fraction, no free
+points within 1.0m, and a nearest free point 1.111824m away.
+Phase 80 adds a wide placement profile using radius `[0.0, 2.0]` and effective
+`place_robot_near(max_tries=100)`. The warmed local report shows robot
+placement now succeeds on all 17 attempts with zero placement failures, but the
+task still ends in `HouseInvalidForTask` after downstream candidate removals.
+Phase 81 captures that downstream rejection path. The warmed local report
+renders `Post-Placement Candidate Rejections` with 17 grasp-failure reports and
+15 candidate-removal calls after successful robot placement for the exact book
+alias.
+Phase 82 carries that evidence into proof-result summaries and proof-bundle
+runner reports as `task_feasibility_blocker_kind=grasp_feasibility` with
+`17 grasp failures; 15 candidate-removal calls`, so future selection can filter
+grasp-infeasible exact aliases without parsing nested diagnostics.
+Phase 83 carries that blocker kind/detail into proof request selection memory:
+excluded requests, generated fallback provenance, filtered fallback pairs, and
+a dedicated `Grasp Feasibility Blockers` runner report view.
+Phase 84 makes that memory robust across regenerated proof manifests by matching
+prior proof results by `request_id` first and then by cleanup `object_id` plus
+`target_receptacle_id`, with `Prior match` rendered in runner reports.
+Phase 85 lets that selection memory consume standalone planner-probe
+`run_result.json` artifacts directly by normalizing them into the same
+proof-result summary interface as prior proof-bundle manifests.
+Phase 86 makes that consumed prior evidence visible in runner reports as
+`Prior Proof Evidence`, preserving diagnostic rows, proof paths, and planner
+view images when present before new proof commands are reviewed.
+Phase 87 executed the remaining selected `proof_002` bowl/sink request. It also
+blocked as `grasp_feasibility` with `17 grasp failures; 15 candidate-removal
+calls`, so the next work must generate or discover a different exact-scene
+candidate rather than retrying the two known blocked source requests.
+Phase 88 carries nested prior proof evidence forward when a later proof-bundle
+manifest is reused as the next prior input. The Phase88 dry-run uses only the
+Phase87 manifest, preserves nested Phase81 evidence plus Phase87 proof results,
+excludes both source requests, generates zero commands, and renders both prior
+evidence rows in the same proof-bundle runner report.
+Phase 89 scopes proof-selection memory by internal planner object plus public
+target after guarded request-ID and cleanup-pair matching. A broader 10-object
+MolmoSpaces cleanup artifact produced 10 ready proof requests and 176
+robot-view images; the dry-run selected 8 new exact-scene candidates while
+excluding only the two known grasp-infeasible internal book/shelf and bowl/sink
+pairs.
+Phase 90 executed those 8 selected broader candidates locally with
+RBY1M/CuRobo warmup and the wide placement profile. Seven candidates remained
+`grasp_feasibility` blocked, while `proof_008` passed as strict
+planner-backed remote-control-to-stand evidence, promoted cleanup binding for
+`nav, pick, nav, place`, and rendered report-relative initial/final planner
+views in the shared runner report.
+Phase 91 reran final cleanup with the existing `proof_008` result, without
+re-executing the proof bundle. The cleanup report now shows `observed_008` as
+strict planner-backed for `nav, pick, nav, place`, renders 44 robot timeline
+steps plus attached planner proof views, and keeps the global bridge blocked
+because the other 38 cleanup subphases remain `api_semantic`.
+Phase 92 prevents the next proof expansion from retrying solved work:
+proof-bundle selection now excludes prior `planner_backed` requests that also
+promoted cleanup binding. The dry-run against the current broader seed selected
+zero commands, excluded `proof_008` as `prior_planner_proof_covered`, excluded
+nine grasp-infeasible requests, and rendered the prior proof views in the
+runner report. The next slice should rotate to a different broader cleanup
+source artifact rather than rerunning this seed.
+Phase 93 closes the stale-report architecture gap: a Cleanup Report Artifact
+Adapter can now regenerate `report.html` from an existing cleanup
+`run_result.json` through the shared underlay. The referenced stale
+`output/molmo-agent-bridge-visual-codex/report.html` was repaired locally to
+show the canonical visual core and semantic subphase rails
+`nav, pick, nav, open?, place`, then passed the agent-bridge checker.
+Phase 94 closes the source-rotation identity gap: MolmoSpaces generated-mess
+selection now uses the subprocess seed to choose different eligible objects on
+the same fixed scene, and proof-selection memory rejects local `proof_###` /
+`observed_###` matches when planner object identity conflicts. The patched seed
+9 artifact selected four new proof commands after prior-memory filtering.
+Phase 95 executed those four selected proof commands. All four reached task
+sampling with the wide placement profile but remained `grasp_feasibility`
+blocked with `17 grasp failures; 15 candidate-removal calls`, so no new
+planner-backed cleanup primitive coverage is available for a cleanup rerun yet.
+Phase 96 closes the blocked-proof report visual gap: task-sampler failures can
+now emit bounded post-placement camera artifacts through the same
+`image_artifacts` interface as successful initial/final planner views, while
+older diagnostic-only artifacts render an inline task-sampler diagnostic view
+instead of an empty no-view state.
+Phase 97 adds the specific visual view for the current grasp-feasibility
+blocker: standalone planner reports and proof-bundle result cards now render
+post-placement grasp failures, candidate removals, threshold removals, and
+candidate-count movement from the same shared report helper.
+Phase 98 adds the selection-level companion view: proof-bundle reports now show
+grasp-infeasible object-target pairs as a `Grasp Feasibility Blocker Matrix`
+before the detailed blocker table, so source-rotation decisions are visually
+reviewable.
+Phase 99 adds a local-dev runtime preflight before real proof-bundle execution.
+If the configured MolmoSpaces Python cannot import canonical `molmo_spaces`,
+the runner writes a `local_runtime_blocked` manifest/report with
+`Local Runtime Preflight` evidence instead of failing before report generation.
+Phase 100 corrects that preflight to the actual upstream package import
+(`molmo_spaces`) and records ready local preflight evidence with zero selected
+proof commands against the current seeded source plus prior memory.
 
 ## Why This Exists
 
@@ -1032,7 +1144,41 @@ completed:
   gsd-plan-phase 64-molmospaces-fallback-runtime-alias-discovery
   gsd-execute-phase 64-molmospaces-fallback-runtime-alias-discovery
   gsd-verify-work 64-molmospaces-fallback-runtime-alias-discovery
+  gsd-plan-phase 85-molmospaces-standalone-prior-proof-ingest
+  gsd-execute-phase 85-molmospaces-standalone-prior-proof-ingest
+  gsd-verify-work 85-molmospaces-standalone-prior-proof-ingest
+  gsd-plan-phase 86-molmospaces-prior-proof-evidence-report
+  gsd-execute-phase 86-molmospaces-prior-proof-evidence-report
+  gsd-verify-work 86-molmospaces-prior-proof-evidence-report
+  gsd-plan-phase 87-molmospaces-selected-proof-candidate-execution
+  gsd-execute-phase 87-molmospaces-selected-proof-candidate-execution
+  gsd-verify-work 87-molmospaces-selected-proof-candidate-execution
+  gsd-plan-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-execute-phase 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-verify-work 88-molmospaces-nested-prior-proof-evidence-carry-forward
+  gsd-plan-phase 89-molmospaces-planner-object-proof-selection-memory
+  gsd-execute-phase 89-molmospaces-planner-object-proof-selection-memory
+  gsd-verify-work 89-molmospaces-planner-object-proof-selection-memory
+  gsd-plan-phase 90-molmospaces-broader-selected-proof-execution
+  gsd-execute-phase 90-molmospaces-broader-selected-proof-execution
+  gsd-verify-work 90-molmospaces-broader-selected-proof-execution
+  gsd-plan-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-execute-phase 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-verify-work 91-molmospaces-broader-bound-proof-cleanup-rerun
+  gsd-plan-phase 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-execute-phase 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-verify-work 92-molmospaces-prior-covered-proof-selection-memory
+  gsd-plan-phase 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-execute-phase 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-verify-work 93-molmospaces-cleanup-report-artifact-adapter
+  gsd-plan-phase 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-execute-phase 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-verify-work 94-molmospaces-seeded-source-pool-proof-memory
+  gsd-plan-phase 95-molmospaces-seeded-selected-proof-execution
+  gsd-execute-phase 95-molmospaces-seeded-selected-proof-execution
+  gsd-verify-work 95-molmospaces-seeded-selected-proof-execution
 
 next pipeline candidates:
-  plan discovered runtime-alias fallback proof execution
+  rotate proof sources or diagnose/reduce the shared RBY1M grasp-feasibility
+  blocker before another cleanup rerun
 ```

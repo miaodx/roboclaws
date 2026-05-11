@@ -119,6 +119,7 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
         molmospaces_python=None,
         molmospaces_root=None,
         torch_extensions_dir=Path("torch_ext"),
+        task_sampler_robot_placement_profile="relaxed",
     )
 
     assert len(commands) == 1
@@ -130,6 +131,8 @@ def test_build_probe_commands_uses_only_ready_requests(tmp_path: Path) -> None:
     assert "pickup/body" in command
     assert "--cleanup-scene-xml" in command
     assert "/tmp/molmospaces-scene.xml" in command
+    assert "--task-sampler-robot-placement-profile" in command
+    assert "relaxed" in command
     assert commands[0]["run_result"].endswith("run_result.json")
 
 
@@ -221,6 +224,7 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
     assert selection["selected_request_ids"] == ["proof_002"]
     assert selection["excluded_requests"][0]["request_id"] == "proof_001"
     assert selection["excluded_requests"][0]["reason"] == "prior_task_feasibility_blocked"
+    assert selection["excluded_requests"][0]["prior_result_match_kind"] == "request_id"
     assert selection["excluded_requests"][0]["prior_report"] == str(
         tmp_path / "prior" / "report.html"
     )
@@ -244,6 +248,7 @@ def test_proof_request_selection_excludes_prior_task_feasibility_blocked(
             "prior_stderr": str(tmp_path / "prior" / "stderr.txt"),
             "last_worker_stage": "worker_exception",
             "execution_attempted": True,
+            "prior_result_match_kind": "request_id",
         }
     ]
     assert selection["fallback_required"] is False
@@ -282,6 +287,250 @@ def test_proof_request_selection_marks_fallback_required_when_all_ready_blocked(
     assert selection["excluded_count"] == 1
     assert selection["target_feasibility_blocker_count"] == 1
     assert selection["fallback_required"] is True
+
+
+def test_proof_request_selection_surfaces_grasp_feasibility_blockers() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["prior_result_match_kind"] == "request_id"
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert excluded["prior_task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+    assert selection["target_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    grasp_blocker = selection["grasp_feasibility_blockers"][0]
+    assert grasp_blocker["source_request_id"] == "proof_001"
+    assert grasp_blocker["kind"] == "source_request"
+    assert grasp_blocker["prior_result_match_kind"] == "request_id"
+    assert grasp_blocker["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert grasp_blocker["prior_task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
+
+
+def test_proof_request_selection_matches_prior_result_by_cleanup_pair() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_regenerated",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {"--cleanup-object-id": "observed_001"},
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_old",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["request_id"] == "proof_regenerated"
+    assert excluded["prior_result_match_kind"] == "object_target"
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert selection["selected_request_ids"] == []
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blockers"][0]["prior_result_match_kind"] == (
+        "object_target"
+    )
+
+
+def test_proof_request_selection_ignores_colliding_request_id_for_different_pair() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_001",
+                "ready": True,
+                "object_id": "observed_001",
+                "target_receptacle_id": "fridge_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_001",
+                    "--cleanup-planner-object-id": "apple_runtime_1_0_2",
+                    "--cleanup-planner-target-receptacle-id": "fridge_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_001",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "book_runtime_1_0_8",
+                    "planner_target_receptacle_id": "shelf_runtime_1_0_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert selection["selected_request_ids"] == ["proof_001"]
+    assert selection["excluded_requests"] == []
+    assert selection["target_feasibility_blocker_count"] == 0
+
+
+def test_proof_request_selection_ignores_local_ids_when_planner_object_differs() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_003",
+                "ready": True,
+                "object_id": "observed_003",
+                "target_receptacle_id": "fridge_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_003",
+                    "--cleanup-planner-object-id": "lettuce_runtime_1_0_2",
+                    "--cleanup-planner-target-receptacle-id": "fridge_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "proof_003",
+                "object_id": "observed_003",
+                "target_receptacle_id": "fridge_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "cleanup_task_config": {
+                    "planner_object_id": "bread_runtime_1_0_2",
+                    "planner_target_receptacle_id": "fridge_runtime_1_0_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    assert selection["selected_request_ids"] == ["proof_003"]
+    assert selection["excluded_requests"] == []
+    assert selection["target_feasibility_blocker_count"] == 0
+
+
+def test_proof_request_selection_matches_prior_result_by_planner_object_target() -> None:
+    manifest = {
+        "schema": PLANNER_PROOF_REQUESTS_SCHEMA,
+        "requests": [
+            {
+                "request_id": "proof_new",
+                "ready": True,
+                "object_id": "observed_009",
+                "target_receptacle_id": "shelf_01",
+                "planner_probe_args": {
+                    "--cleanup-object-id": "observed_009",
+                    "--cleanup-planner-object-id": "book_runtime_1_0_8",
+                    "--cleanup-planner-target-receptacle-id": "shelf_runtime_1_0_2",
+                },
+            }
+        ],
+    }
+    prior_summary = {
+        "results": [
+            {
+                "request_id": "standalone_observed_001_to_shelf_01",
+                "object_id": "observed_001",
+                "target_receptacle_id": "shelf_01",
+                "status": "blocked_capability",
+                "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
+                "cleanup_task_config": {
+                    "planner_object_id": "book_runtime_1_0_8",
+                    "planner_target_receptacle_id": "shelf_runtime_1_1_2",
+                },
+                "blockers": [{"code": "HouseInvalidForTask"}],
+            }
+        ]
+    }
+
+    selection = proof_request_selection_from_summary(
+        manifest,
+        prior_proof_result_summary=prior_summary,
+        exclude_task_feasibility_blocked=True,
+    )
+
+    excluded = selection["excluded_requests"][0]
+    assert excluded["request_id"] == "proof_new"
+    assert excluded["prior_result_match_kind"] == "planner_object_target"
+    assert excluded["prior_task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert selection["selected_request_ids"] == []
+    assert selection["grasp_feasibility_blocker_count"] == 1
+    assert selection["grasp_feasibility_blockers"][0]["prior_result_match_kind"] == (
+        "planner_object_target"
+    )
 
 
 def test_proof_request_selection_generates_fallback_alias_requests(
@@ -344,6 +593,8 @@ def test_proof_request_selection_generates_fallback_alias_requests(
                 "request_id": "proof_001",
                 "status": "blocked_capability",
                 "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": ("3 grasp failures; 1 candidate-removal calls"),
                 "blockers": [{"code": "HouseInvalidForTask"}],
             }
         ]
@@ -377,11 +628,22 @@ def test_proof_request_selection_generates_fallback_alias_requests(
     assert generated[0]["source_request_id"] == "proof_001"
     assert generated[0]["object_id"] == "observed_001"
     assert generated[0]["target_receptacle_id"] == "sink_01"
+    assert generated[0]["fallback_request"]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
+    assert generated[0]["fallback_request"]["prior_task_feasibility_blocker_summary"] == (
+        "3 grasp failures; 1 candidate-removal calls"
+    )
+    assert generated[0]["fallback_request"]["prior_result_match_kind"] == "request_id"
     assert generated[0]["fallback_request"]["prior_blockers"][0]["code"] == ("HouseInvalidForTask")
     assert generated[0]["planner_probe_args"]["--cleanup-planner-target-receptacle-id"] == (
         "sink/alt"
     )
     assert generated[1]["planner_probe_args"]["--cleanup-planner-object-id"] == ("pickup/alt")
+    assert selection["selected_requests"][0]["prior_task_feasibility_blocker_kind"] == (
+        "grasp_feasibility"
+    )
+    assert selection["selected_requests"][0]["prior_result_match_kind"] == "request_id"
     assert selection["fallback_generation"]["filtered_alias_count"] == 2
     assert {
         (item["axis"], item["alias"])
@@ -720,6 +982,10 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
                 "request_id": "proof_001_fallback_01",
                 "status": "blocked_capability",
                 "task_feasibility_status": "blocked",
+                "task_feasibility_blocker_kind": "grasp_feasibility",
+                "task_feasibility_blocker_summary": (
+                    "17 grasp failures; 15 candidate-removal calls"
+                ),
                 "cleanup_task_config": {
                     "planner_object_id": "book_beef_1_0_8",
                     "planner_target_receptacle_id": "shelf_cafe_1_1_2",
@@ -758,7 +1024,7 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
     assert fallback_generation["status"] == "exhausted"
     assert fallback_generation["generated_request_count"] == 0
     assert {item["code"] for item in fallback_generation["exhaustion_blockers"]} == {
-        "target_task_feasibility_blocked_pairs",
+        "grasp_feasibility_blocked_pairs",
         "no_fallback_candidate_available",
     }
     assert fallback_generation["normalized_alias_count"] == 2
@@ -790,6 +1056,8 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
             "reason",
             "prior_status",
             "prior_task_feasibility_status",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
             "last_worker_stage",
             "execution_attempted",
         )
@@ -801,6 +1069,8 @@ def test_proof_request_selection_filters_prior_failed_runtime_candidates() -> No
         "reason": "prior_task_feasibility_blocked_pair",
         "prior_status": "blocked_capability",
         "prior_task_feasibility_status": "blocked",
+        "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+        "prior_task_feasibility_blocker_summary": ("17 grasp failures; 15 candidate-removal calls"),
         "last_worker_stage": "",
         "execution_attempted": False,
     }
@@ -1032,6 +1302,41 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
                     },
+                    "task_sampler_robot_placement_profile": {
+                        "profile": "relaxed",
+                        "requested": True,
+                        "applied": True,
+                        "place_robot_near_overrides": {"max_tries": 50},
+                    },
+                    "cleanup_task_sampler_adapter": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "task_sampler_failure_diagnostics": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 1,
+                        "asset_failure_count": 1,
+                        "grasp_failure_count": 3,
+                        "grasp_failures": [
+                            {
+                                "object_name": "pickup/body",
+                                "count_after": 3,
+                                "removed_candidate": True,
+                            }
+                        ],
+                        "last_placement_scene_diagnostic": {
+                            "target_name": "pickup/body",
+                            "valid_free_point_count": 3,
+                            "valid_neighborhood_fraction": 0.000017,
+                        },
+                        "last_robot_placement_failure": {
+                            "pickup_obj_name": "pickup/body",
+                            "message": "Failed to place robot near object: pickup/body",
+                        },
+                    },
                     "requested_cleanup_primitive_binding": {
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
@@ -1073,10 +1378,88 @@ def test_proof_result_summary_classifies_task_feasibility_and_views(tmp_path: Pa
     assert summary["view_artifact_count"] == 2
     result = summary["results"][0]
     assert result["task_feasibility_status"] == "blocked"
+    assert result["task_feasibility_blocker_kind"] == "robot_placement"
+    assert result["task_feasibility_blocker_summary"] == "1 robot-placement failures"
     assert result["visual_status"] == "views_recorded"
     assert result["blockers"][0]["code"] == "HouseInvalidForTask"
+    assert result["cleanup_task_sampler_adapter"]["applied"] is True
+    assert result["cleanup_task_sampler_adapter"]["planner_target_receptacle_id"] == "sink/body"
+    assert result["task_sampler_robot_placement_profile"]["profile"] == "relaxed"
+    assert (
+        result["task_sampler_robot_placement_profile"]["place_robot_near_overrides"]["max_tries"]
+        == 50
+    )
+    assert result["task_sampler_failure_diagnostics"]["robot_placement_failure_count"] == 1
+    assert result["task_sampler_failure_diagnostics"]["grasp_failure_count"] == 3
+    assert (
+        result["task_sampler_failure_diagnostics"]["last_placement_scene_diagnostic"][
+            "valid_free_point_count"
+        ]
+        == 3
+    )
+    assert (
+        result["task_sampler_failure_diagnostics"]["last_robot_placement_failure"][
+            "pickup_obj_name"
+        ]
+        == "pickup/body"
+    )
     assert result["views"][0]["path"].endswith("planner_views/final.png")
     assert summary["results"][1]["task_feasibility_status"] == "not_run"
+
+
+def test_proof_result_summary_classifies_grasp_feasibility_blocker(tmp_path: Path) -> None:
+    proof_dir = tmp_path / "proofs" / "001_observed_001_to_shelf_01"
+    proof_dir.mkdir(parents=True)
+    (proof_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "status": "blocked_capability",
+                "manipulation_evidence": {
+                    "execution_attempted": True,
+                    "blockers": [
+                        {
+                            "code": "HouseInvalidForTask",
+                            "message": "House invalid for tasks due to physics constraints",
+                        }
+                    ],
+                    "task_sampler_failure_diagnostics": {
+                        "applied": True,
+                        "robot_placement_attempt_count": 17,
+                        "robot_placement_failure_count": 0,
+                        "grasp_failure_count": 17,
+                        "candidate_removal_count": 15,
+                        "grasp_failures": [
+                            {
+                                "object_name": "book/body",
+                                "count_after": 17,
+                                "removed_candidate": False,
+                            }
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    commands = [
+        {
+            "request_id": "proof_001",
+            "object_id": "observed_001",
+            "target_receptacle_id": "shelf_01",
+            "run_result": str(proof_dir / "run_result.json"),
+            "report": str(proof_dir / "report.html"),
+        }
+    ]
+
+    summary = proof_result_summary_from_commands(commands)
+
+    assert summary["grasp_feasibility_blocked_count"] == 1
+    result = summary["results"][0]
+    assert result["task_feasibility_status"] == "blocked"
+    assert result["task_feasibility_blocker_kind"] == "grasp_feasibility"
+    assert result["task_feasibility_blocker_summary"] == (
+        "17 grasp failures; 15 candidate-removal calls"
+    )
 
 
 def test_proof_result_summary_surfaces_timeout_worker_stage_evidence(
