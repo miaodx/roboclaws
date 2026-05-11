@@ -830,6 +830,7 @@ def test_checker_accepts_grasp_only_task_sampler_diagnostics(tmp_path: Path) -> 
                 "task_sampler_failure_diagnostics": {
                     "grasp_failure_count": 17,
                     "candidate_removal_count": 15,
+                    "candidate_name_miss_count": 0,
                     "grasp_failures": [
                         {
                             "object_name": "pickup/body",

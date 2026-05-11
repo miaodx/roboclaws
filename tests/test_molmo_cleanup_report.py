@@ -1236,6 +1236,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "robot_placement_failure_count": 1,
                         "asset_failure_count": 1,
                         "grasp_failure_count": 3,
+                        "candidate_name_miss_count": 0,
                         "grasp_failures": [
                             {
                                 "object_name": "pickup/body",
@@ -1594,6 +1595,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Task sampler placement failures" in html
     assert "Task sampler asset failures" in html
     assert "Post-placement grasp failures" in html
+    assert "Post-placement candidate name misses" in html
     assert "Post-Placement Rejection Views" in html
     assert "Post-placement rejection flow: pickup/body" in html
     assert "Placement free-space fraction" in html

@@ -2634,7 +2634,7 @@ def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None =
     table_rows = "".join(
         f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
         for label, value in rows
-        if value
+        if value not in (None, "", [], {})
     )
     views = item.get("views") or []
     if views:
