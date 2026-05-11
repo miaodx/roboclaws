@@ -13,6 +13,10 @@
 # - just harness::molmo-agent-bridge  Molmo cleanup MCP bridge smoke + comparison
 # - just harness::molmo-agent-bridge-visual  Molmo cleanup MCP bridge visual smoke + comparison
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
+# - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
+# - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
+# - just harness::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit smoke
+# - just harness::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0003 OpenClaw visual kit smoke
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -275,6 +279,111 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
       --min-generated-mess-count "{{generated_mess_count}}" \
       --require-robot-views \
       "{{output_dir}}"
+
+# ADR-0003 real-world MCP smoke agent harness. This uses the stricter public
+# contract through MCP tools: metric_map, fixture_hints, waypoint observe, and
+# observed object handles. It intentionally does not expose scene_objects.
+molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp-harness" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    for seed in {{seeds}}; do
+      run_dir="{{output_dir}}/seed-${seed}"
+      .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+        --seed "${seed}" \
+        --backend molmospaces_subprocess \
+        --task "{{task}}" \
+        --generated-mess-count "{{generated_mess_count}}" \
+        --include-robot \
+        --robot-name rby1m \
+        --record-robot-views \
+        --output-dir "${run_dir}"
+    done
+    seed_csv="$(printf '%s' "{{seeds}}" | tr ' ' ',')"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-policy realworld_contract_smoke_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
+      --expect-seeds "${seed_csv}" \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-robot-views \
+      "{{output_dir}}"
+
+# ADR-0003 direct-agent dogfood kit smoke. This does not launch Codex/Claude;
+# it proves the stricter skill/server/checker path against the synthetic backend
+# before local external-agent dogfood.
+molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-agent-dogfood-kit" task="帮我收拾这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+      --seed "{{seed}}" \
+      --backend api_semantic_synthetic \
+      --task "{{task}}" \
+      --policy realworld_contract_smoke_agent \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend api_semantic_synthetic \
+      --expect-policy realworld_contract_smoke_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
+      --min-generated-mess-count 5 \
+      --require-agent-driven \
+      --require-clean-agent-run \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0003 OpenClaw dogfood kit smoke. This does not launch Gateway; it proves
+# the OpenClaw-labeled artifact shape and minimum checker before a local Gateway
+# attempt supplies real OpenClaw evidence.
+molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld-openclaw-dogfood-kit" task="帮我收拾这个房间":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+      --seed "{{seed}}" \
+      --backend api_semantic_synthetic \
+      --task "{{task}}" \
+      --policy openclaw_agent \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend api_semantic_synthetic \
+      --expect-policy openclaw_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
+      --min-generated-mess-count 5 \
+      --require-agent-driven \
+      --require-openclaw-minimum \
+      "{{output_dir}}/run_result.json"
+
+# ADR-0010 OpenClaw visual dogfood kit smoke. This does not launch Gateway; it
+# proves OpenClaw-labeled ADR-0003 artifacts still render the real
+# MolmoSpaces/RBY1M Robot View Timeline through the shared report underlay.
+molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-realworld-openclaw-visual-dogfood-kit" task="帮我收拾这个房间" generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rm -rf "{{output_dir}}"
+    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+      --seed "{{seed}}" \
+      --backend molmospaces_subprocess \
+      --task "{{task}}" \
+      --policy openclaw_agent \
+      --generated-mess-count "{{generated_mess_count}}" \
+      --include-robot \
+      --robot-name rby1m \
+      --record-robot-views \
+      --output-dir "{{output_dir}}"
+    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+      --expect-task "{{task}}" \
+      --expect-backend molmospaces_subprocess \
+      --expect-policy openclaw_agent \
+      --expect-mcp-server molmo_cleanup_realworld \
+      --min-generated-mess-count "{{generated_mess_count}}" \
+      --require-agent-driven \
+      --require-openclaw-minimum \
+      --require-clean-agent-run \
+      --require-robot-views \
+      "{{output_dir}}/run_result.json"
 
 # List task files available under harness/tasks/.
 list-tasks:

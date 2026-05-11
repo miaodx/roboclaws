@@ -77,7 +77,8 @@ class RealWorldCleanupContract:
         self._handled_handles: set[str] = set()
         self._held_handle: str | None = None
         self._current_object_handle: str | None = None
-        self._current_receptacle_id: str | None = None
+        self._current_receptacle_for_handle: tuple[str, str] | None = None
+        self._opened_receptacle_for_handle: tuple[str, str] | None = None
         self._initial_locations = self.backend.object_locations()
 
     def public_tool_names(self) -> list[str]:
@@ -243,20 +244,38 @@ class RealWorldCleanupContract:
         internal_id = self._internal_object_id(object_id)
         if internal_id is None:
             return self._error("pick", "stale_reference", object_id=object_id)
-        navigate = None
         if getattr(self, "_current_object_handle", None) != object_id:
-            navigate = self.contract.navigate_to_object(internal_id)
-            if not navigate.get("ok"):
-                return self._public_error_from_private("pick", object_id, navigate)
+            return self._semantic_order_error(
+                "pick",
+                required_tool="navigate_to_object",
+                object_id=object_id,
+                recovery_hint=(
+                    "Call navigate_to_object with this observed object handle before pick. "
+                    "The ADR-0003 clean loop is navigate_to_object -> pick -> "
+                    "navigate_to_receptacle -> open_receptacle? -> place/place_inside."
+                ),
+            )
         picked = self.contract.pick(internal_id)
         if picked.get("ok"):
             self._held_handle = object_id
             self._current_object_handle = None
-        return self._public_manipulation_response("pick", object_id, picked, navigate=navigate)
+            self._current_receptacle_for_handle = None
+            self._opened_receptacle_for_handle = None
+        return self._public_manipulation_response("pick", object_id, picked)
 
     def navigate_to_receptacle(self, fixture_id: str) -> dict[str, Any]:
         if fixture_id not in self._fixtures:
             return self._error("navigate_to_receptacle", "stale_reference", fixture_id=fixture_id)
+        if self._held_handle is None:
+            return self._semantic_order_error(
+                "navigate_to_receptacle",
+                required_tool="pick",
+                fixture_id=fixture_id,
+                recovery_hint=(
+                    "Pick an observed object before navigating to a cleanup fixture. "
+                    "Use navigate_to_object -> pick first."
+                ),
+            )
         response = self.contract.navigate_to_receptacle(fixture_id)
         if not response.get("ok"):
             return self._public_error_from_private(
@@ -264,7 +283,8 @@ class RealWorldCleanupContract:
                 self._held_handle or "",
                 response,
             )
-        self._current_receptacle_id = fixture_id
+        self._current_receptacle_for_handle = (self._held_handle, fixture_id)
+        self._opened_receptacle_for_handle = None
         return self._ok(
             "navigate_to_receptacle",
             object_id=self._held_handle,
@@ -282,7 +302,27 @@ class RealWorldCleanupContract:
     def open_receptacle(self, fixture_id: str) -> dict[str, Any]:
         if fixture_id not in self._fixtures:
             return self._error("open_receptacle", "stale_reference", fixture_id=fixture_id)
+        if self._held_handle is None:
+            return self._semantic_order_error(
+                "open_receptacle",
+                required_tool="pick",
+                fixture_id=fixture_id,
+                recovery_hint="Pick an observed object before opening a cleanup fixture.",
+            )
+        if self._current_receptacle_for_handle != (self._held_handle, fixture_id):
+            return self._semantic_order_error(
+                "open_receptacle",
+                required_tool="navigate_to_receptacle",
+                object_id=self._held_handle,
+                fixture_id=fixture_id,
+                recovery_hint=(
+                    "Call navigate_to_receptacle for this fixture before open_receptacle. "
+                    "Fridge-like cleanup must be nav -> open -> place_inside."
+                ),
+            )
         opened = self.contract.open_receptacle(fixture_id)
+        if opened.get("ok"):
+            self._opened_receptacle_for_handle = (self._held_handle, fixture_id)
         return self._public_fixture_response("open_receptacle", fixture_id, opened)
 
     def place(self, fixture_id: str) -> dict[str, Any]:
@@ -358,12 +398,28 @@ class RealWorldCleanupContract:
         handle = self._held_handle
         if handle is None:
             return self._error("place_inside" if inside else "place", "not_holding")
-        navigate = None
-        if getattr(self, "_current_receptacle_id", None) != fixture_id:
-            navigate = self.contract.navigate_to_receptacle(fixture_id)
-            if not navigate.get("ok"):
-                return self._public_error_from_private(
-                    "place_inside" if inside else "place", handle, navigate
+        tool = "place_inside" if inside else "place"
+        if self._current_receptacle_for_handle != (handle, fixture_id):
+            return self._semantic_order_error(
+                tool,
+                required_tool="navigate_to_receptacle",
+                object_id=handle,
+                fixture_id=fixture_id,
+                recovery_hint=(
+                    "Call navigate_to_receptacle for this fixture after pick and before "
+                    "placing the held object."
+                ),
+            )
+        if inside and _fixture_requires_open(self._fixtures[fixture_id]):
+            if self._opened_receptacle_for_handle != (handle, fixture_id):
+                return self._semantic_order_error(
+                    "place_inside",
+                    required_tool="open_receptacle",
+                    object_id=handle,
+                    fixture_id=fixture_id,
+                    recovery_hint=(
+                        "Call open_receptacle for this fridge-like fixture before place_inside."
+                    ),
                 )
         placed = (
             self.contract.place_inside(fixture_id) if inside else self.contract.place(fixture_id)
@@ -371,13 +427,13 @@ class RealWorldCleanupContract:
         if placed.get("ok"):
             self._handled_handles.add(handle)
             self._held_handle = None
-            self._current_receptacle_id = fixture_id
+            self._current_receptacle_for_handle = None
+            self._opened_receptacle_for_handle = None
         return self._public_manipulation_response(
-            "place_inside" if inside else "place",
+            tool,
             handle,
             placed,
             fixture_id=fixture_id,
-            navigate=navigate,
         )
 
     def _visible_detections_for_waypoint(self, waypoint: dict[str, Any]) -> list[dict[str, Any]]:
@@ -552,6 +608,27 @@ class RealWorldCleanupContract:
         _assert_no_forbidden_agent_view_keys(result)
         return result
 
+    def _semantic_order_error(
+        self,
+        tool: str,
+        *,
+        required_tool: str,
+        recovery_hint: str,
+        object_id: str | None = None,
+        fixture_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "required_tool": required_tool,
+            "semantic_loop_variant": "navigate-pick-navigate-open-place",
+            "recovery_hint": recovery_hint,
+        }
+        if object_id is not None:
+            payload["object_id"] = object_id
+        if fixture_id is not None:
+            payload["fixture_id"] = fixture_id
+            payload["receptacle_id"] = fixture_id
+        return self._error(tool, "semantic_order", **payload)
+
 
 def infer_target_fixture_for_detection(
     detection: dict[str, Any],
@@ -642,6 +719,10 @@ def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
     if "fridge" in name or "refrigerator" in name:
         affordances.extend(["open", "place_inside"])
     return affordances
+
+
+def _fixture_requires_open(fixture: dict[str, Any]) -> bool:
+    return {"open", "place_inside"}.issubset(set(_fixture_affordances(fixture)))
 
 
 def _first_fixture_for_waypoint(waypoint: dict[str, Any]) -> str | None:

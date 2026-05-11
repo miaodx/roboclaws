@@ -18,6 +18,10 @@
 # - just verify::molmo-agent-bridge    current-contract Molmo MCP bridge proof
 # - just verify::molmo-agent-bridge-visual  current-contract MCP bridge visual proof
 # - just verify::molmo-realworld-cleanup  ADR-0003 public/private cleanup proof
+# - just verify::molmo-realworld-agent-mcp  ADR-0003 MCP smoke-agent proof
+# - just verify::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit proof
+# - just verify::molmo-realworld-openclaw-dogfood-kit  ADR-0003 OpenClaw minimum-gate kit proof
+# - just verify::molmo-realworld-openclaw-visual-dogfood-kit  ADR-0010 OpenClaw visual report proof
 # - just verify::full-local <task> all local gates, including navigator
 
 set working-directory := '..'
@@ -159,6 +163,53 @@ molmo-realworld-cleanup generated_mess_count="10":
       tests/test_molmo_cleanup_report.py \
       tests/test_verify_just_recipes.py
     just harness::molmo-realworld-cleanup "1 2 3" "output/molmo-realworld-cleanup-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
+
+# ADR-0003 real-world MCP smoke-agent gate. Requires the isolated Python 3.11
+# MolmoSpaces runtime for the harness; focused tests use the synthetic backend.
+molmo-realworld-agent-mcp generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_mcp_server.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-agent-mcp "1" "output/molmo-realworld-agent-mcp-harness" "帮我收拾这个房间" "{{generated_mess_count}}"
+
+# ADR-0003 direct-agent dogfood kit gate. Real Codex/Claude/OpenClaw dogfood is
+# local evidence; this focused gate proves the stricter skill, server setup,
+# checker, and synthetic artifact shape stay wired.
+molmo-realworld-agent-dogfood-kit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_agent_server.py \
+      tests/test_molmo_realworld_mcp_server.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-agent-dogfood-kit
+
+# ADR-0003 OpenClaw dogfood kit gate. Real Gateway dogfood is local evidence;
+# this focused gate proves the OpenClaw minimum checker and artifact shape.
+molmo-realworld-openclaw-dogfood-kit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_mcp_server.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-openclaw-dogfood-kit
+
+# ADR-0010 OpenClaw visual dogfood kit gate. Real Gateway dogfood is local
+# evidence; this focused gate proves the OpenClaw-labeled visual report shape.
+molmo-realworld-openclaw-visual-dogfood-kit generated_mess_count="10":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{standalone_pytest}} -q \
+      tests/test_molmo_realworld_mcp_server.py \
+      tests/test_check_molmo_realworld_cleanup_result.py \
+      tests/test_molmo_cleanup_report.py \
+      tests/test_verify_just_recipes.py
+    just harness::molmo-realworld-openclaw-visual-dogfood-kit "7" "output/molmo-realworld-openclaw-visual-dogfood-kit" "帮我收拾这个房间" "{{generated_mess_count}}"
 
 # Full local confidence ladder. This intentionally requires a navigator task
 # so the slowest gate is explicit rather than accidental.

@@ -174,7 +174,12 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     html = report_path.read_text(encoding="utf-8")
     assert "Robot View Timeline" in html
     assert "Semantic Substeps" in html
-    assert "navigate_to_object -&gt; pick -&gt; navigate_to_receptacle" in html
+    assert "Canonical cleanup loop: nav, pick, nav, open when needed, place." in html
+    assert "<span>nav</span><small>object</small>" in html
+    assert "<span>pick</span><small>object</small>" in html
+    assert "<span>nav</span><small>target</small>" in html
+    assert "<span>place</span><small>surface</small>" in html
+    assert "object_done" not in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
     assert "robot_views/bootstrap.verify.png" not in html

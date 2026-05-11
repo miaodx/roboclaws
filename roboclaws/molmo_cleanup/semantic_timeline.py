@@ -7,6 +7,15 @@ SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place"
 CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT = f"{SEMANTIC_LOOP_VARIANT}-object_done"
 ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"
 
+SEMANTIC_SUBPHASE_LABELS = {
+    "navigate_to_object": ("nav", "object"),
+    "pick": ("pick", "object"),
+    "navigate_to_receptacle": ("nav", "target"),
+    "open_receptacle": ("open", "target"),
+    "place": ("place", "surface"),
+    "place_inside": ("place", "inside"),
+}
+
 
 def record_robot_view_step(
     *,
@@ -208,6 +217,24 @@ def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def display_semantic_subphases(steps: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """Return the report-facing cleanup loop labels for raw semantic tool steps."""
+    displayed = []
+    for step in steps:
+        phase = str(step.get("phase") or "")
+        label = SEMANTIC_SUBPHASE_LABELS.get(phase)
+        if label is None:
+            continue
+        displayed.append(
+            {
+                "phase": phase,
+                "label": label[0],
+                "detail": label[1],
+            }
+        )
+    return displayed
+
+
 def cleanup_plan_from_semantic_substeps(
     substeps: list[dict[str, Any]],
 ) -> list[dict[str, str]]:
@@ -232,6 +259,7 @@ def semantic_diagnostics(
     done_response: dict[str, Any],
 ) -> dict[str, Any]:
     stale_reference_errors = 0
+    semantic_order_errors = 0
     attempted_semantic_substeps = 0
     object_done_count = 0
     fridge_inside_sequence_ok = True
@@ -254,9 +282,16 @@ def semantic_diagnostics(
             and response.get("error_reason") == "stale_reference"
         ):
             stale_reference_errors += 1
+        if (
+            event.get("event") == "response"
+            and isinstance(response, dict)
+            and response.get("error_reason") == "semantic_order"
+        ):
+            semantic_order_errors += 1
     score = done_response.get("score", {})
     return {
         "stale_reference_errors": stale_reference_errors,
+        "semantic_order_errors": semantic_order_errors,
         "premature_done": int(score.get("restored_count", 0)) < int(score.get("total_targets", 0)),
         "object_done_count": object_done_count,
         "attempted_semantic_substeps": attempted_semantic_substeps,
