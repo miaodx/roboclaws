@@ -31,6 +31,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-clean-agent-run", action="store_true")
     parser.add_argument("--require-openclaw-minimum", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
+    parser.add_argument("--require-advisory-scoring", action="store_true")
+    parser.add_argument("--require-raw-fpv-observations", action="store_true")
     return parser.parse_args()
 
 
@@ -60,6 +62,8 @@ def main() -> None:
             require_clean_agent_run=args.require_clean_agent_run,
             require_openclaw_minimum=args.require_openclaw_minimum,
             require_robot_views=args.require_robot_views,
+            require_advisory_scoring=args.require_advisory_scoring,
+            require_raw_fpv_observations=args.require_raw_fpv_observations,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -89,6 +93,8 @@ def _assert_result(
     require_clean_agent_run: bool = False,
     require_openclaw_minimum: bool = False,
     require_robot_views: bool = False,
+    require_advisory_scoring: bool = False,
+    require_raw_fpv_observations: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -99,7 +105,9 @@ def _assert_result(
     assert data.get("planner_uses_private_manifest") is False, data
     assert data.get("fixture_hint_mode") == "room_only", data
     assert data.get("generated_mess_count", 0) >= min_generated_mess_count, data
-    enforce_success = require_clean_agent_run or not require_openclaw_minimum
+    enforce_success = (
+        require_clean_agent_run or not require_openclaw_minimum
+    ) and not require_raw_fpv_observations
     if enforce_success:
         assert data.get("mess_restoration_rate", 0) >= 0.70, data
         assert data.get("sweep_coverage_rate", 0) >= 0.90, data
@@ -151,6 +159,10 @@ def _assert_result(
         _assert_clean_agent_run(data)
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
+    if require_advisory_scoring:
+        _assert_advisory_scoring(data, base, report_text)
+    if require_raw_fpv_observations:
+        _assert_raw_fpv_observations(data, base, report_text)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -214,6 +226,17 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
     assert "observed_objects" in agent_view, agent_view
     assert "objects" not in agent_view.get("metric_map", {}), agent_view
     _assert_no_forbidden_keys(agent_view)
+    if agent_view.get("perception_mode") == "raw_fpv_only":
+        assert agent_view.get("structured_detections_available") is False, agent_view
+        assert not agent_view.get("observed_objects"), agent_view
+        raw = agent_view.get("raw_fpv_observations") or []
+        assert raw, agent_view
+        for item in raw:
+            assert item.get("perception_mode") == "raw_fpv_only", item
+            assert item.get("structured_detections_available") is False, item
+            forbidden = {"category", "name", "support_estimate", "target_receptacle_id"}
+            assert not forbidden.intersection(item), item
+        return
     observed = agent_view.get("observed_objects") or []
     assert observed, agent_view
     for item in observed:
@@ -262,7 +285,8 @@ def _assert_robot_views(
         action = str(step.get("action", ""))
         if _is_focused_robot_action(action):
             focused_actions.add(action.split(" ", 1)[0])
-            _assert_focused_robot_step(step)
+            if not action.startswith("observe "):
+                _assert_focused_robot_step(step)
     assert focused_actions, (focused_actions, data)
     if require_complete_actions:
         for expected in {"navigate_to_object", "pick", "navigate_to_receptacle", "place"}:
@@ -273,6 +297,55 @@ def _assert_robot_views(
         ):
             assert "open_receptacle" in focused_actions, data
             assert "place_inside" in focused_actions, data
+
+
+def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:
+    advisory = data.get("advisory_evaluation") or {}
+    assert advisory, data
+    assert advisory.get("schema_version") == "advisory_cleanup_scoring_v1", advisory
+    assert advisory.get("authoritative") is False, advisory
+    assert advisory.get("status") == "ok", advisory
+    assert advisory.get("object_reviews"), advisory
+    counts = advisory.get("counts") or {}
+    assert int(counts.get("total_reviewed") or 0) == len(advisory["object_reviews"]), advisory
+    artifacts = data.get("artifacts") or {}
+    advisory_path = _resolve_path(base, artifacts.get("advisory_evaluation", ""))
+    assert advisory_path.is_file(), advisory_path
+    loaded = json.loads(advisory_path.read_text(encoding="utf-8"))
+    assert loaded.get("authoritative") is False, loaded
+    assert "Advisory Review" in report_text, report_text[:500]
+
+
+def _assert_raw_fpv_observations(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+) -> None:
+    assert data.get("perception_mode") == "raw_fpv_only", data
+    agent_view = data.get("agent_view") or {}
+    assert agent_view.get("perception_mode") == "raw_fpv_only", agent_view
+    assert agent_view.get("structured_detections_available") is False, agent_view
+    assert not agent_view.get("observed_objects"), agent_view
+    observations = data.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
+    assert observations, data
+    assert "Raw FPV Observations" in report_text, report_text[:500]
+    artifacts = data.get("artifacts") or {}
+    robot_views_dir = _resolve_path(base, artifacts.get("robot_views", ""))
+    assert robot_views_dir.is_dir(), robot_views_dir
+    for item in observations:
+        assert item.get("perception_mode") == "raw_fpv_only", item
+        assert item.get("structured_detections_available") is False, item
+        assert not {"category", "name", "support_estimate", "target_receptacle_id"}.intersection(
+            item
+        ), item
+        image_artifacts = item.get("image_artifacts") or {}
+        fpv = image_artifacts.get("fpv") or item.get("fpv_image")
+        assert fpv, item
+        fpv_path = _resolve_path(base, str(fpv))
+        if not fpv_path.exists():
+            fpv_path = _resolve_path(robot_views_dir.parent, str(fpv))
+        assert fpv_path.is_file(), (fpv_path, item)
+        assert fpv_path.stat().st_size > 0, (fpv_path, item)
 
 
 def _is_focused_robot_action(action: str) -> bool:

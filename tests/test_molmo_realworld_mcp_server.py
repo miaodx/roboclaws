@@ -9,7 +9,7 @@ import pytest
 
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
-from roboclaws.molmo_cleanup.realworld_contract import REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.realworld_mcp_server import (
     MCP_SERVER_NAME,
     make_molmo_realworld_cleanup_mcp,
@@ -111,6 +111,8 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["agent_bridge"]["premature_done"] is False
     assert run_result["agent_bridge"]["premature_done_source"] == "sweep_coverage_rate"
     assert run_result["agent_bridge"]["semantic_order_errors"] == 0
+    assert run_result["advisory_evaluation"]["authoritative"] is False
+    assert run_result["advisory_evaluation"]["object_reviews"]
     assert run_result["agent_view"]["observed_objects"]
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text
@@ -119,6 +121,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert "Private Evaluation" in report_text
     assert (tmp_path / "agent_view.json").is_file()
     assert (tmp_path / "private_evaluation.json").is_file()
+    assert (tmp_path / "advisory_evaluation.json").is_file()
 
 
 class _FakeVisualBackend(ApiSemanticCleanupBackend):
@@ -202,3 +205,41 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
         step["semantic_phase"] == "navigate_to_object" for step in run_result["robot_view_steps"]
     )
     assert "Robot View Timeline" in report_text
+
+
+def test_realworld_mcp_raw_fpv_mode_attaches_fpv_artifacts(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = MolmoCleanupToolContract(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        server.call_tool(
+            "navigate_to_waypoint",
+            waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
+        )
+        observation = server.call_tool("observe")
+        done = server.call_tool("done", reason="raw fpv evidence recorded")
+    finally:
+        server.close()
+
+    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
+    report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
+    raw = observation["raw_fpv_observation"]
+
+    assert done["status"] == "ok"
+    assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
+    assert observation["visible_object_detections"] == []
+    assert raw["image_artifacts"]["fpv"].endswith(".png")
+    assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
+    assert run_result["perception_mode"] == RAW_FPV_ONLY_MODE
+    assert run_result["agent_view"]["observed_objects"] == []
+    assert run_result["raw_fpv_observations"][0]["image_artifacts"]["fpv"].endswith(".png")
+    assert "Raw FPV Observations" in report_text

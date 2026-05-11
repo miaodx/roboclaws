@@ -14,6 +14,14 @@ from roboclaws.molmo_cleanup.types import CleanupScenario
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
+VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
+RAW_FPV_ONLY_MODE = "raw_fpv_only"
+REALWORLD_PERCEPTION_MODES = frozenset(
+    {
+        VISIBLE_OBJECT_DETECTIONS_MODE,
+        RAW_FPV_ONLY_MODE,
+    }
+)
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
     {
@@ -55,14 +63,19 @@ class RealWorldCleanupContract:
         *,
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",
+        perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
+        if perception_mode not in REALWORLD_PERCEPTION_MODES:
+            allowed = ", ".join(sorted(REALWORLD_PERCEPTION_MODES))
+            raise ValueError(f"perception_mode must be one of: {allowed}")
         self.contract = contract
         self.backend = contract.backend
         self.scenario: CleanupScenario = contract.backend.scenario
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
+        self.perception_mode = perception_mode
         self._fixtures = {
             item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
         }
@@ -74,6 +87,7 @@ class RealWorldCleanupContract:
         self._observed_handles_by_object_id: dict[str, str] = {}
         self._object_ids_by_handle: dict[str, str] = {}
         self._detections_by_handle: dict[str, dict[str, Any]] = {}
+        self._raw_fpv_observations: list[dict[str, Any]] = []
         self._handled_handles: set[str] = set()
         self._held_handle: str | None = None
         self._current_object_handle: str | None = None
@@ -195,12 +209,34 @@ class RealWorldCleanupContract:
         if waypoint is None:
             return self._error("observe", "missing_waypoint")
         self._observed_waypoint_ids.add(str(waypoint["waypoint_id"]))
+        if self.perception_mode == RAW_FPV_ONLY_MODE:
+            raw_observation = self._record_raw_fpv_observation(waypoint)
+            return self._ok(
+                "observe",
+                contract=REALWORLD_CONTRACT,
+                current_room_id=waypoint["room_id"],
+                waypoint_id=waypoint["waypoint_id"],
+                perception_mode=self.perception_mode,
+                perception_source=RAW_FPV_ONLY_MODE,
+                structured_detections_available=False,
+                visible_object_detections=[],
+                raw_fpv_observation=raw_observation,
+                held_object_id=self._held_handle,
+                private_target_truth_included=False,
+                instruction=(
+                    "Raw FPV-only mode: infer any cleanup candidates from the FPV image. "
+                    "No structured movable-object detections, categories, support estimates, "
+                    "target labels, or generated mess truth are provided."
+                ),
+            )
         detections = self._visible_detections_for_waypoint(waypoint)
         return self._ok(
             "observe",
             contract=REALWORLD_CONTRACT,
             current_room_id=waypoint["room_id"],
             waypoint_id=waypoint["waypoint_id"],
+            perception_mode=self.perception_mode,
+            structured_detections_available=True,
             visible_object_detections=detections,
             held_object_id=self._held_handle,
             perception_source="robot_local_visible_object_detections",
@@ -358,9 +394,13 @@ class RealWorldCleanupContract:
         ]
         payload = {
             "contract": REALWORLD_CONTRACT,
+            "perception_mode": self.perception_mode,
+            "structured_detections_available": self.perception_mode
+            == VISIBLE_OBJECT_DETECTIONS_MODE,
             "metric_map": self.metric_map(),
             "fixture_hints": self.fixture_hints(),
             "observed_objects": observed_objects,
+            "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
             "observed_waypoint_ids": sorted(self._observed_waypoint_ids),
             "public_tool_names": self.public_tool_names(),
             "forbidden_private_fields_absent": True,
@@ -389,6 +429,27 @@ class RealWorldCleanupContract:
         fixture_hints: dict[str, Any],
     ) -> dict[str, Any] | None:
         return infer_target_fixture_for_detection(detection, fixture_hints)
+
+    def attach_raw_fpv_observation_artifact(
+        self,
+        observation_id: str,
+        *,
+        views: dict[str, Any],
+        robot_view_label: str | None = None,
+    ) -> dict[str, Any] | None:
+        for item in self._raw_fpv_observations:
+            if item.get("observation_id") != observation_id:
+                continue
+            fpv_path = views.get("fpv")
+            if fpv_path:
+                item["image_artifacts"] = {"fpv": str(fpv_path)}
+                item["fpv_image"] = str(fpv_path)
+                item["artifact_status"] = "recorded"
+            if robot_view_label:
+                item["robot_view_label"] = robot_view_label
+            _assert_no_forbidden_agent_view_keys(item)
+            return dict(item)
+        return None
 
     def _place(self, fixture_id: str, *, inside: bool) -> dict[str, Any]:
         if fixture_id not in self._fixtures:
@@ -470,6 +531,25 @@ class RealWorldCleanupContract:
             self._detections_by_handle[handle] = detection
             detections.append(dict(detection))
         return sorted(detections, key=lambda item: str(item["object_id"]))
+
+    def _record_raw_fpv_observation(self, waypoint: dict[str, Any]) -> dict[str, Any]:
+        observation_id = f"raw_fpv_{len(self._raw_fpv_observations) + 1:03d}"
+        item = {
+            "observation_id": observation_id,
+            "waypoint_id": str(waypoint["waypoint_id"]),
+            "room_id": str(waypoint["room_id"]),
+            "held_object_id": self._held_handle,
+            "perception_mode": RAW_FPV_ONLY_MODE,
+            "structured_detections_available": False,
+            "image_artifacts": {},
+            "artifact_status": "pending_robot_view_capture",
+            "public_contract_note": (
+                "No structured movable-object detections, categories, support estimates, "
+                "target labels, or private scoring truth are included."
+            ),
+        }
+        self._raw_fpv_observations.append(item)
+        return dict(item)
 
     def _realworld_metrics(
         self,

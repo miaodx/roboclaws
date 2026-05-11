@@ -103,6 +103,7 @@ def render_cleanup_report(
     </section>
     {_current_contract_note(run_result)}
     {_realworld_contract_note(run_result)}
+    {_manipulation_provenance_section(run_result)}
     <section class="panel">
       <div class="section-heading">
         <h2>Before And After</h2>
@@ -123,13 +124,53 @@ def render_cleanup_report(
       {_moves_table(moves)}
     </section>
     {_agent_view_section(run_result)}
+    {_raw_fpv_observations_section(run_result)}
     {_semantic_steps_table(run_result.get("semantic_substeps") or [])}
     {_robot_timeline(robot_view_steps or [])}
     <section class="panel">
       <h2>Score</h2>
       {_score_table(score)}
     </section>
+    {_advisory_review_section(run_result)}
     {_private_evaluation_section(run_result)}
+    """
+    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    return report_path
+
+
+def render_planner_manipulation_report(
+    *,
+    run_dir: Path,
+    run_result: dict[str, Any],
+) -> Path:
+    """Write a shared-underlay report for planner-backed manipulation probes."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    report_path = run_dir / "report.html"
+    evidence = run_result.get("manipulation_evidence") or {}
+    body = f"""
+    <section class="summary">
+      <div class="summary-head">
+        <p class="eyebrow">Manipulation artifact</p>
+        <h1>Planner-Backed Manipulation Probe</h1>
+      </div>
+      <div class="metric-grid">
+        {_metric("Status", run_result.get("status", "unknown"))}
+        {_metric("Embodiment", evidence.get("embodiment", "unknown"))}
+        {_metric("Policy", evidence.get("upstream_policy_class", "unknown"))}
+        {_metric("Qpos delta", evidence.get("max_abs_qpos_delta", "n/a"))}
+      </div>
+      <div class="badges">
+        {_badge("Contract", run_result.get("contract", "unknown"))}
+        {_badge("Backend", run_result.get("backend", "unknown"))}
+        {_badge("Probe mode", evidence.get("probe_mode", "unknown"))}
+        {_badge("Provenance", evidence.get("primitive_provenance", "unknown"))}
+        {_badge("Planner backed", evidence.get("planner_backed", False))}
+      </div>
+    </section>
+    {_manipulation_provenance_section(run_result)}
+    {_planner_probe_views_section(evidence)}
+    {_planner_probe_blockers_section(evidence)}
+    {_planner_probe_artifacts_section(run_result)}
     """
     report_path.write_text(_wrap_html(body), encoding="utf-8")
     return report_path
@@ -217,6 +258,85 @@ def _realworld_contract_note(run_result: dict[str, Any]) -> str:
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
+def _manipulation_provenance_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("manipulation_evidence") or {}
+    if not evidence:
+        return ""
+    blockers = evidence.get("blockers") or []
+    summary = evidence.get("evidence_note") or ""
+    badges = "".join(
+        (
+            _badge("Status", evidence.get("status", "unknown")),
+            _badge("Primitive", evidence.get("primitive_provenance", "unknown")),
+            _badge("Planner backed", evidence.get("planner_backed", False)),
+            _badge("Strict proof", evidence.get("strict_proof_eligible", False)),
+            _badge("API semantic edits", evidence.get("api_semantic_state_edits", "unknown")),
+        )
+    )
+    requirements = evidence.get("strict_proof_requirements") or []
+    requirements_list = "".join(f"<li>{html.escape(str(item))}</li>" for item in requirements)
+    blocker_text = ""
+    if blockers:
+        blocker_text = f'<p class="note">Capability blocker count: {len(blockers)}.</p>'
+    return (
+        '<section class="panel manipulation-provenance">'
+        "<h2>Manipulation Provenance</h2>"
+        f'<p class="note">{html.escape(str(summary))}</p>'
+        f'<div class="badges">{badges}</div>'
+        f"{blocker_text}"
+        f'<ul class="requirements">{requirements_list}</ul>'
+        "</section>"
+    )
+
+
+def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
+    artifacts = evidence.get("image_artifacts") or {}
+    if not artifacts:
+        return ""
+    return (
+        '<section class="panel"><h2>Planner Probe Views</h2>'
+        '<div class="views">'
+        f"{_view_figure(artifacts.get('initial'), 'Initial')}"
+        f"{_view_figure(artifacts.get('final'), 'Final')}"
+        "</div></section>"
+    )
+
+
+def _planner_probe_blockers_section(evidence: dict[str, Any]) -> str:
+    blockers = evidence.get("blockers") or []
+    if not blockers:
+        return ""
+    rows = []
+    for blocker in blockers:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(blocker.get('code', 'blocked')))}</td>"
+            f"<td>{html.escape(str(blocker.get('message', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<section class="panel"><h2>Capability Blockers</h2>'
+        '<div class="table-wrap"><table><thead><tr><th>Code</th><th>Message</th>'
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div></section>"
+    )
+
+
+def _planner_probe_artifacts_section(run_result: dict[str, Any]) -> str:
+    artifacts = run_result.get("artifacts") or {}
+    rows = []
+    for key in ("stdout", "stderr"):
+        value = artifacts.get(key)
+        if value:
+            rows.append(f"<tr><td>{html.escape(key)}</td><td>{html.escape(str(value))}</td></tr>")
+    if not rows:
+        return ""
+    return (
+        '<section class="panel"><h2>Probe Artifacts</h2>'
+        '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div></section>"
+    )
+
+
 def _agent_view_section(run_result: dict[str, Any]) -> str:
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
@@ -224,31 +344,41 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
     metric_map = agent_view.get("metric_map") or {}
     fixture_hints = agent_view.get("fixture_hints") or {}
     observed = agent_view.get("observed_objects") or []
+    raw_observations = agent_view.get("raw_fpv_observations") or []
     waypoints = metric_map.get("inspection_waypoints") or []
     rooms = fixture_hints.get("rooms") or []
-    rows = []
-    for item in observed:
-        support = item.get("support_estimate") or {}
-        rows.append(
-            "<tr>"
-            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
-            f"<td>{html.escape(str(item.get('category', '')))}</td>"
-            f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
-            f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
-            "</tr>"
+    mode = agent_view.get("perception_mode", "visible_object_detections")
+    if mode == "raw_fpv_only":
+        observed_table = (
+            '<p class="note">Raw FPV-only mode is active. Structured movable-object '
+            "detections, categories, support estimates, target labels, and generated "
+            "mess truth are not present in Agent View.</p>"
         )
-    observed_table = (
-        "<p>No objects observed.</p>"
-        if not rows
-        else '<div class="table-wrap"><table><thead><tr><th>Observed handle</th><th>Category</th>'
-        "<th>Room</th><th>Support estimate</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></div>"
-    )
+    else:
+        rows = []
+        for item in observed:
+            support = item.get("support_estimate") or {}
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+                f"<td>{html.escape(str(item.get('category', '')))}</td>"
+                f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
+                f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+                "</tr>"
+            )
+        if not rows:
+            observed_table = "<p>No objects observed.</p>"
+        else:
+            observed_table = (
+                '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
+                "<th>Category</th><th>Room</th><th>Support estimate</th></tr></thead>"
+                "<tbody>" + "".join(rows) + "</tbody></table></div>"
+            )
     summary = (
         f"{len(metric_map.get('rooms') or [])} public rooms, "
         f"{len(rooms)} fixture-hint room rows, {len(waypoints)} inspection waypoints, "
-        f"{len(observed)} observed object handles."
+        f"{len(observed)} observed object handles, "
+        f"{len(raw_observations)} raw FPV observations."
     )
     return (
         '<section class="panel agent-view"><h2>Agent View</h2>'
@@ -256,6 +386,38 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
         f"{observed_table}</section>"
+    )
+
+
+def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
+    if run_result.get("contract") != "realworld_cleanup_v1":
+        return ""
+    observations = run_result.get("raw_fpv_observations") or (
+        (run_result.get("agent_view") or {}).get("raw_fpv_observations") or []
+    )
+    if not observations:
+        return ""
+    cards = []
+    for item in observations:
+        artifacts = item.get("image_artifacts") or {}
+        fpv_path = artifacts.get("fpv") or item.get("fpv_image")
+        cards.append(
+            '<article class="raw-fpv-card">'
+            "<div>"
+            f"<h3>{html.escape(str(item.get('observation_id', 'observation')))}</h3>"
+            f'<p class="pose">room={html.escape(str(item.get("room_id", "")))} '
+            f"waypoint={html.escape(str(item.get('waypoint_id', '')))}</p>"
+            f'<p class="note">{html.escape(str(item.get("artifact_status", "")))}</p>'
+            "</div>"
+            f"{_view_figure(fpv_path, 'FPV')}"
+            "</article>"
+        )
+    return (
+        '<section class="panel raw-fpv-section"><h2>Raw FPV Observations</h2>'
+        '<p class="note">Camera-only perception evidence: these rows provide FPV image '
+        "artifacts without structured movable-object detections, categories, support "
+        "estimates, target labels, or generated mess truth.</p>"
+        '<div class="raw-fpv-grid">' + "".join(cards) + "</div></section>"
     )
 
 
@@ -290,6 +452,40 @@ def _private_evaluation_section(run_result: dict[str, Any]) -> str:
     return (
         '<section class="panel private-evaluation"><h2>Private Evaluation</h2>'
         f'<p class="note">{html.escape(summary)}</p>{table}</section>'
+    )
+
+
+def _advisory_review_section(run_result: dict[str, Any]) -> str:
+    advisory = run_result.get("advisory_evaluation") or {}
+    if not advisory:
+        return ""
+    rows = []
+    for item in advisory.get("object_reviews") or []:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('actual_location_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('advisory_verdict', '')))}</td>"
+            f"<td>{html.escape(str(item.get('rationale', '')))}</td>"
+            "</tr>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Final location</th><th>Advisory verdict</th><th>Rationale</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    counts = advisory.get("counts") or {}
+    summary = (
+        f"{advisory.get('overall_verdict', 'unknown')} from "
+        f"{advisory.get('evaluator', 'unknown')}; "
+        f"authoritative={str(advisory.get('authoritative')).lower()}; "
+        f"reviewed {counts.get('total_reviewed', 0)} objects."
+    )
+    note = advisory.get("non_authoritative_note") or advisory.get("summary") or ""
+    return (
+        '<section class="panel advisory-review"><h2>Advisory Review</h2>'
+        f'<p class="note">{html.escape(summary)}</p>'
+        f'<p class="note">{html.escape(str(note))}</p>{table}</section>'
     )
 
 
@@ -627,6 +823,19 @@ def _wrap_html(body: str) -> str:
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
     }}
+    .raw-fpv-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }}
+    .raw-fpv-card {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .raw-fpv-card h3 {{ margin: 0 0 4px; font-size: 15px; }}
+    .raw-fpv-card figure {{ margin-top: 10px; }}
     .semantic-cards {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));

@@ -4,7 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.realworld_contract import REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
@@ -49,8 +49,11 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert "acceptable_destination_sets" not in run_result["agent_view"]
     assert run_result["private_evaluation"]["generated_mess_set"]
     assert run_result["private_evaluation"]["requested_generated_mess_count"] == 10
+    assert run_result["advisory_evaluation"]["authoritative"] is False
+    assert run_result["advisory_evaluation"]["object_reviews"]
     assert (tmp_path / "agent_view.json").is_file()
     assert (tmp_path / "private_evaluation.json").is_file()
+    assert (tmp_path / "advisory_evaluation.json").is_file()
     assert (tmp_path / "before.png").is_file()
     assert (tmp_path / "after.png").is_file()
     assert (tmp_path / "report.html").is_file()
@@ -69,5 +72,24 @@ def test_realworld_cleanup_report_separates_agent_view_and_private_eval(
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "Agent View" in report
     assert "Private Evaluation" in report
+    assert "Advisory Review" in report
     assert "Generated mess" in report
     assert "ADR-0003 real-world-style cleanup run" in report
+
+
+def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) -> None:
+    demo = _load_demo_module()
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+
+    assert result["perception_mode"] == RAW_FPV_ONLY_MODE
+    assert result["cleanup_status"] == "failed"
+    assert result["agent_view"]["observed_objects"] == []
+    assert result["agent_view"]["raw_fpv_observations"]
+    assert result["raw_fpv_observations"]
+    assert "Raw FPV Observations" in report

@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 20 OpenClaw clean-policy hardening shipped and verified on 2026-05-09
+**Status:** Phase 22 raw FPV-only perception slice shipped and verified on 2026-05-09
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -13,8 +13,9 @@ Phase 12 current-contract agent bridge -> Phase 13 bridge visual reports ->
 Phase 14 ADR-0003 public/private cleanup -> Phase 15 Generated Mess Set scale
 -> Phase 16 ADR-0003 MCP -> Phase 17 direct-agent dogfood -> Phase 18
 synthetic OpenClaw Gateway viability -> Phase 19 real visual OpenClaw evidence
--> Phase 20 clean-policy semantic-loop hardening. Raw FPV-only perception,
-advisory model scoring, and real planner-backed manipulation remain deferred.
+-> Phase 20 clean-policy semantic-loop hardening -> Phase 21 advisory scoring
+-> Phase 22 raw FPV-only perception evidence. Real planner-backed manipulation
+remains deferred.
 
 ## Why This Exists
 
@@ -771,9 +772,10 @@ completed:
   gsd-plan-phase 10-molmospaces-semantic-substeps
   gsd-execute-phase 10-molmospaces-semantic-substeps
   gsd-verify-work 10-molmospaces-semantic-substeps
+  gsd-plan-phase 23-molmospaces-planner-backed-manipulation-proof
+  gsd-execute-phase 23-molmospaces-planner-backed-manipulation-proof
+  gsd-verify-work 23-molmospaces-planner-backed-manipulation-proof
 
 next pipeline candidates:
-  real coding-agent policy over the public contract
-  real RBY1M/Franka planner-backed manipulation proof
-  OpenClaw cleanup-agent integration
+  real RBY1M/Franka planner-backed cleanup execution after the proof gate passes
 ```

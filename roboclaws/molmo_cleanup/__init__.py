@@ -1,5 +1,6 @@
 """MolmoSpaces-shaped cleanup contracts for provenance-labeled demos."""
 
+from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     RealWorldCleanupContract,
@@ -14,6 +15,7 @@ __all__ = [
     "REALWORLD_CONTRACT",
     "RealWorldCleanupContract",
     "annotate_score_with_semantic_acceptability",
+    "build_advisory_evaluation",
     "build_cleanup_scenario",
     "score_cleanup",
 ]
