@@ -4,6 +4,16 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    NAVIGATE_TO_OBJECT_PHASE,
+    NAVIGATE_TO_RECEPTACLE_PHASE,
+    OBJECT_DONE_PHASE,
+    OPEN_RECEPTACLE_PHASE,
+    PICK_PHASE,
+    PLACE_INSIDE_PHASE,
+    PLACE_PHASE,
+)
+
 ToolCall = Callable[[str, dict[str, Any], Callable[[], dict[str, Any]]], dict[str, Any]]
 ToolViewRecorder = Callable[[str, dict[str, Any], dict[str, Any]], None]
 
@@ -90,23 +100,23 @@ def _run_one_object(
     response = _invoke(
         call_tool,
         record_tool_view,
-        "navigate_to_object",
+        NAVIGATE_TO_OBJECT_PHASE,
         navigate_object_request,
         lambda: contract.navigate_to_object(object_id),
     )
     if not response.get("ok"):
-        return False, _failed_step("navigate_to_object", response)
+        return False, _failed_step(NAVIGATE_TO_OBJECT_PHASE, response)
 
     pick_request = {"object_id": object_id}
     response = _invoke(
         call_tool,
         record_tool_view,
-        "pick",
+        PICK_PHASE,
         pick_request,
         lambda: contract.pick(object_id),
     )
     if not response.get("ok"):
-        return False, _failed_step("pick", response)
+        return False, _failed_step(PICK_PHASE, response)
 
     navigate_receptacle_request = {"receptacle_id": target_receptacle_id}
     if include_object_id_in_receptacle_request:
@@ -114,12 +124,12 @@ def _run_one_object(
     response = _invoke(
         call_tool,
         record_tool_view,
-        "navigate_to_receptacle",
+        NAVIGATE_TO_RECEPTACLE_PHASE,
         navigate_receptacle_request,
         lambda: contract.navigate_to_receptacle(target_receptacle_id),
     )
     if not response.get("ok"):
-        return False, _failed_step("navigate_to_receptacle", response)
+        return False, _failed_step(NAVIGATE_TO_RECEPTACLE_PHASE, response)
 
     target_receptacle = _target_receptacle(target, receptacles_by_id, target_receptacle_id)
     if _requires_inside_place(target, target_receptacle, target_receptacle_id):
@@ -132,15 +142,15 @@ def _run_one_object(
         response = _invoke(
             call_tool,
             record_tool_view,
-            "open_receptacle",
+            OPEN_RECEPTACLE_PHASE,
             open_request,
             lambda: contract.open_receptacle(target_receptacle_id),
         )
         if not response.get("ok"):
-            return False, _failed_step("open_receptacle", response)
-        place_tool = "place_inside"
+            return False, _failed_step(OPEN_RECEPTACLE_PHASE, response)
+        place_tool = PLACE_INSIDE_PHASE
     else:
-        place_tool = "place"
+        place_tool = PLACE_PHASE
 
     place_request = _target_request(
         object_id=object_id,
@@ -148,7 +158,7 @@ def _run_one_object(
         target_request_key=target_request_key,
         include_object_id=include_object_id_in_target_requests,
     )
-    if place_tool == "place_inside":
+    if place_tool == PLACE_INSIDE_PHASE:
         response = _invoke(
             call_tool,
             record_tool_view,
@@ -171,12 +181,12 @@ def _run_one_object(
         response = _invoke(
             call_tool,
             record_tool_view,
-            "object_done",
+            OBJECT_DONE_PHASE,
             {"object_id": object_id, "receptacle_id": target_receptacle_id},
             lambda: contract.object_done(object_id, target_receptacle_id),
         )
         if not response.get("ok"):
-            return False, _failed_step("object_done", response)
+            return False, _failed_step(OBJECT_DONE_PHASE, response)
 
     return True, {}
 
@@ -233,8 +243,8 @@ def _requires_inside_place(
 ) -> bool:
     if "requires_inside_place" in target:
         return bool(target["requires_inside_place"])
-    if "place_inside" in target:
-        return bool(target["place_inside"])
+    if PLACE_INSIDE_PHASE in target:
+        return bool(target[PLACE_INSIDE_PHASE])
     text = " ".join(
         str(value)
         for value in (

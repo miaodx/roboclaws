@@ -2,7 +2,7 @@
 
 # MolmoSpaces Manipulation Spike
 
-**Status:** Phase 111 grasp cache routing decision completed; next work is implementing `Bread_1` grasp-cache mitigation or running separate unproven source-rotation requests without treating them as a cache fix
+**Status:** Phase 123 cache-ready proof rerun completed; next work is diagnosing CuRobo pre-grasp trajectory generation after valid `Bread_1` grasp loading
 **Created:** 2026-05-07
 **Reviewed:** 2026-05-07 with `autoplan`; approved by user
 **Workflow:** Matt-style plan -> autoplan -> local capability spike -> GSD
@@ -378,6 +378,62 @@ reports now render `Grasp Feasibility Mitigation Decision`, route the known
 `Bread_1` missing-cache blocker to `grasp_cache_mitigation`, and keep source
 rotation visible only as `available_for_unproven_requests` for different
 selected requests.
+Phase 112 makes that cache route concrete. Proof-bundle manifests and reports
+now render `Grasp Cache Availability Preflight`, showing that local `Bread_1`
+object XML/OBJ assets are present while the rigid loader files checked by
+MolmoSpaces are missing for droid, droid-objaverse, and RUM sources.
+Phase 113 binds that preflight to the runtime MolmoSpaces assets root. The
+report now derives `ASSETS_DIR` from the planner scene XML and shows both
+loader-relative paths and symlink-resolved cache targets such as
+`grasps/droid/20251116/Bread_1/...`.
+Phase 114 tightens readiness from file existence to content validity. After the
+upstream droid Bread package install, `Bread_1_grasps_filtered.npz` exists but
+contains zero transforms, so reports now show `present_but_invalid` instead of
+ready.
+Phase 115 tightens the shared semantic underlay. Raw phase names, canonical
+surface/inside cleanup sequences, display labels, focused action prefixes, and
+loop variants now live in `semantic_timeline.py`; the loop, reports, visual-core
+checks, and artifact checkers import that vocabulary instead of carrying local
+copies.
+Phase 116 makes the next cache-mitigation local-dev step visible before
+execution. The proof-bundle runner now renders `Grasp Cache Generation
+Preflight`, including the `Bread_1` object XML, generated NPZ path, final droid
+loader cache target, upstream `run_rigid.py` command, and prerequisite blockers.
+The current local environment blocks generation on missing `sklearn`, missing
+`python-fcl`, and missing Manifold `manifold`/`simplify` executables.
+Phase 117 turns that prerequisite gate green with a reusable setup runner. The
+runner installs the rigid-path Python prerequisites into the uv MolmoSpaces
+runtime, initializes/builds Manifold even when the checkout lacks a tracked
+gitlink, and reruns the proof-bundle report with `Grasp Cache Generation
+Preflight` at `ready` and zero blockers.
+Phase 118 makes the actual generation/install attempt reproducible and
+report-visible. The runner reaches upstream candidate generation and writes
+`Bread_1_grasps.json`, but the perturbation filter saves
+`Bread_1_grasps_filtered.npz` with zero transforms, so the wrapper blocks install
+and renders the zero-success filter result in `report.html`.
+Phase 119 adds bounded grasp filter diagnostics. The diagnostic runner preserves
+mesh and candidate intermediates under the output directory, renders explicit
+filter variants, and shows that 24 generated `Bread_1` candidates still produce
+zero successful transforms for `initial_contact`, `translation_shake`, and
+`upstream_like`.
+Phase 120 closes the scenario-less report adapter gap. ADR-0003 visual cleanup
+artifacts without `scenario.json` now regenerate from `run_result.json` through
+the same shared report underlay, using only a minimal public scenario shell and
+preserving the plain `nav, pick, nav, open?, place` visual rhythm.
+Phase 121 records the initial-contact/approach sweep as a reusable diagnostic.
+The upstream-sign approach variants remain zero-success, while positive-sign
+larger standoffs produce nonzero final gripper contacts. The best local variant
+is `sign_1_dist_0.8_settle_1` with 9/24 successes and zero initial object
+displacement.
+Phase 122 applies that validated policy to cache generation without adding a
+second MuJoCo approach implementation. The initial-contact probe now has
+cache-output mode, the generated NPZ routes through the shared cache
+validation/install helper, and the local droid `Bread_1` loader cache now
+validates with 9 transforms after install.
+Phase 123 reruns the exact `observed_001` proof against that cache. The warmed
+run proves the task sampler now loads 9 `Bread_1` grasps and finds 2
+non-colliding grasps, clearing the cache blocker; the remaining blocker is
+CuRobo pre-grasp trajectory generation (`no planned trajectory`).
 
 ## Why This Exists
 

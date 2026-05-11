@@ -12,6 +12,7 @@ from roboclaws.molmo_cleanup.planner_observed_binding import (
 from roboclaws.molmo_cleanup.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_LOOP_VARIANT
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
@@ -880,7 +881,7 @@ class RealWorldCleanupContract:
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "required_tool": required_tool,
-            "semantic_loop_variant": "navigate-pick-navigate-open-place",
+            "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
             "recovery_hint": recovery_hint,
         }
         if object_id is not None:

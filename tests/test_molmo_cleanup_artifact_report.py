@@ -112,6 +112,94 @@ def test_rerender_cleanup_report_from_run_result_uses_shared_visual_core(
     assert "navigate_to_object -&gt; pick" not in report_text
 
 
+def test_rerender_cleanup_report_from_run_result_handles_missing_scenario_artifact(
+    tmp_path: Path,
+) -> None:
+    trace_events = _semantic_trace(
+        object_id="observed_001",
+        source_receptacle_id="table_01",
+        target_receptacle_id="sink_01",
+    )
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(json.dumps(event, sort_keys=True) for event in trace_events) + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "before.png").write_bytes(b"before")
+    (tmp_path / "after.png").write_bytes(b"after")
+    run_result = {
+        "backend": "molmospaces_subprocess",
+        "cleanup_status": "success",
+        "contract": "realworld_cleanup_v1",
+        "agent_driven": True,
+        "policy": "camera_model_policy_baseline",
+        "primitive_provenance": "api_semantic",
+        "scenario_id": "scenario_from_run_result",
+        "seed": 9,
+        "score": {
+            "status": "success",
+            "restored_count": 1,
+            "total_targets": 1,
+            "success_threshold": 1,
+            "restored_object_ids": ["observed_001"],
+            "missed_object_ids": [],
+            "object_results": [
+                {
+                    "object_id": "observed_001",
+                    "actual_location_id": "sink_01",
+                    "restored": True,
+                    "semantic_acceptability": "preferred",
+                    "semantic_reason": "exact",
+                }
+            ],
+        },
+        "semantic_substeps": [
+            {
+                "object_id": "observed_001",
+                "source_receptacle_id": "table_01",
+                "target_receptacle_id": "sink_01",
+                "steps": [
+                    {"phase": "navigate_to_object"},
+                    {"phase": "pick"},
+                    {"phase": "navigate_to_receptacle"},
+                    {"phase": "place", "location_id": "sink_01"},
+                ],
+            }
+        ],
+        "robot_view_steps": [
+            {
+                "action": "navigate_to_object observed_001",
+                "semantic_phase": "navigate_to_object",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            }
+        ],
+        "artifacts": {
+            "trace": "trace.jsonl",
+            "before_snapshot": "before.png",
+            "after_snapshot": "after.png",
+        },
+    }
+    run_result_path = tmp_path / "run_result.json"
+    run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True), encoding="utf-8")
+
+    report_path = rerender_cleanup_report_from_run_result(run_result_path)
+
+    report_text = report_path.read_text(encoding="utf-8")
+    assert "scenario_from_run_result" in report_text
+    assert_cleanup_report_visual_core(
+        report_text,
+        require_semantic_subphases=True,
+        require_robot_timeline=True,
+        require_agent_view=True,
+        require_private_evaluation=True,
+    )
+    assert "<span>nav</span><small>object</small>" in report_text
+    assert "Subphase: <strong>nav</strong>" in report_text
+    assert "nav/object" not in report_text
+
+
 def _semantic_trace(
     *,
     object_id: str,

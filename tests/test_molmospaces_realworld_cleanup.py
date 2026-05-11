@@ -10,6 +10,11 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CANONICAL_BASE_CLEANUP_PHASES,
+    PLACE_CLEANUP_PHASES,
+    SEMANTIC_LOOP_VARIANT,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
@@ -45,11 +50,11 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert run_result["mess_restoration_rate"] >= 0.70
     assert run_result["sweep_coverage_rate"] >= 0.90
     assert run_result["disturbance_count"] <= 2
-    assert run_result["semantic_loop_variant"] == "navigate-pick-navigate-open-place"
+    assert run_result["semantic_loop_variant"] == SEMANTIC_LOOP_VARIANT
     for item in run_result["semantic_substeps"]:
         phases = [step["phase"] for step in item["steps"]]
-        assert phases[:3] == ["navigate_to_object", "pick", "navigate_to_receptacle"]
-        assert phases[-1] in {"place", "place_inside"}
+        assert phases[:3] == list(CANONICAL_BASE_CLEANUP_PHASES)
+        assert phases[-1] in PLACE_CLEANUP_PHASES
     assert run_result["agent_view"]["observed_objects"]
     assert "generated_mess_set" not in run_result["agent_view"]
     assert "acceptable_destination_sets" not in run_result["agent_view"]

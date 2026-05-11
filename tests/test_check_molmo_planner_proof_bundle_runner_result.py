@@ -91,6 +91,179 @@ def test_checker_accepts_local_runtime_blocked_runner_artifact(tmp_path: Path) -
             }
         ],
     }
+    manifest["grasp_cache_availability_preflight"] = {
+        "schema": "planner_grasp_cache_availability_preflight_v1",
+        "status": "missing_cache",
+        "assets_dir": str(tmp_path / "assets"),
+        "assets_dir_source": "argument",
+        "assets_dir_exists": True,
+        "missing_grasp_asset_uids": ["PriorBread_1"],
+        "asset_count": 1,
+        "ready_asset_count": 0,
+        "missing_cache_asset_count": 1,
+        "cache_ready_asset_uids": [],
+        "cache_missing_asset_uids": ["PriorBread_1"],
+        "loader_sources": ["droid", "droid_objaverse", "rum"],
+        "mitigation_recommendation": "generate_or_install_rigid_grasp_cache_before_retry",
+        "upstream_loader": "molmo_spaces.utils.grasp_sample.load_grasps_for_object",
+        "evidence_note": "Preflights rigid-object grasp cache files.",
+        "assets": [
+            {
+                "asset_uid": "PriorBread_1",
+                "status": "missing_cache",
+                "loader_file_status": "missing",
+                "object_asset_status": "present",
+                "candidate_grasp_files": [
+                    {
+                        "asset_uid": "PriorBread_1",
+                        "source": "droid",
+                        "gripper": "droid",
+                        "loader_role": "rigid_object_loader",
+                        "path": str(
+                            tmp_path
+                            / "assets"
+                            / "grasps"
+                            / "droid"
+                            / "PriorBread_1"
+                            / "PriorBread_1_grasps_filtered.npz"
+                        ),
+                        "relative_path": (
+                            "grasps/droid/PriorBread_1/PriorBread_1_grasps_filtered.npz"
+                        ),
+                        "exists": False,
+                        "size_bytes": 0,
+                    },
+                    {
+                        "asset_uid": "PriorBread_1",
+                        "source": "droid_objaverse",
+                        "gripper": "droid",
+                        "loader_role": "rigid_object_loader",
+                        "path": str(
+                            tmp_path
+                            / "assets"
+                            / "grasps"
+                            / "droid_objaverse"
+                            / "PriorBread_1"
+                            / "PriorBread_1_grasps_filtered.npz"
+                        ),
+                        "relative_path": (
+                            "grasps/droid_objaverse/PriorBread_1/PriorBread_1_grasps_filtered.npz"
+                        ),
+                        "exists": False,
+                        "size_bytes": 0,
+                    },
+                    {
+                        "asset_uid": "PriorBread_1",
+                        "source": "rum",
+                        "gripper": "rum",
+                        "loader_role": "rigid_object_loader",
+                        "path": str(
+                            tmp_path
+                            / "assets"
+                            / "grasps"
+                            / "rum"
+                            / "PriorBread_1"
+                            / "PriorBread_1_grasps_filtered.json"
+                        ),
+                        "relative_path": (
+                            "grasps/rum/PriorBread_1/PriorBread_1_grasps_filtered.json"
+                        ),
+                        "exists": False,
+                        "size_bytes": 0,
+                    },
+                ],
+                "folder_probe_files": [
+                    {
+                        "asset_uid": "PriorBread_1",
+                        "source": "droid",
+                        "gripper": "droid",
+                        "loader_role": "has_grasp_folder_only",
+                        "path": str(
+                            tmp_path
+                            / "assets"
+                            / "grasps"
+                            / "droid"
+                            / "PriorBread_1"
+                            / "PriorBread_1_joint_grasps_filtered.npz"
+                        ),
+                        "relative_path": (
+                            "grasps/droid/PriorBread_1/PriorBread_1_joint_grasps_filtered.npz"
+                        ),
+                        "exists": False,
+                        "size_bytes": 0,
+                    }
+                ],
+                "object_asset_files": [
+                    {
+                        "kind": "xml",
+                        "path": str(tmp_path / "assets" / "objects" / "thor" / "PriorBread_1.xml"),
+                        "relative_path": "objects/thor/PriorBread_1.xml",
+                        "exists": True,
+                        "size_bytes": 10,
+                    }
+                ],
+            }
+        ],
+    }
+    manifest["grasp_cache_generation_preflight"] = {
+        "schema": "planner_grasp_cache_generation_preflight_v1",
+        "status": "blocked",
+        "ready": False,
+        "asset_count": 1,
+        "blocker_count": 1,
+        "molmospaces_python": str(tmp_path / "molmospaces-python"),
+        "molmospaces_root": str(tmp_path / "molmospaces"),
+        "assets_dir": str(tmp_path / "assets"),
+        "objects_list_path": str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+        "working_dir": str(tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation"),
+        "command": [
+            str(tmp_path / "molmospaces-python"),
+            str(tmp_path / "molmospaces" / "molmo_spaces" / "grasp_generation" / "run_rigid.py"),
+            "--objects_list",
+            str(tmp_path / "grasp_generation" / "rigid_objects_list.json"),
+        ],
+        "mitigation_recommendation": (
+            "install_grasp_generation_prerequisites_before_cache_generation"
+        ),
+        "assets": [
+            {
+                "asset_uid": "PriorBread_1",
+                "object_xml": str(tmp_path / "assets" / "objects" / "thor" / "PriorBread_1.xml"),
+                "object_xml_exists": True,
+                "generated_npz_path": str(
+                    tmp_path
+                    / "molmospaces"
+                    / "grasp_results"
+                    / "rigid_objects"
+                    / "PriorBread_1"
+                    / "PriorBread_1_grasps_filtered.npz"
+                ),
+                "cache_target_resolved_path": str(
+                    tmp_path
+                    / "assets"
+                    / "grasps"
+                    / "droid"
+                    / "PriorBread_1"
+                    / "PriorBread_1_grasps_filtered.npz"
+                ),
+            }
+        ],
+        "checks": [
+            {
+                "name": "python_fcl_runtime",
+                "status": "blocked",
+                "code": "python_fcl_missing",
+                "message": "No FCL Available",
+            }
+        ],
+        "blockers": [
+            {
+                "code": "python_fcl_missing",
+                "name": "python_fcl_runtime",
+                "message": "No FCL Available",
+            }
+        ],
+    }
     (tmp_path / "proof_bundle_run_manifest.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
