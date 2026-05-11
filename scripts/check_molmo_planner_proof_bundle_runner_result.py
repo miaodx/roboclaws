@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("path", type=Path, help="proof_bundle_run_manifest.json or output dir")
     parser.add_argument("--require-proof-outputs", action="store_true")
     parser.add_argument("--require-cleanup-rerun-output", action="store_true")
+    parser.add_argument("--min-selected-requests", type=int)
+    parser.add_argument("--max-selected-requests", type=int)
+    parser.add_argument("--require-prior-covered-exclusion", action="store_true")
     return parser.parse_args()
 
 
@@ -32,6 +37,9 @@ def main() -> None:
         path.parent,
         require_proof_outputs=args.require_proof_outputs,
         require_cleanup_rerun_output=args.require_cleanup_rerun_output,
+        min_selected_requests=args.min_selected_requests,
+        max_selected_requests=args.max_selected_requests,
+        require_prior_covered_exclusion=args.require_prior_covered_exclusion,
     )
     print(f"molmo-planner-proof-bundle-runner ok: {path}")
 
@@ -42,9 +50,17 @@ def _assert_runner_result(
     *,
     require_proof_outputs: bool = False,
     require_cleanup_rerun_output: bool = False,
+    min_selected_requests: int | None = None,
+    max_selected_requests: int | None = None,
+    require_prior_covered_exclusion: bool = False,
 ) -> None:
     assert data.get("schema") == PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA, data
-    assert data.get("status") in {"dry_run", "probes_executed", "cleanup_rerun"}, data
+    assert data.get("status") in {
+        "dry_run",
+        "probes_executed",
+        "cleanup_rerun",
+        "local_runtime_blocked",
+    }, data
     assert int(data.get("proof_request_count") or 0) >= int(data.get("ready_request_count") or 0), (
         data
     )
@@ -55,6 +71,9 @@ def _assert_runner_result(
     assert report.is_file(), report
     report_text = report.read_text(encoding="utf-8")
     _assert_runner_report(report_text)
+    local_runtime_preflight = data.get("local_runtime_preflight") or {}
+    if local_runtime_preflight:
+        _assert_local_runtime_preflight(local_runtime_preflight, report_text)
     warmup = data.get("warmup") or {}
     if warmup:
         _assert_warmup(
@@ -66,15 +85,28 @@ def _assert_runner_result(
     proof_request_selection = data.get("proof_request_selection") or {}
     if proof_request_selection:
         _assert_proof_request_selection(proof_request_selection, commands, report_text)
+        _assert_selection_requirements(
+            proof_request_selection,
+            report_text,
+            min_selected_requests=min_selected_requests,
+            max_selected_requests=max_selected_requests,
+            require_prior_covered_exclusion=require_prior_covered_exclusion,
+        )
         generated_count = _generated_fallback_request_count(proof_request_selection)
     else:
+        assert not require_prior_covered_exclusion, data
+        assert min_selected_requests in {None, 0}, data
         generated_count = 0
     assert int(data.get("ready_request_count") or 0) + generated_count >= len(commands), data
     proof_result_summary = data.get("proof_result_summary") or {}
+    prior_proof_result_summary = data.get("prior_proof_result_summary") or {}
+    if prior_proof_result_summary:
+        _assert_prior_proof_result_summary(prior_proof_result_summary, base, report_text)
     if proof_result_summary:
         _assert_proof_result_summary(
             proof_result_summary,
             commands,
+            base,
             report_text,
             require_outputs=require_proof_outputs,
         )
@@ -94,6 +126,8 @@ def _assert_runner_result(
             report_text,
             require_outputs=require_cleanup_rerun_output or data.get("status") == "cleanup_rerun",
         )
+    if data.get("status") == "local_runtime_blocked":
+        assert local_runtime_preflight.get("status") == "blocked", local_runtime_preflight
 
 
 def _assert_runner_report(report_text: str) -> None:
@@ -104,6 +138,38 @@ def _assert_runner_report(report_text: str) -> None:
         "Cleanup Rerun Command",
     ):
         assert heading in report_text, (heading, report_text[:500])
+
+
+def _assert_local_runtime_preflight(preflight: dict[str, Any], report_text: str) -> None:
+    assert preflight.get("schema") == "planner_proof_bundle_local_runtime_preflight_v1", preflight
+    assert preflight.get("status") in {"ready", "blocked", "not_checked"}, preflight
+    assert "Local Runtime Preflight" in report_text, report_text[:500]
+    assert str(preflight.get("status") or "") in report_text, report_text[:500]
+    python_executable = str(preflight.get("python_executable") or "")
+    if python_executable:
+        _assert_report_contains(python_executable, report_text)
+    for check in preflight.get("checks") or []:
+        assert isinstance(check, dict), preflight
+        for key in ("name", "status"):
+            value = str(check.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, key)
+        command = " ".join(str(part) for part in check.get("command") or [])
+        if command:
+            _assert_report_contains(command, report_text, command)
+    for blocker in preflight.get("blockers") or []:
+        assert isinstance(blocker, dict), preflight
+        for key in ("code", "message"):
+            value = str(blocker.get(key) or "")
+            if value:
+                _assert_report_contains(value, report_text, key)
+
+
+def _assert_report_contains(value: str, report_text: str, context: Any = "") -> None:
+    assert value in report_text or html.escape(value) in report_text, (
+        context or value,
+        report_text[:500],
+    )
 
 
 def _assert_warmup(
@@ -190,13 +256,28 @@ def _assert_proof_request_selection(
         for key in ("request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
             assert str(item[key]) in report_text, (key, report_text[:500])
+        for key in (
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
+            "prior_result_match_kind",
+        ):
+            if item.get(key):
+                assert str(item[key]) in report_text, (key, report_text[:500])
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
     if "target_feasibility_blocker_count" in selection:
         assert int(selection.get("target_feasibility_blocker_count") or 0) == len(
             target_feasibility_blockers
         ), selection
+    grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
+    if "grasp_feasibility_blocker_count" in selection:
+        assert int(selection.get("grasp_feasibility_blocker_count") or 0) == len(
+            grasp_feasibility_blockers
+        ), selection
     if target_feasibility_blockers:
         assert "Target Feasibility Blockers" in report_text, report_text[:500]
+    if grasp_feasibility_blockers:
+        assert "Grasp Feasibility Blockers" in report_text, report_text[:500]
+        assert "Grasp Feasibility Blocker Matrix" in report_text, report_text[:500]
     for item in target_feasibility_blockers:
         for key in ("kind", "source_request_id", "reason", "prior_task_feasibility_status"):
             assert item.get(key), item
@@ -209,9 +290,16 @@ def _assert_proof_request_selection(
             "derived_from",
             "prior_report",
             "last_worker_stage",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
+            "prior_result_match_kind",
         ):
             if item.get(key):
                 assert str(item[key]) in report_text, (key, report_text[:500])
+    for item in grasp_feasibility_blockers:
+        for key in ("kind", "source_request_id", "prior_task_feasibility_blocker_summary"):
+            assert item.get(key), item
+            assert str(item[key]) in report_text, (key, report_text[:500])
     fallback_generation = selection.get("fallback_generation") or {}
     if fallback_generation:
         fallback_status = str(fallback_generation.get("status") or "")
@@ -247,7 +335,8 @@ def _assert_proof_request_selection(
             assert generated, fallback_generation
         if fallback_status == "exhausted":
             assert not generated, fallback_generation
-            assert selection.get("fallback_required") is True, selection
+            if not selected_ids:
+                assert selection.get("fallback_required") is True, selection
             assert exhaustion_blockers, fallback_generation
             assert "Fallback Exhaustion Blockers" in report_text, report_text[:500]
         for item in generated:
@@ -257,6 +346,13 @@ def _assert_proof_request_selection(
                 assert str(item[key]) in report_text, (key, report_text[:500])
             assert fallback.get("source_request_id"), item
             assert str(fallback["source_request_id"]) in report_text, report_text[:500]
+            for key in (
+                "prior_task_feasibility_blocker_kind",
+                "prior_task_feasibility_blocker_summary",
+                "prior_result_match_kind",
+            ):
+                if fallback.get(key):
+                    assert str(fallback[key]) in report_text, (key, report_text[:500])
             args = item.get("planner_probe_args") or {}
             for key in (
                 "--cleanup-planner-object-id",
@@ -286,6 +382,13 @@ def _assert_proof_request_selection(
             for key in ("prior_report", "last_worker_stage"):
                 if item.get(key):
                     assert str(item[key]) in report_text, (key, report_text[:500])
+            for key in (
+                "prior_task_feasibility_blocker_kind",
+                "prior_task_feasibility_blocker_summary",
+                "prior_result_match_kind",
+            ):
+                if item.get(key):
+                    assert str(item[key]) in report_text, (key, report_text[:500])
         for item in exhaustion_blockers:
             for key in ("code", "message"):
                 assert item.get(key), item
@@ -294,6 +397,32 @@ def _assert_proof_request_selection(
             for key in ("alias", "normalized_alias", "reason"):
                 assert item.get(key), item
                 assert str(item[key]) in report_text, (key, report_text[:500])
+
+
+def _assert_selection_requirements(
+    selection: dict[str, Any],
+    report_text: str,
+    *,
+    min_selected_requests: int | None,
+    max_selected_requests: int | None,
+    require_prior_covered_exclusion: bool,
+) -> None:
+    selected_count = int(selection.get("selected_count") or 0)
+    if min_selected_requests is not None:
+        assert selected_count >= min_selected_requests, selection
+    if max_selected_requests is not None:
+        assert selected_count <= max_selected_requests, selection
+    if not require_prior_covered_exclusion:
+        return
+    excluded = selection.get("excluded_requests") or []
+    covered = [
+        item
+        for item in excluded
+        if isinstance(item, dict) and item.get("reason") == "prior_planner_proof_covered"
+    ]
+    assert covered, selection
+    assert int(selection.get("covered_request_count") or 0) == len(covered), selection
+    assert "prior_planner_proof_covered" in report_text, report_text[:500]
 
 
 def _generated_fallback_request_count(selection: dict[str, Any]) -> int:
@@ -306,6 +435,7 @@ def _generated_fallback_request_count(selection: dict[str, Any]) -> int:
 def _assert_proof_result_summary(
     summary: dict[str, Any],
     commands: list[dict[str, Any]],
+    base: Path,
     report_text: str,
     *,
     require_outputs: bool,
@@ -351,11 +481,72 @@ def _assert_proof_result_summary(
             if code:
                 assert code in report_text, (code, report_text[:500])
         for view in item.get("views") or []:
-            assert str(view.get("path") or "") in report_text, (view, report_text[:500])
+            _assert_report_view_src(view, base, report_text)
         for key in ("last_worker_stage", "stdout", "stderr"):
             value = str(item.get(key) or "")
             if value:
                 assert value in report_text, (key, report_text[:500])
+        blocker_kind = str(item.get("task_feasibility_blocker_kind") or "")
+        if blocker_kind:
+            assert "Task feasibility blocker" in report_text, report_text[:500]
+            assert blocker_kind in report_text, ("task_feasibility_blocker_kind", report_text[:500])
+        blocker_summary = str(item.get("task_feasibility_blocker_summary") or "")
+        if blocker_summary:
+            assert blocker_summary in report_text, (
+                "task_feasibility_blocker_summary",
+                report_text[:500],
+            )
+        sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+        robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
+        if robot_placement_profile:
+            assert "Robot placement profile" in report_text, report_text[:500]
+            for key in ("profile",):
+                value = str(robot_placement_profile.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+            overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
+            max_tries = str(overrides.get("max_tries") or "")
+            if max_tries:
+                assert max_tries in report_text, ("place_robot_near_overrides", report_text[:500])
+        if sampler_adapter:
+            assert "Exact sampler adapter applied" in report_text, report_text[:500]
+            for key in ("planner_target_receptacle_id", "task_sampler_class"):
+                value = str(sampler_adapter.get(key) or "")
+                if value:
+                    assert value in report_text, (key, report_text[:500])
+        task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
+        if task_sampler_failure:
+            placement_failure_keys = ("robot_placement_failure_count", "asset_failure_count")
+            if any(_positive_int(task_sampler_failure.get(key)) for key in placement_failure_keys):
+                assert "Task sampler placement failures" in report_text, report_text[:500]
+                for key in placement_failure_keys:
+                    value = str(task_sampler_failure.get(key) or "")
+                    if value and value != "0":
+                        assert value in report_text, (key, report_text[:500])
+            for key in ("robot_placement_attempt_count",):
+                value = str(task_sampler_failure.get(key) or "")
+                if value and value != "0":
+                    assert value in report_text, (key, report_text[:500])
+            grasp_failures = task_sampler_failure.get("grasp_failures") or []
+            if grasp_failures:
+                assert "Post-placement grasp failures" in report_text, report_text[:500]
+                assert "Post-Placement Rejection Views" in report_text, report_text[:500]
+                value = str(task_sampler_failure.get("grasp_failure_count") or "")
+                if value:
+                    assert value in report_text, ("grasp_failure_count", report_text[:500])
+            last_scene = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+            if last_scene:
+                assert "Placement free-space fraction" in report_text, report_text[:500]
+                value = str(last_scene.get("valid_neighborhood_fraction") or "")
+                if value:
+                    assert value in report_text, (
+                        "last_placement_scene_diagnostic",
+                        report_text[:500],
+                    )
+            last_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
+            value = str(last_failure.get("message") or "")
+            if value:
+                assert value in report_text, ("last_robot_placement_failure", report_text[:500])
         worker_stage_events = item.get("worker_stage_events") or []
         assert int(item.get("worker_stage_event_count") or 0) == len(worker_stage_events), item
         for event in worker_stage_events:
@@ -364,6 +555,38 @@ def _assert_proof_result_summary(
                 value = str(event.get(key) or "")
                 if value:
                     assert value in report_text, (event, report_text[:500])
+
+
+def _assert_prior_proof_result_summary(
+    summary: dict[str, Any],
+    base: Path,
+    report_text: str,
+) -> None:
+    schema = str(summary.get("schema") or "")
+    assert schema, summary
+    results = summary.get("results") or []
+    assert isinstance(results, list), summary
+    assert "Prior Proof Evidence" in report_text, report_text[:500]
+    for item in results:
+        assert isinstance(item, dict), summary
+        for key in ("request_id", "status", "task_feasibility_status", "run_result", "report"):
+            value = str(item.get(key) or "")
+            if value:
+                assert value in report_text, (key, report_text[:500])
+        for view in item.get("views") or []:
+            _assert_report_view_src(view, base, report_text)
+        blocker_summary = str(item.get("task_feasibility_blocker_summary") or "")
+        if blocker_summary:
+            assert blocker_summary in report_text, (
+                "task_feasibility_blocker_summary",
+                report_text[:500],
+            )
+        blocker_kind = str(item.get("task_feasibility_blocker_kind") or "")
+        if blocker_kind:
+            assert blocker_kind in report_text, (
+                "task_feasibility_blocker_kind",
+                report_text[:500],
+            )
 
 
 def _assert_cleanup_rerun(
@@ -393,11 +616,46 @@ def _resolve_path(base: Path, value: str) -> Path:
     return base / path
 
 
+def _assert_report_view_src(view: dict[str, Any], base: Path, report_text: str) -> None:
+    path_text = str(view.get("path") or "")
+    assert path_text, view
+    src = _report_asset_src(path_text, base)
+    expected = f'src="{html.escape(src)}"'
+    assert expected in report_text, (expected, report_text[:500])
+    if _resolve_path(base, path_text).exists():
+        assert _resolve_path(base, src).is_file(), src
+
+
+def _report_asset_src(path_text: str, base: Path) -> str:
+    if path_text.startswith(("http://", "https://", "data:")):
+        return path_text
+    candidate = Path(path_text)
+    try:
+        if candidate.is_absolute():
+            asset_path = candidate
+        elif candidate.exists():
+            asset_path = candidate.resolve()
+        elif (base / candidate).exists():
+            asset_path = (base / candidate).resolve()
+        else:
+            return path_text
+        return Path(os.path.relpath(asset_path, base.resolve())).as_posix()
+    except OSError:
+        return path_text
+
+
 def _has_blocker_code(item: dict[str, Any], code: str) -> bool:
     blockers = [*(item.get("blockers") or []), *(item.get("cleanup_binding_blockers") or [])]
     return any(
         isinstance(blocker, dict) and str(blocker.get("code") or "") == code for blocker in blockers
     )
+
+
+def _positive_int(value: Any) -> bool:
+    try:
+        return int(value or 0) > 0
+    except (TypeError, ValueError):
+        return False
 
 
 if __name__ == "__main__":

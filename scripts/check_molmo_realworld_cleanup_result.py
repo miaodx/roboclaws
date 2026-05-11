@@ -58,6 +58,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
     parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
+    parser.add_argument(
+        "--require-bound-planner-cleanup-object",
+        action="append",
+        default=[],
+        metavar="OBJECT_ID:TARGET_RECEPTACLE_ID",
+        help=(
+            "Require one cleanup object/target pair to have all cleanup subphases "
+            "strictly planner_backed. Repeat for multiple bound objects."
+        ),
+    )
+    parser.add_argument(
+        "--require-mixed-planner-cleanup-primitives",
+        action="store_true",
+        help=(
+            "Require a partial rerun state: at least one bound planner-backed "
+            "object and at least one unmatched api_semantic object, with the "
+            "global primitive gate still blocked."
+        ),
+    )
     parser.add_argument("--accept-blocked-planner-cleanup-bridge", action="store_true")
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     return parser.parse_args()
@@ -103,6 +122,10 @@ def main() -> None:
             require_planner_backed_cleanup_primitives=(
                 args.require_planner_backed_cleanup_primitives
             ),
+            require_bound_planner_cleanup_objects=args.require_bound_planner_cleanup_object,
+            require_mixed_planner_cleanup_primitives=(
+                args.require_mixed_planner_cleanup_primitives
+            ),
             accept_blocked_planner_cleanup_bridge=(args.accept_blocked_planner_cleanup_bridge),
             require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
         )
@@ -140,6 +163,8 @@ def _assert_result(
     require_planner_proof_attachment: bool = False,
     accept_blocked_planner_cleanup_primitives: bool = False,
     require_planner_backed_cleanup_primitives: bool = False,
+    require_bound_planner_cleanup_objects: list[str] | None = None,
+    require_mixed_planner_cleanup_primitives: bool = False,
     accept_blocked_planner_cleanup_bridge: bool = False,
     require_planner_cleanup_bridge_ready: bool = False,
 ) -> None:
@@ -230,6 +255,14 @@ def _assert_result(
             accept_blocked=accept_blocked_planner_cleanup_primitives,
             require_planner_backed=require_planner_backed_cleanup_primitives,
         )
+    if require_bound_planner_cleanup_objects:
+        _assert_bound_planner_cleanup_objects(
+            data,
+            report_text,
+            require_bound_planner_cleanup_objects,
+        )
+    if require_mixed_planner_cleanup_primitives:
+        _assert_mixed_planner_cleanup_primitives(data, report_text)
     if accept_blocked_planner_cleanup_bridge or require_planner_cleanup_bridge_ready:
         _assert_planner_cleanup_bridge(
             data,
@@ -528,6 +561,79 @@ def _assert_cleanup_primitive_gate(
     assert "Subphase role" in report_text, report_text[:500]
     if require_planner_backed:
         assert data.get("primitive_provenance") != API_SEMANTIC_PROVENANCE, data
+
+
+def _assert_bound_planner_cleanup_objects(
+    data: dict[str, Any],
+    report_text: str,
+    specs: list[str],
+) -> None:
+    assert data.get("planner_proof_cleanup_executor_enabled") is True, data
+    evidence = data.get("cleanup_primitive_evidence") or {}
+    assert evidence.get("schema") == "planner_backed_cleanup_primitives_v1", evidence
+    objects = evidence.get("objects") or []
+    assert objects, evidence
+    for spec in specs:
+        object_id, target_receptacle_id = _parse_bound_object_spec(spec)
+        row = next(
+            (
+                item
+                for item in objects
+                if item.get("object_id") == object_id
+                and item.get("target_receptacle_id") == target_receptacle_id
+            ),
+            None,
+        )
+        assert row is not None, (spec, objects)
+        assert row.get("planner_backed") is True, row
+        assert row.get("strict_proof_eligible") is True, row
+        subphases = row.get("subphases") or []
+        assert subphases, row
+        required_phases = {
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            "place",
+        }
+        assert required_phases <= {str(step.get("phase") or "") for step in subphases}, row
+        for step in subphases:
+            assert step.get("primitive_provenance") == "planner_backed", step
+            assert step.get("planner_backed") is True, step
+            assert step.get("strict_proof_eligible") is True, step
+            assert step.get("status") == "ok", step
+            assert step.get("object_id_matches") is True, step
+            assert step.get("target_receptacle_id_matches") is True, step
+        assert object_id in report_text, report_text[:500]
+        assert target_receptacle_id in report_text, report_text[:500]
+        assert "planner_backed" in report_text, report_text[:500]
+
+
+def _assert_mixed_planner_cleanup_primitives(
+    data: dict[str, Any],
+    report_text: str,
+) -> None:
+    evidence = data.get("cleanup_primitive_evidence") or {}
+    assert evidence.get("status") == "blocked_capability", evidence
+    assert evidence.get("planner_backed") is False, evidence
+    assert data.get("primitive_provenance") == API_SEMANTIC_PROVENANCE, data
+    objects = evidence.get("objects") or []
+    assert any(item.get("planner_backed") is True for item in objects), objects
+    assert any(item.get("planner_backed") is False for item in objects), objects
+    summary = evidence.get("primitive_provenance_summary") or {}
+    assert int(summary.get("planner_backed") or 0) >= 1, summary
+    assert int(summary.get(API_SEMANTIC_PROVENANCE) or 0) >= 1, summary
+    blockers = evidence.get("blockers") or []
+    assert any(
+        blocker.get("code") == "cleanup_subphase_not_planner_backed" for blocker in blockers
+    ), blockers
+    assert "Cleanup Primitive Gate" in report_text, report_text[:500]
+    assert "blocked_capability" in report_text, report_text[:500]
+
+
+def _parse_bound_object_spec(spec: str) -> tuple[str, str]:
+    object_id, sep, target_receptacle_id = spec.partition(":")
+    assert sep and object_id and target_receptacle_id, spec
+    return object_id, target_receptacle_id
 
 
 def _assert_planner_cleanup_bridge(

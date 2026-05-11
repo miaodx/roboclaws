@@ -730,6 +730,8 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "object_id": "observed_001",
                     "target_receptacle_id": "sink_01",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_result_match_kind": "request_id",
                 }
             ],
             "excluded_requests": [
@@ -739,6 +741,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "target_receptacle_id": "sink_01",
                     "reason": "prior_task_feasibility_blocked",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 }
             ],
@@ -751,6 +758,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "target_receptacle_id": "sink_01",
                     "reason": "prior_task_feasibility_blocked",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_result_match_kind": "request_id",
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
                 },
                 {
@@ -761,6 +773,45 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "derived_from": "proof_001_fallback_02",
                     "reason": "prior_task_feasibility_blocked_pair",
                     "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_result_match_kind": "request_id",
+                    "last_worker_stage": "worker_exception",
+                    "prior_report": str(tmp_path / "prior-proof" / "report.html"),
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+            ],
+            "grasp_feasibility_blocker_count": 2,
+            "grasp_feasibility_blockers": [
+                {
+                    "kind": "source_request",
+                    "source_request_id": "proof_001",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "reason": "prior_task_feasibility_blocked",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_result_match_kind": "request_id",
+                    "prior_blockers": [{"code": "HouseInvalidForTask"}],
+                },
+                {
+                    "kind": "fallback_pair",
+                    "source_request_id": "proof_001",
+                    "object_alias": "pickup/body",
+                    "target_alias": "sink/body_alt",
+                    "derived_from": "proof_001_fallback_02",
+                    "reason": "prior_task_feasibility_blocked_pair",
+                    "prior_task_feasibility_status": "blocked",
+                    "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                    "prior_task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "prior_result_match_kind": "request_id",
                     "last_worker_stage": "worker_exception",
                     "prior_report": str(tmp_path / "prior-proof" / "report.html"),
                     "prior_blockers": [{"code": "HouseInvalidForTask"}],
@@ -790,6 +841,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "fallback_request": {
                             "source_request_id": "proof_001",
                             "reason": "prior_task_feasibility_blocked",
+                            "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                            "prior_task_feasibility_blocker_summary": (
+                                "3 grasp failures; 1 candidate-removal calls"
+                            ),
+                            "prior_result_match_kind": "request_id",
                             "prior_blockers": [{"code": "HouseInvalidForTask"}],
                         },
                     }
@@ -819,6 +875,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "target_alias": "sink/body_alt",
                         "derived_from": "proof_001_fallback_02",
                         "reason": "prior_task_feasibility_blocked_pair",
+                        "prior_task_feasibility_blocker_kind": "grasp_feasibility",
+                        "prior_task_feasibility_blocker_summary": (
+                            "3 grasp failures; 1 candidate-removal calls"
+                        ),
+                        "prior_result_match_kind": "request_id",
                         "prior_blockers": [{"code": "HouseInvalidForTask"}],
                     }
                 ],
@@ -836,6 +897,36 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                 "config_import",
                 "--torch-extensions-dir",
                 str(tmp_path / "torch_extensions"),
+            ],
+        },
+        "prior_proof_result_summary": {
+            "schema": "merged_prior_planner_proof_result_summary_v1",
+            "result_count": 1,
+            "view_artifact_count": 2,
+            "results": [
+                {
+                    "request_id": "standalone_observed_001_to_sink_01",
+                    "object_id": "observed_001",
+                    "target_receptacle_id": "sink_01",
+                    "run_result": str(tmp_path / "prior-proof" / "run_result.json"),
+                    "report": str(tmp_path / "prior-proof" / "report.html"),
+                    "status": "blocked_capability",
+                    "task_feasibility_status": "blocked",
+                    "task_feasibility_blocker_kind": "grasp_feasibility",
+                    "task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
+                    "views": [
+                        {
+                            "label": "initial",
+                            "path": str(tmp_path / "prior-proof" / "initial.png"),
+                        },
+                        {
+                            "label": "final",
+                            "path": str(tmp_path / "prior-proof" / "final.png"),
+                        },
+                    ],
+                }
             ],
         },
         "command_count": 1,
@@ -868,6 +959,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
             "cleanup_binding_promoted_count": 0,
             "execution_attempted_count": 0,
             "task_feasibility_blocked_count": 1,
+            "grasp_feasibility_blocked_count": 1,
             "worker_stage_event_count": 2,
             "last_worker_stage_counts": {"rby1m_config_import": 1},
             "view_artifact_count": 2,
@@ -885,6 +977,10 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                     "cleanup_binding_promoted": False,
                     "execution_attempted": False,
                     "task_feasibility_status": "blocked",
+                    "task_feasibility_blocker_kind": "grasp_feasibility",
+                    "task_feasibility_blocker_summary": (
+                        "3 grasp failures; 1 candidate-removal calls"
+                    ),
                     "visual_status": "views_recorded",
                     "blockers": [
                         {"code": "HouseInvalidForTask", "message": "robot placement"},
@@ -907,6 +1003,46 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
                         "scene_xml": "/tmp/scene.xml",
                         "planner_object_id": "pickup/body",
                         "planner_target_receptacle_id": "sink/body",
+                    },
+                    "task_sampler_robot_placement_profile": {
+                        "profile": "relaxed",
+                        "requested": True,
+                        "applied": True,
+                        "place_robot_near_overrides": {"max_tries": 50},
+                    },
+                    "cleanup_task_sampler_adapter": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "planner_target_receptacle_id": "sink/body",
+                    },
+                    "task_sampler_failure_diagnostics": {
+                        "applied": True,
+                        "task_sampler_class": "PickAndPlaceTaskSampler",
+                        "robot_placement_attempt_count": 1,
+                        "robot_placement_failure_count": 1,
+                        "asset_failure_count": 1,
+                        "grasp_failure_count": 3,
+                        "grasp_failures": [
+                            {
+                                "object_name": "pickup/body",
+                                "count_before": 2,
+                                "count_after": 3,
+                                "max_failures": 2,
+                                "candidate_count_before": 1,
+                                "candidate_count_after": 0,
+                                "removed_candidate": True,
+                            }
+                        ],
+                        "last_placement_scene_diagnostic": {
+                            "target_name": "pickup/body",
+                            "valid_free_point_count": 3,
+                            "valid_neighborhood_fraction": 0.000017,
+                            "nearest_free_point_distance_m": 0.42,
+                        },
+                        "last_robot_placement_failure": {
+                            "pickup_obj_name": "pickup/body",
+                            "message": "Failed to place robot near object: pickup/body",
+                        },
                     },
                     "views": [
                         {
@@ -933,6 +1069,7 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Planner Proof Bundle Runner" in html
     assert "Source Cleanup Artifact" in html
     assert "Proof Request Selection" in html
+    assert "Prior Proof Evidence" in html
     assert "Proof Probe Commands" in html
     assert "Proof Probe Results" in html
     assert "Cleanup Rerun Command" in html
@@ -959,6 +1096,11 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "Filtered pairs" in html
     assert "Target Feasibility Blockers" in html
     assert "Target blockers" in html
+    assert "Grasp Feasibility Blockers" in html
+    assert "Grasp Feasibility Blocker Matrix" in html
+    assert "Grasp blockers" in html
+    assert "Prior match" in html
+    assert "request_id" in html
     assert "source_request" in html
     assert "fallback_pair" in html
     assert "worker_exception" in html
@@ -971,6 +1113,37 @@ def test_planner_proof_bundle_runner_report_renders_commands(tmp_path: Path) -> 
     assert "torch_extensions" in html
     assert "Task feasibility" in html
     assert "blocked" in html
+    assert "Grasp-feasible blocked" in html
+    assert "Task feasibility blocker" in html
+    assert "grasp_feasibility" in html
+    assert "3 grasp failures; 1 candidate-removal calls" in html
+    assert "standalone_observed_001_to_sink_01" in html
+    assert "prior-proof/run_result.json" in html
+    assert "prior-proof/report.html" in html
+    assert "prior-proof/initial.png" in html
+    assert "prior-proof/final.png" in html
+    assert 'src="prior-proof/initial.png"' in html
+    assert 'src="prior-proof/final.png"' in html
+    assert 'src="proofs/001/initial.png"' in html
+    assert 'src="proofs/001/final.png"' in html
+    assert f'src="{tmp_path}/prior-proof/initial.png"' not in html
+    assert f'src="{tmp_path}/proofs/001/initial.png"' not in html
+    assert "Robot placement profile" in html
+    assert "relaxed" in html
+    assert "place_robot_near max tries" in html
+    assert "Exact sampler adapter applied" in html
+    assert "Exact sampler adapter class" in html
+    assert "PickAndPlaceTaskSampler" in html
+    assert "Exact sampler adapter target" in html
+    assert "Task sampler placement failures" in html
+    assert "Task sampler asset failures" in html
+    assert "Post-placement grasp failures" in html
+    assert "Post-Placement Rejection Views" in html
+    assert "Post-placement rejection flow: pickup/body" in html
+    assert "Placement free-space fraction" in html
+    assert "0.000017" in html
+    assert "Failed to place robot near object: pickup/body" in html
+    assert "sink/body" in html
     assert "Timeouts" in html
     assert "Config-import timeouts" in html
     assert "Last worker stage" in html
@@ -1314,6 +1487,143 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             },
         },
     }
+    run_result["manipulation_evidence"]["cleanup_task_config"] = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": "/tmp/scene.xml",
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+    }
+    run_result["manipulation_evidence"]["task_sampler_robot_placement_profile"] = {
+        "schema": "planner_probe_task_sampler_robot_placement_profile_v1",
+        "profile": "relaxed",
+        "requested": True,
+        "applied": True,
+        "before": {
+            "base_pose_sampling_radius_range": [0.0, 0.7],
+            "robot_safety_radius": 0.35,
+            "check_robot_placement_visibility": True,
+            "max_robot_placement_attempts": 10,
+        },
+        "after": {
+            "base_pose_sampling_radius_range": [0.0, 1.2],
+            "robot_safety_radius": 0.15,
+            "check_robot_placement_visibility": False,
+            "max_robot_placement_attempts": 50,
+        },
+        "applied_overrides": {"robot_safety_radius": 0.15},
+        "place_robot_near_overrides": {"max_tries": 50},
+    }
+    run_result["manipulation_evidence"]["cleanup_task_sampler_adapter"] = {
+        "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "planner_target_receptacle_id": "sink/body",
+    }
+    run_result["manipulation_evidence"]["task_sampler_failure_diagnostics"] = {
+        "schema": "planner_probe_task_sampler_failure_diagnostics_v1",
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "robot_placement_config": {
+            "base_pose_sampling_radius_range": [0.0, 0.7],
+            "robot_safety_radius": 0.15,
+            "check_robot_placement_visibility": True,
+            "max_robot_placement_attempts": 10,
+        },
+        "hooks": ["_sample_and_place_robot", "report_asset_failure"],
+        "robot_placement_attempt_count": 1,
+        "robot_placement_failure_count": 1,
+        "asset_failure_count": 1,
+        "candidate_removal_count": 1,
+        "robot_placement_attempts": [
+            {
+                "attempt_index": 1,
+                "pickup_obj_name": "pickup/body",
+                "asset_uid": "asset-book",
+                "result": "failed",
+                "exception_type": "RobotPlacementError",
+                "message": "Failed to place robot near object: pickup/body",
+            }
+        ],
+        "asset_failures": [
+            {
+                "asset_uid": "asset-book",
+                "reason": "robot placement failed",
+            }
+        ],
+        "grasp_failure_count": 1,
+        "grasp_failures": [
+            {
+                "object_name": "pickup/body",
+                "count_before": 2,
+                "count_after": 3,
+                "max_failures": 2,
+                "candidate_count_before": 1,
+                "candidate_count_after": 0,
+                "removed_candidate": True,
+            }
+        ],
+        "place_robot_near_calls": [
+            {
+                "call_index": 1,
+                "requested": {"max_tries": 10},
+                "effective": {
+                    "max_tries": 50,
+                    "robot_safety_radius": 0.15,
+                    "check_camera_visibility": False,
+                },
+                "result": False,
+            }
+        ],
+        "placement_scene_diagnostic_count": 1,
+        "placement_scene_diagnostics": [
+            {
+                "schema": "planner_probe_placement_scene_diagnostic_v1",
+                "call_index": 1,
+                "target_name": "pickup/body",
+                "target_position": [1.0, 2.0, 0.5],
+                "sampling_radius_range": [0.0, 1.2],
+                "sampling_area_m2": 4.523893,
+                "robot_safety_radius": 0.15,
+                "px_per_m": 200,
+                "total_free_point_count": 100,
+                "valid_free_point_count": 3,
+                "valid_neighborhood_fraction": 0.000017,
+                "low_free_space": True,
+                "nearest_free_point_distance_m": 0.42,
+                "nearest_free_point": [1.42, 2.0, 0.0],
+                "radius_band_counts": [
+                    {"radius_min_m": 0.0, "radius_max_m": 0.25, "free_point_count": 0},
+                    {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
+                ],
+            }
+        ],
+        "last_placement_scene_diagnostic": {
+            "schema": "planner_probe_placement_scene_diagnostic_v1",
+            "call_index": 1,
+            "target_name": "pickup/body",
+            "target_position": [1.0, 2.0, 0.5],
+            "sampling_radius_range": [0.0, 1.2],
+            "sampling_area_m2": 4.523893,
+            "robot_safety_radius": 0.15,
+            "px_per_m": 200,
+            "total_free_point_count": 100,
+            "valid_free_point_count": 3,
+            "valid_neighborhood_fraction": 0.000017,
+            "low_free_space": True,
+            "nearest_free_point_distance_m": 0.42,
+            "nearest_free_point": [1.42, 2.0, 0.0],
+            "radius_band_counts": [
+                {"radius_min_m": 0.0, "radius_max_m": 0.25, "free_point_count": 0},
+                {"radius_min_m": 0.25, "radius_max_m": 0.5, "free_point_count": 1},
+            ],
+        },
+        "candidate_removals": [{"object_name": "pickup/body"}],
+        "last_robot_placement_failure": {
+            "pickup_obj_name": "pickup/body",
+            "message": "Failed to place robot near object: pickup/body",
+        },
+    }
     run_result["manipulation_evidence"]["sampled_task_binding"] = {
         "schema": "planner_probe_sampled_task_binding_v1",
         "pickup_obj_name": "pickup/body",
@@ -1348,7 +1658,28 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "Planner Probe Diagnostic Views" in html
+    assert "Task sampler diagnostic: pickup/body" in html
     assert "Planner Probe Cleanup Binding" in html
+    assert "Task Sampler Robot Placement Profile" in html
+    assert "relaxed" in html
+    assert "place_robot_near max tries" in html
+    assert "Exact task config applied" in html
+    assert "Exact sampler adapter class" in html
+    assert "PickAndPlaceTaskSampler" in html
+    assert "Task Sampler Failure Diagnostics" in html
+    assert "Placement failures" in html
+    assert "Effective max tries" in html
+    assert "Post-Placement Candidate Rejections" in html
+    assert "Post-Placement Rejection Views" in html
+    assert "Post-placement rejection flow: pickup/body" in html
+    assert "Removed by grasp threshold" in html
+    assert "Placement Scene Diagnostics" in html
+    assert "Free-space fraction" in html
+    assert "0.000017" in html
+    assert "Nearest free distance" in html
+    assert "Failed to place robot near object: pickup/body" in html
+    assert "asset-book" in html
     assert "pickup/body" in html
     assert "sink/body" in html
     assert "Planner object alias" in html
@@ -1377,3 +1708,40 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html
+
+
+def test_planner_manipulation_probe_report_renders_diagnostic_image_artifacts(
+    tmp_path: Path,
+) -> None:
+    views = tmp_path / "planner_views"
+    views.mkdir()
+    image = views / "post_placement_attempt_001_head_camera.png"
+    image.write_bytes(b"not a real image but enough for an html src")
+    run_result = {
+        "contract": "planner_backed_manipulation_probe_v1",
+        "backend": "molmospaces_subprocess",
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": blocked_planner_probe_evidence(
+            backend="molmospaces_subprocess",
+            embodiment="rby1m",
+            task="pick_and_place",
+            probe_mode="execute",
+            blockers=[{"code": "HouseInvalidForTask", "message": "candidate removed"}],
+            execution_attempted=True,
+        ),
+        "artifacts": {"stdout": "stdout.txt", "stderr": "stderr.txt"},
+    }
+    run_result["manipulation_evidence"]["image_artifacts"] = {
+        "post_placement_attempt_001_head_camera": (
+            "planner_views/post_placement_attempt_001_head_camera.png"
+        )
+    }
+    run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
+
+    report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Planner Probe Views" in html
+    assert "Post Placement Attempt 001 Head Camera" in html
+    assert 'src="planner_views/post_placement_attempt_001_head_camera.png"' in html

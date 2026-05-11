@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -161,6 +162,10 @@ def render_planner_manipulation_report(
     {_manipulation_provenance_section(run_result)}
     {_planner_probe_views_section(evidence)}
     {_planner_probe_cleanup_binding_section(evidence)}
+    {_planner_probe_task_sampler_robot_placement_profile_section(evidence)}
+    {_planner_probe_task_sampler_failure_section(evidence)}
+    {_planner_probe_post_placement_rejection_section(evidence)}
+    {_planner_probe_placement_scene_diagnostics_section(evidence)}
     {_planner_probe_diagnostics_section(evidence)}
     {_planner_probe_cuda_memory_section(evidence)}
     {_planner_probe_curobo_memory_profile_section(evidence)}
@@ -219,9 +224,26 @@ def render_planner_proof_bundle_runner_report(
     }
     </section>
     {_proof_request_selection_section(manifest.get("proof_request_selection") or {})}
+    {_proof_bundle_local_runtime_preflight_section(manifest.get("local_runtime_preflight") or {})}
+    {
+        _proof_bundle_results_section(
+            manifest.get("prior_proof_result_summary") or {},
+            output_dir=output_dir,
+            title="Prior Proof Evidence",
+            section_class="prior-proof-evidence",
+            default_note=(
+                "Prior proof evidence consumed by selection. This keeps standalone "
+                "probe and prior bundle visuals reviewable in the runner report."
+            ),
+        )
+    }
     {_proof_bundle_warmup_section(manifest.get("warmup") or {})}
     {_proof_bundle_commands_section(commands)}
-    {_proof_bundle_results_section(manifest.get("proof_result_summary") or {})}
+    {
+        _proof_bundle_results_section(
+            manifest.get("proof_result_summary") or {}, output_dir=output_dir
+        )
+    }
     {_cleanup_rerun_command_section(cleanup_command)}
     {_cleanup_rerun_artifact_section(cleanup_rerun)}
     """
@@ -766,6 +788,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
     selected = selection.get("selected_requests") or []
     excluded = selection.get("excluded_requests") or []
     target_feasibility_blockers = selection.get("target_feasibility_blockers") or []
+    grasp_feasibility_blockers = selection.get("grasp_feasibility_blockers") or []
     raw_fallback_generation = selection.get("fallback_generation") or {}
     fallback_generation = (
         raw_fallback_generation if isinstance(raw_fallback_generation, dict) else {}
@@ -780,12 +803,17 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         "target_feasibility_blocker_count",
         len(target_feasibility_blockers),
     )
+    grasp_blocker_count = selection.get(
+        "grasp_feasibility_blocker_count",
+        len(grasp_feasibility_blockers),
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Mode', selection.get('mode', 'unknown'))}"
         f"{_metric('Ready', selection.get('ready_request_count', 0))}"
         f"{_metric('Selected', selection.get('selected_count', len(selected)))}"
         f"{_metric('Excluded', selection.get('excluded_count', len(excluded)))}"
+        f"{_metric('Covered', selection.get('covered_request_count', 0))}"
         f"{_metric('Generated', selection.get('generated_fallback_request_count', len(generated)))}"
         f"{_metric('Discovered aliases', len(discovered_aliases))}"
         f"{_metric('Normalized aliases', len(normalized_aliases))}"
@@ -794,6 +822,7 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"{_metric('Fallback status', fallback_generation.get('status', 'unknown'))}"
         f"{_metric('Exhaustion blockers', len(exhaustion_blockers))}"
         f"{_metric('Target blockers', target_blocker_count)}"
+        f"{_metric('Grasp blockers', grasp_blocker_count)}"
         f"{_metric('Fallback required', _yes_no(selection.get('fallback_required')))}"
         "</div>"
     )
@@ -805,6 +834,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         "</tr>"
         for item in selected
         if isinstance(item, dict)
@@ -816,29 +847,35 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('target_receptacle_id', '')))}</td>"
         f"<td>{html.escape(str(item.get('reason', '')))}</td>"
         f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+        f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
         f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
         "</tr>"
         for item in excluded
         if isinstance(item, dict)
     )
     if not selected_rows:
-        selected_rows = '<tr><td colspan="6">No proof requests selected.</td></tr>'
+        selected_rows = '<tr><td colspan="8">No proof requests selected.</td></tr>'
     if not excluded_rows:
-        excluded_rows = '<tr><td colspan="6">No proof requests excluded.</td></tr>'
+        excluded_rows = '<tr><td colspan="9">No proof requests excluded.</td></tr>'
     selected_table = (
         '<h3>Selected Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Type</th><th>Source</th><th>Object</th><th>Target</th>"
-        "<th>Prior feasibility</th>"
+        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior match</th>"
         f"</tr></thead><tbody>{selected_rows}</tbody></table></div>"
     )
     excluded_table = (
         '<h3>Excluded Requests</h3><div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Object</th><th>Target</th><th>Reason</th>"
-        "<th>Prior feasibility</th><th>Prior blockers</th>"
+        "<th>Prior feasibility</th><th>Prior blocker</th><th>Prior detail</th>"
+        "<th>Prior match</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{excluded_rows}</tbody></table></div>"
     )
     generated_table = _generated_fallback_requests_table(generated)
     target_blockers_table = _target_feasibility_blockers_table(target_feasibility_blockers)
+    grasp_blockers_matrix = _grasp_feasibility_blocker_matrix(grasp_feasibility_blockers)
+    grasp_blockers_table = _grasp_feasibility_blockers_table(grasp_feasibility_blockers)
     discovered_table = _discovered_fallback_aliases_table(discovered_aliases)
     normalized_table = _normalized_fallback_aliases_table(normalized_aliases)
     filtered_table = _filtered_fallback_aliases_table(filtered_aliases)
@@ -851,7 +888,8 @@ def _proof_request_selection_section(selection: dict[str, Any]) -> str:
         '<section class="panel proof-request-selection">'
         "<h2>Proof Request Selection</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}'
-        f"{selected_table}{excluded_table}{target_blockers_table}{generated_table}{discovered_table}"
+        f"{selected_table}{excluded_table}{target_blockers_table}"
+        f"{grasp_blockers_matrix}{grasp_blockers_table}{generated_table}{discovered_table}"
         f"{normalized_table}{filtered_table}{filtered_pairs_table}{exhaustion_table}</section>"
     )
 
@@ -876,17 +914,22 @@ def _generated_fallback_requests_table(generated: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(args.get('--cleanup-planner-object-id', '')))}</td>"
             f"<td>{html.escape(str(args.get('--cleanup-planner-target-receptacle-id', '')))}</td>"
             f"<td>{html.escape(str(fallback.get('reason', '')))}</td>"
+            f"<td>{html.escape(str(fallback.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            "<td>"
+            f"{html.escape(str(fallback.get('prior_task_feasibility_blocker_summary', '')))}"
+            "</td>"
+            f"<td>{html.escape(str(fallback.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(fallback.get('prior_blockers') or []))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="8">No generated fallback requests.</td></tr>')
+        rows.append('<tr><td colspan="11">No generated fallback requests.</td></tr>')
     return (
         "<h3>Generated Fallback Requests</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Request</th><th>Source</th><th>Object</th><th>Target</th>"
         "<th>Planner object alias</th><th>Planner target alias</th><th>Reason</th>"
-        "<th>Prior blockers</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Prior blockers</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -907,20 +950,89 @@ def _target_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('reason', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="10">No target feasibility blockers recorded.</td></tr>')
+        rows.append('<tr><td colspan="13">No target feasibility blockers recorded.</td></tr>')
     return (
         "<h3>Target Feasibility Blockers</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Last stage</th>"
+        "<th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _grasp_feasibility_blockers_table(blockers: list[dict[str, Any]]) -> str:
+    rows = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or ""
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or ""
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_request_id', '')))}</td>"
+            f"<td>{html.escape(str(object_value))}</td>"
+            f"<td>{html.escape(str(target_value))}</td>"
+            f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        rows.append('<tr><td colspan="8">No grasp-feasibility blockers recorded.</td></tr>')
+    return (
+        "<h3>Grasp Feasibility Blockers</h3>"
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Source</th><th>Object or alias</th><th>Target or alias</th>"
+        "<th>Derived from</th><th>Detail</th><th>Prior match</th><th>Proof report</th>"
+        f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
+def _grasp_feasibility_blocker_matrix(blockers: list[dict[str, Any]]) -> str:
+    cards = []
+    for item in blockers:
+        if not isinstance(item, dict):
+            continue
+        object_value = item.get("object_id") or item.get("object_alias") or "object"
+        target_value = item.get("target_receptacle_id") or item.get("target_alias") or "target"
+        detail = item.get("prior_task_feasibility_blocker_summary") or ""
+        badges = [
+            item.get("kind", "blocked"),
+            item.get("source_request_id", ""),
+            item.get("prior_result_match_kind", ""),
+        ]
+        badge_html = "".join(
+            f'<span class="badge">{html.escape(str(value))}</span>' for value in badges if value
+        )
+        cards.append(
+            '<article class="grasp-blocker-card">'
+            '<div class="grasp-blocker-route">'
+            f"<strong>{html.escape(str(object_value))}</strong>"
+            "<span>to</span>"
+            f"<strong>{html.escape(str(target_value))}</strong>"
+            "</div>"
+            f'<div class="evidence-badges">{badge_html}</div>'
+            f"<p>{html.escape(str(detail))}</p>"
+            "</article>"
+        )
+    if not cards:
+        return ""
+    return (
+        "<h3>Grasp Feasibility Blocker Matrix</h3>"
+        f'<div class="grasp-blocker-matrix">{"".join(cards)}</div>'
     )
 
 
@@ -1010,19 +1122,23 @@ def _filtered_fallback_pairs_table(filtered_pairs: list[dict[str, Any]]) -> str:
             f"<td>{html.escape(str(item.get('derived_from', '')))}</td>"
             f"<td>{html.escape(str(item.get('reason', '')))}</td>"
             f"<td>{html.escape(str(item.get('prior_task_feasibility_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_task_feasibility_blocker_summary', '')))}</td>"
+            f"<td>{html.escape(str(item.get('prior_result_match_kind', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_worker_stage', '')))}</td>"
             f"<td>{html.escape(_blocker_codes(item.get('prior_blockers') or []))}</td>"
             f"<td>{html.escape(str(item.get('prior_report', '')))}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="9">No fallback alias pairs filtered.</td></tr>')
+        rows.append('<tr><td colspan="12">No fallback alias pairs filtered.</td></tr>')
     return (
         "<h3>Filtered Fallback Pairs</h3>"
         '<div class="table-wrap"><table><thead><tr>'
         "<th>Source</th><th>Planner object alias</th><th>Planner target alias</th>"
         "<th>Derived from</th><th>Reason</th><th>Prior feasibility</th>"
-        "<th>Last stage</th><th>Prior blockers</th><th>Proof report</th>"
+        "<th>Prior blocker</th><th>Prior detail</th><th>Prior match</th><th>Last stage</th>"
+        "<th>Prior blockers</th><th>Proof report</th>"
         f"</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -1072,6 +1188,61 @@ def _proof_bundle_warmup_section(warmup: dict[str, Any]) -> str:
     )
 
 
+def _proof_bundle_local_runtime_preflight_section(preflight: dict[str, Any]) -> str:
+    if not preflight:
+        return ""
+    blockers = preflight.get("blockers") or []
+    checks = [item for item in preflight.get("checks") or [] if isinstance(item, dict)]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Status', preflight.get('status', 'unknown'))}"
+        f"{_metric('Requested', _yes_no(preflight.get('requested')))}"
+        f"{_metric('Checks', len(checks))}"
+        f"{_metric('Blockers', len(blockers))}"
+        "</div>"
+    )
+    rows = [
+        ("Python executable", preflight.get("python_executable", "")),
+        ("Evidence note", preflight.get("evidence_note", "")),
+    ]
+    check_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('status', '')))}</td>"
+        f"<td>{html.escape(' '.join(str(part) for part in item.get('command') or []))}</td>"
+        f"<td>{html.escape(str(item.get('returncode', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in checks
+    )
+    check_table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Check</th><th>Status</th><th>Command</th><th>Return code</th><th>Message</th>"
+        f"</tr></thead><tbody>{check_rows}</tbody></table></div>"
+        if check_rows
+        else ""
+    )
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    blocker_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th><th>Message</th></tr>'
+        f"</thead><tbody>{blocker_rows}</tbody></table></div>"
+        if blocker_rows
+        else ""
+    )
+    return (
+        '<section class="panel proof-bundle-local-runtime-preflight">'
+        "<h2>Local Runtime Preflight</h2>"
+        f"{metrics}{_field_table(rows)}{check_table}{blocker_table}</section>"
+    )
+
+
 def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
     return ", ".join(
         str(item.get("code") or item.get("message") or "")
@@ -1080,22 +1251,36 @@ def _blocker_codes(blockers: list[dict[str, Any]]) -> str:
     )
 
 
-def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
+def _proof_bundle_results_section(
+    summary: dict[str, Any],
+    *,
+    output_dir: Path | None = None,
+    title: str = "Proof Probe Results",
+    section_class: str = "proof-bundle-results",
+    default_note: str = (
+        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
+    ),
+) -> str:
     if not summary:
         return ""
     results = summary.get("results") or []
+    planner_backed_count = _summary_metric(summary, results, "planner_backed_count")
+    config_import_timeout_count = _summary_config_import_timeout_count(summary, results)
+    binding_promoted_count = _summary_metric(summary, results, "cleanup_binding_promoted_count")
+    execution_attempted_count = _summary_metric(summary, results, "execution_attempted_count")
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Expected', summary.get('expected_count', len(results)))}"
         f"{_metric('Results', summary.get('result_count', 0))}"
-        f"{_metric('Planner-backed', summary.get('planner_backed_count', 0))}"
-        f"{_metric('Timeouts', summary.get('timeout_count', 0))}"
-        f"{_metric('Config-import timeouts', summary.get('rby1m_config_import_timeout_count', 0))}"
-        f"{_metric('Binding promoted', summary.get('cleanup_binding_promoted_count', 0))}"
-        f"{_metric('Execution attempted', summary.get('execution_attempted_count', 0))}"
-        f"{_metric('Task-feasible blocked', summary.get('task_feasibility_blocked_count', 0))}"
-        f"{_metric('Worker stage events', summary.get('worker_stage_event_count', 0))}"
-        f"{_metric('Views', summary.get('view_artifact_count', 0))}"
+        f"{_metric('Planner-backed', planner_backed_count)}"
+        f"{_metric('Timeouts', _summary_timeout_count(summary, results))}"
+        f"{_metric('Config-import timeouts', config_import_timeout_count)}"
+        f"{_metric('Binding promoted', binding_promoted_count)}"
+        f"{_metric('Execution attempted', execution_attempted_count)}"
+        f"{_metric('Task-feasible blocked', _summary_task_blocked_count(summary, results))}"
+        f"{_metric('Grasp-feasible blocked', _summary_grasp_blocked_count(summary, results))}"
+        f"{_metric('Worker stage events', _summary_worker_stage_event_count(summary, results))}"
+        f"{_metric('Views', _summary_view_artifact_count(summary, results))}"
         "</div>"
     )
     stage_counts = _last_worker_stage_counts_text(summary.get("last_worker_stage_counts") or {})
@@ -1105,21 +1290,93 @@ def _proof_bundle_results_section(summary: dict[str, Any]) -> str:
         else ""
     )
     body = (
-        "".join(_proof_bundle_result_card(item) for item in results)
+        "".join(_proof_bundle_result_card(item, output_dir=output_dir) for item in results)
         if results
         else '<p class="note">No proof result rows recorded.</p>'
     )
-    note = summary.get("evidence_note") or (
-        "Bundle-level proof result summary. Strict per-proof checkers remain authoritative."
-    )
+    note = summary.get("evidence_note") or default_note
     return (
-        '<section class="panel proof-bundle-results">'
-        "<h2>Proof Probe Results</h2>"
+        f'<section class="panel {html.escape(section_class)}">'
+        f"<h2>{html.escape(title)}</h2>"
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{stage_counts_html}{body}</section>'
     )
 
 
-def _proof_bundle_result_card(item: dict[str, Any]) -> str:
+def _summary_metric(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+    key: str,
+) -> int:
+    if key in summary:
+        return int(summary.get(key) or 0)
+    if key == "planner_backed_count":
+        return sum(1 for item in results if item.get("planner_backed"))
+    if key == "cleanup_binding_promoted_count":
+        return sum(1 for item in results if item.get("cleanup_binding_promoted"))
+    if key == "execution_attempted_count":
+        return sum(1 for item in results if item.get("execution_attempted"))
+    return 0
+
+
+def _summary_timeout_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "timeout_count" in summary:
+        return int(summary.get("timeout_count") or 0)
+    return sum(1 for item in results if _has_result_blocker_code(item, "timeout"))
+
+
+def _summary_config_import_timeout_count(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> int:
+    if "rby1m_config_import_timeout_count" in summary:
+        return int(summary.get("rby1m_config_import_timeout_count") or 0)
+    return sum(
+        1
+        for item in results
+        if _has_result_blocker_code(item, "timeout")
+        and str(item.get("last_worker_stage") or "") == "rby1m_config_import"
+    )
+
+
+def _summary_task_blocked_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "task_feasibility_blocked_count" in summary:
+        return int(summary.get("task_feasibility_blocked_count") or 0)
+    return sum(1 for item in results if str(item.get("task_feasibility_status") or "") == "blocked")
+
+
+def _summary_grasp_blocked_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "grasp_feasibility_blocked_count" in summary:
+        return int(summary.get("grasp_feasibility_blocked_count") or 0)
+    return sum(
+        1
+        for item in results
+        if str(item.get("task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    )
+
+
+def _summary_worker_stage_event_count(
+    summary: dict[str, Any],
+    results: list[dict[str, Any]],
+) -> int:
+    if "worker_stage_event_count" in summary:
+        return int(summary.get("worker_stage_event_count") or 0)
+    return sum(int(item.get("worker_stage_event_count") or 0) for item in results)
+
+
+def _summary_view_artifact_count(summary: dict[str, Any], results: list[dict[str, Any]]) -> int:
+    if "view_artifact_count" in summary:
+        return int(summary.get("view_artifact_count") or 0)
+    return sum(len(item.get("views") or []) for item in results)
+
+
+def _has_result_blocker_code(item: dict[str, Any], code: str) -> bool:
+    blockers = [*(item.get("blockers") or []), *(item.get("cleanup_binding_blockers") or [])]
+    return any(
+        isinstance(blocker, dict) and str(blocker.get("code") or "") == code for blocker in blockers
+    )
+
+
+def _proof_bundle_result_card(item: dict[str, Any], *, output_dir: Path | None = None) -> str:
     blockers = list(item.get("blockers") or [])
     binding_blockers = list(item.get("cleanup_binding_blockers") or [])
     blocker_text = ", ".join(
@@ -1130,12 +1387,21 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     requested = item.get("requested_cleanup_primitive_binding") or {}
     sampled = item.get("sampled_task_binding") or {}
     config = item.get("cleanup_task_config") or {}
+    robot_placement_profile = item.get("task_sampler_robot_placement_profile") or {}
+    robot_placement_overrides = robot_placement_profile.get("place_robot_near_overrides") or {}
+    sampler_adapter = item.get("cleanup_task_sampler_adapter") or {}
+    task_sampler_failure = item.get("task_sampler_failure_diagnostics") or {}
+    last_robot_failure = task_sampler_failure.get("last_robot_placement_failure") or {}
+    last_scene_diagnostic = task_sampler_failure.get("last_placement_scene_diagnostic") or {}
+    grasp_failures = task_sampler_failure.get("grasp_failures") or []
     rows = [
         ("Request", item.get("request_id", "")),
         ("Object", item.get("object_id", "")),
         ("Target", item.get("target_receptacle_id", "")),
         ("Status", item.get("status", "")),
         ("Task feasibility", item.get("task_feasibility_status", "")),
+        ("Task feasibility blocker", item.get("task_feasibility_blocker_kind", "")),
+        ("Task feasibility detail", item.get("task_feasibility_blocker_summary", "")),
         ("Cleanup binding promoted", _yes_no(item.get("cleanup_binding_promoted"))),
         ("Execution attempted", _yes_no(item.get("execution_attempted"))),
         ("Last worker stage", item.get("last_worker_stage", "")),
@@ -1146,6 +1412,33 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
         ("Proof run result", item.get("run_result", "")),
         ("Proof report", item.get("report", "")),
         ("Requested scene XML", requested.get("scene_xml", "") or config.get("scene_xml", "")),
+        ("Robot placement profile", robot_placement_profile.get("profile", "")),
+        ("Robot placement profile applied", _yes_no(robot_placement_profile.get("applied"))),
+        ("place_robot_near max tries", robot_placement_overrides.get("max_tries", "")),
+        ("Exact sampler adapter applied", _yes_no(sampler_adapter.get("applied"))),
+        ("Exact sampler adapter class", sampler_adapter.get("task_sampler_class", "")),
+        ("Exact sampler adapter target", sampler_adapter.get("planner_target_receptacle_id", "")),
+        (
+            "Task sampler placement attempts",
+            task_sampler_failure.get("robot_placement_attempt_count", ""),
+        ),
+        (
+            "Task sampler placement failures",
+            task_sampler_failure.get("robot_placement_failure_count", ""),
+        ),
+        ("Placement valid free points", last_scene_diagnostic.get("valid_free_point_count", "")),
+        (
+            "Placement free-space fraction",
+            _format_fraction(last_scene_diagnostic.get("valid_neighborhood_fraction", "")),
+        ),
+        (
+            "Placement nearest free distance",
+            last_scene_diagnostic.get("nearest_free_point_distance_m", ""),
+        ),
+        ("Task sampler asset failures", task_sampler_failure.get("asset_failure_count", "")),
+        ("Post-placement grasp failures", task_sampler_failure.get("grasp_failure_count", "")),
+        ("Post-placement rejection rows", len(grasp_failures)),
+        ("Task sampler last failure", last_robot_failure.get("message", "")),
         ("Planner object alias", requested.get("planner_object_id", "")),
         ("Planner target alias", requested.get("planner_target_receptacle_id", "")),
         ("Sampled pickup", sampled.get("pickup_obj_name", "")),
@@ -1164,13 +1457,21 @@ def _proof_bundle_result_card(item: dict[str, Any]) -> str:
     if views:
         figures = "".join(
             _view_figure(
-                view.get("path"),
-                f"{item.get('request_id', '')} {view.get('label', '')}",
+                _report_asset_src(view.get("path"), output_dir),
+                f"{item.get('request_id', '')} {_image_artifact_label(view.get('label', ''))}",
             )
             for view in views
             if isinstance(view, dict)
         )
-        view_html = f'<div class="views">{figures}</div>'
+        view_html = (
+            f'<div class="views">{figures}</div>'
+            f"{_post_placement_rejection_views(task_sampler_failure)}"
+        )
+    elif task_sampler_failure:
+        view_html = (
+            f"{_task_sampler_diagnostic_views(task_sampler_failure)}"
+            f"{_post_placement_rejection_views(task_sampler_failure)}"
+        )
     else:
         view_html = (
             '<p class="note">No planner probe views recorded'
@@ -1261,14 +1562,196 @@ def _path_table(rows: list[tuple[str, Any]]) -> str:
 def _planner_probe_views_section(evidence: dict[str, Any]) -> str:
     artifacts = evidence.get("image_artifacts") or {}
     if not artifacts:
+        diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+        if diagnostics:
+            return (
+                '<section class="panel"><h2>Planner Probe Diagnostic Views</h2>'
+                f"{_task_sampler_diagnostic_views(diagnostics)}</section>"
+            )
         return ""
+    figures = "".join(
+        _view_figure(path, _image_artifact_label(label))
+        for label, path in _ordered_image_artifacts(artifacts)
+    )
     return (
         '<section class="panel"><h2>Planner Probe Views</h2>'
         '<div class="views">'
-        f"{_view_figure(artifacts.get('initial'), 'Initial')}"
-        f"{_view_figure(artifacts.get('final'), 'Final')}"
-        "</div></section>"
+        f"{figures}</div></section>"
     )
+
+
+def _ordered_image_artifacts(artifacts: dict[str, Any]) -> list[tuple[str, Any]]:
+    preferred = ("initial", "final")
+    items = []
+    for key in preferred:
+        if artifacts.get(key):
+            items.append((key, artifacts[key]))
+    items.extend(
+        (str(key), value)
+        for key, value in sorted(artifacts.items())
+        if key not in preferred and value
+    )
+    return items
+
+
+def _image_artifact_label(value: Any) -> str:
+    text = str(value or "").replace("_", " ").replace("-", " ").strip()
+    if not text:
+        return "Planner view"
+    return " ".join(part.capitalize() for part in text.split())
+
+
+def _task_sampler_diagnostic_views(diagnostics: dict[str, Any]) -> str:
+    if not diagnostics:
+        return ""
+    return f'<div class="views">{_task_sampler_diagnostic_figure(diagnostics)}</div>'
+
+
+def _post_placement_rejection_views(diagnostics: dict[str, Any]) -> str:
+    grasp_failures = [
+        item for item in diagnostics.get("grasp_failures") or [] if isinstance(item, dict)
+    ]
+    if not grasp_failures:
+        return ""
+    removed = [item for item in grasp_failures if item.get("removed_candidate")]
+    first = grasp_failures[0]
+    object_name = str(first.get("object_name") or "sampled object")
+    grasp_count = _safe_int(diagnostics.get("grasp_failure_count"), len(grasp_failures))
+    removal_count = _safe_int(
+        diagnostics.get("candidate_removal_count"),
+        len(diagnostics.get("candidate_removals") or []),
+    )
+    max_value = max(grasp_count, removal_count, len(removed), 1)
+    grasp_width = _scaled_bar_width(grasp_count, max_value)
+    removal_width = _scaled_bar_width(removal_count, max_value)
+    removed_width = _scaled_bar_width(len(removed), max_value)
+    stats = [
+        ("Grasp failures", grasp_count),
+        ("Candidate removals", removal_count),
+        ("Removed by threshold", len(removed)),
+        ("Candidate rows", len(grasp_failures)),
+        ("Candidates before", first.get("candidate_count_before", "")),
+        ("Candidates after", first.get("candidate_count_after", "")),
+    ]
+    stat_html = "".join(
+        '<span class="diagnostic-stat">'
+        f"<small>{html.escape(str(label))}</small>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        "</span>"
+        for label, value in stats
+        if value != ""
+    )
+    return (
+        '<div class="post-placement-rejection-views">'
+        "<h3>Post-Placement Rejection Views</h3>"
+        '<div class="views"><figure class="diagnostic-view rejection-view">'
+        '<div class="diagnostic-visual" role="img" '
+        'aria-label="Post-placement rejection flow">'
+        '<svg viewBox="0 0 360 210" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="360" height="210" rx="8" fill="#fff7ed"/>'
+        '<text x="24" y="34" fill="#0f172a" font-size="15" font-weight="700">'
+        "Post-placement rejection flow</text>"
+        '<text x="24" y="58" fill="#64748b" font-size="12">'
+        f"{html.escape(object_name)}</text>"
+        '<text x="24" y="91" fill="#334155" font-size="12">grasp failures</text>'
+        '<rect x="150" y="79" width="170" height="14" rx="7" fill="#fed7aa"/>'
+        f'<rect x="150" y="79" width="{grasp_width}" height="14" rx="7" fill="#f97316"/>'
+        '<text x="326" y="91" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{grasp_count}</text>"
+        '<text x="24" y="128" fill="#334155" font-size="12">candidate removals</text>'
+        '<rect x="150" y="116" width="170" height="14" rx="7" fill="#fecaca"/>'
+        f'<rect x="150" y="116" width="{removal_width}" height="14" rx="7" fill="#ef4444"/>'
+        '<text x="326" y="128" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{removal_count}</text>"
+        '<text x="24" y="165" fill="#334155" font-size="12">threshold removals</text>'
+        '<rect x="150" y="153" width="170" height="14" rx="7" fill="#e2e8f0"/>'
+        f'<rect x="150" y="153" width="{removed_width}" height="14" rx="7" fill="#64748b"/>'
+        '<text x="326" y="165" fill="#0f172a" font-size="12" text-anchor="end">'
+        f"{len(removed)}</text>"
+        "</svg>"
+        "</div>"
+        f"<figcaption>Post-placement rejection flow: {html.escape(object_name)}</figcaption>"
+        f'<div class="diagnostic-stats">{stat_html}</div>'
+        "</figure></div></div>"
+    )
+
+
+def _task_sampler_diagnostic_figure(diagnostics: dict[str, Any]) -> str:
+    last = diagnostics.get("last_placement_scene_diagnostic") or {}
+    target = str(last.get("target_name") or "target")
+    fraction = _safe_float(last.get("valid_neighborhood_fraction"))
+    fraction_text = _format_fraction(last.get("valid_neighborhood_fraction", ""))
+    bar_width = int(max(0.0, min(fraction, 1.0)) * 125)
+    placement_attempts = int(diagnostics.get("robot_placement_attempt_count") or 0)
+    placement_failures = int(diagnostics.get("robot_placement_failure_count") or 0)
+    grasp_failures = int(diagnostics.get("grasp_failure_count") or 0)
+    candidate_removals = int(diagnostics.get("candidate_removal_count") or 0)
+    nearest = last.get("nearest_free_point_distance_m", "")
+    stats = [
+        ("Placement attempts", placement_attempts),
+        ("Placement failures", placement_failures),
+        ("Grasp failures", grasp_failures),
+        ("Candidate removals", candidate_removals),
+        ("Free-space fraction", fraction_text),
+        ("Nearest free distance", nearest),
+    ]
+    stat_html = "".join(
+        '<span class="diagnostic-stat">'
+        f"<small>{html.escape(str(label))}</small>"
+        f"<strong>{html.escape(str(value))}</strong>"
+        "</span>"
+        for label, value in stats
+        if value != ""
+    )
+    return (
+        '<figure class="diagnostic-view">'
+        '<div class="diagnostic-visual" role="img" aria-label="Task sampler diagnostic view">'
+        '<svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">'
+        '<rect x="0" y="0" width="360" height="220" rx="8" fill="#f8fafc"/>'
+        '<circle cx="110" cy="104" r="70" fill="#e0f2fe" stroke="#0284c7" '
+        'stroke-width="2" stroke-dasharray="7 5"/>'
+        '<circle cx="110" cy="104" r="9" fill="#f97316"/>'
+        '<path d="M110 104 L166 64" stroke="#475569" stroke-width="2"/>'
+        '<circle cx="166" cy="64" r="6" fill="#475569"/>'
+        '<text x="30" y="196" fill="#334155" font-size="13">target</text>'
+        '<text x="145" y="196" fill="#334155" font-size="13">nearest free point</text>'
+        '<text x="215" y="54" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{html.escape(str(fraction_text))}</text>"
+        '<text x="215" y="75" fill="#475569" font-size="12">free-space fraction</text>'
+        '<rect x="215" y="92" width="125" height="12" rx="6" fill="#e2e8f0"/>'
+        f'<rect x="215" y="92" width="{bar_width}" height="12" rx="6" fill="#22c55e"/>'
+        '<text x="215" y="134" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{grasp_failures}</text>"
+        '<text x="215" y="155" fill="#475569" font-size="12">grasp failures</text>'
+        '<text x="215" y="184" fill="#0f172a" font-size="16" font-weight="700">'
+        f"{candidate_removals}</text>"
+        '<text x="215" y="205" fill="#475569" font-size="12">candidate removals</text>'
+        "</svg>"
+        "</div>"
+        f"<figcaption>Task sampler diagnostic: {html.escape(target)}</figcaption>"
+        f'<div class="diagnostic-stats">{stat_html}</div>'
+        "</figure>"
+    )
+
+
+def _safe_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _scaled_bar_width(value: int, max_value: int, *, width: int = 170) -> int:
+    if max_value <= 0:
+        return 0
+    return int(max(0.0, min(float(value) / float(max_value), 1.0)) * width)
 
 
 def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
@@ -1293,6 +1776,10 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         (
             "Exact sampler adapter applied",
             _yes_no(cleanup_task_sampler_adapter.get("applied")),
+        ),
+        (
+            "Exact sampler adapter class",
+            cleanup_task_sampler_adapter.get("task_sampler_class", ""),
         ),
         (
             "Exact sampler adapter target",
@@ -1357,6 +1844,333 @@ def _planner_probe_cleanup_binding_section(evidence: dict[str, Any]) -> str:
         '<section class="panel planner-probe-cleanup-binding">'
         "<h2>Planner Probe Cleanup Binding</h2>"
         f'<p class="note">{html.escape(note)}</p>{metrics}{table}{blocker_table}</section>'
+    )
+
+
+def _planner_probe_task_sampler_robot_placement_profile_section(evidence: dict[str, Any]) -> str:
+    profile = evidence.get("task_sampler_robot_placement_profile") or {}
+    if not profile:
+        return ""
+    before = profile.get("before") or {}
+    after = profile.get("after") or {}
+    overrides = profile.get("applied_overrides") or {}
+    place_overrides = profile.get("place_robot_near_overrides") or {}
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Profile', profile.get('profile', 'none'))}"
+        f"{_metric('Requested', _yes_no(profile.get('requested')))}"
+        f"{_metric('Applied', _yes_no(profile.get('applied')))}"
+        f"{_metric('place_robot_near max tries', place_overrides.get('max_tries', ''))}"
+        "</div>"
+    )
+    rows = [
+        ("Base pose radius before", before.get("base_pose_sampling_radius_range", "")),
+        ("Base pose radius after", after.get("base_pose_sampling_radius_range", "")),
+        ("Robot safety radius before", before.get("robot_safety_radius", "")),
+        ("Robot safety radius after", after.get("robot_safety_radius", "")),
+        ("Visibility check before", _yes_no(before.get("check_robot_placement_visibility"))),
+        ("Visibility check after", _yes_no(after.get("check_robot_placement_visibility"))),
+        ("Max placement attempts before", before.get("max_robot_placement_attempts", "")),
+        ("Max placement attempts after", after.get("max_robot_placement_attempts", "")),
+        ("Applied config overrides", overrides),
+        ("place_robot_near overrides", place_overrides),
+    ]
+    blockers = profile.get("blockers") or []
+    blocker_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('code', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in blockers
+        if isinstance(item, dict)
+    )
+    blocker_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Blocker</th><th>Message</th></tr>'
+        f"</thead><tbody>{blocker_rows}</tbody></table></div>"
+        if blocker_rows
+        else ""
+    )
+    note = profile.get("evidence_note") or (
+        "Task sampler robot-placement profiles are probe-local mitigations. They do "
+        "not change the cleanup contract or count as planner-backed proof by themselves."
+    )
+    return (
+        '<section class="panel planner-probe-task-sampler-placement-profile">'
+        "<h2>Task Sampler Robot Placement Profile</h2>"
+        f'<p class="note">{html.escape(str(note))}</p>{metrics}{_field_table(rows)}'
+        f"{blocker_table}</section>"
+    )
+
+
+def _planner_probe_task_sampler_failure_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    if not diagnostics:
+        return ""
+    attempts = diagnostics.get("robot_placement_attempts") or []
+    asset_failures = diagnostics.get("asset_failures") or []
+    candidate_removals = diagnostics.get("candidate_removals") or []
+    place_robot_near_calls = diagnostics.get("place_robot_near_calls") or []
+    config = diagnostics.get("robot_placement_config") or {}
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Adapter applied', _yes_no(diagnostics.get('applied')))}"
+        f"{_metric('Placement attempts', diagnostics.get('robot_placement_attempt_count', 0))}"
+        f"{_metric('Placement failures', diagnostics.get('robot_placement_failure_count', 0))}"
+        f"{_metric('Asset failures', diagnostics.get('asset_failure_count', 0))}"
+        "</div>"
+    )
+    config_rows = [
+        ("Task sampler class", diagnostics.get("task_sampler_class", "")),
+        ("Hooks", ", ".join(str(item) for item in diagnostics.get("hooks") or [])),
+        ("Base pose radius", config.get("base_pose_sampling_radius_range", "")),
+        ("Robot safety radius", config.get("robot_safety_radius", "")),
+        ("Visibility check", _yes_no(config.get("check_robot_placement_visibility"))),
+        ("Max robot placement attempts", config.get("max_robot_placement_attempts", "")),
+        (
+            "place_robot_near overrides",
+            diagnostics.get("place_robot_near_overrides") or "",
+        ),
+    ]
+    config_table = _field_table(config_rows)
+    attempt_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('attempt_index', '')))}</td>"
+        f"<td>{html.escape(str(item.get('pickup_obj_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('result', '')))}</td>"
+        f"<td>{html.escape(str(item.get('exception_type', '')))}</td>"
+        f"<td>{html.escape(str(item.get('message', '')))}</td>"
+        "</tr>"
+        for item in attempts
+        if isinstance(item, dict)
+    )
+    if not attempt_rows:
+        attempt_rows = '<tr><td colspan="6">No robot placement attempts recorded.</td></tr>'
+    attempt_table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Pickup object</th>'
+        "<th>Asset UID</th><th>Result</th><th>Exception</th><th>Message</th>"
+        f"</tr></thead><tbody>{attempt_rows}</tbody></table></div>"
+    )
+    asset_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('asset_uid', '')))}</td>"
+        f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+        "</tr>"
+        for item in asset_failures
+        if isinstance(item, dict)
+    )
+    removal_rows = "".join(
+        f"<tr><td>{html.escape(str(item.get('object_name', '')))}</td></tr>"
+        for item in candidate_removals
+        if isinstance(item, dict)
+    )
+    call_rows = "".join(
+        _place_robot_near_call_row(item)
+        for item in place_robot_near_calls
+        if isinstance(item, dict)
+    )
+    supporting_tables = ""
+    if call_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>#</th>'
+            "<th>Requested max tries</th><th>Effective max tries</th>"
+            "<th>Effective safety radius</th><th>Effective visibility</th><th>Result</th>"
+            f"</tr></thead><tbody>{call_rows}</tbody></table></div>"
+        )
+    if asset_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>Asset UID</th>'
+            f"<th>Reason</th></tr></thead><tbody>{asset_rows}</tbody></table></div>"
+        )
+    if removal_rows:
+        supporting_tables += (
+            '<div class="table-wrap"><table><thead><tr><th>Removed candidate</th>'
+            f"</tr></thead><tbody>{removal_rows}</tbody></table></div>"
+        )
+    note = (
+        "Task sampler failure diagnostics are probe-local wrappers around upstream "
+        "sampler hooks. They make upstream robot-placement failures visible without "
+        "changing the cleanup contract or promoting planner-backed cleanup readiness."
+    )
+    return (
+        '<section class="panel planner-probe-task-sampler-failure">'
+        "<h2>Task Sampler Failure Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{config_table}'
+        f"{attempt_table}{supporting_tables}</section>"
+    )
+
+
+def _planner_probe_placement_scene_diagnostics_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    scene_diagnostics = diagnostics.get("placement_scene_diagnostics") or []
+    if not scene_diagnostics:
+        return ""
+    last = diagnostics.get("last_placement_scene_diagnostic") or scene_diagnostics[-1]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Scene diagnostics', _scene_diagnostic_count(diagnostics, scene_diagnostics))}"
+        f"{_metric('Valid free points', last.get('valid_free_point_count', ''))}"
+        f"{_metric('Free-space fraction', _scene_free_space_fraction(last))}"
+        f"{_metric('Low free space', _yes_no(last.get('low_free_space')))}"
+        f"{_metric('Nearest free distance', last.get('nearest_free_point_distance_m', ''))}"
+        "</div>"
+    )
+    rows = [
+        ("Target", last.get("target_name", "")),
+        ("Target position", last.get("target_position", "")),
+        ("Sampling radius range", last.get("sampling_radius_range", "")),
+        ("Sampling area m2", last.get("sampling_area_m2", "")),
+        ("Robot safety radius", last.get("robot_safety_radius", "")),
+        ("px per meter", last.get("px_per_m", "")),
+        ("Total free points", last.get("total_free_point_count", "")),
+        ("Nearest free point", last.get("nearest_free_point", "")),
+        ("Error", last.get("error", "")),
+    ]
+    scene_rows = "".join(
+        _placement_scene_diagnostic_row(item)
+        for item in scene_diagnostics
+        if isinstance(item, dict)
+    )
+    scene_table = (
+        '<div class="table-wrap"><table><thead><tr><th>#</th><th>Target</th>'
+        "<th>Valid free points</th><th>Free-space fraction</th>"
+        "<th>Nearest free distance</th><th>Low free space</th></tr></thead>"
+        f"<tbody>{scene_rows}</tbody></table></div>"
+        if scene_rows
+        else ""
+    )
+    band_rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('radius_min_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('radius_max_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('free_point_count', '')))}</td>"
+        "</tr>"
+        for item in last.get("radius_band_counts") or []
+        if isinstance(item, dict)
+    )
+    band_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Radius min m</th>'
+        "<th>Radius max m</th><th>Free points</th></tr></thead>"
+        f"<tbody>{band_rows}</tbody></table></div>"
+        if band_rows
+        else ""
+    )
+    note = (
+        "Scene diagnostics summarize public map free-space around the actual "
+        "upstream robot-placement target. They explain placement feasibility "
+        "without changing cleanup semantics."
+    )
+    return (
+        '<section class="panel planner-probe-placement-scene-diagnostics">'
+        "<h2>Placement Scene Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}{_field_table(rows)}'
+        f"{scene_table}{band_table}</section>"
+    )
+
+
+def _planner_probe_post_placement_rejection_section(evidence: dict[str, Any]) -> str:
+    diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    grasp_failures = diagnostics.get("grasp_failures") or []
+    if not grasp_failures:
+        return ""
+    removed = [
+        item for item in grasp_failures if isinstance(item, dict) and item.get("removed_candidate")
+    ]
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Grasp failures', diagnostics.get('grasp_failure_count', len(grasp_failures)))}"
+        f"{_metric('Candidate removals', diagnostics.get('candidate_removal_count', 0))}"
+        f"{_metric('Removed by grasp threshold', len(removed))}"
+        "</div>"
+    )
+    rows = "".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('object_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('max_failures', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_before', '')))}</td>"
+        f"<td>{html.escape(str(item.get('candidate_count_after', '')))}</td>"
+        f"<td>{html.escape(str(item.get('removed_candidate', '')))}</td>"
+        "</tr>"
+        for item in grasp_failures
+        if isinstance(item, dict)
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Object</th>'
+        "<th>Count before</th><th>Count after</th><th>Max failures</th>"
+        "<th>Candidates before</th><th>Candidates after</th><th>Removed</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+    )
+    note = (
+        "Post-placement candidate rejection diagnostics explain failures after "
+        "robot placement succeeds, such as grasp-feasibility thresholds removing "
+        "the sampled object from the candidate pool."
+    )
+    return (
+        '<section class="panel planner-probe-post-placement-rejections">'
+        "<h2>Post-Placement Candidate Rejections</h2>"
+        f'<p class="note">{html.escape(note)}</p>{metrics}'
+        f"{_post_placement_rejection_views(diagnostics)}{table}</section>"
+    )
+
+
+def _placement_scene_diagnostic_row(item: dict[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(item.get('call_index', '')))}</td>"
+        f"<td>{html.escape(str(item.get('target_name', '')))}</td>"
+        f"<td>{html.escape(str(item.get('valid_free_point_count', '')))}</td>"
+        f"<td>{html.escape(str(_scene_free_space_fraction(item)))}</td>"
+        f"<td>{html.escape(str(item.get('nearest_free_point_distance_m', '')))}</td>"
+        f"<td>{html.escape(str(item.get('low_free_space', '')))}</td>"
+        "</tr>"
+    )
+
+
+def _scene_diagnostic_count(
+    diagnostics: dict[str, Any],
+    scene_diagnostics: list[dict[str, Any]],
+) -> Any:
+    return diagnostics.get("placement_scene_diagnostic_count", len(scene_diagnostics))
+
+
+def _format_fraction(value: Any) -> Any:
+    if isinstance(value, float):
+        return f"{value:.6f}"
+    return value
+
+
+def _scene_free_space_fraction(item: dict[str, Any]) -> Any:
+    return _format_fraction(item.get("valid_neighborhood_fraction", ""))
+
+
+def _place_robot_near_call_row(item: dict[str, Any]) -> str:
+    requested = item.get("requested") or {}
+    effective = item.get("effective") or {}
+    return (
+        "<tr>"
+        f"<td>{html.escape(str(item.get('call_index', '')))}</td>"
+        f"<td>{html.escape(str(requested.get('max_tries', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('max_tries', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('robot_safety_radius', '')))}</td>"
+        f"<td>{html.escape(str(effective.get('check_camera_visibility', '')))}</td>"
+        f"<td>{html.escape(str(item.get('result', '')))}</td>"
+        "</tr>"
+    )
+
+
+def _field_table(rows: list[tuple[str, Any]]) -> str:
+    table_rows = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+        if value not in (None, "")
+    )
+    if not table_rows:
+        table_rows = '<tr><td colspan="2">No values recorded.</td></tr>'
+    return (
+        '<div class="table-wrap"><table><thead><tr><th>Field</th><th>Value</th>'
+        f"</tr></thead><tbody>{table_rows}</tbody></table></div>"
     )
 
 
@@ -2161,6 +2975,27 @@ def _view_figure(path: Any, label: str) -> str:
     )
 
 
+def _report_asset_src(path: Any, output_dir: Path | None) -> str:
+    if not path:
+        return ""
+    path_text = str(path)
+    if output_dir is None or path_text.startswith(("http://", "https://", "data:")):
+        return path_text
+    candidate = Path(path_text)
+    try:
+        if candidate.is_absolute():
+            asset_path = candidate
+        elif candidate.exists():
+            asset_path = candidate.resolve()
+        elif (output_dir / candidate).exists():
+            asset_path = (output_dir / candidate).resolve()
+        else:
+            return path_text
+        return Path(os.path.relpath(asset_path, output_dir.resolve())).as_posix()
+    except OSError:
+        return path_text
+
+
 def _moves_table(moves: list[dict[str, Any]]) -> str:
     if not moves:
         return "<p>No place operations recorded.</p>"
@@ -2387,6 +3222,76 @@ def _wrap_html(body: str) -> str:
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
+    }}
+    .diagnostic-view {{
+      background: #ffffff;
+    }}
+    .diagnostic-visual {{
+      border-radius: 8px;
+      overflow: hidden;
+      background: #f8fafc;
+    }}
+    .diagnostic-visual svg {{
+      width: 100%;
+      height: auto;
+      display: block;
+    }}
+    .diagnostic-stats {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }}
+    .diagnostic-stat {{
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8fafc;
+    }}
+    .diagnostic-stat small {{
+      display: block;
+      color: #64748b;
+      margin-bottom: 3px;
+    }}
+    .diagnostic-stat strong {{
+      color: #0f172a;
+    }}
+    .post-placement-rejection-views h3 {{
+      margin: 14px 0 8px;
+      font-size: 15px;
+    }}
+    .rejection-view .diagnostic-visual {{
+      background: #fff7ed;
+    }}
+    .grasp-blocker-matrix {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }}
+    .grasp-blocker-card {{
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fff7f7;
+    }}
+    .grasp-blocker-route {{
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }}
+    .grasp-blocker-route strong {{
+      overflow-wrap: anywhere;
+    }}
+    .grasp-blocker-route span {{
+      color: #64748b;
+      font-size: 12px;
+    }}
+    .grasp-blocker-card p {{
+      margin: 8px 0 0;
+      color: #475569;
     }}
     .raw-fpv-grid {{
       display: grid;

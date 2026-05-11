@@ -29,6 +29,126 @@ _Avoid_: Oracle fixture map
 A public fixture pose used as an easier fallback when room-level hints make cleanup too unreliable.
 _Avoid_: Default landmark truth
 
+**Task Sampler Robot Placement Profile**:
+A probe-local set of placement-search overrides used to test whether an
+upstream MolmoSpaces sampled task is blocked by robot base-placement strictness.
+It must be rendered as mitigation evidence, not treated as cleanup success or
+planner-backed readiness.
+_Avoid_: Hidden sampler patch, proof success flag
+
+**Placement Scene Diagnostics**:
+Probe-local report evidence that summarizes public map free space around the
+actual upstream robot-placement target, including valid free-point counts,
+nearest free-point distance, and radius-band counts.
+_Avoid_: hidden planner fix, success proof
+
+**Wide Placement Profile**:
+A probe-local robot-placement mitigation profile that extends placement search
+to `[0.0, 2.0]m` and raises the effective upstream `place_robot_near` budget to
+100 tries. It is evidence for task-feasibility diagnosis, not cleanup success.
+_Avoid_: production placement policy, readiness proof
+
+**Post-Placement Candidate Rejections**:
+Probe-local report evidence for task-sampler rejection after robot placement
+succeeds, including grasp-failure counts and candidate-removal calls.
+_Avoid_: robot placement failure, planner execution failure
+
+**Grasp-Feasibility Blocker**:
+A proof-result classification for exact-scene requests that clear robot
+placement but fail through post-placement grasp/candidate rejection.
+_Avoid_: generic task-feasibility blocker
+
+**Grasp-Feasibility Selection Memory**:
+Proof-request selection evidence that carries a prior grasp-feasibility blocker
+kind/detail into excluded requests, fallback provenance, filtered fallback
+pairs, and runner report blocker views.
+_Avoid_: hidden retry heuristic, cleanup readiness proof
+
+**Cleanup-Pair Proof Memory**:
+Proof-request selection memory matched by public cleanup `object_id` plus
+`target_receptacle_id` when a regenerated proof request has a different
+request ID.
+_Avoid_: planner-alias-only memory, hidden object identity
+
+**Standalone Prior Proof Result Ingest**:
+The proof-bundle runner behavior that loads standalone planner-probe
+`run_result.json` artifacts into the shared **Planner Proof Result Summary**
+interface before proof request selection.
+_Avoid_: manual synthetic prior summary wrapper, treating standalone probes as proof-bundle manifests
+
+**Prior Proof Evidence View**:
+The proof-bundle runner report section that renders normalized prior proof
+results, including diagnostic rows, proof report links, and planner-view image
+artifacts when present.
+_Avoid_: selection-only prior evidence, hidden prior visual artifacts
+
+**Nested Prior Proof Evidence Carry-Forward**:
+The proof-bundle runner behavior that re-ingests a prior proof-bundle
+manifest's own `prior_proof_result_summary` together with its current
+`proof_result_summary`, so prior evidence survives across multiple runner
+generations.
+_Avoid_: single-hop prior memory, dropping nested blocker evidence
+
+**Planner-Object Proof Memory**:
+Proof-request selection memory keyed by internal planner object alias plus
+public target receptacle, used when public `observed_*` handles or request IDs
+change across broader cleanup artifacts.
+_Avoid_: global request ID memory, observed-handle-only proof memory
+
+**Selected Proof Candidate Execution**:
+Local-dev execution of the currently selected exact-scene proof request after
+prior infeasible requests are filtered.
+_Avoid_: treating selected as feasible before execution
+
+**Broader Selected Proof Execution**:
+Local-dev execution of selected exact-scene proof requests from a broader
+cleanup artifact, after known internal blocked pairs are filtered, to record
+strict proof, cleanup binding, and visual evidence before a cleanup rerun.
+_Avoid_: treating selection as proof, treating one passing proof as full cleanup readiness
+
+**Broader Bound Proof Cleanup Rerun**:
+Final cleanup rerun that consumes an already passing broader bound proof and
+verifies the matching cleanup object uses planner-backed primitive evidence
+while unmatched objects remain honest `api_semantic` work.
+_Avoid_: re-executing proof bundles, full bridge-ready claim from one bound object
+
+**Prior Covered Proof Memory**:
+Proof-request selection memory that excludes prior results that are already
+`planner_backed` and have promoted cleanup binding, so broader proof execution
+expands coverage instead of retrying solved cleanup object/target pairs.
+_Avoid_: rerunning passing bound proofs
+
+**Planner Failure Diagnostic Views**:
+The shared report visual surface for exact-scene planner probes that fail
+during task sampling before normal initial/final planner views exist. Future
+runs should prefer captured post-placement camera artifacts through
+`image_artifacts`; older diagnostic-only artifacts may render inline
+task-sampler visual summaries instead of an empty no-view state.
+_Avoid_: second report renderer, table-only blocked proof
+
+**Post-Placement Rejection Views**:
+The shared report visual surface for grasp-feasibility blockers after robot
+placement succeeds, showing grasp failures, candidate removals, threshold
+removals, and candidate-count movement from task-sampler diagnostics.
+_Avoid_: table-only grasp-feasibility blocker, per-report rejection chart
+
+**Grasp-Feasibility Blocker Matrix**:
+The proof-bundle selection report view that summarizes grasp-infeasible
+object-target pairs as cards before the detailed blocker table, preserving the
+source request, match kind, and blocker summary.
+_Avoid_: table-only selection blocker review
+
+**Proof-Bundle Local Runtime Preflight**:
+The proof-bundle runner evidence that checks the configured MolmoSpaces Python
+runtime before real `--execute-probes` commands, rendering missing import or
+missing executable blockers instead of failing before `report.html` exists.
+_Avoid_: local-dev crash before manifest, treating runtime setup as proof failure
+
+**Canonical MolmoSpaces Runtime Import**:
+The runtime preflight import name for upstream MolmoSpaces Python packages:
+`molmo_spaces`, not the colloquial project label `molmospaces`.
+_Avoid_: false blocked preflight from wrong package name
+
 **Cleanup Sweep**:
 A bounded inspection-and-cleanup attempt where the Cleanup Agent searches for plausible misplaced objects without knowing the target list or target count.
 _Avoid_: Fixed target run
@@ -160,6 +280,12 @@ _Avoid_: Accidental success
 **Cleanup Artifact Report**:
 The shared HTML review artifact for MolmoSpaces cleanup demos, backed by one report renderer and one semantic timeline model.
 _Avoid_: Per-demo report clone
+
+**Cleanup Report Artifact Adapter**:
+A small adapter whose interface starts from an existing cleanup `run_result.json`
+and rehydrates scenario, trace, snapshots, private manifest, and robot-view
+steps before delegating to the shared Cleanup Artifact Report underlay.
+_Avoid_: second report renderer, manual stale HTML repair
 
 **Report Visual Core**:
 The stable first-pass review sequence inside a Cleanup Artifact Report: Before/After, Object Moves, Semantic Cleanup Subphases, Robot View Timeline, and Score.
@@ -361,6 +487,18 @@ selection-owned blocker table.
 _Avoid_: splitting the current target-side blocker across source and fallback
 tables that reviewers must reconcile manually
 
+**Task Sampler Exception Context**:
+The planner-probe evidence preserved when exact cleanup task sampling fails
+before policy execution, including exact task config, sampler adapter state,
+requested cleanup binding, worker stage, and blockers.
+_Avoid_: treating `HouseInvalidForTask` as a context-free sampler failure
+
+**Task Sampler Failure Diagnostics**:
+The probe-local evidence captured from upstream task-sampler hooks when
+`HouseInvalidForTask` occurs, including robot-placement attempts, asset failure
+reasons, candidate removals, and placement config.
+_Avoid_: leaving robot-placement failures only in stderr logs
+
 **Planner Proof Bundle Runner Checker**:
 The artifact gate that validates local proof-bundle runner manifests and
 reports before or after real proof generation.
@@ -521,6 +659,35 @@ _Avoid_: full cleanup replacement claim
   target aliases need separate task-feasibility evidence.
 - **Prior Proof Evidence Merge** should combine older alias-discovery evidence
   with newer failed-candidate memory before generating fallback proof commands.
+- **Standalone Prior Proof Result Ingest** should normalize standalone planner
+  probes to **Planner Proof Result Summary** before selection, so prior bundle
+  manifests and standalone probes share one selection and report interface.
+- A **Prior Proof Evidence View** should render normalized prior proof results
+  in the runner report before new proof commands, so consumed blocker evidence
+  keeps its report links and planner-view images.
+- **Planner Proof Bundle Runner Report** proof-result image sources should use
+  the same report-relative asset policy as standalone proof reports. Manifest
+  fields may keep trace paths, but generated HTML should not require a second
+  visual implementation or output-dir-prefixed `src` values.
+- **Nested Prior Proof Evidence Carry-Forward** should merge nested prior proof
+  summaries before selection so a later proof-bundle manifest can stand alone
+  as the next prior input.
+- **Planner-Object Proof Memory** should run after guarded request-ID and
+  cleanup-pair matching so broader cleanup artifacts can select new requests
+  without retrying known internal blocked object/target pairs.
+- **Selected Proof Candidate Execution** should be checker-gated with required
+  proof outputs before treating a selected exact-scene request as feasible or
+  as a durable blocker.
+- **Broader Selected Proof Execution** should follow **Planner-Object Proof
+  Memory** and precede cleanup rerun; one passing bound proof can feed a rerun
+  slice but does not prove all generated objects are planner-backed.
+- **Broader Bound Proof Cleanup Rerun** should require the matching bound
+  object to be strict planner-backed, require at least one unmatched object to
+  remain `api_semantic`, and keep the global bridge blocked until every cleaned
+  object has matching proof.
+- **Prior Covered Proof Memory** should run alongside task-feasibility memory
+  before broader proof execution, so already solved planner-backed cleanup
+  bindings are visible as covered exclusions instead of selected again.
 - **Fallback Exhaustion Status** should make no-command generated fallback
   states visible in the runner report and checker when all candidates are
   filtered or unavailable.
@@ -541,6 +708,12 @@ _Avoid_: full cleanup replacement claim
   execution is treated as cleanup primitive evidence. Synthetic cleanup aliases
   may prove report and command shape, but not exact planner-backed cleanup
   replacement.
+- **Task Sampler Exception Context** should be rendered when upstream task
+  sampling raises before policy execution, so target-feasibility blockers show
+  whether the exact sampler adapter was applied before `HouseInvalidForTask`.
+- **Task Sampler Failure Diagnostics** should be captured through probe-local
+  wrappers around upstream sampler hooks, not by parsing stderr as the primary
+  evidence source.
 
 ## Example Dialogue
 
@@ -632,3 +805,118 @@ _Avoid_: full cleanup replacement claim
   reports `disabled`, `not_required`, `generated`, or `exhausted`, and the
   proof-bundle runner report/checker make the exhausted no-command state
   explicit.
+- Phase 72 summarized fallback exhaustion blockers, naming root-body alias gaps,
+  target task-feasibility-blocked pairs, and no-candidate source requests in
+  the runner report.
+- Phase 73 normalized non-root pickup runtime aliases back to variant-0 root
+  aliases, proving the current object-side aliases were already derivable.
+- Phase 74 preserved target-feasibility proof links for filtered fallback pairs
+  and prevented colliding generated request IDs from hiding distinct prior
+  attempts.
+- Phase 75 joined source request blockers and generated fallback-pair blockers
+  into one Target Feasibility Blocker Matrix.
+- Phase 76 preserved Task Sampler Exception Context so warmed local
+  `HouseInvalidForTask` reports show the exact sampler adapter was applied
+  before upstream task feasibility failed.
+- Phase 77 captured Task Sampler Failure Diagnostics. The warmed local report
+  shows the current exact book/shelf task fails through repeated robot
+  placement attempts for `Book_23`, not missing alias or sampler-adapter
+  context.
+- Phase 78 added the Task Sampler Robot Placement Profile. The warmed local
+  report proves the relaxed profile affects the actual upstream
+  `place_robot_near` calls, but the exact `Book_23` request still fails after
+  17 effective `max_tries=50` placement attempts.
+- Phase 79 added Placement Scene Diagnostics. The warmed local report shows the
+  exact `Book_23` request has low local free space: 2,231 valid free map points
+  in the `[0.0, 1.2]m` annulus, a 0.012326 free-space fraction, no free points
+  within 1.0m, and the nearest free point at 1.111824m.
+- Phase 80 added the Wide Placement Profile. The warmed local report shows the
+  exact `Book_23` request now clears robot placement with 17/17 successful
+  `place_robot_near` calls at effective `max_tries=100`, but still ends in
+  `HouseInvalidForTask` after downstream candidate removals.
+- Phase 81 added Post-Placement Candidate Rejections. The warmed local report
+  shows the exact `Book_23` request records 17 grasp-failure reports and 15
+  candidate-removal calls after placement succeeds, so the remaining blocker is
+  grasp/candidate feasibility rather than robot base placement.
+- Phase 82 added Grasp-Feasibility Blocker classification. Proof-result
+  summaries now classify the Phase 81 artifact as `grasp_feasibility` with
+  `17 grasp failures; 15 candidate-removal calls`.
+- Phase 83 added Grasp-Feasibility Selection Memory. Proof request selection now
+  preserves that blocker kind/detail through excluded requests, generated
+  fallback provenance, filtered fallback pairs, and runner report blocker views.
+- Phase 84 added Cleanup-Pair Proof Memory. Prior proof results now match by
+  `request_id` first, then by cleanup `object_id` plus `target_receptacle_id`,
+  and runner reports show the `Prior match` kind.
+- Phase 85 added Standalone Prior Proof Result Ingest. The runner can now load
+  Phase 81-style standalone planner-probe `run_result.json` evidence, normalize
+  it to proof-result summary, select by cleanup pair, render grasp blocker
+  evidence, and check partial selection with an exhausted fallback pool.
+- Phase 86 added Prior Proof Evidence View. Runner manifests now carry
+  `prior_proof_result_summary`, and runner reports render consumed prior proof
+  diagnostics, paths, and planner-view images before new proof commands.
+- Phase 87 added Selected Proof Candidate Execution. The remaining selected
+  `proof_002` bowl/sink request executed locally, passed runner checking with
+  required outputs, and was classified as `grasp_feasibility` blocked with
+  `17 grasp failures; 15 candidate-removal calls`.
+- Phase 88 added Nested Prior Proof Evidence Carry-Forward. A Phase87
+  proof-bundle manifest can now stand alone as prior input, preserving nested
+  Phase81 evidence plus Phase87 proof results; the dry-run excluded both source
+  requests, generated zero commands, and rendered both prior evidence rows.
+- Phase 89 added Planner-Object Proof Memory. A broader 10-object MolmoSpaces
+  cleanup artifact produced 10 ready proof requests and 176 robot-view images;
+  the proof-bundle dry-run selected 8 new candidates while excluding the two
+  known internal book/bowl blocked pairs by planner-object/public-target match.
+- Phase 90 added Broader Selected Proof Execution. The executed runner bundle
+  ran all 8 selected candidates with warmup and wide placement; `proof_008`
+  became a strict planner-backed remote-control-to-stand proof with promoted
+  cleanup binding and report-relative initial/final planner views, while the
+  other 7 candidates were classified as `grasp_feasibility` blocked.
+- Phase 91 added Broader Bound Proof Cleanup Rerun. The cleanup rerun consumed
+  the existing `proof_008` artifact without re-executing the proof bundle,
+  rendered the full visual report surface, made `observed_008` strict
+  planner-backed for `nav, pick, nav, place`, and kept the global bridge
+  blocked with 38 unmatched `api_semantic` subphases.
+- Phase 92 added Prior Covered Proof Memory. The runner now excludes prior
+  `planner_backed` + cleanup-binding-promoted requests as
+  `prior_planner_proof_covered`; the dry-run against the current broader seed
+  selected zero commands, excluded `proof_008` as covered, excluded nine
+  grasp-infeasible requests, and rendered the prior proof views in the runner
+  report.
+- Phase 93 added Cleanup Report Artifact Adapter. Existing cleanup artifacts now
+  regenerate `report.html` from `run_result.json` through the shared report
+  underlay, so stale ignored reports do not act like a second implementation.
+- Phase 94 added Seeded Source Pool and Proof Memory. MolmoSpaces generated-mess
+  selection now uses the subprocess seed to rotate object identities while
+  preserving semantic target fixtures, and proof-selection memory rejects local
+  `proof_###`/`observed_###` matches when planner object identity conflicts.
+  The patched seed 9 artifact validates with 10 generated objects and 44 robot
+  timeline steps; prior-aware selection now picks four proof commands
+  (`proof_003`, `proof_005`, `proof_006`, `proof_010`) instead of zero.
+- Phase 95 added Seeded Selected Proof Execution. The four selected patched
+  seed 9 proof commands executed locally through the shared proof-bundle runner
+  with warmup, low RBY1M CuRobo memory, and wide placement profile. All four
+  reached task sampling but remained `grasp_feasibility` blocked with
+  `17 grasp failures; 15 candidate-removal calls`; no new planner-backed proof
+  or cleanup-binding promotion was produced. The runner report still provides
+  the visual review surface for selection, prior evidence, and proof results.
+- Phase 96 added Planner Failure Diagnostic Views. Blocked task-sampler probes
+  can now capture a bounded post-placement camera artifact through the same
+  `image_artifacts` path used by successful initial/final planner views, and
+  old diagnostic-only blocked reports render an inline task-sampler diagnostic
+  view instead of an empty no-view state.
+- Phase 97 added Post-Placement Rejection Views. Standalone planner reports and
+  proof-bundle result cards now render grasp-failure diagnostics as a shared
+  visual view, and checker gates require that visual whenever
+  `task_sampler_failure_diagnostics.grasp_failures` is present.
+- Phase 98 added the Grasp-Feasibility Blocker Matrix. Proof-bundle selection
+  reports now render grasp-infeasible object-target pairs as visual cards before
+  the detailed blocker table, and the runner checker requires the matrix when
+  `grasp_feasibility_blockers` are present.
+- Phase 99 added Proof-Bundle Local Runtime Preflight. Real proof-bundle
+  execution now checks whether the configured MolmoSpaces Python imports
+  canonical `molmo_spaces` before running warmup/proof commands, writes a
+  `local_runtime_blocked` manifest/report when blocked, and renders
+  `Local Runtime Preflight` evidence for the local-dev handoff.
+- Phase 100 corrected the runtime preflight to the canonical upstream package
+  import, `molmo_spaces`, and generated a ready local preflight report with
+  zero selected proof commands.

@@ -4,6 +4,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from roboclaws.molmo_cleanup.manipulation_provenance import (
@@ -54,6 +55,9 @@ def _write_report_files(
     warp_compatibility: bool = False,
     cuda_memory: bool = False,
     curobo_memory_profile: bool = False,
+    task_sampler_robot_placement_profile: bool = False,
+    placement_scene_diagnostics: bool = False,
+    post_placement_rejections: bool = False,
 ) -> dict[str, str]:
     stdout = tmp_path / "planner_probe_stdout.txt"
     stderr = tmp_path / "planner_probe_stderr.txt"
@@ -77,6 +81,19 @@ def _write_report_files(
         body += "CUDA Memory Headroom\n"
     if curobo_memory_profile:
         body += "CuRobo Memory Profile\n"
+    if task_sampler_robot_placement_profile:
+        body += "Task Sampler Robot Placement Profile\nrelaxed\n50\n"
+    if placement_scene_diagnostics:
+        body += (
+            "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
+            "Planner Probe Diagnostic Views\nPlacement Scene Diagnostics\nbook/body\n12\n0.012\n"
+        )
+    if post_placement_rejections:
+        body += (
+            "Task Sampler Failure Diagnostics\nPickAndPlaceTaskSampler\n"
+            "Planner Probe Diagnostic Views\nPost-Placement Candidate Rejections\n"
+            "Post-Placement Rejection Views\nbook/body\n3\n"
+        )
     if rby1m_gate:
         body += "RBY1M CuRobo Gate\n"
     report.write_text(body, encoding="utf-8")
@@ -195,6 +212,341 @@ def test_runner_exact_cleanup_task_sampler_adapter_forces_target() -> None:
     assert sampler._get_place_target_candidates(env, "pickup/body", 1) == ["sink/body"]
     assert sampler._prepare_place_target(env, "ignored", "pickup/body", None, 1) is True
     assert sampler.place_receptacle_name == "sink/body"
+
+
+def test_runner_worker_exception_context_preserves_sampler_adapter(tmp_path: Path) -> None:
+    runner = _load_runner_module()
+    args = SimpleNamespace(
+        cleanup_scene_xml=str(tmp_path / "scene.xml"),
+        cleanup_object_id="observed_001",
+        cleanup_target_receptacle_id="sink_01",
+        cleanup_source_receptacle_id="counter_01",
+        cleanup_planner_object_id="pickup/body",
+        cleanup_planner_target_receptacle_id="sink/body",
+        cleanup_tools="navigate_to_object,pick,navigate_to_receptacle,place",
+    )
+    cleanup_task_config = {
+        "schema": "planner_probe_exact_cleanup_task_config_v1",
+        "applied": True,
+        "scene_xml": str(tmp_path / "scene.xml"),
+        "planner_object_id": "pickup/body",
+        "planner_target_receptacle_id": "sink/body",
+    }
+    sampler_adapter = {
+        "schema": "planner_probe_exact_cleanup_task_sampler_adapter_v1",
+        "applied": True,
+        "task_sampler_class": "FakeSampler",
+        "planner_target_receptacle_id": "sink/body",
+    }
+
+    runner._WORKER_EXCEPTION_CONTEXT.clear()
+    runner._record_worker_exception_context(
+        cleanup_task_config=cleanup_task_config,
+        cleanup_task_sampler_adapter=sampler_adapter,
+        requested_cleanup_primitive_binding={
+            "requested": True,
+            "planner_object_id": "pickup/body",
+            "planner_target_receptacle_id": "sink/body",
+        },
+    )
+    context = runner._worker_exception_probe_context(args)
+
+    assert context["cleanup_task_config"] == cleanup_task_config
+    assert context["cleanup_task_sampler_adapter"] == sampler_adapter
+    assert context["requested_cleanup_primitive_binding"]["planner_target_receptacle_id"] == (
+        "sink/body"
+    )
+
+
+def test_runner_task_sampler_failure_diagnostics_records_robot_placement() -> None:
+    runner = _load_runner_module()
+
+    class FakeTaskConfig:
+        pickup_obj_name = "book/body"
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 0.7)
+        robot_safety_radius = 0.15
+        check_robot_placement_visibility = True
+        max_robot_placement_attempts = 10
+
+    class FakeConfig:
+        task_config = FakeTaskConfig()
+        task_sampler_config = FakeSamplerConfig()
+
+    class FakeObjectManager:
+        def get_object_by_name(self, name: str):
+            assert name == "book/body"
+            return SimpleNamespace(position=[1.0, 2.0, 3.0])
+
+    class FakeSampler:
+        config = FakeConfig()
+
+        def __init__(self) -> None:
+            self.reported: list[tuple[str, str]] = []
+            self.removed: list[str] = []
+
+        def _sample_and_place_robot(self, env):
+            raise RuntimeError("placement blocked")
+
+        def report_asset_failure(self, asset_uid, reason):
+            self.reported.append((asset_uid, reason))
+
+        def _remove_candidate_object(self, object_name):
+            self.removed.append(object_name)
+
+        def get_asset_uid_from_object(self, env, object_name):
+            assert object_name == "book/body"
+            return "asset-book"
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+    env = SimpleNamespace(current_batch_index=0, object_managers=[FakeObjectManager()])
+
+    with pytest.raises(RuntimeError, match="placement blocked"):
+        sampler._sample_and_place_robot(env)
+    sampler.report_asset_failure("asset-book", "robot placement failed")
+    sampler._remove_candidate_object("book/body")
+
+    assert diagnostics["applied"] is True
+    assert diagnostics["robot_placement_attempt_count"] == 1
+    assert diagnostics["robot_placement_failure_count"] == 1
+    assert diagnostics["asset_failure_count"] == 1
+    assert diagnostics["candidate_removal_count"] == 1
+    assert diagnostics["last_robot_placement_failure"]["pickup_obj_name"] == "book/body"
+    assert diagnostics["last_robot_placement_failure"]["asset_uid"] == "asset-book"
+    assert diagnostics["last_robot_placement_failure"]["message"] == "placement blocked"
+    assert diagnostics["robot_placement_config"]["robot_safety_radius"] == 0.15
+
+
+def test_runner_task_sampler_failure_diagnostics_captures_post_placement_view(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner_module()
+    runner._WORKER_EXCEPTION_CONTEXT.clear()
+
+    class FakeSampler:
+        config = SimpleNamespace(task_config=SimpleNamespace(pickup_obj_name="book/body"))
+
+        def _sample_and_place_robot(self, env):
+            return True
+
+    class FakeRegistry:
+        def __init__(self) -> None:
+            self.updated = False
+
+        def keys(self):
+            return ["wrist_camera_l", "head_camera"]
+
+        def update_all_cameras(self, env) -> list[str]:
+            self.updated = True
+            return ["head_camera"]
+
+    class FakeEnv:
+        def __init__(self) -> None:
+            self.camera_manager = SimpleNamespace(registry=FakeRegistry())
+
+        def render_rgb_frame(self, camera_name: str):
+            assert camera_name == "head_camera"
+            return np.full((3, 4, 3), 64, dtype=np.uint8)
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(
+        sampler,
+        output_dir=tmp_path,
+    )
+
+    assert sampler._sample_and_place_robot(FakeEnv()) is True
+
+    artifacts = diagnostics["image_artifacts"]
+    assert list(artifacts) == ["post_placement_attempt_001_head_camera"]
+    assert (tmp_path / artifacts["post_placement_attempt_001_head_camera"]).is_file()
+    assert diagnostics["robot_placement_attempts"][0]["image_artifacts"] == artifacts
+    assert runner._WORKER_EXCEPTION_CONTEXT["image_artifacts"] == artifacts
+
+
+def test_runner_relaxed_task_sampler_profile_overrides_actual_place_robot_near_call() -> None:
+    runner = _load_runner_module()
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 0.7)
+        robot_safety_radius = 0.35
+        check_robot_placement_visibility = True
+        max_robot_placement_attempts = 10
+
+    config = SimpleNamespace(task_sampler_config=FakeSamplerConfig())
+    args = SimpleNamespace(task_sampler_robot_placement_profile="relaxed")
+
+    profile = runner._apply_task_sampler_robot_placement_profile(config, args)
+
+    assert profile["applied"] is True
+    assert profile["before"]["robot_safety_radius"] == 0.35
+    assert profile["after"]["robot_safety_radius"] == 0.15
+    assert profile["after"]["check_robot_placement_visibility"] is False
+    assert profile["place_robot_near_overrides"]["max_tries"] == 50
+
+    class FakeTaskConfig:
+        pickup_obj_name = "book/body"
+
+    class FakeConfig:
+        task_config = FakeTaskConfig()
+        task_sampler_config = config.task_sampler_config
+
+    class FakeSampler:
+        config = FakeConfig()
+
+        def _sample_and_place_robot(self, env):
+            return env.place_robot_near(
+                target=SimpleNamespace(name="book/body"),
+                max_tries=10,
+                sampling_radius_range=(0.0, 0.7),
+                robot_safety_radius=0.35,
+                check_camera_visibility=True,
+            )
+
+    seen_kwargs: dict[str, object] = {}
+
+    def place_robot_near(**kwargs):
+        seen_kwargs.update(kwargs)
+        return True
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler, profile)
+    env = SimpleNamespace(
+        place_robot_near=place_robot_near, object_managers=[], current_batch_index=0
+    )
+
+    assert sampler._sample_and_place_robot(env) is True
+
+    assert seen_kwargs["max_tries"] == 50
+    assert seen_kwargs["sampling_radius_range"] == [0.0, 1.2]
+    assert seen_kwargs["robot_safety_radius"] == 0.15
+    assert seen_kwargs["check_camera_visibility"] is False
+    assert diagnostics["place_robot_near_call_count"] == 1
+    call = diagnostics["place_robot_near_calls"][0]
+    assert call["requested"]["max_tries"] == 10
+    assert call["effective"]["max_tries"] == 50
+    assert call["effective"]["check_camera_visibility"] is False
+
+
+def test_runner_wide_task_sampler_profile_extends_radius_and_max_tries() -> None:
+    runner = _load_runner_module()
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 0.7)
+        robot_safety_radius = 0.35
+        check_robot_placement_visibility = True
+        max_robot_placement_attempts = 10
+
+    config = SimpleNamespace(task_sampler_config=FakeSamplerConfig())
+    args = SimpleNamespace(task_sampler_robot_placement_profile="wide")
+
+    profile = runner._apply_task_sampler_robot_placement_profile(config, args)
+
+    assert profile["applied"] is True
+    assert profile["profile"] == "wide"
+    assert profile["after"]["base_pose_sampling_radius_range"] == [0.0, 2.0]
+    assert profile["after"]["max_robot_placement_attempts"] == 100
+    assert profile["place_robot_near_overrides"]["max_tries"] == 100
+    assert profile["place_robot_near_overrides"]["sampling_radius_range"] == [0.0, 2.0]
+
+
+def test_runner_records_placement_scene_diagnostics_for_place_robot_near_call() -> None:
+    import numpy as np
+
+    runner = _load_runner_module()
+
+    class FakeTaskConfig:
+        pickup_obj_name = "book/body"
+
+    class FakeSamplerConfig:
+        base_pose_sampling_radius_range = (0.0, 1.2)
+        robot_safety_radius = 0.15
+        check_robot_placement_visibility = False
+        max_robot_placement_attempts = 50
+
+    class FakeConfig:
+        task_config = FakeTaskConfig()
+        task_sampler_config = FakeSamplerConfig()
+
+    class FakeSampler:
+        config = FakeConfig()
+
+        def _sample_and_place_robot(self, env):
+            return env.place_robot_near(
+                target=SimpleNamespace(name="book/body", position=np.array([0.0, 0.0, 0.0])),
+                max_tries=10,
+                sampling_radius_range=(0.0, 1.2),
+                robot_safety_radius=0.15,
+                check_camera_visibility=False,
+            )
+
+    class FakeThorMap:
+        px_per_m = 10
+
+        def get_free_points(self):
+            return np.array(
+                [
+                    [0.1, 0.0, 0.0],
+                    [0.2, 0.0, 0.0],
+                    [1.1, 0.0, 0.0],
+                    [1.5, 0.0, 0.0],
+                ]
+            )
+
+    def place_robot_near(**kwargs):
+        return False
+
+    env = SimpleNamespace(
+        place_robot_near=place_robot_near,
+        get_thormap=lambda agent_radius, px_per_m: FakeThorMap(),
+        object_managers=[],
+        current_batch_index=0,
+    )
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    assert sampler._sample_and_place_robot(env) is False
+
+    assert diagnostics["placement_scene_diagnostic_count"] == 1
+    scene = diagnostics["last_placement_scene_diagnostic"]
+    assert scene["schema"] == "planner_probe_placement_scene_diagnostic_v1"
+    assert scene["target_name"] == "book/body"
+    assert scene["valid_free_point_count"] == 3
+    assert scene["nearest_free_point_distance_m"] == 0.1
+    assert scene["radius_band_counts"][0]["free_point_count"] == 2
+    assert diagnostics["place_robot_near_calls"][0]["scene_diagnostic"] == scene
+
+
+def test_runner_records_post_placement_grasp_rejections() -> None:
+    runner = _load_runner_module()
+
+    class FakeSampler:
+        candidate_objects = [SimpleNamespace(name="book/body")]
+
+        def __init__(self) -> None:
+            self._grasp_failure_counts: dict[str, int] = {}
+
+        def _sample_and_place_robot(self, env):
+            return None
+
+        def report_grasp_failure(self, obj_name, max_failures=2):
+            self._grasp_failure_counts[obj_name] = self._grasp_failure_counts.get(obj_name, 0) + 1
+            if self._grasp_failure_counts[obj_name] > max_failures:
+                self.candidate_objects = []
+
+    sampler = FakeSampler()
+    diagnostics = runner._apply_task_sampler_failure_diagnostics_adapter(sampler)
+
+    sampler.report_grasp_failure("book/body", max_failures=2)
+    sampler.report_grasp_failure("book/body", max_failures=2)
+    sampler.report_grasp_failure("book/body", max_failures=2)
+
+    assert diagnostics["grasp_failure_count"] == 3
+    assert diagnostics["grasp_failures"][-1]["object_name"] == "book/body"
+    assert diagnostics["grasp_failures"][-1]["count_after"] == 3
+    assert diagnostics["grasp_failures"][-1]["removed_candidate"] is True
+    assert diagnostics["grasp_failures"][-1]["candidate_count_after"] == 0
 
 
 def test_checker_accepts_blocked_capability_only_when_explicit(tmp_path: Path) -> None:
@@ -677,6 +1029,187 @@ def test_checker_requires_curobo_memory_profile_report_when_requested(
             accept_blocked_capability=True,
             accept_rby1m_curobo_blocked=True,
             require_curobo_memory_profile=True,
+        )
+
+
+def test_checker_requires_task_sampler_robot_placement_profile_report(
+    tmp_path: Path,
+) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "robot placement failed"}],
+        execution_attempted=True,
+    )
+    evidence["task_sampler_robot_placement_profile"] = {
+        "profile": "relaxed",
+        "requested": True,
+        "applied": True,
+        "place_robot_near_overrides": {"max_tries": 50},
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            task_sampler_robot_placement_profile=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        task_sampler_robot_placement_profile=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+        )
+
+
+def test_checker_requires_placement_scene_diagnostics_report(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "robot placement failed"}],
+        execution_attempted=True,
+    )
+    evidence["task_sampler_failure_diagnostics"] = {
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "robot_placement_attempts": [],
+        "placement_scene_diagnostics": [
+            {
+                "schema": "planner_probe_placement_scene_diagnostic_v1",
+                "call_index": 1,
+                "target_name": "book/body",
+                "valid_free_point_count": 12,
+                "valid_neighborhood_fraction": 0.012,
+            }
+        ],
+        "last_placement_scene_diagnostic": {
+            "target_name": "book/body",
+            "valid_free_point_count": 12,
+            "valid_neighborhood_fraction": 0.012,
+        },
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            diagnostics=True,
+            placement_scene_diagnostics=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        diagnostics=True,
+        placement_scene_diagnostics=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
+        )
+
+
+def test_checker_requires_post_placement_rejection_report(tmp_path: Path) -> None:
+    checker = _load_checker_module()
+    evidence = blocked_planner_probe_evidence(
+        backend="molmospaces_subprocess",
+        embodiment="rby1m",
+        task="pick_and_place",
+        probe_mode="execute",
+        blockers=[{"code": "HouseInvalidForTask", "message": "candidate removed"}],
+        execution_attempted=True,
+    )
+    evidence["task_sampler_failure_diagnostics"] = {
+        "applied": True,
+        "task_sampler_class": "PickAndPlaceTaskSampler",
+        "robot_placement_attempts": [],
+        "grasp_failure_count": 3,
+        "grasp_failures": [
+            {
+                "object_name": "book/body",
+                "count_before": 2,
+                "count_after": 3,
+                "max_failures": 2,
+                "candidate_count_before": 1,
+                "candidate_count_after": 0,
+                "removed_candidate": True,
+            }
+        ],
+    }
+    data = {
+        "contract": MANIPULATION_PROBE_CONTRACT,
+        "status": "blocked_capability",
+        "primitive_provenance": "blocked_capability",
+        "manipulation_evidence": evidence,
+        "artifacts": _write_report_files(
+            tmp_path,
+            blocked=True,
+            rby1m_gate=True,
+            post_placement_rejections=True,
+        ),
+    }
+    data["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(data)
+
+    checker._assert_probe_result(
+        data,
+        tmp_path,
+        accept_blocked_capability=True,
+        accept_rby1m_curobo_blocked=True,
+    )
+    data["artifacts"] = _write_report_files(
+        tmp_path,
+        blocked=True,
+        rby1m_gate=True,
+        post_placement_rejections=False,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_probe_result(
+            data,
+            tmp_path,
+            accept_blocked_capability=True,
+            accept_rby1m_curobo_blocked=True,
         )
 
 

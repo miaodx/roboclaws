@@ -75,6 +75,26 @@ one decision per file, sequential numbering, explicit status.
 | [0064](0064-normalize-pickup-root-runtime-aliases.md) | Normalize Pickup Root Runtime Aliases | Accepted |
 | [0065](0065-preserve-target-feasibility-proof-links.md) | Preserve Target Feasibility Proof Links | Accepted |
 | [0066](0066-render-target-feasibility-blocker-matrix.md) | Render Target Feasibility Blocker Matrix | Accepted |
+| [0067](0067-preserve-task-sampler-exception-context.md) | Preserve Task Sampler Exception Context | Accepted |
+| [0068](0068-capture-task-sampler-failure-diagnostics.md) | Capture Task Sampler Failure Diagnostics | Accepted |
+| [0069](0069-add-task-sampler-robot-placement-profile.md) | Add Task Sampler Robot Placement Profile | Accepted |
+| [0070](0070-render-placement-scene-diagnostics.md) | Render Placement Scene Diagnostics | Accepted |
+| [0071](0071-add-wide-placement-profile-retry.md) | Add Wide Placement Profile Retry | Accepted |
+| [0072](0072-capture-post-placement-candidate-rejections.md) | Capture Post-Placement Candidate Rejections | Accepted |
+| [0073](0073-classify-grasp-feasibility-blockers.md) | Classify Grasp-Feasibility Blockers | Accepted |
+| [0074](0074-surface-grasp-feasibility-selection-memory.md) | Surface Grasp-Feasibility Selection Memory | Accepted |
+| [0075](0075-match-proof-selection-memory-by-cleanup-pair.md) | Match Proof Selection Memory by Cleanup Pair | Accepted |
+| [0076](0076-ingest-standalone-prior-proof-results.md) | Ingest Standalone Prior Proof Results | Accepted |
+| [0077](0077-render-prior-proof-evidence-in-runner-reports.md) | Render Prior Proof Evidence in Runner Reports | Accepted |
+| [0078](0078-record-selected-proof-candidate-execution.md) | Record Selected Proof Candidate Execution | Accepted |
+| [0079](0079-carry-forward-nested-prior-proof-evidence.md) | Carry Forward Nested Prior Proof Evidence | Accepted |
+| [0080](0080-scope-proof-selection-memory-by-planner-object.md) | Scope Proof Selection Memory by Planner Object | Accepted |
+| [0081](0081-record-broader-selected-proof-execution.md) | Record Broader Selected Proof Execution | Accepted |
+| [0082](0082-rerun-cleanup-with-broader-bound-proof.md) | Rerun Cleanup with Broader Bound Proof | Accepted |
+| [0083](0083-exclude-prior-covered-planner-proofs.md) | Exclude Prior Covered Planner Proofs | Accepted |
+| [0084](0084-use-run-result-adapter-for-cleanup-report-regeneration.md) | Use Run-Result Adapter for Cleanup Report Regeneration | Accepted |
+| [0085](0085-seed-generated-mess-pools-and-guard-local-proof-memory.md) | Seed Generated Mess Pools and Guard Local Proof Memory | Accepted |
+| [0086](0086-execute-seeded-selected-proof-commands.md) | Execute Seeded Selected Proof Commands | Accepted |
 
 ## Adding a new ADR
 

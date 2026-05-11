@@ -117,6 +117,7 @@ def build_probe_commands(
     renderer_device_id: int = 0,
     torch_extensions_dir: Path | None = None,
     rby1m_curobo_memory_profile: str = "low",
+    task_sampler_robot_placement_profile: str = "none",
     request_selection: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     commands = []
@@ -144,6 +145,13 @@ def build_probe_commands(
             "--timeout-s",
             str(timeout_s),
         ]
+        if task_sampler_robot_placement_profile != "none":
+            command.extend(
+                [
+                    "--task-sampler-robot-placement-profile",
+                    task_sampler_robot_placement_profile,
+                ]
+            )
         if molmospaces_python is not None:
             command.extend(["--python-executable", str(molmospaces_python)])
         if molmospaces_root is not None:
@@ -228,7 +236,9 @@ def proof_bundle_run_manifest(
     proof_requests: dict[str, Any],
     commands: list[dict[str, Any]],
     warmup: dict[str, Any] | None = None,
+    local_runtime_preflight: dict[str, Any] | None = None,
     proof_request_selection: dict[str, Any] | None = None,
+    prior_proof_result_summary: dict[str, Any] | None = None,
     proof_result_summary: dict[str, Any] | None = None,
     cleanup_command: list[str] | None = None,
     cleanup_rerun: dict[str, Any] | None = None,
@@ -242,6 +252,8 @@ def proof_bundle_run_manifest(
         "planner_scene": proof_requests.get("planner_scene") or {},
         "proof_request_selection": proof_request_selection
         or proof_request_selection_from_summary(proof_requests),
+        "prior_proof_result_summary": prior_proof_result_summary or {},
+        "local_runtime_preflight": local_runtime_preflight or {},
         "warmup": warmup or {},
         "command_count": len(commands),
         "commands": commands,
@@ -261,6 +273,7 @@ def proof_request_selection_from_summary(
     *,
     prior_proof_result_summary: dict[str, Any] | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    exclude_prior_covered: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -270,6 +283,8 @@ def proof_request_selection_from_summary(
     ]
     prior_summary = prior_proof_result_summary or {}
     prior_results = _prior_results_by_request_id(prior_summary)
+    prior_results_by_cleanup_pair = _prior_results_by_cleanup_pair(prior_summary)
+    prior_results_by_planner_object_target = _prior_results_by_planner_object_target(prior_summary)
     discovered_aliases_by_request = _discovered_runtime_aliases_by_source_request(
         ready_requests,
         prior_summary,
@@ -286,12 +301,34 @@ def proof_request_selection_from_summary(
     normalized_aliases = []
     for request in ready_requests:
         request_id = str(request.get("request_id") or "")
-        prior_result = prior_results.get(request_id, {})
+        prior_result, prior_result_match_kind = _prior_result_for_request(
+            request,
+            prior_results_by_request_id=prior_results,
+            prior_results_by_cleanup_pair=prior_results_by_cleanup_pair,
+            prior_results_by_planner_object_target=prior_results_by_planner_object_target,
+        )
+        if exclude_prior_covered and _prior_result_has_cleanup_binding_coverage(prior_result):
+            excluded.append(
+                _excluded_request(
+                    request,
+                    prior_result,
+                    reason="prior_planner_proof_covered",
+                    prior_result_match_kind=prior_result_match_kind,
+                )
+            )
+            continue
         if (
             exclude_task_feasibility_blocked
             and prior_result.get("task_feasibility_status") == "blocked"
         ):
-            excluded.append(_excluded_request(request, prior_result))
+            excluded.append(
+                _excluded_request(
+                    request,
+                    prior_result,
+                    reason="prior_task_feasibility_blocked",
+                    prior_result_match_kind=prior_result_match_kind,
+                )
+            )
             if generate_fallback_requests:
                 fallback = _fallback_requests_for_blocked_request(
                     request,
@@ -299,6 +336,7 @@ def proof_request_selection_from_summary(
                     limit=fallback_alias_limit,
                     discovered_aliases=discovered_aliases_by_request.get(request_id, {}),
                     prior_candidate_filters=prior_candidate_filters_by_request.get(request_id, {}),
+                    prior_result_match_kind=prior_result_match_kind,
                 )
                 generated.extend(fallback["generated_requests"])
                 filtered_aliases.extend(fallback["filtered_aliases"])
@@ -306,8 +344,16 @@ def proof_request_selection_from_summary(
                 filtered_pairs.extend(fallback["filtered_pairs"])
                 normalized_aliases.extend(fallback["normalized_aliases"])
             continue
-        selected.append(_selected_request(request, prior_result))
-    selected.extend(_selected_request(request, {}) for request in generated)
+        selected.append(
+            _selected_request(
+                request,
+                prior_result,
+                prior_result_match_kind=prior_result_match_kind,
+            )
+        )
+    selected.extend(
+        _selected_request(request, {}, prior_result_match_kind="") for request in generated
+    )
     fallback_required = bool(ready_requests) and not selected
     fallback_generation = _fallback_generation(
         enabled=generate_fallback_requests,
@@ -324,15 +370,20 @@ def proof_request_selection_from_summary(
         excluded_requests=excluded,
         filtered_pairs=fallback_generation.get("filtered_pairs") or [],
     )
+    grasp_feasibility_blockers = _grasp_feasibility_blockers(target_feasibility_blockers)
     return {
         "schema": PLANNER_PROOF_REQUEST_SELECTION_SCHEMA,
         "mode": _proof_request_selection_mode(
             exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+            exclude_prior_covered=exclude_prior_covered,
             generate_fallback_requests=generate_fallback_requests,
         ),
         "ready_request_count": len(ready_requests),
         "selected_count": len(selected),
         "excluded_count": len(excluded),
+        "covered_request_count": sum(
+            1 for item in excluded if item.get("reason") == "prior_planner_proof_covered"
+        ),
         "generated_fallback_request_count": len(generated),
         "fallback_required": fallback_required,
         "selected_request_ids": [item["request_id"] for item in selected],
@@ -340,6 +391,8 @@ def proof_request_selection_from_summary(
         "excluded_requests": excluded,
         "target_feasibility_blocker_count": len(target_feasibility_blockers),
         "target_feasibility_blockers": target_feasibility_blockers,
+        "grasp_feasibility_blocker_count": len(grasp_feasibility_blockers),
+        "grasp_feasibility_blockers": grasp_feasibility_blockers,
         "fallback_generation": fallback_generation,
         "prior_summary_available": bool(prior_proof_result_summary),
         "prior_result_count": len(prior_results),
@@ -353,12 +406,19 @@ def proof_request_selection_from_summary(
 def _proof_request_selection_mode(
     *,
     exclude_task_feasibility_blocked: bool,
+    exclude_prior_covered: bool,
     generate_fallback_requests: bool,
 ) -> str:
+    if exclude_task_feasibility_blocked and exclude_prior_covered and generate_fallback_requests:
+        return "exclude_task_feasibility_blocked_and_prior_covered_with_fallbacks"
+    if exclude_task_feasibility_blocked and exclude_prior_covered:
+        return "exclude_task_feasibility_blocked_and_prior_covered"
     if exclude_task_feasibility_blocked and generate_fallback_requests:
         return "exclude_task_feasibility_blocked_with_fallbacks"
     if exclude_task_feasibility_blocked:
         return "exclude_task_feasibility_blocked"
+    if exclude_prior_covered:
+        return "exclude_prior_covered"
     return "all_ready"
 
 
@@ -395,13 +455,165 @@ def _prior_results_by_request_id(summary: dict[str, Any]) -> dict[str, dict[str,
     }
 
 
+def _prior_results_by_cleanup_pair(
+    summary: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    results: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in summary.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        pair = _cleanup_pair_from_result(item)
+        if not all(pair):
+            continue
+        existing = results.get(pair)
+        if existing is None or _prior_selection_result_rank(item) >= _prior_selection_result_rank(
+            existing
+        ):
+            results[pair] = dict(item)
+    return results
+
+
+def _prior_results_by_planner_object_target(
+    summary: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    results: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in summary.get("results") or []:
+        if not isinstance(item, dict):
+            continue
+        pair = _planner_object_target_pair_from_result(item)
+        if not all(pair):
+            continue
+        existing = results.get(pair)
+        if existing is None or _prior_selection_result_rank(item) >= _prior_selection_result_rank(
+            existing
+        ):
+            results[pair] = dict(item)
+    return results
+
+
+def _prior_result_for_request(
+    request: dict[str, Any],
+    *,
+    prior_results_by_request_id: dict[str, dict[str, Any]],
+    prior_results_by_cleanup_pair: dict[tuple[str, str], dict[str, Any]],
+    prior_results_by_planner_object_target: dict[tuple[str, str], dict[str, Any]],
+) -> tuple[dict[str, Any], str]:
+    request_id = str(request.get("request_id") or "")
+    prior_by_request_id = prior_results_by_request_id.get(request_id)
+    if prior_by_request_id and _request_id_prior_result_matches_request(
+        request,
+        prior_by_request_id,
+    ):
+        return prior_by_request_id, "request_id"
+    pair = _cleanup_pair_from_request(request)
+    prior_by_cleanup_pair = prior_results_by_cleanup_pair.get(pair)
+    if prior_by_cleanup_pair and _cleanup_pair_prior_result_matches_request(
+        request,
+        prior_by_cleanup_pair,
+    ):
+        return prior_by_cleanup_pair, "object_target"
+    planner_pair = _planner_object_target_pair_from_request(request)
+    if planner_pair in prior_results_by_planner_object_target:
+        return prior_results_by_planner_object_target[planner_pair], "planner_object_target"
+    return {}, ""
+
+
+def _cleanup_pair_from_request(request: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(request.get("object_id") or ""),
+        str(request.get("target_receptacle_id") or ""),
+    )
+
+
+def _cleanup_pair_from_result(result: dict[str, Any]) -> tuple[str, str]:
+    return (
+        str(result.get("object_id") or ""),
+        str(result.get("target_receptacle_id") or ""),
+    )
+
+
+def _planner_object_target_pair_from_request(request: dict[str, Any]) -> tuple[str, str]:
+    args = request.get("planner_probe_args") or {}
+    planner_object_id = _planner_arg(args, "--cleanup-planner-object-id")
+    planner_target_id = _planner_arg(args, "--cleanup-planner-target-receptacle-id")
+    return (
+        planner_object_id,
+        str(request.get("target_receptacle_id") or planner_target_id),
+    )
+
+
+def _planner_object_target_pair_from_result(result: dict[str, Any]) -> tuple[str, str]:
+    config = _proof_cleanup_task_config(result)
+    planner_object_id = str(config.get("planner_object_id") or "")
+    planner_target_id = str(config.get("planner_target_receptacle_id") or "")
+    return (
+        planner_object_id,
+        str(
+            result.get("target_receptacle_id")
+            or config.get("target_receptacle_id")
+            or planner_target_id
+        ),
+    )
+
+
+def _request_id_prior_result_matches_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    if _planner_object_target_pairs_conflict(request, prior_result):
+        return False
+    request_cleanup_pair = _cleanup_pair_from_request(request)
+    prior_cleanup_pair = _cleanup_pair_from_result(prior_result)
+    if all(request_cleanup_pair) and all(prior_cleanup_pair):
+        return request_cleanup_pair == prior_cleanup_pair
+    request_planner_pair = _planner_object_target_pair_from_request(request)
+    prior_planner_pair = _planner_object_target_pair_from_result(prior_result)
+    if all(request_planner_pair) and all(prior_planner_pair):
+        return request_planner_pair == prior_planner_pair
+    return True
+
+
+def _cleanup_pair_prior_result_matches_request(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    return not _planner_object_target_pairs_conflict(request, prior_result)
+
+
+def _planner_object_target_pairs_conflict(
+    request: dict[str, Any],
+    prior_result: dict[str, Any],
+) -> bool:
+    request_planner_pair = _planner_object_target_pair_from_request(request)
+    prior_planner_pair = _planner_object_target_pair_from_result(prior_result)
+    return (
+        all(request_planner_pair)
+        and all(prior_planner_pair)
+        and (request_planner_pair != prior_planner_pair)
+    )
+
+
+def _prior_selection_result_rank(item: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        int(str(item.get("task_feasibility_status") or "") == "blocked"),
+        int(str(item.get("status") or "") == "blocked_capability"),
+        int(bool(item.get("run_result_exists") or item.get("run_result"))),
+    )
+
+
+def _prior_result_has_cleanup_binding_coverage(item: dict[str, Any]) -> bool:
+    return bool(item.get("planner_backed")) and bool(item.get("cleanup_binding_promoted"))
+
+
 def _selected_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
+    *,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
     fallback = request.get("fallback_request") or {}
     is_fallback = isinstance(fallback, dict) and bool(fallback)
-    return {
+    item = {
         "request_id": str(request.get("request_id") or ""),
         "request_type": "fallback_generated" if is_fallback else "source",
         "source_request_id": str(fallback.get("source_request_id") or ""),
@@ -413,22 +625,41 @@ def _selected_request(
             or "unknown"
         ),
     }
+    item.update(
+        _nonempty_prior_blocker_fields(
+            prior_result.get("task_feasibility_blocker_kind")
+            or fallback.get("prior_task_feasibility_blocker_kind"),
+            prior_result.get("task_feasibility_blocker_summary")
+            or fallback.get("prior_task_feasibility_blocker_summary"),
+        )
+    )
+    match_kind = prior_result_match_kind or str(fallback.get("prior_result_match_kind") or "")
+    if match_kind:
+        item["prior_result_match_kind"] = match_kind
+    return item
 
 
 def _excluded_request(
     request: dict[str, Any],
     prior_result: dict[str, Any],
+    *,
+    reason: str,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
-    return {
+    item = {
         "request_id": str(request.get("request_id") or ""),
         "object_id": str(request.get("object_id") or ""),
         "target_receptacle_id": str(request.get("target_receptacle_id") or ""),
-        "reason": "prior_task_feasibility_blocked",
+        "reason": reason,
         "prior_status": str(prior_result.get("status") or ""),
         "prior_task_feasibility_status": str(prior_result.get("task_feasibility_status") or ""),
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
         **_prior_result_evidence_fields(prior_result),
     }
+    item.update(_prior_result_blocker_fields(prior_result))
+    if prior_result_match_kind:
+        item["prior_result_match_kind"] = prior_result_match_kind
+    return item
 
 
 def _target_feasibility_blockers(
@@ -476,7 +707,7 @@ def _target_feasibility_blocker(
     target_alias: str = "",
     derived_from: str = "",
 ) -> dict[str, Any]:
-    return {
+    blocker = {
         "kind": kind,
         "source_request_id": source_request_id,
         "object_id": object_id,
@@ -495,6 +726,25 @@ def _target_feasibility_blocker(
         "last_worker_stage": str(item.get("last_worker_stage") or ""),
         "execution_attempted": bool(item.get("execution_attempted")),
     }
+    blocker.update(
+        _nonempty_prior_blocker_fields(
+            item.get("prior_task_feasibility_blocker_kind"),
+            item.get("prior_task_feasibility_blocker_summary"),
+        )
+    )
+    if item.get("prior_result_match_kind"):
+        blocker["prior_result_match_kind"] = str(item.get("prior_result_match_kind") or "")
+    return blocker
+
+
+def _grasp_feasibility_blockers(
+    target_feasibility_blockers: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    return [
+        dict(item)
+        for item in target_feasibility_blockers
+        if str(item.get("prior_task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    ]
 
 
 def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
@@ -506,6 +756,24 @@ def _prior_result_evidence_fields(result: dict[str, Any]) -> dict[str, Any]:
         "last_worker_stage": str(result.get("last_worker_stage") or ""),
         "execution_attempted": bool(result.get("execution_attempted")),
     }
+
+
+def _prior_result_blocker_fields(result: dict[str, Any]) -> dict[str, Any]:
+    return _nonempty_prior_blocker_fields(
+        result.get("task_feasibility_blocker_kind"),
+        result.get("task_feasibility_blocker_summary"),
+    )
+
+
+def _nonempty_prior_blocker_fields(kind: Any, summary: Any) -> dict[str, str]:
+    fields = {}
+    kind_text = str(kind or "")
+    summary_text = str(summary or "")
+    if kind_text:
+        fields["prior_task_feasibility_blocker_kind"] = kind_text
+    if summary_text:
+        fields["prior_task_feasibility_blocker_summary"] = summary_text
+    return fields
 
 
 def _fallback_generation(
@@ -628,10 +896,28 @@ def _fallback_exhaustion_blockers(
                 ),
             }
         )
+    grasp_feasibility_pair_count = sum(
+        1
+        for item in filtered_pairs
+        if str(item.get("reason") or "") == "prior_task_feasibility_blocked_pair"
+        and str(item.get("prior_task_feasibility_blocker_kind") or "") == "grasp_feasibility"
+    )
+    if grasp_feasibility_pair_count:
+        blockers.append(
+            {
+                "code": "grasp_feasibility_blocked_pairs",
+                "count": grasp_feasibility_pair_count,
+                "message": (
+                    "Known object/target fallback alias pairs clear robot placement "
+                    "but are blocked by post-placement grasp/candidate rejection."
+                ),
+            }
+        )
     task_feasibility_pair_count = sum(
         1
         for item in filtered_pairs
         if str(item.get("reason") or "") == "prior_task_feasibility_blocked_pair"
+        and str(item.get("prior_task_feasibility_blocker_kind") or "") != "grasp_feasibility"
     )
     if task_feasibility_pair_count:
         blockers.append(
@@ -673,6 +959,7 @@ def _fallback_requests_for_blocked_request(
     limit: int,
     discovered_aliases: dict[str, list[dict[str, Any]]] | None = None,
     prior_candidate_filters: dict[str, Any] | None = None,
+    prior_result_match_kind: str = "",
 ) -> dict[str, list[dict[str, Any]]]:
     if limit <= 0:
         return {
@@ -752,6 +1039,7 @@ def _fallback_requests_for_blocked_request(
                     index=len(generated) + 1,
                     planner_object_id=object_alias,
                     planner_target_receptacle_id=target_alias,
+                    prior_result_match_kind=prior_result_match_kind,
                 )
             )
             if len(generated) >= limit:
@@ -778,6 +1066,7 @@ def _fallback_request_with_planner_aliases(
     index: int,
     planner_object_id: str,
     planner_target_receptacle_id: str,
+    prior_result_match_kind: str,
 ) -> dict[str, Any]:
     source_request_id = str(request.get("request_id") or "")
     fallback = deepcopy(request)
@@ -795,6 +1084,9 @@ def _fallback_request_with_planner_aliases(
         "prior_blockers": _blockers(prior_result.get("blockers") or []),
         "agent_view_exposed": False,
     }
+    fallback["fallback_request"].update(_prior_result_blocker_fields(prior_result))
+    if prior_result_match_kind:
+        fallback["fallback_request"]["prior_result_match_kind"] = prior_result_match_kind
     args = dict(fallback.get("planner_probe_args") or {})
     if planner_object_id:
         args["--cleanup-planner-object-id"] = planner_object_id
@@ -1119,7 +1411,7 @@ def _task_feasibility_pair_filter(
     blockers: list[dict[str, Any]],
     result: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    item = {
         "source_request_id": source_request_id,
         "object_alias": object_alias,
         "target_alias": target_alias,
@@ -1130,6 +1422,8 @@ def _task_feasibility_pair_filter(
         "prior_blockers": blockers,
         **_prior_result_evidence_fields(result),
     }
+    item.update(_prior_result_blocker_fields(result))
+    return item
 
 
 def _enrich_existing_pair_filter(
@@ -1147,6 +1441,8 @@ def _enrich_existing_pair_filter(
         for field in (
             "prior_status",
             "prior_task_feasibility_status",
+            "prior_task_feasibility_blocker_kind",
+            "prior_task_feasibility_blocker_summary",
             "prior_run_result",
             "prior_report",
             "prior_stdout",
@@ -1314,6 +1610,11 @@ def proof_result_summary_from_commands(commands: list[dict[str, Any]]) -> dict[s
         "task_feasibility_blocked_count": sum(
             1 for item in results if item["task_feasibility_status"] == "blocked"
         ),
+        "grasp_feasibility_blocked_count": sum(
+            1
+            for item in results
+            if item.get("task_feasibility_blocker_kind") == "grasp_feasibility"
+        ),
         "worker_stage_event_count": sum(
             int(item.get("worker_stage_event_count") or 0) for item in results
         ),
@@ -1380,6 +1681,15 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
     blockers = _blockers(evidence.get("blockers") or [])
     cleanup_binding_blockers = _blockers(evidence.get("cleanup_primitive_binding_blockers") or [])
     cleanup_task_config = evidence.get("cleanup_task_config") or {}
+    task_sampler_robot_placement_profile = (
+        evidence.get("task_sampler_robot_placement_profile") or {}
+    )
+    cleanup_task_sampler_adapter = evidence.get("cleanup_task_sampler_adapter") or {}
+    task_sampler_failure_diagnostics = evidence.get("task_sampler_failure_diagnostics") or {}
+    task_feasibility_blocker_kind = _task_feasibility_blocker_kind(
+        blockers,
+        task_sampler_failure_diagnostics,
+    )
     requested_binding = evidence.get("requested_cleanup_primitive_binding") or {}
     sampled_binding = evidence.get("sampled_task_binding") or {}
     cleanup_binding = evidence.get("cleanup_primitive_binding") or {}
@@ -1400,6 +1710,11 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
                 cleanup_binding_blockers=cleanup_binding_blockers,
                 execution_attempted=bool(evidence.get("execution_attempted")),
             ),
+            "task_feasibility_blocker_kind": task_feasibility_blocker_kind,
+            "task_feasibility_blocker_summary": _task_feasibility_blocker_summary(
+                task_feasibility_blocker_kind,
+                task_sampler_failure_diagnostics,
+            ),
             "visual_status": "views_recorded" if views else "no_views_recorded",
             "blockers": blockers,
             "cleanup_binding_blockers": cleanup_binding_blockers,
@@ -1409,6 +1724,9 @@ def _proof_result_from_command(item: dict[str, Any]) -> dict[str, Any]:
             "stdout": _proof_artifact_path(base, artifacts, "stdout"),
             "stderr": _proof_artifact_path(base, artifacts, "stderr"),
             "cleanup_task_config": cleanup_task_config,
+            "task_sampler_robot_placement_profile": task_sampler_robot_placement_profile,
+            "cleanup_task_sampler_adapter": cleanup_task_sampler_adapter,
+            "task_sampler_failure_diagnostics": task_sampler_failure_diagnostics,
             "requested_cleanup_primitive_binding": requested_binding,
             "sampled_task_binding": sampled_binding,
             "cleanup_primitive_binding": cleanup_binding,
@@ -1479,6 +1797,43 @@ def _task_feasibility_status(
     if status == "blocked_capability":
         return "blocked"
     return "unknown"
+
+
+def _task_feasibility_blocker_kind(
+    blockers: list[dict[str, Any]],
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> str:
+    robot_placement_failures = int(
+        task_sampler_failure_diagnostics.get("robot_placement_failure_count") or 0
+    )
+    grasp_failures = int(task_sampler_failure_diagnostics.get("grasp_failure_count") or 0)
+    if robot_placement_failures:
+        return "robot_placement"
+    if grasp_failures:
+        return "grasp_feasibility"
+    codes = {str(item.get("code") or "") for item in blockers}
+    if "HouseInvalidForTask" in codes:
+        return "task_sampling"
+    return ""
+
+
+def _task_feasibility_blocker_summary(
+    blocker_kind: str,
+    task_sampler_failure_diagnostics: dict[str, Any],
+) -> str:
+    if blocker_kind == "robot_placement":
+        return (
+            f"{int(task_sampler_failure_diagnostics.get('robot_placement_failure_count') or 0)} "
+            "robot-placement failures"
+        )
+    if blocker_kind == "grasp_feasibility":
+        return (
+            f"{int(task_sampler_failure_diagnostics.get('grasp_failure_count') or 0)} "
+            "grasp failures; "
+            f"{int(task_sampler_failure_diagnostics.get('candidate_removal_count') or 0)} "
+            "candidate-removal calls"
+        )
+    return ""
 
 
 def _proof_views(base: Path, evidence: dict[str, Any]) -> list[dict[str, str]]:

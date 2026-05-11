@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     build_probe_warmup_command,
     proof_bundle_run_manifest,
     proof_request_selection_from_summary,
+    proof_result_summary_from_commands,
 )
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
@@ -52,6 +53,11 @@ def parse_args() -> argparse.Namespace:
         choices=("none", "low"),
         default="low",
     )
+    parser.add_argument(
+        "--task-sampler-robot-placement-profile",
+        choices=("none", "relaxed", "wide"),
+        default="none",
+    )
     parser.add_argument("--execute-probes", action="store_true")
     parser.add_argument(
         "--warmup-rby1m-curobo",
@@ -61,7 +67,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rerun-cleanup", action="store_true")
     parser.add_argument("--cleanup-output-dir", type=Path)
     parser.add_argument("--prior-proof-bundle-manifest", type=Path, action="append")
+    parser.add_argument("--prior-planner-probe-run-result", type=Path, action="append")
     parser.add_argument("--exclude-task-feasibility-blocked", action="store_true")
+    parser.add_argument(
+        "--exclude-prior-covered",
+        action="store_true",
+        help=(
+            "Exclude requests that already have prior planner-backed proof with "
+            "cleanup binding promoted."
+        ),
+    )
     parser.add_argument("--generate-fallback-requests", action="store_true")
     parser.add_argument("--fallback-alias-limit", type=int, default=4)
     return parser.parse_args()
@@ -84,12 +99,15 @@ def main() -> None:
         renderer_device_id=args.renderer_device_id,
         torch_extensions_dir=args.torch_extensions_dir,
         rby1m_curobo_memory_profile=args.rby1m_curobo_memory_profile,
+        task_sampler_robot_placement_profile=args.task_sampler_robot_placement_profile,
         execute_probes=args.execute_probes,
         warmup_rby1m_curobo=args.warmup_rby1m_curobo,
         rerun_cleanup=args.rerun_cleanup,
         cleanup_output_dir=args.cleanup_output_dir,
         prior_proof_bundle_manifest=args.prior_proof_bundle_manifest,
+        prior_planner_probe_run_result=args.prior_planner_probe_run_result,
         exclude_task_feasibility_blocked=args.exclude_task_feasibility_blocked,
+        exclude_prior_covered=args.exclude_prior_covered,
         generate_fallback_requests=args.generate_fallback_requests,
         fallback_alias_limit=args.fallback_alias_limit,
     )
@@ -120,12 +138,15 @@ def run_from_cleanup_result(
     renderer_device_id: int,
     torch_extensions_dir: Path | None,
     rby1m_curobo_memory_profile: str,
+    task_sampler_robot_placement_profile: str = "none",
     execute_probes: bool = False,
     warmup_rby1m_curobo: bool = False,
     rerun_cleanup: bool = False,
     cleanup_output_dir: Path | None = None,
     prior_proof_bundle_manifest: Path | Sequence[Path] | None = None,
+    prior_planner_probe_run_result: Path | Sequence[Path] | None = None,
     exclude_task_feasibility_blocked: bool = False,
+    exclude_prior_covered: bool = False,
     generate_fallback_requests: bool = False,
     fallback_alias_limit: int = 4,
 ) -> dict[str, Any]:
@@ -133,11 +154,15 @@ def run_from_cleanup_result(
     output_dir.mkdir(parents=True, exist_ok=True)
     source_run = json.loads(cleanup_run_result.read_text(encoding="utf-8"))
     requests = _load_proof_requests(source_run, cleanup_run_result.parent)
-    prior_summary = _load_prior_proof_result_summary(prior_proof_bundle_manifest)
+    prior_summary = _load_prior_proof_result_summary(
+        prior_proof_bundle_manifest,
+        prior_planner_probe_run_result,
+    )
     proof_request_selection = proof_request_selection_from_summary(
         requests,
         prior_proof_result_summary=prior_summary,
         exclude_task_feasibility_blocked=exclude_task_feasibility_blocked,
+        exclude_prior_covered=exclude_prior_covered,
         generate_fallback_requests=generate_fallback_requests,
         fallback_alias_limit=fallback_alias_limit,
     )
@@ -176,44 +201,57 @@ def run_from_cleanup_result(
         renderer_device_id=renderer_device_id,
         torch_extensions_dir=effective_torch_extensions_dir,
         rby1m_curobo_memory_profile=rby1m_curobo_memory_profile,
+        task_sampler_robot_placement_profile=task_sampler_robot_placement_profile,
         request_selection=proof_request_selection,
+    )
+    local_runtime_preflight = _local_runtime_preflight(
+        molmospaces_python=molmospaces_python,
+        execute_requested=execute_probes,
     )
     proof_results: list[Path] = []
     status = "dry_run"
     if execute_probes:
-        status = "probes_executed"
-        if warmup:
-            _run_command(warmup["command"])
-        for item in commands:
-            _run_command(item["command"])
-            proof_results.append(Path(item["run_result"]))
+        if _local_runtime_preflight_blocked(local_runtime_preflight):
+            status = "local_runtime_blocked"
+        else:
+            status = "probes_executed"
+            if warmup:
+                _run_command(warmup["command"])
+            for item in commands:
+                _run_command(item["command"])
+                proof_results.append(Path(item["run_result"]))
     cleanup_command: list[str] = []
     cleanup_rerun: dict[str, Any] = {}
     if rerun_cleanup:
         if not execute_probes:
             raise ValueError("--rerun-cleanup requires --execute-probes")
-        cleanup_output = cleanup_output_dir or output_dir / "cleanup_with_planner_proof_bundle"
-        cleanup_command = build_cleanup_rerun_command(
-            runner_python=runner_python,
-            cleanup_script=cleanup_script,
-            cleanup_output_dir=cleanup_output,
-            source_run_result=source_run,
-            proof_run_results=proof_results,
-        )
-        _run_command(cleanup_command)
-        status = "cleanup_rerun"
-        cleanup_rerun = {
-            "output_dir": str(cleanup_output),
-            "run_result": str(cleanup_output / "run_result.json"),
-            "report": str(cleanup_output / "report.html"),
-        }
+        if status == "local_runtime_blocked":
+            cleanup_rerun = {}
+        else:
+            cleanup_output = cleanup_output_dir or output_dir / "cleanup_with_planner_proof_bundle"
+            cleanup_command = build_cleanup_rerun_command(
+                runner_python=runner_python,
+                cleanup_script=cleanup_script,
+                cleanup_output_dir=cleanup_output,
+                source_run_result=source_run,
+                proof_run_results=proof_results,
+            )
+            _run_command(cleanup_command)
+            status = "cleanup_rerun"
+            cleanup_rerun = {
+                "output_dir": str(cleanup_output),
+                "run_result": str(cleanup_output / "run_result.json"),
+                "report": str(cleanup_output / "report.html"),
+            }
     manifest = proof_bundle_run_manifest(
         cleanup_run_result=cleanup_run_result,
         output_dir=output_dir,
         proof_requests=requests,
         commands=commands,
         warmup=warmup,
+        local_runtime_preflight=local_runtime_preflight,
         proof_request_selection=proof_request_selection,
+        prior_proof_result_summary=prior_summary,
         cleanup_command=cleanup_command,
         cleanup_rerun=cleanup_rerun,
     )
@@ -235,6 +273,102 @@ def run_from_cleanup_result(
         "report_path": report_path,
         "manifest": manifest,
     }
+
+
+def _local_runtime_preflight(
+    *,
+    molmospaces_python: Path | None,
+    execute_requested: bool,
+) -> dict[str, Any]:
+    if not execute_requested:
+        return {}
+    preflight: dict[str, Any] = {
+        "schema": "planner_proof_bundle_local_runtime_preflight_v1",
+        "requested": True,
+        "status": "not_checked",
+        "python_executable": str(molmospaces_python or ""),
+        "checks": [],
+        "blockers": [],
+        "evidence_note": (
+            "Local-dev runtime preflight for real proof execution. A blocked "
+            "preflight prevents proof commands from running and keeps the report "
+            "reviewable."
+        ),
+    }
+    if molmospaces_python is None:
+        preflight["checks"].append(
+            {
+                "name": "molmospaces_python",
+                "status": "not_checked",
+                "message": "No separate MolmoSpaces Python runtime configured.",
+            }
+        )
+        return preflight
+    if not molmospaces_python.is_file():
+        blocker = {
+            "code": "molmospaces_python_missing",
+            "message": f"MolmoSpaces Python executable is missing: {molmospaces_python}",
+        }
+        preflight["status"] = "blocked"
+        preflight["blockers"].append(blocker)
+        preflight["checks"].append({"name": "python_executable", "status": "blocked", **blocker})
+        return preflight
+    command = [
+        str(molmospaces_python),
+        "-c",
+        "import molmo_spaces; print('molmo_spaces import ok')",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30.0,
+        )
+    except subprocess.TimeoutExpired as exc:
+        preflight["status"] = "blocked"
+        blocker = {
+            "code": "molmo_spaces_import_timeout",
+            "message": "MolmoSpaces package import preflight exceeded 30 seconds.",
+        }
+        preflight["blockers"].append(blocker)
+        preflight["checks"].append(
+            {
+                "name": "molmo_spaces_import",
+                "command": command,
+                "status": "blocked",
+                "returncode": "",
+                "stdout": str(exc.stdout or "").strip(),
+                "stderr": str(exc.stderr or "").strip(),
+                **blocker,
+            }
+        )
+        return preflight
+    check = {
+        "name": "molmo_spaces_import",
+        "command": command,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout.strip(),
+        "stderr": completed.stderr.strip(),
+    }
+    if completed.returncode == 0:
+        preflight["status"] = "ready"
+        check["status"] = "ready"
+    else:
+        preflight["status"] = "blocked"
+        blocker = {
+            "code": "molmo_spaces_import_failed",
+            "message": completed.stderr.strip() or completed.stdout.strip() or "import failed",
+        }
+        preflight["blockers"].append(blocker)
+        check.update({"status": "blocked", **blocker})
+    preflight["checks"].append(check)
+    return preflight
+
+
+def _local_runtime_preflight_blocked(preflight: dict[str, Any]) -> bool:
+    return str(preflight.get("status") or "") == "blocked"
 
 
 def _load_proof_requests(source_run: dict[str, Any], base: Path) -> dict[str, Any]:
@@ -276,16 +410,22 @@ def _with_source_planner_scene(
 
 
 def _load_prior_proof_result_summary(
-    paths: Path | Sequence[Path] | None,
+    manifest_paths: Path | Sequence[Path] | None,
+    standalone_probe_run_results: Path | Sequence[Path] | None = None,
 ) -> dict[str, Any]:
-    manifest_paths = _prior_manifest_paths(paths)
-    if not manifest_paths:
+    prior_manifest_paths = _prior_paths(manifest_paths)
+    prior_probe_paths = _prior_paths(standalone_probe_run_results)
+    if not prior_manifest_paths and not prior_probe_paths:
         return {}
-    summaries = [_load_one_prior_proof_result_summary(path) for path in manifest_paths]
+    summaries = [
+        *(_load_one_prior_proof_result_summary(path) for path in prior_manifest_paths),
+        _load_standalone_probe_result_summary(prior_probe_paths),
+    ]
+    summaries = [summary for summary in summaries if summary]
     return _merge_prior_proof_result_summaries(summaries)
 
 
-def _prior_manifest_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
+def _prior_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
     if paths is None:
         return []
     if isinstance(paths, (str, Path)):
@@ -296,16 +436,134 @@ def _prior_manifest_paths(paths: Path | Sequence[Path] | None) -> list[Path]:
 def _load_one_prior_proof_result_summary(path: Path) -> dict[str, Any]:
     manifest_path = path / "proof_bundle_run_manifest.json" if path.is_dir() else path
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    selection = data.get("proof_request_selection") or {}
+    summaries = []
+    nested_prior = data.get("prior_proof_result_summary")
+    if isinstance(nested_prior, dict):
+        summaries.append(dict(nested_prior))
+    current = _prior_manifest_current_result_summary(data, selection)
+    if current:
+        summaries.append(current)
+    if not summaries:
+        return {}
+    return _merge_prior_proof_result_summaries(summaries)
+
+
+def _prior_manifest_current_result_summary(
+    data: dict[str, Any],
+    selection: dict[str, Any],
+) -> dict[str, Any]:
     summary = data.get("proof_result_summary")
-    prior = dict(summary) if isinstance(summary, dict) else {}
-    fallback_generation = (data.get("proof_request_selection") or {}).get("fallback_generation")
+    current = dict(summary) if isinstance(summary, dict) else {}
+    fallback_generation = selection.get("fallback_generation")
     if isinstance(fallback_generation, dict):
-        prior["fallback_generation"] = dict(fallback_generation)
-    prior["results"] = _merged_prior_results(
-        prior.get("results") or [],
-        (data.get("proof_request_selection") or {}).get("excluded_requests") or [],
+        current["fallback_generation"] = dict(fallback_generation)
+    current["results"] = _merged_prior_results(
+        current.get("results") or [],
+        selection.get("excluded_requests") or [],
     )
-    return prior
+    return current
+
+
+def _load_standalone_probe_result_summary(run_result_paths: list[Path]) -> dict[str, Any]:
+    if not run_result_paths:
+        return {}
+    commands = [
+        _standalone_probe_command(run_result_path, index)
+        for index, run_result_path in enumerate(run_result_paths, start=1)
+    ]
+    summary = proof_result_summary_from_commands(commands)
+    summary["source_kind"] = "standalone_planner_probe_run_result"
+    summary["evidence_note"] = (
+        "Prior proof-result summary loaded directly from standalone planner-probe "
+        "run_result artifacts. Selection still consumes the shared proof-result "
+        "summary interface."
+    )
+    return summary
+
+
+def _standalone_probe_command(run_result_path: Path, index: int) -> dict[str, Any]:
+    data = json.loads(run_result_path.read_text(encoding="utf-8"))
+    evidence = data.get("manipulation_evidence") if isinstance(data, dict) else {}
+    evidence = evidence if isinstance(evidence, dict) else {}
+    requested_binding = evidence.get("requested_cleanup_primitive_binding")
+    requested_binding = requested_binding if isinstance(requested_binding, dict) else {}
+    cleanup_binding = evidence.get("cleanup_primitive_binding")
+    cleanup_binding = cleanup_binding if isinstance(cleanup_binding, dict) else {}
+    object_id = _first_nonempty_str(
+        requested_binding.get("object_id"),
+        cleanup_binding.get("object_id"),
+        data.get("object_id") if isinstance(data, dict) else "",
+    )
+    target_receptacle_id = _first_nonempty_str(
+        requested_binding.get("target_receptacle_id"),
+        cleanup_binding.get("target_receptacle_id"),
+        data.get("target_receptacle_id") if isinstance(data, dict) else "",
+    )
+    return {
+        "request_id": _standalone_probe_request_id(
+            data=data if isinstance(data, dict) else {},
+            evidence=evidence,
+            requested_binding=requested_binding,
+            run_result_path=run_result_path,
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            index=index,
+        ),
+        "object_id": object_id,
+        "target_receptacle_id": target_receptacle_id,
+        "run_result": str(run_result_path),
+        "report": str(_standalone_probe_report_path(run_result_path, data)),
+    }
+
+
+def _standalone_probe_request_id(
+    *,
+    data: dict[str, Any],
+    evidence: dict[str, Any],
+    requested_binding: dict[str, Any],
+    run_result_path: Path,
+    object_id: str,
+    target_receptacle_id: str,
+    index: int,
+) -> str:
+    explicit = _first_nonempty_str(
+        data.get("request_id"),
+        evidence.get("request_id"),
+        requested_binding.get("request_id"),
+    )
+    if explicit:
+        return explicit
+    if object_id or target_receptacle_id:
+        return (
+            "standalone_"
+            f"{_safe_id_part(object_id or 'object')}_to_"
+            f"{_safe_id_part(target_receptacle_id or 'target')}"
+        )
+    parent = run_result_path.parent.name or run_result_path.stem
+    return f"standalone_{index:03d}_{_safe_id_part(parent)}"
+
+
+def _standalone_probe_report_path(run_result_path: Path, data: Any) -> Path:
+    artifacts = data.get("artifacts") if isinstance(data, dict) else {}
+    artifacts = artifacts if isinstance(artifacts, dict) else {}
+    value = str(artifacts.get("report") or "report.html")
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return run_result_path.parent / path
+
+
+def _first_nonempty_str(*values: Any) -> str:
+    for value in values:
+        text = str(value or "")
+        if text:
+            return text
+    return ""
+
+
+def _safe_id_part(value: str) -> str:
+    return "".join(char if char.isalnum() or char in {"_", "-"} else "_" for char in value)[:96]
 
 
 def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -342,11 +600,29 @@ def _merge_prior_proof_result_summaries(summaries: list[dict[str, Any]]) -> dict
         normalized_aliases=normalized_aliases,
         generated_requests=generated_requests,
     )
+    results = list(results_by_key.values())
     return {
         "schema": "merged_prior_planner_proof_result_summary_v1",
-        "result_count": len(results_by_key),
+        "result_count": len(results),
+        "planner_backed_count": sum(1 for item in results if item.get("planner_backed")),
+        "cleanup_binding_promoted_count": sum(
+            1 for item in results if item.get("cleanup_binding_promoted")
+        ),
+        "execution_attempted_count": sum(1 for item in results if item.get("execution_attempted")),
+        "task_feasibility_blocked_count": sum(
+            1 for item in results if item.get("task_feasibility_status") == "blocked"
+        ),
+        "grasp_feasibility_blocked_count": sum(
+            1
+            for item in results
+            if item.get("task_feasibility_blocker_kind") == "grasp_feasibility"
+        ),
+        "worker_stage_event_count": sum(
+            int(item.get("worker_stage_event_count") or 0) for item in results
+        ),
+        "view_artifact_count": sum(len(item.get("views") or []) for item in results),
         "prior_manifest_count": len(summaries),
-        "results": list(results_by_key.values()),
+        "results": results,
         "fallback_generation": fallback_generation,
     }
 
@@ -459,9 +735,17 @@ def _merged_prior_results(
         merged.append(
             {
                 "request_id": request_id,
+                "object_id": str(item.get("object_id") or ""),
+                "target_receptacle_id": str(item.get("target_receptacle_id") or ""),
                 "status": str(item.get("prior_status") or "blocked_capability"),
                 "task_feasibility_status": str(
                     item.get("prior_task_feasibility_status") or "blocked"
+                ),
+                "task_feasibility_blocker_kind": str(
+                    item.get("prior_task_feasibility_blocker_kind") or ""
+                ),
+                "task_feasibility_blocker_summary": str(
+                    item.get("prior_task_feasibility_blocker_summary") or ""
                 ),
                 "blockers": list(item.get("prior_blockers") or []),
                 "run_result": str(item.get("prior_run_result") or ""),

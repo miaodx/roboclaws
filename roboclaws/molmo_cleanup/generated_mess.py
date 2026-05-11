@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from typing import Any
 
 TARGET_RULES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
@@ -17,11 +18,13 @@ def select_generated_mess_targets(
     receptacles: list[dict[str, Any]],
     *,
     target_count: int,
+    seed: int | None = None,
 ) -> list[dict[str, Any]]:
     """Select a diverse hidden Generated Mess Set from public scene metadata."""
     if target_count < 1:
         raise ValueError("target_count must be >= 1")
 
+    rng = random.Random(seed) if seed is not None else None
     selected = []
     used: set[str] = set()
     eligible_rules = []
@@ -30,6 +33,9 @@ def select_generated_mess_targets(
         if receptacle is None:
             continue
         rule_objects = [item for item in objects if item["category"] in object_categories]
+        if rng is not None:
+            rule_objects = sorted(rule_objects, key=lambda item: str(item["object_id"]))
+            rng.shuffle(rule_objects)
         if rule_objects:
             eligible_rules.append((rule_objects, receptacle))
 

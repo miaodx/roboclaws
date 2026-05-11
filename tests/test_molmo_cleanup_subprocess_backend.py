@@ -71,6 +71,33 @@ def test_worker_select_targets_honors_requested_generated_count() -> None:
     assert generated_mess_success_threshold(10) == 7
 
 
+def test_worker_select_targets_uses_seed_for_source_pool_diversity() -> None:
+    receptacles = [
+        {"receptacle_id": "sink_01", "category": "Sink"},
+        {"receptacle_id": "shelf_01", "category": "ShelvingUnit"},
+        {"receptacle_id": "fridge_01", "category": "Fridge"},
+        {"receptacle_id": "tvstand_01", "category": "TVStand"},
+        {"receptacle_id": "bed_01", "category": "Bed"},
+    ]
+    objects = (
+        [{"object_id": f"mug_{index:02d}", "category": "Mug"} for index in range(5)]
+        + [{"object_id": f"book_{index:02d}", "category": "Book"} for index in range(5)]
+        + [{"object_id": f"apple_{index:02d}", "category": "Apple"} for index in range(5)]
+        + [{"object_id": f"remote_{index:02d}", "category": "RemoteControl"} for index in range(5)]
+        + [{"object_id": f"pillow_{index:02d}", "category": "Pillow"} for index in range(5)]
+    )
+
+    first = select_generated_mess_targets(objects, receptacles, target_count=10, seed=11)
+    second = select_generated_mess_targets(objects, receptacles, target_count=10, seed=11)
+    third = select_generated_mess_targets(objects, receptacles, target_count=10, seed=12)
+
+    assert [item["object_id"] for item in first] == [item["object_id"] for item in second]
+    assert [item["object_id"] for item in first] != [item["object_id"] for item in third]
+    assert [item["target_receptacle_id"] for item in first] == [
+        item["target_receptacle_id"] for item in third
+    ]
+
+
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
