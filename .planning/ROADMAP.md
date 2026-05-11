@@ -24,7 +24,15 @@ Phases 9-14 add visual reviewability, semantic substeps, carried-object visual
 consistency, current-contract agent bridge evidence, and the ADR-0003
 public/private real-world cleanup boundary. Phase 15 scales that ADR-0003
 hidden Generated Mess Set from the historical five-object fixture to the v1
-lower bound of 10 generated objects.
+lower bound of 10 generated objects. Phase 16 exposes the ADR-0003 public
+cleanup contract through MCP without the current-contract `scene_objects`
+shortcut. Phase 17 adds the direct coding-agent dogfood kit and clean-run
+checker for that stricter MCP surface. Phase 18 proves OpenClaw Gateway can use
+the same ADR-0003 MCP contract. Phase 19 closes the visual-evidence gap with
+OpenClaw-labeled and live Gateway artifacts on the real MolmoSpaces/RBY1M
+backend carrying the full shared report view set. Phase 20 hardens the clean
+policy path by making the ADR-0003 semantic cleanup loop executable in the MCP
+contract instead of prompt-only guidance.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -65,6 +73,11 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.14 MolmoSpaces agent bridge visual results** - Phase 13 (completed 2026-05-08; reviewable bridge reports)
 - ✅ **v1.15 MolmoSpaces real-world cleanup harness** - Phase 14 (completed 2026-05-09; ADR-0003 public/private contract and visual parity)
 - ✅ **v1.16 MolmoSpaces Generated Mess Set scale** - Phase 15 (completed 2026-05-09; ADR-0005 configurable hidden generated object count with real 10-object evidence)
+- ✅ **v1.17 MolmoSpaces real-world agent MCP** - Phase 16 (completed 2026-05-09; ADR-0006 MCP surface for the ADR-0003 public contract)
+- ✅ **v1.18 MolmoSpaces real-world agent dogfood** - Phase 17 (completed 2026-05-09; direct coding-agent dogfood kit for the ADR-0003 MCP surface)
+- ✅ **v1.19 MolmoSpaces real-world OpenClaw dogfood** - Phase 18 (completed 2026-05-09; OpenClaw Gateway viability on the ADR-0003 MCP surface)
+- ✅ **v1.20 MolmoSpaces real-world OpenClaw visual evidence** - Phase 19 (completed 2026-05-09; real MolmoSpaces/RBY1M visual report evidence for OpenClaw Gateway)
+- ✅ **v1.21 MolmoSpaces real-world OpenClaw clean policy** - Phase 20 (completed 2026-05-09; executable semantic-loop ordering for clean OpenClaw policy evidence)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -96,6 +109,11 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 13: MolmoSpaces agent bridge visual results** - Current-contract agent bridge reports include robot-view images and semantic mid-phase rows. Completed 2026-05-08.
 - [x] **Phase 14: MolmoSpaces real-world cleanup harness** - ADR-0003 public/private contract with Agent View, Private Evaluation, deterministic sweep baseline, and visual parity. Completed 2026-05-09.
 - [x] **Phase 15: MolmoSpaces Generated Mess Set scale** - ADR-0005 configurable hidden Generated Mess Set size; default ADR-0003 real-world evidence to at least 10 generated objects and score the whole set. Completed 2026-05-09.
+- [x] **Phase 16: MolmoSpaces real-world agent MCP** - ADR-0006 MCP surface for the ADR-0003 public cleanup contract; no global `scene_objects` shortcut. Completed 2026-05-09.
+- [x] **Phase 17: MolmoSpaces real-world agent dogfood** - ADR-0007 direct coding-agent dogfood kit and clean-run checker for the ADR-0003 MCP surface. Completed 2026-05-09.
+- [x] **Phase 18: MolmoSpaces real-world OpenClaw dogfood** - ADR-0008 OpenClaw Gateway viability on the ADR-0003 MCP surface. Completed 2026-05-09 with a synthetic Gateway clean run; real visual Gateway evidence remains a follow-up.
+- [x] **Phase 19: MolmoSpaces real-world OpenClaw visual evidence** - ADR-0010 real MolmoSpaces/RBY1M visual report evidence for OpenClaw Gateway on the ADR-0003 MCP surface. Completed 2026-05-09; live Gateway evidence is minimum visual, not clean policy success.
+- [x] **Phase 20: MolmoSpaces real-world OpenClaw clean policy** - ADR-0011 executable semantic-loop ordering for clean ADR-0003 OpenClaw policy evidence. Completed 2026-05-09.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -428,7 +446,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15
+Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 → 2.7 → 2.8 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14 → 15 → 16
 (Phase 2.5 superseded 2026-04-21 — skipped in execution order; Phase 3 remains explicitly deferred and is not on the near-term chain.)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -456,4 +474,9 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 13. MolmoSpaces agent bridge visual results | v1.14 | 1/1 | Complete | 2026-05-08 |
 | 14. MolmoSpaces real-world cleanup harness | v1.15 | 1/1 | Complete | 2026-05-09 |
 | 15. MolmoSpaces Generated Mess Set scale | v1.16 | 1/1 | Complete | 2026-05-09 |
+| 16. MolmoSpaces real-world agent MCP | v1.17 | 1/1 | Complete | 2026-05-09 |
+| 17. MolmoSpaces real-world agent dogfood | v1.18 | 1/1 | Complete | 2026-05-09 |
+| 18. MolmoSpaces real-world OpenClaw dogfood | v1.19 | 1/1 | Complete | 2026-05-09 |
+| 19. MolmoSpaces real-world OpenClaw visual evidence | v1.20 | 1/1 | Complete | 2026-05-09 |
+| 20. MolmoSpaces real-world OpenClaw clean policy | v1.21 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |

@@ -14,6 +14,12 @@ one decision per file, sequential numbering, explicit status.
 | [0003](0003-separate-cleanup-agent-view-from-private-evaluation.md) | Separate Cleanup Agent View From Private Evaluation | Accepted |
 | [0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md) | Use Separate MCP Servers For AI2-THOR And Molmo Cleanup | Accepted |
 | [0005](0005-use-configurable-generated-mess-set-size.md) | Use Configurable Generated Mess Set Size | Accepted |
+| [0006](0006-expose-adr-0003-cleanup-contract-through-mcp.md) | Expose ADR-0003 Cleanup Contract Through MCP | Accepted |
+| [0007](0007-dogfood-adr-0003-mcp-with-clean-agent-runs.md) | Dogfood ADR-0003 MCP With Clean Agent Runs | Accepted |
+| [0008](0008-evaluate-openclaw-on-adr-0003-mcp-after-direct-agent-dogfood.md) | Evaluate OpenClaw On ADR-0003 MCP After Direct Agent Dogfood | Accepted |
+| [0009](0009-use-shared-molmo-cleanup-report-underlay.md) | Use Shared Molmo Cleanup Report Underlay | Accepted |
+| [0010](0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md) | Require Real Visual OpenClaw Evidence For ADR-0003 Cleanup | Accepted |
+| [0011](0011-enforce-semantic-loop-for-adr-0003-openclaw-clean-policy.md) | Enforce Semantic Loop For ADR-0003 OpenClaw Clean Policy | Accepted |
 
 ## Adding a new ADR
 
