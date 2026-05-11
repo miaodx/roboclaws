@@ -17,18 +17,19 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.game_run import (
+    create_game_provider,
+    prepare_prompt_payload,
+    record_game_turn,
+)
 from roboclaws.core.replay import ReplayRecorder
 from roboclaws.core.turn_metrics import (
-    encode_frame_to_b64_jpeg,
     get_provider_turn_metrics,
     round_seconds,
     serialize_prompt_state,
-    summarize_payload_metrics,
 )
 from roboclaws.core.views import (
     compute_world_bbox,
-    encode_prompt_images,
-    image_labels_for_variant,
     render_game_prompt_bundle,
 )
 from roboclaws.core.views import (
@@ -37,7 +38,6 @@ from roboclaws.core.views import (
 from roboclaws.core.visualizer import GameVisualizer
 from roboclaws.core.vlm import (
     ProviderHealthError,
-    create_provider,
     format_provider_status,
     load_agent_souls,
     provider_status_snapshot,
@@ -77,62 +77,6 @@ def _install_sigterm_handler() -> None:
         raise KeyboardInterrupt(f"Stopped by signal {signum}")
 
     signal.signal(signal.SIGTERM, _sigterm)
-
-
-def _create_game_provider(
-    *,
-    backend: str,
-    gateway_url: str | None,
-    agent_count: int,
-    model: str,
-    agent_soul_content: dict[int, str],
-):
-    from roboclaws.openclaw.bridge import build_openclaw_provider_or_die
-
-    if backend == "openclaw":
-        return build_openclaw_provider_or_die(gateway_url=gateway_url, agent_count=agent_count)
-
-    kwargs = {"agent_souls": agent_soul_content} if agent_soul_content else {}
-    try:
-        return create_provider(model, **kwargs)
-    except TypeError:
-        return create_provider(model)
-
-
-def _prepare_prompt_payload(
-    *,
-    backend: str,
-    prompt_image_frames: list[np.ndarray],
-    prompt_state_text: str,
-    prompt_state_metrics: dict[str, Any],
-) -> tuple[list[Any], dict[str, Any], float]:
-    if backend == "openclaw":
-        return (
-            list(prompt_image_frames),
-            summarize_payload_metrics(
-                transport="openclaw_ndarray",
-                prompt_state_chars=prompt_state_metrics["chars"],
-                image_metrics=[
-                    {"label": label} for label in image_labels_for_variant(_VIEW_VARIANT)
-                ],
-            ),
-            0.0,
-        )
-
-    prompt_images, image_metrics, encode_seconds = encode_prompt_images(
-        image_frames=prompt_image_frames,
-        encoder=encode_frame_to_b64_jpeg,
-    )
-    return (
-        prompt_images,
-        summarize_payload_metrics(
-            transport="vlm_base64_jpeg",
-            prompt_state_chars=prompt_state_metrics["chars"],
-            image_metrics=image_metrics,
-            extra={"prompt_state_preview": prompt_state_text[:120]},
-        ),
-        round_seconds(encode_seconds),
-    )
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -249,6 +193,7 @@ def run_coverage_game(
     thor_server_timeout: float = 100.0,
     thor_server_start_timeout: float = 300.0,
     max_wall_seconds: float | None = 1200.0,
+    provider_seed: int | None = None,
 ) -> dict[str, Any]:
     """Run a coverage episode and save replay/artifacts to ``output_dir``."""
     from roboclaws.openclaw.bridge import OpenClawUnavailable
@@ -260,12 +205,13 @@ def run_coverage_game(
     souls_dir = os.environ.get("SOULS_DIR", _DEFAULT_SOULS_DIR)
     agent_labels, agent_soul_content = load_agent_souls(souls_env, agent_count, souls_dir)
 
-    provider = _create_game_provider(
+    provider = create_game_provider(
         backend=effective_backend,
         gateway_url=gateway_url,
         agent_count=agent_count,
         model=model,
         agent_soul_content=agent_soul_content,
+        provider_seed=provider_seed,
     )
     engine = MultiAgentEngine(
         scene=scene,
@@ -363,11 +309,12 @@ def run_coverage_game(
                 prompt_images,
                 turn_metrics["payload"],
                 turn_metrics["timings"]["image_encode_seconds"],
-            ) = _prepare_prompt_payload(
+            ) = prepare_prompt_payload(
                 backend=effective_backend,
                 prompt_image_frames=prompt_bundle.prompt_images,
                 prompt_state_text=prompt_state_text,
                 prompt_state_metrics=prompt_state_metrics,
+                view_variant=_VIEW_VARIANT,
             )
 
             cells_history.append(game.cells_covered())
@@ -425,25 +372,19 @@ def run_coverage_game(
                     f"provider: {format_provider_status(provider_status)}"
                 )
 
-            record_started = time.perf_counter()
-            recorder.record_step(
+            record_game_turn(
+                recorder=recorder,
                 step=step_num,
                 agent_id=current_agent,
                 agent_frames=agent_frames,
                 overhead_frame=structured_map_frame,
                 game_state=game_state,
-                vlm_prompt_state=prompt_state,
-                vlm_response=response,
+                prompt_state=prompt_state,
+                response=response,
                 provider_status=provider_status,
                 turn_metrics=turn_metrics,
+                step_started=step_started,
             )
-            turn_metrics["timings"]["record_step_seconds"] = round_seconds(
-                time.perf_counter() - record_started
-            )
-            turn_metrics["timings"]["step_loop_seconds"] = round_seconds(
-                time.perf_counter() - step_started
-            )
-            recorder._steps[-1].turn_metrics = dict(turn_metrics)
 
             step_num += 1
 

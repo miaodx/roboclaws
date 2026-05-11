@@ -5,7 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 
-from analyze_refactor_regression import analyze_capture_sets, write_summary  # noqa: E402
+from analyze_refactor_regression import (  # noqa: E402
+    analyze_capture_sets,
+    threshold_policy_for_suite,
+    write_summary,
+)
 
 
 def _row(
@@ -175,3 +179,40 @@ def test_openclaw_autonomous_requires_exact_transcript_source() -> None:
     checks = summary["comparisons"][0]["checks"]
     transcript_check = next(check for check in checks if check["metric"] == "transcript_source")
     assert transcript_check["passed"] is False
+
+
+def test_threshold_policy_lookup_exposes_suite_semantics() -> None:
+    policy = threshold_policy_for_suite("territory-vlm")
+
+    assert policy is not None
+    assert policy.name == "territory"
+
+    checks = policy.compare(
+        "territory-vlm",
+        _row(
+            suite="territory-vlm",
+            game="territory",
+            agents=2,
+            cells_claimed_total=10,
+            blocking_events=1,
+            termination_reason="max_steps",
+        ),
+        _row(
+            suite="territory-vlm",
+            game="territory",
+            agents=2,
+            cells_claimed_total=7,
+            blocking_events=1,
+            termination_reason="provider_error",
+        ),
+    )
+
+    assert {check["metric"] for check in checks} == {
+        "cells_claimed_total",
+        "blocking_events",
+        "provider_failure_termination",
+    }
+    provider_check = next(
+        check for check in checks if check["metric"] == "provider_failure_termination"
+    )
+    assert provider_check["passed"] is False

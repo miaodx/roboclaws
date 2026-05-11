@@ -286,7 +286,7 @@ def test_run_passes_three_images_to_provider(mock_engine_cls, tmp_path: Path) ->
             return {"reasoning": "move", "action": "MoveAhead"}
 
     spy = SpyProvider()
-    with patch("territory_game.create_provider", return_value=spy):
+    with patch("roboclaws.core.game_run.create_provider", return_value=spy):
         run_territory_game(
             scene="FloorPlan201",
             agent_count=2,
@@ -309,7 +309,7 @@ def test_run_replay_records_real_vlm_response(mock_engine_cls, tmp_path: Path) -
             return {"reasoning": "claim fresh ground", "action": "MoveAhead"}
 
     out_dir = tmp_path / "territory"
-    with patch("territory_game.create_provider", return_value=SpyProvider()):
+    with patch("roboclaws.core.game_run.create_provider", return_value=SpyProvider()):
         run_territory_game(
             scene="FloorPlan201",
             agent_count=2,
@@ -359,7 +359,7 @@ def test_run_stops_cleanly_on_provider_health_error(mock_engine_cls, tmp_path: P
             raise ProviderHealthError("kimi became unstable", status=self.get_status())
 
     out_dir = tmp_path / "territory"
-    with patch("territory_game.create_provider", return_value=FailingProvider()):
+    with patch("roboclaws.core.game_run.create_provider", return_value=FailingProvider()):
         result = run_territory_game(
             scene="FloorPlan201",
             agent_count=2,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import logging
 import os
 import subprocess
@@ -18,6 +17,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from roboclaws.core.engine import MultiAgentEngine
+from roboclaws.core.navigation_lifecycle import NavigationRunLifecycle
 from roboclaws.core.run_artifacts import build_run_result
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.mcp.text_bridge import observe_runtime_config
@@ -103,10 +103,6 @@ def _start_stdin_thread(
 
 def _metrics_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
-
-
-def _write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
 _DIAGNOSTIC_CAPTURE_TIMEOUT_S = 15.0
@@ -234,7 +230,16 @@ def run_autonomous_navigation(
     this module's bootstrap / engine / MCP / bridge wiring.
     """
     builder: Callable[[int], str] = kickoff_prompt_builder or _kickoff_prompt
-    output_dir.mkdir(parents=True, exist_ok=True)
+    lifecycle = NavigationRunLifecycle(
+        scene=scene,
+        output_dir=output_dir,
+        # Linux Docker bridge requires binding the MCP server to all interfaces;
+        # the Gateway reaches it via host.docker.internal.
+        host="0.0.0.0",
+        port=18788,
+        agent_id=0,
+    )
+    lifecycle.prepare_output_dir()
 
     engine: MultiAgentEngine | None = None
     mcp_server: RoboclawsMCPServer | None = None
@@ -260,17 +265,10 @@ def run_autonomous_navigation(
 
         mcp_server = make_roboclaws_mcp(
             engine,
-            agent_id=0,
-            run_dir=output_dir,
-            # Linux Docker-bridge reality check (probe gate 02.6-06, Rule 1 fix):
-            # plan 01's threat model T-02.6-01 assumed 127.0.0.1 was reachable via
-            # `host.docker.internal` → host-gateway on Linux. That's false on
-            # 6.x kernels with Docker 29.x — the bridge routes to 172.17.0.1,
-            # which cannot reach host loopback. `0.0.0.0` matches the spike +
-            # Phase 2.5 retros + docs/openclw/openclaw-local.md. LAN-exposure risk is
-            # accepted: single-operator local-dev on a trusted workstation.
-            host="0.0.0.0",
-            port=18788,
+            agent_id=lifecycle.agent_id,
+            run_dir=lifecycle.output_dir,
+            host=lifecycle.host,
+            port=lifecycle.port,
             model_name=runtime_config["model_name"],
             image_model=runtime_config["image_model"],
             observe_mode=runtime_config["observe_mode"],
@@ -314,7 +312,7 @@ def run_autonomous_navigation(
             # Honor operator-supplied ROBOCLAWS_MCP_URL (e.g. local-probe runs) by
             # using setdefault; fall back to the container->host loopback URL. This
             # is what plan 02 Task 3's test_mcp_url_env_override_honored exercises.
-            env.setdefault("ROBOCLAWS_MCP_URL", "http://host.docker.internal:18788/mcp")
+            env.setdefault("ROBOCLAWS_MCP_URL", f"http://host.docker.internal:{lifecycle.port}/mcp")
             mcp_server.write_runtime_event(
                 "gateway_bootstrap_begin",
                 timeout_seconds=env["TIMEOUT_SECONDS"],
@@ -382,17 +380,17 @@ def run_autonomous_navigation(
             run_result.wallclock_s,
         )
 
-        _write_json(output_dir / "start_run_metrics.json", bridge_metrics)
+        lifecycle.write_json("start_run_metrics.json", bridge_metrics)
 
         if run_result.terminated_by in {"wall_clock", "error"}:
             diagnostics_files = _capture_gateway_diagnostics(
-                output_dir=output_dir,
+                output_dir=lifecycle.output_dir,
                 container_name=gateway_container,
-                agent_id=0,
+                agent_id=lifecycle.agent_id,
             )
 
-        _write_json(
-            output_dir / "run_result.json",
+        lifecycle.write_json(
+            "run_result.json",
             build_run_result(
                 terminated_by=run_result.terminated_by,
                 wallclock_s=run_result.wallclock_s,
@@ -414,10 +412,15 @@ def run_autonomous_navigation(
 
         log.info("rendering replay.gif + report.html")
         subprocess.run(
-            [sys.executable, "scripts/render_autonomous_replay.py", "--run-dir", str(output_dir)],
+            [
+                sys.executable,
+                "scripts/render_autonomous_replay.py",
+                "--run-dir",
+                str(lifecycle.output_dir),
+            ],
             check=False,
         )
-        log.info("artifacts at %s", output_dir)
+        log.info("artifacts at %s", lifecycle.output_dir)
     finally:
         watchdog_stop.set()
         if watchdog_thread is not None:
@@ -446,7 +449,7 @@ def run_autonomous_navigation(
 
     assert run_result is not None
     return {
-        "output_dir": str(output_dir),
+        "output_dir": str(lifecycle.output_dir),
         "terminated_by": run_result.terminated_by,
         "wallclock_s": run_result.wallclock_s,
         "final_message": run_result.final_message,

@@ -279,3 +279,20 @@ will confuse the handoff.
 
 Conversely, don't run `/gsd-plan-phase` on a plan that's still being
 pressure-tested in gstack review. Finish the reviews first, then hand over.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `MiaoDX/roboclaws`. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The repo uses the canonical five-label triage vocabulary. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: project orientation lives in root docs, with ADRs in
+`docs/adr/`. See `docs/agents/domain.md`.

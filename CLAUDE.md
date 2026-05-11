@@ -164,6 +164,23 @@ phase directory under `.planning/phases/`. Top-level `PLAN.md` holds the
 current active phase only; shipped-phase history (Phase 2.0–2.4) is archived
 under `docs/retrospectives/`.
 
+## Agent skills
+
+### Issue tracker
+
+Issues and PRDs are tracked in GitHub Issues for `MiaoDX/roboclaws`. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The repo uses the canonical five-label triage vocabulary. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context repo: project orientation lives in root docs, with ADRs in
+`docs/adr/`. See `docs/agents/domain.md`.
+
 ## Skill routing (gstack)
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
