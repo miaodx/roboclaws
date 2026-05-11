@@ -159,6 +159,7 @@ python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timesta
 
 ## Documentation Map
 
+- [Current status](STATUS.md) — short human-facing dashboard: current focus, next action, active source links
 - [Architecture](ARCHITECTURE.md) — code map, four operating modes, MCP contract
 - [Architecture Decision Records](docs/adr/) — atomic decisions (platform choice, deferred integrations)
 - [Direct Codex/Claude robot driver](docs/coding-agent-nav-server.md)

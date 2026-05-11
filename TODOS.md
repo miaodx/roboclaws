@@ -3,6 +3,9 @@
 Deferred work that a future maintainer (or future-you, or a different AI agent on
 a clean checkout) can pick up without rereading the whole history.
 
+This is a parked-work list, not current project status. For current focus, next
+action, and active source links, read [`STATUS.md`](STATUS.md).
+
 One entry = one self-contained item. If you start it, check it out first:
 `git log --grep=<item-keyword>` usually surfaces whether someone already
 kicked it off. Start points are written so that a fresh session — no prior

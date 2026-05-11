@@ -1,5 +1,8 @@
 # Roboclaws Domain Context
 
+This file defines domain language. It is not project status. For current focus,
+next action, and active source links, read [`STATUS.md`](STATUS.md).
+
 Roboclaws is a robotics demo context where simulated robots perceive, navigate,
 and manipulate household scenes while producing reviewable artifacts.
 
