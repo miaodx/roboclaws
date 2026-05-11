@@ -4,7 +4,12 @@ import importlib.util
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    CAMERA_MODEL_POLICY_NAME,
+    RAW_FPV_ONLY_MODE,
+    REALWORLD_CONTRACT,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
@@ -93,3 +98,26 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
     assert result["agent_view"]["raw_fpv_observations"]
     assert result["raw_fpv_observations"]
     assert "Raw FPV Observations" in report
+
+
+def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path) -> None:
+    demo = _load_demo_module()
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+
+    assert result["perception_mode"] == CAMERA_MODEL_POLICY_MODE
+    assert result["policy"] == CAMERA_MODEL_POLICY_NAME
+    assert result["cleanup_status"] == "success"
+    assert result["agent_view"]["observed_objects"]
+    assert result["raw_fpv_observations"]
+    assert result["camera_model_policy_evidence"]["enabled"] is True
+    assert result["camera_model_policy_evidence"]["candidate_count"] >= 1
+    assert result["tool_event_counts"]["infer_camera_model_candidates:request"] >= 1
+    assert "Camera Model Policy" in report
+    assert "Raw FPV Observations" in report
+    assert "Semantic Substeps" in report

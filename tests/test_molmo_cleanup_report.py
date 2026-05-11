@@ -240,6 +240,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "<span>pick</span><small>object</small>" in html
     assert "<span>nav</span><small>target</small>" in html
     assert "<span>place</span><small>surface</small>" in html
+    assert "Subphase" in html
+    assert "nav/target" in html
     assert "object_done" not in html
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
@@ -324,6 +326,264 @@ def test_cleanup_report_renders_raw_fpv_observations(tmp_path: Path) -> None:
     assert "raw_fpv_001" in html
     assert "robot_views/raw.fpv.png" in html
     assert "support estimates" in html
+
+
+def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "cleanup_status": "success",
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "agent_view": {
+            "perception_mode": "camera_model_policy",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "perception_mode": "camera_model_policy",
+                    "structured_detections_available": False,
+                    "artifact_status": "pending_robot_view_capture",
+                    "image_artifacts": {},
+                }
+            ],
+            "observed_objects": [
+                {
+                    "object_id": "observed_001",
+                    "category": "dish",
+                    "name": "Mug",
+                    "current_room_id": "kitchen",
+                    "perception_source": "camera_model_policy",
+                    "model_provenance": "simulated_camera_model",
+                    "source_observation_id": "raw_fpv_001",
+                    "support_estimate": {
+                        "fixture_id": "coffee_table_01",
+                        "source": "camera_model_policy",
+                        "model_provenance": "simulated_camera_model",
+                    },
+                }
+            ],
+            "camera_model_policy_evidence": {
+                "schema": "camera_model_policy_v1",
+                "enabled": True,
+                "model_provenance": "simulated_camera_model",
+                "event_count": 1,
+                "candidate_count": 1,
+                "private_truth_included": False,
+                "events": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "room_id": "kitchen",
+                        "model_provenance": "simulated_camera_model",
+                        "candidate_count": 1,
+                        "registered_observed_handles": ["observed_001"],
+                    }
+                ],
+            },
+        },
+    }
+    run_result["raw_fpv_observations"] = run_result["agent_view"]["raw_fpv_observations"]
+    run_result["camera_model_policy_evidence"] = run_result["agent_view"][
+        "camera_model_policy_evidence"
+    ]
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Camera Model Policy" in html
+    assert "simulated_camera_model" in html
+    assert "observed_001" in html
+    assert "raw_fpv_001" in html
+    assert "Raw FPV Observations" in html
+
+
+def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    final_locations = scenario.object_locations()
+    final_locations.update({"mug_01": "sink_01"})
+    score = score_cleanup(final_locations, scenario.private_manifest).to_dict()
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(scenario, final_locations, tmp_path / "after.png", title="After")
+    semantic_substeps = [
+        {
+            "object_id": "observed_001",
+            "source_receptacle_id": "table_01",
+            "target_receptacle_id": "sink_01",
+            "steps": [
+                {"phase": "navigate_to_object", "primitive_provenance": API_SEMANTIC_PROVENANCE},
+                {"phase": "pick", "primitive_provenance": API_SEMANTIC_PROVENANCE},
+                {
+                    "phase": "navigate_to_receptacle",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+                {
+                    "phase": "place",
+                    "location_id": "sink_01",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+            ],
+        }
+    ]
+    run_result = {
+        "contract": "realworld_cleanup_v1",
+        "backend": "api_semantic_synthetic",
+        "cleanup_status": score["status"],
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "policy": "camera_model_policy_baseline",
+        "score": score,
+        "semantic_substeps": semantic_substeps,
+        "cleanup_primitive_evidence": cleanup_primitive_evidence_from_substeps(semantic_substeps),
+        "agent_view": {
+            "perception_mode": "camera_model_policy",
+            "metric_map": {"rooms": [], "inspection_waypoints": []},
+            "fixture_hints": {"rooms": []},
+            "observed_objects": [
+                {
+                    "object_id": "observed_001",
+                    "category": "dish",
+                    "support_estimate": {"fixture_id": "table_01"},
+                    "source_observation_id": "raw_fpv_001",
+                    "model_provenance": "simulated_camera_model",
+                }
+            ],
+            "raw_fpv_observations": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "waypoint_id": "kitchen_scan_1",
+                    "artifact_status": "recorded",
+                    "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                }
+            ],
+            "camera_model_policy_evidence": {
+                "enabled": True,
+                "event_count": 1,
+                "candidate_count": 1,
+                "model_provenance": "simulated_camera_model",
+                "private_truth_included": False,
+                "events": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "room_id": "kitchen",
+                        "model_provenance": "simulated_camera_model",
+                        "candidate_count": 1,
+                        "registered_observed_handles": ["observed_001"],
+                    }
+                ],
+            },
+        },
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "room_id": "kitchen",
+                "waypoint_id": "kitchen_scan_1",
+                "artifact_status": "recorded",
+                "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+            }
+        ],
+        "camera_model_policy_evidence": {
+            "enabled": True,
+            "event_count": 1,
+            "candidate_count": 1,
+            "model_provenance": "simulated_camera_model",
+            "private_truth_included": False,
+            "events": [
+                {
+                    "observation_id": "raw_fpv_001",
+                    "room_id": "kitchen",
+                    "model_provenance": "simulated_camera_model",
+                    "candidate_count": 1,
+                    "registered_observed_handles": ["observed_001"],
+                }
+            ],
+        },
+        "advisory_evaluation": build_advisory_evaluation(
+            score=score,
+            scenario_id=scenario.scenario_id,
+        ),
+        "private_evaluation": {
+            "generated_mess_count": 1,
+            "generated_mess_set": ["mug_01"],
+            "acceptable_destination_sets": {"mug_01": ["sink_01"]},
+            "mess_restoration_rate": 1.0,
+            "sweep_coverage_rate": 1.0,
+            "disturbance_count": 0,
+        },
+    }
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[
+            {
+                "tool": "place",
+                "event": "response",
+                "response": {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
+                },
+            }
+        ],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "place observed_001",
+                "semantic_phase": "place",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/place.fpv.png"},
+                "focus": {},
+            }
+        ],
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    ordered_headings = [
+        "<h2>Before And After</h2>",
+        "<h2>Object Moves</h2>",
+        "<h2>Semantic Substeps</h2>",
+        "<h2>Robot View Timeline</h2>",
+        "<h2>Score</h2>",
+        "<h2>Cleanup Primitive Gate</h2>",
+        "<h2>Agent View</h2>",
+        "<h2>Raw FPV Observations</h2>",
+        "<h2>Camera Model Policy</h2>",
+        "<h2>Advisory Review</h2>",
+        "<h2>Private Evaluation</h2>",
+    ]
+    positions = [html.index(heading) for heading in ordered_headings]
+    assert positions == sorted(positions)
+    assert "place/surface" in html
 
 
 def test_cleanup_report_renders_attached_planner_proof(tmp_path: Path) -> None:
@@ -435,11 +695,138 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
             "cuda_available": True,
             "cpp_extension_cuda_home": "/usr/local/cuda",
         },
+        "cuda_visible_devices_env": "0",
+        "pytorch_cuda_alloc_conf_env": "expandable_segments:True",
+        "cuda_memory": {
+            "available": True,
+            "device_count": 1,
+            "current_device_index": 0,
+            "devices": [
+                {
+                    "index": 0,
+                    "name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+                    "total_memory_bytes": 12884901888,
+                    "compute_capability": "8.9",
+                }
+            ],
+            "current_snapshot": {
+                "stage": "runtime_diagnostics",
+                "elapsed_s": 0.02,
+                "device_index": 0,
+                "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+                "free_bytes": 298844160,
+                "total_bytes": 12455405158,
+                "torch_allocated_bytes": 10458234880,
+                "torch_reserved_bytes": 11408506880,
+            },
+        },
         "modules": {
             "curobo": {"available": False, "version": None},
             "molmo_spaces": {"available": True, "version": "0.1.0"},
         },
+        "curobo_extension_cache": {
+            "configured_dir": "output/cache",
+            "extensions": {
+                "lbfgs_step_cu": {
+                    "build_dir": "output/cache/lbfgs_step_cu",
+                    "so_exists": False,
+                    "lock_exists": True,
+                    "files": [{"name": "lock", "size_bytes": 0}],
+                },
+                "geom_cu": {
+                    "build_dir": "output/cache/geom_cu",
+                    "so_exists": True,
+                    "lock_exists": False,
+                    "files": [{"name": "geom_cu.so", "size_bytes": 12}],
+                },
+            },
+        },
+        "warp_compatibility": {
+            "available": True,
+            "version": "1.13.0",
+            "has_torch_attr": True,
+            "has_device_from_torch": True,
+            "has_from_torch": True,
+            "has_stream_from_torch": True,
+            "adapter": {
+                "applied": True,
+                "provided": ["warp.torch.device_from_torch"],
+            },
+        },
     }
+    run_result["manipulation_evidence"]["worker_stage_events"] = [
+        {
+            "event": "worker_start",
+            "stage": "worker_start",
+            "elapsed_s": 0.01,
+            "embodiment": "rby1m",
+            "probe_mode": "config_import",
+        },
+        {
+            "event": "rby1m_config_import_start",
+            "stage": "rby1m_config_import",
+            "elapsed_s": 0.02,
+        },
+    ]
+    run_result["manipulation_evidence"]["cuda_memory_snapshots"] = [
+        {
+            "stage": "execute_policy_construct_before",
+            "elapsed_s": 10.2,
+            "device_index": 0,
+            "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+            "free_bytes": 2147483648,
+            "total_bytes": 12884901888,
+            "torch_allocated_bytes": 1073741824,
+            "torch_reserved_bytes": 2147483648,
+        },
+        {
+            "stage": "execute_policy_run_start",
+            "elapsed_s": 24.5,
+            "device_index": 0,
+            "device_name": "NVIDIA RTX 3500 Ada Generation Laptop GPU",
+            "free_bytes": 298844160,
+            "total_bytes": 12455405158,
+            "torch_allocated_bytes": 10458234880,
+            "torch_reserved_bytes": 11408506880,
+        },
+    ]
+    run_result["manipulation_evidence"]["curobo_memory_profile"] = {
+        "profile": "low",
+        "applied": True,
+        "before": {
+            "policy": {
+                "batch_size": 4,
+                "max_batch_plan_attempts": 4,
+                "enable_collision_avoidance": True,
+            },
+            "planners": {
+                "left": {
+                    "num_trajopt_seeds": 12,
+                    "num_ik_seeds": 128,
+                    "max_attempts": 15,
+                    "trajopt_tsteps": 48,
+                    "enable_finetune_trajopt": True,
+                }
+            },
+        },
+        "after": {
+            "policy": {
+                "batch_size": 1,
+                "max_batch_plan_attempts": 1,
+                "enable_collision_avoidance": True,
+            },
+            "planners": {
+                "left": {
+                    "num_trajopt_seeds": 1,
+                    "num_ik_seeds": 16,
+                    "max_attempts": 1,
+                    "trajopt_tsteps": 24,
+                    "enable_finetune_trajopt": False,
+                }
+            },
+        },
+    }
+    run_result["manipulation_evidence"]["last_worker_stage"] = "rby1m_config_import"
     run_result["rby1m_curobo_gate"] = rby1m_curobo_gate_from_planner_probe(run_result)
 
     report_path = render_planner_manipulation_report(run_dir=tmp_path, run_result=run_result)
@@ -448,13 +835,27 @@ def test_planner_manipulation_probe_report_uses_shared_underlay(tmp_path: Path) 
     assert "Planner-Backed Manipulation Probe" in html
     assert "Manipulation Provenance" in html
     assert "Runtime Diagnostics" in html
+    assert "CUDA Memory Headroom" in html
+    assert "CuRobo Memory Profile" in html
+    assert "CuRobo Extension Cache" in html
+    assert "lbfgs_step_cu" in html
+    assert "Warp Compatibility" in html
+    assert "Adapter applied" in html
+    assert "Worker Stage Timeline" in html
     assert "Capability Blockers" in html
     assert "PickAndPlacePlannerPolicy" in html
+    assert "rby1m_config_import_start" in html
+    assert "rby1m_config_import" in html
     assert "faulthandler=True" in html
     assert "renderer_adapter=True" in html
     assert "MUJOCO_GL=egl" in html
     assert "CUDA_HOME=/usr/local/cuda" in html
     assert "torch_cuda_available=True" in html
+    assert "PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True" in html
+    assert "execute_policy_run_start" in html
+    assert "num_ik_seeds" in html
+    assert "Collision avoidance" in html
+    assert "10.6 GiB" in html
     assert "curobo" in html
     assert "RBY1M CuRobo Gate" in html
     assert "wrong_embodiment" in html

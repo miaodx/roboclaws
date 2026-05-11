@@ -14,7 +14,11 @@ from roboclaws.molmo_cleanup.planner_proof_attachment import (
     validate_planner_proof_attachment,
 )
 from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    CAMERA_MODEL_POLICY_NAME,
+    CAMERA_MODEL_POLICY_SCHEMA,
     REALWORLD_CONTRACT,
+    SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
 from roboclaws.molmo_cleanup.semantic_timeline import (
@@ -40,6 +44,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-robot-views", action="store_true")
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
+    parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--accept-blocked-planner-cleanup-primitives", action="store_true")
     parser.add_argument("--require-planner-backed-cleanup-primitives", action="store_true")
@@ -57,7 +62,11 @@ def main() -> None:
     expect_policy = args.expect_policy
     if expect_policy is None:
         expect_policy = (
-            "openclaw_agent" if args.require_openclaw_minimum else "deterministic_sweep_baseline"
+            "openclaw_agent"
+            if args.require_openclaw_minimum
+            else CAMERA_MODEL_POLICY_NAME
+            if args.require_camera_model_policy
+            else "deterministic_sweep_baseline"
         )
     for data, path in run_results:
         _assert_result(
@@ -74,6 +83,7 @@ def main() -> None:
             require_robot_views=args.require_robot_views,
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
+            require_camera_model_policy=args.require_camera_model_policy,
             require_planner_proof_attachment=args.require_planner_proof_attachment,
             accept_blocked_planner_cleanup_primitives=(
                 args.accept_blocked_planner_cleanup_primitives
@@ -112,6 +122,7 @@ def _assert_result(
     require_robot_views: bool = False,
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
+    require_camera_model_policy: bool = False,
     require_planner_proof_attachment: bool = False,
     accept_blocked_planner_cleanup_primitives: bool = False,
     require_planner_backed_cleanup_primitives: bool = False,
@@ -183,6 +194,8 @@ def _assert_result(
         _assert_advisory_scoring(data, base, report_text)
     if require_raw_fpv_observations:
         _assert_raw_fpv_observations(data, base, report_text)
+    if require_camera_model_policy:
+        _assert_camera_model_policy(data, report_text)
     if require_planner_proof_attachment:
         _assert_planner_proof_attachment(data, base, report_text)
     if accept_blocked_planner_cleanup_primitives or require_planner_backed_cleanup_primitives:
@@ -265,6 +278,26 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
             assert item.get("structured_detections_available") is False, item
             forbidden = {"category", "name", "support_estimate", "target_receptacle_id"}
             assert not forbidden.intersection(item), item
+        return
+    if agent_view.get("perception_mode") == CAMERA_MODEL_POLICY_MODE:
+        assert agent_view.get("structured_detections_available") is False, agent_view
+        raw = agent_view.get("raw_fpv_observations") or []
+        assert raw, agent_view
+        evidence = agent_view.get("camera_model_policy_evidence") or {}
+        assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
+        assert evidence.get("enabled") is True, evidence
+        observed = agent_view.get("observed_objects") or []
+        assert observed, agent_view
+        for item in observed:
+            assert str(item.get("object_id", "")).startswith("observed_"), item
+            assert item.get("perception_source") == CAMERA_MODEL_POLICY_MODE, item
+            assert item.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert item.get("source_observation_id"), item
+            support = item.get("support_estimate") or {}
+            assert support.get("source") == CAMERA_MODEL_POLICY_MODE, item
+            assert support.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert "is_misplaced" not in item, item
+            assert "target_receptacle_id" not in item, item
         return
     observed = agent_view.get("observed_objects") or []
     assert observed, agent_view
@@ -375,6 +408,27 @@ def _assert_raw_fpv_observations(
             fpv_path = _resolve_path(robot_views_dir.parent, str(fpv))
         assert fpv_path.is_file(), (fpv_path, item)
         assert fpv_path.stat().st_size > 0, (fpv_path, item)
+
+
+def _assert_camera_model_policy(data: dict[str, Any], report_text: str) -> None:
+    assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
+    assert data.get("policy") == CAMERA_MODEL_POLICY_NAME, data
+    evidence = data.get("camera_model_policy_evidence") or (
+        (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+    )
+    assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
+    assert evidence.get("enabled") is True, evidence
+    assert evidence.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, evidence
+    assert evidence.get("private_truth_included") is False, evidence
+    assert int(evidence.get("event_count") or 0) >= 1, evidence
+    assert int(evidence.get("candidate_count") or 0) >= 1, evidence
+    assert evidence.get("events"), evidence
+    assert data.get("raw_fpv_observations"), data
+    counts = data.get("tool_event_counts") or {}
+    assert int(counts.get("infer_camera_model_candidates:request") or 0) >= 1, counts
+    assert "Camera Model Policy" in report_text, report_text[:500]
+    assert "Raw FPV Observations" in report_text, report_text[:500]
+    assert "simulated_camera_model" in report_text, report_text[:500]
 
 
 def _assert_planner_proof_attachment(

@@ -27,6 +27,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-backed", action="store_true")
     parser.add_argument("--accept-rby1m-curobo-blocked", action="store_true")
     parser.add_argument("--require-rby1m-curobo-ready", action="store_true")
+    parser.add_argument("--require-curobo-extension-cache", action="store_true")
+    parser.add_argument("--require-warp-compatibility", action="store_true")
+    parser.add_argument("--require-cuda-memory", action="store_true")
+    parser.add_argument("--require-curobo-memory-profile", action="store_true")
     return parser.parse_args()
 
 
@@ -41,6 +45,10 @@ def main() -> None:
         require_planner_backed=args.require_planner_backed,
         accept_rby1m_curobo_blocked=args.accept_rby1m_curobo_blocked,
         require_rby1m_curobo_ready=args.require_rby1m_curobo_ready,
+        require_curobo_extension_cache=args.require_curobo_extension_cache,
+        require_warp_compatibility=args.require_warp_compatibility,
+        require_cuda_memory=args.require_cuda_memory,
+        require_curobo_memory_profile=args.require_curobo_memory_profile,
     )
     print(f"molmo-planner-manipulation-probe ok: {path}")
 
@@ -53,6 +61,10 @@ def _assert_probe_result(
     require_planner_backed: bool = False,
     accept_rby1m_curobo_blocked: bool = False,
     require_rby1m_curobo_ready: bool = False,
+    require_curobo_extension_cache: bool = False,
+    require_warp_compatibility: bool = False,
+    require_cuda_memory: bool = False,
+    require_curobo_memory_profile: bool = False,
 ) -> None:
     assert data.get("contract") == MANIPULATION_PROBE_CONTRACT, data
     evidence = data.get("manipulation_evidence") or {}
@@ -69,6 +81,41 @@ def _assert_probe_result(
     assert "Manipulation Provenance" in report_text, report_text[:500]
     if evidence.get("runtime_diagnostics"):
         assert "Runtime Diagnostics" in report_text, report_text[:500]
+        cache = (evidence.get("runtime_diagnostics") or {}).get("curobo_extension_cache") or {}
+        if cache.get("extensions"):
+            assert "CuRobo Extension Cache" in report_text, report_text[:500]
+        warp = (evidence.get("runtime_diagnostics") or {}).get("warp_compatibility") or {}
+        if warp:
+            assert "Warp Compatibility" in report_text, report_text[:500]
+        cuda_memory = (evidence.get("runtime_diagnostics") or {}).get("cuda_memory") or {}
+        if cuda_memory:
+            assert "CUDA Memory Headroom" in report_text, report_text[:500]
+    if evidence.get("curobo_memory_profile"):
+        assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    if require_curobo_extension_cache:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        cache = diagnostics.get("curobo_extension_cache") or {}
+        assert cache.get("extensions"), diagnostics
+        assert "CuRobo Extension Cache" in report_text, report_text[:500]
+    if require_warp_compatibility:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        warp = diagnostics.get("warp_compatibility") or {}
+        assert warp, diagnostics
+        assert "Warp Compatibility" in report_text, report_text[:500]
+    if require_cuda_memory:
+        diagnostics = evidence.get("runtime_diagnostics") or {}
+        cuda_memory = diagnostics.get("cuda_memory") or {}
+        snapshots = evidence.get("cuda_memory_snapshots") or []
+        assert cuda_memory or snapshots, diagnostics
+        assert "CUDA Memory Headroom" in report_text, report_text[:500]
+    if require_curobo_memory_profile:
+        profile = evidence.get("curobo_memory_profile") or {}
+        assert profile, evidence
+        assert profile.get("applied") is True, profile
+        assert "CuRobo Memory Profile" in report_text, report_text[:500]
+    if evidence.get("worker_stage_events"):
+        assert evidence.get("last_worker_stage"), evidence
+        assert "Worker Stage Timeline" in report_text, report_text[:500]
     if accept_rby1m_curobo_blocked or require_rby1m_curobo_ready:
         _assert_rby1m_curobo_gate(
             data,

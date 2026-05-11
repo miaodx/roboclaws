@@ -44,7 +44,25 @@ Phase 26 attached that strict proof to cleanup reports while preserving
 `api_semantic` cleanup-loop provenance. Phase 27 closes the per-subphase cleanup
 primitive gate that future real planner-backed cleanup execution must pass.
 Phase 28 closes the RBY1M/CuRobo runtime gate that must be ready before planner
-primitive replacement can depend on the target robot path.
+primitive replacement can depend on the target robot path. Phase 29 closes the
+unblocked camera-only model-policy gap by deriving observed handles from public
+raw FPV observations while reusing the ADR-0003 semantic cleanup/report
+underlay. Phase 30 consolidated the shared Cleanup Artifact Report presentation
+so current-contract and ADR-0003 artifacts keep one visual core while rendering
+their contract-specific evidence. Phase 31 closes staged RBY1M/CuRobo
+warmup-readiness evidence: the local target runtime still times out at
+`rby1m_config_import` during CuRobo warmup, so target execute-mode proof remains
+gated. Phase 32 isolates the CuRobo/Torch extension cache for RBY1M retries and
+renders extension cache state in the planner probe report; config import now
+succeeds, while execute mode is blocked by the installed Warp API shape. Phase
+33 makes that Warp compatibility adapter visible and probe-local; execute mode
+now reaches policy run and blocks on CUDA memory pressure. Phase 34 captures
+CUDA memory headroom as first-class planner probe evidence before tuning or
+primitive replacement; the latest target retry shows the OOM occurs during
+CuRobo trajectory planning after PyTorch reservation grows to about 9.9 GiB.
+Phase 35 adds a visible probe-local low-memory CuRobo profile for the next
+target execute retry; that retry now passes strict standalone RBY1M/CuRobo
+planner-backed proof with nonzero robot-state movement.
 
 Phases 1 → 2.2 have shipped. Phase 2.3 was evaluated and declined. Phase 2.4
 is active under `.planning/phases/02.4-view-experiment-ab/`: plans
@@ -98,6 +116,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.27 MolmoSpaces cleanup planner proof attachment** - Phase 26 (completed 2026-05-09; render strict planner proof inside cleanup reports without relabeling cleanup primitives)
 - ✅ **v1.28 MolmoSpaces cleanup planner-backed primitive gate** - Phase 27 (completed 2026-05-09; per-subphase evidence gate before real planner-backed cleanup primitive replacement)
 - ✅ **v1.29 MolmoSpaces RBY1M CuRobo runtime gate** - Phase 28 (completed 2026-05-09; target-robot runtime readiness gate before cleanup primitive replacement)
+- ✅ **v1.30 MolmoSpaces camera model policy cleanup** - Phase 29 (completed 2026-05-09; camera-derived model-policy cleanup over the ADR-0003 shared underlay)
+- ✅ **v1.31 MolmoSpaces report underlay consolidation** - Phase 30 (completed 2026-05-09; canonical report visual core and semantic subphase labels)
+- ✅ **v1.32 MolmoSpaces RBY1M CuRobo warmup readiness** - Phase 31 (completed 2026-05-09; staged warmup/JIT evidence before target execute-mode retry)
+- ✅ **v1.33 MolmoSpaces RBY1M CuRobo cache isolation** - Phase 32 (completed 2026-05-09; isolated Torch extension cache evidence before target execute-mode retry)
+- ✅ **v1.34 MolmoSpaces RBY1M Warp compatibility** - Phase 33 (completed 2026-05-09; probe-local Warp API adapter before target execute-mode retry)
+- ✅ **v1.35 MolmoSpaces RBY1M CUDA memory headroom** - Phase 34 (completed 2026-05-09; stage-local CUDA memory evidence for target execute-mode OOM)
+- ✅ **v1.36 MolmoSpaces RBY1M CuRobo memory profile** - Phase 35 (completed 2026-05-09; visible low-memory CuRobo retry profile and strict target proof)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -142,6 +167,13 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 26: MolmoSpaces cleanup planner proof attachment** - ADR-0017 render strict standalone planner proof inside ADR-0003 cleanup reports while preserving `api_semantic` cleanup primitive provenance. Completed 2026-05-09.
 - [x] **Phase 27: MolmoSpaces cleanup planner-backed primitive gate** - ADR-0018 per-subphase gate for real planner-backed cleanup primitive evidence before replacement work. Completed 2026-05-09.
 - [x] **Phase 28: MolmoSpaces RBY1M CuRobo runtime gate** - ADR-0019 target-robot runtime readiness gate before planner-backed cleanup primitive replacement. Completed 2026-05-09.
+- [x] **Phase 29: MolmoSpaces camera model policy cleanup** - ADR-0020 camera-derived model-policy cleanup over public raw FPV observations and the shared ADR-0003 report underlay. Completed 2026-05-09.
+- [x] **Phase 30: MolmoSpaces report underlay consolidation** - ADR-0021 canonical report visual core and semantic subphase labels across MolmoSpaces cleanup demos. Completed 2026-05-09.
+- [x] **Phase 31: MolmoSpaces RBY1M CuRobo warmup readiness** - ADR-0022 staged worker evidence for RBY1M/CuRobo JIT/config warmup before target execute-mode retry. Completed 2026-05-09; the local artifact remains blocked at `rby1m_config_import`.
+- [x] **Phase 32: MolmoSpaces RBY1M CuRobo cache isolation** - ADR-0023 isolated Torch extension cache evidence for RBY1M/CuRobo warmup retries. Completed 2026-05-09; config import succeeds, execute mode blocks at `warp.torch`.
+- [x] **Phase 33: MolmoSpaces RBY1M Warp compatibility** - ADR-0024 probe-local Warp API adapter and visible compatibility evidence before target execute-mode retry. Completed 2026-05-09; execute mode reaches `execute_policy_run` and blocks on CUDA OOM.
+- [x] **Phase 34: MolmoSpaces RBY1M CUDA memory headroom** - ADR-0025 stage-local CUDA/PyTorch memory evidence for target execute-mode OOM before planner memory tuning or cleanup primitive replacement. Completed 2026-05-09; execute mode still blocks inside CuRobo trajectory planning before robot-state movement.
+- [x] **Phase 35: MolmoSpaces RBY1M CuRobo memory profile** - ADR-0026 visible probe-local low-memory CuRobo retry profile for target execute-mode OOM. Completed 2026-05-09; strict standalone RBY1M/CuRobo planner-backed proof passes under the visible low-memory profile.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details
@@ -515,4 +547,9 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 26. MolmoSpaces cleanup planner proof attachment | v1.27 | 1/1 | Complete | 2026-05-09 |
 | 27. MolmoSpaces cleanup planner-backed primitive gate | v1.28 | 1/1 | Complete | 2026-05-09 |
 | 28. MolmoSpaces RBY1M CuRobo runtime gate | v1.29 | 1/1 | Complete | 2026-05-09 |
+| 29. MolmoSpaces camera model policy cleanup | v1.30 | 1/1 | Complete | 2026-05-09 |
+| 30. MolmoSpaces report underlay consolidation | v1.31 | 1/1 | Complete | 2026-05-09 |
+| 31. MolmoSpaces RBY1M CuRobo warmup readiness | v1.32 | 1/1 | Complete | 2026-05-09 |
+| 32. MolmoSpaces RBY1M CuRobo cache isolation | v1.33 | 1/1 | Complete | 2026-05-09 |
+| 33. MolmoSpaces RBY1M Warp compatibility | v1.34 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
