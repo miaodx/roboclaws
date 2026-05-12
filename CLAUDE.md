@@ -2,14 +2,17 @@
 
 Multiple VLM/OpenClaw agents controlling simulated robots in competition and cooperation. Python 3.12+, AI2-THOR simulation.
 
+`AGENTS.md` is the canonical repo playbook. This file is a Claude-specific
+overlay; when the two conflict, follow `AGENTS.md`.
+
 ## Required reading
 
-Before writing any code, read only the orientation set in order:
+Before running commands or writing code, read only the orientation set in order:
 1. `README.md` (project orientation, what you can run, mode discovery)
 2. `ARCHITECTURE.md` (code map, four operating modes, MCP contract)
 3. `STATUS.md` (human-facing current focus, next action, and source links)
-4. `CLAUDE.md` (this file)
-5. `AGENTS.md` (operating playbook, cloud-vs-local split, dual-stack workflow)
+4. `AGENTS.md` (canonical operating playbook, cloud-vs-local split, dual-stack workflow)
+5. `CLAUDE.md` (this file)
 
 Then follow the links in `STATUS.md` only as needed:
 
