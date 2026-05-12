@@ -8,7 +8,7 @@ tools. This path does not use the OpenClaw Gateway.
 
 ```bash
 uv sync --extra dev --extra openclaw
-python examples/coding_agent_nav_server.py --scene FloorPlan201
+python examples/mcp/coding_agent_nav_server.py --scene FloorPlan201
 ```
 
 Preferred one-command workflow:
@@ -88,7 +88,7 @@ Important files:
 To score a chair/sofa photo run:
 
 ```bash
-python scripts/check_photo_task.py --run-dir output/runs/<timestamp>
+python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
 ```
 
 ## Notes

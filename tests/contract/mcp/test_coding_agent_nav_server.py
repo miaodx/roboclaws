@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "mcp"))
 
 from coding_agent_nav_server import (  # noqa: E402
     _client_setup_commands,

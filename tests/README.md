@@ -46,10 +46,10 @@ tests/
 ## Common Commands
 
 ```bash
-./scripts/run_pytest_standalone.sh -m unit -q
-./scripts/run_pytest_standalone.sh -m contract -q
-./scripts/run_pytest_standalone.sh -m regression -q
-./scripts/run_pytest_standalone.sh -m "not integration" -q
+./scripts/dev/run_pytest_standalone.sh -m unit -q
+./scripts/dev/run_pytest_standalone.sh -m contract -q
+./scripts/dev/run_pytest_standalone.sh -m regression -q
+./scripts/dev/run_pytest_standalone.sh -m "not integration" -q
 ```
 
 `tests/conftest.py` auto-marks tests from the top-level folder. It still has a

@@ -50,11 +50,11 @@ Why this shape:
   for Roboclaws dependencies.
 - Add `deploy/railway/entrypoint.sh` to prepare runtime directories, seed
   OpenClaw config, and launch supervisord.
-- Add `scripts/appliance_seed_openclaw.py` to seed `/home/node/.openclaw`
-  directly. It replaces local-dev `scripts/openclaw-bootstrap.sh` for this
+- Add `scripts/appliance/appliance_seed_openclaw.py` to seed `/home/node/.openclaw`
+  directly. It replaces local-dev `scripts/openclaw/openclaw-bootstrap.sh` for this
   appliance path because nested Docker is not available on Railway.
 - Add `deploy/railway/supervisord.conf` and `deploy/railway/nginx.conf.template`.
-- Add `scripts/appliance-run-interactive.sh` as the supervised Roboclaws
+- Add `scripts/appliance/appliance-run-interactive.sh` as the supervised Roboclaws
   process wrapper.
 - Run `roboclaws/openclaw/reset_server.py` from the supervised interactive
   process and route nginx `/reset` to `127.0.0.1:18790/reset`.

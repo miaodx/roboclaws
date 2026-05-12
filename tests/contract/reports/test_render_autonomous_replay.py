@@ -12,7 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "render_autonomous_replay.py"
+SCRIPT_PATH = REPO_ROOT / "scripts" / "reports" / "render_autonomous_replay.py"
 
 
 def _tiny_jpeg_b64(colour: str = "blue") -> str:

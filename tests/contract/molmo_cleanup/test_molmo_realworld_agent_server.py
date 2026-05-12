@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVER_PATH = REPO_ROOT / "examples" / "molmo_realworld_cleanup_agent_server.py"
+SERVER_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmo_realworld_cleanup_agent_server.py"
 
 
 def _load_server_module():

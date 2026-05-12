@@ -24,9 +24,9 @@ Relevant code paths:
 
 - `roboclaws/core/engine.py`: `MultiAgentEngine(..., width=640, height=480)`
 - `roboclaws/core/views.py`: `render_navigation_prompt_bundle(...)`
-- `examples/openclaw_nav_autonomous.py`: autonomous OpenClaw path, single agent
-- `examples/openclaw_demo.py`, `examples/territory_game.py`,
-  `examples/coverage_game.py`: main game/demo paths
+- `examples/openclaw/openclaw_nav_autonomous.py`: autonomous OpenClaw path, single agent
+- `examples/openclaw/openclaw_demo.py`, `examples/games/territory_game.py`,
+  `examples/games/coverage_game.py`: main game/demo paths
 
 ## Local Renderer Findings
 
@@ -117,7 +117,7 @@ Platform value:
 Once a headless GPU-backed display exists, for example `DISPLAY=:121`, run:
 
 ```bash
-DISPLAY=:121 python scripts/benchmark_ai2thor_rendering.py \
+DISPLAY=:121 python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend current \
   --ai2thor-platform default \
   --resolutions 320x240,640x480 \
@@ -128,7 +128,7 @@ DISPLAY=:121 python scripts/benchmark_ai2thor_rendering.py \
 Compare against the current visible desktop:
 
 ```bash
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend current \
   --ai2thor-platform default \
   --resolutions 320x240,640x480 \
@@ -247,7 +247,7 @@ supervisord
 The public process should own session admission, queueing, and artifact serving.
 Do not expose the Gateway port directly.
 
-The existing `scripts/openclaw-bootstrap.sh` is local-dev oriented and assumes
+The existing `scripts/openclaw/openclaw-bootstrap.sh` is local-dev oriented and assumes
 host Docker, Docker volumes, bind mounts, and `host.docker.internal`. A
 container appliance should use a different entrypoint that:
 
@@ -277,7 +277,7 @@ container platform while keeping the frontend on a normal web host.
 Use the checked-in benchmark script:
 
 ```bash
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend current \
   --resolutions 320x240,640x480 \
   --steps 20
@@ -295,7 +295,7 @@ already-known local display.
 Run the same probe under managed Xvfb CPU software rendering:
 
 ```bash
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend xvfb \
   --resolutions 320x240,640x480 \
   --steps 20
@@ -307,7 +307,7 @@ when available and otherwise starts Xvfb itself.
 For CI, add a throughput gate:
 
 ```bash
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend auto \
   --ai2thor-platform default \
   --resolutions 320x240 \
@@ -335,7 +335,7 @@ apt-get install -y xvfb libgl1 libglib2.0-0 mesa-utils
 Then run:
 
 ```bash
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --display-backend auto \
   --ai2thor-platform default \
   --suite prompt \
@@ -355,7 +355,7 @@ download can dominate the job:
 
 - name: AI2-THOR rendering benchmark
   run: |
-    python scripts/benchmark_ai2thor_rendering.py \
+    python scripts/dev/benchmark_ai2thor_rendering.py \
       --display-backend auto \
       --ai2thor-platform default \
       --resolutions 320x240 \
@@ -377,7 +377,7 @@ apt-get install -y libvulkan1 vulkan-tools
 
 vulkaninfo --summary
 
-python scripts/benchmark_ai2thor_rendering.py \
+python scripts/dev/benchmark_ai2thor_rendering.py \
   --ai2thor-platform cloud \
   --display-backend auto \
   --resolutions 320x240 \

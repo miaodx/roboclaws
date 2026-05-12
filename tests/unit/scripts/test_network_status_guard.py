@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = REPO_ROOT / "scripts" / "network_status.sh"
+SCRIPT = REPO_ROOT / "scripts" / "dev" / "network_status.sh"
 JUST_DIR = REPO_ROOT / "just"
 
 
@@ -74,6 +74,6 @@ def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
 
     for path in guarded_files:
         text = path.read_text(encoding="utf-8")
-        assert "bash scripts/network_status.sh --assert-off-work" in text, path
+        assert "bash scripts/dev/network_status.sh --assert-off-work" in text, path
 
     assert "network-status:" in (JUST_DIR / "dev.just").read_text(encoding="utf-8")

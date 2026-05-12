@@ -20,7 +20,12 @@ from roboclaws.molmo_cleanup.types import (
 
 MOLMOSPACES_SUBPROCESS_BACKEND = "molmospaces_subprocess"
 DEFAULT_MOLMOSPACES_PYTHON = Path(sys.executable)
-WORKER_SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "molmospaces_subprocess_worker.py"
+WORKER_SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "scripts"
+    / "molmo_cleanup"
+    / "molmospaces_subprocess_worker.py"
+)
 
 
 class MolmoSpacesSubprocessBackend:

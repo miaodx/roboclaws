@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "openclaw"))
 
 import openclaw_interactive  # noqa: E402
 from openclaw_interactive import (  # noqa: E402
@@ -154,7 +154,7 @@ def test_bootstrap_gateway_invokes_script_with_expected_env() -> None:
         token = _bootstrap_gateway(agent_id=1)
 
     assert token == "token-xyz"
-    assert captured["cmd"] == ["./scripts/openclaw-bootstrap.sh"]
+    assert captured["cmd"] == ["./scripts/openclaw/openclaw-bootstrap.sh"]
     env = captured["env"]
     # agent_id=1 → at least 2 agents (0 and 1).
     assert env["AGENTS"] == "2"
@@ -266,7 +266,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     def _fake_run(*args, **kwargs):
         cmd = list(args[0])
         subprocess_calls.append(cmd)
-        if cmd[0] == "./scripts/openclaw-bootstrap.sh":
+        if cmd[0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok-fresh\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -286,7 +286,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
 
     assert rc == 0
     # Bootstrap was invoked exactly once and Gateway was torn down at exit.
-    assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
+    assert ["./scripts/openclaw/openclaw-bootstrap.sh"] in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] in subprocess_calls
 
     # MCP bound to 0.0.0.0:18788 (Linux host.docker.internal route).
@@ -355,7 +355,7 @@ def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> No
 
     def _fake_run(*args, **kwargs):
         cmd = list(args[0])
-        if cmd[0] == "./scripts/openclaw-bootstrap.sh":
+        if cmd[0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -377,7 +377,9 @@ def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> No
 
     assert rc == 0
     bootstrap_call = next(
-        c for c in run_mock.call_args_list if c.args[0] == ["./scripts/openclaw-bootstrap.sh"]
+        c
+        for c in run_mock.call_args_list
+        if c.args[0] == ["./scripts/openclaw/openclaw-bootstrap.sh"]
     )
     env = bootstrap_call.kwargs["env"]
     assert env["PROVIDER"] == "kimi"
@@ -391,7 +393,7 @@ def test_main_plugin_flag_sets_provider_mode_vars(_patched_main_deps) -> None:
 
     def _fake_run(*args, **kwargs):
         cmd = list(args[0])
-        if cmd[0] == "./scripts/openclaw-bootstrap.sh":
+        if cmd[0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -400,7 +402,9 @@ def test_main_plugin_flag_sets_provider_mode_vars(_patched_main_deps) -> None:
 
     assert rc == 0
     bootstrap_call = next(
-        c for c in run_mock.call_args_list if c.args[0] == ["./scripts/openclaw-bootstrap.sh"]
+        c
+        for c in run_mock.call_args_list
+        if c.args[0] == ["./scripts/openclaw/openclaw-bootstrap.sh"]
     )
     env = bootstrap_call.kwargs["env"]
     assert env["KIMI_PROVIDER_MODE"] == "plugin"
@@ -415,7 +419,7 @@ def test_main_clean_wipes_volume_before_bootstrap(_patched_main_deps) -> None:
     def _fake_run(*args, **kwargs):
         cmd = list(args[0])
         subprocess_calls.append(cmd)
-        if cmd[0] == "./scripts/openclaw-bootstrap.sh":
+        if cmd[0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -425,7 +429,7 @@ def test_main_clean_wipes_volume_before_bootstrap(_patched_main_deps) -> None:
     assert rc == 0
     assert ["docker", "volume", "rm", "openclaw-gateway-config"] in subprocess_calls
     wipe_idx = subprocess_calls.index(["docker", "volume", "rm", "openclaw-gateway-config"])
-    boot_idx = subprocess_calls.index(["./scripts/openclaw-bootstrap.sh"])
+    boot_idx = subprocess_calls.index(["./scripts/openclaw/openclaw-bootstrap.sh"])
     assert wipe_idx < boot_idx, "volume wipe must happen before bootstrap"
 
 
@@ -435,7 +439,7 @@ def test_main_clean_respects_custom_volume(_patched_main_deps) -> None:
 
     def _fake_run(*args, **kwargs):
         subprocess_calls.append(list(args[0]))
-        if args[0][0] == "./scripts/openclaw-bootstrap.sh":
+        if args[0][0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -495,7 +499,7 @@ def test_main_skip_bootstrap_uses_env_token(_patched_main_deps) -> None:
 
     assert rc == 0
     # No bootstrap, no teardown — we attached to an existing Gateway.
-    assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
+    assert ["./scripts/openclaw/openclaw-bootstrap.sh"] not in subprocess_calls
     assert all(cmd[:3] != ["docker", "rm", "-f"] for cmd in subprocess_calls), (
         f"should not tear down a Gateway we didn't start: {subprocess_calls}"
     )
@@ -567,7 +571,7 @@ def test_main_keep_gateway_suppresses_teardown(_patched_main_deps) -> None:
     def _fake_run(*args, **kwargs):
         cmd = list(args[0])
         subprocess_calls.append(cmd)
-        if cmd[0] == "./scripts/openclaw-bootstrap.sh":
+        if cmd[0] == "./scripts/openclaw/openclaw-bootstrap.sh":
             return SimpleNamespace(stdout="tok-keep\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)
 
@@ -581,7 +585,7 @@ def test_main_keep_gateway_suppresses_teardown(_patched_main_deps) -> None:
         )
 
     assert rc == 0
-    assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
+    assert ["./scripts/openclaw/openclaw-bootstrap.sh"] in subprocess_calls
     # With --keep-gateway, the Gateway we bootstrapped stays up.
     assert all(cmd[:3] != ["docker", "rm", "-f"] for cmd in subprocess_calls), (
         f"--keep-gateway must suppress teardown; saw: {subprocess_calls}"

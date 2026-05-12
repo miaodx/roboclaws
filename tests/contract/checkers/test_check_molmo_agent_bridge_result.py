@@ -7,9 +7,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_agent_bridge_smoke.py"
-CHECKER_PATH = REPO_ROOT / "scripts" / "check_molmo_agent_bridge_result.py"
-DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_cleanup_demo.py"
+SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_agent_bridge_smoke.py"
+CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_agent_bridge_result.py"
+DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_cleanup_demo.py"
 
 
 def _load_smoke_module():

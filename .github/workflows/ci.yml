@@ -74,7 +74,7 @@ jobs:
       # every push produces a browsable report.html artifact (issue #15).
       # No AI2-THOR / Unity / API keys required.
       - name: Generate demo HTML reports
-        run: python scripts/generate_demo_report.py --output-dir output/demo --steps 30
+        run: python scripts/reports/generate_demo_report.py --output-dir output/demo --steps 30
 
       - name: Upload HTML reports
         uses: actions/upload-artifact@v4
@@ -130,7 +130,7 @@ jobs:
         continue-on-error: true
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-        run: python scripts/check_kimi_key.py
+        run: python scripts/dev/check_kimi_key.py
 
       # Real smoke test: territory game driven by Kimi inside a real AI2-THOR
       # scene.  Budget is 100 steps so the #41 termination logic (all reachable
@@ -141,7 +141,7 @@ jobs:
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
-          xvfb-run -a python examples/territory_game.py \
+          xvfb-run -a python examples/games/territory_game.py \
             --model kimi --agents 2 --steps 100 \
             --output-dir output/smoke/territory
 
@@ -156,7 +156,7 @@ jobs:
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
         run: |
-          xvfb-run -a python examples/coverage_game.py \
+          xvfb-run -a python examples/games/coverage_game.py \
             --model kimi --agents 2 --steps 100 \
             --output-dir output/smoke/coverage
 
@@ -175,8 +175,8 @@ jobs:
   # Job 3: Ephemeral OpenClaw navigation smoke (Phase 2 shipping path).
   #
   # Bootstraps a local OpenClaw Gateway with N named agents (agent-0, agent-1,
-  # ...) using scripts/openclaw-bootstrap.sh — same entry point users run
-  # locally (see docs/openclaw-local.md). Then runs examples/openclaw_demo.py
+  # ...) using scripts/openclaw/openclaw-bootstrap.sh — same entry point users run
+  # locally (see docs/openclaw-local.md). Then runs examples/openclaw/openclaw_demo.py
   # which posts each turn to /v1/chat/completions with
   # model="openclaw/agent-<id>". No bind mount: frames flow inline as
   # data:image/jpeg;base64 URLs.
@@ -238,7 +238,7 @@ jobs:
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |
-          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
@@ -256,7 +256,7 @@ jobs:
           OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
           OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
         run: |
-          xvfb-run -a python examples/openclaw_demo.py \
+          xvfb-run -a python examples/openclaw/openclaw_demo.py \
             --agents 2 --steps 200 \
             --output-dir output/openclaw/demo
 
@@ -337,7 +337,7 @@ jobs:
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |
-          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
@@ -348,7 +348,7 @@ jobs:
           OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
           AGENT_SOULS: "aggressive,defensive"
         run: |
-          xvfb-run -a python examples/territory_game.py \
+          xvfb-run -a python examples/games/territory_game.py \
             --backend openclaw --agents 2 --steps 30 \
             --output-dir output/openclaw/territory
 
@@ -429,7 +429,7 @@ jobs:
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |
-          TOKEN=$(./scripts/openclaw-bootstrap.sh)
+          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
 
@@ -440,7 +440,7 @@ jobs:
           OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
           AGENT_SOULS: "cooperative,cooperative"
         run: |
-          xvfb-run -a python examples/coverage_game.py \
+          xvfb-run -a python examples/games/coverage_game.py \
             --backend openclaw --agents 2 --steps 30 \
             --output-dir output/openclaw/coverage
 
@@ -468,8 +468,8 @@ jobs:
   # Job 4c: Photo-task autonomous smoke (Kimi, opt-in via commit message tag).
   #
   # The "walk the room and photograph each chair/sofa" hand-test, scriptable.
-  # Runs examples/openclaw_photo_task.py against a real Gateway+Kimi, then
-  # scores with scripts/check_photo_task.py — fails if the agent didn't emit
+  # Runs examples/openclaw/openclaw_photo_task.py against a real Gateway+Kimi, then
+  # scores with scripts/openclaw/check_photo_task.py — fails if the agent didn't emit
   # ≥2 distinct labeled snapshots OR didn't terminate via roboclaws__done.
   #
   # Opt-in (not on every push) because the photo task is open-ended: 200-move
@@ -526,14 +526,14 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           PROVIDER: kimi
         run: |
-          xvfb-run -a python examples/openclaw_photo_task.py \
+          xvfb-run -a python examples/openclaw/openclaw_photo_task.py \
             --max-moves 200 --wall-budget 900 \
             --output-dir output/openclaw/photo-task
 
       - name: Score photo-task run
         if: always()
         run: |
-          python scripts/check_photo_task.py \
+          python scripts/openclaw/check_photo_task.py \
             --run-dir output/openclaw/photo-task \
             --min-targets 2
 
@@ -576,7 +576,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # Need the repo checked out so scripts/write_pages_index.py is available.
+      # Need the repo checked out so scripts/reports/write_pages_index.py is available.
       - uses: actions/checkout@v4
 
       - name: Download mock demo artifact
@@ -633,7 +633,7 @@ jobs:
             [ -d openclaw-src/coverage ]  && cp -r openclaw-src/coverage  site/openclaw/coverage
             INDEX_FLAGS="$INDEX_FLAGS --include-openclaw"
           fi
-          python scripts/write_pages_index.py site $INDEX_FLAGS
+          python scripts/reports/write_pages_index.py site $INDEX_FLAGS
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

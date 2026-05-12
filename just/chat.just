@@ -7,7 +7,7 @@
 #   `just chat::tail`  — pretty-tail Gateway session JSONL
 #   `just chat::view`  — live snapshot viewer at http://127.0.0.1:8787
 #
-# Custom flags: `python examples/openclaw_interactive.py --help`.
+# Custom flags: `python examples/openclaw/openclaw_interactive.py --help`.
 #
 # Chat recipes deliberately do NOT use xvfb by default — the whole point is to
 # watch the robot move on the operator's actual X display. If "Unable to open
@@ -28,7 +28,7 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
     #!/usr/bin/env bash
     set -euo pipefail
 
-    bash scripts/network_status.sh --assert-off-work "OpenClaw chat run"
+    bash scripts/dev/network_status.sh --assert-off-work "OpenClaw chat run"
 
     run_args=("--provider" "{{provider}}")
     if [[ -n "{{model}}" ]]; then
@@ -53,11 +53,11 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
     if [[ "{{xvfb}}" == "true" ]]; then
       xvfb_args="{{xvfb_args}}"
       xvfb-run -a -s "-screen 0 {{chat_xvfb_screen}} -nolisten tcp" \
-        {{chat_xvfb_python}} examples/openclaw_interactive.py \
+        {{chat_xvfb_python}} examples/openclaw/openclaw_interactive.py \
         "${run_args[@]}" $xvfb_args
     else
       {{strip_ros_env}} OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-demo}" PYTHONUNBUFFERED=1 \
-        {{chat_xvfb_python}} examples/openclaw_interactive.py "${run_args[@]}"
+        {{chat_xvfb_python}} examples/openclaw/openclaw_interactive.py "${run_args[@]}"
 
     fi
 
@@ -68,10 +68,10 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
 # Pretty-tail Gateway session JSONL (run in a second terminal).
 [group('observer')]
 tail:
-    @{{strip_ros_env}} .venv/bin/python scripts/tail-openclaw-chat.py
+    @{{strip_ros_env}} .venv/bin/python scripts/openclaw/tail-openclaw-chat.py
 
 # Live snapshot viewer at http://127.0.0.1:8787 (run in a second terminal).
 [group('observer')]
 view:
     -@fuser -k 8787/tcp 2>/dev/null
-    @{{strip_ros_env}} .venv/bin/python scripts/view-snapshots.py
+    @{{strip_ros_env}} .venv/bin/python scripts/openclaw/view-snapshots.py

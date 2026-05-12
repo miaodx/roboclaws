@@ -1,4 +1,4 @@
-"""Tests for scripts/control_ui_watcher.py — WS lifecycle parsing + hint policy."""
+"""Tests for scripts/openclaw/control_ui_watcher.py — WS lifecycle parsing + hint policy."""
 
 from __future__ import annotations
 
@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-_WATCHER_PATH = Path(__file__).resolve().parents[3] / "scripts" / "control_ui_watcher.py"
+_WATCHER_PATH = (
+    Path(__file__).resolve().parents[3] / "scripts" / "openclaw" / "control_ui_watcher.py"
+)
 _spec = importlib.util.spec_from_file_location("control_ui_watcher", _WATCHER_PATH)
 assert _spec is not None and _spec.loader is not None
 watcher = importlib.util.module_from_spec(_spec)

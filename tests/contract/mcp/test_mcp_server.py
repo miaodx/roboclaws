@@ -558,7 +558,7 @@ def test_write_trace_after_close_is_safe(tmp_path: Path) -> None:
     """WR-01: write_runtime_event after close() must not raise.
 
     In production the watchdog + stdin threads in
-    examples/openclaw_nav_autonomous.py join with a 0.2s timeout, so
+    examples/openclaw/openclaw_nav_autonomous.py join with a 0.2s timeout, so
     close() can race with a writer that's already called `snapshot_metrics`
     and is about to call `write_runtime_event`. Pre-fix this raised
     `ValueError: I/O operation on closed file.` Post-fix it's a silent
@@ -664,7 +664,7 @@ def test_observe_labeled_writes_png_files_and_returns_media_hint(
             latest = snap_dir / f"latest.{key}.png"
             assert latest.exists(), (
                 f"latest.{key}.png must be (re)written atomically every "
-                "labeled observe so scripts/view-snapshots.py can poll one "
+                "labeled observe so scripts/openclaw/view-snapshots.py can poll one "
                 "stable filename instead of guessing counter suffixes"
             )
             assert latest.read_bytes() == dest.read_bytes()

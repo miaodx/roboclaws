@@ -6,14 +6,14 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "openclaw"))
 
 # Import via file because the script name contains a hyphen.
 import importlib.util  # noqa: E402
 
 _SPEC = importlib.util.spec_from_file_location(
     "tail_openclaw_chat",
-    Path(__file__).resolve().parents[3] / "scripts" / "tail-openclaw-chat.py",
+    Path(__file__).resolve().parents[3] / "scripts" / "openclaw" / "tail-openclaw-chat.py",
 )
 assert _SPEC and _SPEC.loader
 _mod = importlib.util.module_from_spec(_SPEC)

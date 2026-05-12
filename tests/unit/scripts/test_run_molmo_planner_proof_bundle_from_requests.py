@@ -10,7 +10,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe
 from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT_PATH = REPO_ROOT / "scripts" / "run_molmo_planner_proof_bundle_from_requests.py"
+SCRIPT_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_proof_bundle_from_requests.py"
+)
 
 
 def _load_module():

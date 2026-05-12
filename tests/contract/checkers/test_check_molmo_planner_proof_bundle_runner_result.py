@@ -17,7 +17,9 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
 from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CHECKER_PATH = REPO_ROOT / "scripts" / "check_molmo_planner_proof_bundle_runner_result.py"
+CHECKER_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_planner_proof_bundle_runner_result.py"
+)
 
 
 def _load_checker():

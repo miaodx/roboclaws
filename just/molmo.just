@@ -152,11 +152,11 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
         if [[ "$driver" == "openclaw-live" ]]; then
-          bash scripts/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
+          bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
           server_host="0.0.0.0"
           client_url="http://host.docker.internal:${port}/mcp"
         elif [[ "$driver" == "claude-live" ]]; then
-          bash scripts/network_status.sh --assert-off-work "Claude Code Molmo cleanup live report"
+          bash scripts/dev/network_status.sh --assert-off-work "Claude Code Molmo cleanup live report"
         fi
         if [[ "$driver" == "codex-live" ]] && ! command -v codex >/dev/null 2>&1; then
           echo "error: codex command not found; install or activate Codex before running molmo::codex-report" >&2
@@ -183,7 +183,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           "${visual_args[@]}"
         )
 
-        .venv/bin/python examples/molmo_realworld_cleanup_agent_server.py "${server_args[@]}" &
+        .venv/bin/python examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
           set +e
@@ -260,7 +260,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           if [[ "$evidence" == "visual" && "$driver" != "openclaw-live" ]]; then
             checker_args+=(--require-clean-agent-run)
           fi
-          .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+          .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
             "${checker_args[@]}" \
             "${run_dir}/run_result.json"
           echo "==> report: ${run_dir}/report.html"
@@ -277,7 +277,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
       mkdir -p "$run_dir"
       case "$driver" in
         direct)
-          .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+          .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
@@ -292,7 +292,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           if [[ "$driver" == "openclaw-smoke" ]]; then
             policy="openclaw_agent"
           fi
-          .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+          .venv/bin/python scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
@@ -338,7 +338,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         ;;
     esac
 
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       "${checker_args[@]}" \
       "$run_root"
     echo "==> reports:"

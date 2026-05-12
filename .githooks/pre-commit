@@ -79,10 +79,10 @@ if [[ -z "$STAGED_CODE" && "${FORCE_TESTS:-0}" != "1" ]]; then
 fi
 
 # Require wrapper script so pytest always runs in the sanitized environment.
-if [[ ! -x scripts/run_pytest_standalone.sh ]]; then
-    echo "pre-commit: scripts/run_pytest_standalone.sh missing or not executable" >&2
+if [[ ! -x scripts/dev/run_pytest_standalone.sh ]]; then
+    echo "pre-commit: scripts/dev/run_pytest_standalone.sh missing or not executable" >&2
     exit 1
 fi
 
 echo "pre-commit: pytest -m 'not integration' (fast subset)"
-./scripts/run_pytest_standalone.sh -m "not integration" -q --durations=5
+./scripts/dev/run_pytest_standalone.sh -m "not integration" -q --durations=5

@@ -24,7 +24,7 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    bash scripts/network_status.sh --assert-off-work "OpenClaw appliance run"
+    bash scripts/dev/network_status.sh --assert-off-work "OpenClaw appliance run"
 
     container="{{default_container}}"
     local_data_volume="{{default_local_data_volume}}"
@@ -83,11 +83,11 @@ run mode="local" container="" local_data_volume="" railway_data_dir="":
 # Verify Control UI proxy + Gateway token websocket against a running appliance.
 [group('check')]
 smoke:
-    @{{strip_ros_env}} .venv/bin/python scripts/appliance_control_ui_smoke.py \
+    @{{strip_ros_env}} .venv/bin/python scripts/appliance/appliance_control_ui_smoke.py \
       --url "{{smoke_url}}" \
       --token "${OPENCLAW_TOKEN:-${DEMO_PASSWORD:-demo}}"
 
 # Pretty-tail the appliance Gateway session JSONL.
 [group('observer')]
 tail:
-    @{{strip_ros_env}} .venv/bin/python scripts/tail-openclaw-chat.py --container "{{default_container}}"
+    @{{strip_ros_env}} .venv/bin/python scripts/openclaw/tail-openclaw-chat.py --container "{{default_container}}"

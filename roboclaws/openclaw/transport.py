@@ -516,7 +516,8 @@ class OpenClawBridge:
             raise OpenClawUnavailable("Gateway rejected bearer token (401)")
         if resp.status_code == 404:
             raise OpenClawUnavailable(
-                "/v1/chat/completions not enabled (404) — re-run scripts/openclaw-bootstrap.sh"
+                "/v1/chat/completions not enabled (404) — re-run "
+                "scripts/openclaw/openclaw-bootstrap.sh"
             )
         if resp.status_code == 400:
             text = resp.text or ""
@@ -524,7 +525,7 @@ class OpenClawBridge:
                 raise OpenClawUnavailable(
                     f"Gateway rejected model id ({text.strip()[:200]}). "
                     "The named agent is likely not registered — re-run "
-                    "scripts/openclaw-bootstrap.sh with AGENTS>=<agent_id>+1"
+                    "scripts/openclaw/openclaw-bootstrap.sh with AGENTS>=<agent_id>+1"
                 )
             raise OpenClawUnavailable(f"Gateway returned HTTP 400: {text[:200]}")
         if resp.status_code >= 400:

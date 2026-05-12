@@ -45,7 +45,7 @@ mkdir -p "$DATA_DIR" "$ROBOCLAWS_HOME" "$ROBOCLAWS_AI2THOR_DIR" \
   "$DATA_DIR/appliance" /run/nginx /var/log/nginx
 
 cd "$APP_ROOT"
-"$APP_ROOT/.venv/bin/python" scripts/appliance_seed_openclaw.py
+"$APP_ROOT/.venv/bin/python" scripts/appliance/appliance_seed_openclaw.py
 # shellcheck disable=SC1090
 . "$APPLIANCE_ENV_FILE"
 

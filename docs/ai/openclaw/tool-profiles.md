@@ -14,7 +14,7 @@ gated MCP-discovered tools behind a new `bundle-mcp` policy ID. The `minimal`
 profile does NOT include this gate. Without `tools.alsoAllow: ["bundle-mcp"]`
 on each agent, every `roboclaws__*` tool returns "Tool not found" and the agent
 gives up with `capabilities=none`. Our bootstrap script now splices the gate
-back in — see `scripts/openclaw-bootstrap.sh:595`.
+back in — see `scripts/openclaw/openclaw-bootstrap.sh`.
 
 ## The diff
 
@@ -66,7 +66,7 @@ With our shipping config (`agents.list[*].tools.profile = "minimal"`,
 Per-agent `alsoAllow: ["bundle-mcp"]` sibling-key on the `tools` block:
 
 ```python
-# scripts/openclaw-bootstrap.sh — Python heredoc that writes openclaw.json
+# scripts/openclaw/openclaw-bootstrap.sh — Python heredoc that writes openclaw.json
 "tools": {"profile": tool_profile, "alsoAllow": ["bundle-mcp"]},
 ```
 
@@ -132,7 +132,7 @@ Hash suffixes on these filenames rotate every image build — grep by basename.
 
 ## Related
 
-- `scripts/openclaw-bootstrap.sh:595` — where the `alsoAllow` splice lives
+- `scripts/openclaw/openclaw-bootstrap.sh` — where the `alsoAllow` splice lives
 - `docs/human/openclaw/gateway-internals.md` — broader Gateway image internals
 - `docs/human/openclaw/local.md` — local-dev recipe + live-probed model matrix
 - `TODOS.md` — the "benchmark `minimal+alsoAllow:[bundle-mcp]` vs `coding`" item

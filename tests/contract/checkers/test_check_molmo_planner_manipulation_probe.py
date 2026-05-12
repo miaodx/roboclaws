@@ -18,8 +18,8 @@ from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CHECKER_PATH = REPO_ROOT / "scripts" / "check_molmo_planner_manipulation_probe.py"
-RUNNER_PATH = REPO_ROOT / "scripts" / "run_molmo_planner_manipulation_probe.py"
+CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_planner_manipulation_probe.py"
+RUNNER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_manipulation_probe.py"
 
 
 def _load_checker_module():

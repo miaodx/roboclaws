@@ -53,7 +53,7 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
     fi
 
     echo "==> starting roboclaws MCP server (scene={{scene}}, host={{host}}, port={{port}})" >&2
-    .venv/bin/python examples/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}" \
+    .venv/bin/python examples/mcp/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}" \
       > "{{server_log_file}}" 2>&1 &
     SERVER_PID=$!
     printf '%s\n' "$SERVER_PID" > "{{server_pid_file}}"

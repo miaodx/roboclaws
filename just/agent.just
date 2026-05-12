@@ -158,7 +158,7 @@ run task driver report="visual" *overrides:
         agents="$(get agents 2)"
         steps="$(get steps 20)"
         output_dir="$(get output_dir output/script/territory)"
-        run_cmd xvfb-run -a .venv/bin/python -u examples/territory_game.py \
+        run_cmd xvfb-run -a .venv/bin/python -u examples/games/territory_game.py \
           --backend vlm --model mock --agents "$agents" --steps "$steps" \
           --output-dir "$output_dir"
         ;;
@@ -167,7 +167,7 @@ run task driver report="visual" *overrides:
         agents="$(get agents 2)"
         steps="$(get steps 20)"
         output_dir="$(get output_dir output/script/coverage)"
-        run_cmd xvfb-run -a .venv/bin/python -u examples/coverage_game.py \
+        run_cmd xvfb-run -a .venv/bin/python -u examples/games/coverage_game.py \
           --backend vlm --model mock --agents "$agents" --steps "$steps" \
           --output-dir "$output_dir"
         ;;

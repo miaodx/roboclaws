@@ -22,7 +22,7 @@ Use an immutable capture-set label. Do not reuse a permanent bucket like
 `baseline`; use a dated name such as `baseline-2026-04-23`.
 
 ```bash
-python scripts/capture_refactor_regression.py \
+python scripts/regression/capture_refactor_regression.py \
   --suite explore-vlm,territory-vlm,coverage-vlm \
   --label baseline-2026-04-23 \
   --scenes FloorPlan201 \
@@ -48,7 +48,7 @@ the same.
 Run the same coordinates with a different immutable label.
 
 ```bash
-python scripts/capture_refactor_regression.py \
+python scripts/regression/capture_refactor_regression.py \
   --suite explore-vlm,territory-vlm,coverage-vlm \
   --label candidate-dongxu-dev-0423 \
   --scenes FloorPlan201 \
@@ -64,7 +64,7 @@ that satisfies the repo preflight.
 ## Compare them
 
 ```bash
-python scripts/analyze_refactor_regression.py \
+python scripts/regression/analyze_refactor_regression.py \
   --baseline output/refactor-regression/baseline-2026-04-23/results.jsonl \
   --candidate output/refactor-regression/candidate-dongxu-dev-0423/results.jsonl
 ```

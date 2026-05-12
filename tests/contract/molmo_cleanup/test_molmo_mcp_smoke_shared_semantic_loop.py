@@ -10,8 +10,10 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CURRENT_SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_agent_bridge_smoke.py"
-REALWORLD_SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_realworld_agent_mcp_smoke.py"
+CURRENT_SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_agent_bridge_smoke.py"
+REALWORLD_SMOKE_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
+)
 
 
 def _load_module(path: Path, name: str) -> Any:

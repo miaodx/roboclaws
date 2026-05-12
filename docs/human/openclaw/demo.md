@@ -1,7 +1,7 @@
 # OpenClaw Demo Guide
 
 Fastest path to the OpenClaw navigation demo:
-[`examples/openclaw_demo.py`](../../../examples/openclaw_demo.py).
+[`examples/openclaw/openclaw_demo.py`](../../../examples/openclaw/openclaw_demo.py).
 
 If you only want to prove "OpenClaw can drive the robot end-to-end", start
 here. If you want the broader local matrix (territory, coverage, interactive
@@ -59,7 +59,7 @@ Kimi:
 cd /home/mi/ws/gogo/roboclaws
 set -a && source .env && set +a
 docker rm -f openclaw-gateway 2>/dev/null || true
-TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 NVIDIA:
@@ -68,7 +68,7 @@ NVIDIA:
 cd /home/mi/ws/gogo/roboclaws
 set -a && source .env && set +a
 docker rm -f openclaw-gateway 2>/dev/null || true
-TOKEN=$(PROVIDER=nvidia AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=nvidia AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 MiMo direct vision:
@@ -77,7 +77,7 @@ MiMo direct vision:
 cd /home/mi/ws/gogo/roboclaws
 set -a && source .env && set +a
 docker rm -f openclaw-gateway 2>/dev/null || true
-TOKEN=$(PROVIDER=mimo MODEL=mimo_openai/mimo-v2-omni AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=mimo MODEL=mimo_openai/mimo-v2-omni AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 `openclaw_demo.py` sends images directly in the chat-completions turn, so the
@@ -89,7 +89,7 @@ main model still needs image support here. Text-only MiMo variants such as
 ```bash
 cd /home/mi/ws/gogo/roboclaws
 OPENCLAW_GATEWAY_TOKEN="$TOKEN" \
-  xvfb-run -a python examples/openclaw_demo.py \
+  xvfb-run -a python examples/openclaw/openclaw_demo.py \
   --agents 2 \
   --steps 20 \
   --output-dir output/openclaw/demo
@@ -135,4 +135,4 @@ First run is slow:
 
 - Longer OpenClaw game demos: `just openclaw::run territory`, `just openclaw::run coverage`
 - Full local guide: [`local.md`](local.md)
-- Autonomous MCP loop and split-model MiMo: `python examples/openclaw_nav_autonomous.py ...`
+- Autonomous MCP loop and split-model MiMo: `python examples/openclaw/openclaw_nav_autonomous.py ...`

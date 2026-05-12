@@ -1,4 +1,4 @@
-"""Tests for examples/openclaw_demo.py — auto-convergence and step-budget semantics.
+"""Tests for examples/openclaw/openclaw_demo.py — auto-convergence and step-budget semantics.
 
 The real demo talks to a live OpenClaw Gateway.  These tests mock both the
 Gateway provider and the AI2-THOR engine so the loop logic can be exercised
@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "openclaw"))
 
 from openclaw_demo import _parse_args, run_openclaw_demo  # noqa: E402
 
