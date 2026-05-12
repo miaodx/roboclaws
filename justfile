@@ -20,6 +20,7 @@ mod mcp       'just/mcp.just'
 mod code      'just/code.just'
 mod harness   'just/harness.just'
 mod verify    'just/verify.just'
+mod molmo     'just/molmo.just'
 
 # Default: show the grouped recipe list.
 default:

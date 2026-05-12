@@ -56,6 +56,54 @@ the current source of truth before claiming a run supports a setting.
 | `examples/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Underlying contract supports `infer_camera_model_candidates`. |
 
+## Command Taxonomy
+
+Use `molmo::*` for daily operator commands. It names the run by three axes:
+
+```bash
+just molmo::cleanup <driver> <runtime> <evidence>
+```
+
+| Axis | Values | Meaning |
+|------|--------|---------|
+| Driver | `direct` | Deterministic Python cleanup loop; no MCP server and no live LLM agent. |
+| Driver | `mcp-smoke` | Deterministic script through ADR-0003 MCP tools; drives the same tool-call path but does not launch Codex or Claude. |
+| Driver | `openclaw-smoke` | OpenClaw policy-labeled MCP smoke; proves OpenClaw-shaped artifact/checker wiring but does not launch Gateway. |
+| Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
+| Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
+| Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
+| Runtime | `synthetic` | `api_semantic_synthetic`, cheap contract shape. |
+| Runtime | `molmospaces` | `molmospaces_subprocess`, real upstream MolmoSpaces scene. |
+| Evidence | `semantic` | Shared report without RBY1M robot-view timeline. |
+| Evidence | `visual` | Requires `runtime=molmospaces`; adds RBY1M FPV/chase/map/verification timeline. |
+| Evidence | `raw-fpv` | Requires `runtime=molmospaces`; raw FPV-only observations plus visual timeline. |
+
+`verify::*` remains the confidence-gate namespace: it runs focused tests and then
+delegates scenario execution to `harness::*`. `harness::*` remains the
+lower-level implementation-rig namespace, useful when debugging a specific
+script or checker. Prefer `molmo::*` when deciding what report to produce.
+
+The convenient aliases are:
+
+| Command | Expands To | Use It For |
+|---------|------------|------------|
+| `just molmo::quick-check` | `mcp-smoke synthetic semantic` | Cheap contract check; accepts `driver=`, `runtime=`, and `evidence=` overrides. |
+| `just molmo::review-report` | `direct molmospaces visual` | Canonical human review/status report. |
+| `just molmo::mcp-smoke-report` | `mcp-smoke molmospaces visual` | Real visual MCP smoke without a live external agent. |
+| `just molmo::openclaw-smoke-report` | `openclaw-smoke molmospaces visual` | OpenClaw-labeled visual artifact without live Gateway. |
+| `just molmo::raw-fpv-report` | `direct molmospaces raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
+| `just molmo::codex-report` | `codex-live molmospaces visual` | Live Codex agent report. |
+| `just molmo::claude-report` | `claude-live molmospaces visual` | Live Claude Code agent report. |
+| `just molmo::openclaw-report` | `openclaw-live molmospaces visual` | Live OpenClaw Gateway report. |
+
+For quick axis overrides, use positional values or the same first-three
+`key=value` prefixes:
+
+```bash
+just molmo::quick-check openclaw-smoke synthetic semantic
+just molmo::quick-check driver=openclaw-smoke runtime=synthetic evidence=semantic
+```
+
 ## Report Shapes
 
 All Molmo cleanup demos should route through the shared cleanup report underlay
@@ -73,33 +121,50 @@ sections.
 
 ## Recommended Recipes
 
-Harness recipes write runs under Shanghai-local timestamp folders:
-`output/<recipe>/<MMDD_HHMM>/...`. Multi-seed recipes place each seed below
-that timestamp root, for example `output/<recipe>/0511_1628/seed-1/`.
+Molmo operator recipes write runs under Shanghai-local timestamp folders:
+`output/molmo/<recipe>/<MMDD_HHMM>/...`. Recipes place each seed below that
+timestamp root, for example `output/molmo/review-report/0511_1628/seed-1/`.
 
 Fast synthetic contract smoke:
 
 ```bash
-just harness::molmo-realworld-agent-dogfood-kit
+just molmo::quick-check
 ```
 
-Real visual direct MCP smoke:
+Real visual status/review report:
 
 ```bash
-just harness::molmo-realworld-agent-mcp
+just molmo::review-report
 ```
 
-Real visual OpenClaw-shaped kit:
+Real visual MCP smoke:
 
 ```bash
-just harness::molmo-realworld-openclaw-visual-dogfood-kit
+just molmo::mcp-smoke-report
+```
+
+Real visual OpenClaw-shaped smoke:
+
+```bash
+just molmo::openclaw-smoke-report
 ```
 
 Raw FPV evidence:
 
 ```bash
-just harness::molmo-realworld-raw-fpv
+just molmo::raw-fpv-report
 ```
+
+Live external-agent reports:
+
+```bash
+just molmo::codex-report
+just molmo::claude-report
+just molmo::openclaw-report
+```
+
+`claude-report` and `openclaw-report` keep the repo work-network guard; run
+`just dev::network-status` first if you are unsure which network you are on.
 
 Planner proof-bundle dry run:
 
