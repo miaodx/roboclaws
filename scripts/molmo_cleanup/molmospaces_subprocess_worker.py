@@ -1080,11 +1080,11 @@ def _placement_position(
         y_offset = 0.16
     elif object_category == "RemoteControl":
         offset = 0.0
-        y_offset = 0.34
+        y_offset = 0.0 if receptacle.get("category") == "TVStand" else 0.34
     if object_category == "Apple":
         height = 0.58
     elif object_category == "RemoteControl":
-        height = 0.45
+        height = 0.49 if receptacle.get("category") == "TVStand" else 0.45
     else:
         height = 0.35
     if (
