@@ -120,7 +120,10 @@ just molmo::status output/molmo/codex-report/<stamp>/seed-7
 
 The status probe reports tmux liveness, elapsed time, MCP tool progress,
 `run_result.json` / `report.html` readiness, and the latest Codex message if
-the CLI has written one.
+the CLI has written one. Only one detached Molmo/Codex cleanup run is allowed at
+a time because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a
+run is active or the requested MCP port is busy, the launcher fails instead of
+starting another simulator on a different port.
 
 For quick axis overrides, use positional values or the same first-three
 `key=value` prefixes:

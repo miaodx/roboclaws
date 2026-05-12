@@ -67,8 +67,11 @@ tail -f output/molmo/codex-report/<stamp>/seed-7/driver.log
 
 The probe summarizes tmux liveness, elapsed time, MCP tool progress,
 `run_result.json` / `report.html` readiness, and the latest Codex message when
-available. `claude` and `openclaw` live cleanup drivers still use their
-existing interactive launch paths.
+available. Only one detached Molmo/Codex cleanup run is allowed at a time
+because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a run is
+active or the requested MCP port is already accepting connections, the launcher
+fails instead of choosing another port. `claude` and `openclaw` live cleanup
+drivers still use their existing interactive launch paths.
 
 ## Examples
 

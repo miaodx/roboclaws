@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
+import os
 import socket
 import subprocess
 import sys
@@ -29,6 +31,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--client-url", required=True)
     parser.add_argument("--host", required=True)
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--lock-path", type=Path, required=True)
+    parser.add_argument("--tmux-session", required=True)
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
     parser.add_argument("--kickoff-prompt", required=True)
@@ -56,10 +60,12 @@ class LiveCodexCleanupRunner:
         self.status_path = args.status_path
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
+        self.lock_file = None
 
     def run(self) -> int:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         try:
+            self._acquire_lock()
             self._write_status("starting-server")
             self._start_server()
             self._wait_for_mcp_ready()
@@ -78,6 +84,37 @@ class LiveCodexCleanupRunner:
 
         self._write_status("finished", 0)
         return 0
+
+    def _acquire_lock(self) -> None:
+        self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = self.args.lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            lock_file.seek(0)
+            active = lock_file.read().strip()
+            lock_file.close()
+            detail = f": {active}" if active else ""
+            raise RuntimeError(
+                f"another live Molmo cleanup run holds {self.args.lock_path}{detail}"
+            ) from exc
+        lock_file.seek(0)
+        lock_file.truncate()
+        lock_file.write(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "run_dir": str(self.run_dir),
+                    "status_path": str(self.status_path),
+                    "tmux_session": self.args.tmux_session,
+                    "started_at_epoch": self.started_at_epoch,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        lock_file.flush()
+        self.lock_file = lock_file
 
     def _start_server(self) -> None:
         print("==> detached Codex Molmo cleanup runner")
