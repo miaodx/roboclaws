@@ -106,6 +106,76 @@ def test_worker_select_targets_uses_seed_for_source_pool_diversity() -> None:
     ]
 
 
+def test_worker_placement_diagnostic_records_support_relation() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    state = {
+        "objects": {
+            "book_01": {
+                "object_id": "book_01",
+                "category": "Book",
+                "body_name": "book/body",
+                "position": [5.12, 6.08, 0.73],
+            }
+        },
+        "receptacles": {
+            "table_01": {
+                "receptacle_id": "table_01",
+                "category": "DiningTable",
+                "body_name": "table/body",
+                "position": [5.0, 6.0, 0.38],
+            }
+        },
+    }
+
+    diagnostic = worker._placement_diagnostic(
+        state=state,
+        object_id="book_01",
+        receptacle_id="table_01",
+        relation="on",
+        requested_position=[5.12, 6.08, 0.73],
+        source="unit_test",
+    )
+
+    assert diagnostic["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
+    assert diagnostic["support_status"] == "semantic_on_receptacle"
+    assert diagnostic["relation"] == "on"
+    assert diagnostic["xy_distance_m"] == pytest.approx(0.144222)
+    assert diagnostic["z_delta_m"] == pytest.approx(0.35)
+    assert diagnostic["contact_proof"] == "not_measured_mujoco_freejoint_qpos"
+
+
+def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    weak = worker._annotate_focus_visual_grounding(
+        {
+            "has_focus": True,
+            "object_id": "book_01",
+            "receptacle_id": "desk_01",
+            "fpv_visibility": {"status": "ok", "object_pixels": 0},
+            "visibility": {"status": "ok", "object_pixels": 0},
+        }
+    )
+    contained = worker._annotate_focus_visual_grounding(
+        {
+            "has_focus": True,
+            "object_id": "apple_01",
+            "receptacle_id": "fridge_01",
+            "object_contained_in": "fridge_01",
+            "object_location_relation": "inside",
+            "fpv_visibility": {"status": "ok", "object_pixels": 0},
+            "visibility": {"status": "ok", "object_pixels": 0},
+        }
+    )
+
+    assert weak["fpv_visibility"]["status"] == "weak_object_visibility"
+    assert weak["visibility"]["status"] == "weak_object_visibility"
+    assert contained["fpv_visibility"]["status"] == "contained_inside"
+    assert contained["visibility"]["status"] == "contained_inside"
+
+
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

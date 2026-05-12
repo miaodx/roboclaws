@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    CLOSE_RECEPTACLE_PHASE,
     NAVIGATE_TO_OBJECT_PHASE,
     NAVIGATE_TO_RECEPTACLE_PHASE,
     OBJECT_DONE_PHASE,
@@ -176,6 +177,23 @@ def _run_one_object(
         )
     if not response.get("ok"):
         return False, _failed_step(place_tool, response)
+
+    if place_tool == PLACE_INSIDE_PHASE:
+        close_request = _target_request(
+            object_id=object_id,
+            target_receptacle_id=target_receptacle_id,
+            target_request_key=target_request_key,
+            include_object_id=include_object_id_in_target_requests,
+        )
+        response = _invoke(
+            call_tool,
+            record_tool_view,
+            CLOSE_RECEPTACLE_PHASE,
+            close_request,
+            lambda: contract.close_receptacle(target_receptacle_id),
+        )
+        if not response.get("ok"):
+            return False, _failed_step(CLOSE_RECEPTACLE_PHASE, response)
 
     if include_object_done:
         response = _invoke(

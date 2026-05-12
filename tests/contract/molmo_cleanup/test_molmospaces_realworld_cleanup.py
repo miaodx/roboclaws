@@ -12,6 +12,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
 )
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_BASE_CLEANUP_PHASES,
+    CLOSE_RECEPTACLE_PHASE,
     PLACE_CLEANUP_PHASES,
     SEMANTIC_LOOP_VARIANT,
 )
@@ -54,7 +55,7 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     for item in run_result["semantic_substeps"]:
         phases = [step["phase"] for step in item["steps"]]
         assert phases[:3] == list(CANONICAL_BASE_CLEANUP_PHASES)
-        assert phases[-1] in PLACE_CLEANUP_PHASES
+        assert phases[-1] in {*PLACE_CLEANUP_PHASES, CLOSE_RECEPTACLE_PHASE}
     assert run_result["agent_view"]["observed_objects"]
     assert "generated_mess_set" not in run_result["agent_view"]
     assert "acceptable_destination_sets" not in run_result["agent_view"]

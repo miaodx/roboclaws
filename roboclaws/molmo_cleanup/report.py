@@ -15,9 +15,11 @@ from roboclaws.molmo_cleanup.planner_proof_quality import (
 )
 from roboclaws.molmo_cleanup.planner_task_feasibility import grasp_feasibility_signature_counts
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    CLOSE_RECEPTACLE_PHASE,
     OBJECT_DONE_PHASE,
     PLACE_CLEANUP_PHASES,
     SEMANTIC_LOOP_DISPLAY_NOTE,
+    annotate_focus_visual_grounding,
     display_semantic_subphase,
     display_semantic_subphases,
     semantic_subphase_text,
@@ -4206,8 +4208,8 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
         '<p class="note">inspection_waypoints are static_map_fixture_coverage inputs. '
         "Coverage scans, cleanup actions, and post-place observes are labelled so "
         "reviewers can tell whether the run was interleaved or survey-first. "
-        "The current public MCP surface models open_receptacle as semantic access "
-        "state for place_inside, but does not expose or claim close_receptacle.</p>"
+        "The current public MCP surface models open_receptacle and close_receptacle "
+        "as semantic access state around place_inside.</p>"
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
 
@@ -4416,7 +4418,7 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
     for index, step in enumerate(steps, start=1):
         views = step.get("views", {})
         pose = step.get("robot_pose") or {}
-        focus = step.get("focus") or {}
+        focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
         semantic_phase = step.get("semantic_phase")
         pose_text = (
             f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
@@ -4495,7 +4497,7 @@ def _observation_role_summary(step: dict[str, Any], previous_action: str) -> str
     if _action_tool(str(step.get("action", ""))) != "observe":
         return ""
     previous_tool = _action_tool(previous_action)
-    if previous_tool in PLACE_CLEANUP_PHASES:
+    if previous_tool in {*PLACE_CLEANUP_PHASES, CLOSE_RECEPTACLE_PHASE}:
         role = "post-place verification"
         raw_role = "post_place_observe"
     else:
@@ -4524,7 +4526,7 @@ def _focus_summary(step: dict[str, Any], focus: dict[str, Any]) -> str:
 
 def _robot_evidence_summary(step: dict[str, Any]) -> str:
     pose = step.get("robot_pose") or {}
-    focus = step.get("focus") or {}
+    focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
     bits = []
     if pose.get("theta_source"):
         bits.append(_badge("Theta", pose["theta_source"]))
@@ -4536,10 +4538,14 @@ def _robot_evidence_summary(step: dict[str, Any]) -> str:
         bits.append(_badge("Room", room_text))
     if focus.get("has_focus"):
         fpv_visibility = focus.get("fpv_visibility") or {}
-        if fpv_visibility.get("status") == "ok":
+        if fpv_visibility.get("status") in {
+            "ok",
+            "weak_object_visibility",
+            "contained_inside",
+        }:
             bits.append(_badge("FPV visibility", _visibility_text(fpv_visibility)))
         visibility = focus.get("visibility") or {}
-        if visibility.get("status") == "ok":
+        if visibility.get("status") in {"ok", "weak_object_visibility", "contained_inside"}:
             bits.append(_badge("Verify visibility", _visibility_text(visibility)))
     if not bits:
         return ""
@@ -4549,8 +4555,14 @@ def _robot_evidence_summary(step: dict[str, Any]) -> str:
 def _visibility_text(visibility: dict[str, Any]) -> str:
     object_pixels = _pixel_count(visibility.get("object_pixels"))
     target_pixels = _pixel_count(visibility.get("receptacle_pixels"))
-    object_text = f"object {object_pixels} px" if object_pixels > 0 else "object not visible"
+    status = str(visibility.get("visual_grounding_status") or visibility.get("status") or "")
+    if status == "contained_inside":
+        object_text = "object contained inside"
+    else:
+        object_text = f"object {object_pixels} px" if object_pixels > 0 else "object not visible"
     target_text = f"target {target_pixels} px" if target_pixels > 0 else "target not visible"
+    if status and status != "ok":
+        return f"{status}: {object_text}, {target_text}"
     return f"{object_text}, {target_text}"
 
 
@@ -4642,6 +4654,7 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
             for step in displayed
         )
         readback = _semantic_readback(steps)
+        placement = _semantic_placement_readback(steps)
         cards.append(
             '<article class="semantic-card">'
             '<div class="semantic-card-head">'
@@ -4652,6 +4665,7 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
             "</div>"
             f'<ol class="phase-rail">{phase_rail}</ol>'
             f'<p class="readback">Readback: {html.escape(readback or "pending")}</p>'
+            f"{placement}"
             "</article>"
         )
     return (
@@ -4674,6 +4688,25 @@ def _semantic_readback(steps: list[dict[str, Any]]) -> str:
     if contained_in:
         return f"{readback} ({relation}: {contained_in})"
     return readback or "pending"
+
+
+def _semantic_placement_readback(steps: list[dict[str, Any]]) -> str:
+    diagnostics = [
+        step.get("placement_diagnostic")
+        for step in steps
+        if isinstance(step.get("placement_diagnostic"), dict)
+    ]
+    if not diagnostics:
+        return ""
+    diagnostic = diagnostics[-1]
+    summary = (
+        f"Placement: {diagnostic.get('support_status', diagnostic.get('status', 'unknown'))}; "
+        f"relation={diagnostic.get('relation', '')}; "
+        f"xy={diagnostic.get('xy_distance_m', '')}m; "
+        f"z={diagnostic.get('z_delta_m', '')}m; "
+        f"contact={diagnostic.get('contact_proof', '')}"
+    )
+    return f'<p class="readback">{html.escape(summary)}</p>'
 
 
 def _score_table(score: dict[str, Any]) -> str:

@@ -23,6 +23,7 @@ TARGET_SIDE_TOOLS = frozenset(
         "open_receptacle",
         "place",
         "place_inside",
+        "close_receptacle",
     }
 )
 

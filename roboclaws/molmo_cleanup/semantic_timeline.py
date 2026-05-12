@@ -10,6 +10,7 @@ NAVIGATE_TO_RECEPTACLE_PHASE = "navigate_to_receptacle"
 OPEN_RECEPTACLE_PHASE = "open_receptacle"
 PLACE_PHASE = "place"
 PLACE_INSIDE_PHASE = "place_inside"
+CLOSE_RECEPTACLE_PHASE = "close_receptacle"
 OBJECT_DONE_PHASE = "object_done"
 
 CANONICAL_BASE_CLEANUP_PHASES = (
@@ -22,12 +23,14 @@ CANONICAL_INSIDE_CLEANUP_PHASES = (
     *CANONICAL_BASE_CLEANUP_PHASES,
     OPEN_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
+    CLOSE_RECEPTACLE_PHASE,
 )
 CANONICAL_CLEANUP_TOOL_ORDER = (
     *CANONICAL_BASE_CLEANUP_PHASES,
     OPEN_RECEPTACLE_PHASE,
     PLACE_PHASE,
     PLACE_INSIDE_PHASE,
+    CLOSE_RECEPTACLE_PHASE,
 )
 PLACE_CLEANUP_PHASES = (PLACE_PHASE, PLACE_INSIDE_PHASE)
 SEMANTIC_RESPONSE_PHASES = (
@@ -35,6 +38,7 @@ SEMANTIC_RESPONSE_PHASES = (
     OPEN_RECEPTACLE_PHASE,
     PLACE_PHASE,
     PLACE_INSIDE_PHASE,
+    CLOSE_RECEPTACLE_PHASE,
     OBJECT_DONE_PHASE,
 )
 SEMANTIC_RESPONSE_PHASE_SET = frozenset(SEMANTIC_RESPONSE_PHASES)
@@ -43,12 +47,13 @@ FOCUSED_SEMANTIC_PHASES = (
     OPEN_RECEPTACLE_PHASE,
     PLACE_PHASE,
     PLACE_INSIDE_PHASE,
+    CLOSE_RECEPTACLE_PHASE,
 )
 FOCUSED_SEMANTIC_ACTION_PREFIXES = tuple(f"{phase} " for phase in FOCUSED_SEMANTIC_PHASES)
 
-SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place"
+SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place-close"
 CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT = f"{SEMANTIC_LOOP_VARIANT}-object_done"
-SEMANTIC_LOOP_DISPLAY_TEXT = "nav, pick, nav, open when needed, place"
+SEMANTIC_LOOP_DISPLAY_TEXT = "nav, pick, nav, open when needed, place, close when needed"
 SEMANTIC_LOOP_DISPLAY_NOTE = f"Canonical cleanup loop: {SEMANTIC_LOOP_DISPLAY_TEXT}."
 ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"
 
@@ -59,6 +64,7 @@ SEMANTIC_SUBPHASE_LABELS = {
     OPEN_RECEPTACLE_PHASE: ("open", "target"),
     PLACE_PHASE: ("place", "surface"),
     PLACE_INSIDE_PHASE: ("place", "inside"),
+    CLOSE_RECEPTACLE_PHASE: ("close", "target"),
 }
 CANONICAL_DISPLAY_SUBPHASES = tuple(
     SEMANTIC_SUBPHASE_LABELS[phase] for phase in CANONICAL_BASE_CLEANUP_PHASES
@@ -120,7 +126,7 @@ def record_robot_view_step(
             "robot_trajectory_count": len(result.get("robot_trajectory", [])),
             "view_variant": result.get("view_variant"),
             "view_provenance": result.get("view_provenance"),
-            "focus": result.get("focus"),
+            "focus": annotate_focus_visual_grounding(result.get("focus")),
             "semantic_phase": semantic_phase,
             "room_outline_count": result.get("room_outline_count"),
             "views": relative_view_paths(output_dir, result["views"]),
@@ -195,6 +201,16 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": receptacle_id,
             "semantic_phase": OPEN_RECEPTACLE_PHASE,
         }
+    if tool == CLOSE_RECEPTACLE_PHASE:
+        object_id = optional_str(response.get("object_id") or request.get("object_id"))
+        receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
+        return {
+            "action": f"close_receptacle {receptacle_id}",
+            "label_suffix": label_suffix("close_receptacle", receptacle_id),
+            "focus_object_id": transform_object_id(object_id),
+            "focus_receptacle_id": receptacle_id,
+            "semantic_phase": CLOSE_RECEPTACLE_PHASE,
+        }
     if tool in PLACE_CLEANUP_PHASES:
         object_id = optional_str(response.get("object_id"))
         receptacle_id = response_or_request_id(response, request, "receptacle_id", "fixture_id")
@@ -232,7 +248,9 @@ def semantic_substeps(
         elif tool == PICK_PHASE and response.get("ok") and response.get("object_id"):
             object_id = str(response["object_id"])
             active_object_id = object_id
-        elif tool in PLACE_CLEANUP_PHASES and response.get("ok"):
+        elif tool == PLACE_PHASE and response.get("ok"):
+            active_object_id = None
+        elif tool == CLOSE_RECEPTACLE_PHASE and response.get("ok"):
             active_object_id = None
         elif tool == OBJECT_DONE_PHASE and response.get("object_id"):
             object_id = str(response["object_id"])
@@ -278,11 +296,13 @@ def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
         "contained_in": response.get("contained_in"),
         "location_relation": response.get("location_relation"),
         "opened": response.get("opened"),
+        "closed": response.get("closed"),
         "matches_expected_location": response.get("matches_expected_location"),
         "primitive_provenance": response.get("primitive_provenance"),
         "planner_backed": response.get("planner_backed"),
         "strict_proof_eligible": response.get("strict_proof_eligible"),
         "planner_primitive_evidence": response.get("planner_primitive_evidence"),
+        "placement_diagnostic": response.get("placement_diagnostic"),
         "state_sync_provenance": response.get("state_sync_provenance"),
         "state_mutation": response.get("state_mutation"),
     }
@@ -390,16 +410,60 @@ def has_complete_semantic_sequence(phases: list[str]) -> bool:
         return False
     if phases[-1:] == [OBJECT_DONE_PHASE]:
         return any(phase in phases for phase in PLACE_CLEANUP_PHASES)
-    return phases[-1:] in ([PLACE_PHASE], [PLACE_INSIDE_PHASE])
+    return phases[-1:] in ([PLACE_PHASE], [PLACE_INSIDE_PHASE], [CLOSE_RECEPTACLE_PHASE])
 
 
 def fridge_sequence_ok(phases: list[str]) -> bool:
     try:
         open_index = phases.index(OPEN_RECEPTACLE_PHASE)
         place_index = phases.index(PLACE_INSIDE_PHASE)
+        close_index = phases.index(CLOSE_RECEPTACLE_PHASE)
     except ValueError:
         return False
-    return open_index < place_index
+    return open_index < place_index < close_index
+
+
+def annotate_focus_visual_grounding(focus: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Normalize robot-view focus visibility into report/checker grounding statuses."""
+    if not isinstance(focus, dict):
+        return focus
+    if not focus.get("has_focus"):
+        return focus
+    annotated = dict(focus)
+    for key in ("fpv_visibility", "visibility"):
+        visibility = annotated.get(key)
+        if not isinstance(visibility, dict):
+            continue
+        updated = dict(visibility)
+        status = str(updated.get("status") or "")
+        if status != "segmentation_unavailable":
+            grounding = visual_grounding_status(annotated, updated)
+            updated["status"] = grounding
+            updated["visual_grounding_status"] = grounding
+            if grounding == "weak_object_visibility":
+                updated.setdefault(
+                    "evidence_note",
+                    "Focused object has zero pixels in this robot-view frame.",
+                )
+            elif grounding == "contained_inside":
+                updated.setdefault(
+                    "evidence_note",
+                    "Object is semantically contained inside the focused receptacle.",
+                )
+        annotated[key] = updated
+    return annotated
+
+
+def visual_grounding_status(focus: dict[str, Any], visibility: dict[str, Any]) -> str:
+    """Return ok, weak_object_visibility, or contained_inside for a focused object."""
+    receptacle_id = optional_str(focus.get("receptacle_id"))
+    contained_in = optional_str(focus.get("object_contained_in"))
+    relation = str(focus.get("object_location_relation") or "")
+    if receptacle_id and contained_in == receptacle_id and relation == "inside":
+        return "contained_inside"
+    if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
+        return "ok"
+    return "ok" if _pixel_count(visibility.get("object_pixels")) > 0 else "weak_object_visibility"
 
 
 def primitive_provenance_counts(trace_events: list[dict[str, Any]]) -> dict[str, int]:
@@ -454,6 +518,13 @@ def response_or_request_id(
 
 def _identity_optional_str(value: str | None) -> str | None:
     return value
+
+
+def _pixel_count(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def relative_view_paths(output_dir: Path, views: dict[str, str]) -> dict[str, str]:

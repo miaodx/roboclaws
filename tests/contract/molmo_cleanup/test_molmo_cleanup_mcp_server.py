@@ -37,6 +37,11 @@ def _clean_agent_sequence(server: MolmoCleanupMCPServer) -> dict:
             assert fridge["name"] == "fridge"
             server.call_tool("open_receptacle", receptacle_id=receptacle_id)
             server.call_tool("place_inside", receptacle_id=receptacle_id)
+            server.call_tool(
+                "close_receptacle",
+                receptacle_id=receptacle_id,
+                object_id=object_id,
+            )
         else:
             server.call_tool("place", receptacle_id=receptacle_id)
         server.call_tool("object_done", object_id=object_id, receptacle_id=receptacle_id)

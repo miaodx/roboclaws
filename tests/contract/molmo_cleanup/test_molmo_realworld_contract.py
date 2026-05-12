@@ -154,7 +154,16 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
     _assert_no_forbidden_keys(skipped_open)
 
     assert contract.open_receptacle(fixture_id)["ok"] is True
-    assert contract.place_inside(fixture_id)["ok"] is True
+    placed = contract.place_inside(fixture_id)
+    closed = contract.close_receptacle(fixture_id)
+
+    assert placed["ok"] is True
+    assert placed["object_id"] == detection["object_id"]
+    assert placed["location_relation"] == "inside"
+    assert placed["placement_diagnostic"]["relation"] == "inside"
+    assert closed["ok"] is True
+    assert closed["tool"] == "close_receptacle"
+    assert closed["object_id"] == detection["object_id"]
 
 
 def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:

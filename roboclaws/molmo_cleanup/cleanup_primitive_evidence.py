@@ -11,16 +11,22 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.planner_primitive_executor import (
     PLANNER_PRIMITIVE_EXECUTOR_SCHEMA,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_SUBPHASE_LABELS
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    CLOSE_RECEPTACLE_PHASE,
+    SEMANTIC_SUBPHASE_LABELS,
+)
 
 CLEANUP_PRIMITIVE_GATE_SCHEMA = "planner_backed_cleanup_primitives_v1"
-CLEANUP_PRIMITIVE_REQUIRED_PHASES = frozenset(SEMANTIC_SUBPHASE_LABELS)
+CLEANUP_PRIMITIVE_REQUIRED_PHASES = frozenset(
+    phase for phase in SEMANTIC_SUBPHASE_LABELS if phase != CLOSE_RECEPTACLE_PHASE
+)
 TARGET_BOUND_PHASES = frozenset(
     {
         "navigate_to_receptacle",
         "open_receptacle",
         "place",
         "place_inside",
+        "close_receptacle",
     }
 )
 

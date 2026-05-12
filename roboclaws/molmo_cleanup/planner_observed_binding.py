@@ -18,6 +18,7 @@ DEFAULT_CLEANUP_BINDING_TOOLS = (
     "open_receptacle",
     "place",
     "place_inside",
+    "close_receptacle",
 )
 
 

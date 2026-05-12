@@ -190,6 +190,11 @@ class MolmoCleanupMCPServer:
             return server.call_tool("place_inside", receptacle_id=receptacle_id)
 
         @self._mcp.tool()
+        def close_receptacle(receptacle_id: str) -> dict:
+            """Close a fridge-like receptacle after place_inside."""
+            return server.call_tool("close_receptacle", receptacle_id=receptacle_id)
+
+        @self._mcp.tool()
         def object_done(object_id: str, receptacle_id: str) -> dict:
             """Record public readback for one completed object before done."""
             return server.call_tool(
@@ -224,6 +229,9 @@ class MolmoCleanupMCPServer:
             ),
             "place": lambda: self.contract.place(str(kwargs.get("receptacle_id", ""))),
             "place_inside": lambda: self.contract.place_inside(
+                str(kwargs.get("receptacle_id", ""))
+            ),
+            "close_receptacle": lambda: self.contract.close_receptacle(
                 str(kwargs.get("receptacle_id", ""))
             ),
             "object_done": lambda: self.contract.object_done(
@@ -273,7 +281,7 @@ class MolmoCleanupMCPServer:
                 "scene_objects.receptacles order. Then per object: "
                 "navigate_to_object -> pick -> navigate_to_receptacle -> "
                 "open_receptacle if target is fridge -> place/place_inside -> "
-                "object_done. Call done last."
+                "close_receptacle if opened -> object_done. Call done last."
             )
         if tool == "scene_objects":
             augmented["contract"] = CURRENT_CONTRACT
@@ -283,6 +291,10 @@ class MolmoCleanupMCPServer:
             augmented.setdefault("object_id", self.contract.backend.held_object_id)
         if tool == "open_receptacle" and self.contract.backend.held_object_id:
             augmented.setdefault("object_id", self.contract.backend.held_object_id)
+        if tool == "close_receptacle":
+            request_object_id = request.get("object_id")
+            if request_object_id:
+                augmented.setdefault("object_id", request_object_id)
         if tool in {"place", "place_inside"} and "receptacle_id" not in augmented:
             augmented["receptacle_id"] = request.get("receptacle_id")
         return augmented
@@ -563,6 +575,12 @@ def _backend_name(backend: Any) -> str:
 def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:
     if _backend_name(backend) != "molmospaces_subprocess":
         return
+    mess_diagnostics = getattr(backend, "mess_placement_diagnostics", None)
+    placement_diagnostics = getattr(backend, "placement_diagnostics", None)
+    if mess_diagnostics is not None:
+        run_result["mess_placement_diagnostics"] = mess_diagnostics
+    if placement_diagnostics is not None:
+        run_result["placement_diagnostics"] = placement_diagnostics
     run_result["molmospaces_runtime"] = {
         "python_executable": str(getattr(backend, "python_executable", "")),
         "runtime": getattr(backend, "runtime", {}),

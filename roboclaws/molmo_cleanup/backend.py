@@ -183,6 +183,21 @@ class ApiSemanticCleanupBackend:
             state_mutation="semantic_open_state",
         )
 
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        self._count("close_receptacle")
+        receptacle = self._known_receptacles.get(receptacle_id)
+        if receptacle is None:
+            return self._stale_reference("close_receptacle", receptacle_id=receptacle_id)
+        was_open = receptacle_id in self._open_receptacle_ids
+        self._open_receptacle_ids.discard(receptacle_id)
+        return self._ok(
+            "close_receptacle",
+            primitive_provenance=API_SEMANTIC_PROVENANCE,
+            receptacle_id=receptacle_id,
+            closed=was_open,
+            state_mutation="semantic_open_state",
+        )
+
     def place(self, receptacle_id: str) -> dict[str, Any]:
         self._count("place")
         return self._place_at_receptacle("place", receptacle_id, relation="on")
@@ -210,6 +225,14 @@ class ApiSemanticCleanupBackend:
             "contained_in": receptacle_id if relation == "inside" else "",
             "location_relation": relation,
         }
+        diagnostic = _semantic_placement_diagnostic(
+            object_id=object_id,
+            object_category=self._known_objects[object_id].category,
+            receptacle_id=receptacle_id,
+            receptacle_category=self._known_receptacles[receptacle_id].category
+            or self._known_receptacles[receptacle_id].name,
+            relation=relation,
+        )
         return self._ok(
             tool,
             primitive_provenance=API_SEMANTIC_PROVENANCE,
@@ -218,6 +241,7 @@ class ApiSemanticCleanupBackend:
             location_id=receptacle_id,
             contained_in=receptacle_id if relation == "inside" else None,
             location_relation=relation,
+            placement_diagnostic=diagnostic,
         )
 
     def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
@@ -289,3 +313,28 @@ class ApiSemanticCleanupBackend:
 
     def _stale_reference(self, tool: str, **payload: Any) -> dict[str, Any]:
         return self._error(tool, "stale_reference", **payload)
+
+
+def _semantic_placement_diagnostic(
+    *,
+    object_id: str,
+    object_category: str,
+    receptacle_id: str,
+    receptacle_category: str,
+    relation: str,
+) -> dict[str, Any]:
+    support_status = (
+        "semantic_contained_in_receptacle" if relation == "inside" else "semantic_on_receptacle"
+    )
+    return {
+        "schema": "molmospaces_semantic_placement_diagnostic_v1",
+        "status": support_status,
+        "object_id": object_id,
+        "object_category": object_category,
+        "receptacle_id": receptacle_id,
+        "receptacle_category": receptacle_category,
+        "relation": relation,
+        "support_status": support_status,
+        "contact_proof": "not_measured_api_semantic",
+        "diagnostic_source": "api_semantic_contract_state",
+    }

@@ -179,6 +179,7 @@ def _add_visual_bridge_fields(path: Path) -> None:
         ("place mug_01", "mug_01", "sink_01", "target_facing_base_yaw"),
         ("open_receptacle fridge_01", "apple_01", "fridge_01", "opened_receptacle_access_yaw"),
         ("place_inside apple_01", "apple_01", "fridge_01", "opened_receptacle_access_yaw"),
+        ("close_receptacle fridge_01", "apple_01", "fridge_01", "opened_receptacle_access_yaw"),
     ]
     steps = []
     for index, (action, object_id, receptacle_id, theta_source) in enumerate(actions):
@@ -197,8 +198,13 @@ def _add_visual_bridge_fields(path: Path) -> None:
                 "receptacle_category": "Fridge" if receptacle_id == "fridge_01" else "",
                 "provenance": "public_mujoco_state_report_aid",
                 "object_position": [1.45, 2.0, 1.05],
+                "object_contained_in": "fridge_01"
+                if action.startswith("close_receptacle ")
+                else None,
                 "object_location_relation": "held"
                 if action.startswith(("navigate_to_receptacle ", "open_receptacle "))
+                else "inside"
+                if action.startswith("close_receptacle ")
                 else "at",
                 "fpv_visibility": {
                     "status": "ok",

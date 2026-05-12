@@ -60,6 +60,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert observation["visible_object_detections"]
     assert observation["visible_object_detections"][0]["object_id"].startswith("observed_")
     assert "target_receptacle_id" not in json.dumps(observation)
+    assert "close_receptacle" in server.contract.public_tool_names()
 
 
 def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(

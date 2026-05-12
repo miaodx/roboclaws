@@ -19,6 +19,7 @@ PLANNER_CLEANUP_PRIMITIVE_TOOLS = frozenset(
         "open_receptacle",
         "place",
         "place_inside",
+        "close_receptacle",
     }
 )
 

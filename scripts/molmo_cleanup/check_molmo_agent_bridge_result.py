@@ -10,11 +10,13 @@ from typing import Any
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_SURFACE_CLEANUP_PHASES,
+    CLOSE_RECEPTACLE_PHASE,
     CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
     OBJECT_DONE_PHASE,
     OPEN_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
+    annotate_focus_visual_grounding,
     fridge_sequence_ok,
     has_complete_semantic_sequence,
 )
@@ -182,6 +184,7 @@ def _assert_robot_views(data: dict[str, Any], base: Path) -> None:
     ):
         assert OPEN_RECEPTACLE_PHASE in focused_actions, data
         assert PLACE_INSIDE_PHASE in focused_actions, data
+        assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
 
 
 def _is_focused_robot_action(action: str) -> bool:
@@ -190,21 +193,21 @@ def _is_focused_robot_action(action: str) -> bool:
 
 def _assert_focused_robot_step(step: dict[str, Any]) -> None:
     action = str(step.get("action", ""))
-    focus = step.get("focus") or {}
+    focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
     pose = step.get("robot_pose") or {}
     assert focus.get("has_focus") is True, step
     assert focus.get("object_id"), step
     assert focus.get("provenance") == "public_mujoco_state_report_aid", step
     assert pose.get("head_pitch_source") == "target_framing_head_pitch", step
     assert pose.get("same_room_as_target") is True, step
-    if action.startswith(("open_receptacle ", "place_inside ")) and (
+    if action.startswith(("open_receptacle ", "place_inside ", "close_receptacle ")) and (
         focus.get("receptacle_category") == "Fridge"
     ):
         assert pose.get("theta_source") == "opened_receptacle_access_yaw", step
     else:
         assert pose.get("theta_source") == "target_facing_base_yaw", step
     fpv_visibility = focus.get("fpv_visibility") or {}
-    assert fpv_visibility.get("status") == "ok", step
+    assert fpv_visibility.get("status") in {"ok", "contained_inside"}, step
     assert fpv_visibility.get("boxes"), step
     if action.startswith("navigate_to_object "):
         assert int(fpv_visibility.get("object_pixels") or 0) >= 250, step
@@ -225,8 +228,8 @@ def _assert_focused_robot_step(step: dict[str, Any]) -> None:
         if focus.get("object_location_relation") == "held":
             _assert_held_object_tracks_robot(step)
     visibility = focus.get("visibility") or {}
-    assert visibility.get("status") == "ok", step
-    if not action.startswith(("pick ", "place_inside ")):
+    assert visibility.get("status") in {"ok", "contained_inside"}, step
+    if not action.startswith(("pick ", "place_inside ", "close_receptacle ")):
         assert visibility.get("boxes"), step
 
 

@@ -23,6 +23,7 @@ def test_tool_contract_exposes_expected_direct_call_methods() -> None:
         "navigate_to_receptacle",
         "open_receptacle",
         "place_inside",
+        "close_receptacle",
         "object_done",
     }
 
