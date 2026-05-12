@@ -150,6 +150,13 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         mkdir -p "$run_dir"
         policy="${driver%-live}_agent"
         server_host="$host"
+        if [[ "$driver" == "codex-live" ]]; then
+          selected_port="$(.venv/bin/python scripts/dev/select_free_tcp_port.py "$host" "$port")"
+          if [[ "$selected_port" != "$port" ]]; then
+            echo "==> requested MCP port ${port} is busy; using ${selected_port} for this Codex run"
+          fi
+          port="$selected_port"
+        fi
         client_url="http://${host}:${port}/mcp"
         if [[ "$driver" == "openclaw-live" ]]; then
           bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
