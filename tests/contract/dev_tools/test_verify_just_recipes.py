@@ -8,12 +8,19 @@ JUSTFILE = REPO_ROOT / "justfile"
 JUST_DIR = REPO_ROOT / "just"
 VERIFY_JUST = JUST_DIR / "verify.just"
 HARNESS_JUST = JUST_DIR / "harness.just"
+MOLMO_JUST = JUST_DIR / "molmo.just"
 
 
 def test_verify_module_is_registered() -> None:
     text = JUSTFILE.read_text(encoding="utf-8")
 
     assert re.search(r"^mod verify\s+'just/verify\.just'$", text, re.MULTILINE)
+
+
+def test_molmo_module_is_registered() -> None:
+    text = JUSTFILE.read_text(encoding="utf-8")
+
+    assert re.search(r"^mod molmo\s+'just/molmo\.just'$", text, re.MULTILINE)
 
 
 def test_verify_layer_keeps_static_checks_out_of_harness_namespace() -> None:
@@ -91,6 +98,82 @@ def test_harness_exposes_named_execution_rigs() -> None:
     )
     for header in expected_headers:
         assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
+
+
+def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    expected_headers = (
+        r"^cleanup driver=\"mcp-smoke\" runtime=\"synthetic\" evidence=\"semantic\"",
+        r"^quick-check driver=\"mcp-smoke\" runtime=\"synthetic\" evidence=\"semantic\"",
+        r"^review-report seeds=\"1 2 3\"",
+        r"^mcp-smoke-report seed=\"7\"",
+        r"^openclaw-smoke-report seed=\"7\"",
+        r"^raw-fpv-report seed=\"7\"",
+        r"^codex-report seed=\"7\"",
+        r"^claude-report seed=\"7\"",
+        r"^openclaw-report seed=\"7\"",
+    )
+    for header in expected_headers:
+        assert re.search(header, text, re.MULTILINE), f"missing recipe header: {header}"
+
+
+def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    expected_calls = (
+        'just molmo::cleanup "{{driver}}" "{{runtime}}" "{{evidence}}"',
+        'just molmo::cleanup "direct" "molmospaces" "visual"',
+        'just molmo::cleanup "mcp-smoke" "molmospaces" "visual"',
+        'just molmo::cleanup "openclaw-smoke" "molmospaces" "visual"',
+        'just molmo::cleanup "direct" "molmospaces" "raw-fpv"',
+        'just molmo::cleanup "codex-live" "{{runtime}}" "{{evidence}}"',
+        'just molmo::cleanup "claude-live" "{{runtime}}" "{{evidence}}"',
+        'just molmo::cleanup "openclaw-live" "{{runtime}}" "{{evidence}}"',
+    )
+    for call in expected_calls:
+        assert call in text
+
+    assert "agent-report" not in text
+    assert "openclaw_agent" in text
+    assert "realworld_contract_smoke_agent" in text
+
+
+def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    for expected in (
+        'driver="${driver#driver=}"',
+        'runtime="${runtime#runtime=}"',
+        'evidence="${evidence#evidence=}"',
+        "evidence=visual requires runtime=molmospaces",
+        "mcp-smoke/openclaw-smoke for deterministic substitutes",
+        "command -v codex",
+        "command -v claude",
+        "codex mcp add roboclaws",
+        "claude mcp add --transport http roboclaws",
+        'SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup"',
+        "just chat::run",
+        'bash scripts/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"',
+        'bash scripts/network_status.sh --assert-off-work "Claude Code Molmo cleanup live report"',
+    ):
+        assert expected in text
+
+
+def test_molmo_visual_reports_require_robot_timeline_and_real_robot_checks() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    for expected in (
+        "--include-robot",
+        "--robot-name rby1m",
+        "--record-robot-views",
+        "--require-robot-views",
+        "--require-waypoint-honesty",
+        "--require-real-robot-alignment",
+        'perception_mode="raw_fpv_only"',
+        "--require-raw-fpv-observations",
+    ):
+        assert expected in text
 
 
 def test_molmo_harness_output_roots_keep_timestamped_runs() -> None:
