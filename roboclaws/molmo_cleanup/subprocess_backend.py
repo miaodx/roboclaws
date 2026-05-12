@@ -86,6 +86,16 @@ class MolmoSpacesSubprocessBackend:
         result = self._run_worker("locations")
         return {str(key): str(value) for key, value in result["final_locations"].items()}
 
+    @property
+    def mess_placement_diagnostics(self) -> list[dict[str, Any]]:
+        raw = self._read_state().get("mess_placement_diagnostics") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
+
+    @property
+    def placement_diagnostics(self) -> list[dict[str, Any]]:
+        raw = self._read_state().get("placement_diagnostics") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
+
     def write_snapshot(self, output_path: Path, *, title: str) -> Path:
         self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
         return output_path
@@ -143,6 +153,9 @@ class MolmoSpacesSubprocessBackend:
 
     def place_inside(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("place_inside", "--receptacle-id", receptacle_id)
+
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._run_worker("close_receptacle", "--receptacle-id", receptacle_id)
 
     def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker(

@@ -70,6 +70,9 @@ def main(argv: list[str] | None = None) -> None:
     open_receptacle_parser = subparsers.add_parser("open_receptacle")
     open_receptacle_parser.add_argument("--receptacle-id", required=True)
 
+    close_receptacle_parser = subparsers.add_parser("close_receptacle")
+    close_receptacle_parser.add_argument("--receptacle-id", required=True)
+
     place = subparsers.add_parser("place")
     place.add_argument("--receptacle-id", required=True)
 
@@ -128,6 +131,9 @@ def main(argv: list[str] | None = None) -> None:
             _write_state(args.state_path, state)
         elif args.command == "open_receptacle":
             result = open_receptacle(state, args.receptacle_id)
+            _write_state(args.state_path, state)
+        elif args.command == "close_receptacle":
+            result = close_receptacle(state, args.receptacle_id)
             _write_state(args.state_path, state)
         elif args.command == "place":
             result = place_object(state, args.receptacle_id)
@@ -222,6 +228,8 @@ def init_state(
         "held_object_id": None,
         "current_receptacle_id": None,
         "open_receptacle_ids": [],
+        "mess_placement_diagnostics": [],
+        "placement_diagnostics": [],
         "tool_event_counts": {},
     }
     _seed_misplaced_objects(model, data, state, targets)
@@ -357,6 +365,7 @@ def write_robot_views(
         frame=fpv,
     )
     focus["visibility"] = _focus_visibility(model, data, verify_camera, focus, frame=verify)
+    focus = _annotate_focus_visual_grounding(focus)
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -568,6 +577,15 @@ def _place_object_at_receptacle(
     _set_free_body_position(model, data, obj["body_name"], target_position)
     mujoco.mj_forward(model, data)
     _refresh_object_positions(model, data, state)
+    diagnostic = _placement_diagnostic(
+        state=state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        relation=relation,
+        requested_position=target_position,
+        source="cleanup_place",
+    )
+    state.setdefault("placement_diagnostics", []).append(diagnostic)
 
     state["qpos"] = [float(value) for value in data.qpos]
     state["held_object_id"] = None
@@ -583,6 +601,7 @@ def _place_object_at_receptacle(
         location_id=final_locations.get(object_id),
         contained_in=receptacle_id if relation == "inside" else None,
         location_relation=relation,
+        placement_diagnostic=diagnostic,
         mujoco_body_name=obj["body_name"],
         qpos_changed=True,
         state_mutation="mujoco_freejoint_qpos",
@@ -637,6 +656,43 @@ def open_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]
     )
 
 
+def close_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    _count(state, "close_receptacle")
+    if receptacle_id not in state["receptacles"]:
+        return _error("close_receptacle", "stale_reference", receptacle_id=receptacle_id)
+
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    receptacle = state["receptacles"][receptacle_id]
+    joints = _openable_receptacle_joints(model, receptacle["body_name"])
+    closed_joints = []
+    for joint in joints:
+        _set_joint_qpos(model, data, joint["joint_name"], joint["close_value"])
+        closed_joints.append(joint)
+    held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
+    mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
+    state["qpos"] = [float(value) for value in data.qpos]
+    open_ids = set(state.get("open_receptacle_ids", []))
+    was_open = receptacle_id in open_ids
+    open_ids.discard(receptacle_id)
+    state["open_receptacle_ids"] = sorted(open_ids)
+    return _ok(
+        "close_receptacle",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        receptacle_id=receptacle_id,
+        closed=was_open or bool(closed_joints),
+        closed_joints=closed_joints,
+        held_object_pose=held_object_pose,
+        qpos_changed=bool(closed_joints) or held_object_pose is not None,
+        state_mutation=_close_receptacle_state_mutation(
+            bool(closed_joints),
+            held_object_pose is not None,
+        ),
+        backend=BACKEND,
+    )
+
+
 def object_done(state: dict[str, Any], object_id: str, receptacle_id: str) -> dict[str, Any]:
     _count(state, "object_done")
     if object_id not in state["objects"]:
@@ -674,6 +730,18 @@ def _open_receptacle_state_mutation(
         parts.append("mujoco_receptacle_joint_qpos")
     if robot_pose_changed:
         parts.append("robot_base_qpos")
+    if held_object_changed:
+        parts.append("held_object_freejoint_qpos")
+    return "+".join(parts) if parts else "no_openable_joint"
+
+
+def _close_receptacle_state_mutation(
+    joints_changed: bool,
+    held_object_changed: bool,
+) -> str:
+    parts = []
+    if joints_changed:
+        parts.append("mujoco_receptacle_joint_qpos")
     if held_object_changed:
         parts.append("held_object_freejoint_qpos")
     return "+".join(parts) if parts else "no_openable_joint"
@@ -786,12 +854,34 @@ def _seed_misplaced_objects(
             "target_receptacle_id"
         ]
         state["objects"][target["object_id"]]["seeded_start_receptacle_id"] = wrong["receptacle_id"]
+        relation = "inside" if wrong.get("category") == "Fridge" else "on"
+        state["objects"][target["object_id"]]["contained_in"] = (
+            wrong["receptacle_id"] if relation == "inside" else None
+        )
+        state["objects"][target["object_id"]]["location_relation"] = relation
+        placement_position = _placement_position(
+            wrong,
+            index=index,
+            relation=relation,
+            object_category=target.get("category"),
+        )
         _set_free_body_position(
             model,
             data,
             target["body_name"],
-            _placement_position(wrong, index=index, object_category=target.get("category")),
+            placement_position,
         )
+        mujoco.mj_forward(model, data)
+        _refresh_object_positions(model, data, state)
+        diagnostic = _placement_diagnostic(
+            state=state,
+            object_id=target["object_id"],
+            receptacle_id=wrong["receptacle_id"],
+            relation=relation,
+            requested_position=placement_position,
+            source="mess_seed",
+        )
+        state.setdefault("mess_placement_diagnostics", []).append(diagnostic)
     mujoco.mj_forward(model, data)
 
 
@@ -978,6 +1068,45 @@ def _placement_position(
     return [float(base[0]) + offset, float(base[1]) + y_offset, float(base[2]) + height]
 
 
+def _placement_diagnostic(
+    *,
+    state: dict[str, Any],
+    object_id: str,
+    receptacle_id: str,
+    relation: str,
+    requested_position: list[float],
+    source: str,
+) -> dict[str, Any]:
+    obj = state["objects"][object_id]
+    receptacle = state["receptacles"][receptacle_id]
+    object_position = [float(value) for value in obj.get("position", requested_position)]
+    receptacle_position = [float(value) for value in receptacle.get("position", [0.0, 0.0, 0.0])]
+    xy_distance = math.dist(object_position[:2], receptacle_position[:2])
+    z_delta = object_position[2] - receptacle_position[2]
+    support_status = (
+        "semantic_contained_in_receptacle" if relation == "inside" else "semantic_on_receptacle"
+    )
+    return {
+        "schema": "molmospaces_semantic_placement_diagnostic_v1",
+        "status": support_status,
+        "object_id": object_id,
+        "object_category": obj.get("category"),
+        "object_body_name": obj.get("body_name"),
+        "receptacle_id": receptacle_id,
+        "receptacle_category": receptacle.get("category"),
+        "receptacle_body_name": receptacle.get("body_name"),
+        "relation": relation,
+        "requested_position": [round(float(value), 6) for value in requested_position],
+        "object_position": [round(float(value), 6) for value in object_position],
+        "receptacle_position": [round(float(value), 6) for value in receptacle_position],
+        "xy_distance_m": round(float(xy_distance), 6),
+        "z_delta_m": round(float(z_delta), 6),
+        "support_status": support_status,
+        "contact_proof": "not_measured_mujoco_freejoint_qpos",
+        "diagnostic_source": source,
+    }
+
+
 def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:
     model = mujoco.MjModel.from_xml_path(str(scene_xml))
     data = mujoco.MjData(model)
@@ -1139,6 +1268,7 @@ def _openable_receptacle_joints(
             if not joint_name:
                 continue
             open_value = float(model.jnt_range[joint_id][1])
+            close_value = float(model.jnt_range[joint_id][0])
             joints.append(
                 {
                     "joint_name": joint_name,
@@ -1146,6 +1276,7 @@ def _openable_receptacle_joints(
                     if joint_type == int(mujoco.mjtJoint.mjJNT_HINGE)
                     else "slide",
                     "open_value": round(open_value, 6),
+                    "close_value": round(close_value, 6),
                 }
             )
     return joints
@@ -1559,6 +1690,46 @@ def _focus_visibility(
         "receptacle_pixels": receptacle_pixels,
         "boxes": boxes,
     }
+
+
+def _annotate_focus_visual_grounding(focus: dict[str, Any]) -> dict[str, Any]:
+    if not focus.get("has_focus"):
+        return focus
+    annotated = dict(focus)
+    for key in ("fpv_visibility", "visibility"):
+        visibility = annotated.get(key)
+        if not isinstance(visibility, dict):
+            continue
+        updated = dict(visibility)
+        if updated.get("status") != "segmentation_unavailable":
+            status = _visual_grounding_status(annotated, updated)
+            updated["status"] = status
+            updated["visual_grounding_status"] = status
+            if status == "weak_object_visibility":
+                updated.setdefault(
+                    "evidence_note",
+                    "Focused object has zero pixels in this robot-view frame.",
+                )
+            elif status == "contained_inside":
+                updated.setdefault(
+                    "evidence_note",
+                    "Object is semantically contained inside the focused receptacle.",
+                )
+        annotated[key] = updated
+    return annotated
+
+
+def _visual_grounding_status(focus: dict[str, Any], visibility: dict[str, Any]) -> str:
+    receptacle_id = focus.get("receptacle_id")
+    if (
+        receptacle_id
+        and focus.get("object_contained_in") == receptacle_id
+        and focus.get("object_location_relation") == "inside"
+    ):
+        return "contained_inside"
+    if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
+        return "ok"
+    return "ok" if int(visibility.get("object_pixels") or 0) > 0 else "weak_object_visibility"
 
 
 def _render_segmentation(

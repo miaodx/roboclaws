@@ -42,11 +42,13 @@ from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_vis
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
     CANONICAL_SURFACE_CLEANUP_PHASES,
+    CLOSE_RECEPTACLE_PHASE,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
     OPEN_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
     SEMANTIC_LOOP_VARIANT,
     SEMANTIC_RESPONSE_PHASES,
+    annotate_focus_visual_grounding,
     has_complete_semantic_sequence,
 )
 
@@ -481,6 +483,7 @@ def _assert_robot_views(
         ):
             assert OPEN_RECEPTACLE_PHASE in focused_actions, data
             assert PLACE_INSIDE_PHASE in focused_actions, data
+            assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:
@@ -661,7 +664,7 @@ def _assert_bound_planner_cleanup_objects(
 def _required_bound_cleanup_phases(subphases: list[dict[str, Any]]) -> set[str]:
     phases = {str(step.get("phase") or "") for step in subphases}
     if OPEN_RECEPTACLE_PHASE in phases or PLACE_INSIDE_PHASE in phases:
-        return set(CANONICAL_INSIDE_CLEANUP_PHASES)
+        return set(CANONICAL_INSIDE_CLEANUP_PHASES) - {CLOSE_RECEPTACLE_PHASE}
     return set(CANONICAL_SURFACE_CLEANUP_PHASES)
 
 
@@ -829,12 +832,27 @@ def _is_focused_robot_action(action: str) -> bool:
 
 
 def _assert_focused_robot_step(step: dict[str, Any]) -> None:
-    focus = step.get("focus") or {}
+    focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
     assert focus.get("has_focus") is True, step
     fpv_visibility = focus.get("fpv_visibility") or {}
     verify_visibility = focus.get("visibility") or {}
-    assert fpv_visibility.get("status") == "ok", step
-    assert verify_visibility.get("status") == "ok", step
+    _assert_focus_visibility_status(fpv_visibility, focus, step)
+    _assert_focus_visibility_status(verify_visibility, focus, step)
+
+
+def _assert_focus_visibility_status(
+    visibility: dict[str, Any],
+    focus: dict[str, Any],
+    step: dict[str, Any],
+) -> None:
+    status = visibility.get("status")
+    assert status in {"ok", "contained_inside"}, step
+    if (
+        status == "ok"
+        and "object_pixels" in visibility
+        and (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label"))
+    ):
+        assert int(visibility.get("object_pixels") or 0) > 0, step
 
 
 def _assert_no_forbidden_keys(payload: Any) -> None:

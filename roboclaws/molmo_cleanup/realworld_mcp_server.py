@@ -241,6 +241,11 @@ class RealWorldMolmoCleanupMCPServer:
             return server.call_tool("place_inside", fixture_id=fixture_id)
 
         @self._mcp.tool()
+        def close_receptacle(fixture_id: str) -> dict:
+            """Close a public fixture after place_inside."""
+            return server.call_tool("close_receptacle", fixture_id=fixture_id)
+
+        @self._mcp.tool()
         def done(reason: str) -> dict:
             """Finish the run and write trace, run_result, and report."""
             return server.call_tool("done", reason=reason)
@@ -278,6 +283,9 @@ class RealWorldMolmoCleanupMCPServer:
             ),
             "place": lambda: self.contract.place(str(kwargs.get("fixture_id", ""))),
             "place_inside": lambda: self.contract.place_inside(str(kwargs.get("fixture_id", ""))),
+            "close_receptacle": lambda: self.contract.close_receptacle(
+                str(kwargs.get("fixture_id", ""))
+            ),
             "done": lambda: self.contract.done(str(kwargs.get("reason", ""))),
         }
         if name not in handlers:
@@ -328,9 +336,9 @@ class RealWorldMolmoCleanupMCPServer:
                 "Runtime movable objects come only from observe; acceptable destination "
                 "sets and generated mess truth are private."
             )
-        if tool in {"place", "place_inside"} and augmented.get("ok"):
+        if tool in {"place", "place_inside", "close_receptacle"} and augmented.get("ok"):
             augmented["instruction"] = (
-                "After placing the held object, call observe once in the current "
+                "After placing and closing if needed, call observe once in the current "
                 "room/fixture area before choosing the next object or waypoint."
             )
         return augmented
@@ -699,6 +707,12 @@ def _backend_name(backend: Any) -> str:
 def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:
     if _backend_name(backend) != "molmospaces_subprocess":
         return
+    mess_diagnostics = getattr(backend, "mess_placement_diagnostics", None)
+    placement_diagnostics = getattr(backend, "placement_diagnostics", None)
+    if mess_diagnostics is not None:
+        run_result["mess_placement_diagnostics"] = mess_diagnostics
+    if placement_diagnostics is not None:
+        run_result["placement_diagnostics"] = placement_diagnostics
     run_result["molmospaces_runtime"] = {
         "python_executable": str(getattr(backend, "python_executable", "")),
         "runtime": getattr(backend, "runtime", {}),

@@ -165,6 +165,9 @@ class _CurrentContractMcpLoop:
     def place_inside(self, receptacle_id: str) -> dict[str, Any]:
         return self._server.call_tool("place_inside", receptacle_id=receptacle_id)
 
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("close_receptacle", receptacle_id=receptacle_id)
+
     def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         return self._server.call_tool(
             "object_done",

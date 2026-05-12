@@ -190,6 +190,9 @@ class _RealWorldMcpLoop:
     def place_inside(self, receptacle_id: str) -> dict[str, Any]:
         return self._server.call_tool("place_inside", fixture_id=receptacle_id)
 
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self._server.call_tool("close_receptacle", fixture_id=receptacle_id)
+
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)

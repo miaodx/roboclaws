@@ -67,9 +67,13 @@ class MolmoCleanupToolContract:
                 "description": "Place the held object inside an opened fridge-like receptacle.",
             },
             {
+                "name": "close_receptacle",
+                "description": "Close fridge-like targets after a successful place_inside.",
+            },
+            {
                 "name": "object_done",
                 "description": (
-                    "Call after each object is placed to record public completion readback."
+                    "Call after each object is placed and any close_receptacle readback."
                 ),
             },
             {
@@ -104,6 +108,9 @@ class MolmoCleanupToolContract:
 
     def place_inside(self, receptacle_id: str) -> dict[str, Any]:
         return self.backend.place_inside(receptacle_id=receptacle_id)
+
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return self.backend.close_receptacle(receptacle_id=receptacle_id)
 
     def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         return self.backend.object_done(object_id=object_id, receptacle_id=receptacle_id)

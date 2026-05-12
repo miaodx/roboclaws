@@ -369,6 +369,7 @@ def test_cleanup_report_labels_observe_roles_and_zero_pixel_focus(tmp_path: Path
     assert "close_receptacle" in html
     assert "Handle: <strong>observed_002</strong>" in html
     assert "Book book" in html
+    assert "weak_object_visibility" in html
     assert "object not visible, target 57359 px" in html
     assert "object not visible, target 55138 px" in html
     assert "object 0 px" not in html

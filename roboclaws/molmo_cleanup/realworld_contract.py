@@ -108,6 +108,7 @@ class RealWorldCleanupContract:
         self._current_object_handle: str | None = None
         self._current_receptacle_for_handle: tuple[str, str] | None = None
         self._opened_receptacle_for_handle: tuple[str, str] | None = None
+        self._pending_close_receptacle_for_handle: tuple[str, str] | None = None
         self._initial_locations = self.backend.object_locations()
 
     def public_tool_names(self) -> list[str]:
@@ -125,6 +126,7 @@ class RealWorldCleanupContract:
             "open_receptacle",
             "place",
             "place_inside",
+            "close_receptacle",
             "done",
         ]
 
@@ -458,7 +460,8 @@ class RealWorldCleanupContract:
                 recovery_hint=(
                     "Call navigate_to_object with this observed object handle before pick. "
                     "The ADR-0003 clean loop is navigate_to_object -> pick -> "
-                    "navigate_to_receptacle -> open_receptacle? -> place/place_inside."
+                    "navigate_to_receptacle -> open_receptacle? -> place/place_inside "
+                    "-> close_receptacle?."
                 ),
             )
         picked = self.contract.pick(internal_id)
@@ -532,7 +535,7 @@ class RealWorldCleanupContract:
                 fixture_id=fixture_id,
                 recovery_hint=(
                     "Call navigate_to_receptacle for this fixture before open_receptacle. "
-                    "Fridge-like cleanup must be nav -> open -> place_inside."
+                    "Fridge-like cleanup must be nav -> open -> place_inside -> close."
                 ),
             )
         opened = self.contract.open_receptacle(fixture_id)
@@ -545,6 +548,38 @@ class RealWorldCleanupContract:
 
     def place_inside(self, fixture_id: str) -> dict[str, Any]:
         return self._place(fixture_id, inside=True)
+
+    def close_receptacle(self, fixture_id: str) -> dict[str, Any]:
+        if fixture_id not in self._fixtures:
+            return self._error("close_receptacle", "stale_reference", fixture_id=fixture_id)
+        pending = self._pending_close_receptacle_for_handle
+        if pending is None or pending[1] != fixture_id:
+            return self._semantic_order_error(
+                "close_receptacle",
+                required_tool="place_inside",
+                object_id=pending[0] if pending is not None else None,
+                fixture_id=fixture_id,
+                recovery_hint=(
+                    "Call close_receptacle only after place_inside for the same fridge-like "
+                    "fixture."
+                ),
+            )
+        handle, _ = pending
+        closed = self.contract.close_receptacle(fixture_id)
+        if closed.get("ok"):
+            self._pending_close_receptacle_for_handle = None
+            self._set_handle_state(
+                handle,
+                "placed_closed",
+                tool="close_receptacle",
+                fixture_id=fixture_id,
+            )
+        return self._public_fixture_response(
+            "close_receptacle",
+            fixture_id,
+            closed,
+            object_id=handle,
+        )
 
     def done(self, reason: str = "") -> dict[str, Any]:
         done = self.contract.done(reason=reason)
@@ -800,6 +835,10 @@ class RealWorldCleanupContract:
                 tool=tool,
                 fixture_id=fixture_id,
             )
+            if inside and _fixture_requires_open(self._fixtures[fixture_id]):
+                self._pending_close_receptacle_for_handle = (handle, fixture_id)
+            else:
+                self._pending_close_receptacle_for_handle = None
             self._held_handle = None
             self._current_receptacle_for_handle = None
             self._opened_receptacle_for_handle = None
@@ -986,6 +1025,8 @@ class RealWorldCleanupContract:
             payload["location_id"] = response.get("location_id")
         if response.get("contained_in") is not None:
             payload["contained_in"] = response.get("contained_in")
+        if response.get("placement_diagnostic") is not None:
+            payload["placement_diagnostic"] = response.get("placement_diagnostic")
         return (
             self._ok(tool, **payload)
             if response.get("ok")
@@ -1001,6 +1042,8 @@ class RealWorldCleanupContract:
         tool: str,
         fixture_id: str,
         response: dict[str, Any],
+        *,
+        object_id: str | None = None,
     ) -> dict[str, Any]:
         if not response.get("ok"):
             return self._error(
@@ -1010,9 +1053,10 @@ class RealWorldCleanupContract:
             tool,
             fixture_id=fixture_id,
             receptacle_id=fixture_id,
-            object_id=self._held_handle,
+            object_id=object_id if object_id is not None else self._held_handle,
             primitive_provenance=response.get("primitive_provenance", API_SEMANTIC_PROVENANCE),
             opened=response.get("opened"),
+            closed=response.get("closed"),
             state_mutation=response.get("state_mutation"),
         )
 
@@ -1339,7 +1383,7 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
     if tool == "observe":
         return (
             "post_place_observe"
-            if previous_success_tool in {"place", "place_inside"}
+            if previous_success_tool in {"place", "place_inside", "close_receptacle"}
             else ("coverage_scan_observe")
         )
     if tool in {
@@ -1349,6 +1393,7 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
         "open_receptacle",
         "place",
         "place_inside",
+        "close_receptacle",
     }:
         return "cleanup_action"
     return "setup_or_completion"
@@ -1464,7 +1509,7 @@ def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
     name = f"{fixture.get('name', '')} {fixture.get('category', '')}".lower()
     affordances = ["place"]
     if "fridge" in name or "refrigerator" in name:
-        affordances.extend(["open", "place_inside"])
+        affordances.extend(["open", "place_inside", "close"])
     return affordances
 
 

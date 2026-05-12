@@ -29,10 +29,12 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    calling the `required_tool` named in the error response.
 4. If the fixture affordances/name indicate a fridge or refrigerator, call
    `roboclaws__open_receptacle(fixture_id)` before
-   `roboclaws__place_inside(fixture_id)`. Otherwise call
+   `roboclaws__place_inside(fixture_id)`, then
+   `roboclaws__close_receptacle(fixture_id)`. Otherwise call
    `roboclaws__place(fixture_id)`.
-5. After any successful place/place_inside, call `roboclaws__observe()` once in
-   the current room/fixture area before choosing the next object or waypoint.
+5. After any successful place/place_inside and required close, call
+   `roboclaws__observe()` once in the current room/fixture area before choosing
+   the next object or waypoint.
 6. Call `roboclaws__done(reason)` only after you have swept the map and cleaned
    every plausible candidate you intend to handle. Do not stop because you
    guess the hidden target count.

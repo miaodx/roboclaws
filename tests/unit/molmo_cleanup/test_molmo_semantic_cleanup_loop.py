@@ -36,6 +36,7 @@ def test_semantic_cleanup_loop_runs_canonical_fridge_sequence() -> None:
         "navigate_to_receptacle",
         "open_receptacle",
         "place_inside",
+        "close_receptacle",
         "object_done",
     ]
     assert recorded == [tool for tool, _request in calls]
@@ -48,6 +49,10 @@ def test_semantic_cleanup_loop_runs_canonical_fridge_sequence() -> None:
         "receptacle_id": "fridge_01",
     }
     assert calls[4][1] == {
+        "object_id": "apple_01",
+        "receptacle_id": "fridge_01",
+    }
+    assert calls[5][1] == {
         "object_id": "apple_01",
         "receptacle_id": "fridge_01",
     }
@@ -102,6 +107,24 @@ def test_robot_view_capture_can_translate_public_handles_to_focus_ids() -> None:
     assert capture["focus_receptacle_id"] == "fridge_01"
 
 
+def test_robot_view_capture_records_close_receptacle_focus() -> None:
+    capture = robot_view_capture_for_tool(
+        "close_receptacle",
+        {"fixture_id": "fridge_01", "object_id": "observed_001"},
+        {
+            "ok": True,
+            "object_id": "observed_001",
+            "receptacle_id": "fridge_01",
+        },
+    )
+
+    assert capture is not None
+    assert capture["action"] == "close_receptacle fridge_01"
+    assert capture["label_suffix"] == "close_receptacle_fridge_01"
+    assert capture["focus_object_id"] == "observed_001"
+    assert capture["focus_receptacle_id"] == "fridge_01"
+
+
 def _record_call(
     calls: list[tuple[str, dict[str, Any]]],
     tool: str,
@@ -142,6 +165,9 @@ class _FakeCleanupContract:
 
     def place_inside(self, receptacle_id: str) -> dict[str, Any]:
         return _ok("place_inside", object_id="held_object", receptacle_id=receptacle_id)
+
+    def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
+        return _ok("close_receptacle", object_id="held_object", receptacle_id=receptacle_id)
 
     def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         return _ok("object_done", object_id=object_id, receptacle_id=receptacle_id)
