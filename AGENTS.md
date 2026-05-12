@@ -1,7 +1,9 @@
 # AGENTS.md
 
-This file defines the default operating playbook for coding agents working in this repository.
-Its scope is the entire repo tree rooted at this directory.
+This file defines the canonical operating playbook for coding agents working in
+this repository. Its scope is the entire repo tree rooted at this directory.
+Tool-specific files such as `CLAUDE.md` may add local guidance, but this file
+owns repo-wide defaults and conflict resolution.
 
 ## 0) First-read policy (mandatory)
 
