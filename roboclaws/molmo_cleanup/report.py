@@ -4205,7 +4205,9 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
         "<h2>Waypoint Honesty & Cleanup Loop</h2>"
         '<p class="note">inspection_waypoints are static_map_fixture_coverage inputs. '
         "Coverage scans, cleanup actions, and post-place observes are labelled so "
-        "reviewers can tell whether the run was interleaved or survey-first.</p>"
+        "reviewers can tell whether the run was interleaved or survey-first. "
+        "The current public MCP surface models open_receptacle as semantic access "
+        "state for place_inside, but does not expose or claim close_receptacle.</p>"
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
 
@@ -4410,6 +4412,7 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
     if not steps:
         return ""
     cards = []
+    previous_action = ""
     for index, step in enumerate(steps, start=1):
         views = step.get("views", {})
         pose = step.get("robot_pose") or {}
@@ -4424,7 +4427,8 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
             f"<h3>{index}. {html.escape(str(step.get('action', step.get('label', 'step'))))}</h3>"
             f'<p class="pose">{html.escape(pose_text)}</p>'
             f"{_semantic_phase_summary(semantic_phase)}"
-            f"{_focus_summary(focus)}"
+            f"{_observation_role_summary(step, previous_action)}"
+            f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
             '<div class="views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
@@ -4434,12 +4438,18 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
             "</div>"
             "</article>"
         )
+        previous_action = str(step.get("action", step.get("label", "")))
     return (
         '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
         '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
         "Chase is a report_only_simulation_view, not policy input. "
         "The map and verification panels are report artifacts from public MuJoCo state, "
-        "not private scoring manifest data.</p>" + "".join(cards) + "</section>"
+        "not private scoring manifest data. Observe role badges distinguish "
+        "post-place verification from the next waypoint scan. Focus badges are "
+        "public-state object/receptacle bindings; visibility badges say whether "
+        "that bound object is actually visible in the current frame.</p>"
+        + "".join(cards)
+        + "</section>"
     )
 
 
@@ -4481,10 +4491,28 @@ def _semantic_phase_summary(semantic_phase: Any) -> str:
     return '<div class="semantic-badges">' + badges + "</div>"
 
 
-def _focus_summary(focus: dict[str, Any]) -> str:
+def _observation_role_summary(step: dict[str, Any], previous_action: str) -> str:
+    if _action_tool(str(step.get("action", ""))) != "observe":
+        return ""
+    previous_tool = _action_tool(previous_action)
+    if previous_tool in PLACE_CLEANUP_PHASES:
+        role = "post-place verification"
+        raw_role = "post_place_observe"
+    else:
+        role = "waypoint scan"
+        raw_role = "coverage_scan_observe"
+    badges = _badge("Observe role", role)
+    badges += _badge("Raw role", raw_role)
+    return '<div class="semantic-badges">' + badges + "</div>"
+
+
+def _focus_summary(step: dict[str, Any], focus: dict[str, Any]) -> str:
     if not focus.get("has_focus"):
         return ""
     bits = []
+    handle = _observed_handle_from_action(str(step.get("action", "")))
+    if handle:
+        bits.append(_badge("Handle", handle))
     if focus.get("object_label"):
         bits.append(_badge("Object", focus["object_label"]))
     if focus.get("receptacle_label"):
@@ -4509,21 +4537,39 @@ def _robot_evidence_summary(step: dict[str, Any]) -> str:
     if focus.get("has_focus"):
         fpv_visibility = focus.get("fpv_visibility") or {}
         if fpv_visibility.get("status") == "ok":
-            fpv_visible = (
-                f"object {fpv_visibility.get('object_pixels', 0)} px, "
-                f"target {fpv_visibility.get('receptacle_pixels', 0)} px"
-            )
-            bits.append(_badge("FPV visibility", fpv_visible))
+            bits.append(_badge("FPV visibility", _visibility_text(fpv_visibility)))
         visibility = focus.get("visibility") or {}
         if visibility.get("status") == "ok":
-            visible = (
-                f"object {visibility.get('object_pixels', 0)} px, "
-                f"target {visibility.get('receptacle_pixels', 0)} px"
-            )
-            bits.append(_badge("Verify visibility", visible))
+            bits.append(_badge("Verify visibility", _visibility_text(visibility)))
     if not bits:
         return ""
     return '<div class="evidence-badges">' + "".join(bits) + "</div>"
+
+
+def _visibility_text(visibility: dict[str, Any]) -> str:
+    object_pixels = _pixel_count(visibility.get("object_pixels"))
+    target_pixels = _pixel_count(visibility.get("receptacle_pixels"))
+    object_text = f"object {object_pixels} px" if object_pixels > 0 else "object not visible"
+    target_text = f"target {target_pixels} px" if target_pixels > 0 else "target not visible"
+    return f"{object_text}, {target_text}"
+
+
+def _pixel_count(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _action_tool(action: str) -> str:
+    return action.split(" ", 1)[0] if action else ""
+
+
+def _observed_handle_from_action(action: str) -> str:
+    parts = action.split()
+    if len(parts) >= 2 and parts[1].startswith("observed_"):
+        return parts[1]
+    return ""
 
 
 def _view_figure(path: Any, label: str) -> str:
