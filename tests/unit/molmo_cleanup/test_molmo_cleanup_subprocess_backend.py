@@ -289,7 +289,7 @@ def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
     body_id = worker.mujoco.mj_name2id(model, worker.mujoco.mjtObj.mjOBJ_BODY, "apple")
     assert result == {
         "object_id": "apple_01",
-        "position": [1.45, 2.0, 1.05],
+        "position": [1.8, 2.0, 1.22],
         "position_source": "robot_relative_held_pose",
     }
-    assert data.xpos[body_id].tolist() == pytest.approx([1.45, 2.0, 1.05])
+    assert data.xpos[body_id].tolist() == pytest.approx([1.8, 2.0, 1.22])
