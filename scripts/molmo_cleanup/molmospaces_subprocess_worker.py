@@ -1568,6 +1568,7 @@ def _focus_camera_azimuth(
     if (
         focus is not None
         and focus.get("receptacle_category") == "Fridge"
+        and focus.get("focus_mode") != "object_closeup"
         and focus.get("object_contained_in") != focus.get("receptacle_id")
     ):
         return 45.0
