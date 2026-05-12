@@ -24,6 +24,11 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    object handles:
    `roboclaws__navigate_to_object(object_id)`, `roboclaws__pick(object_id)`,
    `roboclaws__navigate_to_receptacle(fixture_id)`, then place it.
+   If a visible detection or done recovery response includes
+   `cleanup_recommended: true` or a `candidate_fixture_id` that differs from
+   its `support_estimate.fixture_id`, treat that public candidate as cleanup
+   work and use the `candidate_fixture_id` as the target. Do not leave such a
+   handle pending just because the current surface looks plausible.
    The server rejects skipped semantic phases: if you call `pick` before
    `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
    calling the `required_tool` named in the error response.
@@ -40,7 +45,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `roboclaws__observe()` once in the current room/fixture area before choosing
    the next object or waypoint.
 6. Call `roboclaws__done(reason)` only after you have swept the map and cleaned
-   every plausible candidate you intend to handle. Do not stop because you
+   every public recommended candidate. If `done` returns
+   `pending_cleanup_candidates`, clean those listed observed handles with their
+   `candidate_fixture_id`, then call `done` again. Do not stop because you
    guess the hidden target count.
 
 ## Boundaries

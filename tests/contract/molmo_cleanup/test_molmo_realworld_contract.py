@@ -31,6 +31,8 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     for detection in observation["visible_object_detections"]:
         assert detection["object_id"].startswith("observed_")
         assert "support_estimate" in detection
+        assert "candidate_fixture_id" in detection
+        assert "cleanup_recommended" in detection
         assert "target_receptacle_id" not in detection
         assert "is_misplaced" not in detection
     _assert_no_forbidden_keys(metric_map)
@@ -132,6 +134,24 @@ def test_realworld_contract_rejects_skipped_semantic_phases_without_private_trut
 
     assert contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))["ok"] is True
     assert contract.place(str(target_fixture["fixture_id"]))["ok"] is True
+
+
+def test_realworld_contract_rejects_done_with_pending_public_candidates() -> None:
+    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    observation = _first_non_empty_observation(contract)
+    recommended = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+
+    done = contract.done("finished sweep")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_object"
+    assert recommended["object_id"] in done["pending_observed_handles"]
+    assert done["pending_cleanup_candidates"][0]["candidate_fixture_id"]
+    assert "target_receptacle_id" not in str(done)
+    _assert_no_forbidden_keys(done)
 
 
 def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
