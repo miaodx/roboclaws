@@ -1270,10 +1270,11 @@ def _held_object_position(state: dict[str, Any]) -> list[float]:
     if "x" not in pose or "y" not in pose or "theta" not in pose:
         return [0.0, 0.0, 1.0]
     theta = float(pose["theta"])
+    distance_m = 0.8
     return [
-        round(float(pose["x"]) + math.cos(theta) * 0.45, 6),
-        round(float(pose["y"]) + math.sin(theta) * 0.45, 6),
-        1.05,
+        round(float(pose["x"]) + math.cos(theta) * distance_m, 6),
+        round(float(pose["y"]) + math.sin(theta) * distance_m, 6),
+        1.22,
     ]
 
 
