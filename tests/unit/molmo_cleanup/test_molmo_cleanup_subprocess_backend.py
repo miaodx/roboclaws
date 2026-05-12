@@ -145,6 +145,25 @@ def test_worker_placement_diagnostic_records_support_relation() -> None:
     assert diagnostic["contact_proof"] == "not_measured_mujoco_freejoint_qpos"
 
 
+def test_worker_table_placement_uses_support_top_for_flat_objects() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    position = worker._placement_position(
+        {
+            "receptacle_id": "table_01",
+            "category": "DiningTable",
+            "position": [5.0, 6.0, 0.38],
+            "support_top_z": 1.21,
+        },
+        index=0,
+        relation="on",
+        object_category="Book",
+    )
+
+    assert position == pytest.approx([4.88, 6.0, 1.25])
+
+
 def test_worker_allows_open_shelf_place_inside_without_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -259,6 +278,25 @@ def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
     assert contained["visibility"]["status"] == "contained_inside"
     assert open_shelf["fpv_visibility"]["status"] == "weak_object_visibility"
     assert open_shelf["visibility"]["status"] == "weak_object_visibility"
+
+
+def test_worker_reuses_grounded_fpv_when_verify_closeup_misses_focus() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    focus = {
+        "has_focus": True,
+        "object_id": "potato_01",
+        "object_body_name": "potato/body",
+        "object_label": "Potato potato",
+        "fpv_visibility": {"status": "ok", "object_pixels": 120, "boxes": [{"bbox": [1, 2, 3, 4]}]},
+        "visibility": {
+            "status": "weak_object_visibility",
+            "object_pixels": 0,
+            "boxes": [],
+        },
+    }
+
+    assert worker._should_use_fpv_as_verify_focus(focus) is True
 
 
 def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place() -> None:

@@ -366,6 +366,15 @@ def write_robot_views(
     )
     focus["visibility"] = _focus_visibility(model, data, verify_camera, focus, frame=verify)
     focus = _annotate_focus_visual_grounding(focus)
+    if _should_use_fpv_as_verify_focus(focus):
+        verify = fpv.copy()
+        fallback_visibility = dict(focus["fpv_visibility"])
+        fallback_visibility["fallback_source"] = "fpv_focus_visibility"
+        fallback_visibility.setdefault(
+            "evidence_note",
+            "Verify frame reused FPV because the closeup camera missed the focused object.",
+        )
+        focus["visibility"] = fallback_visibility
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -832,6 +841,7 @@ def _collect_receptacles(
                 "body_name": body_name,
                 "upstream_object_id": info.get("object_id", name),
                 "position": _xyz(data.xpos[body_id]),
+                "support_top_z": _receptacle_support_top_z(model, data, body_name, category),
             }
         )
     return sorted(items, key=lambda item: (item["category"], item["receptacle_id"]))
@@ -1077,7 +1087,61 @@ def _placement_position(
         height = 0.45
     else:
         height = 0.35
+    if (
+        relation == "on"
+        and receptacle.get("category") == "DiningTable"
+        and receptacle.get("support_top_z") is not None
+    ):
+        height = (
+            float(receptacle["support_top_z"])
+            - float(base[2])
+            + _object_surface_lift(object_category)
+        )
     return [float(base[0]) + offset, float(base[1]) + y_offset, float(base[2]) + height]
+
+
+def _object_surface_lift(object_category: str | None) -> float:
+    if object_category in {"Book", "Plate", "RemoteControl"}:
+        return 0.04
+    if object_category in {"Apple", "Potato"}:
+        return 0.08
+    if object_category == "Pillow":
+        return 0.12
+    return 0.06
+
+
+def _receptacle_support_top_z(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    body_name: str,
+    category: str,
+) -> float | None:
+    if category != "DiningTable":
+        return None
+    top_values = []
+    for geom_id in _subtree_geom_ids(model, body_name):
+        geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or ""
+        if "collision" not in geom_name.lower():
+            continue
+        geom_type = int(model.geom_type[geom_id])
+        if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
+            half_z = float(model.geom_size[geom_id][2])
+        elif geom_type in {
+            int(mujoco.mjtGeom.mjGEOM_SPHERE),
+            int(mujoco.mjtGeom.mjGEOM_ELLIPSOID),
+        }:
+            half_z = float(model.geom_size[geom_id][0])
+        elif geom_type in {
+            int(mujoco.mjtGeom.mjGEOM_CYLINDER),
+            int(mujoco.mjtGeom.mjGEOM_CAPSULE),
+        }:
+            half_z = float(model.geom_size[geom_id][1])
+        else:
+            half_z = float(model.geom_size[geom_id][2])
+        top_values.append(float(data.geom_xpos[geom_id][2]) + half_z)
+    if not top_values:
+        return None
+    return round(max(top_values), 6)
 
 
 def _receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
@@ -1751,6 +1815,28 @@ def _annotate_focus_visual_grounding(focus: dict[str, Any]) -> dict[str, Any]:
                 )
         annotated[key] = updated
     return annotated
+
+
+def _should_use_fpv_as_verify_focus(focus: dict[str, Any]) -> bool:
+    fpv_visibility = focus.get("fpv_visibility") or {}
+    verify_visibility = focus.get("visibility") or {}
+    fpv_grounded = _focus_visibility_is_grounded(fpv_visibility, focus)
+    verify_grounded = _focus_visibility_is_grounded(verify_visibility, focus)
+    return fpv_grounded and not verify_grounded
+
+
+def _focus_visibility_is_grounded(
+    visibility: dict[str, Any],
+    focus: dict[str, Any],
+) -> bool:
+    status = visibility.get("status")
+    if status == "contained_inside":
+        return True
+    if status != "ok":
+        return False
+    if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
+        return True
+    return int(visibility.get("object_pixels") or 0) > 0
 
 
 def _visual_grounding_status(focus: dict[str, Any], visibility: dict[str, Any]) -> str:
