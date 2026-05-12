@@ -85,6 +85,12 @@ class LiveCodexCleanupRunner:
         print(f"    run dir : {self.run_dir}")
         print(f"    MCP URL : {self.args.client_url}")
 
+        probe_host = _probe_host(self.args.host)
+        if _port_accepting(probe_host, self.args.port):
+            raise RuntimeError(
+                f"TCP port {self.args.host}:{self.args.port} is already in use before server start"
+            )
+
         command = [
             str(self.args.repo_root / ".venv/bin/python"),
             SERVER_SCRIPT,
@@ -95,7 +101,7 @@ class LiveCodexCleanupRunner:
 
     def _wait_for_mcp_ready(self) -> None:
         assert self.server_proc is not None
-        probe_host = "127.0.0.1" if self.args.host in {"0.0.0.0", "::"} else self.args.host
+        probe_host = _probe_host(self.args.host)
         deadline = time.monotonic() + 120.0
         while time.monotonic() < deadline:
             if self.server_proc.poll() is not None:
@@ -288,6 +294,10 @@ def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
             return True
     except OSError:
         return False
+
+
+def _probe_host(host: str) -> str:
+    return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
 
 
 def _shell_quote(value: str) -> str:

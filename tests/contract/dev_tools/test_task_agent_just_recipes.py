@@ -258,10 +258,12 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert 'tmux new-session -d -s "$session_name"' in molmo_text
     assert "run_live_codex.sh" in molmo_text
     assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" in molmo_text
+    assert "scripts/dev/select_free_tcp_port.py" in molmo_text
     assert "tmux_session.txt" in molmo_text
     assert "live_status.json" in molmo_text
     assert "codex-events.jsonl" in runner_text
     assert "codex-last-message.md" in runner_text
+    assert "is already in use before server start" in runner_text
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text
 
