@@ -15,7 +15,7 @@ default:
 # Any new just recipe that launches Codex or Claude Code should call these
 # recipes or reuse these args; avoid bare agent launches that fall back to
 # read-only or approval-prompting modes.
-codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox --ask-for-approval never"
+codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"
 claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
 
 cc scene="FloorPlan201" host="127.0.0.1" port="18788":

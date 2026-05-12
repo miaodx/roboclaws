@@ -33,7 +33,7 @@
 set working-directory := '..'
 
 timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"
-codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox --ask-for-approval never"
+codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"
 claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
 
 default:
@@ -168,6 +168,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         fi
         codex_bin="$(command -v codex || true)"
         claude_bin="$(command -v claude || true)"
+        kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
 
         server_args=(
           --host "$server_host"
@@ -192,7 +193,25 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           fi
         }
         trap cleanup_server EXIT INT TERM
-        sleep 2
+        wait_for_mcp_ready() {
+          local wait_host="$1"
+          local wait_port="$2"
+          for _ in {1..240}; do
+            if (echo > /dev/tcp/"$wait_host"/"$wait_port") >/dev/null 2>&1; then
+              return 0
+            fi
+            if ! kill -0 "$server_pid" >/dev/null 2>&1; then
+              wait "$server_pid" >/dev/null 2>&1 || true
+              return 1
+            fi
+            sleep 0.5
+          done
+          return 1
+        }
+        if ! wait_for_mcp_ready "$host" "$port"; then
+          echo "error: cleanup MCP server did not become ready at ${host}:${port}" >&2
+          exit 1
+        fi
 
         case "$driver" in
           codex-live)
@@ -200,15 +219,15 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             codex mcp add roboclaws --url "$client_url"
             echo "==> launching Codex with full permissions"
             echo "==> MCP URL: ${client_url}"
-            echo "==> kickoff: Read skills/molmo-realworld-cleanup/SKILL.md, call metric_map and fixture_hints first, sweep waypoints, clean observed objects, then call done."
-            "$codex_bin" {{codex_full_permission_args}}
+            echo "==> kickoff: ${kickoff_prompt}"
+            "$codex_bin" exec {{codex_full_permission_args}} --cd "$PWD" "$kickoff_prompt"
             ;;
           claude-live)
             claude mcp remove roboclaws >/dev/null 2>&1 || true
             claude mcp add --transport http roboclaws "$client_url"
             echo "==> launching Claude Code with full permissions"
             echo "==> MCP URL: ${client_url}"
-            echo "==> kickoff: Read skills/molmo-realworld-cleanup/SKILL.md, call metric_map and fixture_hints first, sweep waypoints, clean observed objects, then call done."
+            echo "==> kickoff: ${kickoff_prompt}"
             "$claude_bin" {{claude_full_permission_args}}
             ;;
           openclaw-live)

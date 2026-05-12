@@ -28,6 +28,7 @@ REPO_ROOT = _repo_root()
 JUST_DIR = REPO_ROOT / "just"
 CODE_JUST = JUST_DIR / "code.just"
 MCP_JUST = JUST_DIR / "mcp.just"
+MOLMO_JUST = JUST_DIR / "molmo.just"
 HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
 
 # Matches an inter-recipe call to mcp::up and captures the trailing argument
@@ -90,10 +91,7 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     """Direct Codex / Claude Code just recipes should not launch in read-only mode."""
     text = CODE_JUST.read_text(encoding="utf-8")
 
-    assert (
-        'codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox '
-        '--ask-for-approval never"'
-    ) in text
+    assert 'codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"' in text
     assert (
         'claude_full_permission_args := "--dangerously-skip-permissions '
         '--permission-mode bypassPermissions"'
@@ -103,6 +101,15 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert "codex --yolo" not in text
     assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
     assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
+
+
+def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
+    """Molmo Codex reports should be runnable without a manual prompt paste."""
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "wait_for_mcp_ready" in text
+    assert '"$codex_bin" exec {{codex_full_permission_args}} --cd "$PWD" "$kickoff_prompt"' in text
+    assert 'kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md.' in text
 
 
 def test_other_just_files_do_not_launch_bare_coding_agents() -> None:
