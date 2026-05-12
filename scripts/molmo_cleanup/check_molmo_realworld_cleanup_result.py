@@ -50,6 +50,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     SEMANTIC_RESPONSE_PHASES,
     annotate_focus_visual_grounding,
     has_complete_semantic_sequence,
+    successful_semantic_phases,
 )
 
 
@@ -236,7 +237,7 @@ def _assert_result(
     assert private.get("acceptable_destination_sets"), data
     if enforce_success:
         for item in data.get("semantic_substeps") or []:
-            phases = [str(step.get("phase")) for step in item.get("steps", [])]
+            phases = successful_semantic_phases(item.get("steps", []))
             assert has_complete_semantic_sequence(phases), (phases, item)
 
     artifacts = data.get("artifacts") or {}
@@ -359,9 +360,18 @@ def _assert_clean_agent_run(data: dict[str, Any]) -> None:
     assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
-    assert int(diagnostics.get("complete_semantic_substep_objects") or 0) >= int(
-        data.get("generated_mess_count") or 0
-    ), data
+    assert _complete_semantic_substep_count(data) >= int(data.get("generated_mess_count") or 0), (
+        data
+    )
+
+
+def _complete_semantic_substep_count(data: dict[str, Any]) -> int:
+    complete = 0
+    for item in data.get("semantic_substeps") or []:
+        phases = successful_semantic_phases(item.get("steps", []))
+        if has_complete_semantic_sequence(phases):
+            complete += 1
+    return complete
 
 
 def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:

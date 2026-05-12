@@ -167,19 +167,27 @@ def test_worker_table_placement_uses_support_top_for_flat_objects() -> None:
 def test_worker_remote_control_tv_stand_placement_stays_visible_from_front() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
+    tv_stand = {
+        "receptacle_id": "stand_01",
+        "category": "TVStand",
+        "position": [1.06, 10.21, 0.35],
+    }
 
-    position = worker._placement_position(
-        {
-            "receptacle_id": "stand_01",
-            "category": "TVStand",
-            "position": [1.06, 10.21, 0.35],
-        },
+    first_position = worker._placement_position(
+        tv_stand,
         index=3,
         relation="on",
         object_category="RemoteControl",
     )
+    second_position = worker._placement_position(
+        tv_stand,
+        index=8,
+        relation="on",
+        object_category="RemoteControl",
+    )
 
-    assert position == pytest.approx([1.06, 10.21, 0.84])
+    assert first_position == pytest.approx([0.88, 9.93, 0.84])
+    assert second_position == pytest.approx([1.06, 9.93, 0.84])
 
 
 def test_worker_allows_open_shelf_place_inside_without_open(

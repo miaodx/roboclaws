@@ -370,8 +370,9 @@ def semantic_diagnostics(
     fridge_inside_sequence_ok = True
     complete_objects = 0
     for item in substeps:
-        phases = [str(step.get("phase")) for step in item.get("steps", [])]
-        attempted_semantic_substeps += len(phases)
+        attempted_phases = [str(step.get("phase")) for step in item.get("steps", [])]
+        phases = successful_semantic_phases(item.get("steps", []))
+        attempted_semantic_substeps += len(attempted_phases)
         if OBJECT_DONE_PHASE in phases:
             object_done_count += 1
         if has_complete_semantic_sequence(phases):
@@ -411,6 +412,11 @@ def has_complete_semantic_sequence(phases: list[str]) -> bool:
     if phases[-1:] == [OBJECT_DONE_PHASE]:
         return any(phase in phases for phase in PLACE_CLEANUP_PHASES)
     return phases[-1:] in ([PLACE_PHASE], [PLACE_INSIDE_PHASE], [CLOSE_RECEPTACLE_PHASE])
+
+
+def successful_semantic_phases(steps: list[dict[str, Any]]) -> list[str]:
+    """Return phases from successful semantic tool responses, excluding failed retries."""
+    return [str(step.get("phase")) for step in steps if step.get("ok") is True]
 
 
 def fridge_sequence_ok(phases: list[str]) -> bool:
