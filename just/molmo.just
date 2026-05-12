@@ -150,13 +150,6 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         mkdir -p "$run_dir"
         policy="${driver%-live}_agent"
         server_host="$host"
-        if [[ "$driver" == "codex-live" ]]; then
-          selected_port="$(.venv/bin/python scripts/dev/select_free_tcp_port.py "$host" "$port")"
-          if [[ "$selected_port" != "$port" ]]; then
-            echo "==> requested MCP port ${port} is busy; using ${selected_port} for this Codex run"
-          fi
-          port="$selected_port"
-        fi
         client_url="http://${host}:${port}/mcp"
         if [[ "$driver" == "openclaw-live" ]]; then
           bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
@@ -204,6 +197,29 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             exit 1
           fi
 
+          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_codex_cleanup[.]py' || true)"
+          active_server="$(pgrep -af 'examples/molmo_cleanup/molmo_realworld_cleanup_agent_server[.]py' || true)"
+          active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
+          if [[ -n "$active_runner$active_server$active_sessions" ]]; then
+            echo "error: another live Molmo cleanup run appears to be active" >&2
+            [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
+            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
+            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
+            echo "probe latest: just molmo::status" >&2
+            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
+          probe_host="$host"
+          if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
+            probe_host="127.0.0.1"
+          fi
+          if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
+            echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
+            echo "       refusing to choose another port because each live visual cleanup run owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
           session_name="roboclaws-molmo-codex-${stamp}-seed-${seed}"
           session_name="${session_name//[^A-Za-z0-9_.-]/-}"
           if tmux has-session -t "$session_name" >/dev/null 2>&1; then
@@ -225,6 +241,8 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --client-url "$client_url"
             --host "$host"
             --port "$port"
+            --lock-path output/molmo/.live-codex.lock
+            --tmux-session "$session_name"
             --codex-bin "$codex_bin"
             --codex-model "$codex_model"
             --kickoff-prompt "$kickoff_prompt"
