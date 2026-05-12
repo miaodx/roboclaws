@@ -291,6 +291,25 @@ def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place()
     assert focus["focus_position"] == [8.2, 5.0, 1.22]
 
 
+def test_worker_focus_camera_azimuth_does_not_apply_fridge_angle_to_held_object() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    focus = {
+        "focus_mode": "object_closeup",
+        "receptacle_category": "Fridge",
+        "object_contained_in": None,
+        "receptacle_id": "fridge_01",
+    }
+
+    azimuth = worker._focus_camera_azimuth(
+        {"robot_pose": {"x": 8.2, "y": 5.8}},
+        [8.2, 5.0, 1.22],
+        focus,
+    )
+
+    assert azimuth == pytest.approx(180.0)
+
+
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
