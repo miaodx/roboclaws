@@ -108,6 +108,20 @@ These become per-run `--model` flags only; unset variables leave the system CLI
 defaults unchanged. `ROBOCLAWS_CODE_AGENT_MODEL` can be used as a shared fallback
 for both drivers.
 
+`codex-live` is detached by default. `just molmo::codex-report` starts a tmux
+session that owns the cleanup MCP server, `codex exec`, logs, checker, and
+artifacts, then returns with status/attach/tail commands. Probe it without
+attaching:
+
+```bash
+just molmo::status
+just molmo::status output/molmo/codex-report/<stamp>/seed-7
+```
+
+The status probe reports tmux liveness, elapsed time, MCP tool progress,
+`run_result.json` / `report.html` readiness, and the latest Codex message if
+the CLI has written one.
+
 For quick axis overrides, use positional values or the same first-three
 `key=value` prefixes:
 
