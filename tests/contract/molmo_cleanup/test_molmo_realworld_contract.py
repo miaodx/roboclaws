@@ -166,6 +166,37 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
     assert closed["object_id"] == detection["object_id"]
 
 
+def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
+    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    fixture_hints = contract.fixture_hints()
+    detection = _first_detection_by_category(contract, "book")
+    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert target_fixture is not None
+    fixture_id = str(target_fixture["fixture_id"])
+
+    assert fixture_id == "bookshelf_01"
+    assert "place_inside" in target_fixture["affordances"]
+    assert "open" not in target_fixture["affordances"]
+    assert "close" not in target_fixture["affordances"]
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
+
+    surface_place = contract.place(fixture_id)
+    assert surface_place["ok"] is False
+    assert surface_place["error_reason"] == "semantic_order"
+    assert surface_place["required_tool"] == "place_inside"
+
+    placed = contract.place_inside(fixture_id)
+    assert placed["ok"] is True
+    assert placed["location_relation"] == "inside"
+    assert placed["placement_diagnostic"]["relation"] == "inside"
+
+    skipped_close = contract.close_receptacle(fixture_id)
+    assert skipped_close["ok"] is False
+    assert skipped_close["required_tool"] == "place_inside"
+
+
 def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
     contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
 

@@ -4,7 +4,10 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_loop
-from roboclaws.molmo_cleanup.semantic_timeline import robot_view_capture_for_tool
+from roboclaws.molmo_cleanup.semantic_timeline import (
+    robot_view_capture_for_tool,
+    visual_grounding_status,
+)
 
 
 def test_semantic_cleanup_loop_runs_canonical_fridge_sequence() -> None:
@@ -88,6 +91,33 @@ def test_semantic_cleanup_loop_preserves_fixture_style_target_requests() -> None
     assert calls[3][1] == {"fixture_id": "sink_01"}
 
 
+def test_semantic_cleanup_loop_places_inside_open_shelf_without_close() -> None:
+    contract = _FakeCleanupContract()
+    calls: list[tuple[str, dict[str, Any]]] = []
+
+    result = run_semantic_cleanup_loop(
+        targets=[
+            {
+                "object_id": "book_01",
+                "target_receptacle_id": "bookshelf_01",
+                "target_receptacle": {"category": "bookshelf", "fixture_id": "bookshelf_01"},
+            }
+        ],
+        contract=contract,
+        include_object_done=True,
+        call_tool=lambda tool, request, fn: _record_call(calls, tool, request, fn),
+    )
+
+    assert result.completed_objects == 1
+    assert [tool for tool, _request in calls] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "place_inside",
+        "object_done",
+    ]
+
+
 def test_robot_view_capture_can_translate_public_handles_to_focus_ids() -> None:
     capture = robot_view_capture_for_tool(
         "place_inside",
@@ -123,6 +153,37 @@ def test_robot_view_capture_records_close_receptacle_focus() -> None:
     assert capture["label_suffix"] == "close_receptacle_fridge_01"
     assert capture["focus_object_id"] == "observed_001"
     assert capture["focus_receptacle_id"] == "fridge_01"
+
+
+def test_visual_grounding_only_hides_closed_container_contents() -> None:
+    visibility = {"status": "ok", "object_pixels": 0}
+
+    assert (
+        visual_grounding_status(
+            {
+                "object_id": "apple_01",
+                "receptacle_id": "fridge_01",
+                "receptacle_category": "Fridge",
+                "object_contained_in": "fridge_01",
+                "object_location_relation": "inside",
+            },
+            visibility,
+        )
+        == "contained_inside"
+    )
+    assert (
+        visual_grounding_status(
+            {
+                "object_id": "book_01",
+                "receptacle_id": "shelf_01",
+                "receptacle_category": "ShelvingUnit",
+                "object_contained_in": "shelf_01",
+                "object_location_relation": "inside",
+            },
+            visibility,
+        )
+        == "weak_object_visibility"
+    )
 
 
 def _record_call(

@@ -562,7 +562,11 @@ def _place_object_at_receptacle(
     if object_id is None:
         return _error(tool, "not_holding")
     receptacle = state["receptacles"][receptacle_id]
-    if relation == "inside" and receptacle_id not in set(state.get("open_receptacle_ids", [])):
+    if (
+        relation == "inside"
+        and _receptacle_requires_open(receptacle)
+        and receptacle_id not in set(state.get("open_receptacle_ids", []))
+    ):
         return _error(tool, "receptacle_closed", receptacle_id=receptacle_id)
 
     model, data = _load_model_data_for_state(state)
@@ -839,11 +843,19 @@ def _seed_misplaced_objects(
     state: dict[str, Any],
     targets: list[dict[str, Any]],
 ) -> None:
+    target_receptacle_ids = {target["target_receptacle_id"] for target in targets}
     wrong_pool = [
         item
         for item in state["receptacles"].values()
-        if item["receptacle_id"] not in {target["target_receptacle_id"] for target in targets}
+        if item["receptacle_id"] not in target_receptacle_ids
+        and not _receptacle_requires_open(item)
     ]
+    if not wrong_pool:
+        wrong_pool = [
+            item
+            for item in state["receptacles"].values()
+            if item["receptacle_id"] not in target_receptacle_ids
+        ]
     if not wrong_pool:
         wrong_pool = list(state["receptacles"].values())
     for index, target in enumerate(targets):
@@ -854,7 +866,7 @@ def _seed_misplaced_objects(
             "target_receptacle_id"
         ]
         state["objects"][target["object_id"]]["seeded_start_receptacle_id"] = wrong["receptacle_id"]
-        relation = "inside" if wrong.get("category") == "Fridge" else "on"
+        relation = "inside" if _receptacle_prefers_inside(wrong) else "on"
         state["objects"][target["object_id"]]["contained_in"] = (
             wrong["receptacle_id"] if relation == "inside" else None
         )
@@ -1066,6 +1078,24 @@ def _placement_position(
     else:
         height = 0.35
     return [float(base[0]) + offset, float(base[1]) + y_offset, float(base[2]) + height]
+
+
+def _receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
+    text = _receptacle_text(receptacle)
+    return "fridge" in text or "refrigerator" in text
+
+
+def _receptacle_prefers_inside(receptacle: dict[str, Any]) -> bool:
+    return _receptacle_requires_open(receptacle) or _receptacle_is_open_container(receptacle)
+
+
+def _receptacle_is_open_container(receptacle: dict[str, Any]) -> bool:
+    text = _receptacle_text(receptacle)
+    return any(term in text for term in ("shelvingunit", "bookshelf", "bookcase", "shelf"))
+
+
+def _receptacle_text(receptacle: dict[str, Any]) -> str:
+    return f"{receptacle.get('name', '')} {receptacle.get('category', '')}".lower()
 
 
 def _placement_diagnostic(
@@ -1725,11 +1755,17 @@ def _visual_grounding_status(focus: dict[str, Any], visibility: dict[str, Any]) 
         receptacle_id
         and focus.get("object_contained_in") == receptacle_id
         and focus.get("object_location_relation") == "inside"
+        and _focus_receptacle_can_hide_contents(focus)
     ):
         return "contained_inside"
     if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
         return "ok"
     return "ok" if int(visibility.get("object_pixels") or 0) > 0 else "weak_object_visibility"
+
+
+def _focus_receptacle_can_hide_contents(focus: dict[str, Any]) -> bool:
+    text = f"{focus.get('receptacle_label', '')} {focus.get('receptacle_category', '')}".lower()
+    return "fridge" in text or "refrigerator" in text
 
 
 def _render_segmentation(

@@ -20,8 +20,10 @@ Make semantic cleanup artifacts honest and mechanically guarded:
 - Mess seeding must place moved objects on or inside the claimed source
   receptacle, with placement diagnostics attached.
 - Cleanup `place` must put the object onto the target receptacle surface.
-- Cleanup `place_inside` must put the object into an open receptacle.
-- Fridge-like flows must expose `close_receptacle` after `place_inside`.
+- Cleanup `place_inside` must put the object into a container-style receptacle.
+- Fridge-like closed-container flows must expose `close_receptacle` after
+  `place_inside`; open shelf/bookshelf flows use `place_inside` without
+  open/close.
 - Robot-view reports/checkers must flag focused cleanup actions whose visual
   evidence does not show the focused object.
 
@@ -41,12 +43,16 @@ Make semantic cleanup artifacts honest and mechanically guarded:
 - Do not solve upstream RBY1M/CuRobo grasp feasibility blockers.
 - Do not require every object to be visible after it is placed inside a closed
   refrigerator; contained-in proof is the inside-placement evidence.
+- Do not let open shelf/bookshelf placements bypass visual grounding; those
+  objects should still be visible in focused report views.
 
 ## Acceptance Criteria
 
 - Public MCP/contract surfaces list and route `close_receptacle`.
 - Canonical inside cleanup sequence becomes:
   `navigate_to_object -> pick -> navigate_to_receptacle -> open_receptacle -> place_inside -> close_receptacle`.
+- Canonical open-container shelf cleanup sequence becomes:
+  `navigate_to_object -> pick -> navigate_to_receptacle -> place_inside`.
 - Surface placement and mess placement emit support diagnostics tying object,
   relation, and receptacle together.
 - Focused robot-view actions report a visual-grounding status:

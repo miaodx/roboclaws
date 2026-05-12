@@ -133,6 +133,7 @@ def _run_one_object(
         return False, _failed_step(NAVIGATE_TO_RECEPTACLE_PHASE, response)
 
     target_receptacle = _target_receptacle(target, receptacles_by_id, target_receptacle_id)
+    requires_open = _requires_open_for_inside_place(target_receptacle, target_receptacle_id)
     if _requires_inside_place(target, target_receptacle, target_receptacle_id):
         open_request = _target_request(
             object_id=object_id,
@@ -140,15 +141,16 @@ def _run_one_object(
             target_request_key=target_request_key,
             include_object_id=include_object_id_in_target_requests,
         )
-        response = _invoke(
-            call_tool,
-            record_tool_view,
-            OPEN_RECEPTACLE_PHASE,
-            open_request,
-            lambda: contract.open_receptacle(target_receptacle_id),
-        )
-        if not response.get("ok"):
-            return False, _failed_step(OPEN_RECEPTACLE_PHASE, response)
+        if requires_open:
+            response = _invoke(
+                call_tool,
+                record_tool_view,
+                OPEN_RECEPTACLE_PHASE,
+                open_request,
+                lambda: contract.open_receptacle(target_receptacle_id),
+            )
+            if not response.get("ok"):
+                return False, _failed_step(OPEN_RECEPTACLE_PHASE, response)
         place_tool = PLACE_INSIDE_PHASE
     else:
         place_tool = PLACE_PHASE
@@ -178,7 +180,7 @@ def _run_one_object(
     if not response.get("ok"):
         return False, _failed_step(place_tool, response)
 
-    if place_tool == PLACE_INSIDE_PHASE:
+    if place_tool == PLACE_INSIDE_PHASE and requires_open:
         close_request = _target_request(
             object_id=object_id,
             target_receptacle_id=target_receptacle_id,
@@ -263,6 +265,27 @@ def _requires_inside_place(
         return bool(target["requires_inside_place"])
     if PLACE_INSIDE_PHASE in target:
         return bool(target[PLACE_INSIDE_PHASE])
+    text = " ".join(
+        str(value)
+        for value in (
+            receptacle.get("category"),
+            receptacle.get("name"),
+            receptacle.get("receptacle_id"),
+            receptacle.get("fixture_id"),
+            receptacle_id,
+        )
+        if value is not None
+    ).lower()
+    return any(
+        term in text
+        for term in ("fridge", "refrigerator", "shelvingunit", "bookshelf", "bookcase", "shelf")
+    )
+
+
+def _requires_open_for_inside_place(
+    receptacle: Mapping[str, Any],
+    receptacle_id: str,
+) -> bool:
     text = " ".join(
         str(value)
         for value in (

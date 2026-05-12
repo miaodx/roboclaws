@@ -145,6 +145,76 @@ def test_worker_placement_diagnostic_records_support_relation() -> None:
     assert diagnostic["contact_proof"] == "not_measured_mujoco_freejoint_qpos"
 
 
+def test_worker_allows_open_shelf_place_inside_without_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    class _FakeData:
+        qpos = [0.0]
+
+    state = {
+        "held_object_id": "book_01",
+        "selected_object_ids": ["book_01"],
+        "qpos": [0.0],
+        "open_receptacle_ids": [],
+        "current_receptacle_id": None,
+        "objects": {
+            "book_01": {
+                "object_id": "book_01",
+                "category": "Book",
+                "body_name": "book/body",
+                "position": [0.0, 0.0, 0.0],
+            }
+        },
+        "receptacles": {
+            "shelf_01": {
+                "receptacle_id": "shelf_01",
+                "category": "ShelvingUnit",
+                "body_name": "shelf/body",
+                "position": [1.0, 2.0, 0.4],
+            },
+            "fridge_01": {
+                "receptacle_id": "fridge_01",
+                "category": "Fridge",
+                "body_name": "fridge/body",
+                "position": [3.0, 4.0, 0.6],
+            },
+        },
+    }
+
+    monkeypatch.setattr(
+        worker,
+        "_load_model_data_for_state",
+        lambda _state: (object(), _FakeData()),
+    )
+    monkeypatch.setattr(worker, "_apply_qpos", lambda _data, _qpos: None)
+    monkeypatch.setattr(worker, "_set_free_body_position", lambda *_args: None)
+    monkeypatch.setattr(worker, "_refresh_object_positions", lambda *_args: None)
+    monkeypatch.setattr(worker.mujoco, "mj_forward", lambda *_args: None)
+
+    placed = worker._place_object_at_receptacle(
+        state,
+        "shelf_01",
+        tool="place_inside",
+        relation="inside",
+    )
+
+    assert placed["ok"] is True
+    assert placed["location_relation"] == "inside"
+    assert placed["contained_in"] == "shelf_01"
+    state["held_object_id"] = "book_01"
+    rejected = worker._place_object_at_receptacle(
+        state,
+        "fridge_01",
+        tool="place_inside",
+        relation="inside",
+    )
+    assert rejected["ok"] is False
+    assert rejected["error_reason"] == "receptacle_closed"
+
+
 def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
@@ -163,7 +233,20 @@ def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
             "has_focus": True,
             "object_id": "apple_01",
             "receptacle_id": "fridge_01",
+            "receptacle_category": "Fridge",
             "object_contained_in": "fridge_01",
+            "object_location_relation": "inside",
+            "fpv_visibility": {"status": "ok", "object_pixels": 0},
+            "visibility": {"status": "ok", "object_pixels": 0},
+        }
+    )
+    open_shelf = worker._annotate_focus_visual_grounding(
+        {
+            "has_focus": True,
+            "object_id": "book_01",
+            "receptacle_id": "shelf_01",
+            "receptacle_category": "ShelvingUnit",
+            "object_contained_in": "shelf_01",
             "object_location_relation": "inside",
             "fpv_visibility": {"status": "ok", "object_pixels": 0},
             "visibility": {"status": "ok", "object_pixels": 0},
@@ -174,6 +257,8 @@ def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
     assert weak["visibility"]["status"] == "weak_object_visibility"
     assert contained["fpv_visibility"]["status"] == "contained_inside"
     assert contained["visibility"]["status"] == "contained_inside"
+    assert open_shelf["fpv_visibility"]["status"] == "weak_object_visibility"
+    assert open_shelf["visibility"]["status"] == "weak_object_visibility"
 
 
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:

@@ -901,7 +901,7 @@ def _seed7_cleanup_bindings() -> list[dict[str, object]]:
             "laundry_hamper_01",
             ["place"],
         ),
-        _cleanup_binding("observed_005", "floor_01", "bookshelf_01", ["place"]),
+        _cleanup_binding("observed_005", "floor_01", "bookshelf_01", ["place_inside"]),
         _cleanup_binding(
             "observed_006",
             "desk_01",

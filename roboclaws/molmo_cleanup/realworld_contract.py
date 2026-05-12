@@ -813,6 +813,23 @@ class RealWorldCleanupContract:
                     "placing the held object."
                 ),
             )
+        if not inside and _fixture_prefers_inside(self._fixtures[fixture_id]):
+            requires_open = _fixture_requires_open(self._fixtures[fixture_id])
+            needs_open = requires_open and self._opened_receptacle_for_handle != (
+                handle,
+                fixture_id,
+            )
+            required_tool = "open_receptacle" if needs_open else "place_inside"
+            return self._semantic_order_error(
+                "place",
+                required_tool=required_tool,
+                object_id=handle,
+                fixture_id=fixture_id,
+                recovery_hint=(
+                    "Use place_inside for fridge-like or shelf-like fixtures; "
+                    "fridge-like fixtures must be opened first."
+                ),
+            )
         if inside and _fixture_requires_open(self._fixtures[fixture_id]):
             if self._opened_receptacle_for_handle != (handle, fixture_id):
                 return self._semantic_order_error(
@@ -1506,10 +1523,11 @@ def _driveable_ways(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 
 def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
-    name = f"{fixture.get('name', '')} {fixture.get('category', '')}".lower()
     affordances = ["place"]
-    if "fridge" in name or "refrigerator" in name:
+    if _fixture_requires_open(fixture):
         affordances.extend(["open", "place_inside", "close"])
+    elif _fixture_is_open_container(fixture):
+        affordances.append("place_inside")
     return affordances
 
 
@@ -1521,7 +1539,21 @@ def _fixture_footprint(fixture_id: str) -> dict[str, Any]:
 
 
 def _fixture_requires_open(fixture: dict[str, Any]) -> bool:
-    return {"open", "place_inside"}.issubset(set(_fixture_affordances(fixture)))
+    text = _fixture_text(fixture)
+    return "fridge" in text or "refrigerator" in text
+
+
+def _fixture_prefers_inside(fixture: dict[str, Any]) -> bool:
+    return _fixture_requires_open(fixture) or _fixture_is_open_container(fixture)
+
+
+def _fixture_is_open_container(fixture: dict[str, Any]) -> bool:
+    text = _fixture_text(fixture)
+    return any(term in text for term in ("shelvingunit", "bookshelf", "bookcase", "shelf"))
+
+
+def _fixture_text(fixture: dict[str, Any]) -> str:
+    return f"{fixture.get('name', '')} {fixture.get('category', '')}".lower()
 
 
 def _first_fixture_for_waypoint(waypoint: dict[str, Any]) -> str | None:
