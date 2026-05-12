@@ -630,6 +630,7 @@ class RealWorldMolmoCleanupMCPServer:
         if not callable(writer):
             raise RuntimeError("robot view capture requires backend.write_robot_views")
         previous_count = len(self.robot_view_steps)
+        capture_started = time.monotonic()
         self._robot_view_index = record_robot_view_step(
             steps=self.robot_view_steps,
             backend=self.base_contract.backend,
@@ -643,7 +644,16 @@ class RealWorldMolmoCleanupMCPServer:
         )
         if len(self.robot_view_steps) <= previous_count:
             return None
-        return self.robot_view_steps[-1]
+        capture_elapsed_s = round(time.monotonic() - capture_started, 6)
+        step = self.robot_view_steps[-1]
+        step["capture_elapsed_s"] = capture_elapsed_s
+        self.write_runtime_event(
+            "robot_view_capture",
+            action=action,
+            label=step.get("label", ""),
+            elapsed_s=capture_elapsed_s,
+        )
+        return step
 
     def _write_tool_request(self, tool: str, request: dict[str, Any]) -> None:
         self._tool_event_counts[f"{tool}:request"] = (
