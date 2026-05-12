@@ -9,6 +9,7 @@ AI agents should also read these docs when they need human-facing context.
 
 - [Domain vocabulary](domain.md)
 - [Contributing](contributing.md)
+- [Agent/task command taxonomy](agent-task-command-taxonomy.md)
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
 - [Model matrix](model-matrix.md)

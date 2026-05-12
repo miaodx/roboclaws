@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev --extra openclaw` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock` |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; recipes are grouped by module (`just openclaw::run nav`, `just chat::run provider=kimi`) |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing recipes live under `task::*` (`just task::navigate openclaw`, `just task::control-ui`) with lower-level modules available for debugging |
 
 ### Install
 
@@ -50,6 +50,8 @@ If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
 ```bash
 just                       # default: prints the grouped recipe list
 just --list                # same
+just --list task           # user-facing outcomes
+just --list agent          # driver-facing aliases
 just --list openclaw       # only the openclaw module
 just --list chat           # only the chat module
 just openclaw              # equivalent — runs the module's `default` recipe (a list)
@@ -58,8 +60,8 @@ just openclaw              # equivalent — runs the module's `default` recipe (
 Invoke recipes with the `module::recipe` form:
 
 ```bash
-just openclaw::run nav
-just chat::run provider=kimi
+just task::navigate openclaw
+just task::control-ui openclaw kimi
 just appliance::run local
 just dev::test all
 ```

@@ -24,13 +24,13 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 
 | Mode | Use it for | Entry point |
 |------|------------|-------------|
-| Direct VLM games | Fast local experiments without OpenClaw | `examples/territory_game.py`, `examples/coverage_game.py` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just openclaw::run nav`, `just chat::run` |
-| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just code::codex`, `just code::cc` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just openclaw::run photo` |
+| Direct VLM games | Fast local experiments without OpenClaw | `just task::territory vlm`, `just task::coverage vlm` |
+| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just task::navigate openclaw`, `just task::control-ui` |
+| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just task::navigate codex`, `just task::navigate claude` |
+| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just task::photo-chairs` |
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
-| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just molmo::review-report`, `just molmo::mcp-smoke-report`, live: `just molmo::openclaw-report` |
-| MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just harness::molmo-planner-proof-bundle-runner`, local: `just harness::molmo-planner-proof-bundle-execute-rerun` |
+| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::cleanup-report`, `just task::cleanup-quick-check`, live: `just task::cleanup-report openclaw-live` |
+| MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::planner-proof`, local: `just task::planner-proof execute-rerun` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
 | Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just harness::run <task>` (see [`harness/README.md`](harness/README.md)) |
 
@@ -70,12 +70,12 @@ python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ### Run OpenClaw
 
 ```bash
-just openclaw::run nav
-just chat::run
+just task::navigate openclaw
+just task::control-ui
 ```
-`just openclaw::run nav` is the canonical entrypoint.
-`just chat::run` opens the local browser-control workflow. Useful companion
-terminals:
+`just task::navigate openclaw` is the normal navigation entrypoint.
+`just task::control-ui` opens the local browser-control workflow. Useful
+companion terminals:
 
 ```bash
 just chat::tail
@@ -91,8 +91,8 @@ just chat::view
 Preferred one-command workflows:
 
 ```bash
-just code::codex
-just code::cc
+just task::navigate codex
+just task::navigate claude
 ```
 
 Those recipes start the MCP server, register `roboclaws`, launch the coding
@@ -166,7 +166,7 @@ FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 ![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
 ```bash
-just openclaw::run photo
+just task::photo-chairs
 python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 
