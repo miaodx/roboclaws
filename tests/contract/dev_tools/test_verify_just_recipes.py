@@ -9,6 +9,7 @@ JUST_DIR = REPO_ROOT / "just"
 VERIFY_JUST = JUST_DIR / "verify.just"
 HARNESS_JUST = JUST_DIR / "harness.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
+LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 
 
 def test_verify_module_is_registered() -> None:
@@ -141,6 +142,7 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
 
 def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     for expected in (
         'driver="${driver#driver=}"',
@@ -150,7 +152,6 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         "mcp-smoke/openclaw-smoke for deterministic substitutes",
         "command -v codex",
         "command -v claude",
-        "codex mcp add roboclaws",
         "claude mcp add --transport http roboclaws",
         'SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup"',
         "just chat::run",
@@ -161,6 +162,8 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         ),
     ):
         assert expected in text
+
+    assert '"mcp", "add", "roboclaws"' in runner_text
 
 
 def test_molmo_visual_reports_require_robot_timeline_and_real_robot_checks() -> None:

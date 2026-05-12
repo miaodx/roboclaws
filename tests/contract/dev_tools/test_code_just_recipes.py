@@ -30,6 +30,7 @@ CODE_JUST = JUST_DIR / "code.just"
 MCP_JUST = JUST_DIR / "mcp.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
+LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 
 # Matches an inter-recipe call to mcp::up and captures the trailing argument
 # list up to end-of-line. Excludes the recipe definition header.
@@ -106,12 +107,16 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
 def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     """Molmo Codex reports should be runnable without a manual prompt paste."""
     text = MOLMO_JUST.read_text(encoding="utf-8")
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "wait_for_mcp_ready" in text
-    assert (
-        '"$codex_bin" exec "${codex_model_args[@]}" {{codex_full_permission_args}} '
-        '--cd "$PWD" "$kickoff_prompt"'
-    ) in text
+    assert 'tmux new-session -d -s "$session_name"' in text
+    assert '"exec"' in runner_text
+    assert '"--json"' in runner_text
+    assert '"--output-last-message"' in runner_text
+    assert "*self.args.codex_model_arg" in runner_text
+    assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
+    assert '"--cd"' in runner_text
     assert 'kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md.' in text
 
 

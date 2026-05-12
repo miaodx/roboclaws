@@ -50,15 +50,25 @@ and keeps the `visual` default.
 
 ## Live Agent Launch Behavior
 
-Live `codex` and `claude` task drivers run inline in the terminal where `just`
-was invoked. For example, `just task::run molmo-cleanup codex visual` starts
-the cleanup MCP server in the same process tree, launches `codex exec`, waits
-for the agent to call `done`, then runs the report checker. It does not create a
-tmux window.
+`just task::run molmo-cleanup codex visual` launches a detached tmux session.
+The session owns the cleanup MCP server, the `codex exec` process, raw Codex
+logs, the MCP trace, and the final checker. The invoking terminal returns after
+printing the tmux session name and artifact directory, so monitor sessions do
+not spend their own context window on the live agent transcript.
 
-The tmux-managed agent loop is a separate harness surface (`just
-agent::harness ...` / `just harness::*`) used for navigator self-improvement
-experiments.
+Use the printed probe command, or let it find the latest Codex cleanup run:
+
+```bash
+just molmo::status
+just molmo::status output/molmo/codex-report/<stamp>/seed-7
+tmux attach -t <session>
+tail -f output/molmo/codex-report/<stamp>/seed-7/driver.log
+```
+
+The probe summarizes tmux liveness, elapsed time, MCP tool progress,
+`run_result.json` / `report.html` readiness, and the latest Codex message when
+available. `claude` and `openclaw` live cleanup drivers still use their
+existing interactive launch paths.
 
 ## Examples
 

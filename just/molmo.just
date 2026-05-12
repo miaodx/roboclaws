@@ -191,6 +191,77 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           "${visual_args[@]}"
         )
 
+        if [[ "$driver" == "codex-live" ]]; then
+          if ! command -v tmux >/dev/null 2>&1; then
+            echo "error: tmux command not found; install tmux before running detached Codex cleanup" >&2
+            exit 1
+          fi
+
+          session_name="roboclaws-molmo-codex-${stamp}-seed-${seed}"
+          session_name="${session_name//[^A-Za-z0-9_.-]/-}"
+          if tmux has-session -t "$session_name" >/dev/null 2>&1; then
+            echo "error: tmux session already exists: ${session_name}" >&2
+            echo "       attach with: tmux attach -t ${session_name}" >&2
+            exit 1
+          fi
+
+          runner="${run_dir}/run_live_codex.sh"
+          status_path="${run_dir}/live_status.json"
+          printf '%s\n' "$session_name" > "${run_dir}/tmux_session.txt"
+
+          runner_args=(
+            .venv/bin/python
+            scripts/molmo_cleanup/run_live_codex_cleanup.py
+            --repo-root "$PWD"
+            --run-dir "$run_dir"
+            --status-path "$status_path"
+            --client-url "$client_url"
+            --host "$host"
+            --port "$port"
+            --codex-bin "$codex_bin"
+            --codex-model "$codex_model"
+            --kickoff-prompt "$kickoff_prompt"
+            --backend "$backend"
+            --policy "$policy"
+            --task "$task"
+            --min-generated-mess-count "$min_generated_mess_count"
+            --evidence "$evidence"
+          )
+          for arg in "${server_args[@]}"; do
+            runner_args+=("--server-arg=$arg")
+          done
+          for arg in "${codex_model_args[@]}"; do
+            runner_args+=("--codex-model-arg=$arg")
+          done
+          for arg in "${checker_visual_args[@]}"; do
+            runner_args+=("--checker-visual-arg=$arg")
+          done
+
+          {
+            printf '#!/usr/bin/env bash\n'
+            printf 'set -Eeuo pipefail\n'
+            printf 'cd %q\n' "$PWD"
+            printf 'if [[ -f .env ]]; then set -a; source .env; set +a; fi\n'
+            printf 'exec > >(tee -a %q) 2>&1\n' "${run_dir}/driver.log"
+            printf 'exec'
+            for arg in "${runner_args[@]}"; do
+              printf ' %q' "$arg"
+            done
+            printf '\n'
+          } > "$runner"
+          chmod +x "$runner"
+          printf '{"phase":"queued","started_at_epoch":%s}\n' "$(date +%s)" > "$status_path"
+
+          tmux new-session -d -s "$session_name" "bash $(printf '%q' "$runner")"
+          echo "==> launched detached Codex Molmo cleanup"
+          echo "    tmux session : ${session_name}"
+          echo "    run dir      : ${run_dir}"
+          echo "    status       : just molmo::status ${run_dir}"
+          echo "    attach       : tmux attach -t ${session_name}"
+          echo "    tail         : tail -f ${run_dir}/driver.log"
+          exit 0
+        fi
+
         .venv/bin/python examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
@@ -222,17 +293,6 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         fi
 
         case "$driver" in
-          codex-live)
-            codex mcp remove roboclaws >/dev/null 2>&1 || true
-            codex mcp add roboclaws --url "$client_url"
-            echo "==> launching Codex with full permissions"
-            if [[ -n "$codex_model" ]]; then
-              echo "==> Codex model override for this run: ${codex_model}"
-            fi
-            echo "==> MCP URL: ${client_url}"
-            echo "==> kickoff: ${kickoff_prompt}"
-            "$codex_bin" exec "${codex_model_args[@]}" {{codex_full_permission_args}} --cd "$PWD" "$kickoff_prompt"
-            ;;
           claude-live)
             claude mcp remove roboclaws >/dev/null 2>&1 || true
             claude mcp add --transport http roboclaws "$client_url"
@@ -381,6 +441,15 @@ raw-fpv-report seed="7" output_dir="output/molmo/raw-fpv-report" task="帮我收
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
 codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual" host="127.0.0.1" port="18788":
     just molmo::cleanup "codex-live" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+
+# Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
+status path="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -n "{{path}}" ]]; then
+      exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py "{{path}}"
+    fi
+    exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
 claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual" host="127.0.0.1" port="18788":

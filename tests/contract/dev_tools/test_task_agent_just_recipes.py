@@ -16,6 +16,7 @@ AGENT_JUST = JUST_DIR / "agent.just"
 CODE_JUST = JUST_DIR / "code.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
+LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 
 
 def just_bin() -> str:
@@ -236,6 +237,7 @@ def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback(
 def test_coding_agent_launchers_apply_env_model_overrides_per_invocation() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "source scripts/dev/coding_agent_env.sh" in code_text
     assert "roboclaws_load_dotenv .env" in code_text
@@ -243,8 +245,25 @@ def test_coding_agent_launchers_apply_env_model_overrides_per_invocation() -> No
     assert 'claude "${claude_model_args[@]}" {{claude_full_permission_args}}' in code_text
 
     assert "source scripts/dev/coding_agent_env.sh" in molmo_text
-    assert '"$codex_bin" exec "${codex_model_args[@]}" {{codex_full_permission_args}}' in molmo_text
+    assert '"--codex-model-arg=$arg"' in molmo_text
+    assert "*self.args.codex_model_arg" in runner_text
+    assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
     assert '"$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}}' in molmo_text
+
+
+def test_molmo_codex_live_is_detached_and_probeable() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+
+    assert 'tmux new-session -d -s "$session_name"' in molmo_text
+    assert "run_live_codex.sh" in molmo_text
+    assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" in molmo_text
+    assert "tmux_session.txt" in molmo_text
+    assert "live_status.json" in molmo_text
+    assert "codex-events.jsonl" in runner_text
+    assert "codex-last-message.md" in runner_text
+    assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
+    assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text
 
 
 def test_lower_level_just_modules_do_not_call_task_or_agent_facades() -> None:
