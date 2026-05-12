@@ -33,6 +33,19 @@ Both recipes default to full agent permissions for local demo operation:
 uses Claude Code's bypass-permissions mode. Run them only in a trusted local
 checkout.
 
+To pin a model for these demos without changing the machine-wide Codex or
+Claude Code defaults, add optional overrides to the repo-local `.env`:
+
+```bash
+ROBOCLAWS_CODEX_MODEL=gpt-5.2
+ROBOCLAWS_CLAUDE_MODEL=sonnet
+```
+
+`ROBOCLAWS_CODE_AGENT_MODEL` is also accepted as a shared fallback for both
+drivers. The wrappers translate these values into per-invocation `--model`
+flags; when the variables are unset, the CLIs use their normal configured
+defaults.
+
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):
 
