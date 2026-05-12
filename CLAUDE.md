@@ -31,7 +31,7 @@ append-only logbook of scripted-loop runs that grades the skill on curated
 tasks. Each `## Run NNN` entry attributes a metric delta to one bounded
 change. See [`docs/ai/harness/self-improvement-loop.md`](docs/ai/harness/self-improvement-loop.md)
 for the design rationale and [`harness/README.md`](harness/README.md) for
-how to run another iteration (`just harness::run <task>`).
+how to run another iteration (`just agent::harness run <task>`).
 
 ## Build & test
 
@@ -69,13 +69,12 @@ python examples/territory_game.py --agents 3
 python examples/coverage_game.py --agents 3
 ```
 
-Common `just` recipes (run `just --list` for the full grouped list):
+Common `just` recipes use the small public facade:
 
 ```bash
-just dev::test all                              # full repo confidence (lint + tests)
-just openclaw::run photo                         # autonomous chair/sofa photo smoke
-just chat::run                                   # OpenClaw Gateway + browser Control UI
-DEMO_PASSWORD=demo just appliance::run local      # hosted Railway-style appliance
+just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
+just task::run molmo-cleanup codex minimal        # cheap semantic cleanup iteration
+just agent::verify mock                          # maintainer confidence gate
 ```
 
 Work-network restriction: if `just dev::network-status` reports `network: work`
@@ -92,8 +91,8 @@ reuse those wrappers or the same bypass-approval / bypass-sandbox flags; do not
 add bare `codex` or `claude` launches.
 
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
-for the one-line `just` install + tab completion. Modules:
-`openclaw`, `vlm`, `chat`, `appliance`, `dev` — each lives in `just/<module>.just`.
+for the one-line `just` install + tab completion. See [`just/README.md`](just/README.md)
+for the task/driver/report grammar and prompt mappings.
 
 ## Code style
 

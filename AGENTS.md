@@ -175,18 +175,17 @@ python examples/single_agent_explore.py --steps 20 --model gpt-4o-mini
 python examples/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
 ```
 
-Or use `just` recipes (`just --list` for the full grouped list):
+Or use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
-just dev::test all                              # full repo confidence (lint + tests)
-just openclaw::run photo                         # autonomous chair/sofa photo smoke
-just chat::run                                  # OpenClaw Gateway + browser Control UI
-DEMO_PASSWORD=demo just appliance::run local      # Railway-style hosted appliance
+just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
+just task::run molmo-cleanup codex minimal        # cheap semantic cleanup iteration
+just agent::verify mock                          # maintainer confidence gate
 ```
 
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
-for the one-line install + tab-completion setup. Modules:
-`openclaw`, `vlm`, `chat`, `appliance`, `dev` — each maps to a file in `just/`.
+for the one-line install + tab-completion setup. See [`just/README.md`](just/README.md)
+for the task/driver/report grammar and prompt mappings.
 
 ---
 
@@ -310,6 +309,42 @@ focus, latest phase, next action, or blocker changed; keep it short and do not
 mirror `.planning/STATE.md`. For parallel standalone terminal work, use one
 task-owned file under `docs/status/active/` instead of editing `STATUS.md` for
 routine progress.
+
+## 9) Just command routing
+
+When a user asks in natural language to run a demo, cleanup task, proof task, or
+verification gate, translate it to the composable public surface instead of
+searching for a bespoke recipe name.
+
+Primary grammar:
+
+```bash
+just task::run <task> <driver> [report] [key=value ...]
+```
+
+Use `visual` by default. Use `minimal` only when the prompt asks for minimal,
+cheap, semantic, or fast AI-agent iteration evidence.
+
+Examples:
+
+- "run the molmospace cleanup task with codex" -> `just task::run molmo-cleanup codex visual`
+- "run the molmospace cleanup task with codex with minimal report" -> `just task::run molmo-cleanup codex minimal`
+- "run the ai2thor nav task with openclaw" -> `just task::run ai2thor-nav openclaw visual`
+
+Use `agent::*` for deeper maintainer control:
+
+```bash
+just agent::run <task> <driver> [report] [key=value ...]
+just agent::verify <target> [args ...]
+just agent::harness <target> [args ...]
+just agent::mcp up|down
+just agent::gateway up|down|pull-image
+```
+
+Lower modules (`openclaw::*`, `vlm::*`, `molmo::*`, `harness::*`, `verify::*`,
+`mcp::*`, `code::*`, `chat::*`, `appliance::*`, `dev::*`) are private
+implementation details. They remain runnable for debugging, but are hidden from
+completion and should not be the first choice for natural-language run requests.
 
 ## Agent skills
 

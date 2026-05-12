@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev --extra openclaw` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock` |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing recipes live under `task::*` (`just task::navigate openclaw`, `just task::control-ui`) with lower-level modules available for debugging |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just task::run <task> <driver> [report]` with lower-level modules hidden from completion but still available for debugging |
 
 ### Install
 
@@ -48,22 +48,19 @@ If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
 ### Discover recipes
 
 ```bash
-just                       # default: prints the grouped recipe list
+just                       # default: prints the small public facade
 just --list                # same
-just --list task           # user-facing outcomes
-just --list agent          # driver-facing aliases
-just --list openclaw       # only the openclaw module
-just --list chat           # only the chat module
-just openclaw              # equivalent — runs the module's `default` recipe (a list)
+just --list task           # human-facing task grammar
+just --list agent          # maintainer dispatchers
+just --summary             # task::run plus compact agent::* dispatchers
 ```
 
 Invoke recipes with the `module::recipe` form:
 
 ```bash
-just task::navigate openclaw
-just task::control-ui openclaw kimi
-just appliance::run local
-just dev::test all
+just task::run ai2thor-nav openclaw
+just task::run molmo-cleanup codex minimal
+just agent::verify mock
 ```
 
 `just <module> <recipe>` (space-separated) also works, but `module::recipe`
@@ -72,7 +69,7 @@ keeps the namespace visible at a glance.
 ### Tab completion (one-time per machine)
 
 `just`'s install script does **not** wire up shell completions. Run this
-once to make `just <TAB>`, `just openclaw::<TAB>`, `just chat::pl<TAB>`, etc.
+once to make `just <TAB>`, `just task::<TAB>`, `just agent::<TAB>`, etc.
 work in any directory that has a `justfile`:
 
 ```bash
