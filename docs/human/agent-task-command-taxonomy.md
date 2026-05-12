@@ -1,6 +1,7 @@
 # Agent and Task Command Taxonomy Plan
 
-Status: implemented as `just/task.just` and `just/agent.just`.
+Status: implemented as `just/task.just`, `just/agent.just`, and
+[`just/README.md`](../../just/README.md).
 
 This plan defines the human-facing command layers for robot/agent demos while
 keeping the existing implementation modules available for lower-level debugging.
@@ -9,13 +10,13 @@ keeping the existing implementation modules available for lower-level debugging.
 
 Make command discovery follow what users care about:
 
-- `task::*` names the outcome: navigate, photograph, compete, cover, cleanup,
-  prove.
-- `agent::*` names the driver: Codex, Claude Code, OpenClaw, direct VLM, or
-  script.
-- existing implementation modules keep their current ownership:
+- `task::*` owns the small user grammar:
+  `task::run <task> <driver> [report] [key=value ...]`.
+- `agent::*` owns compact maintainer dispatchers: `run`, `verify`, `harness`,
+  `mcp`, and `gateway`.
+- Existing implementation modules keep their current ownership:
   `code::*`, `chat::*`, `openclaw::*`, `vlm::*`, `molmo::*`, `harness::*`,
-  `verify::*`.
+  `verify::*`, but are hidden from completion.
 
 ## Non-Goal
 
@@ -28,11 +29,11 @@ The command graph must be one-way:
 
 ```text
 task::* -> agent::* or molmo::* or harness::* or verify::*
-agent::* -> code::* or chat::* or openclaw::* or vlm::* or scripts/examples
+agent::* -> code::* or chat::* or openclaw::* or vlm::* or molmo::* or scripts/examples
 verify::* -> harness::* or focused tests
 harness::* -> scripts/examples
 lower modules must not call task::*
-lower modules must not call agent::* unless they are explicitly user-facing aliases
+lower modules must not call agent::*
 ```
 
 This avoids circular references. In particular:
@@ -44,33 +45,43 @@ This avoids circular references. In particular:
 - `harness::*` should not depend on `task::*` or `agent::*`; harness recipes are
   implementation rigs.
 
-## Proposed User Surface
+## Implemented User Surface
 
-`task::*` recipes:
+`task::*` public recipe:
 
-- `task::navigate driver=codex|claude|openclaw`
-- `task::photo-chairs driver=openclaw`
-- `task::territory driver=vlm|openclaw|script`
-- `task::coverage driver=vlm|openclaw|script`
-- `task::control-ui driver=openclaw`
-- `task::cleanup-quick-check`
-- `task::cleanup-report driver=direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live`
-- `task::cleanup-raw-fpv`
-- `task::planner-proof mode=dry-run|execute-rerun`
+- `task::run <task> <driver> [report] [key=value ...]`
 
-`agent::*` recipes:
+Tasks:
 
-- `agent::codex-nav`
-- `agent::claude-nav`
-- `agent::openclaw-nav`
-- `agent::openclaw-photo`
-- `agent::openclaw-territory`
-- `agent::openclaw-coverage`
-- `agent::openclaw-ui`
-- `agent::vlm-territory`
-- `agent::vlm-coverage`
-- `agent::script-territory`
-- `agent::script-coverage`
+- `ai2thor-nav`
+- `territory`
+- `coverage`
+- `photo-chairs`
+- `molmo-cleanup`
+- `molmo-planner-proof`
+
+Drivers:
+
+- `openclaw`
+- `vlm`
+- `codex`
+- `claude`
+- `script`
+- `direct`
+- `mcp-smoke`
+
+Reports:
+
+- `visual` by default.
+- `minimal` for cheap semantic agent iteration.
+
+`agent::*` public recipes:
+
+- `agent::run`
+- `agent::verify`
+- `agent::harness`
+- `agent::mcp`
+- `agent::gateway`
 
 ## Documentation Updates
 
@@ -84,8 +95,9 @@ This avoids circular references. In particular:
 Add cheap command-surface tests that prove:
 
 - `task` and `agent` modules are registered in the root `justfile`.
-- `task::*` recipes delegate only downward.
-- `agent::*` recipes delegate only downward.
+- `just --summary` exposes only the small public facade.
+- `task::run` routes prompt-derived commands to the expected lower modules.
+- visual default and minimal override choose the expected cleanup report shape.
 - lower-level modules do not call `task::*`.
 - no `task::* <-> agent::*` cycle exists.
 - coding-agent launches still satisfy the existing full-permission guard.
@@ -97,21 +109,19 @@ run is required for this command taxonomy refactor.
 
 Completed on 2026-05-12:
 
-- Added `just/task.just` and `just/agent.just`.
-- Registered both modules in the root `justfile`.
-- Updated README and human docs to point normal users at `task::*`.
-- Added `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
+- Collapsed public task recipes into `task::run`.
+- Collapsed public agent recipes into compact dispatchers.
+- Marked implementation modules private in the root `justfile`.
+- Added `just/README.md`.
+- Updated README and human docs to point normal users at `task::run`.
+- Updated `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
 
 Verification run:
 
-- `just --list task`
-- `just --list agent`
-- `just task::cleanup-quick-check`
-- `just --dry-run task::navigate codex`
-- `just --dry-run task::navigate claude`
-- `just --dry-run task::territory openclaw`
-- `just --dry-run task::control-ui openclaw kimi`
-- `just --dry-run task::cleanup-report openclaw-live`
+- `just --summary`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex minimal`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
 - `./scripts/run_pytest_standalone.sh -q tests/contract/dev_tools`
 - `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`
 - `.venv/bin/ruff format --check tests/contract/dev_tools/test_task_agent_just_recipes.py`

@@ -24,15 +24,15 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 
 | Mode | Use it for | Entry point |
 |------|------------|-------------|
-| Direct VLM games | Fast local experiments without OpenClaw | `just task::territory vlm`, `just task::coverage vlm` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just task::navigate openclaw`, `just task::control-ui` |
-| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just task::navigate codex`, `just task::navigate claude` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just task::photo-chairs` |
+| Direct VLM games | Fast local experiments without OpenClaw | `just task::run territory vlm`, `just task::run coverage vlm` |
+| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just task::run ai2thor-nav openclaw` |
+| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just task::run ai2thor-nav codex`, `just task::run ai2thor-nav claude` |
+| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just task::run photo-chairs openclaw` |
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
-| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::cleanup-report`, `just task::cleanup-quick-check`, live: `just task::cleanup-report openclaw-live` |
-| MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::planner-proof`, local: `just task::planner-proof execute-rerun` |
+| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::run molmo-cleanup direct`, minimal: `just task::run molmo-cleanup mcp-smoke minimal` |
+| MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::run molmo-planner-proof direct`, local: `just task::run molmo-planner-proof direct mode=execute-rerun` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
-| Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just harness::run <task>` (see [`harness/README.md`](harness/README.md)) |
+| Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just agent::harness run <task>` (see [`harness/README.md`](harness/README.md)) |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
 
@@ -70,12 +70,10 @@ python examples/coverage_game.py --agents 3 --scene FloorPlan201
 ### Run OpenClaw
 
 ```bash
-just task::navigate openclaw
-just task::control-ui
+just task::run ai2thor-nav openclaw
 ```
-`just task::navigate openclaw` is the normal navigation entrypoint.
-`just task::control-ui` opens the local browser-control workflow. Useful
-companion terminals:
+`just task::run ai2thor-nav openclaw` is the normal navigation entrypoint.
+Useful companion terminals for the lower-level browser-control workflow:
 
 ```bash
 just chat::tail
@@ -84,15 +82,16 @@ just chat::view
 
 > Recipes are run via [`just`](https://just.systems/) — see
 > [`docs/human/contributing.md`](docs/human/contributing.md) for the one-line install +
-> tab-completion setup. `just --list` shows everything grouped by module.
+> tab-completion setup. `just --list` shows the small public facade; the
+> full task grammar is in [`just/README.md`](just/README.md).
 
 ### Let Codex or Claude Drive the Robot
 
 Preferred one-command workflows:
 
 ```bash
-just task::navigate codex
-just task::navigate claude
+just task::run ai2thor-nav codex
+just task::run ai2thor-nav claude
 ```
 
 Those recipes start the MCP server, register `roboclaws`, launch the coding
@@ -166,7 +165,7 @@ FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 ![Roboclaws photo task](docs/assets/readme-photo-task.png)
 
 ```bash
-just task::photo-chairs
+just task::run photo-chairs openclaw
 python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 
