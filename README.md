@@ -97,6 +97,16 @@ just task::run ai2thor-nav claude
 Those recipes start the MCP server, register `roboclaws`, launch the coding
 agent, and clean up the server on exit.
 
+Optional repo-local model overrides can live in `.env`:
+
+```bash
+ROBOCLAWS_CODEX_MODEL=gpt-5.2
+ROBOCLAWS_CLAUDE_MODEL=sonnet
+```
+
+The launchers pass these as per-run `--model` flags. If unset, Codex and
+Claude Code use their normal system-configured defaults.
+
 Manual server flow:
 
 ```bash

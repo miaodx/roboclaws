@@ -166,6 +166,14 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           echo "error: claude command not found; install or activate Claude Code before running molmo::claude-report" >&2
           exit 1
         fi
+        source scripts/dev/coding_agent_env.sh
+        roboclaws_load_dotenv .env
+        codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL)"
+        claude_model="$(roboclaws_code_agent_model ROBOCLAWS_CLAUDE_MODEL)"
+        codex_model_args=()
+        claude_model_args=()
+        roboclaws_code_agent_model_args codex_model_args ROBOCLAWS_CODEX_MODEL
+        roboclaws_code_agent_model_args claude_model_args ROBOCLAWS_CLAUDE_MODEL
         codex_bin="$(command -v codex || true)"
         claude_bin="$(command -v claude || true)"
         kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
@@ -218,17 +226,23 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             codex mcp remove roboclaws >/dev/null 2>&1 || true
             codex mcp add roboclaws --url "$client_url"
             echo "==> launching Codex with full permissions"
+            if [[ -n "$codex_model" ]]; then
+              echo "==> Codex model override for this run: ${codex_model}"
+            fi
             echo "==> MCP URL: ${client_url}"
             echo "==> kickoff: ${kickoff_prompt}"
-            "$codex_bin" exec {{codex_full_permission_args}} --cd "$PWD" "$kickoff_prompt"
+            "$codex_bin" exec "${codex_model_args[@]}" {{codex_full_permission_args}} --cd "$PWD" "$kickoff_prompt"
             ;;
           claude-live)
             claude mcp remove roboclaws >/dev/null 2>&1 || true
             claude mcp add --transport http roboclaws "$client_url"
             echo "==> launching Claude Code with full permissions"
+            if [[ -n "$claude_model" ]]; then
+              echo "==> Claude Code model override for this run: ${claude_model}"
+            fi
             echo "==> MCP URL: ${client_url}"
             echo "==> kickoff: ${kickoff_prompt}"
-            "$claude_bin" {{claude_full_permission_args}}
+            "$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}}
             ;;
           openclaw-live)
             echo "==> launching OpenClaw Gateway chat with cleanup skill"

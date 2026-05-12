@@ -22,6 +22,12 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    source scripts/dev/coding_agent_env.sh
+    roboclaws_load_dotenv .env
+    claude_model="$(roboclaws_code_agent_model ROBOCLAWS_CLAUDE_MODEL)"
+    claude_model_args=()
+    roboclaws_code_agent_model_args claude_model_args ROBOCLAWS_CLAUDE_MODEL
+
     bash scripts/dev/network_status.sh --assert-off-work "Claude Code direct MCP run"
 
     if ! command -v codex >/dev/null 2>&1; then
@@ -67,9 +73,12 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     claude mcp add --transport http roboclaws "$mcp_url"
 
     echo "==> launching Claude Code with full permissions (cwd=$(pwd))" >&2
+    if [[ -n "$claude_model" ]]; then
+      echo "==> Claude Code model override for this run: ${claude_model}" >&2
+    fi
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    claude {{claude_full_permission_args}}
+    claude "${claude_model_args[@]}" {{claude_full_permission_args}}
 
 # Open the live snapshot viewer for the most recent run (output/runs/).
 # Polls latest.{fpv,map,chase}.png written by every observe() call.
@@ -83,6 +92,12 @@ view run_dir="" port="8787" agent="0":
 codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
+
+    source scripts/dev/coding_agent_env.sh
+    roboclaws_load_dotenv .env
+    codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL)"
+    codex_model_args=()
+    roboclaws_code_agent_model_args codex_model_args ROBOCLAWS_CODEX_MODEL
 
     if ! command -v codex >/dev/null 2>&1; then
       echo "error: codex command not found; install or activate Codex before running code:codex" >&2
@@ -117,6 +132,9 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
     echo "==> launching Codex with full permissions (cwd=$(pwd))" >&2
+    if [[ -n "$codex_model" ]]; then
+      echo "==> Codex model override for this run: ${codex_model}" >&2
+    fi
     echo "==> MCP URL: $mcp_url" >&2
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
-    codex {{codex_full_permission_args}}
+    codex "${codex_model_args[@]}" {{codex_full_permission_args}}

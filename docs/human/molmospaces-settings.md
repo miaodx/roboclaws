@@ -96,6 +96,18 @@ The convenient aliases are:
 | `just molmo::claude-report` | `claude-live molmospaces visual` | Live Claude Code agent report. |
 | `just molmo::openclaw-report` | `openclaw-live molmospaces visual` | Live OpenClaw Gateway report. |
 
+For live Codex / Claude reports, optional repo-local `.env` model overrides are
+honored the same way as the direct navigation demos:
+
+```bash
+ROBOCLAWS_CODEX_MODEL=gpt-5.2
+ROBOCLAWS_CLAUDE_MODEL=sonnet
+```
+
+These become per-run `--model` flags only; unset variables leave the system CLI
+defaults unchanged. `ROBOCLAWS_CODE_AGENT_MODEL` can be used as a shared fallback
+for both drivers.
+
 For quick axis overrides, use positional values or the same first-three
 `key=value` prefixes:
 

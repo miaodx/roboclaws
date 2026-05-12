@@ -13,6 +13,9 @@ JUSTFILE = REPO_ROOT / "justfile"
 JUST_DIR = REPO_ROOT / "just"
 TASK_JUST = JUST_DIR / "task.just"
 AGENT_JUST = JUST_DIR / "agent.just"
+CODE_JUST = JUST_DIR / "code.just"
+MOLMO_JUST = JUST_DIR / "molmo.just"
+CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 
 
 def just_bin() -> str:
@@ -194,6 +197,54 @@ def test_key_value_third_argument_keeps_visual_default() -> None:
         "7",
         "output/custom",
     ]
+
+
+def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
+    env = os.environ.copy()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODE_AGENT_MODEL=shared-model
+            roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL
+            ROBOCLAWS_CODEX_MODEL=codex-model
+            roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL
+            args=()
+            roboclaws_code_agent_model_args args ROBOCLAWS_CODEX_MODEL
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "shared-model",
+        "codex-model",
+        "--model",
+        "codex-model",
+    ]
+
+
+def test_coding_agent_launchers_apply_env_model_overrides_per_invocation() -> None:
+    code_text = CODE_JUST.read_text(encoding="utf-8")
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "source scripts/dev/coding_agent_env.sh" in code_text
+    assert "roboclaws_load_dotenv .env" in code_text
+    assert 'codex "${codex_model_args[@]}" {{codex_full_permission_args}}' in code_text
+    assert 'claude "${claude_model_args[@]}" {{claude_full_permission_args}}' in code_text
+
+    assert "source scripts/dev/coding_agent_env.sh" in molmo_text
+    assert '"$codex_bin" exec "${codex_model_args[@]}" {{codex_full_permission_args}}' in molmo_text
+    assert '"$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}}' in molmo_text
 
 
 def test_lower_level_just_modules_do_not_call_task_or_agent_facades() -> None:
