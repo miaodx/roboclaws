@@ -27,11 +27,15 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    The server rejects skipped semantic phases: if you call `pick` before
    `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
    calling the `required_tool` named in the error response.
-4. If the fixture affordances/name indicate a fridge or refrigerator, call
-   `roboclaws__open_receptacle(fixture_id)` before
-   `roboclaws__place_inside(fixture_id)`, then
-   `roboclaws__close_receptacle(fixture_id)`. Otherwise call
-   `roboclaws__place(fixture_id)`.
+4. Use the receptacle type to choose the placement tool:
+   - For a fridge or refrigerator, call
+     `roboclaws__open_receptacle(fixture_id)` before
+     `roboclaws__place_inside(fixture_id)`, then
+     `roboclaws__close_receptacle(fixture_id)`.
+   - For a shelf, bookshelf, bookcase, or shelving unit, call
+     `roboclaws__place_inside(fixture_id)` without open/close.
+   - For table, sofa, bed, desk, sink, counter, or stand surfaces, call
+     `roboclaws__place(fixture_id)`.
 5. After any successful place/place_inside and required close, call
    `roboclaws__observe()` once in the current room/fixture area before choosing
    the next object or waypoint.

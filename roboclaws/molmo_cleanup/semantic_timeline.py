@@ -460,7 +460,9 @@ def visual_grounding_status(focus: dict[str, Any], visibility: dict[str, Any]) -
     contained_in = optional_str(focus.get("object_contained_in"))
     relation = str(focus.get("object_location_relation") or "")
     if receptacle_id and contained_in == receptacle_id and relation == "inside":
-        return "contained_inside"
+        text = f"{focus.get('receptacle_label', '')} {focus.get('receptacle_category', '')}".lower()
+        if "fridge" in text or "refrigerator" in text:
+            return "contained_inside"
     if not (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")):
         return "ok"
     return "ok" if _pixel_count(visibility.get("object_pixels")) > 0 else "weak_object_visibility"

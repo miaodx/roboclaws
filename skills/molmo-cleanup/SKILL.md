@@ -26,10 +26,11 @@ manipulation.
 3. For each misplaced pickupable object: `roboclaws__navigate_to_object(object_id)`,
    `roboclaws__pick(object_id)`, `roboclaws__navigate_to_receptacle(receptacle_id)`,
    then place it and call `roboclaws__object_done(object_id, receptacle_id)`.
-4. If the target is the fridge/refrigerator, call
-   `roboclaws__open_receptacle(receptacle_id)` before
-   `roboclaws__place_inside(receptacle_id)`. For normal targets use
-   `roboclaws__place(receptacle_id)`.
+4. Use `roboclaws__place_inside(receptacle_id)` for fridge/refrigerator and
+   shelf/bookshelf/bookcase/shelving-unit targets. Fridge-like targets must be
+   opened first with `roboclaws__open_receptacle(receptacle_id)` and closed
+   afterward with `roboclaws__close_receptacle(receptacle_id)`. For table, sofa,
+   bed, desk, sink, counter, or stand surfaces use `roboclaws__place(receptacle_id)`.
 5. Call `roboclaws__done(reason)` only after every intended object has an
    `object_done` readback. If a tool returns `stale_reference` or another error,
    re-read `scene_objects` and repair the current object before continuing.
