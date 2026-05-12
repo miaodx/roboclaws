@@ -48,6 +48,18 @@ Reports:
 If the third argument is `key=value`, `task::run` treats the report as omitted
 and keeps the `visual` default.
 
+## Live Agent Launch Behavior
+
+Live `codex` and `claude` task drivers run inline in the terminal where `just`
+was invoked. For example, `just task::run molmo-cleanup codex visual` starts
+the cleanup MCP server in the same process tree, launches `codex exec`, waits
+for the agent to call `done`, then runs the report checker. It does not create a
+tmux window.
+
+The tmux-managed agent loop is a separate harness surface (`just
+agent::harness ...` / `just harness::*`) used for navigator self-improvement
+experiments.
+
 ## Examples
 
 ```bash

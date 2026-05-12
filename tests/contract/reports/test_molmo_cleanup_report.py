@@ -264,6 +264,64 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "decision-card" not in html
 
 
+def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+    }
+    trace_events = [
+        {"tool": "<runtime>", "event": "initialized", "wallclock_elapsed": 0.1},
+        {"tool": "metric_map", "event": "request", "wallclock_elapsed": 0.2},
+        {"tool": "metric_map", "event": "response", "wallclock_elapsed": 0.5},
+        {"tool": "fixture_hints", "event": "request", "wallclock_elapsed": 1.5},
+        {"tool": "fixture_hints", "event": "response", "wallclock_elapsed": 1.7},
+        {
+            "tool": "<runtime>",
+            "event": "robot_view_capture",
+            "wallclock_elapsed": 2.1,
+            "elapsed_s": 0.4,
+        },
+        {"tool": "done", "event": "request", "wallclock_elapsed": 3.0},
+        {"tool": "done", "event": "response", "wallclock_elapsed": 3.2},
+    ]
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=trace_events,
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Runtime Timing" in html
+    assert "MCP elapsed" in html
+    assert "3.2s" in html
+    assert "Tool/backend handling" in html
+    assert "0.7s" in html
+    assert "Robot-view capture" in html
+    assert "0.4s" in html
+    assert "Between-tool gap" in html
+    assert "2.3s" in html
+    assert "fixture_hints" in html
+
+
 def test_cleanup_report_labels_observe_roles_and_zero_pixel_focus(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     score = score_cleanup(scenario.object_locations(), scenario.private_manifest)

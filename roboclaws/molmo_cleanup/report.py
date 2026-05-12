@@ -123,6 +123,7 @@ def _cleanup_report_sections(
             _current_contract_note(run_result),
             _realworld_contract_note(run_result),
             _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
+            _runtime_timing_section(run_result, trace_events, robot_view_steps),
             _object_moves_section(moves),
             _semantic_steps_table(run_result.get("semantic_substeps") or []),
             _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
@@ -479,6 +480,187 @@ def _score_section(score: dict[str, Any]) -> str:
       {_score_table(score)}
     </section>
     """
+
+
+def _runtime_timing_section(
+    run_result: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]],
+) -> str:
+    timing = run_result.get("runtime_timing")
+    if not isinstance(timing, dict):
+        timing = _runtime_timing_from_trace(trace_events, robot_view_steps)
+    if not timing:
+        return ""
+    total_elapsed = timing.get("total_elapsed_s")
+    if not isinstance(total_elapsed, (int, float)) or total_elapsed <= 0:
+        return ""
+
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('MCP elapsed', _seconds_text(total_elapsed))}"
+        f"{_metric('Tool/backend handling', _seconds_text(timing.get('tool_handler_s', 0)))}"
+        f"{_metric('Robot-view capture', _seconds_text(timing.get('robot_view_capture_s', 0)))}"
+        f"{_metric('Between-tool gap', _seconds_text(timing.get('between_tool_gap_s', 0)))}"
+        f"{_metric('Tool calls', timing.get('tool_call_count', 0))}"
+        "</div>"
+    )
+    tool_rows = []
+    for item in timing.get("tool_breakdown") or []:
+        tool_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('tool', '')))}</td>"
+            f"<td>{html.escape(str(item.get('calls', 0)))}</td>"
+            f"<td>{html.escape(_seconds_text(item.get('handler_s', 0)))}</td>"
+            f"<td>{html.escape(_seconds_text(item.get('avg_handler_s', 0)))}</td>"
+            "</tr>"
+        )
+    gap_rows = []
+    for item in timing.get("longest_between_tool_gaps") or []:
+        gap_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('after_tool', '')))}</td>"
+            f"<td>{html.escape(str(item.get('before_tool', '')))}</td>"
+            f"<td>{html.escape(_seconds_text(item.get('gap_s', 0)))}</td>"
+            "</tr>"
+        )
+    tool_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Tool</th><th>Calls</th>'
+        "<th>Handler time</th><th>Avg handler</th></tr></thead><tbody>"
+        + "".join(tool_rows)
+        + "</tbody></table></div>"
+    )
+    gap_table = (
+        '<div class="table-wrap"><table><thead><tr><th>After response</th>'
+        "<th>Before request</th><th>Gap</th></tr></thead><tbody>"
+        + "".join(gap_rows)
+        + "</tbody></table></div>"
+        if gap_rows
+        else ""
+    )
+    return (
+        '<section class="panel runtime-timing">'
+        "<h2>Runtime Timing</h2>"
+        '<p class="note">MCP elapsed is measured inside the cleanup server. '
+        "Tool/backend handling is synchronous tool execution. Between-tool gaps are "
+        "time after one MCP response before the next request; for live Codex runs "
+        "that bucket is where model reasoning, CLI orchestration, transport, and "
+        "any post-response artifact work show up.</p>"
+        f"{metrics}{tool_table}{gap_table}</section>"
+    )
+
+
+def _runtime_timing_from_trace(
+    trace_events: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]],
+) -> dict[str, Any]:
+    timed_events = [
+        event for event in trace_events if isinstance(event.get("wallclock_elapsed"), (int, float))
+    ]
+    if not timed_events:
+        return {}
+    timed_events.sort(key=lambda event: float(event["wallclock_elapsed"]))
+    total_elapsed = max(float(event["wallclock_elapsed"]) for event in timed_events)
+    tool_events = [
+        event
+        for event in timed_events
+        if event.get("tool") != "<runtime>" and event.get("event") in {"request", "response"}
+    ]
+    pending_requests: dict[str, list[dict[str, Any]]] = {}
+    tool_breakdown: dict[str, dict[str, float | int | str]] = {}
+    handler_total = 0.0
+    for event in tool_events:
+        tool = str(event.get("tool", ""))
+        if event.get("event") == "request":
+            pending_requests.setdefault(tool, []).append(event)
+            continue
+        if event.get("event") != "response":
+            continue
+        request = None
+        requests = pending_requests.get(tool) or []
+        if requests:
+            request = requests.pop(0)
+        duration = 0.0
+        if request is not None:
+            duration = max(
+                0.0,
+                float(event["wallclock_elapsed"]) - float(request["wallclock_elapsed"]),
+            )
+        item = tool_breakdown.setdefault(tool, {"tool": tool, "calls": 0, "handler_s": 0.0})
+        item["calls"] = int(item["calls"]) + 1
+        item["handler_s"] = float(item["handler_s"]) + duration
+        handler_total += duration
+
+    gap_total = 0.0
+    gaps = []
+    previous_response: dict[str, Any] | None = None
+    for event in tool_events:
+        if event.get("event") == "response":
+            previous_response = event
+            continue
+        if event.get("event") == "request" and previous_response is not None:
+            gap = max(
+                0.0,
+                float(event["wallclock_elapsed"]) - float(previous_response["wallclock_elapsed"]),
+            )
+            if gap > 0:
+                gap_total += gap
+                gaps.append(
+                    {
+                        "after_tool": str(previous_response.get("tool", "")),
+                        "before_tool": str(event.get("tool", "")),
+                        "gap_s": round(gap, 3),
+                    }
+                )
+            previous_response = None
+
+    robot_view_capture = _robot_view_capture_seconds(timed_events, robot_view_steps)
+    breakdown = []
+    for item in tool_breakdown.values():
+        calls = int(item["calls"])
+        handler_s = float(item["handler_s"])
+        breakdown.append(
+            {
+                "tool": str(item["tool"]),
+                "calls": calls,
+                "handler_s": round(handler_s, 3),
+                "avg_handler_s": round(handler_s / calls, 3) if calls else 0.0,
+            }
+        )
+    breakdown.sort(key=lambda item: (-float(item["handler_s"]), str(item["tool"])))
+    gaps.sort(key=lambda item: -float(item["gap_s"]))
+    return {
+        "total_elapsed_s": round(total_elapsed, 3),
+        "tool_handler_s": round(handler_total, 3),
+        "robot_view_capture_s": round(robot_view_capture, 3),
+        "between_tool_gap_s": round(gap_total, 3),
+        "tool_call_count": sum(int(item["calls"]) for item in breakdown),
+        "tool_breakdown": breakdown,
+        "longest_between_tool_gaps": gaps[:8],
+    }
+
+
+def _robot_view_capture_seconds(
+    trace_events: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]],
+) -> float:
+    trace_total = sum(
+        float(event.get("elapsed_s") or 0.0)
+        for event in trace_events
+        if event.get("tool") == "<runtime>" and event.get("event") == "robot_view_capture"
+    )
+    if trace_total > 0:
+        return trace_total
+    return sum(float(step.get("capture_elapsed_s") or 0.0) for step in robot_view_steps)
+
+
+def _seconds_text(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value):.1f}s"
+    try:
+        return f"{float(value):.1f}s"
+    except (TypeError, ValueError):
+        return "n/a"
 
 
 def _badge(label: str, value: Any) -> str:
