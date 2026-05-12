@@ -582,6 +582,20 @@ class RealWorldCleanupContract:
         )
 
     def done(self, reason: str = "") -> dict[str, Any]:
+        pending = self._pending_cleanup_candidates()
+        if pending:
+            return self._error(
+                "done",
+                "pending_cleanup_candidates",
+                required_tool="navigate_to_object",
+                pending_observed_handles=[str(item["object_id"]) for item in pending],
+                pending_cleanup_candidates=pending,
+                recovery_hint=(
+                    "Clean pending observed handles before done: navigate_to_object -> pick -> "
+                    "navigate_to_receptacle(candidate_fixture_id) -> place/place_inside, using "
+                    "open_receptacle/close_receptacle for fridge-like fixtures."
+                ),
+            )
         done = self.contract.done(reason=reason)
         if not done.get("ok"):
             return done
@@ -664,14 +678,19 @@ class RealWorldCleanupContract:
             lifecycle = dict(self._object_lifecycle.get(handle, {}))
             support = detection.get("support_estimate") or {}
             public_candidate = infer_target_fixture_for_detection(detection, public_fixtures)
+            candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
+            source_fixture_id = str(support.get("fixture_id") or "")
             lifecycle_rows.append(
                 {
                     "object_id": handle,
                     "state": lifecycle.get("state", "pending"),
                     "category": detection.get("category", ""),
                     "room_id": detection.get("current_room_id", lifecycle.get("room_id", "")),
-                    "source_fixture_id": support.get("fixture_id", ""),
-                    "candidate_fixture_id": (public_candidate or {}).get("fixture_id", ""),
+                    "source_fixture_id": source_fixture_id,
+                    "candidate_fixture_id": candidate_fixture_id,
+                    "cleanup_recommended": bool(
+                        candidate_fixture_id and candidate_fixture_id != source_fixture_id
+                    ),
                     "candidate_source": "public_category_fixture_affordance",
                     "last_waypoint_id": lifecycle.get("waypoint_id", ""),
                     "perception_source": lifecycle.get("perception_source", "visible_detection"),
@@ -730,6 +749,29 @@ class RealWorldCleanupContract:
         }
         _assert_no_forbidden_agent_view_keys(payload)
         return payload
+
+    def _pending_cleanup_candidates(self) -> list[dict[str, Any]]:
+        worklist = self.cleanup_worklist_payload(fixture_hints=self.fixture_hints())
+        pending = []
+        for item in worklist.get("objects", []):
+            if item.get("state") != "pending":
+                continue
+            candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+            source_fixture_id = str(item.get("source_fixture_id") or "")
+            if not candidate_fixture_id or candidate_fixture_id == source_fixture_id:
+                continue
+            pending.append(
+                {
+                    "object_id": str(item.get("object_id") or ""),
+                    "category": str(item.get("category") or ""),
+                    "source_fixture_id": source_fixture_id,
+                    "candidate_fixture_id": candidate_fixture_id,
+                    "recommended_tool": _recommended_place_tool(
+                        candidate_fixture_id, self._fixtures
+                    ),
+                }
+            )
+        return pending
 
     def camera_model_policy_payload(self) -> dict[str, Any]:
         events = [dict(item) for item in self._camera_model_policy_events]
@@ -897,6 +939,7 @@ class RealWorldCleanupContract:
                     "source": "visible_detection",
                 },
             }
+            detection.update(self._public_candidate_hint(detection))
             self._detections_by_handle[handle] = detection
             self._record_detection_lifecycle(handle, detection, waypoint)
             detections.append(dict(detection))
@@ -946,11 +989,33 @@ class RealWorldCleanupContract:
                     "source_observation_id": observation_id,
                 },
             }
+            detection.update(self._public_candidate_hint(detection))
             _assert_no_forbidden_agent_view_keys(detection)
             self._detections_by_handle[handle] = detection
             self._record_detection_lifecycle(handle, detection, waypoint)
             candidates.append(dict(detection))
         return sorted(candidates, key=lambda item: str(item["object_id"]))
+
+    def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]:
+        candidate = infer_target_fixture_for_detection(detection, self.fixture_hints())
+        if candidate is None:
+            return {
+                "candidate_fixture_id": "",
+                "candidate_fixture_category": "",
+                "cleanup_recommended": False,
+                "candidate_source": "public_category_fixture_affordance",
+            }
+        candidate_fixture_id = str(candidate.get("fixture_id") or "")
+        source_fixture_id = str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+        return {
+            "candidate_fixture_id": candidate_fixture_id,
+            "candidate_fixture_category": str(candidate.get("category") or ""),
+            "cleanup_recommended": bool(
+                candidate_fixture_id and candidate_fixture_id != source_fixture_id
+            ),
+            "candidate_source": "public_category_fixture_affordance",
+            "recommended_tool": _recommended_place_tool(candidate_fixture_id, self._fixtures),
+        }
 
     def _record_raw_fpv_observation(
         self,
@@ -1529,6 +1594,11 @@ def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
     elif _fixture_is_open_container(fixture):
         affordances.append("place_inside")
     return affordances
+
+
+def _recommended_place_tool(fixture_id: str, fixtures: dict[str, dict[str, Any]]) -> str:
+    fixture = fixtures.get(fixture_id, {})
+    return "place_inside" if _fixture_prefers_inside(fixture) else "place"
 
 
 def _fixture_footprint(fixture_id: str) -> dict[str, Any]:
