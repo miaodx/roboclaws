@@ -122,7 +122,7 @@ Verification run:
 - `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex minimal`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
-- `./scripts/run_pytest_standalone.sh -q tests/contract/dev_tools`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
 - `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`
 - `.venv/bin/ruff format --check tests/contract/dev_tools/test_task_agent_just_recipes.py`
 - `git diff --check`

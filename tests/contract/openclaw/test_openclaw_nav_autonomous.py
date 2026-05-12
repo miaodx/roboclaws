@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "openclaw"))
 
 import subprocess  # noqa: E402
 
@@ -156,7 +156,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     def _subprocess_run(*args, **kwargs):
         cmd = list(args[0])
         subprocess_calls.append(cmd)
-        if cmd == ["./scripts/openclaw-bootstrap.sh"]:
+        if cmd == ["./scripts/openclaw/openclaw-bootstrap.sh"]:
             env = kwargs["env"]
             assert env["TIMEOUT_SECONDS"] == "360"
             assert env["READY_TIMEOUT"] == "180"
@@ -249,10 +249,10 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert first_trace["event"] == "assistant_transcript"
     assert first_trace["content"] == "Checking session"
     assert first_trace["wallclock_elapsed"] == 1.2
-    assert ["./scripts/openclaw-bootstrap.sh"] in subprocess_calls
+    assert ["./scripts/openclaw/openclaw-bootstrap.sh"] in subprocess_calls
     assert [
         sys.executable,
-        "scripts/render_autonomous_replay.py",
+        "scripts/reports/render_autonomous_replay.py",
         "--run-dir",
         str(output_dir),
     ] in subprocess_calls
@@ -303,7 +303,7 @@ def test_run_autonomous_navigation_skip_bootstrap_reuses_token(tmp_path: Path) -
 
     assert result["terminated_by"] == "done"
     bridge_cls.assert_called_once_with(gateway_url="http://127.0.0.1:18789", token="token-xyz")
-    assert ["./scripts/openclaw-bootstrap.sh"] not in subprocess_calls
+    assert ["./scripts/openclaw/openclaw-bootstrap.sh"] not in subprocess_calls
     assert ["docker", "rm", "-f", "openclaw-gateway"] not in subprocess_calls
     engine_cls.return_value.close.assert_called_once()
     fake_server.close.assert_called_once()
@@ -317,7 +317,7 @@ def test_run_autonomous_navigation_records_gateway_error(tmp_path: Path) -> None
     def _subprocess_run(*args, **kwargs):
         cmd = list(args[0])
         subprocess_calls.append(cmd)
-        if cmd == ["./scripts/openclaw-bootstrap.sh"]:
+        if cmd == ["./scripts/openclaw/openclaw-bootstrap.sh"]:
             env = kwargs["env"]
             assert env["TIMEOUT_SECONDS"] == "360"
             return SimpleNamespace(stdout="token-123\n", returncode=0)
@@ -378,7 +378,7 @@ def test_roboclaws_mcp_url_env_override_is_honored(tmp_path: Path) -> None:
 
     def _subprocess_run(*args, **kwargs):
         cmd = list(args[0])
-        if cmd == ["./scripts/openclaw-bootstrap.sh"]:
+        if cmd == ["./scripts/openclaw/openclaw-bootstrap.sh"]:
             captured_env.update(kwargs["env"])
             return SimpleNamespace(stdout="token-override\n", returncode=0)
         return SimpleNamespace(stdout="", returncode=0)

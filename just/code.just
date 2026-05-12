@@ -22,7 +22,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    bash scripts/network_status.sh --assert-off-work "Claude Code direct MCP run"
+    bash scripts/dev/network_status.sh --assert-off-work "Claude Code direct MCP run"
 
     if ! command -v codex >/dev/null 2>&1; then
       echo "error: codex command not found; install or activate Codex before running code:cc" >&2
@@ -78,7 +78,7 @@ view run_dir="" port="8787" agent="0":
     #!/usr/bin/env bash
     args=(--agent-id "{{agent}}" --port "{{port}}")
     [[ -n "{{run_dir}}" ]] && args+=(--run-dir "{{run_dir}}")
-    exec .venv/bin/python scripts/view-snapshots.py "${args[@]}"
+    exec .venv/bin/python scripts/openclaw/view-snapshots.py "${args[@]}"
 
 codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash

@@ -47,8 +47,8 @@ RUN UV_HTTP_TIMEOUT=600 \
 COPY --chown=node:node . /opt/roboclaws
 
 RUN chmod +x /opt/roboclaws/deploy/railway/entrypoint.sh \
-    /opt/roboclaws/scripts/appliance-run-interactive.sh \
-    /opt/roboclaws/scripts/appliance_seed_openclaw.py
+    /opt/roboclaws/scripts/appliance/appliance-run-interactive.sh \
+    /opt/roboclaws/scripts/appliance/appliance_seed_openclaw.py
 
 ENV APP_ROOT=/opt/roboclaws \
     DATA_DIR=/data \

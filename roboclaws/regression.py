@@ -17,7 +17,7 @@ from typing import Any
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLES_DIR = REPO_ROOT / "examples"
+EXAMPLES_DIR = REPO_ROOT / "examples" / "games"
 TEST_FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 SCHEMA_VERSION = 1
 STABLE_PAIRING_KEYS: tuple[str, ...] = (

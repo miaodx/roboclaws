@@ -25,7 +25,7 @@ def _repo_root() -> Path:
 
 
 REPO_ROOT = _repo_root()
-WORKER_PATH = REPO_ROOT / "scripts" / "molmospaces_subprocess_worker.py"
+WORKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "molmospaces_subprocess_worker.py"
 
 
 def _load_worker_module():

@@ -17,7 +17,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
+DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
 
 
 def _load_demo_module():

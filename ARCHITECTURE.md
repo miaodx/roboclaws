@@ -47,7 +47,7 @@ The cleanup/proof stack has four core abstractions:
 3. **Planner-proof request and bundle flow** — turns completed cleanup substeps
    into private bound proof requests, dry-run manifests, local execution reports,
    and optional cleanup reruns (`roboclaws/molmo_cleanup/planner_proof_requests.py`,
-   `scripts/run_molmo_planner_proof_bundle_from_requests.py`).
+   `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`).
 4. **Planner-backed primitive gate** — adapters and checkers that decide whether
    a cleanup subphase is still `api_semantic` or has exact-scene RBY1M/CuRobo
    proof for the requested object/target binding.
@@ -80,7 +80,7 @@ agents use over structured-HTTP transport:
 Every tool call writes a line to `<run_dir>/trace.jsonl`. The schema is a
 **frozen superset** of `tests/fixtures/trace_schema_reference.json` —
 adding keys is fine; removing or renaming is a breaking change because
-`scripts/render_autonomous_replay.py` consumes it.
+`scripts/reports/render_autonomous_replay.py` consumes it.
 
 The server binds to `127.0.0.1:18788` by default. Loopback-only is part
 of the threat model (see `.planning/phases/02.6-openclaw-mcp-tools-integration/`
@@ -94,7 +94,7 @@ boots first and what mediates between the engine and the model.
 
 ### 1. Direct VLM games
 
-`examples/territory_game.py`, `examples/coverage_game.py`. Boots
+`examples/games/territory_game.py`, `examples/games/coverage_game.py`. Boots
 `MultiAgentEngine` + a `VLMProvider` directly. No MCP, no Gateway. Game
 logic lives in `roboclaws/games/territory.py` (`TerritoryGame`) and
 `roboclaws/games/coverage.py` (`CoverageGame`). Each `step()` passes
@@ -119,7 +119,7 @@ routing. The roboclaws side:
 
 ### 3. Direct coding-agent driver
 
-`examples/coding_agent_nav_server.py`. Boots `MultiAgentEngine` +
+`examples/mcp/coding_agent_nav_server.py`. Boots `MultiAgentEngine` +
 `RoboclawsMCPServer` over HTTP. No Gateway, no VLM key needed
 server-side — the coding agent (Codex / Claude Code) is the model.
 Output: `output/runs/<timestamp>/` unless `--output-dir` is passed. Operating instructions
@@ -132,7 +132,7 @@ for the agent itself live in
 AI2-THOR + xvfb + nginx + supervisord + the OpenClaw Gateway + the MCP
 server + `reset_server.py` (HTTP `/reset`). Public surface is nginx on
 `:8080` with auth via `OPENCLAW_TOKEN` / `DEMO_PASSWORD`. Env-driven
-config seeded by `scripts/appliance_seed_openclaw.py`. Full deploy
+config seeded by `scripts/appliance/appliance_seed_openclaw.py`. Full deploy
 runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
 
 ## MolmoSpaces Cleanup Flow
@@ -183,13 +183,13 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/openclaw/skill.py` | `AI2THORNavigatorSkill`: wraps a provider as an OpenClaw skill with SOUL injection. |
 | `roboclaws/openclaw/reset_server.py` | HTTP `/reset` for appliance scene resets (loopback-only). |
 | `roboclaws/openclaw/diagnostics.py` | Replay-loading utilities (`load_replay_turn`). |
-| `examples/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
-| `examples/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
-| `examples/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
-| `examples/molmospaces_cleanup_demo.py`, `examples/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry points: synthetic/current-contract cleanup and ADR-0003 public/private real-world cleanup. |
-| `examples/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. |
-| `scripts/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
-| `scripts/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
+| `examples/games/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
+| `examples/mcp/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
+| `examples/openclaw/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
+| `examples/molmo_cleanup/molmospaces_cleanup_demo.py`, `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry points: synthetic/current-contract cleanup and ADR-0003 public/private real-world cleanup. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. |
+| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
+| `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
 | `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
 | `skills/ai2thor-navigator/SKILL.md` | Operating instructions for any agent driving the robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
 | `scripts/` | Supporting tooling: bootstrap, scoring (`check_photo_task.py`), replay rendering (`render_autonomous_replay.py`), appliance config (`appliance_seed_openclaw.py`), regression harnesses. |

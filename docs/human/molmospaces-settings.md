@@ -51,9 +51,9 @@ the current source of truth before claiming a run supports a setting.
 
 | Entrypoint | Visible Detections | Raw FPV Only | Camera Model Policy | Notes |
 |------------|--------------------|--------------|---------------------|-------|
-| `examples/molmospaces_realworld_cleanup.py` | yes | yes | yes | Deterministic cleanup demo and checker path. |
-| `scripts/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | no | Dogfood/smoke wrapper used by several just recipes. |
-| `examples/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI. |
+| `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | yes | yes | yes | Deterministic cleanup demo and checker path. |
+| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | no | Dogfood/smoke wrapper used by several just recipes. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Underlying contract supports `infer_camera_model_candidates`. |
 
 ## Command Taxonomy

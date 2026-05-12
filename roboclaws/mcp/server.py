@@ -28,7 +28,7 @@ What this module delivers:
                                   the total_moves + elapsed_s.
 * A per-tool-call JSONL trace at `run_dir/trace.jsonl`. Keyset is a **superset**
   of the frozen `tests/fixtures/trace_schema_reference.json` so
-  `scripts/render_autonomous_replay.py` keeps working without edits; the JPEG
+  `scripts/reports/render_autonomous_replay.py` keeps working without edits; the JPEG
   base64 frame fields (`fpv`, `overhead` inside `frame_capture` events) are
   carried forward verbatim from `sim_server.py` for renderer compatibility.
 * A human-message queue (bounded `deque(maxlen=10)`) that the example's stdin
@@ -47,7 +47,7 @@ mode, the Gateway container reaches this server via `host.docker.internal`
 Caveat — Linux with Docker 29.x default bridge: `host.docker.internal`
 resolves to the bridge gateway (172.17.0.1) and **cannot** reach the
 host's 127.0.0.1. On that topology the only production caller
-(`examples/openclaw_nav_autonomous.py`) must — and does — override to
+(`examples/openclaw/openclaw_nav_autonomous.py`) must — and does — override to
 `host="0.0.0.0"`. See probe gate 02.6-06 in the phase planning for the
 live evidence. The LAN-exposure risk is accepted for single-operator
 local-dev on a trusted workstation; this is not a server for untrusted
@@ -111,7 +111,7 @@ __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 #
 # NOTE: On Linux with Docker 29.x default bridge, `host.docker.internal` cannot
 # reach host loopback; callers on that topology must override to `host="0.0.0.0"`.
-# See module docstring + examples/openclaw_nav_autonomous.py for the rationale.
+# See module docstring + examples/openclaw/openclaw_nav_autonomous.py for the rationale.
 # `test_example_binds_to_all_interfaces_on_linux` guards that override.
 _DEFAULT_HOST = "127.0.0.1"  # host="127.0.0.1"
 _DEFAULT_PORT = 18788
@@ -149,7 +149,7 @@ def _encode_frame_jpeg_b64(frame: np.ndarray, quality: int = 70) -> str:
     """Encode an RGB ndarray as JPEG base64 at sim_server.py-compatible 320x240.
 
     Used for the trace.jsonl `fpv` / `overhead` fields so
-    `scripts/render_autonomous_replay.py` keeps working without edits.
+    `scripts/reports/render_autonomous_replay.py` keeps working without edits.
     """
     image = PILImage.fromarray(frame, mode="RGB").resize((320, 240), PILImage.Resampling.BILINEAR)
     buf = io.BytesIO()
@@ -1307,7 +1307,7 @@ class RoboclawsMCPServer:
 
     def _write_trace(self, *, tool: str, event: str, **data: Any) -> None:
         # WR-01 fix: gate writes against close(). The watchdog + stdin
-        # threads in examples/openclaw_nav_autonomous.py join with a 0.2s
+        # threads in examples/openclaw/openclaw_nav_autonomous.py join with a 0.2s
         # timeout, so close() can run while a writer is in flight. Early
         # bail-out is cheap; the in-lock re-check avoids the race where
         # close() flips `_closed` after we read it but before we write.

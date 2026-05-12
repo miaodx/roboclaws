@@ -5,7 +5,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 ## 1) Prepare and pin target image
 
 - [ ] Set the candidate image in the repo default:
-  - `scripts/openclaw-defaults.env` → `OPENCLAW_IMAGE_DEFAULT="ghcr.io/openclaw/openclaw:2026.4.26"`
+  - `scripts/openclaw/openclaw-defaults.env` → `OPENCLAW_IMAGE_DEFAULT="ghcr.io/openclaw/openclaw:2026.4.26"`
 - [ ] If running CI manually, pass the candidate through env:
   - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26`
 - [ ] Check `docs/human/openclaw/` and `docs/ai/openclaw/` for release-specific assumptions tied to the previous tag.
@@ -15,7 +15,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 - [ ] Confirm Docker is clean on gateway ports:
   - `docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -E 'openclaw-gateway' || true`
 - [ ] Run bootstrap smoke command with the candidate image:
-  - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26 IMAGE_MODEL=mimo_openai/mimo-v2-omni scripts/openclaw-bootstrap.sh`
+  - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26 IMAGE_MODEL=mimo_openai/mimo-v2-omni scripts/openclaw/openclaw-bootstrap.sh`
 - [ ] Confirm startup succeeds and returns token.
 - [ ] Confirm built-in probe returns `PONG` and prints a normal bootstrap summary.
 - [ ] Confirm container cleanup state per local policy (`docker rm -f openclaw-gateway` after run).
@@ -24,7 +24,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 
 - [ ] Re-run MCP visibility check from `docs/human/openclaw/local.md` (initialize + `roboclaws__*` tool calls).
 - [ ] Re-run tool-profile diff described in `docs/ai/openclaw/tool-profiles.md` against image artifacts.
-- [ ] Verify `scripts/openclaw-bootstrap.sh` still emits `tools.alsoAllow: ["bundle-mcp"]` for agents.
+- [ ] Verify `scripts/openclaw/openclaw-bootstrap.sh` still emits `tools.alsoAllow: ["bundle-mcp"]` for agents.
 - [ ] Re-run plugin allowlist behavior probe from `docs/ai/openclaw/plugin-allowlist.md`.
 - [ ] Validate startup logs with the new image:
   - plugin set matches expected allow-list

@@ -259,16 +259,18 @@ def build_openclaw_provider_or_die(
         msg = str(exc)
         if "401" in msg or "bearer token" in msg.lower():
             hint = (
-                "Token likely expired — re-capture with: TOKEN=$(./scripts/openclaw-bootstrap.sh)"
+                "Token likely expired — re-capture with: "
+                "TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)"
             )
         elif "400" in msg and "Invalid model" in msg:
             hint = (
                 f"Agent 0 not registered — re-run with AGENTS={agent_count}: "
-                "TOKEN=$(AGENTS={agent_count} ./scripts/openclaw-bootstrap.sh)"
+                "TOKEN=$(AGENTS={agent_count} ./scripts/openclaw/openclaw-bootstrap.sh)"
             )
         else:
             hint = (
-                "Gateway not running — check `docker ps` and re-run ./scripts/openclaw-bootstrap.sh"
+                "Gateway not running — check `docker ps` and re-run "
+                "./scripts/openclaw/openclaw-bootstrap.sh"
             )
         raise SystemExit(f"Gateway precondition failed: {exc}\nHint: {hint}") from exc
     return provider

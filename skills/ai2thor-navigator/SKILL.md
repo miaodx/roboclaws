@@ -46,7 +46,7 @@ If you find yourself wanting to write `curl ... 18788`, `rg roboclaws ../robocla
 
 ## Direct coding-agent mode
 
-When Codex or Claude Code is connected directly to `python examples/coding_agent_nav_server.py` (no OpenClaw Gateway), follow this minimal flow:
+When Codex or Claude Code is connected directly to `python examples/mcp/coding_agent_nav_server.py` (no OpenClaw Gateway), follow this minimal flow:
 
 1. **First call**: `roboclaws__observe(label="preflight")`. This verifies the MCP is alive AND drops a baseline snapshot into the server's snapshots dir. If the tool errors, tell the operator the server isn't ready and stop.
 2. **Read the operator's task.** If it asks you to photograph things in the scene, switch to the **Photo protocol** below. Otherwise navigate as the task requires.

@@ -17,7 +17,7 @@ from roboclaws.molmo_cleanup.realworld_mcp_server import (
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_realworld_agent_mcp_smoke.py"
+SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 
 
 def _load_smoke_module():

@@ -290,7 +290,7 @@ def load_agent_souls(
 ) -> tuple[list[str], dict[int, str]]:
     """Parse ``AGENT_SOULS`` env var and load SOUL file contents.
 
-    Accepts two formats (same as ``scripts/openclaw-bootstrap.sh``):
+    Accepts two formats (same as ``scripts/openclaw/openclaw-bootstrap.sh``):
 
     * positional CSV — ``aggressive,defensive`` → agent 0 / 1
     * dict form      — ``agent-0:aggressive,agent-2:cooperative``

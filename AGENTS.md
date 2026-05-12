@@ -153,7 +153,7 @@ On systems with ROS jazzy installed (this host, for example), `pytest` picks up
 `lark` import. Use the repo wrapper to run tests in a minimal environment:
 
 ```bash
-./scripts/run_pytest_standalone.sh -x -q
+./scripts/dev/run_pytest_standalone.sh -x -q
 ```
 
 This is a machine-local quirk, not a repo issue.
@@ -171,8 +171,8 @@ pytest -q
 ### 2.2 Run a specific demo
 
 ```bash
-python examples/single_agent_explore.py --steps 20 --model gpt-4o-mini
-python examples/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
+python examples/games/single_agent_explore.py --steps 20 --model gpt-4o-mini
+python examples/games/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
 ```
 
 Or use `just` recipes. The public command grammar is intentionally small:

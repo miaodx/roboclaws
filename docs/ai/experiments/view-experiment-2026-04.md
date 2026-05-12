@@ -12,11 +12,11 @@ modes on the main examples.
 
 ## What Changed
 
-- `examples/openclaw_demo.py`, `examples/territory_game.py`, and
-  `examples/coverage_game.py` now use a fixed three-image prompt contract:
+- `examples/openclaw/openclaw_demo.py`, `examples/games/territory_game.py`, and
+  `examples/games/coverage_game.py` now use a fixed three-image prompt contract:
   FPV + structured overhead + chase cam.
 - The user-facing `--views` flag was removed from those main example drivers.
-- `examples/view_experiment.py` now sweeps scenes, seeds, and games for the
+- `examples/games/view_experiment.py` now sweeps scenes, seeds, and games for the
   single supported variant instead of exposing unsupported runtime variants.
 
 ## Rationale

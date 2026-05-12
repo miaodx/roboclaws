@@ -5,7 +5,7 @@ that were useful when building Phase 2.1 and that future phases (2.2, 2.5)
 will want on hand. Keeps you from re-spelunking `/app/dist/` every time.
 
 > Scope: this file is for contributors touching the
-> `roboclaws/openclaw/` bridge or `scripts/openclaw-bootstrap.sh`. End users
+> `roboclaws/openclaw/` bridge or `scripts/openclaw/openclaw-bootstrap.sh`. End users
 > should reach for `docs/human/openclaw/local.md` instead.
 
 ## How the Gateway loads config + models
@@ -133,7 +133,7 @@ Accepted `transport` values: `"streamable-http"` or `"sse"`. Anything else
 `[bundle-mcp] failed to start server "<name>" (<url>): Error: SSE error: Non-200 status code (400)`
 and the agent reports "I don't have access to a tool named `<name>`" when
 asked to call it. The `openclaw mcp set` CLI does NOT validate the JSON; it
-writes whatever you give it straight to config. `scripts/openclaw-bootstrap.sh`
+writes whatever you give it straight to config. `scripts/openclaw/openclaw-bootstrap.sh`
 seeds the correct shape before first container start — don't hand-roll an
 alternate.
 

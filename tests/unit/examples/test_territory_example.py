@@ -1,4 +1,4 @@
-"""Tests for examples/territory_game.py."""
+"""Tests for examples/games/territory_game.py."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ _make_agent_state = game_fakes.make_example_agent_state
 _make_frame = game_fakes.make_example_frame
 
 # Make the examples directory importable without a package install
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "games"))
 
 from territory_game import (  # noqa: E402
     _parse_args,

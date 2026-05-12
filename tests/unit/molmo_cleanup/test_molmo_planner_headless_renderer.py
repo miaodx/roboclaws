@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PROBE_PATH = REPO_ROOT / "scripts" / "run_molmo_planner_manipulation_probe.py"
+PROBE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_planner_manipulation_probe.py"
 
 
 def _load_probe_module():

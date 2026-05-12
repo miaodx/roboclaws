@@ -64,9 +64,9 @@ uv sync --extra dev --extra molmospaces
 Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB; see `AGENTS.md` §1.3 for VLM key setup):
 
 ```bash
-python examples/single_agent_explore.py
-python examples/territory_game.py --agents 3
-python examples/coverage_game.py --agents 3
+python examples/games/single_agent_explore.py
+python examples/games/territory_game.py --agents 3
+python examples/games/coverage_game.py --agents 3
 ```
 
 Common `just` recipes use the small public facade:

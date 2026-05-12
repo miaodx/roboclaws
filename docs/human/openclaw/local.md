@@ -1,7 +1,7 @@
 # OpenClaw Gateway — local quick-start
 
 This is the concrete recipe for running the Phase 2 demo
-(`examples/openclaw_demo.py`) against a local OpenClaw Gateway. CI follows
+(`examples/openclaw/openclaw_demo.py`) against a local OpenClaw Gateway. CI follows
 the same contract in `.github/workflows/ci.yml` under the `openclaw-smoke`
 job.
 
@@ -30,14 +30,14 @@ just openclaw::pull-image
 ```bash
 # NVIDIA NIM — default when NV_API_KEY is set:
 export NV_API_KEY=nvapi-...
-TOKEN=$(AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 
 # Kimi — explicit selection (or default when only KIMI_API_KEY is set):
 export KIMI_API_KEY=sk-...
-TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=kimi AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 
 # Kimi via the stock Gateway plugin/provider instead of the custom override:
-TOKEN=$(PROVIDER=kimi KIMI_PROVIDER_MODE=plugin AGENTS=2 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=kimi KIMI_PROVIDER_MODE=plugin AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 That one command does every first-run step: pulls the pinned image, creates
@@ -48,7 +48,7 @@ pre-seeds `openclaw.json` (with `chatCompletions.enabled = true` and an
 skill read-only into every agent's workspace, starts the Gateway, waits
 for `/readyz`, and finally probes `openclaw/agent-0` with a one-turn
 `PONG` call so if anything in the skill/auth/model chain is broken you
-hear about it before `examples/openclaw_demo.py` boots Unity.
+hear about it before `examples/openclaw/openclaw_demo.py` boots Unity.
 
 The script prints the live bearer token on stdout (everything else goes
 to stderr), so `TOKEN=$(...)` captures just the token.
@@ -64,7 +64,7 @@ Useful overrides:
 | `AGENT_SOULS`       | `` (empty)                                | Csv of soul names per agent, e.g. `aggressive,defensive`. Supports dict form `agent-0:aggressive,agent-2:cooperative`. |
 | `SOULS_DIR`         | `$PWD/skills/ai2thor-navigator/souls`     | Directory containing `<name>.md` SOUL files.                    |
 | `PERSONALITY_PROBE` | `1`                                       | Set to `0` to skip divergence probe (needed when souls are identical). |
-| `IMAGE`             | Same as `scripts/openclaw-defaults.env` (`OPENCLAW_IMAGE_DEFAULT`) | Pinned tag under test (override with a known-good release if needed). |
+| `IMAGE`             | Same as `scripts/openclaw/openclaw-defaults.env` (`OPENCLAW_IMAGE_DEFAULT`) | Pinned tag under test (override with a known-good release if needed). |
 | `MODEL`             | per-provider default (see below)          | Explicit override. Format: `<provider>/<model-id>`.             |
 | `IMAGE_MODEL`       | same as `MODEL`                           | Vision model for the generic OpenClaw `image` tool. Keep this pinned when you want deterministic image-tool routing. |
 | `READY_TIMEOUT`     | `180`                                     | Seconds to wait for `/readyz`; newer image builds can spend more than 60s on cold start while provider/runtime deps settle. |
@@ -127,7 +127,7 @@ when we revisit in a future phase:
 | `google/gemma-3-{12b,27b}-it:free`             | OpenRouter | :free endpoints don't support tool use — Gateway's agent edge sees 404   |
 
 To re-enable a broader list, lift the curation in
-`scripts/openclaw-bootstrap.sh` (the `EXTRA_MODELS_JSON` arrays) and
+`scripts/openclaw/openclaw-bootstrap.sh` (the `EXTRA_MODELS_JSON` arrays) and
 rerun `tests/contract/openclaw/test_openclaw_bootstrap.py`.
 
 ## Per-agent personalities (Phase 2.2)
@@ -137,7 +137,7 @@ Bootstrap can drop a SOUL file into each agent's workspace via `AGENT_SOULS`:
 ```bash
 export KIMI_API_KEY=sk-...
 # Positional csv — one soul name per agent (no .md extension)
-TOKEN=$(AGENTS=2 AGENT_SOULS=aggressive,defensive ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(AGENTS=2 AGENT_SOULS=aggressive,defensive ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 The csv length must match `AGENTS`. Available SOULs (from
@@ -151,7 +151,7 @@ automatically skipped when all souls are identical (e.g.
 
 Dict form is also accepted for sparse assignment:
 ```bash
-TOKEN=$(AGENTS=3 AGENT_SOULS="agent-0:aggressive,agent-2:cooperative" ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(AGENTS=3 AGENT_SOULS="agent-0:aggressive,agent-2:cooperative" ./scripts/openclaw/openclaw-bootstrap.sh)
 # agent-1 gets the default (stock) SOUL
 ```
 
@@ -170,11 +170,11 @@ export KIMI_API_KEY=sk-...          # or: export NV_API_KEY=nvapi-...
 
 # 2. Bootstrap with SOULs
 export OPENCLAW_GATEWAY_TOKEN=$(AGENTS=2 AGENT_SOULS=aggressive,defensive \
-    ./scripts/openclaw-bootstrap.sh)
+    ./scripts/openclaw/openclaw-bootstrap.sh)
 
 # 3. Run the game
 AGENT_SOULS=aggressive,defensive \
-    xvfb-run -a python examples/territory_game.py \
+    xvfb-run -a python examples/games/territory_game.py \
     --backend openclaw --agents 2 --steps 60 \
     --output-dir output/openclaw/territory
 
@@ -195,11 +195,11 @@ export KIMI_API_KEY=sk-...
 
 # 2. Bootstrap (PERSONALITY_PROBE=0 because both souls are identical)
 export OPENCLAW_GATEWAY_TOKEN=$(AGENTS=2 AGENT_SOULS=cooperative,cooperative \
-    PERSONALITY_PROBE=0 ./scripts/openclaw-bootstrap.sh)
+    PERSONALITY_PROBE=0 ./scripts/openclaw/openclaw-bootstrap.sh)
 
 # 3. Run the game
 AGENT_SOULS=cooperative,cooperative \
-    xvfb-run -a python examples/coverage_game.py \
+    xvfb-run -a python examples/games/coverage_game.py \
     --backend openclaw --agents 2 --steps 60 \
     --output-dir output/openclaw/coverage
 
@@ -212,7 +212,7 @@ Or use the canonical command: `just openclaw::run coverage`
 ## 2. Run the navigation demo
 
 ```bash
-OPENCLAW_GATEWAY_TOKEN=$TOKEN python examples/openclaw_demo.py \
+OPENCLAW_GATEWAY_TOKEN=$TOKEN python examples/openclaw/openclaw_demo.py \
     --agents 2 --steps 20
 ```
 
@@ -254,7 +254,7 @@ docker volume rm openclaw-gateway-config
 
 ## MCP tool surface (Phase 2.6)
 
-The autonomous-loop path (`examples/openclaw_nav_autonomous.py`) flips the
+The autonomous-loop path (`examples/openclaw/openclaw_nav_autonomous.py`) flips the
 integration around: the Gateway still receives one long-running
 `POST /v1/chat/completions` kickoff, but the agent's only path back to the
 AI2-THOR engine is a small set of **first-class MCP tools** exposed by a
@@ -300,7 +300,7 @@ removed in a follow-on phase. New code should set `ROBOCLAWS_MCP_URL` directly.
 
 ```bash
 export KIMI_API_KEY=sk-...
-python examples/openclaw_nav_autonomous.py \
+python examples/openclaw/openclaw_nav_autonomous.py \
   --scene FloorPlan201 \
   --max-moves 30 \
   --wall-budget 180
@@ -319,11 +319,11 @@ For local validation it is often faster to bootstrap once and reuse the same
 Gateway container across multiple autonomous runs:
 
 ```bash
-export OPENCLAW_GATEWAY_TOKEN=$(./scripts/openclaw-bootstrap.sh)
+export OPENCLAW_GATEWAY_TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
 
-python examples/openclaw_nav_autonomous.py --skip-bootstrap \
+python examples/openclaw/openclaw_nav_autonomous.py --skip-bootstrap \
   --scene FloorPlan201 --max-moves 50 --wall-budget 300
-python examples/openclaw_nav_autonomous.py --skip-bootstrap \
+python examples/openclaw/openclaw_nav_autonomous.py --skip-bootstrap \
   --scene FloorPlan201 --max-moves 50 --wall-budget 300
 ```
 
@@ -380,7 +380,7 @@ from the container on recent Linux kernels + Docker (verified on kernel 6.17
 + Docker 29.2.1 during plan 02.6-06; symptom was
 `[bundle-mcp] failed to start server "roboclaws": TypeError: fetch failed`
 in the Gateway log and the agent reporting "I don't have access to a tool
-named roboclaws__observe"). `examples/openclaw_nav_autonomous.py` already
+named roboclaws__observe"). `examples/openclaw/openclaw_nav_autonomous.py` already
 passes `host="0.0.0.0"` at the `make_roboclaws_mcp(...)` call site; any new
 caller starting the MCP server independently must do the same. LAN-exposure
 risk is accepted for local-dev on a trusted workstation.
@@ -435,7 +435,7 @@ back-to-back workspace reset, and prompt-token overhead ratio) lives in
 [`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`](../../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md).
 Linux-only bootstrap fallback (`--network host`) is still available if
 `--add-host=host.docker.internal:host-gateway` doesn't resolve on a specific
-machine: edit `scripts/openclaw-bootstrap.sh` locally and swap the
+machine: edit `scripts/openclaw/openclaw-bootstrap.sh` locally and swap the
 published-port + `--add-host` pair for `--network host`. Not portable to
 Docker Desktop.
 
@@ -478,7 +478,7 @@ Or just re-run `bootstrap.sh` and re-capture `TOKEN`.
 `bootstrap.sh` didn't register agent-N. Re-run with a higher `AGENTS=`:
 
 ```bash
-TOKEN=$(AGENTS=4 ./scripts/openclaw-bootstrap.sh)
+TOKEN=$(AGENTS=4 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 ### Gateway returns 404 on `/v1/chat/completions`

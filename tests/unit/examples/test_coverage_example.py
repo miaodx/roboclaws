@@ -1,4 +1,4 @@
-"""Tests for examples/coverage_game.py."""
+"""Tests for examples/games/coverage_game.py."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ configure_example_engine_instance = game_fakes.configure_example_engine_instance
 _make_agent_state = game_fakes.make_example_agent_state
 _make_frame = game_fakes.make_example_frame
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "games"))
 
 from coverage_game import (  # noqa: E402
     _draw_progression_chart,

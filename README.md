@@ -31,7 +31,7 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
 | MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::run molmo-cleanup direct`, minimal: `just task::run molmo-cleanup mcp-smoke minimal` |
 | MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::run molmo-planner-proof direct`, local: `just task::run molmo-planner-proof direct mode=execute-rerun` |
-| Mock reports | CI-safe visualization/report regression coverage | `python scripts/generate_demo_report.py --output-dir output/demo` |
+| Mock reports | CI-safe visualization/report regression coverage | `python scripts/reports/generate_demo_report.py --output-dir output/demo` |
 | Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just agent::harness run <task>` (see [`harness/README.md`](harness/README.md)) |
 
 ![Roboclaws control paths](docs/assets/readme-control-paths.png)
@@ -63,8 +63,8 @@ export OPENAI_API_KEY=...     # OpenAI direct VLM path
 ### Run a Game
 
 ```bash
-python examples/territory_game.py --agents 3 --scene FloorPlan201
-python examples/coverage_game.py --agents 3 --scene FloorPlan201
+python examples/games/territory_game.py --agents 3 --scene FloorPlan201
+python examples/games/coverage_game.py --agents 3 --scene FloorPlan201
 ```
 
 ### Run OpenClaw
@@ -100,7 +100,7 @@ agent, and clean up the server on exit.
 Manual server flow:
 
 ```bash
-python examples/coding_agent_nav_server.py --scene FloorPlan201
+python examples/mcp/coding_agent_nav_server.py --scene FloorPlan201
 ```
 
 In another terminal:
@@ -166,7 +166,7 @@ FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
 
 ```bash
 just task::run photo-chairs openclaw
-python scripts/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
+python scripts/openclaw/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
 ```
 
 ## Documentation Map

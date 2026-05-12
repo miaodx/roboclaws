@@ -1,4 +1,4 @@
-"""Tests for examples/single_agent_explore.py."""
+"""Tests for examples/games/single_agent_explore.py."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 # Make the examples directory importable without a package install
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "games"))
 
 from single_agent_explore import (  # noqa: E402
     _CENTER_COL,

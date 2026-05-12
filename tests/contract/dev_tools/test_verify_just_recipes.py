@@ -154,8 +154,11 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         "claude mcp add --transport http roboclaws",
         'SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup"',
         "just chat::run",
-        'bash scripts/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"',
-        'bash scripts/network_status.sh --assert-off-work "Claude Code Molmo cleanup live report"',
+        'bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"',
+        (
+            "bash scripts/dev/network_status.sh --assert-off-work "
+            '"Claude Code Molmo cleanup live report"'
+        ),
     ):
         assert expected in text
 
@@ -284,9 +287,9 @@ def test_planner_manipulation_probe_accepts_only_explicit_blocked_gate() -> None
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
-        "scripts/run_molmo_planner_manipulation_probe.py",
+        "scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py",
         "--probe-mode",
-        "scripts/check_molmo_planner_manipulation_probe.py",
+        "scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py",
         "--accept-blocked-capability",
     ):
         assert expected in body
@@ -303,10 +306,10 @@ def test_planner_proof_bundle_runner_harness_stays_dry_run() -> None:
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
-        "examples/molmospaces_realworld_cleanup.py",
-        "scripts/check_molmo_realworld_cleanup_result.py",
-        "scripts/run_molmo_planner_proof_bundle_from_requests.py",
-        "scripts/check_molmo_planner_proof_bundle_runner_result.py",
+        "examples/molmo_cleanup/molmospaces_realworld_cleanup.py",
+        "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
+        "scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py",
+        "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
         "--backend api_semantic_synthetic",
         "--probe-mode execute",
     ):
@@ -325,11 +328,11 @@ def test_planner_proof_bundle_execute_rerun_gate_is_strict_and_local() -> None:
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
-        "examples/molmospaces_realworld_cleanup.py",
+        "examples/molmo_cleanup/molmospaces_realworld_cleanup.py",
         "--backend molmospaces_subprocess",
         "--include-robot",
         "--record-robot-views",
-        "scripts/run_molmo_planner_proof_bundle_from_requests.py",
+        "scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py",
         "--torch-extensions-dir",
         "--execute-probes",
         "--rerun-cleanup",

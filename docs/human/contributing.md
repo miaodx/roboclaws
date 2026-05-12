@@ -120,7 +120,7 @@ CI has one required fast job plus several push-to-`main` smoke/report jobs:
 | `openclaw-smoke` | push to `main` only (`continue-on-error`) | ephemeral Gateway + Kimi navigation smoke |
 | `territory-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed territory smoke |
 | `coverage-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed coverage smoke |
-| `photo-task-smoke` | push to `main` with `[photo-smoke]` in the commit message | chair/sofa photo-task smoke scored by `scripts/check_photo_task.py` |
+| `photo-task-smoke` | push to `main` with `[photo-smoke]` in the commit message | chair/sofa photo-task smoke scored by `scripts/openclaw/check_photo_task.py` |
 | `publish-pages` | push to `main` after required smoke inputs | publishes mock, real-model, and available OpenClaw reports to GitHub Pages |
 
 ## Secrets required for CI
@@ -144,7 +144,7 @@ Roboclaws uses the Kimi model in CI because it is OpenAI-compatible, cost-effect
 **Local validation:**
 
 ```bash
-KIMI_API_KEY=sk-... python scripts/check_kimi_key.py
+KIMI_API_KEY=sk-... python scripts/dev/check_kimi_key.py
 ```
 
 A successful run prints:
@@ -160,7 +160,7 @@ AI2-THOR requires a display.  On CI (and headless servers) use `xvfb-run`:
 
 ```bash
 sudo apt-get install xvfb libgl1 libglib2.0-0
-xvfb-run python examples/territory_game.py --agents 2 --steps 5 --model mock
+xvfb-run python examples/games/territory_game.py --agents 2 --steps 5 --model mock
 ```
 
 The Unity binary (~1 GB) is downloaded to `~/.ai2thor/` on first run and

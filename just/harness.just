@@ -43,7 +43,7 @@ run task cap="900":
 
 # Explicit name for the coding-agent / AI2-THOR navigator harness.
 navigator task cap="900":
-    bash scripts/network_status.sh --assert-off-work "Claude Code navigator harness"
+    bash scripts/dev/network_status.sh --assert-off-work "Claude Code navigator harness"
     bash harness/run-next.sh "{{task}}" "{{cap}}"
 
 # Capture and compare refactor-regression suites.
@@ -65,7 +65,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
         allow_args=()
         ;;
       local-openclaw|openclaw)
-        bash scripts/network_status.sh --assert-off-work "OpenClaw regression harness"
+        bash scripts/dev/network_status.sh --assert-off-work "OpenClaw regression harness"
         suites="openclaw-demo,territory-openclaw,coverage-openclaw,openclaw-autonomous"
         allow_args=(--allow-local)
         ;;
@@ -80,7 +80,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
         echo "error: provide both baseline and candidate results.jsonl paths, or neither" >&2
         exit 1
       fi
-      .venv/bin/python scripts/analyze_refactor_regression.py \
+      .venv/bin/python scripts/regression/analyze_refactor_regression.py \
         --baseline "{{baseline}}" \
         --candidate "{{candidate}}"
       exit 0
@@ -91,7 +91,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
     baseline_label="baseline-${stamp}"
     candidate_label="candidate-${short_sha}-${stamp}"
 
-    .venv/bin/python scripts/capture_refactor_regression.py \
+    .venv/bin/python scripts/regression/capture_refactor_regression.py \
       --suite "$suites" \
       --label "$baseline_label" \
       --scenes "{{scenes}}" \
@@ -101,7 +101,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
       --model "{{model}}" \
       "${allow_args[@]}"
 
-    .venv/bin/python scripts/capture_refactor_regression.py \
+    .venv/bin/python scripts/regression/capture_refactor_regression.py \
       --suite "$suites" \
       --label "$candidate_label" \
       --scenes "{{scenes}}" \
@@ -111,7 +111,7 @@ regression mode="mock" baseline="" candidate="" scenes="FloorPlan201" seeds="1,2
       --model "{{model}}" \
       "${allow_args[@]}"
 
-    .venv/bin/python scripts/analyze_refactor_regression.py \
+    .venv/bin/python scripts/regression/analyze_refactor_regression.py \
       --baseline "output/refactor-regression/${baseline_label}/results.jsonl" \
       --candidate "output/refactor-regression/${candidate_label}/results.jsonl"
 
@@ -132,10 +132,10 @@ molmo-cleanup seed="7" output_dir="output/molmo-cleanup-harness":
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmospaces_cleanup_result.py \
       --require-semantic-acceptability \
       "${run_dir}/run_result.json"
 
@@ -147,12 +147,12 @@ molmo-prompt-cleanup seed="7" output_dir="output/molmo-prompt-cleanup-harness" t
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --planner public_heuristic \
       --task "{{task}}" \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
       --require-semantic-acceptability \
@@ -166,13 +166,13 @@ molmo-real-cleanup seed="7" output_dir="output/molmo-real-cleanup-harness" task=
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --planner public_heuristic \
       --task "{{task}}" \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
@@ -189,7 +189,7 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --planner public_heuristic \
@@ -198,7 +198,7 @@ molmo-robot-visual seed="7" output_dir="output/molmo-robot-visual-harness" task=
       --robot-name rby1m \
       --record-robot-views \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmospaces_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmospaces_cleanup_result.py \
       --require-public-planner \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
@@ -220,16 +220,16 @@ molmo-agent-bridge seed="7" output_dir="output/molmo-agent-bridge-harness" rule_
     mkdir -p "$run_dir" "$rule_run_dir"
     echo "==> run dir: ${run_dir}"
     echo "==> rule dir: ${rule_run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --planner public_heuristic \
       --task "{{task}}" \
       --output-dir "$rule_run_dir"
-    .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_agent_bridge_smoke.py \
       --seed "{{seed}}" \
       --task "{{task}}" \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_agent_bridge_result.py \
       --expect-policy contract_smoke_agent \
       --require-agent-driven \
       --require-clean \
@@ -249,7 +249,7 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
     mkdir -p "$run_dir" "$rule_run_dir"
     echo "==> run dir: ${run_dir}"
     echo "==> rule dir: ${rule_run_dir}"
-    .venv/bin/python examples/molmospaces_cleanup_demo.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_cleanup_demo.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --planner public_heuristic \
@@ -258,7 +258,7 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --robot-name rby1m \
       --record-robot-views \
       --output-dir "$rule_run_dir"
-    .venv/bin/python scripts/run_molmo_agent_bridge_smoke.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_agent_bridge_smoke.py \
       --seed "{{seed}}" \
       --task "{{task}}" \
       --backend molmospaces_subprocess \
@@ -266,7 +266,7 @@ molmo-agent-bridge-visual seed="7" output_dir="output/molmo-agent-bridge-visual-
       --robot-name rby1m \
       --record-robot-views \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_agent_bridge_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_agent_bridge_result.py \
       --expect-policy contract_smoke_agent \
       --expect-backend molmospaces_subprocess \
       --expect-robot rby1m \
@@ -292,7 +292,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
     echo "==> run root: ${run_root}"
     for seed in {{seeds}}; do
       run_dir="${run_root}/seed-${seed}"
-      .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+      .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
         --seed "${seed}" \
         --backend molmospaces_subprocess \
         --task "{{task}}" \
@@ -304,7 +304,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
         --output-dir "${run_dir}"
     done
     seed_csv="$(printf '%s' "{{seeds}}" | tr ' ' ',')"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --expect-seeds "${seed_csv}" \
@@ -325,7 +325,7 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
     echo "==> run root: ${run_root}"
     for seed in {{seeds}}; do
       run_dir="${run_root}/seed-${seed}"
-      .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+      .venv/bin/python scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
         --seed "${seed}" \
         --backend molmospaces_subprocess \
         --task "{{task}}" \
@@ -336,7 +336,7 @@ molmo-realworld-agent-mcp seeds="1" output_dir="output/molmo-realworld-agent-mcp
         --output-dir "${run_dir}"
     done
     seed_csv="$(printf '%s' "{{seeds}}" | tr ' ' ',')"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --expect-policy realworld_contract_smoke_agent \
@@ -357,13 +357,13 @@ molmo-realworld-agent-dogfood-kit seed="7" output_dir="output/molmo-realworld-ag
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
       --policy realworld_contract_smoke_agent \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend api_semantic_synthetic \
       --expect-policy realworld_contract_smoke_agent \
@@ -384,13 +384,13 @@ molmo-realworld-openclaw-dogfood-kit seed="7" output_dir="output/molmo-realworld
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
       --policy openclaw_agent \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend api_semantic_synthetic \
       --expect-policy openclaw_agent \
@@ -411,7 +411,7 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python scripts/run_molmo_realworld_agent_mcp_smoke.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
@@ -421,7 +421,7 @@ molmo-realworld-openclaw-visual-dogfood-kit seed="7" output_dir="output/molmo-re
       --robot-name rby1m \
       --record-robot-views \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --expect-policy openclaw_agent \
@@ -443,7 +443,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
@@ -454,7 +454,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
       --robot-name rby1m \
       --record-robot-views \
       --output-dir "$run_dir"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --min-generated-mess-count "{{generated_mess_count}}" \
@@ -475,20 +475,20 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
     bundle_dir="${run_root}/proof_bundle"
     mkdir -p "$run_root"
     echo "==> run root: ${run_root}"
-    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
       --fixture-hint-mode room_only \
       --generated-mess-count "{{generated_mess_count}}" \
       --output-dir "${cleanup_dir}"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend api_semantic_synthetic \
       --min-generated-mess-count 5 \
       --require-advisory-scoring \
       "${cleanup_dir}/run_result.json"
-    .venv/bin/python scripts/run_molmo_planner_proof_bundle_from_requests.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py \
       "${cleanup_dir}/run_result.json" \
       --output-dir "${bundle_dir}" \
       --runner-python .venv/bin/python \
@@ -496,7 +496,7 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
       --probe-mode execute \
       --steps 2 \
       --timeout-s 600
-    .venv/bin/python scripts/check_molmo_planner_proof_bundle_runner_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py \
       "${bundle_dir}"
 
 # ADR-0044 local-dev proof-bundle execution gate. This executes real RBY1M/CuRobo
@@ -513,7 +513,7 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
     torch_extensions_dir="${run_root}/torch_extensions"
     mkdir -p "$run_root"
     echo "==> run root: ${run_root}"
-    .venv/bin/python examples/molmospaces_realworld_cleanup.py \
+    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
@@ -522,14 +522,14 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
       --record-robot-views \
       --generated-mess-count "{{generated_mess_count}}" \
       --output-dir "${cleanup_dir}"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --min-generated-mess-count "{{min_generated_mess_count}}" \
       --require-robot-views \
       --require-advisory-scoring \
       "${cleanup_dir}/run_result.json"
-    .venv/bin/python scripts/run_molmo_planner_proof_bundle_from_requests.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py \
       "${cleanup_dir}/run_result.json" \
       --output-dir "${bundle_dir}" \
       --runner-python .venv/bin/python \
@@ -541,11 +541,11 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
       --execute-probes \
       --rerun-cleanup \
       --cleanup-output-dir "${rerun_dir}"
-    .venv/bin/python scripts/check_molmo_planner_proof_bundle_runner_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py \
       --require-proof-outputs \
       --require-cleanup-rerun-output \
       "${bundle_dir}"
-    .venv/bin/python scripts/check_molmo_realworld_cleanup_result.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       --expect-task "{{task}}" \
       --expect-backend molmospaces_subprocess \
       --min-generated-mess-count "{{min_generated_mess_count}}" \
@@ -567,12 +567,12 @@ molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-p
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python scripts/run_molmo_planner_manipulation_probe.py \
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_planner_manipulation_probe.py \
       --output-dir "$run_dir" \
       --embodiment "{{embodiment}}" \
       --probe-mode "{{probe_mode}}" \
       --steps "{{steps}}"
-    .venv/bin/python scripts/check_molmo_planner_manipulation_probe.py \
+    .venv/bin/python scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py \
       --accept-blocked-capability \
       "${run_dir}/run_result.json"
 

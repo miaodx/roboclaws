@@ -24,7 +24,7 @@ Two terminals, both started from repo root:
 
 ```bash
 # terminal 1 — start the MCP server
-python examples/coding_agent_nav_server.py --scene FloorPlan201
+python examples/mcp/coding_agent_nav_server.py --scene FloorPlan201
 
 # terminal 2 — attach an agent in this folder, NOT repo root
 cd demo

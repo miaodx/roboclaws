@@ -14,9 +14,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.realworld_contract import CAMERA_MODEL_POLICY_MODE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEMO_PATH = REPO_ROOT / "examples" / "molmospaces_realworld_cleanup.py"
-CHECKER_PATH = REPO_ROOT / "scripts" / "check_molmo_realworld_cleanup_result.py"
-SMOKE_PATH = REPO_ROOT / "scripts" / "run_molmo_realworld_agent_mcp_smoke.py"
+DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
+CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_cleanup_result.py"
+SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 
 
 def _load_module(path: Path, name: str):

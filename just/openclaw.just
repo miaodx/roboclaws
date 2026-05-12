@@ -20,11 +20,11 @@ pull-image:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    bash scripts/network_status.sh --assert-off-work "OpenClaw image pull"
+    bash scripts/dev/network_status.sh --assert-off-work "OpenClaw image pull"
 
-    OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw-defaults.env | tr -d '"')"
+    OPENCLAW_DEFAULT_IMAGE="$(awk -F= '$1=="OPENCLAW_IMAGE_DEFAULT"{print $2}' scripts/openclaw/openclaw-defaults.env | tr -d '"')"
     if [[ -z "$OPENCLAW_DEFAULT_IMAGE" ]]; then
-      echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw-defaults.env" >&2
+      echo "error: missing OPENCLAW_IMAGE_DEFAULT in scripts/openclaw/openclaw-defaults.env" >&2
       exit 1
     fi
 
@@ -58,7 +58,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
     #!/usr/bin/env bash
     set -euo pipefail
 
-    bash scripts/network_status.sh --assert-off-work "OpenClaw Gateway run"
+    bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Gateway run"
 
     bootstrap_cmd=(env PROVIDER="{{provider}}" AGENTS="{{agents}}")
     if [[ -n "{{agent_souls}}" ]]; then
@@ -68,7 +68,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
       bootstrap_cmd+=(PERSONALITY_PROBE="{{personality_probe}}")
     fi
 
-    TOKEN=$("${bootstrap_cmd[@]}" ./scripts/openclaw-bootstrap.sh)
+    TOKEN=$("${bootstrap_cmd[@]}" ./scripts/openclaw/openclaw-bootstrap.sh)
     [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
 
     wall_args=()
@@ -79,7 +79,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
     case "{{game}}" in
       nav)
         echo "==> Running navigation demo …"
-        OPENCLAW_GATEWAY_TOKEN="$TOKEN" xvfb-run -a .venv/bin/python examples/openclaw_demo.py \
+        OPENCLAW_GATEWAY_TOKEN="$TOKEN" xvfb-run -a .venv/bin/python examples/openclaw/openclaw_demo.py \
           --agents "{{agents}}" \
           --steps "{{steps}}" \
           --output-dir "{{output_dir}}"
@@ -90,12 +90,12 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
         if [[ -n "{{agent_souls}}" ]]; then
           AGENT_SOULS="{{agent_souls}}" \
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a .venv/bin/python examples/territory_game.py \
+            xvfb-run -a .venv/bin/python examples/games/territory_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         else
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a .venv/bin/python examples/territory_game.py \
+            xvfb-run -a .venv/bin/python examples/games/territory_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         fi
@@ -106,12 +106,12 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
         if [[ -n "{{agent_souls}}" ]]; then
           AGENT_SOULS="{{agent_souls}}" \
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a .venv/bin/python examples/coverage_game.py \
+            xvfb-run -a .venv/bin/python examples/games/coverage_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         else
           {{strip_ros_env}} OPENCLAW_GATEWAY_TOKEN="$TOKEN" PYTHONUNBUFFERED=1 \
-            xvfb-run -a .venv/bin/python examples/coverage_game.py \
+            xvfb-run -a .venv/bin/python examples/games/coverage_game.py \
             --backend openclaw --agents "{{agents}}" --steps "{{steps}}" \
             "${wall_args[@]}" --output-dir "{{output_dir}}"
         fi
@@ -120,7 +120,7 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
       photo)
         echo "==> Photo-task smoke (single agent, {{photo_scene}}, wall budget {{photo_wall_budget}}s)"
         {{strip_ros_env}} PROVIDER="{{provider}}" PYTHONUNBUFFERED=1 \
-          xvfb-run -a .venv/bin/python examples/openclaw_photo_task.py \
+          xvfb-run -a .venv/bin/python examples/openclaw/openclaw_photo_task.py \
           --output-dir "{{photo_output_dir}}" \
           --max-moves "{{photo_max_moves}}" --wall-budget "{{photo_wall_budget}}"
         ;;
@@ -217,12 +217,12 @@ gateway action="up" token_file=".openclaw-token" provider="kimi" agents="2":
 
     case "{{action}}" in
       up)
-        bash scripts/network_status.sh --assert-off-work "OpenClaw Gateway"
+        bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Gateway"
         TOKEN=$(
           env \
             PROVIDER="{{provider}}" \
             AGENTS="{{agents}}" \
-            ./scripts/openclaw-bootstrap.sh
+            ./scripts/openclaw/openclaw-bootstrap.sh
         )
         [ -n "$TOKEN" ] || { echo "bootstrap failed — no token"; exit 1; }
         printf '%s\n' "$TOKEN" > "{{token_file}}"

@@ -1,4 +1,4 @@
-"""Static checks on ``scripts/openclaw-bootstrap.sh`` — the contract this file
+"""Static checks on ``scripts/openclaw/openclaw-bootstrap.sh`` — the contract this file
 locks in is:
 
 1. Every NVIDIA / OpenRouter model the bootstrap advertises as "free"
@@ -13,7 +13,7 @@ locks in is:
    provider id that matches a Gateway plugin manifest at
    ``/app/dist/extensions/<id>/openclaw.plugin.json``.
 
-The tests read the live ``scripts/openclaw-bootstrap.sh`` plus the pinned
+The tests read the live ``scripts/openclaw/openclaw-bootstrap.sh`` plus the pinned
 image contents; if Docker + the image aren't available the affected
 tests ``skip`` (so CI's ``lint-and-mock`` job passes without pulling the
 Gateway image).
@@ -32,12 +32,12 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-BOOTSTRAP = ROOT / "scripts" / "openclaw-bootstrap.sh"
-DEFAULTS_ENV = ROOT / "scripts" / "openclaw-defaults.env"
+BOOTSTRAP = ROOT / "scripts" / "openclaw" / "openclaw-bootstrap.sh"
+DEFAULTS_ENV = ROOT / "scripts" / "openclaw" / "openclaw-defaults.env"
 
 
 def _default_gateway_image() -> str:
-    """Read OPENCLAW_IMAGE_DEFAULT from ``scripts/openclaw-defaults.env``."""
+    """Read OPENCLAW_IMAGE_DEFAULT from ``scripts/openclaw/openclaw-defaults.env``."""
     raw = DEFAULTS_ENV.read_text(encoding="utf-8")
     for line in raw.splitlines():
         if line.startswith("OPENCLAW_IMAGE_DEFAULT="):
@@ -54,7 +54,7 @@ IMAGE_DEFAULT = _default_gateway_image()
 # Pre-seed heredoc runner
 # ---------------------------------------------------------------------------
 #
-# ``scripts/openclaw-bootstrap.sh`` materialises ``openclaw.json`` inside a
+# ``scripts/openclaw/openclaw-bootstrap.sh`` materialises ``openclaw.json`` inside a
 # short-lived throwaway container via a python3 pre-seed script.  The D-04 /
 # spike F-3 contract (mcp.servers + tools.profile must be present BEFORE first
 # container start) is encoded entirely in that pre-seed — so the regression
@@ -145,7 +145,7 @@ def _run_preseed(tmp_path: Path, env_overrides: dict[str, str]) -> Path:
         "ROBOCLAWS_MCP_URL": "http://host.docker.internal:18788/mcp",
         "ROBOCLAWS_TOOL_PROFILE": "minimal",
         # In production the bash wrapper reads this from
-        # scripts/openclaw_plugin_allowlist.py; for the test we synthesize
+        # scripts/openclaw/openclaw_plugin_allowlist.py; for the test we synthesize
         # the same JSON so the pre-seed exercises the plugins.allow code path.
         "PLUGIN_ALLOW_JSON": json.dumps(["acpx", "memory-core", "nvidia", "kimi", "xiaomi"]),
     }
@@ -853,13 +853,13 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
 
 def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
     """Seeded openclaw.json must carry ``plugins.allow`` from the canonical
-    list in ``scripts/openclaw_plugin_allowlist.py``.
+    list in ``scripts/openclaw/openclaw_plugin_allowlist.py``.
 
     Strict allow-list flips the failure mode on a gateway image bump: any
     new auto-enabled plugin upstream is hard-rejected unless we explicitly
     add it here. Without this, the bonjour/browser/document-extract/microsoft
     family silently lazy-installs heavy npm tarballs (playwright, edge-tts,
-    pdfjs) on first start. See scripts/openclaw_plugin_allowlist.py for
+    pdfjs) on first start. See scripts/openclaw/openclaw_plugin_allowlist.py for
     rationale + per-entry justification.
     """
     cfg_path = _run_preseed(tmp_path, {})
@@ -868,12 +868,12 @@ def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
     from openclaw_plugin_allowlist import ALLOWED as expected_allow
 
     assert cfg["plugins"]["allow"] == list(expected_allow), (
-        "plugins.allow drift detected — update scripts/openclaw_plugin_allowlist.py "
+        "plugins.allow drift detected — update scripts/openclaw/openclaw_plugin_allowlist.py "
         "or the bootstrap pre-seed in lockstep so both paths agree on the list"
     )
     # acpx probeAgent pins the embedded-ACP health probe to one of our agents
     # instead of the upstream default ``codex`` — see the same fix in
-    # scripts/appliance_seed_openclaw.py for rationale.
+    # scripts/appliance/appliance_seed_openclaw.py for rationale.
     assert cfg["plugins"]["entries"]["acpx"]["enabled"] is True, (
         "plugins.entries.acpx must set enabled=true or the entries-system "
         "warns 'plugin disabled (bundled (disabled by default)) but config "
@@ -887,7 +887,7 @@ def test_plugins_allow_seeded_from_canonical_allowlist(tmp_path: Path) -> None:
 
 def test_bootstrap_reads_canonical_plugin_allowlist() -> None:
     """The bash wrapper must source ``plugins.allow`` from
-    ``scripts/openclaw_plugin_allowlist.py`` (single source of truth shared
+    ``scripts/openclaw/openclaw_plugin_allowlist.py`` (single source of truth shared
     with the appliance seeder), not inline a copy of the list.
     """
     text = _read_bootstrap()

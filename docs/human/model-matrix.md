@@ -1,7 +1,7 @@
 # Model Matrix — declared vs. vendor-spec
 
 Canonical reference for every model we advertise to the OpenClaw Gateway via
-`scripts/openclaw-bootstrap.sh`. Update this file whenever the bootstrap
+`scripts/openclaw/openclaw-bootstrap.sh`. Update this file whenever the bootstrap
 provider JSON changes; CI does not cross-check the numbers against vendor
 docs, so this is the audit trail.
 

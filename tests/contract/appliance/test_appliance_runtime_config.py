@@ -10,7 +10,9 @@ def test_railway_ai2thor_cache_uses_data_root_home() -> None:
     supervisord = (ROOT / "deploy" / "railway" / "supervisord.conf").read_text(encoding="utf-8")
     dockerfile = (ROOT / "Dockerfile.railway").read_text(encoding="utf-8")
     nginx = (ROOT / "deploy" / "railway" / "nginx.conf.template").read_text(encoding="utf-8")
-    run_wrapper = (ROOT / "scripts" / "appliance-run-interactive.sh").read_text(encoding="utf-8")
+    run_wrapper = (ROOT / "scripts" / "appliance" / "appliance-run-interactive.sh").read_text(
+        encoding="utf-8"
+    )
 
     assert 'ROBOCLAWS_HOME="${ROBOCLAWS_HOME:-${DATA_DIR}}"' in entrypoint
     assert 'export HOME="$ROBOCLAWS_HOME"' in entrypoint
@@ -82,13 +84,16 @@ def test_appliance_tail_targets_named_container() -> None:
     appliance = (ROOT / "just" / "appliance.just").read_text(encoding="utf-8")
 
     assert "\ntail:\n" in appliance
-    assert 'python scripts/tail-openclaw-chat.py --container "{{default_container}}"' in appliance
+    assert (
+        'python scripts/openclaw/tail-openclaw-chat.py --container "{{default_container}}"'
+        in appliance
+    )
 
 
 def test_appliance_smoke_target_checks_control_ui_websocket() -> None:
     appliance = (ROOT / "just" / "appliance.just").read_text(encoding="utf-8")
 
     assert "\nsmoke:\n" in appliance
-    assert "scripts/appliance_control_ui_smoke.py" in appliance
+    assert "scripts/appliance/appliance_control_ui_smoke.py" in appliance
     assert '--url "{{smoke_url}}"' in appliance
     assert '--token "${OPENCLAW_TOKEN:-${DEMO_PASSWORD:-demo}}"' in appliance

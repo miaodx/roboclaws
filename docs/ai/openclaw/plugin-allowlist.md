@@ -29,7 +29,7 @@ Anything not on this list is hard-rejected by the gateway
 auto-enables a new plugin (Slack, webhook, voice-call, whatever) is filtered
 silently — no surprise install delay, no surprise outbound traffic.
 
-Source of truth: [`scripts/openclaw_plugin_allowlist.py`](../../../scripts/openclaw_plugin_allowlist.py).
+Source of truth: [`scripts/openclaw/openclaw_plugin_allowlist.py`](../../../scripts/openclaw/openclaw_plugin_allowlist.py).
 Both seeders (`openclaw-bootstrap.sh` for `just chat::run`,
 `appliance_seed_openclaw.py` for `just appliance::run`) read it, and a
 regression test in each test file pins the rendered config against it.
@@ -58,7 +58,7 @@ regression test in each test file pins the rendered config against it.
    `plugin not found: kimi-coding (stale config entry ignored)` warning at
    gateway startup, and the actual Kimi plugin will be filtered out.
 
-2. Add the **id** to `scripts/openclaw_plugin_allowlist.py` with a one-line
+2. Add the **id** to `scripts/openclaw/openclaw_plugin_allowlist.py` with a one-line
    doc-comment explaining *why* it's needed (which provider, which mode,
    which contract). Removing an entry later requires a probe; adding one
    should be cheap to justify.
