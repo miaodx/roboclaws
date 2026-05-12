@@ -261,6 +261,36 @@ def test_worker_visual_grounding_marks_zero_pixels_weak_or_contained() -> None:
     assert open_shelf["visibility"]["status"] == "weak_object_visibility"
 
 
+def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    state = {
+        "objects": {
+            "potato_01": {
+                "object_id": "potato_01",
+                "category": "Potato",
+                "body_name": "potato/body",
+                "position": [8.2, 5.0, 1.22],
+                "contained_in": None,
+                "location_relation": "held",
+            }
+        },
+        "receptacles": {
+            "fridge_01": {
+                "receptacle_id": "fridge_01",
+                "category": "Fridge",
+                "body_name": "fridge/body",
+                "position": [8.2, 4.7, 0.7],
+            }
+        },
+    }
+
+    focus = worker._focus_payload(state, "potato_01", "fridge_01")
+
+    assert focus["focus_mode"] == "object_closeup"
+    assert focus["focus_position"] == [8.2, 5.0, 1.22]
+
+
 def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

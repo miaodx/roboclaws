@@ -1596,9 +1596,11 @@ def _focus_payload(
     if obj is not None and receptacle is not None:
         object_position = obj["position"]
         receptacle_position = receptacle["position"]
-        if receptacle.get("category") == "Fridge" and (
-            obj.get("location_relation") == "held"
-            or obj.get("contained_in") == receptacle.get("receptacle_id")
+        if obj.get("location_relation") == "held":
+            focus_position = object_position
+            focus_mode = "object_closeup"
+        elif receptacle.get("category") == "Fridge" and obj.get("contained_in") == receptacle.get(
+            "receptacle_id"
         ):
             focus_position = receptacle_position
             focus_mode = "receptacle_context"
