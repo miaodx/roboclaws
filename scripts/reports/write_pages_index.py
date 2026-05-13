@@ -15,11 +15,17 @@ Usage::
     # Include all available OpenClaw tiles (whichever subdirs exist under
     # site/openclaw/ are auto-detected when --include-openclaw is passed)
     python scripts/reports/write_pages_index.py site --include-smoke --include-openclaw
+
+    # Include opt-in Molmo live cleanup tiles from
+    # site/molmo/live/live-report-manifest.json
+    python scripts/reports/write_pages_index.py site --include-smoke --include-molmo-live
 """
 
 from __future__ import annotations
 
 import argparse
+import html
+import json
 from pathlib import Path
 
 _SMOKE_ITEMS = (
@@ -107,6 +113,7 @@ def write_index(
     site_dir: Path,
     include_smoke: bool = False,
     include_openclaw: bool = False,
+    include_molmo_live: bool = False,
 ) -> Path:
     """Write ``index.html`` into *site_dir* and return its path.
 
@@ -142,9 +149,11 @@ def write_index(
         else ""
     )
 
+    molmo_live_section = _molmo_live_section(site_dir) if include_molmo_live else ""
+
     html = _TEMPLATE.format(
         smoke_section=smoke_section,
-        openclaw_section=openclaw_section,
+        openclaw_section=openclaw_section + molmo_live_section,
     )
     out = site_dir / "index.html"
     out.write_text(html, encoding="utf-8")
@@ -167,14 +176,55 @@ def main(argv: list[str] | None = None) -> None:
             "site_dir/openclaw/{demo,territory,coverage}/)"
         ),
     )
+    p.add_argument(
+        "--include-molmo-live",
+        action="store_true",
+        help="Include Molmo live cleanup tiles from site_dir/molmo/live/live-report-manifest.json",
+    )
     args = p.parse_args(argv)
     args.site_dir.mkdir(parents=True, exist_ok=True)
     out = write_index(
         args.site_dir,
         include_smoke=args.include_smoke,
         include_openclaw=args.include_openclaw,
+        include_molmo_live=args.include_molmo_live,
     )
     print(f"Wrote {out}")
+
+
+def _molmo_live_section(site_dir: Path) -> str:
+    manifest_path = site_dir / "molmo" / "live" / "live-report-manifest.json"
+    if not manifest_path.is_file():
+        return ""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    entries = manifest.get("entries") or []
+    if not entries:
+        return ""
+
+    items = []
+    for entry in entries:
+        label = html.escape(str(entry.get("label") or entry.get("entry") or "Molmo live run"))
+        model = html.escape(str(entry.get("model") or "unknown model"))
+        provider = html.escape(str(entry.get("provider_profile") or "unknown provider"))
+        status = html.escape(str(entry.get("status") or "unknown"))
+        reason = html.escape(str(entry.get("reason") or ""))
+        report_path = str(entry.get("report_path") or "")
+        if status == "success" and report_path:
+            href = html.escape("molmo/live/" + report_path, quote=True)
+            title = f'<a href="{href}">&#x25B6; {label}</a>'
+        else:
+            title = f"<span>{label}</span>"
+        desc = (
+            f'      <div class="desc">Claude Code live cleanup via '
+            f"<code>{provider}</code> / <code>{model}</code>. Status: "
+            f"<code>{status}</code>"
+        )
+        if reason:
+            desc += f" ({reason})"
+        desc += ".</div>"
+        items.append(f'  <li>{title}<span class="tag">molmo live</span>\n{desc}</li>')
+
+    return "\n<h2>MolmoSpaces Live Cleanup (opt-in CI)</h2>\n<ul>\n" + "\n".join(items) + "\n</ul>"
 
 
 if __name__ == "__main__":
