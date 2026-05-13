@@ -589,8 +589,8 @@ jobs:
       matrix:
         model_entry:
           - kimi-k2.6
-          - mimo-v2.5-pro-simple
-          - mimo-v2-omni-simple
+          - mimo-v2.5-pro
+          - mimo-v2-omni
 
     steps:
       - uses: actions/checkout@v4
@@ -748,16 +748,16 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: report-molmo-live-mimo-v2.5-pro-simple
-          path: molmo-live-src/mimo-v2.5-pro-simple
+          name: report-molmo-live-mimo-v2.5-pro
+          path: molmo-live-src/mimo-v2.5-pro
 
       - name: Download Molmo live MiMo Omni artifact (best-effort)
         id: download_molmo_live_mimo_omni
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          name: report-molmo-live-mimo-v2-omni-simple
-          path: molmo-live-src/mimo-v2-omni-simple
+          name: report-molmo-live-mimo-v2-omni
+          path: molmo-live-src/mimo-v2-omni
 
       # Slot replays at /smoke/{territory,coverage}/ and (when present)
       # /openclaw/{demo,territory,coverage}/, then rewrite index.html so

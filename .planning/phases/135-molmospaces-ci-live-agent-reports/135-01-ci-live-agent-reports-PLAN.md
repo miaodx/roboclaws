@@ -22,7 +22,10 @@ links on the existing GitHub Pages report site.
 - Prewarm/cache `~/.cache/uv`, `~/.cache/molmospaces`, and
   `~/.cache/molmo-spaces-resources`.
 - Run the seed-7, generated-mess-count-5 `world-labels` task for:
-  `kimi-k2.6`, `mimo-v2.5-pro-simple`, and `mimo-v2-omni-simple`.
+  `kimi-k2.6`, `mimo-v2.5-pro`, and `mimo-v2-omni`.
+- Treat the historical `*-simple` local artifact suffix as a Claude Code
+  simple-mode run label, not a model ID. Provider helpers still export
+  `CLAUDE_CODE_SIMPLE=1` for Anthropic-compatible repo-local providers.
 - Publish successful reports and skipped/failed statuses through the existing
   Pages landing page.
 

@@ -29,17 +29,17 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         secret_env="KIMI_API_KEY",
     ),
     MolmoLiveModelEntry(
-        name="mimo-v2.5-pro-simple",
-        label="MiMo v2.5 Pro Simple",
+        name="mimo-v2.5-pro",
+        label="MiMo v2.5 Pro",
         provider_profile="mimo-anthropic",
-        model="mimo-v2.5-pro-simple",
+        model="mimo-v2.5-pro",
         secret_env="MIMO_TP_KEY",
     ),
     MolmoLiveModelEntry(
-        name="mimo-v2-omni-simple",
-        label="MiMo v2 Omni Simple",
+        name="mimo-v2-omni",
+        label="MiMo v2 Omni",
         provider_profile="mimo-anthropic",
-        model="mimo-v2-omni-simple",
+        model="mimo-v2-omni",
         secret_env="MIMO_TP_KEY",
     ),
 )
