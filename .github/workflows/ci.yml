@@ -678,10 +678,10 @@ jobs:
     if: |
       always()
       && needs.lint-and-mock.result == 'success'
+      && github.ref == 'refs/heads/main'
       && (
         (
           github.event_name == 'push'
-          && github.ref == 'refs/heads/main'
           && needs.real-model-smoke.result == 'success'
         )
         || (
