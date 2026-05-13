@@ -96,17 +96,25 @@ The convenient aliases are:
 | `just molmo::claude-report` | `claude-live molmospaces visual` | Live Claude Code agent report. |
 | `just molmo::openclaw-report` | `openclaw-live molmospaces visual` | Live OpenClaw Gateway report. |
 
-For live Codex / Claude reports, optional repo-local `.env` model overrides are
-honored the same way as the direct navigation demos:
+For live Codex / Claude reports, optional repo-local `.env` provider overrides
+are honored the same way as the direct navigation demos:
 
 ```bash
-ROBOCLAWS_CODEX_MODEL=gpt-5.2
-ROBOCLAWS_CLAUDE_MODEL=sonnet
+ROBOCLAWS_CODEX_PROVIDER=mimo-openai
+ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2-5
 ```
 
-These become per-run `--model` flags only; unset variables leave the system CLI
-defaults unchanged. `ROBOCLAWS_CODE_AGENT_MODEL` can be used as a shared fallback
-for both drivers.
+`system` leaves the system CLI defaults unchanged. Kimi/MiMo profiles select
+model, base URL, API-key env var, and protocol for the launched process only.
+`ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
+shared fallbacks. Before a long Codex visual cleanup run, use:
+
+```bash
+just code::codex-provider-smoke
+```
 
 `codex-live` is detached by default. `just molmo::codex-report` starts a tmux
 session that owns the cleanup MCP server, `codex exec`, logs, checker, and

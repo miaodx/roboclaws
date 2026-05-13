@@ -98,7 +98,11 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
         '--permission-mode bypassPermissions"'
     ) in text
     assert 'codex "${codex_model_args[@]}" {{codex_full_permission_args}}' in text
-    assert 'claude "${claude_model_args[@]}" {{claude_full_permission_args}}' in text
+    assert (
+        'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})' in text
+    )
+    assert 'for entry in "${claude_env_args[@]}"; do' in text
+    assert 'export "$entry"' in text
     assert "codex --yolo" not in text
     assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
     assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
