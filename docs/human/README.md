@@ -12,6 +12,7 @@ AI agents should also read these docs when they need human-facing context.
 - [Agent/task command taxonomy](agent-task-command-taxonomy.md)
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
+- [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)
 - [Model matrix](model-matrix.md)
 
 ## Runbooks
