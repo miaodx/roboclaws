@@ -104,7 +104,7 @@ ROBOCLAWS_CODEX_PROVIDER=mimo-openai
 ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
 
 ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
-ROBOCLAWS_CLAUDE_MODEL=kimi-k2-5
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
 `system` remains the default provider and leaves Codex / Claude Code on their

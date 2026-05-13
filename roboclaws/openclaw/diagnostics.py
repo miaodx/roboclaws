@@ -155,7 +155,7 @@ def run_latency_probe(
     replay_dir: str | Path,
     *,
     step: int = 0,
-    model: str = "kimi-coding",
+    model: str = "kimi-k2.6",
     gateway_url: str | None = None,
 ) -> dict[str, Any]:
     """Run Gateway and direct-provider latency probes against one saved turn."""

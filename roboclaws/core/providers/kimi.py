@@ -187,7 +187,7 @@ class KimiCodingProvider:
 
     def __init__(
         self,
-        model: str = "kimi-for-coding",
+        model: str = "kimi-k2.6",
         api_key: str | None = None,
         max_tokens: int = 8192,
         retry_attempts: int = 2,

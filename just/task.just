@@ -172,11 +172,11 @@ photo-chairs driver="openclaw" provider="kimi" output_dir="output/openclaw-photo
     just task::run photo-chairs "{{driver}}" visual provider="{{provider}}" output_dir="{{output_dir}}" max_moves="{{max_moves}}" wall_budget="{{wall_budget}}" scene="{{scene}}"
 
 [private]
-territory driver="vlm" model="kimi-coding" agents="2" steps="20" provider="kimi" output_dir="":
+territory driver="vlm" model="kimi-k2.6" agents="2" steps="20" provider="kimi" output_dir="":
     just task::run territory "{{driver}}" visual model="{{model}}" agents="{{agents}}" steps="{{steps}}" provider="{{provider}}" output_dir="{{output_dir}}"
 
 [private]
-coverage driver="vlm" model="kimi-coding" agents="2" steps="20" provider="kimi" output_dir="":
+coverage driver="vlm" model="kimi-k2.6" agents="2" steps="20" provider="kimi" output_dir="":
     just task::run coverage "{{driver}}" visual model="{{model}}" agents="{{agents}}" steps="{{steps}}" provider="{{provider}}" output_dir="{{output_dir}}"
 
 [private]

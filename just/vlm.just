@@ -13,7 +13,7 @@ set working-directory := '..'
 default:
     @just --list vlm
 
-run game="territory" model="kimi-coding" agents="2" steps="20" souls="" output_dir="output/kimi/{{game}}":
+run game="territory" model="kimi-k2.6" agents="2" steps="20" souls="" output_dir="output/kimi/{{game}}":
     #!/usr/bin/env bash
     set -euo pipefail
 
