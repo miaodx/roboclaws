@@ -627,7 +627,8 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0 tmux
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0 tmux just
+          just --version
 
       - name: Install Python dependencies
         run: uv sync --extra dev --extra molmospaces
