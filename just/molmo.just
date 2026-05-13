@@ -1,7 +1,7 @@
 # MolmoSpaces cleanup operator commands.
 #
 # This module is the human-facing facade for the ADR-0003 cleanup matrix.
-# Use `driver`, `runtime`, and `evidence` to make the run shape explicit.
+# Use `driver` and `profile` to make the public run shape explicit.
 #
 # Drivers:
 # - direct          deterministic Python cleanup loop; no MCP server
@@ -11,21 +11,18 @@
 # - claude-live     live Claude Code connected to the cleanup MCP server
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
-# Runtimes:
-# - synthetic       api_semantic_synthetic, cheap contract shape
-# - molmospaces     real upstream MolmoSpaces subprocess backend
-#
-# Evidence:
-# - semantic        shared report without RBY1M robot-view timeline
-# - visual          RBY1M FPV/chase/map/verification timeline
-# - raw-fpv         raw FPV-only observation evidence plus robot timeline
+# Profiles:
+# - smoke           synthetic contract sanity with world labels and semantic report
+# - world-labels    MolmoSpaces/RBY1M report; agent receives structured world labels
+# - camera-raw      MolmoSpaces/RBY1M report; agent receives raw camera artifacts
+# - camera-labels   MolmoSpaces/RBY1M report; agent receives camera-derived labels
 #
 # Preferred entrypoints:
 # - just molmo::quick-check
 # - just molmo::review-report
 # - just molmo::mcp-smoke-report
 # - just molmo::openclaw-smoke-report
-# - just molmo::raw-fpv-report
+# - just molmo::camera-raw-report
 # - just molmo::codex-report
 # - just molmo::claude-report
 # - just molmo::openclaw-report
@@ -39,14 +36,13 @@ claude_full_permission_args := "--dangerously-skip-permissions --permission-mode
 default:
     @just --list molmo
 
-# Explicit matrix runner.
-cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788":
+# Explicit profile runner.
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
     driver="{{driver}}"
-    runtime="{{runtime}}"
-    evidence="{{evidence}}"
+    profile="{{profile}}"
     seeds="{{seeds}}"
     output_dir="{{output_dir}}"
     task="{{task}}"
@@ -55,11 +51,10 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
     port="{{port}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
-    # the first axes so `just molmo::cleanup driver=direct runtime=synthetic`
+    # the first axes so `just molmo::cleanup driver=direct profile=smoke`
     # stays usable for operators.
     driver="${driver#driver=}"
-    runtime="${runtime#runtime=}"
-    evidence="${evidence#evidence=}"
+    profile="${profile#profile=}"
     seeds="${seeds#seeds=}"
     output_dir="${output_dir#output_dir=}"
     task="${task#task=}"
@@ -78,32 +73,18 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         ;;
     esac
 
-    case "$runtime" in
-      synthetic|mock)
-        backend="api_semantic_synthetic"
-        min_generated_mess_count="5"
-        ;;
-      molmospaces|real)
-        backend="molmospaces_subprocess"
-        min_generated_mess_count="$generated_mess_count"
-        ;;
-      *)
-        echo "error: unsupported runtime '$runtime' (expected synthetic|molmospaces)" >&2
-        exit 1
-        ;;
-    esac
-
     perception_mode="visible_object_detections"
     visual_args=()
     checker_visual_args=()
-    case "$evidence" in
-      semantic)
+    profile_requires_clean_success="true"
+    case "$profile" in
+      smoke)
+        backend="api_semantic_synthetic"
+        min_generated_mess_count="5"
         ;;
-      visual)
-        if [[ "$backend" != "molmospaces_subprocess" ]]; then
-          echo "error: evidence=visual requires runtime=molmospaces" >&2
-          exit 1
-        fi
+      world-labels)
+        backend="molmospaces_subprocess"
+        min_generated_mess_count="$generated_mess_count"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
         checker_visual_args=(
           --require-robot-views
@@ -111,17 +92,23 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           --require-real-robot-alignment
         )
         ;;
-      raw-fpv)
-        if [[ "$backend" != "molmospaces_subprocess" ]]; then
-          echo "error: evidence=raw-fpv requires runtime=molmospaces" >&2
-          exit 1
-        fi
+      camera-raw)
+        backend="molmospaces_subprocess"
+        min_generated_mess_count="$generated_mess_count"
         perception_mode="raw_fpv_only"
+        profile_requires_clean_success="false"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
         checker_visual_args=(--require-robot-views --require-raw-fpv-observations)
         ;;
+      camera-labels)
+        backend="molmospaces_subprocess"
+        min_generated_mess_count="$generated_mess_count"
+        perception_mode="camera_model_policy"
+        visual_args=(--include-robot --robot-name rby1m --record-robot-views)
+        checker_visual_args=(--require-robot-views --require-camera-model-policy)
+        ;;
       *)
-        echo "error: unsupported evidence '$evidence' (expected semantic|visual|raw-fpv)" >&2
+        echo "error: unsupported profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
         exit 1
         ;;
     esac
@@ -132,8 +119,9 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
 
     echo "==> Molmo cleanup matrix"
     echo "    driver   : ${driver}"
-    echo "    runtime  : ${runtime} (${backend})"
-    echo "    evidence : ${evidence}"
+    echo "    profile  : ${profile}"
+    echo "    backend  : ${backend}"
+    echo "    input    : ${perception_mode}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
 
@@ -184,7 +172,17 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         fi
         codex_bin="$(command -v codex || true)"
         claude_bin="$(command -v claude || true)"
-        kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+        case "$profile" in
+          camera-raw)
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, inspect the raw FPV artifacts returned by observe, do not expect observed_* detections or structured labels, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when camera evidence is recorded."
+            ;;
+          camera-labels)
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, call roboclaws__infer_camera_model_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+            ;;
+          *)
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+            ;;
+        esac
 
         server_args=(
           --host "$server_host"
@@ -196,6 +194,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           --task "$task"
           --generated-mess-count "$generated_mess_count"
           --perception-mode "$perception_mode"
+          --cleanup-profile "$profile"
           "${visual_args[@]}"
         )
 
@@ -259,7 +258,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
-            --evidence "$evidence"
+            --profile "$profile"
           )
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
@@ -366,6 +365,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --expect-task "$task"
             --expect-backend "$backend"
             --expect-policy "$policy"
+            --expect-profile "$profile"
             --expect-mcp-server molmo_cleanup_realworld
             --min-generated-mess-count "$min_generated_mess_count"
             --require-agent-driven
@@ -375,7 +375,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           if [[ "$driver" == "openclaw-live" ]]; then
             checker_args+=(--require-openclaw-minimum)
           fi
-          if [[ "$evidence" == "visual" && "$driver" != "openclaw-live" ]]; then
+          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" ]]; then
             checker_args+=(--require-clean-agent-run)
           fi
           .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
@@ -401,6 +401,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --task "$task" \
             --fixture-hint-mode room_only \
             --perception-mode "$perception_mode" \
+            --cleanup-profile "$profile" \
             --generated-mess-count "$generated_mess_count" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
@@ -417,6 +418,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             --perception-mode "$perception_mode" \
+            --cleanup-profile "$profile" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
           ;;
@@ -428,6 +430,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
       --expect-task "$task"
       --expect-backend "$backend"
       --expect-seeds "$seed_csv"
+      --expect-profile "$profile"
       --min-generated-mess-count "$min_generated_mess_count"
       --require-advisory-scoring
       "${checker_visual_args[@]}"
@@ -439,7 +442,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           --expect-mcp-server molmo_cleanup_realworld
           --require-agent-driven
         )
-        if [[ "$evidence" == "visual" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" ]]; then
           checker_args+=(--require-clean-agent-run)
         fi
         ;;
@@ -450,7 +453,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           --require-agent-driven
           --require-openclaw-minimum
         )
-        if [[ "$evidence" == "visual" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" ]]; then
           checker_args+=(--require-clean-agent-run)
         fi
         ;;
@@ -463,28 +466,28 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
     find "$run_root" -maxdepth 2 -name report.html -print
 
 # Cheap default: deterministic MCP smoke on the synthetic backend.
-quick-check driver="mcp-smoke" runtime="synthetic" evidence="semantic" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "{{driver}}" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
+    just molmo::cleanup "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Canonical human review report: direct cleanup, real MolmoSpaces/RBY1M visuals.
 review-report seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "molmospaces" "visual" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "direct" "world-labels" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Deterministic ADR-0003 MCP tool smoke with real MolmoSpaces/RBY1M visuals.
 mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "mcp-smoke" "molmospaces" "visual" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "mcp-smoke" "world-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "openclaw-smoke" "molmospaces" "visual" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "openclaw-smoke" "world-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
-# Raw FPV-only evidence report. This proves camera artifact plumbing, not cleanup success.
-raw-fpv-report seed="7" output_dir="output/molmo/raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "molmospaces" "raw-fpv" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+# Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
+camera-raw-report seed="7" output_dir="output/molmo/camera-raw-report" task="帮我收拾这个房间" generated_mess_count="10":
+    just molmo::cleanup "direct" "camera-raw" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
-codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual" host="127.0.0.1" port="18788":
-    just molmo::cleanup "codex-live" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" host="127.0.0.1" port="18788":
+    just molmo::cleanup "codex-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
 status path="":
@@ -496,9 +499,9 @@ status path="":
     exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
-claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual" host="127.0.0.1" port="18788":
-    just molmo::cleanup "claude-live" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" host="127.0.0.1" port="18788":
+    just molmo::cleanup "claude-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
-openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual" port="18788":
-    just molmo::cleanup "openclaw-live" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
+openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
+    just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"

@@ -1,6 +1,6 @@
 # MolmoSpaces Cleanup Profile Architecture
 
-Status: draft for refactor planning
+Status: implemented 2026-05-13
 
 This note defines a reduced naming model for MolmoSpaces cleanup commands. It is
 intended to guide a later CLI/docs/test refactor without changing behavior by
@@ -273,26 +273,35 @@ The second most important regression test is:
 profile=camera-raw must fail if structured object labels leak into agent input.
 ```
 
-## Implementation Plan
+## Implementation Result
 
-1. Change public `just task::run molmo-cleanup <driver> <report>` routing to
-   treat the third positional argument as `<profile>`.
-2. Implement the four profiles: `smoke`, `world-labels`, `camera-raw`,
+Implemented in the command facade, Molmo cleanup runners, artifact metadata,
+report summary, checker, and focused tests:
+
+1. `just task::run molmo-cleanup <driver> <profile>` treats the third
+   positional argument as the cleanup profile.
+2. The public profiles are `smoke`, `world-labels`, `camera-raw`, and
    `camera-labels`.
-3. Remove old public values instead of preserving aliases.
-4. Keep internal constants if that reduces churn, but translate them into the
-   new profile metadata at command/report boundaries.
-5. Update command help, `docs/human/molmospaces-settings.md`, and
-   `just/README.md`.
-6. Add contract tests for profile expansion and report metadata.
-7. Add focused default tests for `camera-raw` and `camera-labels`.
+3. Old public profile values (`visual`, `semantic`, `raw-fpv`) are not accepted
+   as cleanup profiles.
+4. Profile expansion lives in `roboclaws/molmo_cleanup/profiles.py`, while
+   existing perception constants such as `visible_object_detections`,
+   `raw_fpv_only`, and `camera_model_policy` remain internal metadata.
+5. Generated cleanup artifacts can record `cleanup_profile` and
+   `cleanup_profile_metadata`; the HTML report surfaces profile, agent input,
+   provenance, report type, and verifier metadata.
+6. Command help, `docs/human/molmospaces-settings.md`, and `just/README.md`
+   use profile names.
+7. Focused tests cover profile expansion, report metadata, command routing,
+   raw-camera label leakage, and camera-label provenance.
 
-## Open Decisions
+## Decisions Made
 
-- Whether `direct` should be renamed to `scripted-baseline` now or left alone.
-- Whether `camera-labels` should be exposed for live Codex/Claude/OpenClaw
-  immediately; the current live server supports the structured-label and
-  raw-camera shapes, while camera-label support is strongest in the direct
-  contract path.
-- Whether `profile=world-labels` should default to one seed or keep the current
-  direct-driver multi-seed review behavior.
+- `direct` was left unchanged as a driver name. It remains clear enough for this
+  refactor.
+- `camera-labels` is exposed through the direct cleanup demo, deterministic MCP
+  smoke path, and live cleanup MCP server CLI. It still records
+  `input_provenance=simulated_camera_model` until a real detector/VLM path is
+  implemented.
+- `profile=world-labels` keeps the current direct-driver multi-seed review
+  behavior (`1 2 3`) and live-driver single-seed behavior.

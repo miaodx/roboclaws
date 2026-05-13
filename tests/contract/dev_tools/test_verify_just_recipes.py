@@ -105,12 +105,12 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^cleanup driver=\"mcp-smoke\" runtime=\"synthetic\" evidence=\"semantic\"",
-        r"^quick-check driver=\"mcp-smoke\" runtime=\"synthetic\" evidence=\"semantic\"",
+        r"^cleanup driver=\"mcp-smoke\" profile=\"smoke\"",
+        r"^quick-check driver=\"mcp-smoke\" profile=\"smoke\"",
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
         r"^openclaw-smoke-report seed=\"7\"",
-        r"^raw-fpv-report seed=\"7\"",
+        r"^camera-raw-report seed=\"7\"",
         r"^codex-report seed=\"7\"",
         r"^claude-report seed=\"7\"",
         r"^openclaw-report seed=\"7\"",
@@ -123,14 +123,14 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     expected_calls = (
-        'just molmo::cleanup "{{driver}}" "{{runtime}}" "{{evidence}}"',
-        'just molmo::cleanup "direct" "molmospaces" "visual"',
-        'just molmo::cleanup "mcp-smoke" "molmospaces" "visual"',
-        'just molmo::cleanup "openclaw-smoke" "molmospaces" "visual"',
-        'just molmo::cleanup "direct" "molmospaces" "raw-fpv"',
-        'just molmo::cleanup "codex-live" "{{runtime}}" "{{evidence}}"',
-        'just molmo::cleanup "claude-live" "{{runtime}}" "{{evidence}}"',
-        'just molmo::cleanup "openclaw-live" "{{runtime}}" "{{evidence}}"',
+        'just molmo::cleanup "{{driver}}" "{{profile}}"',
+        'just molmo::cleanup "direct" "world-labels"',
+        'just molmo::cleanup "mcp-smoke" "world-labels"',
+        'just molmo::cleanup "openclaw-smoke" "world-labels"',
+        'just molmo::cleanup "direct" "camera-raw"',
+        'just molmo::cleanup "codex-live" "{{profile}}"',
+        'just molmo::cleanup "claude-live" "{{profile}}"',
+        'just molmo::cleanup "openclaw-live" "{{profile}}"',
     )
     for call in expected_calls:
         assert call in text
@@ -146,9 +146,10 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
 
     for expected in (
         'driver="${driver#driver=}"',
-        'runtime="${runtime#runtime=}"',
-        'evidence="${evidence#evidence=}"',
-        "evidence=visual requires runtime=molmospaces",
+        'profile="${profile#profile=}"',
+        "unsupported profile",
+        "--cleanup-profile",
+        "--expect-profile",
         "mcp-smoke/openclaw-smoke for deterministic substitutes",
         "command -v codex",
         "command -v claude",
@@ -174,7 +175,9 @@ def test_molmo_visual_reports_require_robot_timeline_and_real_robot_checks() -> 
         "--require-waypoint-honesty",
         "--require-real-robot-alignment",
         'perception_mode="raw_fpv_only"',
+        'perception_mode="camera_model_policy"',
         "--require-raw-fpv-observations",
+        "--require-camera-model-policy",
     ):
         assert expected in text
 

@@ -122,6 +122,7 @@ def _cleanup_report_sections(
             _cleanup_summary_section(scenario=scenario, run_result=run_result, score=score),
             _current_contract_note(run_result),
             _realworld_contract_note(run_result),
+            _cleanup_profile_note(run_result),
             _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
             _runtime_timing_section(run_result, trace_events, robot_view_steps),
             _object_moves_section(moves),
@@ -433,6 +434,7 @@ def _cleanup_summary_section(
         {_badge("Restored", restored_summary)}
         {_badge("Generated mess", _generated_mess_summary(run_result))}
         {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+        {_cleanup_profile_badges(run_result)}
         {_badge("Agent driven", run_result.get("agent_driven", False))}
         {_badge("Provenance", run_result["primitive_provenance"])}
         {_badge("MCP server", run_result.get("mcp_server", "none"))}
@@ -710,6 +712,20 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     return _badge("Robot", robot_name)
 
 
+def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
+    metadata = run_result.get("cleanup_profile_metadata") or {}
+    if not metadata:
+        return ""
+    return "".join(
+        (
+            _badge("Profile", metadata.get("profile", run_result.get("cleanup_profile", ""))),
+            _badge("Agent input", metadata.get("agent_input", "")),
+            _badge("Input provenance", metadata.get("input_provenance", "")),
+            _badge("Report", metadata.get("report", "")),
+        )
+    )
+
+
 def _generated_mess_summary(run_result: dict[str, Any]) -> str:
     actual = run_result.get("generated_mess_count")
     requested = run_result.get("requested_generated_mess_count")
@@ -741,6 +757,22 @@ def _realworld_contract_note(run_result: dict[str, Any]) -> str:
         "ADR-0003 real-world-style cleanup run. The Agent View is limited to "
         "metric map, room-level fixture hints, and robot-local observed object "
         "handles. Private Evaluation is shown only after the run."
+    )
+    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
+
+
+def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
+    metadata = run_result.get("cleanup_profile_metadata") or {}
+    if not metadata:
+        return ""
+    profile = metadata.get("profile", run_result.get("cleanup_profile", "unknown"))
+    verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
+    note = (
+        f"Cleanup profile {profile}: {metadata.get('summary', '')} "
+        f"Agent input: {metadata.get('agent_input', 'unknown')}; "
+        f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
+        f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
+        f"{metadata.get('model_input_note', '')}"
     )
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 

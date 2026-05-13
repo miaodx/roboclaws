@@ -17,7 +17,7 @@ private. They remain runnable for debugging, but they are hidden from
 ## Main Grammar
 
 ```bash
-just task::run <task> <driver> [report] [key=value ...]
+just task::run <task> <driver> [report|profile] [key=value ...]
 ```
 
 Tasks:
@@ -39,18 +39,26 @@ Drivers:
 - `direct`
 - `mcp-smoke`
 
-Reports:
+Reports for non-Molmo tasks:
 
 - `visual` is the default. Use it for human-facing runs that should produce
   reviewable images, timelines, and metrics.
 - `minimal` is for cheaper semantic evidence during AI-agent iteration.
 
-If the third argument is `key=value`, `task::run` treats the report as omitted
-and keeps the `visual` default.
+Molmo cleanup profiles:
+
+- `smoke` is the cheap synthetic contract sanity profile.
+- `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
+- `camera-raw` withholds structured labels and provides raw camera artifacts.
+- `camera-labels` registers structured candidates from camera observations.
+
+If the third argument is `key=value`, `task::run` treats the report/profile as
+omitted and keeps the task default (`visual` for non-Molmo tasks,
+`world-labels` for Molmo cleanup).
 
 ## Live Agent Launch Behavior
 
-`just task::run molmo-cleanup codex visual` launches a detached tmux session.
+`just task::run molmo-cleanup codex world-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -90,7 +98,9 @@ the selected OpenAI-compatible endpoint works with the installed Codex CLI.
 
 ```bash
 just task::run molmo-cleanup codex
-just task::run molmo-cleanup codex minimal
+just task::run molmo-cleanup codex smoke
+just task::run molmo-cleanup direct camera-raw
+just task::run molmo-cleanup direct camera-labels
 just task::run ai2thor-nav openclaw
 just task::run territory vlm steps=20 agents=2
 just task::run coverage script output_dir=output/script/coverage-smoke
@@ -101,8 +111,9 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the molmospace cleanup task with codex" | `just task::run molmo-cleanup codex visual` |
-| "run the molmospace cleanup task with codex with minimal report" | `just task::run molmo-cleanup codex minimal` |
+| "run the molmospace cleanup task with codex" | `just task::run molmo-cleanup codex world-labels` |
+| "run the molmospace cleanup task with codex with smoke profile" | `just task::run molmo-cleanup codex smoke` |
+| "run the molmospace cleanup camera raw profile" | `just task::run molmo-cleanup direct camera-raw` |
 | "run the ai2thor nav task with openclaw" | `just task::run ai2thor-nav openclaw visual` |
 
 ## Maintainer Dispatch

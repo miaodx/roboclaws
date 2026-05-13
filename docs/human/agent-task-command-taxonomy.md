@@ -49,7 +49,7 @@ This avoids circular references. In particular:
 
 `task::*` public recipe:
 
-- `task::run <task> <driver> [report] [key=value ...]`
+- `task::run <task> <driver> [report|profile] [key=value ...]`
 
 Tasks:
 
@@ -70,10 +70,17 @@ Drivers:
 - `direct`
 - `mcp-smoke`
 
-Reports:
+Reports for non-Molmo tasks:
 
 - `visual` by default.
 - `minimal` for cheap semantic agent iteration.
+
+Molmo cleanup profiles:
+
+- `world-labels` by default.
+- `smoke` for cheap synthetic contract iteration.
+- `camera-raw` for raw camera input evidence.
+- `camera-labels` for camera-derived structured candidates.
 
 `agent::*` public recipes:
 
@@ -97,7 +104,7 @@ Add cheap command-surface tests that prove:
 - `task` and `agent` modules are registered in the root `justfile`.
 - `just --summary` exposes only the small public facade.
 - `task::run` routes prompt-derived commands to the expected lower modules.
-- visual default and minimal override choose the expected cleanup report shape.
+- Molmo cleanup profile defaults and overrides choose the expected cleanup run shape.
 - lower-level modules do not call `task::*`.
 - no `task::* <-> agent::*` cycle exists.
 - coding-agent launches still satisfy the existing full-permission guard.
@@ -120,7 +127,7 @@ Verification run:
 
 - `just --summary`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex minimal`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex smoke`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
 - `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`

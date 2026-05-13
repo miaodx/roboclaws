@@ -1,7 +1,7 @@
 # Roboclaws command runner.
 #
 # Public surface:
-# - just task::run <task> <driver> [report] [key=value ...]
+# - just task::run <task> <driver> [report|profile] [key=value ...]
 # - just agent::<dispatcher> ...
 #
 # Implementation modules stay private so completion shows the composable facade,

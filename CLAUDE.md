@@ -76,7 +76,7 @@ Common `just` recipes use the small public facade:
 
 ```bash
 just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
-just task::run molmo-cleanup codex minimal        # cheap semantic cleanup iteration
+just task::run molmo-cleanup codex smoke          # cheap synthetic cleanup iteration
 just agent::verify mock                          # maintainer confidence gate
 ```
 

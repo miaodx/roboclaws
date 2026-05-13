@@ -44,6 +44,26 @@ def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
     )
 
 
+def test_checker_accepts_smoke_profile_metadata_and_report_note(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        cleanup_profile="smoke",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_profile="smoke",
+        min_generated_mess_count=5,
+    )
+
+
 def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
     tmp_path: Path,
 ) -> None:

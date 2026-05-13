@@ -41,7 +41,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
-    parser.add_argument("--evidence", required=True)
+    parser.add_argument("--profile", required=True)
     parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--codex-model-arg", action="append", default=[])
     parser.add_argument("--checker-visual-arg", action="append", default=[])
@@ -220,6 +220,8 @@ class LiveCodexCleanupRunner:
             self.args.backend,
             "--expect-policy",
             self.args.policy,
+            "--expect-profile",
+            self.args.profile,
             "--expect-mcp-server",
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",
@@ -228,7 +230,7 @@ class LiveCodexCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.evidence == "visual":
+        if self.args.profile in {"smoke", "world-labels", "camera-labels"}:
             checker_args.append("--require-clean-agent-run")
         checker_args.append(str(run_result))
 

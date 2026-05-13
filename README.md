@@ -29,7 +29,7 @@ where the coding agent itself drives the robot with `observe`, `move`, and
 | Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just task::run ai2thor-nav codex`, `just task::run ai2thor-nav claude` |
 | Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just task::run photo-chairs openclaw` |
 | Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
-| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::run molmo-cleanup direct`, minimal: `just task::run molmo-cleanup mcp-smoke minimal` |
+| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::run molmo-cleanup direct`, smoke: `just task::run molmo-cleanup mcp-smoke smoke` |
 | MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::run molmo-planner-proof direct`, local: `just task::run molmo-planner-proof direct mode=execute-rerun` |
 | Mock reports | CI-safe visualization/report regression coverage | `python scripts/reports/generate_demo_report.py --output-dir output/demo` |
 | Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just agent::harness run <task>` (see [`harness/README.md`](harness/README.md)) |

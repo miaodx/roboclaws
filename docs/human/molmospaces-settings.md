@@ -58,10 +58,11 @@ the current source of truth before claiming a run supports a setting.
 
 ## Command Taxonomy
 
-Use `molmo::*` for daily operator commands. It names the run by three axes:
+Use `molmo::*` for daily operator commands. It names the run by driver and
+profile:
 
 ```bash
-just molmo::cleanup <driver> <runtime> <evidence>
+just molmo::cleanup <driver> <profile>
 ```
 
 | Axis | Values | Meaning |
@@ -72,11 +73,10 @@ just molmo::cleanup <driver> <runtime> <evidence>
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
 | Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
-| Runtime | `synthetic` | `api_semantic_synthetic`, cheap contract shape. |
-| Runtime | `molmospaces` | `molmospaces_subprocess`, real upstream MolmoSpaces scene. |
-| Evidence | `semantic` | Shared report without RBY1M robot-view timeline. |
-| Evidence | `visual` | Requires `runtime=molmospaces`; adds RBY1M FPV/chase/map/verification timeline. |
-| Evidence | `raw-fpv` | Requires `runtime=molmospaces`; raw FPV-only observations plus visual timeline. |
+| Profile | `smoke` | Synthetic contract sanity; world labels; semantic report. |
+| Profile | `world-labels` | MolmoSpaces/RBY1M report; agent receives structured world labels, not images. |
+| Profile | `camera-raw` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
+| Profile | `camera-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates. |
 
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
@@ -87,14 +87,14 @@ The convenient aliases are:
 
 | Command | Expands To | Use It For |
 |---------|------------|------------|
-| `just molmo::quick-check` | `mcp-smoke synthetic semantic` | Cheap contract check; accepts `driver=`, `runtime=`, and `evidence=` overrides. |
-| `just molmo::review-report` | `direct molmospaces visual` | Canonical human review/status report. |
-| `just molmo::mcp-smoke-report` | `mcp-smoke molmospaces visual` | Real visual MCP smoke without a live external agent. |
-| `just molmo::openclaw-smoke-report` | `openclaw-smoke molmospaces visual` | OpenClaw-labeled visual artifact without live Gateway. |
-| `just molmo::raw-fpv-report` | `direct molmospaces raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
-| `just molmo::codex-report` | `codex-live molmospaces visual` | Live Codex agent report. |
-| `just molmo::claude-report` | `claude-live molmospaces visual` | Live Claude Code agent report. |
-| `just molmo::openclaw-report` | `openclaw-live molmospaces visual` | Live OpenClaw Gateway report. |
+| `just molmo::quick-check` | `mcp-smoke smoke` | Cheap contract check; accepts `driver=` and `profile=` overrides. |
+| `just molmo::review-report` | `direct world-labels` | Canonical human review/status report. |
+| `just molmo::mcp-smoke-report` | `mcp-smoke world-labels` | Real visual MCP smoke without a live external agent. |
+| `just molmo::openclaw-smoke-report` | `openclaw-smoke world-labels` | OpenClaw-labeled visual artifact without live Gateway. |
+| `just molmo::camera-raw-report` | `direct camera-raw` | Camera-only observation evidence; not cleanup-success proof. |
+| `just molmo::codex-report` | `codex-live world-labels` | Live Codex agent report. |
+| `just molmo::claude-report` | `claude-live world-labels` | Live Claude Code agent report. |
+| `just molmo::openclaw-report` | `openclaw-live world-labels` | Live OpenClaw Gateway report. |
 
 For live Codex / Claude reports, optional repo-local `.env` provider overrides
 are honored the same way as the direct navigation demos:
@@ -133,12 +133,12 @@ a time because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a
 run is active or the requested MCP port is busy, the launcher fails instead of
 starting another simulator on a different port.
 
-For quick axis overrides, use positional values or the same first-three
-`key=value` prefixes:
+For quick axis overrides, use positional values or `driver=` / `profile=`
+prefixes:
 
 ```bash
-just molmo::quick-check openclaw-smoke synthetic semantic
-just molmo::quick-check driver=openclaw-smoke runtime=synthetic evidence=semantic
+just molmo::quick-check openclaw-smoke smoke
+just molmo::quick-check driver=openclaw-smoke profile=smoke
 ```
 
 ## Report Shapes
@@ -186,10 +186,10 @@ Real visual OpenClaw-shaped smoke:
 just molmo::openclaw-smoke-report
 ```
 
-Raw FPV evidence:
+Raw camera evidence:
 
 ```bash
-just molmo::raw-fpv-report
+just molmo::camera-raw-report
 ```
 
 Live external-agent reports:

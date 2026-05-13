@@ -127,7 +127,7 @@ def test_agent_module_exposes_compact_dispatchers() -> None:
     text = AGENT_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^run task driver report=\"visual\" \*overrides:",
+        r"^run task driver mode=\"\" \*overrides:",
         r"^verify target=\"mock\" \*args:",
         r"^harness target \*args:",
         r"^mcp action=\"up\"",
@@ -150,7 +150,7 @@ def test_agent_module_exposes_compact_dispatchers() -> None:
 def test_task_module_exposes_only_run_publicly() -> None:
     text = TASK_JUST.read_text(encoding="utf-8")
 
-    assert re.search(r"^run task driver report=\"visual\" \*overrides:", text, re.MULTILINE)
+    assert re.search(r"^run task driver mode=\"\" \*overrides:", text, re.MULTILINE)
     assert "[private]\nnavigate " in text
     assert "[private]\nterritory " in text
     assert "[private]\ncleanup-report " in text
@@ -161,31 +161,29 @@ def test_task_module_exposes_only_run_publicly() -> None:
     assert "task::cleanup-report" not in summary
 
 
-def test_prompt_mapping_molmo_cleanup_codex_visual_default() -> None:
+def test_prompt_mapping_molmo_cleanup_codex_world_labels_default() -> None:
     route = trace_task_run("molmo-cleanup", "codex")
 
-    assert route[:7] == [
+    assert route[:6] == [
         "just",
         "molmo::cleanup",
         "codex-live",
-        "molmospaces",
-        "visual",
+        "world-labels",
         "7",
         "output/molmo/codex-report",
     ]
 
 
-def test_prompt_mapping_molmo_cleanup_codex_minimal_override() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "minimal")
+def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
+    route = trace_task_run("molmo-cleanup", "codex", "smoke")
 
-    assert route[:7] == [
+    assert route[:6] == [
         "just",
         "molmo::cleanup",
         "codex-live",
-        "synthetic",
-        "semantic",
+        "smoke",
         "7",
-        "output/molmo/codex-minimal",
+        "output/molmo/codex-smoke",
     ]
 
 
@@ -203,17 +201,40 @@ def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
     ]
 
 
-def test_key_value_third_argument_keeps_visual_default() -> None:
+def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     route = trace_task_run("molmo-cleanup", "codex", "output_dir=output/custom")
 
-    assert route[:7] == [
+    assert route[:6] == [
         "just",
         "molmo::cleanup",
         "codex-live",
-        "molmospaces",
-        "visual",
+        "world-labels",
         "7",
         "output/custom",
+    ]
+
+
+def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
+    raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
+    labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
+
+    assert raw_route[:7] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "camera-raw",
+        "7",
+        "output/molmo/direct-camera-raw",
+        "帮我收拾这个房间",
+    ]
+    assert labels_route[:7] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "camera-labels",
+        "7",
+        "output/molmo/direct-camera-labels",
+        "帮我收拾这个房间",
     ]
 
 
