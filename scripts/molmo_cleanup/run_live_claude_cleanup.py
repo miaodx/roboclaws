@@ -171,6 +171,23 @@ class LiveClaudeCleanupRunner:
             cwd=self.args.repo_root,
             check=True,
         )
+        mcp_config_path = self.run_dir / "claude-mcp-config.json"
+        mcp_config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "roboclaws": {
+                            "type": "http",
+                            "url": self.args.client_url,
+                        }
+                    }
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
         print("==> launching Claude Code print mode with full permissions")
         if self.args.claude_provider_summary != "system defaults":
@@ -183,6 +200,9 @@ class LiveClaudeCleanupRunner:
             "--verbose",
             "--output-format",
             "stream-json",
+            "--mcp-config",
+            str(mcp_config_path.resolve()),
+            "--strict-mcp-config",
             *self.args.claude_model_arg,
             *FULL_PERMISSION_ARGS,
             self.args.kickoff_prompt,
