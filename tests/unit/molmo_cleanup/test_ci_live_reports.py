@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 from roboclaws.molmo_cleanup.ci_live_reports import (
     MODEL_ENTRIES,
@@ -17,6 +18,7 @@ from roboclaws.molmo_cleanup.ci_live_reports import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_MATRIX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_ci_live_cleanup_matrix.py"
+RUN_CLAUDE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
 
@@ -75,6 +77,51 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     )
     assert manifest["schema"] == "molmo_live_ci_report_manifest_v1"
     assert manifest["entries"][0]["entry"] == "kimi-k2.6"
+
+
+def test_live_claude_print_command_uses_verbose_for_stream_json(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "runner.lock",
+        claude_bin="claude",
+        claude_provider_summary="test provider",
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        task="帮我收拾这个房间",
+        min_generated_mess_count="5",
+        profile="world-labels",
+        server_arg=[],
+        claude_model_arg=["--model", "kimi-k2.6"],
+        claude_env=[],
+        checker_visual_arg=[],
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+
+    monkeypatch.setattr(run_claude.subprocess, "run", lambda *_, **__: None)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run_and_tee(command, **_kwargs):
+        captured["command"] = command
+        return 0
+
+    monkeypatch.setattr(run_claude, "_run_and_tee", fake_run_and_tee)
+
+    runner._run_claude()
+
+    command = captured["command"]
+    assert command[:5] == ["claude", "-p", "--verbose", "--output-format", "stream-json"]
+    assert "--dangerously-skip-permissions" in command
 
 
 def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path) -> None:
