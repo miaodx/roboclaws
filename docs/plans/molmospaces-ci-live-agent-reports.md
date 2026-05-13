@@ -28,8 +28,8 @@ Add a CI path that can run the three proven Molmo cleanup live-agent variants
 and publish their reports to GitHub Pages:
 
 - Kimi K2.6
-- MiMo v2.5 Pro simple
-- MiMo v2 Omni simple
+- MiMo v2.5 Pro
+- MiMo v2 Omni
 
 The result should be a stable web entrypoint from the existing Pages landing
 page to each `report.html`, with enough CI metadata to tell whether a missing
@@ -304,8 +304,8 @@ gate before committing workflow YAML.
   `~/.cache/molmo-spaces-resources` are prewarmed or restored from cache before
   the live model call starts.
 - At least one live Molmo report is published to GitHub Pages from CI.
-- The full matrix publishes Kimi K2.6, MiMo v2.5 Pro simple, and MiMo v2 Omni
-  simple reports from the same seed/task shape as the local artifacts.
+- The full matrix publishes Kimi K2.6, MiMo v2.5 Pro, and MiMo v2 Omni reports
+  from the same seed/task shape as the local artifacts.
 - The Pages landing page links directly to each available report.
 - Missing or failed live Molmo entries leave diagnostics in GitHub Actions
   artifacts and do not remove baseline mock/smoke/OpenClaw report visibility.
