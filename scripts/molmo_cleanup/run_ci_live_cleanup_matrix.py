@@ -18,9 +18,12 @@ from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
     MODEL_ENTRIES,
     MolmoLiveModelEntry,
     base_status,
+    diagnostic_path_for_entry,
     entry_by_name,
     entry_names,
+    latest_seed_artifact_dir,
     latest_seed_run_dir,
+    publish_diagnostic_seed_run,
     publish_seed_run,
     report_path_for_entry,
     status_path_for_entry,
@@ -167,6 +170,17 @@ def _run_entry(
     except Exception as exc:
         status["status"] = "failed"
         status["reason"] = str(exc)
+        seed_dir = latest_seed_artifact_dir(entry_output_dir, seed=args.seed)
+        if seed_dir is not None:
+            diagnostic_dir = publish_diagnostic_seed_run(
+                source_seed_dir=seed_dir,
+                publish_root=publish_root,
+                entry_name=entry.name,
+                seed=args.seed,
+            )
+            status["run_dir"] = str(seed_dir)
+            status["diagnostic_dir"] = str(diagnostic_dir)
+            status["diagnostic_path"] = diagnostic_path_for_entry(entry.name, seed=args.seed)
     return _finalize_status(status, publish_root)
 
 

@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 135 MolmoSpaces CI live-agent reports implemented and non-live verified; hosted live proof pending secrets/run.
-last_updated: "2026-05-13T18:08:00+08:00"
+stopped_at: Phase 135 MolmoSpaces CI live-agent reports merged; hosted live run reaches MCP tools, with provider-runtime failures under inspection.
+last_updated: "2026-05-13T22:31:14+08:00"
 last_activity: 2026-05-13
 progress:
   total_phases: 136
@@ -24,8 +24,9 @@ See: .planning/PROJECT.md (updated 2026-04-21)
 **Current focus:** Phase 135 promotes the three known-good local MolmoSpaces
 Claude Code provider-profile cleanup reports into an opt-in GitHub-hosted CI
 path with local rehearsal, MolmoSpaces/MuJoCo asset caching/prewarm, and
-Pages-visible report/status tiles. The repo-side implementation is complete;
-hosted live proof is pending GitHub Actions secrets and an opt-in run.
+Pages-visible report/status tiles. The repo-side implementation is merged;
+hosted live proof now reaches cleanup MCP tools, and the current follow-up is
+publishing useful diagnostics for provider/runtime failures.
 
 ## Current Position
 
@@ -40,9 +41,10 @@ Phase: 135 (molmospaces-ci-live-agent-reports) - COMPLETE
 Plan: 1 of 1 complete - `135-01` added local rehearsal, non-interactive Claude
 Code live cleanup CI execution, MolmoSpaces asset prewarm/cache, and Pages
 status/report publishing for the three model entries.
-Status: Phase 135 is implemented and non-live verified. Real hosted/live proof
-is intentionally not claimed until GitHub Actions secrets are configured and the
-opt-in workflow runs.
+Status: Phase 135 is implemented and non-live verified. The first main-hosted
+opt-in workflow runs with the configured `KIMI_API_KEY` and `MIMO_TP_KEY`; Kimi
+connected to the cleanup MCP tools before failing with a provider API error, and
+MiMo hosted entries still need final inspection.
 
 Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability

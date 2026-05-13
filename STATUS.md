@@ -10,22 +10,23 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible and honest from local runs through CI-published report pages.
 
-Phase 135, MolmoSpaces CI live-agent reports, is implemented and non-live
-verified. It promotes the three known-good local Claude Code provider-profile
-cleanup reports into an opt-in GitHub-hosted CI path with local rehearsal,
-MolmoSpaces asset caching/prewarm, and Pages-visible report/status tiles.
+Phase 135, MolmoSpaces CI live-agent reports, is implemented, merged, and
+non-live verified. The opt-in hosted workflow now installs Codex/Claude Code,
+prewarms MolmoSpaces assets, passes explicit Claude MCP config, and reaches the
+cleanup MCP tools with repo-scoped provider secrets.
 
 ## Next Action
 
-Land the Molmo live CI branch to `main`, then run the opt-in Molmo live workflow
-via `workflow_dispatch` or a `[molmo-live]` push to `main`, using the existing
-GitHub Actions secrets `KIMI_API_KEY` and `MIMO_TP_KEY`.
+Finish hosted proof from the current opt-in `main` workflow dispatch, inspect
+the MiMo entries, and land the follow-up failure-diagnostics patch so failed
+live model runs publish their partial seed-run logs on Pages/artifacts.
 
 ## Current Blocker
 
-Real hosted proof is pending an actual hosted live run from `main`. A branch
-dispatch can exercise the matrix, but web deployment is intentionally limited
-to the protected `main` ref.
+The hosted live path is through setup/MCP visibility. The latest Kimi run
+connected to the `roboclaws` MCP server and executed cleanup tools, then failed
+with a provider API error. MiMo hosted entries still need final inspection, and
+failed entries need richer published diagnostics than a bare `status.json`.
 
 ## Human Review Surface
 

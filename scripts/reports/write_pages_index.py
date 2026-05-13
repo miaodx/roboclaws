@@ -209,9 +209,13 @@ def _molmo_live_section(site_dir: Path) -> str:
         status = html.escape(str(entry.get("status") or "unknown"))
         reason = html.escape(str(entry.get("reason") or ""))
         report_path = str(entry.get("report_path") or "")
+        diagnostic_path = str(entry.get("diagnostic_path") or "")
         if status == "success" and report_path:
             href = html.escape("molmo/live/" + report_path, quote=True)
             title = f'<a href="{href}">&#x25B6; {label}</a>'
+        elif diagnostic_path:
+            href = html.escape("molmo/live/" + diagnostic_path, quote=True)
+            title = f'<a href="{href}">{label} diagnostics</a>'
         else:
             title = f"<span>{label}</span>"
         desc = (
