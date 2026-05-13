@@ -232,6 +232,7 @@ roboclaws_claude_provider_args() {
   out_env_args=(
     "ANTHROPIC_API_KEY=${!key_env}"
     "ANTHROPIC_BASE_URL=${base_url}"
+    "CLAUDE_CODE_SIMPLE=${CLAUDE_CODE_SIMPLE:-1}"
   )
 }
 

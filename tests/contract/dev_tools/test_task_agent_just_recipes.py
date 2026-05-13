@@ -409,7 +409,37 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
         "model:mimo-v2.5-pro",
         "env:ANTHROPIC_API_KEY=fake-mimo-key",
         "env:ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic",
+        "env:CLAUDE_CODE_SIMPLE=1",
     ]
+
+
+def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    env["CLAUDE_CODE_SIMPLE"] = "0"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
+            MIMO_TP_KEY=fake-mimo-key
+            model_args=()
+            env_args=()
+            roboclaws_claude_provider_args model_args env_args
+            printf 'env:%s\n' "${env_args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "env:CLAUDE_CODE_SIMPLE=0" in result.stdout.splitlines()
 
 
 def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> None:
