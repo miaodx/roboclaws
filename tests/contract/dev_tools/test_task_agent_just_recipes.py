@@ -17,6 +17,16 @@ CODE_JUST = JUST_DIR / "code.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+CODE_AGENT_ENV_VARS = (
+    "ROBOCLAWS_CODE_AGENT_PROVIDER",
+    "ROBOCLAWS_CODEX_PROVIDER",
+    "ROBOCLAWS_CLAUDE_PROVIDER",
+    "ROBOCLAWS_CODE_AGENT_MODEL",
+    "ROBOCLAWS_CODEX_MODEL",
+    "ROBOCLAWS_CLAUDE_MODEL",
+    "KIMI_API_KEY",
+    "MIMO_TP_KEY",
+)
 
 
 def just_bin() -> str:
@@ -54,6 +64,13 @@ def trace_task_run(*args: str) -> list[str]:
         text=True,
     )
     return result.stdout.strip().split("\t")
+
+
+def clean_code_agent_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in CODE_AGENT_ENV_VARS:
+        env.pop(key, None)
+    return env
 
 
 def test_public_just_summary_is_small_facade() -> None:
@@ -201,7 +218,7 @@ def test_key_value_third_argument_keeps_visual_default() -> None:
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
-    env = os.environ.copy()
+    env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
         [
@@ -234,21 +251,190 @@ def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback(
     ]
 
 
-def test_coding_agent_launchers_apply_env_model_overrides_per_invocation() -> None:
+def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            codex_args=()
+            claude_model_args=()
+            claude_env_args=()
+            roboclaws_codex_provider_args codex_args
+            roboclaws_claude_provider_args claude_model_args claude_env_args
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            printf 'codex_args=%s\n' "${#codex_args[@]}"
+            printf 'claude_model_args=%s\n' "${#claude_model_args[@]}"
+            printf 'claude_env_args=%s\n' "${#claude_env_args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "system",
+        "codex_args=0",
+        "claude_model_args=0",
+        "claude_env_args=0",
+    ]
+
+
+def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODE_AGENT_PROVIDER=kimi-openai
+            ROBOCLAWS_CODE_AGENT_MODEL=shared-model
+            ROBOCLAWS_CODEX_PROVIDER=mimo-openai
+            ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+            MIMO_TP_KEY=fake
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "-c",
+        'model="mimo-v2.5-pro"',
+        "-c",
+        'model_provider="mimo-openai"',
+        "-c",
+        'model_providers.mimo-openai.name="mimo-openai"',
+        "-c",
+        'model_providers.mimo-openai.base_url="https://token-plan-cn.xiaomimimo.com/v1"',
+        "-c",
+        'model_providers.mimo-openai.env_key="MIMO_TP_KEY"',
+        "-c",
+        'model_providers.mimo-openai.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=kimi-openai
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "kimi-openai requires KIMI_API_KEY" in result.stderr
+    assert "sk-" not in result.stderr
+
+
+def test_coding_agent_claude_profile_builds_scoped_env() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
+            MIMO_TP_KEY=fake-mimo-key
+            model_args=()
+            env_args=()
+            roboclaws_claude_provider_args model_args env_args
+            printf 'model:%s\n' "${model_args[@]}"
+            printf 'env:%s\n' "${env_args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "model:--model",
+        "model:mimo-v2.5-pro",
+        "env:ANTHROPIC_API_KEY=fake-mimo-key",
+        "env:ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic",
+    ]
+
+
+def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    helper_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "source scripts/dev/coding_agent_env.sh" in code_text
     assert "roboclaws_load_dotenv .env" in code_text
+    assert "roboclaws_codex_provider_args codex_model_args" in code_text
+    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in code_text
     assert 'codex "${codex_model_args[@]}" {{codex_full_permission_args}}' in code_text
-    assert 'claude "${claude_model_args[@]}" {{claude_full_permission_args}}' in code_text
+    assert (
+        'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})'
+        in code_text
+    )
+    assert 'for entry in "${claude_env_args[@]}"; do' in code_text
+    assert 'export "$entry"' in code_text
+    assert "export ANTHROPIC_API_KEY" not in code_text
 
     assert "source scripts/dev/coding_agent_env.sh" in molmo_text
+    assert "roboclaws_codex_provider_args codex_model_args" in molmo_text
+    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in molmo_text
     assert '"--codex-model-arg=$arg"' in molmo_text
+    assert "--codex-provider-summary" in molmo_text
     assert "*self.args.codex_model_arg" in runner_text
+    assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
-    assert '"$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}}' in molmo_text
+    assert (
+        'claude_command=("$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}})'
+        in molmo_text
+    )
+    assert "ANTHROPIC_BASE_URL" in helper_text
+    assert "ANTHROPIC_API_KEY" in helper_text
+
+
+def test_codex_provider_smoke_is_explicit_and_profile_only() -> None:
+    code_text = CODE_JUST.read_text(encoding="utf-8")
+
+    assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
+    assert "no Codex provider profile selected" in code_text
+    assert "--sandbox read-only" in code_text
+    assert "--ephemeral" in code_text
+    assert "--ignore-user-config" in code_text
+    assert "no system-provider fallback was used" in code_text
 
 
 def test_molmo_codex_live_is_detached_and_probeable() -> None:

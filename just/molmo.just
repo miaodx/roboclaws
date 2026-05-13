@@ -168,12 +168,20 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         fi
         source scripts/dev/coding_agent_env.sh
         roboclaws_load_dotenv .env
-        codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL)"
-        claude_model="$(roboclaws_code_agent_model ROBOCLAWS_CLAUDE_MODEL)"
+        codex_model=""
+        codex_profile_summary="system defaults"
+        claude_profile_summary="system defaults"
         codex_model_args=()
         claude_model_args=()
-        roboclaws_code_agent_model_args codex_model_args ROBOCLAWS_CODEX_MODEL
-        roboclaws_code_agent_model_args claude_model_args ROBOCLAWS_CLAUDE_MODEL
+        claude_env_args=()
+        if [[ "$driver" == "codex-live" ]]; then
+          codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
+          codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
+          roboclaws_codex_provider_args codex_model_args
+        elif [[ "$driver" == "claude-live" ]]; then
+          claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CLAUDE_PROVIDER ROBOCLAWS_CLAUDE_MODEL)"
+          roboclaws_claude_provider_args claude_model_args claude_env_args
+        fi
         codex_bin="$(command -v codex || true)"
         claude_bin="$(command -v claude || true)"
         kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
@@ -245,6 +253,7 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             --tmux-session "$session_name"
             --codex-bin "$codex_bin"
             --codex-model "$codex_model"
+            --codex-provider-summary "$codex_profile_summary"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --policy "$policy"
@@ -322,12 +331,22 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
             claude mcp remove roboclaws >/dev/null 2>&1 || true
             claude mcp add --transport http roboclaws "$client_url"
             echo "==> launching Claude Code with full permissions"
-            if [[ -n "$claude_model" ]]; then
-              echo "==> Claude Code model override for this run: ${claude_model}"
+            if [[ "$claude_profile_summary" != "system defaults" ]]; then
+              echo "==> Claude Code provider for this run: ${claude_profile_summary}"
             fi
             echo "==> MCP URL: ${client_url}"
             echo "==> kickoff: ${kickoff_prompt}"
-            "$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}}
+            claude_command=("$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}})
+            if [[ "${#claude_env_args[@]}" -gt 0 ]]; then
+              (
+                for entry in "${claude_env_args[@]}"; do
+                  export "$entry"
+                done
+                "${claude_command[@]}"
+              )
+            else
+              "${claude_command[@]}"
+            fi
             ;;
           openclaw-live)
             echo "==> launching OpenClaw Gateway chat with cleanup skill"

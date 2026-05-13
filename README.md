@@ -97,15 +97,25 @@ just task::run ai2thor-nav claude
 Those recipes start the MCP server, register `roboclaws`, launch the coding
 agent, and clean up the server on exit.
 
-Optional repo-local model overrides can live in `.env`:
+Optional repo-local provider overrides can live in `.env`:
 
 ```bash
-ROBOCLAWS_CODEX_MODEL=gpt-5.2
-ROBOCLAWS_CLAUDE_MODEL=sonnet
+ROBOCLAWS_CODEX_PROVIDER=mimo-openai
+ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2-5
 ```
 
-The launchers pass these as per-run `--model` flags. If unset, Codex and
-Claude Code use their normal system-configured defaults.
+`system` remains the default provider and leaves Codex / Claude Code on their
+normal machine configuration. The Kimi/MiMo profiles select model, base URL,
+API-key env var, and protocol together for that one launcher invocation. For
+Codex provider profiles, run a cheap compatibility check before long visual
+runs:
+
+```bash
+just code::codex-provider-smoke
+```
 
 Manual server flow:
 

@@ -11,11 +11,117 @@ roboclaws_load_dotenv() {
   fi
 }
 
+roboclaws_code_agent_provider() {
+  local primary_var="$1"
+  local provider="${!primary_var:-}"
+  if [[ -z "$provider" ]]; then
+    provider="${ROBOCLAWS_CODE_AGENT_PROVIDER:-}"
+  fi
+  if [[ -z "$provider" ]]; then
+    provider="system"
+  fi
+  printf '%s\n' "$provider"
+}
+
+roboclaws_code_agent_profile_default_model() {
+  local provider="$1"
+  case "$provider" in
+    system)
+      printf '\n'
+      ;;
+    kimi-openai)
+      printf 'kimi-for-coding\n'
+      ;;
+    mimo-openai)
+      printf 'mimo-v2.5-pro\n'
+      ;;
+    kimi-anthropic)
+      printf 'kimi-k2-5\n'
+      ;;
+    mimo-anthropic)
+      printf 'mimo-v2.5-pro\n'
+      ;;
+    *)
+      echo "error: unknown coding-agent provider profile: ${provider}" >&2
+      return 2
+      ;;
+  esac
+}
+
+roboclaws_code_agent_profile_base_url() {
+  local provider="$1"
+  case "$provider" in
+    kimi-openai)
+      printf 'https://api.kimi.com/coding/v1\n'
+      ;;
+    mimo-openai)
+      printf 'https://token-plan-cn.xiaomimimo.com/v1\n'
+      ;;
+    kimi-anthropic)
+      printf 'https://api.kimi.com/coding/\n'
+      ;;
+    mimo-anthropic)
+      printf 'https://token-plan-cn.xiaomimimo.com/anthropic\n'
+      ;;
+    system)
+      printf '\n'
+      ;;
+    *)
+      echo "error: unknown coding-agent provider profile: ${provider}" >&2
+      return 2
+      ;;
+  esac
+}
+
+roboclaws_code_agent_profile_key_env() {
+  local provider="$1"
+  case "$provider" in
+    kimi-openai|kimi-anthropic)
+      printf 'KIMI_API_KEY\n'
+      ;;
+    mimo-openai|mimo-anthropic)
+      printf 'MIMO_TP_KEY\n'
+      ;;
+    system)
+      printf '\n'
+      ;;
+    *)
+      echo "error: unknown coding-agent provider profile: ${provider}" >&2
+      return 2
+      ;;
+  esac
+}
+
+roboclaws_code_agent_profile_wire_api() {
+  local provider="$1"
+  case "$provider" in
+    kimi-openai|mimo-openai)
+      printf 'responses\n'
+      ;;
+    kimi-anthropic|mimo-anthropic)
+      printf 'anthropic\n'
+      ;;
+    system)
+      printf '\n'
+      ;;
+    *)
+      echo "error: unknown coding-agent provider profile: ${provider}" >&2
+      return 2
+      ;;
+  esac
+}
+
 roboclaws_code_agent_model() {
   local primary_var="$1"
+  local provider_var="${2:-}"
   local model="${!primary_var:-}"
   if [[ -z "$model" ]]; then
     model="${ROBOCLAWS_CODE_AGENT_MODEL:-}"
+  fi
+  if [[ -z "$model" && -n "$provider_var" ]]; then
+    local provider
+    provider="$(roboclaws_code_agent_provider "$provider_var")" || return
+    model="$(roboclaws_code_agent_profile_default_model "$provider")" || return
   fi
   printf '%s\n' "$model"
 }
@@ -23,11 +129,131 @@ roboclaws_code_agent_model() {
 roboclaws_code_agent_model_args() {
   local -n out_args="$1"
   local primary_var="$2"
+  local provider_var="${3:-}"
   local model
 
   out_args=()
-  model="$(roboclaws_code_agent_model "$primary_var")"
+  model="$(roboclaws_code_agent_model "$primary_var" "$provider_var")"
   if [[ -n "$model" ]]; then
     out_args=(--model "$model")
   fi
+}
+
+roboclaws_code_agent_require_key() {
+  local provider="$1"
+  local key_env="$2"
+  if [[ -z "$key_env" ]]; then
+    return 0
+  fi
+  if [[ -z "${!key_env:-}" ]]; then
+    echo "error: ${provider} requires ${key_env}; add it to the repo-local .env or export it for this shell" >&2
+    return 2
+  fi
+}
+
+roboclaws_toml_string() {
+  local value="${1//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+roboclaws_codex_provider_args() {
+  local -n out_args="$1"
+  local provider_var="${2:-ROBOCLAWS_CODEX_PROVIDER}"
+  local model_var="${3:-ROBOCLAWS_CODEX_MODEL}"
+  local provider model base_url key_env wire_api
+
+  out_args=()
+  provider="$(roboclaws_code_agent_provider "$provider_var")" || return
+  case "$provider" in
+    system|kimi-openai|mimo-openai)
+      ;;
+    *)
+      echo "error: unsupported Codex provider '${provider}'; expected system, kimi-openai, or mimo-openai" >&2
+      return 2
+      ;;
+  esac
+
+  model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
+  if [[ "$provider" == "system" ]]; then
+    if [[ -n "$model" ]]; then
+      out_args=(--model "$model")
+    fi
+    return 0
+  fi
+
+  base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
+  key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
+  wire_api="$(roboclaws_code_agent_profile_wire_api "$provider")" || return
+  roboclaws_code_agent_require_key "$provider" "$key_env" || return
+
+  out_args=(
+    -c "model=$(roboclaws_toml_string "$model")"
+    -c "model_provider=$(roboclaws_toml_string "$provider")"
+    -c "model_providers.${provider}.name=$(roboclaws_toml_string "$provider")"
+    -c "model_providers.${provider}.base_url=$(roboclaws_toml_string "$base_url")"
+    -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
+    -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
+  )
+}
+
+roboclaws_claude_provider_args() {
+  local model_args_name="$1"
+  local env_args_name="$2"
+  local provider_var="${3:-ROBOCLAWS_CLAUDE_PROVIDER}"
+  local model_var="${4:-ROBOCLAWS_CLAUDE_MODEL}"
+  local -n out_model_args="$model_args_name"
+  local -n out_env_args="$env_args_name"
+  local provider model base_url key_env
+
+  out_model_args=()
+  out_env_args=()
+  provider="$(roboclaws_code_agent_provider "$provider_var")" || return
+  case "$provider" in
+    system|kimi-anthropic|mimo-anthropic)
+      ;;
+    *)
+      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, or mimo-anthropic" >&2
+      return 2
+      ;;
+  esac
+
+  model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
+  if [[ -n "$model" ]]; then
+    out_model_args=(--model "$model")
+  fi
+  if [[ "$provider" == "system" ]]; then
+    return 0
+  fi
+
+  base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
+  key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
+  roboclaws_code_agent_require_key "$provider" "$key_env" || return
+  out_env_args=(
+    "ANTHROPIC_API_KEY=${!key_env}"
+    "ANTHROPIC_BASE_URL=${base_url}"
+  )
+}
+
+roboclaws_code_agent_profile_summary() {
+  local provider_var="$1"
+  local model_var="$2"
+  local provider model base_url key_env wire_api
+
+  provider="$(roboclaws_code_agent_provider "$provider_var")" || return
+  model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
+  if [[ "$provider" == "system" ]]; then
+    if [[ -n "$model" ]]; then
+      printf 'system model=%s\n' "$model"
+    else
+      printf 'system defaults\n'
+    fi
+    return 0
+  fi
+
+  base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
+  key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
+  wire_api="$(roboclaws_code_agent_profile_wire_api "$provider")" || return
+  printf '%s model=%s base_url=%s key_env=%s protocol=%s\n' \
+    "$provider" "$model" "$base_url" "$key_env" "$wire_api"
 }

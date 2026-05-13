@@ -33,18 +33,31 @@ Both recipes default to full agent permissions for local demo operation:
 uses Claude Code's bypass-permissions mode. Run them only in a trusted local
 checkout.
 
-To pin a model for these demos without changing the machine-wide Codex or
-Claude Code defaults, add optional overrides to the repo-local `.env`:
+To run these demos through Kimi or MiMo without changing the machine-wide Codex
+or Claude Code defaults, add optional provider overrides to the repo-local
+`.env`:
 
 ```bash
-ROBOCLAWS_CODEX_MODEL=gpt-5.2
-ROBOCLAWS_CLAUDE_MODEL=sonnet
+ROBOCLAWS_CODEX_PROVIDER=mimo-openai
+ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2-5
 ```
 
-`ROBOCLAWS_CODE_AGENT_MODEL` is also accepted as a shared fallback for both
-drivers. The wrappers translate these values into per-invocation `--model`
-flags; when the variables are unset, the CLIs use their normal configured
-defaults.
+Supported profiles are `system`, `kimi-openai`, and `mimo-openai` for Codex,
+and `system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
+`ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` are accepted as
+shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
+var, and protocol together for the launched process only; unset variables leave
+the CLIs on their normal configured defaults.
+
+Before a long Codex visual run, check the selected OpenAI-compatible endpoint
+against the current Codex CLI wire API:
+
+```bash
+just code::codex-provider-smoke
+```
 
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):

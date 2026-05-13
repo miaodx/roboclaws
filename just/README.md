@@ -73,6 +73,19 @@ active or the requested MCP port is already accepting connections, the launcher
 fails instead of choosing another port. `claude` and `openclaw` live cleanup
 drivers still use their existing interactive launch paths.
 
+Repo-local `.env` provider profiles can route the live Codex / Claude launchers
+through Kimi or MiMo without editing user-level CLI config:
+
+```bash
+ROBOCLAWS_CODEX_PROVIDER=mimo-openai
+ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2-5
+```
+
+Run `just code::codex-provider-smoke` before long Codex visual runs to verify
+the selected OpenAI-compatible endpoint works with the installed Codex CLI.
+
 ## Examples
 
 ```bash

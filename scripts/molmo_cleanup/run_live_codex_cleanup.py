@@ -35,6 +35,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tmux-session", required=True)
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
+    parser.add_argument("--codex-provider-summary", default="system defaults")
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--policy", required=True)
@@ -166,8 +167,8 @@ class LiveCodexCleanupRunner:
         )
 
         print("==> launching Codex exec with full permissions")
-        if self.args.codex_model:
-            print(f"==> Codex model override for this run: {self.args.codex_model}")
+        if self.args.codex_provider_summary != "system defaults":
+            print(f"==> Codex provider for this run: {self.args.codex_provider_summary}")
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
         command = [
