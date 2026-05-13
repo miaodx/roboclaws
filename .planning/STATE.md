@@ -1142,7 +1142,8 @@ Items acknowledged and carried forward from the new-mode ingest:
 Last session: 2026-05-13T18:08:00+08:00
 Stopped at: Phase 135 MolmoSpaces CI live-agent reports implemented and
 non-live verified. A branch `workflow_dispatch` found the Molmo live job needed
-`just` installed and confirmed GitHub Pages deployment is protected to `main`.
+`just` installed and confirmed GitHub Pages deployment is protected to `main`;
+branch dispatches can rehearse the matrix without deploying Pages.
 The next external validation should run `workflow_dispatch` with
 `molmo_live=true` on `main` or push to `main` with `[molmo-live]` in the commit
 message, using the configured GitHub Actions secrets `KIMI_API_KEY` and

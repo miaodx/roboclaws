@@ -24,8 +24,8 @@ GitHub Actions secrets `KIMI_API_KEY` and `MIMO_TP_KEY`.
 ## Current Blocker
 
 Real hosted proof is pending an actual hosted live run from `main`. A branch
-dispatch can exercise the matrix, but GitHub Pages environment protection
-rejects deployment from non-main refs.
+dispatch can exercise the matrix, but web deployment is intentionally limited
+to the protected `main` ref.
 
 ## Human Review Surface
 
