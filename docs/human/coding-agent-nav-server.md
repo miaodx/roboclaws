@@ -49,8 +49,8 @@ Supported profiles are `system`, `kimi-openai`, and `mimo-openai` for Codex,
 and `system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` are accepted as
 shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
-var, and protocol together for the launched process only; unset variables leave
-the CLIs on their normal configured defaults.
+var, protocol, and `CLAUDE_CODE_SIMPLE=1` together for the launched process
+only; unset variables leave the CLIs on their normal configured defaults.
 
 Before a long Codex visual run, check the selected OpenAI-compatible endpoint
 against the current Codex CLI wire API:

@@ -108,7 +108,8 @@ ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
 `system` leaves the system CLI defaults unchanged. Kimi/MiMo profiles select
-model, base URL, API-key env var, and protocol for the launched process only.
+model, base URL, API-key env var, protocol, and `CLAUDE_CODE_SIMPLE=1` for the
+launched process only.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
 shared fallbacks. Before a long Codex visual cleanup run, use:
 
