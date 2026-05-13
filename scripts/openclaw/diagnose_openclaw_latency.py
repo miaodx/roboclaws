@@ -19,7 +19,7 @@ def _parse_args() -> argparse.Namespace:
         help="Replay directory containing replay.json + saved PNG frames",
     )
     parser.add_argument("--step", type=int, default=0, help="Replay step number to probe")
-    parser.add_argument("--model", default="kimi-coding", help="Direct provider model alias")
+    parser.add_argument("--model", default="kimi-k2.6", help="Direct provider model alias")
     parser.add_argument(
         "--gateway-url",
         default=None,

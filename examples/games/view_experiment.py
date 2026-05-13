@@ -42,7 +42,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seeds", default="1,2,3,4,5")
     parser.add_argument("--scenes", default="FloorPlan201,FloorPlan205,FloorPlan210")
     parser.add_argument("--games", default="territory,coverage")
-    parser.add_argument("--model", default="kimi-coding")
+    parser.add_argument("--model", default="kimi-k2.6")
     parser.add_argument("--agents", type=int, default=3)
     parser.add_argument("--steps", type=int, default=200)
     parser.add_argument("--output-dir", default="output/view-experiment", dest="output_dir")

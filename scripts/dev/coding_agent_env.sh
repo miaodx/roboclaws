@@ -30,13 +30,13 @@ roboclaws_code_agent_profile_default_model() {
       printf '\n'
       ;;
     kimi-openai)
-      printf 'kimi-for-coding\n'
+      printf 'kimi-k2.6\n'
       ;;
     mimo-openai)
       printf 'mimo-v2.5-pro\n'
       ;;
     kimi-anthropic)
-      printf 'kimi-k2-5\n'
+      printf 'kimi-k2.6\n'
       ;;
     mimo-anthropic)
       printf 'mimo-v2.5-pro\n'

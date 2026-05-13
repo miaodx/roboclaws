@@ -153,7 +153,7 @@ run task driver mode="" *overrides:
         ;;
 
       territory:vlm|coverage:vlm)
-        model="$(get model kimi-coding)"
+        model="$(get model kimi-k2.6)"
         agents="$(get agents 2)"
         steps="$(get steps 20)"
         souls="$(get souls "")"

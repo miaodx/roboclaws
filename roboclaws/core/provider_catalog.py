@@ -31,7 +31,7 @@ _MODELS: tuple[ModelMetadata, ...] = (
     ModelMetadata("kimi-k2.6", "kimi-k2.6", "kimi", "kimi", ("KIMI_API_KEY",), True),
     ModelMetadata(
         "kimi-coding",
-        "kimi-for-coding",
+        "kimi-k2.6",
         "kimi",
         "kimi-coding",
         ("KIMI_API_KEY",),

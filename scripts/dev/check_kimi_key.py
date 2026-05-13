@@ -30,7 +30,7 @@ def validate_kimi_key(max_attempts: int = 4) -> str:
     for attempt in range(max_attempts):
         try:
             msg = client.messages.create(
-                model="kimi-k2-5",
+                model="kimi-k2.6",
                 max_tokens=64,
                 messages=[{"role": "user", "content": prompt}],
             )
