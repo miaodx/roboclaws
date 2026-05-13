@@ -117,8 +117,8 @@ Run and publish the three-model comparison matrix:
 | Page Tile | Provider Profile | Model | Expected Driver |
 |---|---|---|---|
 | Kimi K2.6 | `kimi-anthropic` | `kimi-k2.6` | `claude` |
-| MiMo v2.5 Pro Simple | `mimo-anthropic` | `mimo-v2.5-pro` | `claude` |
-| MiMo v2 Omni Simple | `mimo-anthropic` or provider-specific profile | `mimo-v2-omni` | `claude` |
+| MiMo v2.5 Pro | `mimo-anthropic` | `mimo-v2.5-pro` | `claude` |
+| MiMo v2 Omni | `mimo-anthropic` or provider-specific profile | `mimo-v2-omni` | `claude` |
 
 The first implementation should mirror the local artifacts' shape:
 
@@ -130,6 +130,10 @@ The first implementation should mirror the local artifacts' shape:
   budget.
 - expected artifact size: about 20 MB per successful run based on the three
   cited local directories.
+- naming note: the local MiMo artifact directories used `*-simple` to indicate
+  Claude Code simple mode. The real model IDs remain `mimo-v2.5-pro` and
+  `mimo-v2-omni`; CI should pass those exact IDs while the provider helper
+  keeps `CLAUDE_CODE_SIMPLE=1`.
 
 ## Local CI Rehearsal
 
@@ -158,8 +162,8 @@ Preferred command surface:
 
 ```bash
 just molmo::ci-rehearsal kimi-k2.6
-just molmo::ci-rehearsal mimo-v2.5-pro-simple
-just molmo::ci-rehearsal mimo-v2-omni-simple
+just molmo::ci-rehearsal mimo-v2.5-pro
+just molmo::ci-rehearsal mimo-v2-omni
 ```
 
 The `ci-rehearsal` recipe should:
@@ -189,8 +193,7 @@ gate before committing workflow YAML.
      `scripts/molmo_cleanup/` that can be called by both the local recipe and
      GitHub Actions.
    - Support the three model entries:
-     `kimi-k2.6`, `mimo-v2.5-pro-simple`, and
-     `mimo-v2-omni-simple`.
+     `kimi-k2.6`, `mimo-v2.5-pro`, and `mimo-v2-omni`.
    - Use `output/molmo/ci-rehearsal/<model>/` locally and the same internal
      layout the CI artifact upload will expect.
    - The first successful rehearsal only needs one model; the full rehearsal
@@ -254,8 +257,8 @@ gate before committing workflow YAML.
    - Matrix: three entries with `max-parallel: 1` and `fail-fast: false`.
    - Upload artifact names:
      - `report-molmo-live-kimi-k2.6`
-     - `report-molmo-live-mimo-v2.5-pro-simple`
-     - `report-molmo-live-mimo-v2-omni-simple`
+     - `report-molmo-live-mimo-v2.5-pro`
+     - `report-molmo-live-mimo-v2-omni`
    - Always upload `report.html`, `run_result.json`, `trace.jsonl`,
      `agent_view.json`, `private_evaluation.json`,
      `advisory_evaluation.json`, `planner_proof_requests.json`,
@@ -266,8 +269,8 @@ gate before committing workflow YAML.
    - Extend `publish-pages.needs` with the new live Molmo job, but keep it
      best-effort like the OpenClaw jobs.
    - Download `report-molmo-live-kimi-k2.6`,
-     `report-molmo-live-mimo-v2.5-pro-simple`, and
-     `report-molmo-live-mimo-v2-omni-simple` best-effort into
+     `report-molmo-live-mimo-v2.5-pro`, and
+     `report-molmo-live-mimo-v2-omni` best-effort into
      `molmo-live-src/<model>/`.
    - Copy successful matrix entries to stable paths under `site/molmo/live/`.
    - Extend `scripts/reports/write_pages_index.py` with an

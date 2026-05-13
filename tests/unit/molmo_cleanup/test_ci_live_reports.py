@@ -32,13 +32,13 @@ def _load_module(path: Path, name: str):
 def test_ci_live_model_entries_match_provider_profiles() -> None:
     assert [entry.name for entry in MODEL_ENTRIES] == [
         "kimi-k2.6",
-        "mimo-v2.5-pro-simple",
-        "mimo-v2-omni-simple",
+        "mimo-v2.5-pro",
+        "mimo-v2-omni",
     ]
     assert entry_by_name("kimi-k2.6").provider_profile == "kimi-anthropic"
     assert entry_by_name("kimi-k2.6").secret_env == "KIMI_API_KEY"
-    assert entry_by_name("mimo-v2-omni-simple").provider_profile == "mimo-anthropic"
-    assert entry_by_name("mimo-v2-omni-simple").secret_env == "MIMO_TP_KEY"
+    assert entry_by_name("mimo-v2-omni").provider_profile == "mimo-anthropic"
+    assert entry_by_name("mimo-v2-omni").secret_env == "MIMO_TP_KEY"
 
 
 def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
@@ -108,7 +108,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         }
     )
     skipped = base_status(
-        entry_by_name("mimo-v2.5-pro-simple"),
+        entry_by_name("mimo-v2.5-pro"),
         seed=7,
         generated_mess_count=5,
         profile="world-labels",
@@ -116,12 +116,12 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     )
     skipped.update({"status": "skipped", "reason": "missing required secret/env MIMO_TP_KEY"})
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), success)
-    write_status(status_path_for_entry(live_root, "mimo-v2.5-pro-simple"), skipped)
+    write_status(status_path_for_entry(live_root, "mimo-v2.5-pro"), skipped)
     write_manifest(live_root)
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
     assert "MolmoSpaces Live Cleanup" in html
     assert "molmo/live/kimi-k2.6/seed-7/report.html" in html
-    assert "MiMo v2.5 Pro Simple" in html
+    assert "MiMo v2.5 Pro" in html
     assert "missing required secret/env MIMO_TP_KEY" in html

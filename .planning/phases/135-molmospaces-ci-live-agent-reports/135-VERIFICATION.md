@@ -19,7 +19,7 @@ That proof requires configured GitHub Actions secrets and a hosted
 |---|---|
 | Local CI rehearsal exists for model entries | `just molmo::ci-rehearsal kimi-k2.6 --dry-run`; `just --list molmo` shows `ci-rehearsal` and `ci-rehearsal-all`. |
 | Rehearsal records provider/cache/status shape | Dry-run status at `output/molmo/ci-rehearsal/site/molmo/live/kimi-k2.6/status.json` records `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic`, `ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6`, cache roots, command, and dry-run reason. |
-| Three model entries are supported | `tests/unit/molmo_cleanup/test_ci_live_reports.py::test_ci_live_model_entries_match_provider_profiles`; all-entry dry-run command generated statuses for Kimi, MiMo Pro, and MiMo Omni. |
+| Three model entries are supported | `tests/unit/molmo_cleanup/test_ci_live_reports.py::test_ci_live_model_entries_match_provider_profiles`; entries use real model IDs `kimi-k2.6`, `mimo-v2.5-pro`, and `mimo-v2-omni`. |
 | Claude Code live execution is non-interactive | `scripts/molmo_cleanup/run_live_claude_cleanup.py --help`; implementation uses `claude -p --output-format stream-json` with full permission flags. |
 | MolmoSpaces assets are prewarmed/cached | `scripts/molmo_cleanup/prewarm_molmospaces_ci_assets.py --help`; workflow caches `~/.cache/uv`, `~/.cache/molmospaces`, and `~/.cache/molmo-spaces-resources`, and the matrix script prewarms seed 7 / `rby1m` / generated mess count 5 before live calls when secrets exist. |
 | CI installs Codex and Claude Code | `.github/workflows/ci.yml` has Node 22 setup, npm install for `@openai/codex` and `@anthropic-ai/claude-code`, and `codex --version` / `claude --version`. |
