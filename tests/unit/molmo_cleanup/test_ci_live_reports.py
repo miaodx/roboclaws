@@ -121,6 +121,17 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
 
     command = captured["command"]
     assert command[:5] == ["claude", "-p", "--verbose", "--output-format", "stream-json"]
+    mcp_config_path = Path(command[command.index("--mcp-config") + 1])
+    mcp_config = json.loads(mcp_config_path.read_text(encoding="utf-8"))
+    assert mcp_config == {
+        "mcpServers": {
+            "roboclaws": {
+                "type": "http",
+                "url": "http://127.0.0.1:18788/mcp",
+            }
+        }
+    }
+    assert "--strict-mcp-config" in command
     assert "--dangerously-skip-permissions" in command
 
 
