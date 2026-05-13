@@ -59,7 +59,7 @@ Invoke recipes with the `module::recipe` form:
 
 ```bash
 just task::run ai2thor-nav openclaw
-just task::run molmo-cleanup codex minimal
+just task::run molmo-cleanup codex smoke
 just agent::verify mock
 ```
 

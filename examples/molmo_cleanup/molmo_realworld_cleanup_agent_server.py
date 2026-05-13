@@ -18,7 +18,9 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+    CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -59,8 +61,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--generated-mess-count", type=int, default=10)
     parser.add_argument(
         "--perception-mode",
-        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
+    parser.add_argument(
+        "--cleanup-profile",
+        choices=cleanup_profile_names(),
+        help="Public Molmo cleanup profile selected by the command facade.",
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
@@ -98,6 +105,7 @@ def print_setup(
     backend: str = SYNTHETIC_BACKEND,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
+    cleanup_profile: str | None = None,
 ) -> None:
     commands = client_setup_commands(url)
     print("\nMolmo real-world cleanup MCP server is ready.")
@@ -108,6 +116,8 @@ def print_setup(
     print(f"MCP server    : {MCP_SERVER_NAME}")
     print(f"Backend       : {backend}")
     print(f"Perception    : {perception_mode}")
+    if cleanup_profile:
+        print(f"Profile       : {cleanup_profile}")
     print(f"Visual report : {'enabled' if record_robot_views else 'disabled'}")
     print("\nIn another terminal from this repo, run one of:")
     print(f"  {commands['Codex']}")
@@ -128,6 +138,9 @@ def print_setup(
         print(
             "  Sweep waypoints, inspect the FPV artifacts, and call done when evidence is recorded."
         )
+    elif perception_mode == CAMERA_MODEL_POLICY_MODE:
+        print("  Observe returns raw FPV evidence first; call infer_camera_model_candidates.")
+        print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
         print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")
     print("  The server rejects skipped semantic phases; follow required_tool if returned.")
@@ -155,6 +168,7 @@ def run_molmo_realworld_cleanup_agent_server(
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
+    cleanup_profile: str | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -198,6 +212,7 @@ def run_molmo_realworld_cleanup_agent_server(
             fixture_hint_mode="room_only",
             perception_mode=perception_mode,
             record_robot_views=record_robot_views,
+            cleanup_profile=cleanup_profile,
         )
         server.run_in_thread()
         server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
@@ -209,6 +224,7 @@ def run_molmo_realworld_cleanup_agent_server(
                 backend=backend,
                 perception_mode=perception_mode,
                 record_robot_views=record_robot_views,
+                cleanup_profile=cleanup_profile,
             )
         while not server.done_event.wait(poll_interval_s):
             pass
@@ -258,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
             include_robot=args.include_robot,
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,
+            cleanup_profile=args.cleanup_profile,
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

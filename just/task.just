@@ -1,7 +1,7 @@
 # Human-facing task grammar.
 #
 # Canonical form:
-#   just task::run <task> <driver> [report] [key=value ...]
+#   just task::run <task> <driver> [report|profile] [key=value ...]
 #
 # Tasks:
 #   ai2thor-nav | territory | coverage | photo-chairs | molmo-cleanup |
@@ -11,8 +11,11 @@
 #   openclaw | vlm | codex | claude | script | direct | mcp-smoke
 #
 # Reports:
-#   visual  - default, reviewable artifacts for humans
-#   minimal - cheaper semantic evidence for agent iteration
+#   visual  - default for non-Molmo tasks, reviewable artifacts for humans
+#   minimal - cheaper semantic evidence for non-Molmo agent iteration
+#
+# Molmo cleanup profiles:
+#   smoke | world-labels | camera-raw | camera-labels
 
 set working-directory := '..'
 set positional-arguments
@@ -22,26 +25,29 @@ default:
     @just --list task
 
 # Run a human-facing task through a driver.
-run task driver report="visual" *overrides:
+run task driver mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
 
     args=("$@")
     task="${args[0]}"
     driver="${args[1]}"
-    report="${args[2]}"
+    mode="${args[2]}"
     overrides=("${args[@]:3}")
 
     task="${task#task=}"
     driver="${driver#driver=}"
 
-    case "$report" in
+    case "$mode" in
       report=*)
-        report="${report#report=}"
+        mode="${mode#report=}"
+        ;;
+      profile=*)
+        mode="${mode#profile=}"
         ;;
       *=*)
-        overrides=("$report" "${overrides[@]}")
-        report="visual"
+        overrides=("$mode" "${overrides[@]}")
+        mode=""
         ;;
     esac
 
@@ -112,14 +118,29 @@ run task driver report="visual" *overrides:
       exit 1
     fi
 
-    case "$report" in
-      visual|minimal)
-        ;;
-      *)
-        echo "error: unsupported report '$report' (expected visual|minimal)" >&2
-        exit 1
-        ;;
-    esac
+    if [[ "$task" == "molmo-cleanup" ]]; then
+      profile="${mode:-world-labels}"
+      case "$profile" in
+        smoke|world-labels|camera-raw|camera-labels)
+          ;;
+        *)
+          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          exit 1
+          ;;
+      esac
+      dispatch_mode="$profile"
+    else
+      report="${mode:-visual}"
+      case "$report" in
+        visual|minimal)
+          ;;
+        *)
+          echo "error: unsupported report '$report' (expected visual|minimal)" >&2
+          exit 1
+          ;;
+      esac
+      dispatch_mode="$report"
+    fi
 
     case "$task:$driver" in
       ai2thor-nav:openclaw|ai2thor-nav:codex|ai2thor-nav:claude|\
@@ -136,7 +157,7 @@ run task driver report="visual" *overrides:
         ;;
     esac
 
-    exec just agent::run "$task" "$driver" "$report" "${overrides[@]}"
+    exec just agent::run "$task" "$driver" "$dispatch_mode" "${overrides[@]}"
 
 # ---------------------------------------------------------------------------
 # Private compatibility wrappers for older docs/scripts.
@@ -175,30 +196,30 @@ control-ui driver="openclaw" provider="mimo" model="" image_model="" observe_mod
     esac
 
 [private]
-cleanup-quick-check driver="mcp-smoke" runtime="synthetic" evidence="semantic" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::quick-check "{{driver}}" "{{runtime}}" "{{evidence}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+cleanup-quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo/quick-check" task="帮我收拾这个房间" generated_mess_count="10":
+    just molmo::quick-check "{{driver}}" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 [private]
-cleanup-report driver="direct" seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10" runtime="molmospaces" evidence="visual":
+cleanup-report driver="direct" seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels":
     #!/usr/bin/env bash
     set -euo pipefail
     driver="{{driver}}"
     driver="${driver#driver=}"
     case "$driver" in
       openclaw-smoke)
-        just molmo::cleanup "openclaw-smoke" "{{runtime}}" "{{evidence}}" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+        just molmo::cleanup "openclaw-smoke" "{{profile}}" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
         ;;
       codex-live)
-        just task::run molmo-cleanup codex visual seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}" runtime="{{runtime}}" evidence="{{evidence}}"
+        just task::run molmo-cleanup codex "{{profile}}" seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}"
         ;;
       claude-live)
-        just task::run molmo-cleanup claude visual seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}" runtime="{{runtime}}" evidence="{{evidence}}"
+        just task::run molmo-cleanup claude "{{profile}}" seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}"
         ;;
       openclaw-live)
-        just task::run molmo-cleanup openclaw visual seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}" runtime="{{runtime}}" evidence="{{evidence}}"
+        just task::run molmo-cleanup openclaw "{{profile}}" seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}"
         ;;
       direct|mcp-smoke)
-        just task::run molmo-cleanup "$driver" visual seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}" runtime="{{runtime}}" evidence="{{evidence}}"
+        just task::run molmo-cleanup "$driver" "{{profile}}" seeds="{{seeds}}" output_dir="{{output_dir}}" task="{{task}}" generated_mess_count="{{generated_mess_count}}"
         ;;
       *)
         echo "error: unsupported cleanup-report driver '$driver'" >&2
@@ -207,8 +228,8 @@ cleanup-report driver="direct" seeds="1 2 3" output_dir="output/molmo/review-rep
     esac
 
 [private]
-cleanup-raw-fpv seed="7" output_dir="output/molmo/raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::raw-fpv-report "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+cleanup-camera-raw seed="7" output_dir="output/molmo/camera-raw-report" task="帮我收拾这个房间" generated_mess_count="10":
+    just molmo::camera-raw-report "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 [private]
 planner-proof mode="dry-run":

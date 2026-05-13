@@ -40,6 +40,10 @@ from roboclaws.molmo_cleanup.planner_proof_bundle import (  # noqa: E402
 from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     write_planner_proof_requests,
 )
+from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
+    cleanup_profile_metadata_for_run,
+    cleanup_profile_names,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -99,6 +103,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
     )
+    parser.add_argument(
+        "--cleanup-profile",
+        choices=cleanup_profile_names(),
+        help="Public Molmo cleanup profile selected by the command facade.",
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -135,6 +144,7 @@ def run_realworld_cleanup(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
+    cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
     use_planner_proof_for_cleanup_primitives: bool = False,
@@ -385,6 +395,16 @@ def run_realworld_cleanup(
         )
     )
     public_tool_counts = _tool_event_counts(trace_events)
+    profile_metadata = (
+        cleanup_profile_metadata_for_run(
+            profile_name=cleanup_profile,
+            backend=backend,
+            perception_mode=perception_mode,
+            record_robot_views=record_robot_views,
+        )
+        if cleanup_profile is not None
+        else None
+    )
     run_result = {
         "backend": backend,
         "scenario_id": scenario.scenario_id,
@@ -439,6 +459,9 @@ def run_realworld_cleanup(
             "after_snapshot": str(after_snapshot),
         },
     }
+    if profile_metadata is not None:
+        run_result["cleanup_profile"] = profile_metadata["profile"]
+        run_result["cleanup_profile_metadata"] = profile_metadata
     if backend_instance is not None:
         run_result["molmospaces_runtime"] = {
             "python_executable": str(backend_instance.python_executable),
@@ -770,6 +793,7 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
+        cleanup_profile=args.cleanup_profile,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,
     )

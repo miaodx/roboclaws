@@ -13,7 +13,9 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+    CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -50,8 +52,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--generated-mess-count", type=int, default=10)
     parser.add_argument(
         "--perception-mode",
-        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE),
+        choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
+    parser.add_argument(
+        "--cleanup-profile",
+        choices=cleanup_profile_names(),
+        help="Public Molmo cleanup profile selected by the command facade.",
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
@@ -71,6 +78,7 @@ def run_smoke(
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
+    cleanup_profile: str | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -107,6 +115,7 @@ def run_smoke(
         fixture_hint_mode="room_only",
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
+        cleanup_profile=cleanup_profile,
     )
     try:
         _drive_public_sweep(server, policy=policy)
@@ -125,7 +134,8 @@ def _drive_public_sweep(server: Any, *, policy: str) -> None:
         waypoint_id = str(waypoint["waypoint_id"])
         server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
         observation = server.call_tool("observe")
-        for detection in observation.get("visible_object_detections", []):
+        detections = _detections_for_observation(server, observation)
+        for detection in detections:
             handle = str(detection["object_id"])
             if handle in handled_handles:
                 continue
@@ -139,6 +149,16 @@ def _drive_public_sweep(server: Any, *, policy: str) -> None:
             _clean_handle(server, handle=handle, fixture=target_fixture)
             server.call_tool("observe")
             handled_handles.add(handle)
+
+
+def _detections_for_observation(server: Any, observation: dict[str, Any]) -> list[dict[str, Any]]:
+    detections = list(observation.get("visible_object_detections", []))
+    if detections or not observation.get("camera_model_policy_available"):
+        return detections
+    raw = observation.get("raw_fpv_observation") or {}
+    observation_id = str(raw.get("observation_id") or "")
+    response = server.call_tool("infer_camera_model_candidates", observation_id=observation_id)
+    return list(response.get("camera_model_candidates", []))
 
 
 def _clean_handle(server: Any, *, handle: str, fixture: dict[str, Any]) -> None:
@@ -207,6 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         include_robot=args.include_robot,
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
+        cleanup_profile=args.cleanup_profile,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

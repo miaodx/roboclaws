@@ -10,26 +10,29 @@ set positional-arguments
 default:
     @just --list agent
 
-# Run a normalized task/driver/report tuple.
-run task driver report="visual" *overrides:
+# Run a normalized task/driver/report-or-profile tuple.
+run task driver mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
 
     args=("$@")
     task="${args[0]}"
     driver="${args[1]}"
-    report="${args[2]}"
+    mode="${args[2]}"
     raw_overrides=("${args[@]:3}")
 
     task="${task#task=}"
     driver="${driver#driver=}"
-    case "$report" in
+    case "$mode" in
       report=*)
-        report="${report#report=}"
+        mode="${mode#report=}"
+        ;;
+      profile=*)
+        mode="${mode#profile=}"
         ;;
       *=*)
-        raw_overrides=("$report" "${raw_overrides[@]}")
-        report="visual"
+        raw_overrides=("$mode" "${raw_overrides[@]}")
+        mode=""
         ;;
     esac
 
@@ -69,11 +72,11 @@ run task driver report="visual" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        agent_souls|agents|baseline|candidate|cap|evidence|generated_mess_count|\
+        agent_souls|agents|baseline|candidate|cap|generated_mess_count|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
-        runtime|scene|scenes|seed|seeds|souls|steps|task|timeout_s|wall_budget)
+        profile|scene|scenes|seed|seeds|souls|steps|task|timeout_s|wall_budget)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -104,14 +107,27 @@ run task driver report="visual" *overrides:
       fi
     }
 
-    case "$report" in
-      visual|minimal)
-        ;;
-      *)
-        echo "error: unsupported report '$report' (expected visual|minimal)" >&2
-        exit 1
-        ;;
-    esac
+    if [[ "$task" == "molmo-cleanup" ]]; then
+      profile="${mode:-$(get profile world-labels)}"
+      case "$profile" in
+        smoke|world-labels|camera-raw|camera-labels)
+          ;;
+        *)
+          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          exit 1
+          ;;
+      esac
+    else
+      report="${mode:-visual}"
+      case "$report" in
+        visual|minimal)
+          ;;
+        *)
+          echo "error: unsupported report '$report' (expected visual|minimal)" >&2
+          exit 1
+          ;;
+      esac
+    fi
 
     case "$task:$driver" in
       ai2thor-nav:codex)
@@ -199,31 +215,29 @@ run task driver report="visual" *overrides:
             ;;
         esac
 
-        if [[ "$report" == "minimal" ]]; then
-          default_runtime="synthetic"
-          default_evidence="semantic"
-          default_output_dir="output/molmo/${driver}-minimal"
-          default_seeds="7"
+        case "$profile" in
+          world-labels)
+            default_output_dir="output/molmo/${driver}-report"
+            ;;
+          smoke)
+            default_output_dir="output/molmo/${driver}-smoke"
+            ;;
+          *)
+            default_output_dir="output/molmo/${driver}-${profile}"
+            ;;
+        esac
+        if [[ "$driver" == "direct" && "$profile" == "world-labels" ]]; then
+          default_seeds="1 2 3"
         else
-          default_runtime="molmospaces"
-          default_evidence="visual"
-          default_output_dir="output/molmo/${driver}-report"
-          if [[ "$driver" == "direct" ]]; then
-            default_seeds="1 2 3"
-          else
-            default_seeds="7"
-          fi
+          default_seeds="7"
         fi
-
-        runtime="$(get runtime "$default_runtime")"
-        evidence="$(get evidence "$default_evidence")"
         seeds="$(get seeds "$(get seed "$default_seeds")")"
         output_dir="$(get output_dir "$default_output_dir")"
         prompt="$(cleanup_prompt)"
         generated_mess_count="$(get generated_mess_count 10)"
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
-        run_just molmo::cleanup "$impl_driver" "$runtime" "$evidence" "$seeds" \
+        run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port"
         ;;
 

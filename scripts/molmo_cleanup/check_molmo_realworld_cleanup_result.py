@@ -26,6 +26,11 @@ from roboclaws.molmo_cleanup.planner_proof_quality import (
     validate_planner_proof_quality_evidence,
 )
 from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
+from roboclaws.molmo_cleanup.profiles import (
+    WORLD_LABELS_PROFILE,
+    cleanup_profile,
+    validate_cleanup_profile_metadata,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -62,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-task")
     parser.add_argument("--expect-backend")
     parser.add_argument("--expect-policy")
+    parser.add_argument("--expect-profile")
     parser.add_argument("--expect-mcp-server")
     parser.add_argument("--expect-seeds")
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
@@ -132,6 +138,7 @@ def main() -> None:
             expect_task=args.expect_task,
             expect_backend=args.expect_backend,
             expect_policy=expect_policy,
+            expect_profile=args.expect_profile,
             expect_mcp_server=args.expect_mcp_server,
             min_generated_mess_count=args.min_generated_mess_count,
             require_agent_driven=args.require_agent_driven,
@@ -181,6 +188,7 @@ def _assert_result(
     expect_task: str | None,
     expect_backend: str | None,
     expect_policy: str | None = "deterministic_sweep_baseline",
+    expect_profile: str | None = None,
     expect_mcp_server: str | None = None,
     min_generated_mess_count: int = 1,
     require_agent_driven: bool = False,
@@ -253,6 +261,8 @@ def _assert_result(
         assert path.is_file(), path
         assert path.stat().st_size > 0, path
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
+    if expect_profile is not None:
+        _assert_cleanup_profile(data, report_text, expect_profile)
     assert "Agent View" in report_text, report_text[:500]
     assert "Private Evaluation" in report_text, report_text[:500]
     assert "Score" in report_text, report_text[:500]
@@ -340,6 +350,27 @@ def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
         public_requests += int(counts.get(f"{tool}:request") or 0)
     assert public_requests >= 1, (public_requests, counts, data)
     assert int(counts.get("scene_objects:request") or 0) == 0, (counts, data)
+
+
+def _assert_cleanup_profile(
+    data: dict[str, Any],
+    report_text: str,
+    expected_profile: str,
+) -> None:
+    profile = cleanup_profile(expected_profile)
+    assert data.get("cleanup_profile") == profile.profile, data
+    metadata = data.get("cleanup_profile_metadata") or {}
+    validate_cleanup_profile_metadata(
+        metadata,
+        expected_profile=profile.profile,
+        expected_backend=data.get("backend"),
+        expected_perception_mode=data.get("perception_mode"),
+    )
+    assert profile.profile in report_text, report_text[:500]
+    assert profile.agent_input in report_text, report_text[:500]
+    if profile.profile == WORLD_LABELS_PROFILE:
+        assert "image reasoning" not in report_text.lower(), report_text[:500]
+        assert "not model input" in report_text.lower(), report_text[:500]
 
 
 def _assert_clean_agent_run(data: dict[str, Any]) -> None:
@@ -547,7 +578,6 @@ def _assert_raw_fpv_observations(
 
 def _assert_camera_model_policy(data: dict[str, Any], report_text: str) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
-    assert data.get("policy") == CAMERA_MODEL_POLICY_NAME, data
     evidence = data.get("camera_model_policy_evidence") or (
         (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
     )
