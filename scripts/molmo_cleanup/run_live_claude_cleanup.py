@@ -180,6 +180,7 @@ class LiveClaudeCleanupRunner:
         command = [
             self.args.claude_bin,
             "-p",
+            "--verbose",
             "--output-format",
             "stream-json",
             *self.args.claude_model_arg,
