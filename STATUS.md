@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-11
+Last updated: 2026-05-13
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -8,23 +8,24 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
-artifacts honest about which steps are semantic simulator mutations and which
-steps have planner-backed RBY1M/CuRobo proof.
+artifacts visible and honest from local runs through CI-published report pages.
 
-Phase 134, MolmoSpaces canonical proof command tool order, is complete. There
-is no active GSD implementation phase at the moment.
+Phase 135, MolmoSpaces CI live-agent reports, is implemented and non-live
+verified. It promotes the three known-good local Claude Code provider-profile
+cleanup reports into an opt-in GitHub-hosted CI path with local rehearsal,
+MolmoSpaces asset caching/prewarm, and Pages-visible report/status tiles.
 
 ## Next Action
 
-Execute the bounded `proof_001` two-step local proof attempt with canonical
-cleanup tools, then rerun cleanup only if the resulting proof has cleanup
-binding coverage.
+Configure `KIMI_API_KEY` and `MIMO_TP_KEY` as GitHub Actions secrets, then run
+the opt-in Molmo live workflow via `workflow_dispatch` or a `[molmo-live]` push
+to `main`.
 
 ## Current Blocker
 
-The global cleanup bridge is still blocked until broader or stronger
-planner-backed proof evidence exists for cleanup primitives. The latest
-`proof_001` artifact is a dry-run command/report, not fresh runtime proof.
+Real hosted proof is still pending on repo GitHub Actions secrets and an actual
+hosted live run. The repo-side pipeline is implemented and locally dry-run
+verified without spending provider budget.
 
 ## Human Review Surface
 

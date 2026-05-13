@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+if __package__ in {None, ""}:
+    repo_root = Path(__file__).resolve().parents[2]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
+    MODEL_ENTRIES,
+    MolmoLiveModelEntry,
+    base_status,
+    entry_by_name,
+    entry_names,
+    latest_seed_run_dir,
+    publish_seed_run,
+    report_path_for_entry,
+    status_path_for_entry,
+    utc_timestamp,
+    write_manifest,
+    write_status,
+)
+from roboclaws.molmo_cleanup.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run or rehearse the opt-in Molmo live CI cleanup matrix."
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--entry", choices=entry_names())
+    group.add_argument("--all", action="store_true")
+    parser.add_argument("--output-dir", type=Path, default=Path("output/molmo/ci-live"))
+    parser.add_argument("--published-dir", type=Path)
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--generated-mess-count", type=int, default=5)
+    parser.add_argument("--profile", default="world-labels")
+    parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=18788)
+    parser.add_argument("--uv-bin", default="uv")
+    parser.add_argument("--just-bin", default="just")
+    parser.add_argument("--python-bin", default=".venv/bin/python")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--skip-uv-sync", action="store_true")
+    parser.add_argument("--skip-prewarm", action="store_true")
+    parser.add_argument("--skip-version-check", action="store_true")
+    parser.add_argument("--continue-on-error", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    entries = MODEL_ENTRIES if args.all else (entry_by_name(args.entry),)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    publish_root = args.published_dir or args.output_dir / "published"
+    publish_root.mkdir(parents=True, exist_ok=True)
+
+    statuses: list[dict[str, Any]] = []
+    failure_count = 0
+    if not args.dry_run and _any_entry_has_secret(entries):
+        try:
+            if not args.skip_version_check:
+                _version_checks(args)
+            if not args.skip_uv_sync:
+                _run_checked([args.uv_bin, "sync", "--extra", "dev", "--extra", "molmospaces"])
+            if not args.skip_prewarm:
+                _prewarm(args)
+        except Exception as exc:
+            for entry in entries:
+                status = base_status(
+                    entry,
+                    seed=args.seed,
+                    generated_mess_count=args.generated_mess_count,
+                    profile=args.profile,
+                    task=args.task,
+                )
+                status["status"] = "failed"
+                status["reason"] = f"preflight failed: {exc}"
+                statuses.append(_finalize_status(status, publish_root))
+            write_manifest(publish_root, statuses)
+            return 1
+
+    for entry in entries:
+        status = _run_entry(entry, args, publish_root=publish_root)
+        statuses.append(status)
+        if status["status"] == "failed":
+            failure_count += 1
+            if not args.continue_on_error and not args.all:
+                break
+
+    write_manifest(publish_root, statuses)
+    if failure_count:
+        return 1
+    return 0
+
+
+def _run_entry(
+    entry: MolmoLiveModelEntry,
+    args: argparse.Namespace,
+    *,
+    publish_root: Path,
+) -> dict[str, Any]:
+    status = base_status(
+        entry,
+        seed=args.seed,
+        generated_mess_count=args.generated_mess_count,
+        profile=args.profile,
+        task=args.task,
+    )
+    entry_output_dir = args.output_dir / entry.name
+    command = _live_command(entry_output_dir, args)
+    status.update(
+        {
+            "command": command,
+            "env": {
+                "ROBOCLAWS_CLAUDE_PROVIDER": entry.provider_profile,
+                "ROBOCLAWS_CLAUDE_MODEL": entry.model,
+            },
+            "cache_roots": [
+                "~/.cache/uv",
+                "~/.cache/molmospaces",
+                "~/.cache/molmo-spaces-resources",
+            ],
+            "updated_at": utc_timestamp(),
+        }
+    )
+
+    if args.dry_run:
+        status["status"] = "dry_run"
+        status["reason"] = "dry run requested; no live provider call made"
+        return _finalize_status(status, publish_root)
+
+    if not os.environ.get(entry.secret_env):
+        status["status"] = "skipped"
+        status["reason"] = f"missing required secret/env {entry.secret_env}"
+        return _finalize_status(status, publish_root)
+
+    env = os.environ.copy()
+    env["ROBOCLAWS_CLAUDE_PROVIDER"] = entry.provider_profile
+    env["ROBOCLAWS_CLAUDE_MODEL"] = entry.model
+    try:
+        _run_checked(command, env=env)
+        seed_dir = latest_seed_run_dir(entry_output_dir, seed=args.seed)
+        if seed_dir is None:
+            raise RuntimeError(
+                f"no seed-{args.seed} run_result.json found under {entry_output_dir}"
+            )
+        published_seed_dir = publish_seed_run(
+            source_seed_dir=seed_dir,
+            publish_root=publish_root,
+            entry_name=entry.name,
+            seed=args.seed,
+        )
+        status["status"] = "success"
+        status["run_dir"] = str(seed_dir)
+        status["published_dir"] = str(published_seed_dir)
+        status["report_path"] = report_path_for_entry(entry.name, seed=args.seed)
+    except Exception as exc:
+        status["status"] = "failed"
+        status["reason"] = str(exc)
+    return _finalize_status(status, publish_root)
+
+
+def _finalize_status(status: dict[str, Any], publish_root: Path) -> dict[str, Any]:
+    status["updated_at"] = utc_timestamp()
+    write_status(status_path_for_entry(publish_root, str(status["entry"])), status)
+    print(f"molmo-live-ci {status['entry']}: {status['status']}")
+    if status.get("reason"):
+        print(f"  reason: {status['reason']}")
+    return status
+
+
+def _live_command(entry_output_dir: Path, args: argparse.Namespace) -> list[str]:
+    return [
+        args.just_bin,
+        "task::run",
+        "molmo-cleanup",
+        "claude",
+        args.profile,
+        f"seed={args.seed}",
+        f"generated_mess_count={args.generated_mess_count}",
+        f"output_dir={entry_output_dir}",
+        f"task={args.task}",
+        f"host={args.host}",
+        f"port={args.port}",
+    ]
+
+
+def _prewarm(args: argparse.Namespace) -> None:
+    _run_checked(
+        [
+            args.python_bin,
+            "scripts/molmo_cleanup/prewarm_molmospaces_ci_assets.py",
+            "--output-dir",
+            str(args.output_dir / "_prewarm"),
+            "--seed",
+            str(args.seed),
+            "--generated-mess-count",
+            str(args.generated_mess_count),
+            "--robot-name",
+            "rby1m",
+        ]
+    )
+
+
+def _version_checks(args: argparse.Namespace) -> None:
+    for binary in ("codex", "claude"):
+        resolved = shutil.which(binary)
+        if not resolved:
+            raise RuntimeError(f"{binary} command not found")
+        _run_checked([resolved, "--version"])
+
+
+def _any_entry_has_secret(entries: tuple[MolmoLiveModelEntry, ...]) -> bool:
+    return any(os.environ.get(entry.secret_env) for entry in entries)
+
+
+def _run_checked(command: list[str], *, env: dict[str, str] | None = None) -> None:
+    print("+ " + " ".join(_shell_quote(item) for item in command))
+    subprocess.run(command, check=True, env=env)
+
+
+def _shell_quote(value: str | Path) -> str:
+    text = str(value)
+    if not text:
+        return "''"
+    safe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-"
+    if all(char in safe for char in text):
+        return text
+    return "'" + text.replace("'", "'\"'\"'") + "'"
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

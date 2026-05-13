@@ -367,6 +367,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ✅ **v1.94 MolmoSpaces cleanup report artifact adapter** - Phase 93 (completed 2026-05-10; stale cleanup reports regenerate from run_result.json through the shared underlay)
 - ✅ **v1.95 MolmoSpaces seeded source pool proof memory** - Phase 94 (completed 2026-05-10; generated-mess seeds rotate object pools and local proof IDs cannot hide new planner objects)
 - ✅ **v1.96 MolmoSpaces seeded selected proof execution** - Phase 95 (completed 2026-05-10; four selected seed9 proofs executed and all remain grasp-feasibility blocked)
+- ✅ **v1.97 MolmoSpaces CI live-agent reports** - Phase 135 (completed 2026-05-13; opt-in GitHub-hosted live cleanup matrix, local rehearsal, MolmoSpaces asset cache/prewarm, and Pages status/report tiles; hosted live proof pending secrets/run)
 - 📋 **v2.0 Isaac Lab** - Phase 3 (deferred indefinitely)
 
 ## Phases
@@ -478,6 +479,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - [x] **Phase 93: MolmoSpaces cleanup report artifact adapter** - ADR-0084 regenerates stale cleanup `report.html` artifacts from `run_result.json` through the shared underlay. Completed 2026-05-10.
 - [x] **Phase 94: MolmoSpaces seeded source pool proof memory** - ADR-0085 makes generated-mess selection seed-aware and guards prior proof memory against local ID collisions when planner object identity differs. Completed 2026-05-10.
 - [x] **Phase 95: MolmoSpaces seeded selected proof execution** - ADR-0086 executes the four selected patched seed9 proof commands and records all four as grasp-feasibility blocked. Completed 2026-05-10.
+- [x] **Phase 135: MolmoSpaces CI live-agent reports** - Promote the three proven local Claude Code provider-profile cleanup reports into an opt-in GitHub-hosted CI path with local rehearsal, MolmoSpaces cache/prewarm, and Pages-visible status/report tiles. Completed 2026-05-13 for implementation and non-live verification; hosted live proof pending secrets/run.
 - [ ] **Phase 3: Isaac Lab migration** - Humanoid + multi-embodiment nav via VLM → RL locomotion (deferred indefinitely)
 
 ## Phase Details

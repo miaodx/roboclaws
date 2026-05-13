@@ -295,6 +295,64 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           exit 0
         fi
 
+        if [[ "$driver" == "claude-live" ]]; then
+          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_claude_cleanup[.]py' || true)"
+          active_server="$(pgrep -af 'examples/molmo_cleanup/molmo_realworld_cleanup_agent_server[.]py' || true)"
+          if [[ -n "$active_runner$active_server" ]]; then
+            echo "error: another live Molmo cleanup run appears to be active" >&2
+            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
+            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
+            echo "probe latest: just molmo::status" >&2
+            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
+          probe_host="$host"
+          if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
+            probe_host="127.0.0.1"
+          fi
+          if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
+            echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
+            echo "       refusing to choose another port because each live visual cleanup run owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
+          status_path="${run_dir}/live_status.json"
+          runner_args=(
+            .venv/bin/python
+            scripts/molmo_cleanup/run_live_claude_cleanup.py
+            --repo-root "$PWD"
+            --run-dir "$run_dir"
+            --status-path "$status_path"
+            --client-url "$client_url"
+            --host "$host"
+            --port "$port"
+            --lock-path output/molmo/.live-claude.lock
+            --claude-bin "$claude_bin"
+            --claude-provider-summary "$claude_profile_summary"
+            --kickoff-prompt "$kickoff_prompt"
+            --backend "$backend"
+            --policy "$policy"
+            --task "$task"
+            --min-generated-mess-count "$min_generated_mess_count"
+            --profile "$profile"
+          )
+          for arg in "${server_args[@]}"; do
+            runner_args+=("--server-arg=$arg")
+          done
+          for arg in "${claude_model_args[@]}"; do
+            runner_args+=("--claude-model-arg=$arg")
+          done
+          for entry in "${claude_env_args[@]}"; do
+            export "$entry"
+          done
+          for arg in "${checker_visual_args[@]}"; do
+            runner_args+=("--checker-visual-arg=$arg")
+          done
+
+          exec "${runner_args[@]}"
+        fi
+
         .venv/bin/python examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
@@ -501,6 +559,54 @@ status path="":
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
 claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" host="127.0.0.1" port="18788":
     just molmo::cleanup "claude-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
+
+# Local rehearsal for the opt-in hosted Molmo live CI job.
+ci-rehearsal entry="kimi-k2.6" dry_run="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    entry="{{entry}}"
+    dry_run="{{dry_run}}"
+    dry_args=()
+    case "$dry_run" in
+      ""|live)
+        ;;
+      --dry-run|dry-run|dry|true)
+        dry_args=(--dry-run --skip-uv-sync --skip-prewarm --skip-version-check)
+        ;;
+      *)
+        echo "error: unsupported ci-rehearsal mode '$dry_run' (expected live or --dry-run)" >&2
+        exit 1
+        ;;
+    esac
+    .venv/bin/python scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py \
+      --entry "$entry" \
+      --output-dir "output/molmo/ci-rehearsal" \
+      --published-dir "output/molmo/ci-rehearsal/site/molmo/live" \
+      "${dry_args[@]}"
+
+# Serial local rehearsal for all three Molmo live CI model entries.
+ci-rehearsal-all dry_run="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dry_run="{{dry_run}}"
+    dry_args=()
+    case "$dry_run" in
+      ""|live)
+        ;;
+      --dry-run|dry-run|dry|true)
+        dry_args=(--dry-run --skip-uv-sync --skip-prewarm --skip-version-check)
+        ;;
+      *)
+        echo "error: unsupported ci-rehearsal-all mode '$dry_run' (expected live or --dry-run)" >&2
+        exit 1
+        ;;
+    esac
+    .venv/bin/python scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py \
+      --all \
+      --continue-on-error \
+      --output-dir "output/molmo/ci-rehearsal" \
+      --published-dir "output/molmo/ci-rehearsal/site/molmo/live" \
+      "${dry_args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
