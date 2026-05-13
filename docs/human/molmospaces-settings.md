@@ -200,8 +200,11 @@ just molmo::claude-report
 just molmo::openclaw-report
 ```
 
-`claude-report` and `openclaw-report` keep the repo work-network guard; run
-`just dev::network-status` first if you are unsure which network you are on.
+`openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
+on the work network only when using the system Claude Code provider; it may run
+there with `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
+`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Run `just dev::network-status` first
+if you are unsure which network you are on.
 
 Planner proof-bundle dry run:
 

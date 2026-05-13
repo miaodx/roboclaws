@@ -56,7 +56,8 @@ print_status() {
     0)
       echo "network: work"
       echo "probe: reachable $probe_url"
-      echo "guard: Claude Code and OpenClaw just recipes are blocked here"
+      echo "guard: OpenClaw and system-provider Claude Code just recipes are blocked here"
+      echo "guard: Claude Code may run with repo-local kimi-anthropic or mimo-anthropic profiles"
       ;;
     1)
       echo "network: non-work"

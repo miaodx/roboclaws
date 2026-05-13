@@ -156,10 +156,7 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
         'SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup"',
         "just chat::run",
         'bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"',
-        (
-            "bash scripts/dev/network_status.sh --assert-off-work "
-            '"Claude Code Molmo cleanup live report"'
-        ),
+        'roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"',
     ):
         assert expected in text
 

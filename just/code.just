@@ -29,7 +29,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     claude_env_args=()
     roboclaws_claude_provider_args claude_model_args claude_env_args
 
-    bash scripts/dev/network_status.sh --assert-off-work "Claude Code direct MCP run"
+    roboclaws_assert_claude_code_network_allowed "Claude Code direct MCP run"
 
     if ! command -v codex >/dev/null 2>&1; then
       echo "error: codex command not found; install or activate Codex before running code:cc" >&2

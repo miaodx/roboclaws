@@ -43,7 +43,11 @@ run task cap="900":
 
 # Explicit name for the coding-agent / AI2-THOR navigator harness.
 navigator task cap="900":
-    bash scripts/dev/network_status.sh --assert-off-work "Claude Code navigator harness"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source scripts/dev/coding_agent_env.sh
+    roboclaws_load_dotenv .env
+    roboclaws_assert_claude_code_network_allowed "Claude Code navigator harness"
     bash harness/run-next.sh "{{task}}" "{{cap}}"
 
 # Capture and compare refactor-regression suites.
