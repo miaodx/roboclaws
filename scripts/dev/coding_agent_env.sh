@@ -235,6 +235,45 @@ roboclaws_claude_provider_args() {
   )
 }
 
+roboclaws_assert_claude_code_network_allowed() {
+  local label="${1:-Claude Code}"
+  local provider
+  provider="$(roboclaws_code_agent_provider ROBOCLAWS_CLAUDE_PROVIDER)" || return
+  case "$provider" in
+    system|kimi-anthropic|mimo-anthropic)
+      ;;
+    *)
+      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, or mimo-anthropic" >&2
+      return 2
+      ;;
+  esac
+
+  local rc
+  if bash scripts/dev/network_status.sh --is-work-network >/dev/null 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  case "$rc" in
+    0)
+      if [[ "$provider" == "system" ]]; then
+        echo "error: work network detected; ${label} is blocked while using system Claude Code provider." >&2
+        echo "       Set ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic or mimo-anthropic with repo-local .env keys, or switch off the work network." >&2
+        return 1
+      fi
+      echo "==> network guard ok: work network with repo-local Claude provider (${provider})" >&2
+      ;;
+    1)
+      echo "==> network guard ok: off work network" >&2
+      ;;
+    *)
+      echo "error: cannot determine network status; curl is required for ${label}." >&2
+      return 2
+      ;;
+  esac
+}
+
 roboclaws_code_agent_profile_summary() {
   local provider_var="$1"
   local model_var="$2"

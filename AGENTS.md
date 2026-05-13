@@ -76,20 +76,24 @@ need normal GitHub access or a local network proxy.
 
 ### 1.1.1 Work-network guard
 
-Claude Code and OpenClaw Gateway runs are not allowed on the work network. The
-work network is detected by reachability of `https://api-router.evad.mioffice.cn/`.
+OpenClaw Gateway runs and system-provider Claude Code runs are not allowed on
+the work network. The work network is detected by reachability of
+`https://api-router.evad.mioffice.cn/`.
 Check the current network before those workflows with:
 
 ```bash
 just dev::network-status
 ```
 
-If that command reports `network: work`, do not run `just code::cc`,
-`just harness::navigator`, `just openclaw::*`, `just chat::run`,
-`just appliance::run`, or OpenClaw integration/local verification gates. Those
-recipes are guarded and should fail before launching when the work-network probe
-is reachable. Switch to a non-work network before running Claude Code or
-OpenClaw workflows.
+If that command reports `network: work`, do not run `just openclaw::*`,
+`just chat::run`, `just appliance::run`, or OpenClaw integration/local
+verification gates. Do not run `just code::cc`, `just harness::navigator`, or
+`just molmo::claude-report` with the default `ROBOCLAWS_CLAUDE_PROVIDER=system`.
+Those Claude Code recipes may run on the work network only when `.env` selects a
+repo-local provider profile such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic`
+or `ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`; model-only overrides do not
+bypass the guard. Guarded recipes should fail before launching when the
+work-network probe is reachable and no repo-local Claude provider is selected.
 
 ### 1.1.2 Coding-agent permissions
 

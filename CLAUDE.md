@@ -81,11 +81,15 @@ just agent::verify mock                          # maintainer confidence gate
 ```
 
 Work-network restriction: if `just dev::network-status` reports `network: work`
-(the probe can reach `https://api-router.evad.mioffice.cn/`), do not run Claude
-Code or OpenClaw workflows. Guarded recipes include `just code::cc`,
-`just harness::navigator`, OpenClaw Gateway recipes, `just chat::run`,
-`just appliance::run`, and OpenClaw local/integration verification gates. Switch
-to a non-work network first.
+(the probe can reach `https://api-router.evad.mioffice.cn/`), do not run
+OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
+`just chat::run`, `just appliance::run`, and OpenClaw local/integration
+verification gates. System-provider Claude Code is also blocked on the work
+network, but `just code::cc`, `just harness::navigator`, and
+`just molmo::claude-report` may run there when `.env` selects a repo-local
+Claude provider such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
+`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Model-only overrides do not bypass
+the guard.
 
 Coding-agent permission default: run direct Codex / Claude Code demos through
 `just code::codex` or `just code::cc`. Those recipes launch with full local-demo

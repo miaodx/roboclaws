@@ -151,12 +151,14 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
         policy="${driver%-live}_agent"
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
+        source scripts/dev/coding_agent_env.sh
+        roboclaws_load_dotenv .env
         if [[ "$driver" == "openclaw-live" ]]; then
           bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Molmo cleanup live report"
           server_host="0.0.0.0"
           client_url="http://host.docker.internal:${port}/mcp"
         elif [[ "$driver" == "claude-live" ]]; then
-          bash scripts/dev/network_status.sh --assert-off-work "Claude Code Molmo cleanup live report"
+          roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"
         fi
         if [[ "$driver" == "codex-live" ]] && ! command -v codex >/dev/null 2>&1; then
           echo "error: codex command not found; install or activate Codex before running molmo::codex-report" >&2
@@ -166,8 +168,6 @@ cleanup driver="mcp-smoke" runtime="synthetic" evidence="semantic" seeds="7" out
           echo "error: claude command not found; install or activate Claude Code before running molmo::claude-report" >&2
           exit 1
         fi
-        source scripts/dev/coding_agent_env.sh
-        roboclaws_load_dotenv .env
         codex_model=""
         codex_profile_summary="system defaults"
         claude_profile_summary="system defaults"
