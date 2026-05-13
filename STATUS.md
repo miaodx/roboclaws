@@ -17,15 +17,14 @@ MolmoSpaces asset caching/prewarm, and Pages-visible report/status tiles.
 
 ## Next Action
 
-Configure `KIMI_API_KEY` and `MIMO_TP_KEY` as GitHub Actions secrets, then run
-the opt-in Molmo live workflow via `workflow_dispatch` or a `[molmo-live]` push
-to `main`.
+Run the opt-in Molmo live workflow via `workflow_dispatch` or a `[molmo-live]`
+push to `main`, using the existing GitHub Actions secrets `KIMI_API_KEY` and
+`MIMO_TP_KEY`.
 
 ## Current Blocker
 
-Real hosted proof is still pending on repo GitHub Actions secrets and an actual
-hosted live run. The repo-side pipeline is implemented and locally dry-run
-verified without spending provider budget.
+Real hosted proof is pending an actual hosted live run. The repo-side pipeline
+is implemented and locally dry-run verified without spending provider budget.
 
 ## Human Review Surface
 
