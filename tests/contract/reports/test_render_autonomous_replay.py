@@ -117,6 +117,7 @@ def _run_renderer(
     run_dir: Path,
     *,
     rerun_command: str | None = None,
+    generate_gif: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH")
@@ -126,6 +127,8 @@ def _run_renderer(
     command = [sys.executable, str(SCRIPT_PATH), "--run-dir", str(run_dir)]
     if rerun_command is not None:
         command.extend(["--rerun-command", rerun_command])
+    if generate_gif:
+        command.append("--generate-gif")
     return subprocess.run(
         command,
         cwd=REPO_ROOT,
@@ -136,7 +139,7 @@ def _run_renderer(
     )
 
 
-def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
+def test_renders_html_without_rebuildable_gif_by_default(tmp_path: Path) -> None:
     run_dir = tmp_path / "mixed"
     events = [
         _make_tool_event(
@@ -176,8 +179,7 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     report_html = run_dir / "report.html"
     summary_json = run_dir / "summary.json"
 
-    assert replay_gif.exists()
-    assert replay_gif.stat().st_size > 100
+    assert not replay_gif.exists()
     assert report_html.exists()
     report_text = report_html.read_text(encoding="utf-8")
     assert 'type="range"' in report_text
@@ -192,6 +194,21 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     assert "Rerun Locally" in report_text
     assert "just task::run ai2thor-nav codex visual scene=FloorPlan201" in report_text
     assert summary_json.exists()
+
+
+def test_renders_gif_when_explicitly_requested(tmp_path: Path) -> None:
+    run_dir = tmp_path / "gif"
+    events = [
+        _make_tool_event(event_type="request", tool="observe", wallclock=0.0, request={}),
+        _make_frame_event(wallclock=0.1, tool="observe", seen_by_agent=True, colour="green"),
+    ]
+    _write_trace(run_dir, events)
+
+    _run_renderer(run_dir, generate_gif=True)
+
+    replay_gif = run_dir / "replay.gif"
+    assert replay_gif.exists()
+    assert replay_gif.stat().st_size > 100
 
 
 def test_reasoned_and_blind_batch_labels(tmp_path: Path) -> None:

@@ -40,8 +40,9 @@ just openclaw::run nav
 
 Artifacts for the default `just openclaw::run nav` recipe:
 
-- `output/openclaw/nav/replay.gif`
 - `output/openclaw/nav/report.html`
+- `output/openclaw/nav/replay.json`
+- `output/openclaw/nav/frames/`
 
 The CI/manual examples below still pass `--output-dir output/openclaw/demo`
 explicitly, so those runs write to `output/openclaw/demo/`.
@@ -107,7 +108,7 @@ docker volume rm openclaw-gateway-config
 ## What Good Looks Like
 
 - `report.html` loads and shows per-step first-person frames
-- `replay.gif` shows visible movement
+- the frame slider shows visible movement
 - the run writes `replay.json` under `output/openclaw/demo/`
 
 ## Troubleshooting

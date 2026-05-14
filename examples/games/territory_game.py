@@ -101,7 +101,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output-dir",
         default="output/territory",
         dest="output_dir",
-        help="Directory to write replay files, GIF, and final territory map",
+        help="Directory to write replay files, report.html, and final territory map",
     )
     p.add_argument(
         "--thor-server-timeout",
@@ -361,7 +361,7 @@ def run_territory_game(
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={f"agent_{a}": c for a, c in result.cells_claimed.items()},
         termination_reason=termination_reason,
-        generate_gif=True,
+        generate_gif=False,
         generate_report=True,
         provider_status=final_provider_status,
     )

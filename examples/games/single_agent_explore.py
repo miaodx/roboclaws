@@ -2,9 +2,9 @@
 
 Run a single VLM-controlled agent in an AI2-THOR living room scene.
 The agent explores the room for a fixed number of steps, with its
-trajectory visualised on an overhead grid map.  Outputs a replay GIF
-showing the agent's first-person view alongside the cumulative
-exploration trail, and prints the total VLM cost at the end.
+trajectory visualised on an overhead grid map. Outputs replay frames
+and a manifest, and prints the total VLM cost at the end. A GIF can be
+rebuilt from the composite frames with ``ReplayRecorder.generate_gif_from_dir``.
 
 Usage::
 
@@ -101,7 +101,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output-dir",
         default="output/explore",
         dest="output_dir",
-        help="Directory to write replay files and GIF",
+        help="Directory to write replay files",
     )
     return p.parse_args(argv)
 
@@ -124,7 +124,7 @@ def run_exploration(
         scene: AI2-THOR scene name.
         steps: Maximum number of exploration steps.
         model: VLM model alias passed to :func:`~roboclaws.core.vlm.create_provider`.
-        output_dir: Directory for replay files and GIF output.
+        output_dir: Directory for replay files.
 
     Returns:
         Summary dict with keys ``cells_visited``, ``vlm_cost_usd``, ``output_dir``.
@@ -204,7 +204,7 @@ def run_exploration(
                     f"action: {action}  |  provider: {format_provider_status(provider_status)}"
                 )
 
-            # Record: use the rendered map frame as overhead so the GIF shows the trail
+            # Record: use the rendered map frame as overhead so composites show the trail.
             recorder.record_step(
                 step=step,
                 agent_id=0,
@@ -229,7 +229,7 @@ def run_exploration(
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={"cells_visited": len(visited_world)},
         termination_reason=termination_reason,
-        generate_gif=True,
+        generate_gif=False,
         provider_status=final_provider_status,
     )
 

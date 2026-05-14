@@ -410,7 +410,7 @@ def run_autonomous_navigation(
             ),
         )
 
-        log.info("rendering replay.gif + report.html")
+        log.info("rendering report.html")
         subprocess.run(
             [
                 sys.executable,

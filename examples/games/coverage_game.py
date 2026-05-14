@@ -103,7 +103,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output-dir",
         default="output/coverage",
         dest="output_dir",
-        help="Directory to write replay files, GIF, progression chart, and final coverage map",
+        help=(
+            "Directory to write replay files, report.html, progression chart, "
+            "and final coverage map"
+        ),
     )
     p.add_argument(
         "--thor-server-timeout",
@@ -405,7 +408,7 @@ def run_coverage_game(
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={f"agent_{a}": c for a, c in result.contribution.items()},
         termination_reason=termination_reason,
-        generate_gif=True,
+        generate_gif=False,
         generate_report=True,
         provider_status=final_provider_status,
     )
