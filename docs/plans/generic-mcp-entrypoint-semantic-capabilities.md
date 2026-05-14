@@ -1,7 +1,10 @@
+<!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0514-autoplan-restore-20260514-210504.md -->
+
 # Generic MCP Entrypoint And Semantic Capabilities
 
-**Status:** Proposed source plan
+**Status:** Reviewed source plan
 **Created:** 2026-05-13
+**Autoplan review:** Approved 2026-05-14; decisions reconciled in this file.
 **Source:** open-ended robot task architecture discussion and `CONTEXT.md`
 vocabulary alignment
 **Workflow:** Pre-GSD plan. Ingest into `.planning/` before implementation.
@@ -221,6 +224,156 @@ large literature survey; the output should directly shape the Roboclaws API.
 - Existing relevant MCP and cleanup contract tests through the repo-local
   pytest wrapper.
 
+## Autoplan Review Decisions
+
+Review mode: `autoplan` via `intuitive-flow`, single-reviewer degradation.
+Codex CLI authenticated but its read-only sandbox could not inspect local files
+on this host, and no Claude subagent tool was available, so outside voices were
+recorded as unavailable instead of being faked.
+
+Final gate: approved as a soft continuation. The review did not change the
+target user, public privacy posture, paid-service dependency, data model, or
+phase split. It tightened the plan around already stated acceptance criteria:
+metadata-first profiles, a generic router prototype, accelerator exclusions,
+and fail-closed privacy tests.
+
+### CEO Review
+
+Premises accepted:
+
+- The problem is real: `CONTEXT.md` already separates Task Prompt, Capability
+  Tool, Environment Primitive, Semantic Capability, Semantic Service, Task
+  Shortcut, Accelerator, Demo Recipe, Contract Profile, MCP Entrypoint, and
+  Capability Family.
+- The right wedge is profile metadata plus one router prototype, not a
+  universal robot API.
+- Existing contracts are useful leverage: AI2-THOR navigation already exposes
+  `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`,
+  while MolmoSpaces ADR-0003 exposes metric maps, fixture hints, observed
+  handles, navigation, manipulation, and private evaluator separation.
+
+Strategic risks and decisions:
+
+- Keep this as one coherent GSD phase. A separate ROS/Nav2 or real-robot phase
+  would change execution ownership and validation requirements.
+- Do not make the research spike open ended. It must answer implementation
+  questions for profile schema, namespacing, provenance, accelerator policy,
+  and leak tests.
+- Treat "generic MCP entrypoint" as a router that loads one selected contract
+  profile. Do not market it as a universal robot control surface.
+
+### Engineering Review
+
+What already exists:
+
+- `roboclaws/mcp/server.py` is the AI2-THOR MCP surface and dispatcher.
+- `roboclaws/molmo_cleanup/realworld_mcp_server.py` is the ADR-0003 cleanup MCP
+  surface and explicitly rejects `scene_objects`.
+- `roboclaws/molmo_cleanup/realworld_contract.py` owns public tool names,
+  public/private field exclusions, perception modes, provenance values, and
+  agent-view payload generation.
+- `roboclaws/molmo_cleanup/profiles.py` already proves the repo has a small
+  metadata registry pattern for public cleanup profiles.
+- Contract tests already cover AI2-THOR MCP behavior, Molmo public/private
+  cleanup boundaries, profile expansion, and report/private-evaluation
+  separation.
+
+Recommended implementation shape:
+
+```text
+contract profile metadata
+  -> backend adapter describes existing tools
+  -> generic MCP entrypoint selects exactly one profile
+  -> FastMCP registration exposes only profile-public tools
+  -> trace/report metadata records capability family + provenance + accelerator status
+```
+
+The first implementation should define a small typed profile declaration with:
+
+- `profile_id`, `version`, `backend`, and `domain`.
+- `capability_families`.
+- public tool descriptors with name, family, stability, provenance
+  expectations, and whether they are canonical, composed, or accelerator.
+- `privacy_exclusions` / forbidden field names for serialized public profile
+  output.
+- optional accelerator descriptors that are excluded unless explicitly loaded
+  for debug or demo paths.
+
+Error and rescue registry:
+
+| Failure | Required behavior | Test |
+| --- | --- | --- |
+| Unknown profile id | fail before MCP server registration with actionable message | unit |
+| Malformed profile metadata | validation error naming missing field | unit |
+| Accelerator appears in canonical profile | validation/test failure | unit/contract |
+| Molmo private field appears in public profile | fail closed using forbidden-key checks | contract |
+| Router registers stale tool not in profile | MCP registration test fails | contract |
+| Existing demo command bypasses current server accidentally | existing MCP/demo contract tests stay green | contract |
+
+Failure modes registry:
+
+| Risk | Severity | Mitigation |
+| --- | --- | --- |
+| Thin router becomes a naming wrapper around unrelated tools | high | typed profile schema plus contract tests for both current surfaces |
+| `goto` / `scene_objects` look like real robot capabilities | high | accelerator classification and canonical-profile exclusion tests |
+| Molmo private scoring truth leaks through profile metadata | high | reuse ADR-0003 forbidden-key checks on serialized profiles |
+| Research spike becomes a literature survey | medium | require implementation-ready schema and test recommendations only |
+| Existing demos break during router introduction | medium | adapter-first implementation, no removal of current servers in this phase |
+
+### Test Review
+
+Test artifact:
+`/home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0514-test-plan-generic-mcp-entrypoint-20260514-2112.md`.
+
+Required test diagram:
+
+| Path | Coverage |
+| --- | --- |
+| Profile declaration parsing/validation | unit |
+| AI2-THOR profile metadata and accelerator exclusions | contract |
+| MolmoSpaces cleanup profile metadata and ADR-0003 exclusions | contract |
+| Generic router loads a mock profile and registers only declared tools | contract |
+| Accelerator opt-in path records explicit accelerator provenance | unit/contract |
+| Existing AI2-THOR and Molmo MCP tests remain green | regression |
+
+### DX Review
+
+Developer persona: repo maintainer adding or reviewing a new robot contract
+profile.
+
+DX decisions:
+
+- Add copy-paste examples for selecting a profile in the generic entrypoint,
+  but keep existing `just task::run ...` demo recipes unchanged.
+- Make invalid profile and accelerator-use errors name the requested profile,
+  the allowed profile ids, and the reason the tool is excluded.
+- Keep profile names backend/domain-specific, such as `ai2thor_navigation_v1`
+  and `molmospaces_cleanup_v1`, so future real robot work does not inherit
+  simulator shortcuts by implication.
+
+TTHW target for maintainers: under 5 minutes to read the profile schema, add a
+mock profile, and run the router registration test.
+
+### NOT In Scope
+
+- Real ROS/Nav2, live robot, Docker Gateway, GPU, or VLM validation.
+- Removing the current AI2-THOR or MolmoSpaces MCP servers.
+- A universal tool set every environment must implement.
+- Whole-task MCP tools such as `cleanup_room()`.
+- Reclassifying `scene_objects` or current teleport-like `goto` as canonical
+  real-robot capabilities without a decomposed service implementation.
+
+### Decision Audit Trail
+
+| Decision | Classification | Outcome | Rationale |
+| --- | --- | --- | --- |
+| Run `autoplan` before GSD handoff | mechanical | accepted | Plan had no reconciled autoplan evidence. |
+| Skip UI/design review | mechanical | accepted | Plan changes MCP contracts and docs, not UI screens/components. |
+| Include DX review | mechanical | accepted | MCP entrypoint/profile work is developer-facing. |
+| Degrade outside voices | blocker workaround | accepted | Codex sandbox could not inspect local files; no subagent tool was exposed. |
+| Keep one phase | soft continuation | accepted | Work is one coherent metadata/router prototype with one acceptance surface. |
+| Strengthen fail-closed tests | soft continuation | accepted | This preserves stated privacy and accelerator boundaries. |
+
 ## ADR Follow-Up
 
 Create an ADR only after the research spike and profile prototype answer the
@@ -243,12 +396,31 @@ while keeping backend-specific contract profiles and public/private boundaries."
 
 ## GSD Handoff
 
-Preferred handoff:
+Reviewed handoff state:
+
+- `.planning/` already exists.
+- No existing roadmap phase was identified for this exact profile/router scope.
+- This plan appears to add roadmap scope, so the likely next step is a GSD
+  ingest/merge through a manifest that lists this file as `PRD`, then a single
+  `gsd-plan-phase <created-or-updated-phase> --prd ...` execution plan.
+- Do not manually copy this file into `.planning/phases/*/CONTEXT.md`.
+
+Preferred command after the GSD phase decision:
 
 ```text
 gsd-plan-phase <phase> --prd docs/plans/generic-mcp-entrypoint-semantic-capabilities.md
 ```
 
-The phase should start with the research spike, then implement the smallest
-profile metadata/router prototype that proves the abstraction without rewriting
-both existing MCP servers.
+The phase should start with the bounded research spike, then implement the
+smallest profile metadata/router prototype that proves the abstraction without
+rewriting both existing MCP servers.
+
+## GSTACK REVIEW REPORT
+
+| Review | Command | Scope | Runs | Status | Findings |
+| --- | --- | --- | --- | --- | --- |
+| CEO Review | `/plan-ceo-review` | Strategy and scope | 1 | clean | selective expansion; no unresolved challenges |
+| Eng Review | `/plan-eng-review` | Architecture and tests | 1 | clean | schema/router/test risks reconciled into this plan |
+| Design Review | `/plan-design-review` | UI/design | 0 | skipped | no UI scope detected |
+| DX Review | `/plan-devex-review` | Developer experience | 1 | clean | score 7/10 -> 8/10 target, TTHW target under 5 minutes |
+| Outside Voices | `autoplan-voices` | CEO, eng, DX | 0 | unavailable | Codex local read-only sandbox failed; no subagent tool exposed |
