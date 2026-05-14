@@ -9,7 +9,7 @@ last_activity: 2026-05-13
 progress:
   total_phases: 137
   completed_phases: 132
-  total_plans: 166
+  total_plans: 167
   completed_plans: 153
   percent: 92
 ---
@@ -834,7 +834,8 @@ Recent decisions affecting current work:
 - Phase 136 added (2026-05-14): **Generic MCP entrypoint and semantic
   capability profiles** — one reviewed PRD ingested from
   `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md` as a single
-  metadata/router prototype phase.
+  metadata/router prototype phase. Planning produced one executable plan:
+  `136-01-generic-mcp-entrypoint-semantic-capabilities-PLAN.md`.
 - Phase 2.4 closed (2026-04-24): **Better Views** now has a locked product decision. The repo keeps only the `map-v2+chase` runtime path; the old multi-variant experiment is retained as historical context plus analysis tooling, not as an active gate.
 - Phase 12 completed (2026-05-08): **MolmoSpaces current-contract agent
   bridge** — current semantic cleanup contract exposed through FastMCP and
