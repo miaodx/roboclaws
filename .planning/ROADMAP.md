@@ -873,5 +873,11 @@ Docker Gateway, GPU, live VLM, or real-robot validation in this phase.
 **Plans:** 1 plan
 
 Plans:
-- [ ] 136-01: Generic MCP entrypoint semantic capabilities — profile schema,
+- [x] 136-01: Generic MCP entrypoint semantic capabilities — profile schema,
       built-in metadata, router prototype, docs, and fast contract tests.
+**Status update (2026-05-14):** Phase 136 is implemented and verified. The
+additive `roboclaws/mcp/` profile/router layer represents existing AI2-THOR and
+MolmoSpaces contracts, excludes AI2-THOR accelerators from canonical profile
+metadata, preserves the Molmo ADR-0003 public/private boundary, and leaves
+existing demo recipes unchanged. Verification evidence is recorded in
+`.planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.

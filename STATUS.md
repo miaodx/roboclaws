@@ -15,11 +15,16 @@ verified. The opt-in hosted workflow now installs Codex/Claude Code, prewarms
 MolmoSpaces assets, passes explicit Claude MCP config, and reaches the cleanup
 MCP tools with repo-scoped provider secrets.
 
+Phase 136, Generic MCP entrypoint and semantic capability profiles, is
+implemented and verified. It adds an additive profile/router layer for
+AI2-THOR and MolmoSpaces MCP contracts while keeping simulator accelerators and
+Molmo private evaluator truth out of canonical public profile metadata.
+
 ## Next Action
 
-Land the current report-surface follow-up branch, then trigger or monitor the
-next `main` Pages deploy so the dedicated Molmo live index and report rerun
-commands are visible on the public site.
+Land the current report-surface follow-up and Phase 136 semantic-profile
+commits, then trigger or monitor the next `main` Pages deploy so the dedicated
+Molmo live index and report rerun commands are visible on the public site.
 
 ## Current Blocker
 

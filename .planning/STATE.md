@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Better Views
 status: active
-stopped_at: Phase 135 MolmoSpaces CI live-agent reports merged; hosted live run reaches MCP tools, with provider-runtime failures under inspection.
-last_updated: "2026-05-13T22:31:14+08:00"
-last_activity: 2026-05-13
+stopped_at: Phase 136 Generic MCP entrypoint and semantic capability profiles implemented and verified; Phase 135 hosted-provider follow-up remains the repo-level external blocker.
+last_updated: "2026-05-14T22:03:09+08:00"
+last_activity: 2026-05-14
 progress:
   total_phases: 137
-  completed_phases: 132
+  completed_phases: 133
   total_plans: 167
-  completed_plans: 153
+  completed_plans: 154
   percent: 92
 ---
 
@@ -21,30 +21,27 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-21)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 135 promotes the three known-good local MolmoSpaces
-Claude Code provider-profile cleanup reports into an opt-in GitHub-hosted CI
-path with local rehearsal, MolmoSpaces/MuJoCo asset caching/prewarm, and
-Pages-visible report/status tiles. The repo-side implementation is merged;
-hosted live proof now reaches cleanup MCP tools, and the current follow-up is
-publishing useful diagnostics for provider/runtime failures.
+**Current focus:** Phase 136 has added the generic MCP semantic profile/router
+layer for AI2-THOR and MolmoSpaces contracts. Phase 135's hosted Molmo live
+proof still reaches cleanup MCP tools, and the repo-level follow-up remains
+publishing useful diagnostics for provider/runtime failures and preserving live
+report artifacts on Pages deploys.
 
 ## Current Position
 
-**Current Phase:** 135
-**Current Phase Name:** MolmoSpaces CI live-agent reports
+**Current Phase:** 136
+**Current Phase Name:** Generic MCP entrypoint and semantic capability profiles
 **Current Plan:** 1
 **Total Plans in Phase:** 1
-**Total Phases:** 136
+**Total Phases:** 137
 **Progress:** 92%
 
-Phase: 135 (molmospaces-ci-live-agent-reports) - COMPLETE
-Plan: 1 of 1 complete - `135-01` added local rehearsal, non-interactive Claude
-Code live cleanup CI execution, MolmoSpaces asset prewarm/cache, and Pages
-status/report publishing for the three model entries.
-Status: Phase 135 is implemented and non-live verified. The first main-hosted
-opt-in workflow runs with the configured `KIMI_API_KEY` and `MIMO_TP_KEY`; Kimi
-connected to the cleanup MCP tools before failing with a provider API error, and
-MiMo hosted entries still need final inspection.
+Phase: 136 (generic-mcp-entrypoint-and-semantic-capability-profiles) - COMPLETE
+Plan: 1 of 1 complete - `136-01` added semantic MCP contract profiles, built-in
+AI2-THOR and MolmoSpaces metadata, a profile router prototype, accelerator and
+privacy fail-closed tests, and agent-facing vocabulary updates.
+Status: Phase 136 is implemented and verified with focused MCP/Molmo contract
+tests plus the repo fast non-integration pytest subset from the commit hook.
 
 Phase 35 produced strict standalone target planner-backed proof with
 2 executed steps, `max_abs_qpos_delta=0.04167305757535879`, and no capability
@@ -432,20 +429,20 @@ Phase 135 adds the opt-in MolmoSpaces live cleanup CI/report path: local
 rehearsal, non-interactive Claude Code execution, MolmoSpaces/MuJoCo asset
 prewarm/cache, GitHub-hosted serialized model entries, and Pages-visible
 success/skipped/failed tiles for the three known-good local model variants.
-Last activity: 2026-05-13 - Completed Phase 135 MolmoSpaces CI live-agent
-reports implementation and non-live verification.
+Last activity: 2026-05-14 - Completed Phase 136 Generic MCP entrypoint and
+semantic capability profiles implementation and verification.
 
 Progress: [##########] 100%
-Next blocker: land the Molmo live CI branch to `main`, then run the opt-in
-hosted Molmo live workflow with the configured GitHub Actions secrets
-`KIMI_API_KEY` and `MIMO_TP_KEY` to collect real provider/runner evidence.
+Next blocker: land the current report-surface follow-up and Phase 136 semantic
+profile commits, then run or monitor the next `main` Pages deploy and Kimi
+provider-error follow-up.
 (Phase 08 satisfies the MolmoSpaces prompt-cleanup definition of done with a real upstream MuJoCo scene and subprocess backend. Phase 09 completes the visual FPV/same-room follow-up. Phase 10 completes the semantic-substep/report follow-up. Phase 11 completes the held-object carry visual follow-up. Phase 12 proves current-contract agent/OpenClaw tool viability. Phase 13 makes those agent bridge artifacts visually reviewable. Phase 14 implements the ADR-0003 public/private real-world-style cleanup boundary. Phase 15 closes the larger hidden Generated Mess Set lower-bound gap. Phase 16 exposes the ADR-0003 MCP agent surface. Phase 17 completes direct coding-agent dogfood on that stricter surface. Phase 18 completes synthetic OpenClaw Gateway dogfood on the same ADR-0003 MCP surface. Phase 19 completes real visual evidence on the same surface. Phase 20 completes clean-policy semantic-loop enforcement. Phase 21 completes advisory scoring/model-check artifacts. Phase 22 completes raw FPV-only perception evidence. Phase 23 completes the planner-backed manipulation provenance/proof gate. Phase 24 completes runtime diagnostics for strict planner probe blockers. Phase 25 completes the headless renderer blocker and produces a strict Franka planner-backed proof. Phase 26 attaches that proof to cleanup reports without changing cleanup-loop primitive provenance. Phase 27 completes the per-subphase cleanup primitive gate. Phase 28 completes the RBY1M/CuRobo target-runtime gate. Phase 29 completes camera-only model-policy cleanup. Phase 30 completes canonical report visual-core consolidation. Phase 31 completes staged RBY1M/CuRobo warmup evidence. Phase 32 completes isolated CuRobo extension-cache evidence. Phase 33 completes visible Warp compatibility evidence.)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 135 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 135)
+- Total plans completed: 136 (18 historical retrofit + 3 completed in Phase 02.4 + Phase 6/7/8/9/10/11/12/13/14 MolmoSpaces plans plus follow-on MolmoSpaces slices through Phase 136)
 - Average duration: n/a (ingested from retrospectives, not GSD-tracked)
 - Total execution time: n/a (pre-GSD work)
 
@@ -831,11 +828,12 @@ Recent decisions affecting current work:
 
 ### Roadmap Evolution
 
-- Phase 136 added (2026-05-14): **Generic MCP entrypoint and semantic
-  capability profiles** — one reviewed PRD ingested from
-  `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md` as a single
-  metadata/router prototype phase. Planning produced one executable plan:
-  `136-01-generic-mcp-entrypoint-semantic-capabilities-PLAN.md`.
+- Phase 136 completed (2026-05-14): **Generic MCP entrypoint and semantic
+  capability profiles** — added an additive `roboclaws/mcp/` profile/router
+  layer for AI2-THOR and MolmoSpaces contracts, excluding AI2-THOR accelerators
+  from canonical profile metadata and preserving Molmo ADR-0003 private
+  evaluator boundaries. Verification is recorded in
+  `.planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
 - Phase 2.4 closed (2026-04-24): **Better Views** now has a locked product decision. The repo keeps only the `map-v2+chase` runtime path; the old multi-variant experiment is retained as historical context plus analysis tooling, not as an active gate.
 - Phase 12 completed (2026-05-08): **MolmoSpaces current-contract agent
   bridge** — current semantic cleanup contract exposed through FastMCP and
@@ -1146,15 +1144,13 @@ Items acknowledged and carried forward from the new-mode ingest:
 
 ## Session Continuity
 
-Last session: 2026-05-13T18:08:00+08:00
-Stopped at: Phase 135 MolmoSpaces CI live-agent reports implemented and
-non-live verified. A branch `workflow_dispatch` found the Molmo live job needed
-`just` installed and confirmed GitHub Pages deployment is protected to `main`;
-branch dispatches can rehearse the matrix without deploying Pages.
-The next external validation should run `workflow_dispatch` with
-`molmo_live=true` on `main` or push to `main` with `[molmo-live]` in the commit
-message, using the configured GitHub Actions secrets `KIMI_API_KEY` and
-`MIMO_TP_KEY`.
+Last session: 2026-05-14T22:03:09+08:00
+Stopped at: Phase 136 Generic MCP entrypoint and semantic capability profiles
+implemented and verified. Phase 135 hosted live-provider follow-up remains the
+repo-level external blocker; the next external validation should run
+`workflow_dispatch` with `molmo_live=true` on `main` or push to `main` with
+`[molmo-live]` in the commit message, using the configured GitHub Actions
+secrets `KIMI_API_KEY` and `MIMO_TP_KEY`.
 Report generation routes Molmo cleanup artifacts to the shared visual underlay,
 prior-covered selection can reselect one-step proof memory when a higher
 horizon is requested, proof-bundle dry-run reports expose command quality plus
@@ -1213,7 +1209,9 @@ Latest focused cleanup report examples:
 `output/molmo-realworld-report-underlay-visual/report.html`.
 Latest Molmo CI live dry-run manifest:
 `output/molmo/ci-rehearsal-all/site/molmo/live/live-report-manifest.json`.
-Resume file: .planning/phases/135-molmospaces-ci-live-agent-reports/135-01-ci-live-agent-reports-PLAN.md
+Latest semantic MCP profile verification:
+`.planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
+Resume file: .planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-01-generic-mcp-entrypoint-semantic-capabilities-PLAN.md
 
 ## Dual-Stack Workflow
 
@@ -1221,6 +1219,6 @@ Resume file: .planning/phases/135-molmospaces-ci-live-agent-reports/135-01-ci-li
 - **GSD** owns execution: `.planning/` (this directory), STATE.md, ROADMAP.md, phase plans.
 - Pre-plan → plan handoff: when a drafted phase in root `PLAN.md` is ready for execution, the owner runs `/gsd-plan-phase <phase>` and this STATE.md is updated.
 
-**Active Phase:** None. Phase 135 MolmoSpaces CI live-agent reports is complete
-for repo-side implementation and non-live verification; hosted live proof is
-pending GitHub Actions secrets and an opt-in workflow run.
+**Active Phase:** None. Phase 136 Generic MCP entrypoint and semantic
+capability profiles is complete and verified; Phase 135 hosted live proof still
+needs the external provider/Pages follow-up described above.
