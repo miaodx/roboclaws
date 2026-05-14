@@ -166,3 +166,29 @@ from canonical public profiles.
 - Profile metadata is additive and does not alter existing server behavior.
 - Accelerator and privacy exclusions fail closed in tests.
 - No local-dev hardware, Docker, paid API, or private-credential gate is crossed.
+
+## Result
+
+Complete on 2026-05-14.
+
+Phase 136 added an additive semantic MCP profile/router layer without changing
+existing demo server behavior:
+
+- `roboclaws/mcp/profiles.py` defines `ContractProfile`, `ToolDescriptor`,
+  capability-family constants, tool classification constants, provenance
+  vocabulary, built-in `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`
+  metadata, profile lookup, and fail-closed validation.
+- `roboclaws/mcp/entrypoint.py` provides a small router/helper that loads one
+  selected profile and registers only that profile's public tools against
+  supplied handlers.
+- `tests/contract/mcp/test_semantic_profiles.py` locks the profile registry,
+  AI2-THOR accelerator exclusions, Molmo private-metadata exclusions, router
+  registration behavior, unknown-profile errors, and extra-handler rejection.
+- `docs/human/coding-agent-nav-server.md`,
+  `docs/human/molmospaces-settings.md`, and
+  `skills/ai2thor-navigator/SKILL.md` now describe the semantic profile
+  boundary and label `scene_objects` / teleport-like `goto` as AI2-THOR
+  accelerators rather than real-robot canonical capabilities.
+
+Verification evidence is recorded in `136-VERIFICATION.md`. The implementation
+commit is `b620a44`.
