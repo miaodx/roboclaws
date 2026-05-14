@@ -155,6 +155,15 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       Planned in GSD Phase 4 under
       `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/`.
 
+- [ ] **A-09** (REQ-generic-mcp-entrypoint-semantic-capabilities): Add a
+      metadata-first generic MCP entrypoint/router that loads exactly one
+      backend/domain-specific contract profile, declares semantic capability
+      families and provenance expectations, represents existing AI2-THOR
+      navigation and MolmoSpaces cleanup contracts, and fails closed if
+      canonical profiles expose simulator accelerators or Molmo private
+      evaluator truth. Planned in GSD Phase 136 from
+      `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md`.
+
 ## v2 Requirements
 
 Deferred to Phase 3 (Isaac Lab).
@@ -210,12 +219,13 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Complete (shipped 2026-04-21) |
 | A-07 | Phase 2.8 | Planned |
 | A-08 | Phase 4 | Planned |
+| A-09 | Phase 136 | Planned |
 
 **Coverage:**
-- v1 requirements: 18 total (A-08 added 2026-04-23)
-- Mapped to phases: 17 active + 1 deferred
+- v1 requirements: 19 total (A-09 added 2026-05-14)
+- Mapped to phases: 18 active + 1 deferred
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 after new-mode ingest bootstrap*
+*Last updated: 2026-05-14 after Phase 136 merge ingest*

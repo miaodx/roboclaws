@@ -859,3 +859,18 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 32. MolmoSpaces RBY1M CuRobo cache isolation | v1.33 | 1/1 | Complete | 2026-05-09 |
 | 33. MolmoSpaces RBY1M Warp compatibility | v1.34 | 1/1 | Complete | 2026-05-09 |
 | 3. Isaac Lab migration | v2.0 | 0/5 | Deferred | - |
+
+### Phase 136: Generic MCP entrypoint and semantic capability profiles
+
+**Goal:** Add a metadata-first generic MCP entrypoint/router profile layer with fail-closed accelerator/privacy boundaries.
+**Requirements**: A-09
+**Depends on:** Phase 135 plus Phase 2.6 and Phase 16
+**Source:** `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md`
+**Scope:** Bounded research spike, profile declaration schema, AI2-THOR and
+MolmoSpaces profile metadata, generic router prototype, accelerator/privacy
+fail-closed tests, and agent-facing vocabulary/docs alignment. No ROS/Nav2,
+Docker Gateway, GPU, live VLM, or real-robot validation in this phase.
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 136 to break down)

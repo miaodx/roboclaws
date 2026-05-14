@@ -1,5 +1,17 @@
 ## Conflict Detection Report
 
+> **UPDATE 2026-05-14:** Merge ingest for
+> `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md` used the
+> manifest
+> `docs/plans/generic-mcp-entrypoint-semantic-capabilities.ingest.yaml`.
+> Autoplan evidence was already reconciled in the PRD. Repo search found no
+> existing phase for this exact generic MCP profile/router scope, so the merge
+> created Phase 136 as one coherent phase. No LOCKED decision contradiction,
+> warning, or blocker was found. The phase explicitly excludes ROS/Nav2,
+> Docker Gateway, GPU, live VLM, paid API, and real-robot validation.
+
+---
+
 > **UPDATE 2026-04-20 (same day):** Both WARNINGs below were found to be
 > **stale** when verified against the live code and issue tracker.
 > Root cause: `docs/research/05-real-model-smoke-validation.md` is a
