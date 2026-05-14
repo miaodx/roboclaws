@@ -113,14 +113,21 @@ def _write_trace(run_dir: Path, events: list[dict]) -> None:
     )
 
 
-def _run_renderer(run_dir: Path) -> subprocess.CompletedProcess[str]:
+def _run_renderer(
+    run_dir: Path,
+    *,
+    rerun_command: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH")
     env["PYTHONPATH"] = (
         f"{REPO_ROOT}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else str(REPO_ROOT)
     )
+    command = [sys.executable, str(SCRIPT_PATH), "--run-dir", str(run_dir)]
+    if rerun_command is not None:
+        command.extend(["--rerun-command", rerun_command])
     return subprocess.run(
-        [sys.executable, str(SCRIPT_PATH), "--run-dir", str(run_dir)],
+        command,
         cwd=REPO_ROOT,
         check=True,
         capture_output=True,
@@ -160,7 +167,10 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     ]
     _write_trace(run_dir, events)
 
-    _run_renderer(run_dir)
+    _run_renderer(
+        run_dir,
+        rerun_command="just task::run ai2thor-nav codex visual scene=FloorPlan201",
+    )
 
     replay_gif = run_dir / "replay.gif"
     report_html = run_dir / "report.html"
@@ -179,6 +189,8 @@ def test_renders_gif_and_html_with_mixed_frames(tmp_path: Path) -> None:
     assert "Chase" in report_text
     assert "fresh observation" in report_text
     assert "fresh observe-driven move" in report_text
+    assert "Rerun Locally" in report_text
+    assert "just task::run ai2thor-nav codex visual scene=FloorPlan201" in report_text
     assert summary_json.exists()
 
 

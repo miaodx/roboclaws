@@ -107,6 +107,20 @@ run task driver mode="" *overrides:
       fi
     }
 
+    shell_join() {
+      local first=1
+      local quoted
+      for arg in "$@"; do
+        printf -v quoted '%q' "$arg"
+        if [[ "$first" == "1" ]]; then
+          printf '%s' "$quoted"
+          first=0
+        else
+          printf ' %s' "$quoted"
+        fi
+      done
+    }
+
     if [[ "$task" == "molmo-cleanup" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
@@ -128,6 +142,17 @@ run task driver mode="" *overrides:
           ;;
       esac
     fi
+
+    report_rerun_parts=("just" "task::run" "$task" "$driver")
+    if [[ "$task" == "molmo-cleanup" ]]; then
+      report_rerun_parts+=("$profile")
+    else
+      report_rerun_parts+=("$report")
+    fi
+    for override in "${raw_overrides[@]}"; do
+      [[ -n "$override" ]] && report_rerun_parts+=("$override")
+    done
+    export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
     case "$task:$driver" in
       ai2thor-nav:codex)

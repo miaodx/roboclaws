@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.rerun import render_rerun_panel  # noqa: E402
 from roboclaws.core.run_artifacts import build_autonomous_summary as _artifact_summary  # noqa: E402
 from roboclaws.core.run_artifacts import (
     extract_frame_events,  # noqa: E402
@@ -41,6 +42,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=160,
         help="Max width of each frame thumbnail in report.html",
+    )
+    parser.add_argument(
+        "--rerun-command",
+        default=None,
+        help="Local command to render at the top of report.html.",
     )
     return parser.parse_args(argv)
 
@@ -365,6 +371,7 @@ def render_report(
     frame_data: list[dict[str, Any]],
     tool_log: list[dict[str, Any]],
     thumbnail_size: int,
+    rerun_command: str | None = None,
 ) -> Path:
     try:
         from jinja2 import Environment, FileSystemLoader
@@ -391,6 +398,7 @@ def render_report(
         frames_json=json.dumps(frame_data),
         tool_log=tool_log,
         thumbnail_size=thumbnail_size,
+        rerun_panel=render_rerun_panel(rerun_command),
     )
     report_path = run_dir / "report.html"
     report_path.write_text(html, encoding="utf-8")
@@ -425,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         frame_data=frame_data,
         tool_log=build_tool_log(events),
         thumbnail_size=args.thumbnail_size,
+        rerun_command=args.rerun_command,
     )
     return 0
 

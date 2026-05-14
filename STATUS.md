@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-13
+Last updated: 2026-05-14
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -10,23 +10,24 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible and honest from local runs through CI-published report pages.
 
-Phase 135, MolmoSpaces CI live-agent reports, is implemented, merged, and
-non-live verified. The opt-in hosted workflow now installs Codex/Claude Code,
-prewarms MolmoSpaces assets, passes explicit Claude MCP config, and reaches the
-cleanup MCP tools with repo-scoped provider secrets.
+Phase 135, MolmoSpaces CI live-agent reports, is implemented and non-live
+verified. The opt-in hosted workflow now installs Codex/Claude Code, prewarms
+MolmoSpaces assets, passes explicit Claude MCP config, and reaches the cleanup
+MCP tools with repo-scoped provider secrets.
 
 ## Next Action
 
-Finish hosted proof from the current opt-in `main` workflow dispatch, inspect
-the MiMo entries, and land the follow-up failure-diagnostics patch so failed
-live model runs publish their partial seed-run logs on Pages/artifacts.
+Land the current report-surface follow-up branch, then trigger or monitor the
+next `main` Pages deploy so the dedicated Molmo live index and report rerun
+commands are visible on the public site.
 
 ## Current Blocker
 
-The hosted live path is through setup/MCP visibility. The latest Kimi run
-connected to the `roboclaws` MCP server and executed cleanup tools, then failed
-with a provider API error. MiMo hosted entries still need final inspection, and
-failed entries need richer published diagnostics than a bare `status.json`.
+The latest completed Molmo live dispatch proved both MiMo entries successfully,
+but a later `main` Pages deploy skipped the opt-in Molmo live matrix and erased
+those files from the public site. The preservation patch rehydrates the latest
+successful live dispatch on ordinary Pages deploys; Kimi live still needs
+provider-error follow-up.
 
 ## Human Review Surface
 

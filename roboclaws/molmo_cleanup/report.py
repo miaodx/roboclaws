@@ -8,6 +8,12 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from roboclaws.core.rerun import (
+    render_rerun_panel,
+    report_rerun_command_from_env,
+    rerun_panel_css,
+    shell_join,
+)
 from roboclaws.molmo_cleanup.planner_proof_quality import (
     format_quality_tier_counts,
     planner_proof_quality_evidence,
@@ -101,7 +107,8 @@ def render_cleanup_report(
             robot_view_steps=robot_view_steps or [],
         )
     )
-    report_path.write_text(_wrap_html(body), encoding="utf-8")
+    rerun_command = report_rerun_command_from_env() or _cleanup_local_rerun_command(run_result)
+    report_path.write_text(_wrap_html(body, rerun_command=rerun_command), encoding="utf-8")
     return report_path
 
 
@@ -4976,8 +4983,34 @@ def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return moves
 
 
-def _wrap_html(body: str, *, extra_css: str = "") -> str:
+def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
+    seed = run_result.get("seed", 7)
+    generated_mess_count = run_result.get(
+        "requested_generated_mess_count",
+        run_result.get("generated_mess_count", 10),
+    )
+    profile = run_result.get("cleanup_profile") or "world-labels"
+    return shell_join(
+        [
+            "just",
+            "task::run",
+            "molmo-cleanup",
+            "direct",
+            profile,
+            f"seed={seed}",
+            f"generated_mess_count={generated_mess_count}",
+        ]
+    )
+
+
+def _wrap_html(
+    body: str,
+    *,
+    extra_css: str = "",
+    rerun_command: str | None = None,
+) -> str:
     extra_css_block = f"{extra_css.rstrip()}\n" if extra_css else ""
+    rerun_panel = render_rerun_panel(rerun_command)
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -5147,9 +5180,10 @@ def _wrap_html(body: str, *, extra_css: str = "") -> str:
       overflow-wrap: anywhere;
     }}
     th {{ background: #eef1f5; font-weight: 650; }}
+{rerun_panel_css()}
   </style>
 </head>
-<body><main>{body}</main></body>
+<body><main>{rerun_panel}{body}</main></body>
 </html>
 """
 

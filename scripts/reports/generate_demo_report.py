@@ -196,7 +196,13 @@ def _run_territory_demo(output_dir: Path, agents: int, steps: int) -> Path:
             output_dir=str(output_dir),
         )
     replay_dir = Path(result["output_dir"])
-    _generate_report(replay_dir)
+    _generate_report(
+        replay_dir,
+        rerun_command=(
+            "just task::run territory script visual "
+            f"agents={agents} steps={steps} output_dir={output_dir}"
+        ),
+    )
     return replay_dir
 
 
@@ -212,7 +218,13 @@ def _run_coverage_demo(output_dir: Path, agents: int, steps: int) -> Path:
             output_dir=str(output_dir),
         )
     replay_dir = Path(result["output_dir"])
-    _generate_report(replay_dir)
+    _generate_report(
+        replay_dir,
+        rerun_command=(
+            "just task::run coverage script visual "
+            f"agents={agents} steps={steps} output_dir={output_dir}"
+        ),
+    )
     return replay_dir
 
 
@@ -243,7 +255,17 @@ def main(argv: list[str] | None = None) -> None:
 
     compare_out = root / "report_compare.html"
     print(f"[demo] Writing A/B comparison to {compare_out}")
-    _compare_reports(territory_dir, coverage_dir, output_path=compare_out)
+    _compare_reports(
+        territory_dir,
+        coverage_dir,
+        output_path=compare_out,
+        rerun_command=(
+            "just task::run territory script visual "
+            f"agents={args.agents} steps={args.steps} output_dir={root / 'territory'} && "
+            "just task::run coverage script visual "
+            f"agents={args.agents} steps={args.steps} output_dir={root / 'coverage'}"
+        ),
+    )
 
     print(f"[demo] Writing landing index to {root / 'index.html'}")
     index_out = _write_index(root, include_smoke=False)

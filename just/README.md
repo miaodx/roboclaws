@@ -51,6 +51,8 @@ Molmo cleanup profiles:
 - `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
 - `camera-labels` registers structured candidates from camera observations.
+- Compatibility aliases from the older report vocabulary are still accepted:
+  `minimal` maps to `smoke`, and `visual` maps to `world-labels`.
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
 omitted and keeps the task default (`visual` for non-Molmo tasks,

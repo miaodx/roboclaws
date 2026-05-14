@@ -14,6 +14,7 @@ from roboclaws.molmo_cleanup.ci_live_reports import (
     publish_seed_run,
     report_path_for_entry,
     status_path_for_entry,
+    write_live_index,
     write_manifest,
     write_status,
 )
@@ -72,6 +73,10 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
     }
     assert payload["command"][:4] == ["just", "task::run", "molmo-cleanup", "claude"]
+    assert payload["rerun_command"].startswith(
+        "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
+        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 just task::run molmo-cleanup claude"
+    )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
             encoding="utf-8"
@@ -222,10 +227,16 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), success)
     write_status(status_path_for_entry(live_root, "mimo-v2.5-pro"), skipped)
     write_manifest(live_root)
+    live_index = write_live_index(live_root)
+    live_html = live_index.read_text(encoding="utf-8")
+    assert "MolmoSpaces Live Cleanup Reports" in live_html
+    assert "kimi-k2.6/seed-7/report.html" in live_html
+    assert "Rerun locally" in live_html
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
-    assert "MolmoSpaces Live Cleanup" in html
+    assert "MolmoSpaces Live Cleanup (main-only / opt-in CI)" in html
+    assert "molmo/live/" in html
     assert "molmo/live/kimi-k2.6/seed-7/report.html" in html
     assert "MiMo v2.5 Pro" in html
     assert "missing required secret/env MIMO_TP_KEY" in html
@@ -264,6 +275,9 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
     )
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), failed)
     write_manifest(live_root)
+    live_index = write_live_index(live_root)
+    live_html = live_index.read_text(encoding="utf-8")
+    assert "kimi-k2.6/diagnostics/seed-7/diagnostics.html" in live_html
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")

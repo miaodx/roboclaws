@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 from PIL import Image
 
+from roboclaws.core.rerun import render_rerun_panel, rerun_panel_css
 from roboclaws.core.run_artifacts import build_replay_report_context
 
 # ---------------------------------------------------------------------------
@@ -36,6 +37,7 @@ def generate(
     replay_dir: str | Path,
     output_path: str | Path | None = None,
     auto_open: bool = False,
+    rerun_command: str | None = None,
 ) -> Path:
     """Generate a self-contained HTML report from a replay directory.
 
@@ -63,7 +65,11 @@ def generate(
         raise FileNotFoundError(f"replay.json not found in {replay_dir}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     section = _build_run_section(replay_dir, manifest, run_id="run")
-    html_content = _wrap_html(section, title="RoboClaws Run Report")
+    html_content = _wrap_html(
+        section,
+        title="RoboClaws Run Report",
+        rerun_command=rerun_command,
+    )
     out_path = Path(output_path) if output_path else replay_dir / "report.html"
     out_path.write_text(html_content, encoding="utf-8")
     if auto_open:
@@ -101,6 +107,7 @@ def compare(
     dir2: str | Path,
     output_path: str | Path | None = None,
     auto_open: bool = False,
+    rerun_command: str | None = None,
 ) -> Path:
     """Generate a side-by-side A/B comparison HTML report for two replay directories.
 
@@ -127,7 +134,11 @@ def compare(
         f'<div class="compare-col"><h2>Run B: {name2}</h2>{section2}</div>'
         f"</div>"
     )
-    html_content = _wrap_html(body, title="RoboClaws A/B Comparison")
+    html_content = _wrap_html(
+        body,
+        title="RoboClaws A/B Comparison",
+        rerun_command=rerun_command,
+    )
     out_path = Path(output_path) if output_path else dir1 / "report_compare.html"
     out_path.write_text(html_content, encoding="utf-8")
     if auto_open:
@@ -572,7 +583,12 @@ def _render_provider_health(provider_status: dict[str, Any]) -> str:
     )
 
 
-def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
+def _wrap_html(
+    body: str,
+    title: str = "RoboClaws Report",
+    *,
+    rerun_command: str | None = None,
+) -> str:
     """Wrap *body* in a complete self-contained HTML document."""
     safe_title = _html.escape(title)
     # CSS is placed inside a Python string; line lengths inside the literal are unchecked.
@@ -654,7 +670,9 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         ".compare-col { min-width: 0; }"
         "@media (max-width: 900px) { .compare-layout { grid-template-columns: 1fr; }"
         "  .frame-board { grid-template-columns: 1fr; } }"
+        f"{rerun_panel_css()}"
     )
+    rerun_panel = render_rerun_panel(rerun_command)
     return (
         f"<!DOCTYPE html>\n"
         f'<html lang="en">\n<head>\n'
@@ -663,6 +681,7 @@ def _wrap_html(body: str, title: str = "RoboClaws Report") -> str:
         f"<title>{safe_title}</title>\n"
         f"<style>{css}</style>\n"
         f"</head>\n<body>\n"
+        f"{rerun_panel}\n"
         f"{body}\n"
         f"</body>\n</html>"
     )
@@ -872,6 +891,11 @@ def _main(argv: list[str] | None = None) -> None:
         help="Generate side-by-side A/B comparison with OTHER_DIR",
     )
     parser.add_argument("--output", metavar="PATH", help="Override output HTML file path")
+    parser.add_argument(
+        "--rerun-command",
+        default=None,
+        help="Local command to render at the top of the HTML report.",
+    )
     args = parser.parse_args(argv)
 
     if args.compare:
@@ -880,9 +904,15 @@ def _main(argv: list[str] | None = None) -> None:
             args.compare,
             output_path=args.output,
             auto_open=args.auto_open,
+            rerun_command=args.rerun_command,
         )
     else:
-        out = generate(args.replay_dir, output_path=args.output, auto_open=args.auto_open)
+        out = generate(
+            args.replay_dir,
+            output_path=args.output,
+            auto_open=args.auto_open,
+            rerun_command=args.rerun_command,
+        )
 
     print(f"Report written to: {out}")
 

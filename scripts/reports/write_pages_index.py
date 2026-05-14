@@ -228,7 +228,11 @@ def _molmo_live_section(site_dir: Path) -> str:
         desc += ".</div>"
         items.append(f'  <li>{title}<span class="tag">molmo live</span>\n{desc}</li>')
 
-    return "\n<h2>MolmoSpaces Live Cleanup (opt-in CI)</h2>\n<ul>\n" + "\n".join(items) + "\n</ul>"
+    return (
+        "\n<h2>MolmoSpaces Live Cleanup (main-only / opt-in CI)</h2>\n"
+        '<p class="sub"><a href="molmo/live/">Open the dedicated MolmoSpaces live page</a></p>\n'
+        "<ul>\n" + "\n".join(items) + "\n</ul>"
+    )
 
 
 if __name__ == "__main__":
