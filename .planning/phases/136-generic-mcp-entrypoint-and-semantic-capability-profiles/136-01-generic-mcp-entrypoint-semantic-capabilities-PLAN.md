@@ -1,3 +1,20 @@
+---
+phase: 136
+plan: 136-01
+wave: 1
+depends_on: []
+autonomous: true
+requirements:
+  - A-09
+files_modified:
+  - roboclaws/mcp/profiles.py
+  - roboclaws/mcp/entrypoint.py
+  - tests/contract/mcp/test_semantic_profiles.py
+  - docs/human/coding-agent-nav-server.md
+  - docs/human/molmospaces-settings.md
+  - skills/ai2thor-navigator/SKILL.md
+---
+
 # Phase 136 Plan: Generic MCP Entrypoint And Semantic Capability Profiles
 
 ## Source
@@ -36,45 +53,95 @@ from canonical public profiles.
 
 ## Tasks
 
-1. Add semantic profile schema and validation.
-   - Read first: `roboclaws/molmo_cleanup/profiles.py`,
-     `roboclaws/mcp/server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py`.
-   - Modify: `roboclaws/mcp/profiles.py`.
-   - Acceptance: profile validation rejects unknown families, accelerator tools
-     in canonical public tools, missing descriptors, and forbidden private keys.
+<task id="T1" type="auto">
+  <title>Add semantic profile schema and validation</title>
+  <read_first>
+    <file>roboclaws/molmo_cleanup/profiles.py</file>
+    <file>roboclaws/mcp/server.py</file>
+    <file>roboclaws/molmo_cleanup/realworld_mcp_server.py</file>
+  </read_first>
+  <action>
+    Create `roboclaws/mcp/profiles.py` with typed profile/tool declarations,
+    capability-family constants, tool classification constants, provenance
+    vocabulary, public serialization, profile lookup, and validation helpers.
+  </action>
+  <acceptance_criteria>
+    <criterion>`roboclaws/mcp/profiles.py` defines `ContractProfile` and `ToolDescriptor`.</criterion>
+    <criterion>Validation rejects accelerator descriptors in canonical `public_tools`.</criterion>
+    <criterion>Validation rejects serialized public profile metadata containing configured forbidden private keys.</criterion>
+  </acceptance_criteria>
+</task>
 
-2. Add built-in AI2-THOR and MolmoSpaces profile metadata.
-   - Read first: `docs/adr/0003-separate-cleanup-agent-view-from-private-evaluation.md`,
-     `docs/adr/0006-expose-adr-0003-cleanup-contract-through-mcp.md`,
-     `roboclaws/molmo_cleanup/realworld_contract.py`.
-   - Modify: `roboclaws/mcp/profiles.py`.
-   - Acceptance: `ai2thor_navigation_v1` lists `scene_objects` and `goto` only
-     as accelerators; `molmospaces_cleanup_v1` serialized metadata contains no
-     ADR-0003 private evaluator fields.
+<task id="T2" type="auto">
+  <title>Add built-in AI2-THOR and MolmoSpaces profile metadata</title>
+  <read_first>
+    <file>docs/adr/0003-separate-cleanup-agent-view-from-private-evaluation.md</file>
+    <file>docs/adr/0006-expose-adr-0003-cleanup-contract-through-mcp.md</file>
+    <file>roboclaws/molmo_cleanup/realworld_contract.py</file>
+  </read_first>
+  <action>
+    Add `ai2thor_navigation_v1` and `molmospaces_cleanup_v1` built-in profiles.
+    AI2-THOR public tools are `observe`, `observe_archived`, `move`, and `done`;
+    AI2-THOR accelerators are `scene_objects` and `goto`. Molmo public tools
+    mirror the ADR-0003 real-world MCP surface and exclude private evaluator
+    fields.
+  </action>
+  <acceptance_criteria>
+    <criterion>`ai2thor_navigation_v1` lists `scene_objects` and `goto` only under accelerators.</criterion>
+    <criterion>`molmospaces_cleanup_v1` public metadata contains no `Generated Mess Set`, `acceptable_destination`, `private_manifest`, `is_misplaced`, or hidden target fields.</criterion>
+  </acceptance_criteria>
+</task>
 
-3. Add generic MCP entrypoint/router prototype.
-   - Read first: `roboclaws/mcp/server.py`,
-     `roboclaws/molmo_cleanup/realworld_mcp_server.py`.
-   - Modify: `roboclaws/mcp/entrypoint.py`.
-   - Acceptance: loading an unknown profile raises an actionable error, and a
-     mock FastMCP registration test sees only tools from the selected profile's
-     `public_tools`.
+<task id="T3" type="auto">
+  <title>Add generic MCP entrypoint/router prototype</title>
+  <read_first>
+    <file>roboclaws/mcp/server.py</file>
+    <file>roboclaws/molmo_cleanup/realworld_mcp_server.py</file>
+  </read_first>
+  <action>
+    Create `roboclaws/mcp/entrypoint.py` with a generic profile loader and a
+    registration helper that registers exactly the selected profile's public
+    tools against supplied handler callables.
+  </action>
+  <acceptance_criteria>
+    <criterion>Unknown profile ids raise `ValueError` that includes the unknown id and allowed profile ids.</criterion>
+    <criterion>A router registration test can prove only selected-profile public tools are registered.</criterion>
+  </acceptance_criteria>
+</task>
 
-4. Add contract/unit tests.
-   - Modify: `tests/contract/mcp/test_semantic_profiles.py`.
-   - Acceptance: tests cover profile parsing/validation, built-in metadata,
-     accelerator exclusion, Molmo privacy exclusions, and router registration.
+<task id="T4" type="auto">
+  <title>Add profile and router contract tests</title>
+  <read_first>
+    <file>tests/contract/mcp/test_mcp_server.py</file>
+    <file>tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py</file>
+    <file>tests/contract/molmo_cleanup/test_molmo_cleanup_profiles.py</file>
+  </read_first>
+  <action>
+    Add `tests/contract/mcp/test_semantic_profiles.py` covering profile lookup,
+    validation, built-in metadata, accelerator exclusion, Molmo privacy
+    exclusions, and router registration.
+  </action>
+  <acceptance_criteria>
+    <criterion>`tests/contract/mcp/test_semantic_profiles.py` passes through the repo pytest wrapper.</criterion>
+  </acceptance_criteria>
+</task>
 
-5. Update agent-facing vocabulary.
-   - Read first: `docs/human/agent-task-command-taxonomy.md`,
-     `docs/human/coding-agent-nav-server.md`,
-     `docs/human/molmospaces-settings.md`,
-     `skills/ai2thor-navigator/SKILL.md`.
-   - Modify the smallest docs/skill surfaces needed to make Task Prompt,
-     Semantic Capability, Semantic Service, Demo Recipe, and Accelerator
-     language consistent.
-   - Acceptance: docs do not describe `scene_objects` or teleport-like `goto`
-     as canonical real-robot capabilities.
+<task id="T5" type="auto">
+  <title>Update agent-facing vocabulary</title>
+  <read_first>
+    <file>docs/human/agent-task-command-taxonomy.md</file>
+    <file>docs/human/coding-agent-nav-server.md</file>
+    <file>docs/human/molmospaces-settings.md</file>
+    <file>skills/ai2thor-navigator/SKILL.md</file>
+  </read_first>
+  <action>
+    Make the smallest docs/skill updates needed to distinguish Task Prompt,
+    Semantic Capability, Semantic Service, Demo Recipe, and Accelerator.
+  </action>
+  <acceptance_criteria>
+    <criterion>Docs do not describe `scene_objects` or teleport-like `goto` as canonical real-robot capabilities.</criterion>
+  </acceptance_criteria>
+</task>
 
 ## Acceptance Checks
 
