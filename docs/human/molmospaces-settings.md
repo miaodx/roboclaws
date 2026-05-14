@@ -44,6 +44,20 @@ for fast contract checks, but it has no robot camera timeline.
 | Provenance | `api_semantic` | Cleanup tools mutate simulator semantic state. | Current normal cleanup loop. |
 | Provenance | `planner_backed` | Cleanup subphase has matching RBY1M/CuRobo proof. | Future strict manipulation target. |
 
+## Semantic Contract Profile
+
+`molmospaces_cleanup_v1` is the MCP contract profile for the ADR-0003 cleanup
+surface. It describes semantic capability tools such as `metric_map`,
+`fixture_hints`, `observe`, `navigate_to_object`, `pick`, `place`, and `done`;
+the user's instruction, for example "clean the room", remains a Task Prompt
+that the agent plans over those capabilities.
+
+The profile is public-agent metadata only. It must not expose generated mess
+sets, acceptable destinations, private manifests, hidden target lists,
+`is_misplaced`, private scoring truth, or the AI2-THOR `scene_objects` oracle.
+Demo recipes such as `just task::run molmo-cleanup ...` choose a run shape; they
+are not whole-task MCP tools.
+
 ## Entrypoint Support
 
 Not every entrypoint exposes every contract mode yet. Treat the matrix below as
