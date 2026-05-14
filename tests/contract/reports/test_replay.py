@@ -97,6 +97,7 @@ def test_save_creates_output_dir(tmp_path) -> None:
     out = recorder.save(tmp_path / "run")
     assert out.exists()
     assert out.is_dir()
+    assert not (out / "replay.gif").exists()
 
 
 def test_save_creates_subdirectories(tmp_path) -> None:

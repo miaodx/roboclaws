@@ -158,7 +158,7 @@ class ReplayRecorder:
         vlm_cost_usd: float = 0.0,
         final_scores: dict[str, Any] | None = None,
         termination_reason: str = "unknown",
-        generate_gif: bool = True,
+        generate_gif: bool = False,
         gif_fps: float = 4.0,
         generate_report: bool = False,
         provider_status: dict[str, Any] | None = None,
@@ -169,7 +169,7 @@ class ReplayRecorder:
 
             output_dir/
             ├── replay.json           — full manifest (metadata + every step)
-            ├── replay.gif            — animated composite GIF (optional)
+            ├── replay.gif            — animated composite GIF (optional, opt-in)
             ├── frames/               — composite PNG per step
             │   ├── 0000_composite.png
             │   └── …
@@ -186,6 +186,8 @@ class ReplayRecorder:
             final_scores: Game-specific final scores dict.
             termination_reason: Why the game ended ("max_steps", "coverage_reached", …).
             generate_gif: Write ``replay.gif`` when ``imageio`` is available.
+                Defaults to ``False`` because the GIF is rebuildable from
+                ``frames/*_composite.png``.
             gif_fps: Frames per second for the output GIF.
             generate_report: Generate a self-contained ``report.html`` via
                 :mod:`roboclaws.core.reporter` after saving. Defaults to ``False``.

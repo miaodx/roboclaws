@@ -48,6 +48,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Local command to render at the top of report.html.",
     )
+    parser.add_argument(
+        "--generate-gif",
+        action="store_true",
+        help="Also write replay.gif. Off by default because it can be rebuilt from frames.",
+    )
     return parser.parse_args(argv)
 
 
@@ -414,7 +419,8 @@ def main(argv: list[str] | None = None) -> int:
     events = load_events(trace_path)
     frames = extract_frame_events(events)
     composite_images = build_composite_images(frames)
-    write_replay_gif(composite_images, args.run_dir / "replay.gif")
+    if args.generate_gif:
+        write_replay_gif(composite_images, args.run_dir / "replay.gif")
 
     run_result_path = args.run_dir / "run_result.json"
     run_result = {}

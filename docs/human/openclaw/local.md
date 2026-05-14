@@ -221,10 +221,10 @@ The demo posts each turn to `POST /v1/chat/completions` with
 URLs — no bind mount, no shared filesystem. Artefacts land under
 `output/openclaw-demo/`:
 
-- `replay.gif` — animated overview (one composite frame per step)
 - `report.html` — self-contained interactive report (step slider,
   per-agent FPV, VLM reasoning log)
 - `replay.json` — full per-step manifest
+- `frames/` — composite PNG frames; rebuild `replay.gif` from these only when needed
 
 ## 3. Clean up
 
@@ -306,8 +306,8 @@ python examples/openclaw/openclaw_nav_autonomous.py \
   --wall-budget 180
 ```
 
-Output lands in `output/openclaw-autonomous/<timestamp>/` with `replay.gif`,
-`report.html`, `trace.jsonl`, and `run_result.json`. The example starts the
+Output lands in `output/openclaw-autonomous/<timestamp>/` with `report.html`,
+`trace.jsonl`, and `run_result.json`. The example starts the
 MCP server in-process on port `18788` before the bootstrap subprocess runs, so
 operators don't need to launch anything extra. The current default prompt-image
 bundle is `map-v2+chase`; pass `--views baseline` or `--views map-v2` when you

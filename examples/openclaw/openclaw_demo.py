@@ -103,7 +103,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--output-dir",
         default="output/openclaw-demo",
         dest="output_dir",
-        help="Directory to write replay files, GIF, and report.html",
+        help="Directory to write replay files and report.html",
     )
     p.add_argument(
         "--gateway-url",
@@ -325,7 +325,7 @@ def run_openclaw_demo(
         vlm_cost_usd=provider.cumulative_cost,
         final_scores={"steps_executed": steps_executed},
         termination_reason=termination_reason,
-        generate_gif=True,
+        generate_gif=False,
         generate_report=True,
         provider_status=final_provider_status,
     )
