@@ -870,7 +870,8 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 MolmoSpaces profile metadata, generic router prototype, accelerator/privacy
 fail-closed tests, and agent-facing vocabulary/docs alignment. No ROS/Nav2,
 Docker Gateway, GPU, live VLM, or real-robot validation in this phase.
-**Plans:** 0 plans
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 136 to break down)
+- [ ] 136-01: Generic MCP entrypoint semantic capabilities — profile schema,
+      built-in metadata, router prototype, docs, and fast contract tests.
