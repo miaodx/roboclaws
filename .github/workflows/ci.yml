@@ -573,10 +573,11 @@ jobs:
   # ---------------------------------------------------------------------------
   # Job 4d: Opt-in MolmoSpaces live cleanup reports.
   #
-  # Runs only on manual dispatch or `[molmo-live]` pushes to main. The matrix is
-  # serialized because each run owns a MuJoCo-backed MolmoSpaces backend and a
-  # provider-backed Claude Code session. Failures are uploaded as status JSON so
-  # Pages can show skipped/failed tiles instead of silently omitting models.
+  # Runs only on manual dispatch or `[molmo-live]` pushes to main. Each matrix
+  # entry gets its own GitHub-hosted runner, so the Kimi/MiMo live reports can
+  # run in parallel while sharing the same restored MolmoSpaces runtime cache.
+  # Failures are uploaded as status JSON so Pages can show skipped/failed tiles
+  # instead of silently omitting models.
   # ---------------------------------------------------------------------------
   molmo-live-cleanup:
     name: Molmo live cleanup (${{ matrix.model_entry }})
@@ -596,7 +597,7 @@ jobs:
     timeout-minutes: 75
     strategy:
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 3
       matrix:
         model_entry:
           - kimi-k2.6
