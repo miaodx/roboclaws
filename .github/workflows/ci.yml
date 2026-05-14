@@ -15,6 +15,7 @@ on:
 # Needed by the deploy-pages job (push to main only) to publish report.html
 # to https://miaodx.github.io/roboclaws/ via GitHub Pages.
 permissions:
+  actions: read
   contents: read
   pages: write
   id-token: write
@@ -152,7 +153,9 @@ jobs:
             --output-dir output/smoke/territory
 
       - name: Generate HTML report from smoke replay
-        run: python -m roboclaws.core.reporter output/smoke/territory
+        run: |
+          python -m roboclaws.core.reporter output/smoke/territory \
+            --rerun-command "just task::run territory vlm visual model=kimi agents=2 steps=100 output_dir=output/smoke/territory"
 
       # Cooperative counterpart of the territory smoke.  Same 100-step budget
       # so the coverage-game 95% early-termination re-enabled by #41 has a real
@@ -167,7 +170,9 @@ jobs:
             --output-dir output/smoke/coverage
 
       - name: Generate HTML report from coverage smoke replay
-        run: python -m roboclaws.core.reporter output/smoke/coverage
+        run: |
+          python -m roboclaws.core.reporter output/smoke/coverage \
+            --rerun-command "just task::run coverage vlm visual model=kimi agents=2 steps=100 output_dir=output/smoke/coverage"
 
       - name: Upload smoke replay + HTML report
         uses: actions/upload-artifact@v4
@@ -268,7 +273,9 @@ jobs:
 
       - name: Generate demo HTML report
         if: steps.gateway.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw/demo
+        run: |
+          python -m roboclaws.core.reporter output/openclaw/demo \
+            --rerun-command "just task::run ai2thor-nav openclaw visual agents=2 steps=200 output_dir=output/openclaw/demo"
 
       - name: Dump Gateway logs on failure
         if: failure() && steps.gateway.outcome == 'success'
@@ -360,7 +367,9 @@ jobs:
 
       - name: Generate territory HTML report
         if: steps.gateway.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw/territory
+        run: |
+          python -m roboclaws.core.reporter output/openclaw/territory \
+            --rerun-command "just task::run territory openclaw visual agents=2 steps=30 souls=aggressive,defensive output_dir=output/openclaw/territory"
 
       - name: Dump Gateway logs on failure
         if: failure() && steps.gateway.outcome == 'success'
@@ -452,7 +461,9 @@ jobs:
 
       - name: Generate coverage HTML report
         if: steps.gateway.outcome == 'success'
-        run: python -m roboclaws.core.reporter output/openclaw/coverage
+        run: |
+          python -m roboclaws.core.reporter output/openclaw/coverage \
+            --rerun-command "just task::run coverage openclaw visual agents=2 steps=30 souls=cooperative,cooperative output_dir=output/openclaw/coverage"
 
       - name: Dump Gateway logs on failure
         if: failure() && steps.gateway.outcome == 'success'
@@ -768,6 +779,45 @@ jobs:
         with:
           name: report-molmo-live-mimo-v2-omni
           path: molmo-live-src/mimo-v2-omni
+
+      # Normal main pushes do not run the opt-in Molmo live matrix, but they
+      # still redeploy Pages. Rehydrate the latest successful live dispatch so
+      # routine report publishes do not erase the public Molmo live section.
+      - name: Download latest Molmo live dispatch artifacts (best-effort)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f molmo-live-src/kimi-k2.6/status.json ] \
+             || [ -f molmo-live-src/mimo-v2.5-pro/status.json ] \
+             || [ -f molmo-live-src/mimo-v2-omni/status.json ]; then
+            echo "Molmo live artifacts are already present in this workflow run."
+            exit 0
+          fi
+
+          run_id="$(gh run list \
+            --workflow ci.yml \
+            --branch main \
+            --event workflow_dispatch \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[0].databaseId // ""')"
+          if [ -z "$run_id" ]; then
+            echo "No prior successful Molmo live workflow_dispatch run found."
+            exit 0
+          fi
+
+          echo "Downloading Molmo live artifacts from workflow run ${run_id}."
+          gh run download "$run_id" \
+            --name report-molmo-live-kimi-k2.6 \
+            --dir molmo-live-src/kimi-k2.6 || true
+          gh run download "$run_id" \
+            --name report-molmo-live-mimo-v2.5-pro \
+            --dir molmo-live-src/mimo-v2.5-pro || true
+          gh run download "$run_id" \
+            --name report-molmo-live-mimo-v2-omni \
+            --dir molmo-live-src/mimo-v2-omni || true
 
       # Slot replays at /smoke/{territory,coverage}/ and (when present)
       # /openclaw/{demo,territory,coverage}/, then rewrite index.html so

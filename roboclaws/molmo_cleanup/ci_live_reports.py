@@ -233,3 +233,85 @@ def write_manifest(root: Path, statuses: list[dict[str, Any]] | None = None) -> 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return path
+
+
+def write_live_index(root: Path, statuses: list[dict[str, Any]] | None = None) -> Path:
+    """Write the dedicated ``/molmo/live/`` Pages index."""
+    if statuses is None:
+        statuses = collect_entry_statuses(root)
+
+    if statuses:
+        rows = "\n".join(_live_index_row(status) for status in statuses)
+    else:
+        rows = (
+            '<tr><td colspan="6">No MolmoSpaces live cleanup statuses were '
+            "published in this Pages build.</td></tr>"
+        )
+
+    path = root / "index.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "\n".join(
+            [
+                "<!doctype html>",
+                '<meta charset="utf-8">',
+                "<title>MolmoSpaces Live Cleanup Reports</title>",
+                "<style>",
+                "body{font-family:system-ui,sans-serif;max-width:960px;margin:3rem auto;"
+                "padding:0 1rem;color:#1a1a2e;background:#f5f6fa}",
+                "table{border-collapse:collapse;width:100%;background:#fff}",
+                "th,td{border:1px solid #d9dde8;padding:.65rem;text-align:left;vertical-align:top}",
+                "th{background:#eef1f8}",
+                "a{color:#2952cc;text-decoration:none;font-weight:600}",
+                "a:hover{text-decoration:underline}",
+                "code{background:#eef1f8;padding:1px 4px;border-radius:4px}",
+                "td code{overflow-wrap:anywhere;white-space:pre-wrap}",
+                ".sub{color:#555}",
+                "</style>",
+                "<h1>MolmoSpaces Live Cleanup Reports</h1>",
+                '<p class="sub">Published by GitHub Actions for main-only / opt-in '
+                "MolmoSpaces cleanup runs. Each row links to the report or diagnostics "
+                "for one provider-backed Claude Code run.</p>",
+                "<table>",
+                "<thead><tr><th>Model</th><th>Status</th><th>Report</th>"
+                "<th>Provider</th><th>Rerun locally</th><th>Reason</th></tr></thead>",
+                f"<tbody>{rows}</tbody>",
+                "</table>",
+                '<p><a href="../../">&larr; Back to RoboClaws reports</a></p>',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _live_index_row(status: dict[str, Any]) -> str:
+    label = html.escape(str(status.get("label") or status.get("entry") or "Molmo live run"))
+    state = html.escape(str(status.get("status") or "unknown"))
+    provider = html.escape(str(status.get("provider_profile") or "unknown provider"))
+    model = html.escape(str(status.get("model") or "unknown model"))
+    reason = html.escape(str(status.get("reason") or ""))
+    report_path = str(status.get("report_path") or "")
+    diagnostic_path = str(status.get("diagnostic_path") or "")
+    rerun_command = html.escape(str(status.get("rerun_command") or ""))
+
+    if status.get("status") == "success" and report_path:
+        href = html.escape(report_path, quote=True)
+        report = f'<a href="{href}">report.html</a>'
+    elif diagnostic_path:
+        href = html.escape(diagnostic_path, quote=True)
+        report = f'<a href="{href}">diagnostics.html</a>'
+    else:
+        report = "No report artifact"
+
+    return (
+        "<tr>"
+        f"<td>{label}<br><code>{model}</code></td>"
+        f"<td><code>{state}</code></td>"
+        f"<td>{report}</td>"
+        f"<td><code>{provider}</code></td>"
+        f"<td><code>{rerun_command}</code></td>"
+        f"<td>{reason}</td>"
+        "</tr>"
+    )

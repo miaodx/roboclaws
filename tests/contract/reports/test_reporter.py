@@ -219,6 +219,15 @@ class TestGenerate:
         assert "Transient errors" in content
         assert "Provider status" in content
 
+    def test_report_contains_rerun_command(self, tmp_path: Path) -> None:
+        replay_dir = _write_replay(tmp_path, n_steps=3)
+        content = generate(
+            replay_dir,
+            rerun_command="just task::run territory script visual agents=2 steps=3",
+        ).read_text()
+        assert "Rerun Locally" in content
+        assert "just task::run territory script visual agents=2 steps=3" in content
+
     def test_report_contains_decision_snapshot_panel(self, tmp_path: Path) -> None:
         replay_dir = _write_replay(tmp_path, n_steps=3)
         content = generate(replay_dir).read_text()

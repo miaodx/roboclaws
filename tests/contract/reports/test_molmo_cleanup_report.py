@@ -106,6 +106,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
 
     html = report_path.read_text(encoding="utf-8")
     assert "MolmoSpaces Cleanup Pilot" in html
+    assert "Rerun Locally" in html
+    assert "just task::run molmo-cleanup direct world-labels" in html
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
     assert "Cleanup Primitive Gate" in html

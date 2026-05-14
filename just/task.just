@@ -16,6 +16,7 @@
 #
 # Molmo cleanup profiles:
 #   smoke | world-labels | camera-raw | camera-labels
+#   compatibility aliases: visual -> world-labels, minimal -> smoke
 
 set working-directory := '..'
 set positional-arguments
@@ -28,136 +29,17 @@ default:
 run task driver mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
-
-    args=("$@")
-    task="${args[0]}"
-    driver="${args[1]}"
-    mode="${args[2]}"
-    overrides=("${args[@]:3}")
-
-    task="${task#task=}"
-    driver="${driver#driver=}"
-
-    case "$mode" in
-      report=*)
-        mode="${mode#report=}"
-        ;;
-      profile=*)
-        mode="${mode#profile=}"
-        ;;
-      *=*)
-        overrides=("$mode" "${overrides[@]}")
-        mode=""
-        ;;
-    esac
-
-    normalize_task() {
-      case "$1" in
-        ai2thor-nav|nav|navigate|navigation|ai2thor-navigation)
-          printf '%s\n' "ai2thor-nav"
-          ;;
-        territory|territory-game)
-          printf '%s\n' "territory"
-          ;;
-        coverage|coverage-game)
-          printf '%s\n' "coverage"
-          ;;
-        photo-chairs|photo|photo-task|chairs|chairs-photo)
-          printf '%s\n' "photo-chairs"
-          ;;
-        molmo-cleanup|molmospaces-cleanup|molmospace-cleanup|cleanup|cleanup-report)
-          printf '%s\n' "molmo-cleanup"
-          ;;
-        molmo-planner-proof|planner-proof|proof-bundle)
-          printf '%s\n' "molmo-planner-proof"
-          ;;
-        *)
-          return 1
-          ;;
-      esac
-    }
-
-    normalize_driver() {
-      case "$1" in
-        openclaw|openclaw-live)
-          printf '%s\n' "openclaw"
-          ;;
-        vlm|direct-vlm)
-          printf '%s\n' "vlm"
-          ;;
-        codex|codex-live)
-          printf '%s\n' "codex"
-          ;;
-        claude|claudecode|cc|claude-live)
-          printf '%s\n' "claude"
-          ;;
-        script|mock)
-          printf '%s\n' "script"
-          ;;
-        direct)
-          printf '%s\n' "direct"
-          ;;
-        mcp-smoke|mcp_smoke|mcp)
-          printf '%s\n' "mcp-smoke"
-          ;;
-        *)
-          return 1
-          ;;
-      esac
-    }
-
-    if ! task="$(normalize_task "$task")"; then
-      echo "error: unsupported task '$task'" >&2
-      echo "       expected ai2thor-nav|territory|coverage|photo-chairs|molmo-cleanup|molmo-planner-proof" >&2
-      exit 1
+    python_bin="${ROBOCLAWS_DEVTOOLS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x .venv/bin/python ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
     fi
-
-    if ! driver="$(normalize_driver "$driver")"; then
-      echo "error: unsupported driver '$driver'" >&2
-      echo "       expected openclaw|vlm|codex|claude|script|direct|mcp-smoke" >&2
-      exit 1
-    fi
-
-    if [[ "$task" == "molmo-cleanup" ]]; then
-      profile="${mode:-world-labels}"
-      case "$profile" in
-        smoke|world-labels|camera-raw|camera-labels)
-          ;;
-        *)
-          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
-          exit 1
-          ;;
-      esac
-      dispatch_mode="$profile"
-    else
-      report="${mode:-visual}"
-      case "$report" in
-        visual|minimal)
-          ;;
-        *)
-          echo "error: unsupported report '$report' (expected visual|minimal)" >&2
-          exit 1
-          ;;
-      esac
-      dispatch_mode="$report"
-    fi
-
-    case "$task:$driver" in
-      ai2thor-nav:openclaw|ai2thor-nav:codex|ai2thor-nav:claude|\
-      territory:openclaw|territory:vlm|territory:script|\
-      coverage:openclaw|coverage:vlm|coverage:script|\
-      photo-chairs:openclaw|\
-      molmo-cleanup:direct|molmo-cleanup:mcp-smoke|molmo-cleanup:codex|\
-      molmo-cleanup:claude|molmo-cleanup:openclaw|\
-      molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)
-        ;;
-      *)
-        echo "error: driver '$driver' cannot run task '$task'" >&2
-        exit 1
-        ;;
-    esac
-
-    exec just agent::run "$task" "$driver" "$dispatch_mode" "${overrides[@]}"
+    exec "$python_bin" -m roboclaws.devtools.commands task run "$@"
 
 # ---------------------------------------------------------------------------
 # Private compatibility wrappers for older docs/scripts.

@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
 from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
     MODEL_ENTRIES,
     collect_entry_statuses,
+    write_live_index,
     write_manifest,
 )
 
@@ -43,7 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     statuses = collect_entry_statuses(args.site_live_dir)
     if statuses:
         manifest = write_manifest(args.site_live_dir, statuses)
+        index = write_live_index(args.site_live_dir, statuses)
         print(f"molmo-live-pages manifest: {manifest}")
+        print(f"molmo-live-pages index: {index}")
     else:
         print("molmo-live-pages: no status artifacts found")
     return 0 if copied or not args.source_dir.exists() else 0

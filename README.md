@@ -1,214 +1,135 @@
 # Roboclaws
 
-[![CI (main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml)
-[![Live Smoke Reports](https://img.shields.io/badge/live%20smoke-GitHub%20Pages-0A66C2)](https://miaodx.com/roboclaws/)
-[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](./pyproject.toml)
-[![Install](https://img.shields.io/badge/install-uv%20recommended-5E5CE6)](https://docs.astral.sh/uv/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[CI (main)](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml)
+[Live Reports](https://miaodx.com/roboclaws/)
+[Python](./pyproject.toml)
+[Install](https://docs.astral.sh/uv/)
+[License](./LICENSE)
 
-**AI coding agents and VLM/OpenClaw agents driving simulated robots in AI2-THOR.**
+> **Let's Bring Brain To Robots**
 
-![Roboclaws robot navigation banner](docs/assets/readme-hero.png)
+**Visible robotics demos driven by VLM policies, OpenClaw, and AI coding agents.**
 
-Roboclaws is a robotics demo repo with one practical goal: make agent behavior
-visible. It can run multi-agent territory and coverage games, OpenClaw Gateway
-chat demos, a hosted Railway appliance, and a direct Codex/Claude Code MCP path
-where the coding agent itself drives the robot with `observe`, `move`, and
-`done`.
+Roboclaws is a thin demo repo for making AI-driven robotics behavior reviewable:
+frames, maps, tool traces, scores, and public/private evaluation boundaries are
+published as HTML reports instead of buried in terminal logs.
 
-> Operational hint: if the live smoke reports look stale, check the
-> `CI (main)` badge first. GitHub Pages republishes only after CI succeeds on
-> `main`.
+It answers three practical questions:
 
-## What You Can Run
+- How can an AI agent drive a robot?
+- What context and tools does the agent need?
+- What did the agent actually do in the simulated or robot-backed world?
 
-| Mode | Use it for | Entry point |
-|------|------------|-------------|
-| Direct VLM games | Fast local experiments without OpenClaw | `just task::run territory vlm`, `just task::run coverage vlm` |
-| OpenClaw Gateway demos | Persistent agents, SOULs, browser Control UI | `just task::run ai2thor-nav openclaw` |
-| Direct Codex / Claude driver | Let a normal coding agent drive AI2-THOR over MCP | `just task::run ai2thor-nav codex`, `just task::run ai2thor-nav claude` |
-| Photo-task smoke | "Walk the room and photograph each chair/sofa" validation | `just task::run photo-chairs openclaw` |
-| Railway appliance | Hosted single-container demo with UI, viewer, Gateway, AI2-THOR | `DEMO_PASSWORD=demo just appliance::run local` |
-| MolmoSpaces cleanup | Household cleanup reports with Agent View, Private Evaluation, RBY1M views, and checker gates | `just task::run molmo-cleanup direct`, smoke: `just task::run molmo-cleanup mcp-smoke smoke` |
-| MolmoSpaces planner proof | Generate or execute bound RBY1M/CuRobo proof requests from cleanup artifacts | `just task::run molmo-planner-proof direct`, local: `just task::run molmo-planner-proof direct mode=execute-rerun` |
-| Mock reports | CI-safe visualization/report regression coverage | `python scripts/reports/generate_demo_report.py --output-dir output/demo` |
-| Self-improvement harness | Score the navigator skill on a curated task, append metrics to a logbook | `just agent::harness run <task>` (see [`harness/README.md`](harness/README.md)) |
+## Run Demos With Just
 
-![Roboclaws control paths](docs/assets/readme-control-paths.png)
-
-## Architecture
-
-![Roboclaws architecture](docs/architecture.svg)
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map, the AI2-THOR
-operating modes, the MolmoSpaces cleanup/proof flow, and the shared MCP
-contracts.
-
-## Quick Start
+Install the project once:
 
 ```bash
 uv sync --extra dev --extra openclaw
 ```
 
-For real VLM/OpenClaw runs, load one provider key:
+For MolmoSpaces/MuJoCo cleanup demos, include the heavier extra:
+
+```bash
+uv sync --extra dev --extra molmospaces
+```
+
+The public command grammar is:
+
+```bash
+just task::run <task> <driver> [report|profile] [key=value ...]
+```
+
+For full command routing, profiles, and maintainer-only recipes, read
+[just/README.md](just/README.md).
+
+## Demo Matrix
+
+GitHub Actions publishes the report site at
+[miaodx.com/roboclaws](https://miaodx.com/roboclaws/). If a link looks stale,
+check the [CI workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml):
+Pages republishes from successful `main` runs.
+
+| Demo | What it proves | Run it locally | Live CI report |
+| --- | --- | --- | --- |
+| AI2-THOR territory | Multiple robots compete for reachable cells in an iTHOR scene. | Local VLM route is being repaired; use mock/OpenClaw reports for now. | [mock](https://miaodx.com/roboclaws/territory/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/territory/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/territory/report.html) |
+| AI2-THOR coverage | Multiple robots cooperate to cover as much of the room as possible. | `just task::run coverage vlm visual agents=2 steps=100` | [mock](https://miaodx.com/roboclaws/coverage/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/coverage/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/coverage/report.html) |
+| OpenClaw navigation | OpenClaw Gateway agents control robots through the shared Roboclaws APIs. | `just task::run ai2thor-nav openclaw visual` | [openclaw/demo/report.html](https://miaodx.com/roboclaws/openclaw/demo/report.html) |
+| Coding-agent MCP control | Codex or Claude Code drives the robot directly through MCP tools. | `just task::run ai2thor-nav codex visual` or `just task::run ai2thor-nav claude visual` | Local-only today; reports write to `output/runs/<stamp>/`. |
+| Photo task | A robot navigates the room and photographs chairs/sofas. | `just task::run photo-chairs openclaw visual` | Local/OpenClaw report artifact. |
+| MolmoSpaces cleanup | A cleanup agent tidies a generated household mess while private scoring stays hidden. | `just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2 Omni](https://miaodx.com/roboclaws/molmo/live/mimo-v2-omni/seed-7/report.html) |
+| MolmoSpaces live agent | Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Railway appliance | Single-container hosted demo with UI, viewer, Gateway, and AI2-THOR. | `DEMO_PASSWORD=demo just appliance::run local` | Local appliance surface. |
+| Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the code map and the full operating
+mode contract.
+
+## Provider Keys
+
+Real provider runs read keys from the environment or the gitignored repo-local
+`.env` file:
 
 ```bash
 export KIMI_API_KEY=...       # Kimi / Moonshot
-export MIMO_TP_KEY=...        # MiMo, used by the interactive chat defaults
-export NV_API_KEY=...         # NVIDIA NIM
-export ANTHROPIC_API_KEY=...  # Claude direct VLM path
-export OPENAI_API_KEY=...     # OpenAI direct VLM path
+export MIMO_TP_KEY=...        # MiMo provider profiles
+export NV_API_KEY=...         # NVIDIA NIM, optional
 ```
 
-### Run a Game
+Repo-local coding-agent provider profiles can route Codex or Claude Code
+through Kimi/MiMo without changing user-level CLI config:
 
 ```bash
-python examples/games/territory_game.py --agents 3 --scene FloorPlan201
-python examples/games/coverage_game.py --agents 3 --scene FloorPlan201
-```
-
-### Run OpenClaw
-
-```bash
-just task::run ai2thor-nav openclaw
-```
-`just task::run ai2thor-nav openclaw` is the normal navigation entrypoint.
-Useful companion terminals for the lower-level browser-control workflow:
-
-```bash
-just chat::tail
-just chat::view
-```
-
-> Recipes are run via [`just`](https://just.systems/) — see
-> [`docs/human/contributing.md`](docs/human/contributing.md) for the one-line install +
-> tab-completion setup. `just --list` shows the small public facade; the
-> full task grammar is in [`just/README.md`](just/README.md).
-
-### Let Codex or Claude Drive the Robot
-
-Preferred one-command workflows:
-
-```bash
-just task::run ai2thor-nav codex
-just task::run ai2thor-nav claude
-```
-
-Those recipes start the MCP server, register `roboclaws`, launch the coding
-agent, and clean up the server on exit.
-
-Optional repo-local provider overrides can live in `.env`:
-
-```bash
+# Codex provider routing is present but not the validated README path yet.
 ROBOCLAWS_CODEX_PROVIDER=mimo-openai
 ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
 
-ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
-ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
+ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic
+ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni
 ```
 
-`system` remains the default provider and leaves Codex / Claude Code on their
-normal machine configuration. The Kimi/MiMo profiles select model, base URL,
-API-key env var, and protocol together for that one launcher invocation. For
-Codex provider profiles, run a cheap compatibility check before long visual
-runs:
+Run `just dev::network-status` before OpenClaw or system-provider Claude Code
+workflows; work-network restrictions are documented in [AGENTS.md](AGENTS.md).
 
-```bash
-just code::codex-provider-smoke
-```
+## Local Report Artifacts
 
-Manual server flow:
+Most demo commands write under `output/` and print the exact run directory.
+Common examples:
 
-```bash
-python examples/mcp/coding_agent_nav_server.py --scene FloorPlan201
-```
 
-In another terminal:
+| Run type                   | Typical output                                          |
+| -------------------------- | ------------------------------------------------------- |
+| Territory/Coverage games   | `output/territory/<stamp>/`, `output/coverage/<stamp>/` |
+| Coding-agent navigation    | `output/runs/<stamp>/`                                  |
+| OpenClaw demos             | `output/openclaw-*/<stamp>/`                            |
+| Molmo cleanup              | `output/molmo/<driver-or-profile>/<stamp>/seed-7/`      |
+| Molmo live CI rehearsal    | `output/molmo/ci-rehearsal/<model>/`                    |
+| Molmo planner proof bundle | `output/molmo/planner-proof*/`                          |
 
-```bash
-codex mcp add roboclaws --url http://127.0.0.1:18788/mcp
-# or
-claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
-```
 
-Then start Codex or Claude Code in this repo and ask it to read
-`skills/ai2thor-navigator/SKILL.md`, call `roboclaws__observe` first, and
-use labeled observes as photos.
-
-Full guide: [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md).
-
-## Live Reports
-
-Every successful push to `main` publishes interactive artifacts to GitHub
-Pages. Reports include first-person frames, map/chase views, replay GIFs,
-tool traces, and run metrics.
-
-| Territory Control | Cooperative Coverage |
-|-------------------|----------------------|
-| ![territory demo](docs/preview/territory.gif) | ![coverage demo](docs/preview/coverage.gif) |
-| [Mock report](https://miaodx.github.io/roboclaws/territory/report.html) | [Mock report](https://miaodx.github.io/roboclaws/coverage/report.html) |
-
-| Stack | Territory | Coverage |
-|-------|-----------|----------|
-| Mock CI | [report](https://miaodx.github.io/roboclaws/territory/report.html) | [report](https://miaodx.github.io/roboclaws/coverage/report.html) |
-| Kimi + real AI2-THOR | [report](https://miaodx.github.io/roboclaws/smoke/territory/report.html) | [report](https://miaodx.github.io/roboclaws/smoke/coverage/report.html) |
-| OpenClaw + Kimi | [territory](https://miaodx.github.io/roboclaws/openclaw/territory/report.html) | [coverage](https://miaodx.github.io/roboclaws/openclaw/coverage/report.html) |
-
-OpenClaw navigation report:
-[openclaw/demo/report.html](https://miaodx.github.io/roboclaws/openclaw/demo/report.html)
-
-A side-by-side report comparison view is also available:
-[report_compare.html](https://miaodx.github.io/roboclaws/report_compare.html).
-
-## Core Demos
-
-### Territory Control
-
-Two or three robots compete over a discrete grid in an iTHOR living room.
-Each cell belongs to the first robot that reaches it. The interesting behavior
-is strategic: rapid expansion, blocking, and route recovery when an agent gets
-stuck.
-
-### Cooperative Coverage
-
-Robots work together to see as much of the room as possible. The report shows
-coverage progress, work balance, and whether agents divide the room in useful
-ways.
-
-### Navigation and Photo Tasks
-
-The single-agent navigation loop is the smallest surface for debugging model
-behavior. The photo-task smoke builds on it: the agent must move around
-FloorPlan201, call `observe(label="...")` for chairs/sofas, then finish with
-`done`.
-
-![Roboclaws photo task](docs/assets/readme-photo-task.png)
-
-```bash
-just task::run photo-chairs openclaw
-python scripts/openclaw/check_photo_task.py --run-dir output/openclaw-photo-task/<timestamp>
-```
+Each report directory is meant to be reviewable without re-running the model.
 
 ## Documentation Map
 
-Human reviewers only need this small surface:
 
-- [README](README.md) — project orientation and runnable entrypoints
-- [Architecture](ARCHITECTURE.md) — code map, operating modes, and contracts
-- [Current status](STATUS.md) — focus, next action, blocker, and source links
-- [Human docs](docs/human/README.md) — domain vocabulary, setup, runbooks, and design context
+| Need                             | Read                                                                                                       |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Code map and operating modes     | [ARCHITECTURE.md](ARCHITECTURE.md)                                                                         |
+| Human setup/runbooks/domain docs | [docs/human/README.md](docs/human/README.md)                                                               |
+| Public command grammar           | [just/README.md](just/README.md)                                                                           |
+| Coding-agent navigation guide    | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
+| MolmoSpaces settings             | [docs/human/molmospaces-settings.md](docs/human/molmospaces-settings.md)                                   |
+| Current project focus            | [STATUS.md](STATUS.md)                                                                                     |
+| Agent operating rules            | [AGENTS.md](AGENTS.md)                                                                                     |
 
-Other docs folders are AI-agent workspace, generated planning detail, evidence,
-or history. They are still checkable by agents, but they are not the normal
-human review surface.
 
 ## Related Projects
 
-- [Roboharness](https://github.com/MiaoDX/roboharness) — visual testing harness for AI coding agents in robot simulation
-- [Robowbc](https://github.com/MiaoDX/robowbc) — whole-body-control experiments
-- [OpenClaw](https://github.com/openclaw/openclaw) — open-source personal AI assistant
-- [ROSClaw](https://github.com/PlaiPin/rosclaw) — OpenClaw to ROS 2 bridge
-- [AI2-THOR](https://github.com/allenai/ai2thor) — interactive 3D indoor simulation
+- [Roboharness](https://github.com/MiaoDX/roboharness) - visual testing harness for AI coding agents in robot simulation
+- [Robowbc](https://github.com/MiaoDX/robowbc) - whole-body-control experiments
+- [OpenClaw](https://github.com/openclaw/openclaw) - open-source personal AI assistant
+- [ROSClaw](https://github.com/PlaiPin/rosclaw) - OpenClaw to ROS 2 bridge
+- [AI2-THOR](https://github.com/allenai/ai2thor) - interactive 3D indoor simulation
 
 ## License
 

@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.devtools.commands import resolve_task_run
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JUSTFILE = REPO_ROOT / "justfile"
 JUST_DIR = REPO_ROOT / "just"
@@ -151,6 +153,9 @@ def test_task_module_exposes_only_run_publicly() -> None:
     text = TASK_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^run task driver mode=\"\" \*overrides:", text, re.MULTILINE)
+    assert "-m roboclaws.devtools.commands task run" in text
+    assert "normalize_task()" not in text
+    assert "normalize_driver()" not in text
     assert "[private]\nnavigate " in text
     assert "[private]\nterritory " in text
     assert "[private]\ncleanup-report " in text
@@ -185,6 +190,46 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         "7",
         "output/molmo/codex-smoke",
     ]
+
+
+def test_task_router_preserves_molmo_report_compatibility_aliases() -> None:
+    minimal_route = trace_task_run("molmo-cleanup", "codex", "minimal")
+    visual_route = trace_task_run("molmo-cleanup", "codex", "visual")
+
+    assert minimal_route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "smoke",
+        "7",
+        "output/molmo/codex-smoke",
+    ]
+    assert visual_route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/molmo/codex-report",
+    ]
+
+
+def test_task_router_is_importable_source_of_truth() -> None:
+    resolved = resolve_task_run(
+        ("molmospace-cleanup", "codex-live", "profile=minimal", "output_dir=output/custom")
+    )
+
+    assert resolved.argv == (
+        "just",
+        "agent::run",
+        "molmo-cleanup",
+        "codex",
+        "smoke",
+        "output_dir=output/custom",
+    )
+    assert resolved.task == "molmo-cleanup"
+    assert resolved.driver == "codex"
+    assert resolved.mode == "smoke"
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:

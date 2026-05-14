@@ -14,6 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.core.rerun import shell_join  # noqa: E402
 from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
     MODEL_ENTRIES,
     MolmoLiveModelEntry,
@@ -121,9 +122,11 @@ def _run_entry(
     )
     entry_output_dir = args.output_dir / entry.name
     command = _live_command(entry_output_dir, args)
+    rerun_command = _live_report_rerun_command(entry, args)
     status.update(
         {
             "command": command,
+            "rerun_command": rerun_command,
             "env": {
                 "ROBOCLAWS_CLAUDE_PROVIDER": entry.provider_profile,
                 "ROBOCLAWS_CLAUDE_MODEL": entry.model,
@@ -150,6 +153,7 @@ def _run_entry(
     env = os.environ.copy()
     env["ROBOCLAWS_CLAUDE_PROVIDER"] = entry.provider_profile
     env["ROBOCLAWS_CLAUDE_MODEL"] = entry.model
+    env["ROBOCLAWS_REPORT_RERUN_COMMAND"] = rerun_command
     try:
         _run_checked(command, env=env)
         seed_dir = latest_seed_run_dir(entry_output_dir, seed=args.seed)
@@ -207,6 +211,24 @@ def _live_command(entry_output_dir: Path, args: argparse.Namespace) -> list[str]
         f"host={args.host}",
         f"port={args.port}",
     ]
+
+
+def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> str:
+    command = [
+        "just",
+        "task::run",
+        "molmo-cleanup",
+        "claude",
+        args.profile,
+        f"seed={args.seed}",
+        f"generated_mess_count={args.generated_mess_count}",
+        f"task={args.task}",
+    ]
+    return (
+        f"ROBOCLAWS_CLAUDE_PROVIDER={entry.provider_profile} "
+        f"ROBOCLAWS_CLAUDE_MODEL={entry.model} "
+        f"{shell_join(command)}"
+    )
 
 
 def _prewarm(args: argparse.Namespace) -> None:
