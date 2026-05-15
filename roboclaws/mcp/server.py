@@ -95,6 +95,7 @@ from roboclaws.core.views import (
     pos_to_world_idx,
     render_navigation_prompt_bundle,
 )
+from roboclaws.mcp.profiles import AI2THOR_NAVIGATION_PROFILE, contract_profile
 from roboclaws.mcp.text_bridge import (
     VisionBridge,
     normalize_observe_mode,
@@ -247,6 +248,7 @@ class RoboclawsMCPServer:
         observe_mode: str | None = None,
         vision_bridge_model: str | None = None,
         vision_bridge: Any | None = None,
+        allow_privileged_tools: bool = True,
     ) -> None:
         self.engine = engine
         self.agent_id = agent_id
@@ -263,6 +265,8 @@ class RoboclawsMCPServer:
             image_model=self.image_model,
         )
         self._vision_bridge = vision_bridge
+        self.contract_profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
+        self.allow_privileged_tools = allow_privileged_tools
         # Directory the host writes snapshot PNGs to. Bootstrap bind-mounts
         # this same directory at `/home/node/.openclaw/workspaces/<agent>/snapshots`
         # inside the Gateway container so the agent can reference
@@ -317,6 +321,7 @@ class RoboclawsMCPServer:
 
     def _register_tools(self) -> None:
         server = self
+        registered: list[str] = []
 
         @self._mcp.tool()
         def observe(label: str = "") -> list:
@@ -334,6 +339,8 @@ class RoboclawsMCPServer:
             the chat tab; omit it when you are only looking for yourself.
             """
             return server.call_tool("observe", label=label)
+
+        registered.append("observe")
 
         @self._mcp.tool()
         def observe_archived(label: str) -> dict:
@@ -373,6 +380,8 @@ class RoboclawsMCPServer:
             """
             return server.call_tool("observe_archived", label=label)
 
+        registered.append("observe_archived")
+
         @self._mcp.tool()
         def move(direction: str, reason: str = "", steps: int = 1) -> dict:
             """Step the agent one or more grid cells / rotations in `direction`.
@@ -387,67 +396,54 @@ class RoboclawsMCPServer:
             """
             return server.call_tool("move", direction=direction, reason=reason, steps=steps)
 
-        @self._mcp.tool()
-        def scene_objects(filter_types: str = "") -> dict:
-            """Return ALL objects in the scene with positions and bounding boxes.
+        registered.append("move")
 
-            Use this BEFORE moving on any multi-target task — it gives you the
-            full target list with world coordinates so you can plan a route
-            instead of discovering objects by collision. The cost is one
-            tool call (no images), and it returns instantly because AI2-THOR
-            streams the full object list in every event.
+        if self.allow_privileged_tools:
 
-            Args:
-                filter_types: Optional comma-separated objectType values to
-                  cull the response (e.g. ``"Sofa,Chair,ArmChair"``). Empty
-                  returns every object. Case-sensitive — use the exact
-                  ``objectType`` strings AI2-THOR exposes (e.g. ``ArmChair``,
-                  not ``armchair``).
+            @self._mcp.tool()
+            def scene_objects(filter_types: str = "") -> dict:
+                """Return ALL objects in the scene with positions and bounding boxes.
 
-            Returns ``{"count": N, "agent_position": {x,y,z},
-            "agent_yaw_deg": Y, "objects": [...]}`` where each object has
-            ``objectId``, ``objectType``, ``name``, ``position{x,y,z}``,
-            ``bbox_center{x,y,z}``, ``bbox_size{x,y,z}``, ``visible``, and
-            ``distance_xz`` (planar distance from the agent — sort by this
-            to plan a TSP-ish capture route).
+                Privileged simulator helper: useful for demo/photo skills, but
+                excluded from the canonical navigation profile.
 
-            Multi-target capture pattern:
+                Args:
+                    filter_types: Optional comma-separated objectType values to
+                      cull the response (e.g. ``"Sofa,Chair,ArmChair"``). Empty
+                      returns every object. Case-sensitive — use the exact
+                      ``objectType`` strings AI2-THOR exposes.
 
-                1. ``scene_objects(filter_types="Sofa,Chair,ArmChair")``
-                2. Sort returned objects by ``distance_xz``.
-                3. For each: navigate, frame, ``observe_archived(label=...)``.
-                4. ``done(reason="captured ...")``.
-            """
-            return server.call_tool("scene_objects", filter_types=filter_types)
+                Returns a global object inventory with world positions and
+                bounding boxes. Do not describe this as real-robot perception.
+                """
+                return server.call_tool("scene_objects", filter_types=filter_types)
 
-        @self._mcp.tool()
-        def goto(object_id: str, distance: float = 1.0, face: bool = True) -> dict:
-            """Teleport agent to a reachable cell near a target object.
+            registered.append("scene_objects")
 
-            Pairs with ``scene_objects`` for target-relative motion. Replaces
-            multi-step ``move``/``rotate`` chains for "go to that chair"
-            navigation. Each call is one tool invocation; previously the
-            same outcome required 5–10 grid steps with collision recovery.
+            @self._mcp.tool()
+            def goto(object_id: str, distance: float = 1.0, face: bool = True) -> dict:
+                """Teleport agent to a reachable cell near a target object.
 
-            Args:
-                object_id: ``objectId`` from ``scene_objects.objects[*]``.
-                  Required.
-                distance: Target standoff (meters) from the object's
-                  bbox center. Default 1.0m. The actual chosen cell is the
-                  reachable cell whose distance is closest to this value
-                  (may be more or less if no exact match exists).
-                face: If True (default), rotate the agent to point toward
-                  the object's bbox center, snapped to the nearest 90°.
+                Privileged simulator helper: pairs with ``scene_objects`` for
+                target-relative demo/photo motion. Excluded from the canonical
+                navigation profile.
 
-            Returns ``{"result": "ok"|"error", "agent_position": {x,y,z},
-            "yaw_deg": Y, "actual_distance": d, "object_id": ...}``. On
-            error: ``{"result": "error", "error": <reason>}``.
+                Args:
+                    object_id: ``objectId`` from ``scene_objects.objects[*]``.
+                    distance: Target standoff from the object's bbox center.
+                    face: If True, rotate the agent toward the bbox center.
 
-            **Use after ``scene_objects``**: read the inventory once, then
-            call ``goto(object_id=...)`` per target. Verify framing with
-            one ``observe`` before capturing with ``observe_archived``.
-            """
-            return server.call_tool("goto", object_id=object_id, distance=distance, face=face)
+                Returns the chosen agent position/yaw and actual standoff.
+                Do not describe this as real-robot navigation.
+                """
+                return server.call_tool(
+                    "goto",
+                    object_id=object_id,
+                    distance=distance,
+                    face=face,
+                )
+
+            registered.append("goto")
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
@@ -477,6 +473,9 @@ class RoboclawsMCPServer:
             """
             return server.call_tool("done", reason=reason)
 
+        registered.append("done")
+        self.registered_tool_names = tuple(registered)
+
     # ------------------------------------------------------------------
     # Tool implementations (tests call these directly)
     # ------------------------------------------------------------------
@@ -499,8 +498,10 @@ class RoboclawsMCPServer:
                 steps=int(kwargs.get("steps", 1)),
             )
         if name == "scene_objects":
+            self._require_privileged_tool_enabled(name)
             return self._do_scene_objects(str(kwargs.get("filter_types", "")))
         if name == "goto":
+            self._require_privileged_tool_enabled(name)
             return self._do_goto(
                 str(kwargs.get("object_id", "")),
                 distance=float(kwargs.get("distance", 1.0)),
@@ -509,6 +510,14 @@ class RoboclawsMCPServer:
         if name == "done":
             return self._do_done(str(kwargs.get("reason", "")))
         raise ValueError(f"unknown MCP tool {name!r}")
+
+    def _require_privileged_tool_enabled(self, name: str) -> None:
+        if self.allow_privileged_tools:
+            return
+        if name in self.contract_profile.privileged_tool_names():
+            raise ValueError(
+                f"MCP tool {name!r} is privileged and not registered in canonical-only mode"
+            )
 
     def _do_observe(self, label: str = "") -> list:
         request_payload = {"label": label} if label else {}
@@ -1352,6 +1361,7 @@ def make_roboclaws_mcp(
     observe_mode: str | None = None,
     vision_bridge_model: str | None = None,
     vision_bridge: Any | None = None,
+    allow_privileged_tools: bool = True,
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 
@@ -1379,4 +1389,5 @@ def make_roboclaws_mcp(
         observe_mode=observe_mode,
         vision_bridge_model=vision_bridge_model,
         vision_bridge=vision_bridge,
+        allow_privileged_tools=allow_privileged_tools,
     )
