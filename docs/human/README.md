@@ -10,7 +10,7 @@ AI agents should also read these docs when they need human-facing context.
 - [Domain vocabulary](domain.md)
 - [Contributing](contributing.md)
 - [Agent/task command taxonomy](agent-task-command-taxonomy.md)
-- [MCP skills and semantic profiles](mcp-skills-and-semantic-profiles.md)
+- [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
 - [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)

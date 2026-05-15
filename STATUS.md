@@ -17,8 +17,8 @@ MCP tools with repo-scoped provider secrets.
 
 Phase 136, Generic MCP entrypoint and semantic capability profiles, is
 implemented and verified. It adds an additive profile/router layer for
-AI2-THOR and MolmoSpaces MCP contracts while keeping simulator accelerators and
-Molmo private evaluator truth out of canonical public profile metadata.
+AI2-THOR and MolmoSpaces MCP contracts while keeping privileged simulator tools
+and Molmo private evaluator truth out of canonical public profile metadata.
 
 ## Next Action
 
@@ -38,7 +38,7 @@ provider-error follow-up.
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
-- Skill/MCP profile design: `docs/human/mcp-skills-and-semantic-profiles.md`
+- Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 

@@ -31,7 +31,7 @@ for fast contract checks, but it has no robot camera timeline.
 | Axis | Values | Meaning | Status Claim |
 |------|--------|---------|--------------|
 | Contract | `realworld_cleanup_v1` | ADR-0003 public/private-safe surface. No `scene_objects`, no target list. | Target contract for demos. |
-| Contract | `current_contract` | Older shortcut surface. Exposes global scene objects for loop proof. | Legacy/current-contract bridge only. |
+| Contract | `current_contract` | Older convenience surface. Exposes global scene objects for loop proof. | Legacy/current-contract bridge only. |
 | Backend | `api_semantic_synthetic` | Fast in-process semantic state mutation. | CI/smoke shape, not real visual proof. |
 | Backend | `molmospaces_subprocess` | Real upstream MolmoSpaces/MuJoCo scene. | Required for real visual evidence. |
 | Perception | `visible_object_detections` | Agent gets robot-local observed handles, categories, boxes, and support estimates. | Current best cleanup-success mode. |

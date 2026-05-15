@@ -122,10 +122,11 @@ python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
 - Semantic contract profile: `ai2thor_navigation_v1` describes this server as
   an AI2-THOR navigation profile. Its canonical public capability tools are
   `observe`, `observe_archived`, `move`, and `done`.
-- Accelerator tools: `scene_objects` and `goto` remain available on this
+- Privileged tools: `scene_objects` and `goto` remain available on this
   AI2-THOR demo server for photo tasks and harness iteration, but they are
-  simulator accelerators. They are excluded from the canonical profile metadata
-  and must not be described as real-robot perception or navigation capabilities.
+  privileged simulator helpers. They are excluded from the canonical profile
+  metadata and must not be described as real-robot perception or navigation
+  capabilities.
 - `observe(label="...")` is the framing-and-archive action; the cheaper
   `observe_archived(label="...")` captures without inlining images when
   this turn does not need to see pixels.
