@@ -13,6 +13,12 @@ from roboclaws.molmo_cleanup.mcp_server import (
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def _fastmcp_tool_names(server: MolmoCleanupMCPServer) -> set[str]:
+    return set(server._mcp._tool_manager._tools)
+
 
 def _clean_agent_sequence(server: MolmoCleanupMCPServer) -> dict:
     server.call_tool("observe")
@@ -66,6 +72,23 @@ def test_molmo_cleanup_mcp_server_exposes_current_contract_tools(tmp_path: Path)
     assert scene_objects["contract"] == CURRENT_CONTRACT
     assert scene_objects["private_target_truth_included"] is False
     assert "valid_receptacle_ids" not in json.dumps(scene_objects)
+
+
+def test_molmo_cleanup_mcp_surface_matches_legacy_skill_manifest(tmp_path: Path) -> None:
+    manifest = json.loads((ROOT / "skills" / "molmo-cleanup" / "skill.json").read_text())
+    server = make_molmo_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        policy="codex_agent",
+    )
+    try:
+        assert manifest["mcp"]["surface"] == "legacy_current_contract"
+        assert manifest["mcp"]["profiles"] == []
+        assert _fastmcp_tool_names(server) == set(manifest["mcp"]["required_tools"])
+        assert "scene_objects" in manifest["mcp"]["privileged_tools"]
+    finally:
+        server.close()
 
 
 def test_molmo_cleanup_mcp_server_finalizes_agent_artifacts(tmp_path: Path) -> None:
