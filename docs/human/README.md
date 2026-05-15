@@ -18,6 +18,7 @@ AI agents should also read these docs when they need human-facing context.
 
 ## Runbooks
 
+- [Local runtime reference](local-runtime.md)
 - [Direct Codex/Claude robot driver](coding-agent-nav-server.md)
 - [OpenClaw demo](openclaw/demo.md)
 - [OpenClaw local development](openclaw/local.md)

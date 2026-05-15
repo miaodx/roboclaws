@@ -22,6 +22,38 @@ It answers three practical questions:
 - What context and tools does the agent need?
 - What did the agent actually do in the simulated or robot-backed world?
 
+## MCP and Skill Design Principles
+
+Roboclaws treats reusable robot behavior as **skills first** and MCP tools as a
+bounded public robot capability surface.
+
+| Principle | Practice |
+| --- | --- |
+| Start from open-ended goals | A user asks for work such as "clean the room" or "take useful photos"; an agent selects or creates a skill to do it. |
+| Keep strategy in skills | Skills own prompt strategy, scripts, examples, checks, and task-specific loops such as photo capture or cleanup. |
+| Keep MCP bounded | MCP tools expose semantic robot capabilities like observe, move, pick, place, and done; they should not hide a whole task behind one opaque call. |
+| Profile public capabilities | Semantic profiles describe the public tool contract for a backend/domain, currently `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`. |
+| Label privileged help | Simulator or demo helpers such as full object inventory and target-relative teleport are useful, but they stay labeled as privileged tools, not canonical robot abilities. |
+| Protect private evaluation truth | Hidden mess sets, acceptable destinations, private manifests, and scoring truth stay out of public profile metadata and agent-facing skill inputs. |
+| Let reports improve skills | Traces, artifacts, and evals feed the skill lifecycle: improve, split, merge, prune, or promote behavior only when the boundary is stable. |
+
+The working abstraction ladder is:
+
+```text
+open-ended goal
+  -> agent skill
+  -> composite action
+  -> semantic capability
+  -> environment primitive
+  -> execution backend
+```
+
+Default decision: improve or add a skill. Promote behavior into MCP only when
+multiple skills need it, the input/output shape is stable, public/private
+boundaries are clear, and traces can preserve the important substeps. The
+detailed profile and skill reference is
+[docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md).
+
 ## Run Demos With Just
 
 Install the project once:
@@ -67,50 +99,6 @@ Pages republishes from successful `main` runs.
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the code map and the full operating
 mode contract.
 
-## Provider Keys
-
-Real provider runs read keys from the environment or the gitignored repo-local
-`.env` file:
-
-```bash
-export KIMI_API_KEY=...       # Kimi / Moonshot
-export MIMO_TP_KEY=...        # MiMo provider profiles
-export NV_API_KEY=...         # NVIDIA NIM, optional
-```
-
-Repo-local coding-agent provider profiles can route Codex or Claude Code
-through Kimi/MiMo without changing user-level CLI config:
-
-```bash
-# Codex provider routing is present but not the validated README path yet.
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
-
-ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic
-ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni
-```
-
-Run `just dev::network-status` before OpenClaw or system-provider Claude Code
-workflows; work-network restrictions are documented in [AGENTS.md](AGENTS.md).
-
-## Local Report Artifacts
-
-Most demo commands write under `output/` and print the exact run directory.
-Common examples:
-
-
-| Run type                   | Typical output                                          |
-| -------------------------- | ------------------------------------------------------- |
-| Territory/Coverage games   | `output/territory/<stamp>/`, `output/coverage/<stamp>/` |
-| Coding-agent navigation    | `output/runs/<stamp>/`                                  |
-| OpenClaw demos             | `output/openclaw-*/<stamp>/`                            |
-| Molmo cleanup              | `output/molmo/<driver-or-profile>/<stamp>/seed-7/`      |
-| Molmo live CI rehearsal    | `output/molmo/ci-rehearsal/<model>/`                    |
-| Molmo planner proof bundle | `output/molmo/planner-proof*/`                          |
-
-
-Each report directory is meant to be reviewable without re-running the model.
-
 ## Documentation Map
 
 
@@ -118,9 +106,10 @@ Each report directory is meant to be reviewable without re-running the model.
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Code map and operating modes     | [ARCHITECTURE.md](ARCHITECTURE.md)                                                                         |
 | Human setup/runbooks/domain docs | [docs/human/README.md](docs/human/README.md)                                                               |
-| Skill-first MCP architecture     | [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md)           |
+| Detailed MCP profile reference   | [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md)           |
 | Skill library convention         | [skills/README.md](skills/README.md)                                                                       |
 | Public command grammar           | [just/README.md](just/README.md)                                                                           |
+| Local keys and report artifacts  | [docs/human/local-runtime.md](docs/human/local-runtime.md)                                                 |
 | Coding-agent navigation guide    | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
 | MolmoSpaces settings             | [docs/human/molmospaces-settings.md](docs/human/molmospaces-settings.md)                                   |
 | Current project focus            | [STATUS.md](STATUS.md)                                                                                     |

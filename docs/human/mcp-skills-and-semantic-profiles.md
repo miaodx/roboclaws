@@ -1,15 +1,15 @@
 # Skill-First MCP Architecture
 
-This note is the small human-facing explanation of how Roboclaws connects
-agent skills, MCP tools, semantic robot capabilities, and execution backends.
-It is meant for teammates who need the design logic without reading the GSD
-phase logs.
+The root [`README.md`](../../README.md) owns the big-picture MCP and skill
+design principles. This note is the companion reference for how Roboclaws
+connects agent skills, MCP tools, semantic robot capabilities, and execution
+backends without making teammates read the GSD phase logs.
 
 ![Skill-first robotics](skill-first-robotics.svg)
 
 ![MCP skills and semantic profile architecture](mcp-skills-and-semantic-profiles.svg)
 
-## The Short Version
+## Reference Summary
 
 Roboclaws uses a **skill-first, MCP-bounded** architecture:
 
