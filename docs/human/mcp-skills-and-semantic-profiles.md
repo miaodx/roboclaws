@@ -157,7 +157,7 @@ Canonical public capability tools include the ADR-0003 cleanup surface:
 
 The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
-`is_misplaced`, private scoring truth, or AI2-THOR object inventory shortcuts.
+`is_misplaced`, private scoring truth, or AI2-THOR object inventory helpers.
 
 ## Design Considerations
 
