@@ -12,7 +12,7 @@ vocabulary alignment
 ## Problem
 
 Roboclaws currently has useful embodied demos, but the architecture is drifting
-toward named tasks and backend-specific shortcuts instead of the original goal:
+toward named tasks and backend-specific privileged helpers instead of the original goal:
 give the robot an open-ended task prompt and let an agent solve it with a small,
 composable set of robot abilities.
 
@@ -21,7 +21,7 @@ The current surfaces are not wrong, but they mix abstraction levels:
 - AI2-THOR navigation exposes `observe`, `move`, `scene_objects`, `goto`, and
   `done`.
 - The photo task depends on `scene_objects` and `goto`, which are effective
-  accelerators but not real robot capabilities.
+  privileged AI2-THOR helpers but not real robot capabilities.
 - MolmoSpaces cleanup exposes a stricter ADR-0003 public contract with metric
   map, fixture hints, observed handles, pick/place tools, private scoring
   separation, and planner-proof evidence.
@@ -49,8 +49,9 @@ The target model:
 - Agent-facing tools live at the semantic capability or selected semantic
   service layer.
 - Environment primitives remain behind adapters.
-- Shortcuts are either decomposed task shortcuts with traceable substeps or
-  explicitly labeled accelerators outside the canonical contract.
+- Reusable task behavior lives in agent skills. Composite actions are described
+  by their traceable substeps, while privileged tools stay outside the
+  canonical contract.
 
 ## Decisions Resolved
 
@@ -66,10 +67,10 @@ The target model:
 - Contract profiles should combine environment and task domain when both matter:
   `ai2thor_navigation_v1`, `molmospaces_cleanup_v1`, and later
   `real_robot_cleanup_v1`.
-- `scene_objects` and teleport-like `goto` are accelerators unless redesigned
-  as decomposed semantic services.
-- Deterministic cleanup policies and proof-bundle selection are baseline or
-  evidence accelerators, not the target open-ended agent capability.
+- `scene_objects` and teleport-like `goto` are privileged tools unless
+  redesigned as decomposed semantic services.
+- Deterministic cleanup policies and proof-bundle selection are baselines or
+  private evidence helpers, not the target open-ended agent capability.
 
 ## Proposed Architecture
 
@@ -118,13 +119,14 @@ Bounded reusable algorithms that can support capabilities:
 Semantic services may be exposed directly when they are useful for planning,
 but they should not hide a whole user task behind an opaque tool.
 
-### Layer 4: Task Shortcuts And Accelerators
+### Layer 4: Agent Skills, Composite Actions, And Privileged Tools
 
 Convenience operations must be classified:
 
 - **Canonical:** safe semantic capability in an open-ended contract.
-- **Composed:** shortcut allowed when it records a decomposition trace.
-- **Accelerator:** demo/debug/smoke/proof helper, excluded from canonical
+- **Composed:** higher-level behavior allowed when it records or preserves a
+  decomposition trace.
+- **Privileged tool:** demo/debug/smoke/proof helper, excluded from canonical
   agent-facing contracts.
 
 Initial classification:
@@ -132,17 +134,17 @@ Initial classification:
 - `observe`: Canonical. Implementations vary by profile.
 - `move`: Profile-specific canonical tool or environment primitive. Appropriate
   for low-level navigation profiles, but not the only real-robot interface.
-- `scene_objects`: Accelerator. Useful AI2-THOR inventory shortcut; not a real
-  robot perception surface.
-- Current AI2-THOR `goto`: Accelerator. Teleport-like; not route-planning-backed
-  today.
+- `scene_objects`: Privileged tool. Useful AI2-THOR inventory helper; not a
+  real robot perception surface.
+- Current AI2-THOR `goto`: Privileged tool. Teleport-like; not
+  route-planning-backed today.
 - Future `navigate_to`: Canonical or composed. Should expose
   localization/navigation provenance.
 - `pick` / `place`: Canonical. Must report manipulation provenance.
-- Deterministic cleanup policy: Accelerator/baseline. Useful for reports and
-  regressions, not target autonomy.
-- Proof-bundle runner/selection: Private evidence accelerator. Supports proof
-  claims; not public agent input.
+- Deterministic cleanup policy: baseline skill/script behavior. Useful for
+  reports and regressions, not target autonomy.
+- Proof-bundle runner/selection: private evidence helper. Supports proof claims;
+  not public agent input.
 
 ## Research Spike
 
@@ -160,7 +162,7 @@ Research output should be implementation-ready:
 - recommended profile declaration schema;
 - recommended tool naming and namespacing pattern;
 - required provenance fields;
-- shortcut classification rules;
+- privileged-tool classification rules;
 - risks where real robot conventions conflict with simulator convenience.
 
 Use primary sources or local docs for external claims. Do not turn this into a
@@ -176,18 +178,18 @@ large literature survey; the output should directly shape the Roboclaws API.
    without merging their server implementations immediately.
 4. Add a generic MCP entrypoint/router that loads a selected contract profile
    and registers that profile's tools.
-5. Mark existing accelerators in docs and profile metadata.
+5. Mark existing privileged tools in docs and profile metadata.
 6. Add tests that prove canonical profiles do not expose private scoring truth
-   or simulator-only accelerators by default.
+   or simulator-only privileged tools by default.
 7. Update agent-facing skills so prompts describe task prompts, semantic
-   capabilities, and accelerator boundaries consistently.
+   capabilities, and privileged-tool boundaries consistently.
 
 ## Non-Goals
 
 - Do not build one universal MCP tool set that every environment must implement.
 - Do not remove existing AI2-THOR or MolmoSpaces servers before the router is
   proven.
-- Do not claim real robot readiness from simulator-only shortcuts.
+- Do not claim real robot readiness from simulator-only privileged helpers.
 - Do not expose Molmo private scoring truth, generated mess sets, acceptable
   destination sets, or hidden target lists.
 - Do not implement live ROS/Nav2 or manipulation backends in this phase.
@@ -202,11 +204,11 @@ large literature survey; the output should directly shape the Roboclaws API.
   profiles.
 - The generic MCP entrypoint/router can load at least one profile in tests.
 - Profiles declare capability families, public tools, provenance expectations,
-  and accelerator exclusions.
-- AI2-THOR `scene_objects` and current `goto` are labeled as accelerators or
-  excluded from canonical profile metadata.
+  and privileged-tool exclusions.
+- AI2-THOR `scene_objects` and current `goto` are labeled as privileged tools
+  and excluded from canonical profile metadata.
 - Molmo cleanup profile preserves ADR-0003 public/private boundaries.
-- Tests fail if canonical profiles expose private evaluator data or accelerator
+- Tests fail if canonical profiles expose private evaluator data or privileged
   tools unintentionally.
 - Existing demo recipes continue to run through their current commands.
 
@@ -217,10 +219,10 @@ large literature survey; the output should directly shape the Roboclaws API.
 - MCP registration tests for the generic entrypoint/router using a mock profile.
 - Leak tests proving Molmo private scoring truth is absent from public profile
   declarations.
-- Shortcut classification tests proving accelerators are opt-in or excluded
-  from canonical agent-facing contracts.
+- Privileged-tool classification tests proving privileged tools are opt-in or
+  excluded from canonical agent-facing contracts.
 - Focused docs tests or grep checks to keep `task prompt`, `capability tool`,
-  `demo recipe`, and `accelerator` language consistent.
+  `demo recipe`, and `privileged tool` language consistent.
 - Existing relevant MCP and cleanup contract tests through the repo-local
   pytest wrapper.
 
@@ -234,17 +236,16 @@ recorded as unavailable instead of being faked.
 Final gate: approved as a soft continuation. The review did not change the
 target user, public privacy posture, paid-service dependency, data model, or
 phase split. It tightened the plan around already stated acceptance criteria:
-metadata-first profiles, a generic router prototype, accelerator exclusions,
-and fail-closed privacy tests.
+metadata-first profiles, a generic router prototype, privileged-tool
+exclusions, and fail-closed privacy tests.
 
 ### CEO Review
 
 Premises accepted:
 
-- The problem is real: `CONTEXT.md` already separates Task Prompt, Capability
-  Tool, Environment Primitive, Semantic Capability, Semantic Service, Task
-  Shortcut, Accelerator, Demo Recipe, Contract Profile, MCP Entrypoint, and
-  Capability Family.
+- The problem is real: `CONTEXT.md` now separates Open-Ended Goal, Agent Skill,
+  Composite Action, Semantic Capability, Privileged Tool, Demo Recipe, Contract
+  Profile, MCP Entrypoint, and Capability Family.
 - The right wedge is profile metadata plus one router prototype, not a
   universal robot API.
 - Existing contracts are useful leverage: AI2-THOR navigation already exposes
@@ -257,7 +258,7 @@ Strategic risks and decisions:
 - Keep this as one coherent GSD phase. A separate ROS/Nav2 or real-robot phase
   would change execution ownership and validation requirements.
 - Do not make the research spike open ended. It must answer implementation
-  questions for profile schema, namespacing, provenance, accelerator policy,
+  questions for profile schema, namespacing, provenance, privileged-tool policy,
   and leak tests.
 - Treat "generic MCP entrypoint" as a router that loads one selected contract
   profile. Do not market it as a universal robot control surface.
@@ -285,7 +286,7 @@ contract profile metadata
   -> backend adapter describes existing tools
   -> generic MCP entrypoint selects exactly one profile
   -> FastMCP registration exposes only profile-public tools
-  -> trace/report metadata records capability family + provenance + accelerator status
+  -> trace/report metadata records capability family + provenance + privileged-tool status
 ```
 
 The first implementation should define a small typed profile declaration with:
@@ -293,11 +294,11 @@ The first implementation should define a small typed profile declaration with:
 - `profile_id`, `version`, `backend`, and `domain`.
 - `capability_families`.
 - public tool descriptors with name, family, stability, provenance
-  expectations, and whether they are canonical, composed, or accelerator.
+  expectations, and whether they are canonical, composed, or privileged.
 - `privacy_exclusions` / forbidden field names for serialized public profile
   output.
-- optional accelerator descriptors that are excluded unless explicitly loaded
-  for debug or demo paths.
+- optional privileged-tool descriptors that are excluded unless explicitly
+  loaded for debug or demo paths.
 
 Error and rescue registry:
 
@@ -305,7 +306,7 @@ Error and rescue registry:
 | --- | --- | --- |
 | Unknown profile id | fail before MCP server registration with actionable message | unit |
 | Malformed profile metadata | validation error naming missing field | unit |
-| Accelerator appears in canonical profile | validation/test failure | unit/contract |
+| Privileged tool appears in canonical profile | validation/test failure | unit/contract |
 | Molmo private field appears in public profile | fail closed using forbidden-key checks | contract |
 | Router registers stale tool not in profile | MCP registration test fails | contract |
 | Existing demo command bypasses current server accidentally | existing MCP/demo contract tests stay green | contract |
@@ -315,7 +316,7 @@ Failure modes registry:
 | Risk | Severity | Mitigation |
 | --- | --- | --- |
 | Thin router becomes a naming wrapper around unrelated tools | high | typed profile schema plus contract tests for both current surfaces |
-| `goto` / `scene_objects` look like real robot capabilities | high | accelerator classification and canonical-profile exclusion tests |
+| `goto` / `scene_objects` look like real robot capabilities | high | privileged-tool classification and canonical-profile exclusion tests |
 | Molmo private scoring truth leaks through profile metadata | high | reuse ADR-0003 forbidden-key checks on serialized profiles |
 | Research spike becomes a literature survey | medium | require implementation-ready schema and test recommendations only |
 | Existing demos break during router introduction | medium | adapter-first implementation, no removal of current servers in this phase |
@@ -330,10 +331,10 @@ Required test diagram:
 | Path | Coverage |
 | --- | --- |
 | Profile declaration parsing/validation | unit |
-| AI2-THOR profile metadata and accelerator exclusions | contract |
+| AI2-THOR profile metadata and privileged-tool exclusions | contract |
 | MolmoSpaces cleanup profile metadata and ADR-0003 exclusions | contract |
 | Generic router loads a mock profile and registers only declared tools | contract |
-| Accelerator opt-in path records explicit accelerator provenance | unit/contract |
+| Privileged-tool opt-in path records explicit privileged-tool provenance | unit/contract |
 | Existing AI2-THOR and Molmo MCP tests remain green | regression |
 
 ### DX Review
@@ -345,11 +346,11 @@ DX decisions:
 
 - Add copy-paste examples for selecting a profile in the generic entrypoint,
   but keep existing `just task::run ...` demo recipes unchanged.
-- Make invalid profile and accelerator-use errors name the requested profile,
+- Make invalid profile and privileged-tool-use errors name the requested profile,
   the allowed profile ids, and the reason the tool is excluded.
 - Keep profile names backend/domain-specific, such as `ai2thor_navigation_v1`
   and `molmospaces_cleanup_v1`, so future real robot work does not inherit
-  simulator shortcuts by implication.
+  simulator privileged helpers by implication.
 
 TTHW target for maintainers: under 5 minutes to read the profile schema, add a
 mock profile, and run the router registration test.
@@ -372,7 +373,7 @@ mock profile, and run the router registration test.
 | Include DX review | mechanical | accepted | MCP entrypoint/profile work is developer-facing. |
 | Degrade outside voices | blocker workaround | accepted | Codex sandbox could not inspect local files; no subagent tool was exposed. |
 | Keep one phase | soft continuation | accepted | Work is one coherent metadata/router prototype with one acceptance surface. |
-| Strengthen fail-closed tests | soft continuation | accepted | This preserves stated privacy and accelerator boundaries. |
+| Strengthen fail-closed tests | soft continuation | accepted | This preserves stated privacy and privileged-tool boundaries. |
 
 ## ADR Follow-Up
 
@@ -387,7 +388,7 @@ while keeping backend-specific contract profiles and public/private boundaries."
 
 - A generic router could become a thin wrapper around unrelated tools unless
   profile metadata and tests enforce the capability model.
-- A universal-looking surface could accidentally make simulator accelerators
+- A universal-looking surface could accidentally make simulator privileged tools
   look like real robot capabilities.
 - Too much abstraction could slow the thin-demo repo down. Keep the first phase
   metadata-first and preserve existing runnable demos.
