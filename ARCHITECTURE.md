@@ -54,8 +54,8 @@ The cleanup/proof stack has four core abstractions:
 
 Across both stacks, `roboclaws/mcp/profiles.py` now defines semantic MCP
 contract profiles. Profiles describe the canonical public capability tools,
-capability families, provenance expectations, accelerators, and private-data
-exclusions for a selected backend/domain. The current built-ins are
+capability families, provenance expectations, privileged-tool metadata, and
+private-data exclusions for a selected backend/domain. The current built-ins are
 `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`. For the human design
 logic behind profiles, MCP tools, and agent skills, see
 [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md).
@@ -88,7 +88,7 @@ surface that external agents use over structured-HTTP transport:
 The semantic profile `ai2thor_navigation_v1` treats `observe`,
 `observe_archived`, `move`, and `done` as canonical navigation capability
 tools. `scene_objects` and `goto` remain concrete AI2-THOR server tools, but
-they are labeled as simulator accelerators rather than real-robot capability
+they are labeled as privileged simulator tools rather than real-robot capability
 claims.
 
 Every tool call writes a line to `<run_dir>/trace.jsonl`. The schema is a
@@ -185,7 +185,7 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/games/coverage.py` | `CoverageGame`: cooperative coverage. Tracks `coverage_pct`, per-agent `contribution`, `work_balance`. |
 | `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
 | `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
-| `roboclaws/mcp/profiles.py`, `roboclaws/mcp/entrypoint.py` | Semantic MCP contract profile declarations and a small router helper for registering one selected profile's public tools. Current profiles represent AI2-THOR navigation and MolmoSpaces cleanup while excluding accelerators/private evaluator truth from canonical public metadata. |
+| `roboclaws/mcp/profiles.py`, `roboclaws/mcp/entrypoint.py` | Semantic MCP contract profile declarations and a small router helper for registering one selected profile's public tools. Current profiles represent AI2-THOR navigation and MolmoSpaces cleanup while excluding privileged simulator tools/private evaluator truth from canonical public metadata. |
 | `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
 | `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
 | `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
@@ -251,7 +251,7 @@ not) and power the `just chat::view` live viewer.
 | What you want | Where it lives |
 |---------------|----------------|
 | Scenario design rationale, VLM strategy, references | [`docs/human/technical-design.md`](docs/human/technical-design.md) |
-| MCP skills, semantic profiles, and accelerator boundaries | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
+| Skill-first MCP design, semantic profiles, and privileged-tool boundaries | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
 | MolmoSpaces cleanup settings and proof boundaries | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
 | Domain vocabulary for cleanup/proof language | [`docs/human/domain.md`](docs/human/domain.md) |
 | Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |

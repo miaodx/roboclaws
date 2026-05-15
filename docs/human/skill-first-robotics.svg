@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Skill-first robotics architecture</title>
+  <desc id="desc">Hero diagram showing open-ended goals becoming reusable skills, skills calling bounded MCP capabilities, environments executing primitives, and reports improving the skill library.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="54%" stop-color="#f4fbf7"/>
+      <stop offset="100%" stop-color="#fff8ed"/>
+    </linearGradient>
+    <linearGradient id="skill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="shadow" x="-8%" y="-12%" width="116%" height="132%">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .title { font: 800 42px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .card { fill: #ffffff; stroke: #d7e2ea; stroke-width: 1.2; rx: 20; filter: url(#shadow); }
+      .skill-card { fill: url(#skill); stroke: #0f766e; stroke-width: 1.2; rx: 24; filter: url(#shadow); }
+      .card-title { font: 800 22px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .card-text { font: 500 14px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .skill-title { font: 800 28px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+      .skill-text { font: 600 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
+      .label { font: 800 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .06em; }
+      .small { font: 700 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
+      .chip { fill: #eef6ff; stroke: #bfd7f2; stroke-width: 1; rx: 12; }
+      .ok-chip { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; rx: 12; }
+      .warn-chip { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1; rx: 12; }
+      .line { stroke: #64748b; stroke-width: 2.4; fill: none; marker-end: url(#arrow); }
+      .loop { stroke: #0f766e; stroke-width: 2.4; fill: none; marker-end: url(#arrow); stroke-dasharray: 9 7; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="720" fill="url(#bg)"/>
+
+  <text x="64" y="76" class="title">Skill-First Robotics</text>
+  <text x="64" y="110" class="subtitle">Reusable skills evolve quickly. MCP profiles keep robot capability boundaries stable.</text>
+
+  <rect x="76" y="176" width="210" height="108" class="card"/>
+  <text x="104" y="212" class="card-title">Open-ended goal</text>
+  <text x="104" y="240" class="card-text">"Clean the room"</text>
+  <text x="104" y="262" class="card-text">"Take useful photos"</text>
+
+  <rect x="364" y="146" width="284" height="168" class="skill-card"/>
+  <text x="398" y="192" class="skill-title">Agent Skill</text>
+  <text x="398" y="224" class="skill-text">Prompts, scripts, heuristics,</text>
+  <text x="398" y="248" class="skill-text">examples, checks, and policy</text>
+  <text x="398" y="272" class="skill-text">for reusable behavior.</text>
+
+  <rect x="724" y="176" width="230" height="108" class="card"/>
+  <text x="752" y="212" class="card-title">MCP profile</text>
+  <text x="752" y="240" class="card-text">Public capability boundary</text>
+  <text x="752" y="262" class="card-text">for one backend/domain</text>
+
+  <rect x="1030" y="176" width="190" height="108" class="card"/>
+  <text x="1058" y="212" class="card-title">Backend</text>
+  <text x="1058" y="240" class="card-text">Mock, AI2-THOR,</text>
+  <text x="1058" y="262" class="card-text">MolmoSpaces, robots</text>
+
+  <path class="line" d="M286 230 L364 230"/>
+  <path class="line" d="M648 230 L724 230"/>
+  <path class="line" d="M954 230 L1030 230"/>
+
+  <rect x="94" y="372" width="196" height="34" class="chip"/>
+  <text x="116" y="394" class="small">Goal stays flexible</text>
+  <rect x="354" y="360" width="126" height="34" class="ok-chip"/>
+  <text x="376" y="382" class="small">Create</text>
+  <rect x="498" y="360" width="126" height="34" class="ok-chip"/>
+  <text x="520" y="382" class="small">Improve</text>
+  <rect x="424" y="414" width="126" height="34" class="ok-chip"/>
+  <text x="446" y="436" class="small">Prune</text>
+  <rect x="714" y="372" width="254" height="34" class="warn-chip"/>
+  <text x="736" y="394" class="small">Resist adding MCP tools</text>
+  <rect x="1018" y="372" width="214" height="34" class="chip"/>
+  <text x="1040" y="394" class="small">Execute primitives</text>
+
+  <rect x="138" y="528" width="1004" height="96" class="card"/>
+  <text x="172" y="562" class="label">SKILL LIBRARY LIFECYCLE</text>
+  <text x="172" y="592" class="card-text">Search/select a skill. If none fits, solve with lower-level tools. Record traces, reports, and evals. Extract, merge, refactor, prune, and re-evaluate skills.</text>
+
+  <path class="loop" d="M506 314 C506 420 640 458 640 528"/>
+  <path class="loop" d="M640 624 C640 672 506 672 506 448"/>
+
+  <text x="64" y="674" class="subtitle">Interpretation: with capable agents, the bottleneck shifts to task definition, context, tools, loops, evals, and maintaining reusable behavior.</text>
+</svg>

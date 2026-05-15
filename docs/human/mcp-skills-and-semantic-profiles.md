@@ -1,56 +1,114 @@
-# MCP Skills and Semantic Profiles
+# Skill-First MCP Architecture
 
 This note is the small human-facing explanation of how Roboclaws connects
-agent skills, MCP tools, and semantic robot capabilities. It is meant for
-teammates who need the design logic without reading the GSD phase logs.
+agent skills, MCP tools, semantic robot capabilities, and execution backends.
+It is meant for teammates who need the design logic without reading the GSD
+phase logs.
+
+![Skill-first robotics](skill-first-robotics.svg)
 
 ![MCP skills and semantic profile architecture](mcp-skills-and-semantic-profiles.svg)
 
 ## The Short Version
 
-A user gives a **task prompt** such as "take photos of the chairs" or "clean the
-room." Roboclaws should not turn that whole task into one giant MCP tool.
-Instead:
+Roboclaws uses a **skill-first, MCP-bounded** architecture:
 
-1. The **agent skill** tells the model how to work in this environment.
-2. The **MCP server** exposes the tools the agent may call.
-3. The **semantic contract profile** describes which tools are canonical robot
-   capabilities for that backend/domain, and which tools are only accelerators.
-4. The **report/checker path** records what the agent did and which claims are
-   public, private, semantic, or planner-backed.
+1. A user gives an **open-ended goal**, such as "clean the room" or "take
+   useful photos."
+2. The agent searches for, uses, or creates an **agent skill**.
+3. The skill may call scripts, examples, checks, and MCP tools.
+4. The **MCP profile** keeps the public robot capability boundary stable.
+5. The execution backend runs environment-specific primitives.
+6. Reports and evals feed the skill library lifecycle.
 
-The profile layer is metadata and routing discipline. It does not replace the
-existing AI2-THOR or MolmoSpaces MCP servers.
+The design bias is to keep reusable behavior in skills and to resist adding
+new MCP tools unless the behavior clearly belongs in the robot capability
+contract.
 
-## Why This Exists
+This aligns with the "skill issue" framing discussed by Andrej Karpathy on
+[No Priors](https://www.youtube.com/watch?v=kwSVtQ7dziU): with capable agents,
+the bottleneck shifts to how well we define tasks, give context, build tools,
+run loops, evaluate outputs, and maintain reusable agent behavior. Roboclaws
+applies that idea to robotics by letting skills evolve while MCP profiles stay
+bounded and auditable.
 
-Roboclaws now has two useful but different robot-demo stacks:
+## Abstraction Ladder
 
-- AI2-THOR navigation, where simulator metadata can provide helpful shortcuts
-  like full object inventory and teleport-like target positioning.
-- MolmoSpaces cleanup, where private evaluator truth must stay hidden from the
-  cleanup agent and manipulation claims need provenance.
+Build from the bottom up, but let the agent enter from the top:
 
-Without a shared vocabulary, it is easy to blur these layers:
-
-- A demo recipe such as `just task::run molmo-cleanup claude world-labels` can
-  look like the user's open-ended task.
-- A simulator helper such as `scene_objects` can look like real robot
-  perception.
-- A semantic state edit can look like planner-backed manipulation.
-
-Semantic profiles make those boundaries explicit while preserving the fast demo
-paths that are useful for development.
-
-## Layer Model
-
-| Layer | Owns | Examples | What to watch |
+| Level | Owns | Examples | What to watch |
 | --- | --- | --- | --- |
-| Task prompt | User intent | "clean the room", "photograph all chairs" | Do not collapse this into one opaque MCP tool. |
-| Agent skill | Operating instructions for a model | `skills/ai2thor-navigator/SKILL.md` | Skills may recommend accelerators, but should say they are accelerators. |
-| MCP server | Concrete callable tool surface | AI2-THOR navigation server, Molmo cleanup server | Server tools are real callables, not all equally canonical. |
-| Semantic profile | Public capability contract and exclusions | `ai2thor_navigation_v1`, `molmospaces_cleanup_v1` | Profiles must not expose private evaluator truth or simulator-only shortcuts as canonical capabilities. |
-| Report/checker | Evidence and claim boundary | trace JSONL, cleanup report, planner proof report | Reports say what happened and what level of proof backs it. |
+| Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
+| Agent skill | Reusable behavior package | `capture-object-photo`, `cleanup-generated-mess` | Skills can evolve, merge, split, and be pruned. |
+| Composite action | Describes a skill's internal behavior shape | `locate -> navigate -> observe_archived` | Descriptive by default, not a separate artifact. |
+| Composed semantic capability | Bounded capability or service | localization, navigation, search, transport | Promote only when the boundary is stable. |
+| Atomic semantic capability | Small public robot action | observe, move, turn, pick, place, open, close | Prefer these for MCP capability contracts. |
+| Environment primitive | Backend-specific implementation | AI2-THOR step, MuJoCo actuation, robot API call | Not agent-facing by default. |
+| Execution backend | Actual environment | mock, AI2-THOR, MolmoSpaces, Unitree G1, RBY1M, AGIbot G2 | Backends differ; profiles should not pretend otherwise. |
+
+`capture_object_photo(object)` is a good example: maintain it as an agent skill
+with a script by default. Internally, it may perform a composite action such as
+`locate -> navigate -> orient -> observe_archived -> verify`. It should not
+become an MCP tool unless several skills need the same stable capability and
+the public trace semantics are clear.
+
+## Skill Library Lifecycle
+
+Skills are where reusable behavior evolves:
+
+```text
+Open-ended goal
+  -> search/select existing skill
+  -> if no good skill exists, solve with lower-level tools
+  -> record trace/report/eval
+  -> extract or improve reusable skill behavior
+  -> periodically refactor, merge, prune, and re-evaluate skills
+```
+
+The skill layer can hold long-running behavior, prompt strategy, scripts,
+examples, checks, and maintenance notes. It is the right home for task-like
+behavior such as photo capture, generated-mess cleanup, grocery placement, or
+room inspection.
+
+MCP is different: it is the public robot capability boundary. A skill can call
+many MCP tools, but the skill itself is not automatically a robot capability
+claim.
+
+## MCP Promotion Rule
+
+Resist adding MCP tools by default. Promote behavior from a skill or script
+into an MCP tool only when all of these are true:
+
+1. Multiple skills need it.
+2. Inputs and outputs are stable for one contract profile.
+3. It has traceable substeps or a clear atomic meaning.
+4. It uses only public allowed information.
+5. It belongs in the robot capability boundary, not just agent strategy.
+
+For example, `observe_archived(label)` belongs in MCP because it is a stable
+observation capability with clear artifact output. A photo-capture routine
+usually belongs in a skill because it is task strategy.
+
+## Composite Actions and Privileged Tools
+
+A **composite action** is an honest behavior shape built from lower-level
+semantic capabilities. It records or preserves its substeps. It is descriptive
+by default, not a separate maintained artifact.
+
+A **privileged tool** is a non-canonical tool that uses information or execution
+power a robot would not generally have. Privileged tools can stay useful for
+demos, debugging, smoke tests, or proof loops, but they must not be treated as
+canonical robot capability claims.
+
+Examples:
+
+| Behavior | Classification | Why |
+| --- | --- | --- |
+| `capture_object_photo(object)` | Agent skill with a composite action inside | It combines locate, navigation, observation, and verification. |
+| `put_in_refrigerator(object)` | Skill or composite action, depending on packaging | It can be decomposed into navigate, open, place, close. |
+| `scene_objects()` | Privileged tool | It exposes full AI2-THOR object inventory. |
+| `goto(object_id)` | Privileged tool unless decomposed | The current AI2-THOR version is target-relative teleport-style help. |
+| Hidden acceptable-destination lookup | Privileged/private evaluator data | It must never enter public profile metadata. |
 
 ## Current Profiles
 
@@ -63,13 +121,13 @@ Canonical public capability tools:
 - `move`
 - `done`
 
-Accelerator exclusions:
+Privileged tools:
 
 - `scene_objects` is an AI2-THOR object-inventory oracle.
 - `goto` is a target-relative teleport-style helper.
 
-Those accelerators remain available on the demo server because they make photo
-tasks and harness iterations efficient. They are not presented as real robot
+Those tools remain available on the demo server because they make photo tasks
+and harness iterations efficient. They are not presented as real robot
 perception or real robot navigation capabilities.
 
 ### `molmospaces_cleanup_v1`
@@ -100,26 +158,14 @@ Future profiles can combine environment and task domain, for example:
 - `ai2thor_photo_v1`
 - `molmospaces_camera_cleanup_v1`
 
-### Keep Planning in the Agent
+### Keep Planning in the Agent and Skills
 
-The model should plan over capabilities. MCP should expose bounded abilities
-and semantic services, not whole-task tools like `cleanup_room()`.
+The model should plan over capabilities. Skills should capture reusable
+behavior. MCP should expose bounded abilities and semantic services, not
+whole-goal tools like `cleanup_room()`.
 
-This keeps the agent behavior inspectable: the report can show the steps the
-agent chose instead of hiding the work behind one tool call.
-
-### Treat Accelerators Honestly
-
-Accelerators are allowed when they are useful for demos, debugging, or cheap
-proof loops. They must be labeled as accelerators and excluded from canonical
-profile metadata unless redesigned as composed semantic services with traceable
-substeps.
-
-### Preserve Public/Private Boundaries
-
-Molmo cleanup has a hard boundary between the agent's public view and private
-evaluation truth. Profile metadata belongs on the public side, so it must fail
-closed if private evaluator terms leak into serialized metadata.
+This keeps behavior inspectable: the report can show the steps the agent or
+skill chose instead of hiding the work behind one tool call.
 
 ### Keep Existing Servers Stable
 
@@ -130,17 +176,17 @@ route selected tool surfaces.
 ## How a Request Flows
 
 ```text
-User task prompt
-  -> agent skill explains operating strategy and tool etiquette
-  -> selected MCP server exposes concrete tools
-  -> semantic profile declares canonical public tools and exclusions
-  -> agent calls tools
-  -> trace/report/checker records behavior and proof level
+Open-ended goal
+  -> skill library search / skill creation
+  -> selected skill calls scripts and MCP tools
+  -> semantic profile constrains public capabilities
+  -> execution backend runs primitives
+  -> trace/report/eval feeds skill maintenance
 ```
 
-For AI2-THOR photo tasks, the skill may still tell the agent to use
-`scene_objects` and `goto` because the goal is an efficient demo artifact.
-The semantic profile still records that these are accelerators, not general
+For AI2-THOR photo tasks, a skill may still tell the agent to use
+`scene_objects` and `goto` when the goal is an efficient demo artifact. The
+semantic profile still records that these are privileged tools, not general
 robot capabilities.
 
 For Molmo cleanup, the profile keeps the public cleanup surface separate from
@@ -150,21 +196,21 @@ honest about whether the result is `api_semantic`, `planner_backed`, or
 
 ## Adding a New Profile
 
-When adding a profile, start from the contract, not the implementation helper:
+When adding a profile, start from the capability contract, not the skill:
 
 1. Name the backend/domain profile, such as `<environment>_<task-domain>_v1`.
 2. List capability families: perception, localization, mapping, navigation,
    manipulation, memory, and episode.
 3. List canonical public tools.
-4. List accelerators separately.
+4. List privileged tools separately.
 5. List private terms that must never appear in public metadata.
 6. Add contract tests that prove profile validation fails closed.
 7. Update the relevant human doc if the new profile changes how teammates
    should reason about the system.
 
-Do not add a new profile just to rename a demo recipe. Demo recipes choose how
-to run a scenario; semantic profiles describe what public robot capabilities
-the agent is allowed to rely on.
+Do not add a new profile just to rename a demo recipe or skill. Demo recipes
+choose how to run a scenario; skills own reusable behavior; semantic profiles
+describe what public robot capabilities the agent is allowed to rely on.
 
 ## Where to Look in the Repo
 
@@ -176,6 +222,7 @@ the agent is allowed to rely on.
 | Molmo cleanup MCP server | `roboclaws/molmo_cleanup/realworld_mcp_server.py` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
+| Skill-first hero diagram | `docs/human/skill-first-robotics.svg` |
 | Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |
 
 Planning artifacts for Phase 136 explain the implementation history, but this
