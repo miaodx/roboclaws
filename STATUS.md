@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-14
+Last updated: 2026-05-15
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -38,6 +38,7 @@ provider-error follow-up.
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
+- Skill/MCP profile design: `docs/human/mcp-skills-and-semantic-profiles.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 
