@@ -74,6 +74,21 @@ MCP is different: it is the public robot capability boundary. A skill can call
 many MCP tools, but the skill itself is not automatically a robot capability
 claim.
 
+## Skill Manifests
+
+Maintained skills include a small `skill.json` manifest next to `SKILL.md`.
+The manifest is not another runtime API. It is a human/test-readable contract
+for the skill library:
+
+- which MCP profiles the skill expects;
+- which tools are required, optional, or privileged;
+- which scripts belong to the skill;
+- which artifacts count as evidence;
+- when to refactor the skill or promote behavior into MCP.
+
+This keeps reusable behavior shareable without hiding task strategy inside the
+core MCP server. See `skills/README.md` for the manifest fields.
+
 ## MCP Promotion Rule
 
 Resist adding MCP tools by default. Promote behavior from a skill or script
@@ -220,8 +235,11 @@ describe what public robot capabilities the agent is allowed to rely on.
 | Generic profile router helper | `roboclaws/mcp/entrypoint.py` |
 | AI2-THOR navigation MCP server | `roboclaws/mcp/server.py` |
 | Molmo cleanup MCP server | `roboclaws/molmo_cleanup/realworld_mcp_server.py` |
+| Skill library convention | `skills/README.md` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
+| Photo capture skill | `skills/capture-object-photo/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
+| Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
 | Skill-first hero diagram | `docs/human/skill-first-robotics.svg` |
 | Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |
 

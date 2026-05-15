@@ -1,0 +1,40 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "capture-object-photo",
+  "summary": "Capture labeled photos of requested AI2-THOR objects as reusable skill behavior.",
+  "abstraction_level": "agent_skill",
+  "role": "task_behavior",
+  "status": "active",
+  "mcp": {
+    "profiles": ["ai2thor_navigation_v1"],
+    "required_tools": ["observe", "done"],
+    "optional_tools": ["observe_archived", "move"],
+    "privileged_tools": ["scene_objects", "goto"],
+    "boundary_notes": "Photo capture is a skill-level composite action. scene_objects and goto are privileged AI2-THOR helpers, not canonical robot capabilities."
+  },
+  "scripts": [
+    {
+      "path": "scripts/plan_capture_route.py",
+      "purpose": "Convert a scene_objects response into a deterministic label and goto/observe route plan."
+    }
+  ],
+  "evidence_outputs": [
+    "trace.jsonl",
+    "run_result.json",
+    "snapshots/agent-<id>/<label>-*.fpv.png",
+    "snapshots/agent-<id>/<label>-*.map.png",
+    "snapshots/agent-<id>/<label>-*.chase.png"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "multiple photo skills duplicate the same route planning script",
+      "the trace repeatedly needs a stable public photo capability with preserved substeps"
+    ],
+    "promote_to_mcp_when": [
+      "multiple skills need the same stable photo capability",
+      "inputs and outputs fit one contract profile",
+      "substeps remain visible in trace and reports",
+      "the implementation uses only public allowed information"
+    ]
+  }
+}

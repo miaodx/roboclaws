@@ -206,7 +206,8 @@ Operator-facing settings and recommended recipes live in
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
 | `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
 | `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
-| `skills/ai2thor-navigator/SKILL.md` | Operating instructions for any agent driving the robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
+| `skills/ai2thor-navigator/SKILL.md` | Base operating instructions for any agent driving the AI2-THOR robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
+| `skills/capture-object-photo/SKILL.md` | Skill-level photo behavior (`locate -> navigate -> observe`) plus route-planning helper. Keeps object-photo strategy out of the MCP capability surface. |
 | `scripts/` | Supporting tooling: bootstrap, scoring (`check_photo_task.py`), replay rendering (`render_autonomous_replay.py`), appliance config (`appliance_seed_openclaw.py`), regression harnesses. |
 | `tests/` | Mock-heavy unit tests + integration guards (refactor regression, photo-task smoke, MCP server contracts). |
 

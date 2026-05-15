@@ -21,9 +21,9 @@ to perfectly photograph every chair (real VLMs vary). It has to:
      the wall-clock out) with a reason that mentions the photographed
      targets.
 
-The kickoff prompt is the operator's verbatim Chinese prompt followed
-by a tiny preamble pointing at SKILL.md and naming the three roboclaws
-MCP tools, so the agent knows it has labeled-snapshot capability.
+The kickoff prompt is the operator's verbatim Chinese prompt followed by a
+small preamble pointing at the base navigator skill and the task-specific
+capture-object-photo skill.
 """
 
 from __future__ import annotations
@@ -53,13 +53,17 @@ def photo_task_kickoff_prompt(max_moves: int) -> str:
     """Compose the kickoff message sent to the agent on this run."""
     return (
         "You are an OpenClaw agent operating an AI2-THOR robot. "
-        "Read skills/ai2thor-navigator/SKILL.md and follow it.\n\n"
-        "Your tools are roboclaws__observe, roboclaws__move, roboclaws__done.\n"
-        "When you take a 'photo' of a target, call roboclaws__observe with a "
-        "descriptive label (e.g. label='sofa-1', 'chair-living-1'). The labeled "
-        "observe writes durable PNGs under the agent workspace; the operator's "
-        "scorer counts those files at the end. Do NOT use unlabeled observe "
-        "for photos — the scorer ignores the unlabeled latest.*.png files.\n\n"
+        "Read skills/ai2thor-navigator/SKILL.md for base tool semantics, then "
+        "read skills/capture-object-photo/SKILL.md and follow that task skill.\n\n"
+        "Use the roboclaws MCP tools named by those skills. For this AI2-THOR "
+        "demo, scene_objects and goto are privileged helpers you may use for "
+        "efficient photo capture; do not describe them as real-robot perception "
+        "or real-robot navigation.\n\n"
+        "When you take a photo, call roboclaws__observe with a descriptive label "
+        "(e.g. label='sofa-1', 'chair-1'). The labeled observe writes durable "
+        "PNGs under the agent workspace; the operator's scorer counts those "
+        "files at the end. Do NOT use unlabeled observe for photos — the scorer "
+        "ignores the unlabeled latest.*.png files.\n\n"
         f"Move budget: ~{max_moves} physical moves plus the wall-clock cap. "
         "Pace yourself.\n\n"
         "Once every target is photographed, call roboclaws__done with a "
