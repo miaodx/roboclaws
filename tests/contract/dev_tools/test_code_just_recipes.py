@@ -31,6 +31,7 @@ MCP_JUST = JUST_DIR / "mcp.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 
 # Matches an inter-recipe call to mcp::up and captures the trailing argument
 # list up to end-of-line. Excludes the recipe definition header.
@@ -106,6 +107,25 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert "codex --yolo" not in text
     assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
     assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
+
+
+def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> None:
+    """Direct MCP runs must know the model so text-only profiles avoid raw images."""
+    code_text = CODE_JUST.read_text(encoding="utf-8")
+    env_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
+
+    assert (
+        'claude_model="$(roboclaws_code_agent_model '
+        'ROBOCLAWS_CLAUDE_MODEL ROBOCLAWS_CLAUDE_PROVIDER)"'
+    ) in code_text
+    assert (
+        'codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"'
+    ) in code_text
+    assert ('roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"') in code_text
+    assert ('roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"') in code_text
+    assert 'export MODEL="$model"' in env_text
+    assert "mimo-v2.5|mimo-v2.5-pro" in env_text
+    assert "MCP observe(auto) will not inline raw images" in env_text
 
 
 def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:

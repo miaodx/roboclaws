@@ -52,6 +52,21 @@ shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
 var, protocol, and `CLAUDE_CODE_SIMPLE=1` together for the launched process
 only; unset variables leave the CLIs on their normal configured defaults.
 
+The `code::cc` and `code::codex` launchers also pass the selected coding-agent
+model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
+capability catalog:
+
+- `mimo-v2.5-pro` and `mimo-v2.5` are text-only. They should use
+  `scene_objects`, `goto`, and `observe_archived` for photo evidence, or a
+  configured vision bridge for ordinary navigation observations.
+- `mimo-v2-omni` is the MiMo image-capable route and can receive raw
+  `observe` images.
+- `kimi-k2.6` is image-capable, but the Claude Code Kimi coding endpoint has
+  shown intermittent generic server errors when a long skill-reading context is
+  immediately followed by multiple inline PNG image blocks. For batch photo
+  tasks, prefer `observe_archived` unless the agent genuinely needs visual
+  reasoning.
+
 Before a long Codex visual run, check the selected OpenAI-compatible endpoint
 against the current Codex CLI wire API:
 
@@ -141,7 +156,7 @@ python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
   motion; replaces 5–10 grid-step move/rotate chains.
 - `skills/capture-object-photo/SKILL.md` owns the reusable photo flow and
   optional route-planning helper script. Keep that behavior in the skill unless
-  it meets the MCP promotion rule in the skill-first architecture doc.
+  it meets the MCP promotion rule in the root `README.md`.
 - Stop the server with Ctrl-C, or let the agent call `roboclaws__done`.
 
 ## Self-improvement loop

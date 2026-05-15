@@ -24,6 +24,8 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     source scripts/dev/coding_agent_env.sh
     roboclaws_load_dotenv .env
+    claude_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CLAUDE_PROVIDER)"
+    claude_model="$(roboclaws_code_agent_model ROBOCLAWS_CLAUDE_MODEL ROBOCLAWS_CLAUDE_PROVIDER)"
     claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CLAUDE_PROVIDER ROBOCLAWS_CLAUDE_MODEL)"
     claude_model_args=()
     claude_env_args=()
@@ -54,6 +56,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     }
     trap cleanup EXIT INT TERM
 
+    roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"
     mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
 
     # Switch CWD to demo/ for the agent launch. demo/ is intentionally empty
@@ -106,6 +109,8 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     source scripts/dev/coding_agent_env.sh
     roboclaws_load_dotenv .env
+    codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
+    codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
     codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
     codex_model_args=()
     roboclaws_codex_provider_args codex_model_args
@@ -128,6 +133,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     }
     trap cleanup EXIT INT TERM
 
+    roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"
     mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
 
     # Switch CWD to demo/ for the agent launch. See `cc` recipe above for

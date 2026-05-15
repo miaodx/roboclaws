@@ -7,15 +7,15 @@
   "status": "active",
   "mcp": {
     "profiles": ["ai2thor_navigation_v1"],
-    "required_tools": ["observe", "done"],
-    "optional_tools": ["observe_archived", "move"],
+    "required_tools": ["observe_archived", "done"],
+    "optional_tools": ["observe", "move"],
     "privileged_tools": ["scene_objects", "goto"],
     "boundary_notes": "Photo capture is a skill-level composite action. scene_objects and goto are privileged AI2-THOR helpers, not canonical robot capabilities."
   },
   "scripts": [
     {
       "path": "scripts/plan_capture_route.py",
-      "purpose": "Convert a scene_objects response into a deterministic label and goto/observe route plan."
+      "purpose": "Convert a scene_objects response into a deterministic label and goto/observe_archived route plan."
     }
   ],
   "evidence_outputs": [

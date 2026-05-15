@@ -139,6 +139,38 @@ roboclaws_code_agent_model_args() {
   fi
 }
 
+roboclaws_code_agent_model_supports_images() {
+  local model="${1:-}"
+  model="${model##*/}"
+  case "$model" in
+    mimo-v2.5|mimo-v2.5-pro)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+roboclaws_code_agent_prepare_mcp_env() {
+  local model="${1:-}"
+  local provider="${2:-}"
+
+  if [[ -n "$model" ]]; then
+    export MODEL="$model"
+  fi
+
+  if [[ -n "$model" ]] && ! roboclaws_code_agent_model_supports_images "$model"; then
+    echo "==> model capability guard: ${model} is text-only; MCP observe(auto) will not inline raw images" >&2
+    echo "    Use observe_archived for photo evidence, or configure IMAGE_MODEL/ROBOCLAWS_VISION_BRIDGE_MODEL for text-bridge observations." >&2
+  fi
+
+  if [[ "$provider" == "kimi-anthropic" ]]; then
+    echo "==> Kimi coding profile note: Kimi is image-capable, but long skill context + raw observe images can intermittently return upstream server errors." >&2
+    echo "    For batch photo tasks, prefer scene_objects/goto/observe_archived unless visual reasoning is required." >&2
+  fi
+}
+
 roboclaws_code_agent_require_key() {
   local provider="$1"
   local key_env="$2"
