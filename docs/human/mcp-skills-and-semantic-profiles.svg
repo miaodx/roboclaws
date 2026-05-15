@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" role="img" aria-labelledby="title desc">
+  <title id="title">Roboclaws MCP skills and semantic profile architecture</title>
+  <desc id="desc">A shareable architecture diagram showing how user tasks, agent skills, MCP servers, semantic profiles, robot capabilities, accelerators, private data, and reports relate.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="56%" stop-color="#f6fbf7"/>
+      <stop offset="100%" stop-color="#fff9ef"/>
+    </linearGradient>
+    <linearGradient id="profile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f766e"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="shadow" x="-8%" y="-10%" width="116%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.13"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="softArrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .title { font: 800 32px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .section { font: 800 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .07em; }
+      .card { fill: #ffffff; stroke: #d7e2ea; stroke-width: 1.2; rx: 18; filter: url(#shadow); }
+      .muted-card { fill: #f8fafc; stroke: #d7e2ea; stroke-width: 1.2; rx: 18; }
+      .public-band { fill: #eff6ff; stroke: #c7dcf5; stroke-width: 1.2; rx: 24; }
+      .private-band { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1.2; rx: 24; }
+      .profile-card { fill: url(#profile); stroke: #0f766e; stroke-width: 1.2; rx: 20; filter: url(#shadow); }
+      .card-title { font: 800 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .card-text { font: 500 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .card-small { font: 600 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
+      .profile-title { font: 800 20px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+      .profile-text { font: 600 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
+      .label { font: 800 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .06em; }
+      .chip { fill: #eef6ff; stroke: #bfd7f2; stroke-width: 1; rx: 12; }
+      .warn-chip { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1; rx: 12; }
+      .ok-chip { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; rx: 12; }
+      .chip-text { font: 700 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; }
+      .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .soft-line { stroke: #94a3b8; stroke-width: 1.8; fill: none; marker-end: url(#softArrow); stroke-dasharray: 7 6; }
+      .block-line { stroke: #ea580c; stroke-width: 2; fill: none; marker-end: url(#softArrow); stroke-dasharray: 3 6; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="900" fill="url(#background)"/>
+
+  <text x="60" y="58" class="title">Roboclaws MCP Skills and Semantic Profiles</text>
+  <text x="60" y="86" class="subtitle">Task prompts stay open-ended. Skills guide the model. MCP tools do the work. Profiles say which tools are real public capabilities.</text>
+
+  <rect x="48" y="118" width="1184" height="290" class="public-band"/>
+  <text x="72" y="148" class="section">PUBLIC AGENT SIDE</text>
+
+  <rect x="84" y="182" width="194" height="88" class="card"/>
+  <text x="108" y="212" class="card-title">Task prompt</text>
+  <text x="108" y="237" class="card-text">"Clean the room"</text>
+  <text x="108" y="257" class="card-text">"Photograph chairs"</text>
+
+  <rect x="336" y="170" width="214" height="112" class="card"/>
+  <text x="360" y="202" class="card-title">Agent skill</text>
+  <text x="360" y="228" class="card-text">Operating strategy,</text>
+  <text x="360" y="248" class="card-text">tool etiquette, and</text>
+  <text x="360" y="268" class="card-text">domain guidance</text>
+
+  <rect x="608" y="170" width="224" height="112" class="card"/>
+  <text x="632" y="202" class="card-title">MCP server</text>
+  <text x="632" y="228" class="card-text">Concrete callable tools</text>
+  <text x="632" y="248" class="card-text">for one backend or</text>
+  <text x="632" y="268" class="card-text">robot-demo domain</text>
+
+  <rect x="890" y="170" width="250" height="112" class="card"/>
+  <text x="914" y="202" class="card-title">Agent action loop</text>
+  <text x="914" y="228" class="card-text">Observe, choose, act,</text>
+  <text x="914" y="248" class="card-text">record, and stop with</text>
+  <text x="914" y="268" class="card-text">inspectable steps</text>
+
+  <path class="line" d="M278 226 L336 226"/>
+  <path class="line" d="M550 226 L608 226"/>
+  <path class="line" d="M832 226 L890 226"/>
+
+  <rect x="92" y="328" width="186" height="36" class="warn-chip"/>
+  <text x="112" y="351" class="chip-text">Not one giant tool</text>
+  <rect x="340" y="328" width="210" height="36" class="chip"/>
+  <text x="360" y="351" class="chip-text">Skills can mention accelerators</text>
+  <rect x="612" y="328" width="220" height="36" class="chip"/>
+  <text x="632" y="351" class="chip-text">Server tools are real callables</text>
+  <rect x="894" y="328" width="236" height="36" class="ok-chip"/>
+  <text x="914" y="351" class="chip-text">Behavior remains auditable</text>
+
+  <rect x="48" y="440" width="1184" height="198" class="muted-card"/>
+  <text x="72" y="470" class="section">SEMANTIC PROFILE LAYER</text>
+
+  <rect x="392" y="492" width="496" height="92" class="profile-card"/>
+  <text x="424" y="524" class="profile-title">Semantic contract profile</text>
+  <text x="424" y="550" class="profile-text">Declares canonical public tools, capability families, provenance,</text>
+  <text x="424" y="570" class="profile-text">accelerator labels, and private-data exclusions for one domain.</text>
+
+  <rect x="86" y="518" width="230" height="82" class="card"/>
+  <text x="110" y="548" class="card-title">Canonical tools</text>
+  <text x="110" y="573" class="card-text">Robot capability claims</text>
+  <text x="110" y="593" class="card-small">observe, move, pick, place...</text>
+
+  <rect x="964" y="508" width="220" height="102" class="card"/>
+  <text x="988" y="538" class="card-title">Accelerators</text>
+  <text x="988" y="563" class="card-text">Useful shortcuts, but</text>
+  <text x="988" y="583" class="card-text">not real capability claims</text>
+  <text x="988" y="603" class="card-small">scene_objects, goto</text>
+
+  <path class="line" d="M720 282 L720 492"/>
+  <path class="line" d="M392 538 L316 558"/>
+  <path class="soft-line" d="M888 538 L964 558"/>
+
+  <rect x="48" y="670" width="1184" height="122" class="public-band"/>
+  <text x="72" y="700" class="section">CURRENT PROFILE EXAMPLES</text>
+
+  <rect x="110" y="724" width="300" height="44" class="chip"/>
+  <text x="132" y="752" class="chip-text">ai2thor_navigation_v1: observe, move, done</text>
+  <rect x="490" y="724" width="380" height="44" class="chip"/>
+  <text x="512" y="752" class="chip-text">molmospaces_cleanup_v1: public cleanup actions</text>
+  <rect x="950" y="724" width="210" height="44" class="warn-chip"/>
+  <text x="972" y="752" class="chip-text">Backend/domain specific</text>
+
+  <path class="line" d="M540 584 L276 724"/>
+  <path class="line" d="M650 584 L680 724"/>
+
+  <rect x="48" y="818" width="1184" height="64" class="private-band"/>
+  <text x="72" y="846" class="section">PRIVATE DATA AND EVIDENCE STAY SEPARATE</text>
+  <text x="72" y="866" class="card-text">Generated mess sets, acceptable destinations, hidden target lists, private scoring truth, traces, reports, and planner proof bundles stay outside public profile metadata.</text>
+
+  <path class="block-line" d="M1184 558 C1218 620 1218 758 1190 818"/>
+  <text x="908" y="650" class="label">EXCLUDE FROM CANONICAL PROFILE</text>
+</svg>

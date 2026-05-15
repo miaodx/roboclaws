@@ -4,6 +4,8 @@ This note is the small human-facing explanation of how Roboclaws connects
 agent skills, MCP tools, and semantic robot capabilities. It is meant for
 teammates who need the design logic without reading the GSD phase logs.
 
+![MCP skills and semantic profile architecture](mcp-skills-and-semantic-profiles.svg)
+
 ## The Short Version
 
 A user gives a **task prompt** such as "take photos of the chairs" or "clean the
@@ -174,6 +176,7 @@ the agent is allowed to rely on.
 | Molmo cleanup MCP server | `roboclaws/molmo_cleanup/realworld_mcp_server.py` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
+| Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |
 
 Planning artifacts for Phase 136 explain the implementation history, but this
 document is the human entry point for sharing the architecture with teammates.
