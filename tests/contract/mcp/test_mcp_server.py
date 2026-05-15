@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from roboclaws.core.engine import NAVIGATION_ACTIONS
+from roboclaws.mcp.profiles import AI2THOR_NAVIGATION_PROFILE, contract_profile
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
 from roboclaws.mcp.text_bridge import VisionBridgeResult
 
@@ -140,9 +141,45 @@ def _read_trace(run_dir: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
 
 
+def _fastmcp_tool_names(server: RoboclawsMCPServer) -> set[str]:
+    return set(server._mcp._tool_manager._tools)
+
+
 # ---------------------------------------------------------------------------
 # Tool behavior
 # ---------------------------------------------------------------------------
+
+
+def test_registered_tools_match_ai2thor_profile_with_privileged_demo_tools(
+    server: RoboclawsMCPServer,
+) -> None:
+    profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
+    expected = set(profile.public_tool_names()) | set(profile.privileged_tool_names())
+
+    assert _fastmcp_tool_names(server) == expected
+    assert set(server.registered_tool_names) == expected
+
+
+def test_canonical_only_mode_excludes_privileged_ai2thor_tools(
+    engine: FakeEngine,
+    tmp_path: Path,
+) -> None:
+    srv = make_roboclaws_mcp(
+        engine,
+        agent_id=0,
+        run_dir=tmp_path,
+        port=0,
+        allow_privileged_tools=False,
+    )
+    try:
+        profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
+
+        assert _fastmcp_tool_names(srv) == set(profile.public_tool_names())
+        assert set(srv.registered_tool_names) == set(profile.public_tool_names())
+        with pytest.raises(ValueError, match="privileged"):
+            srv.call_tool("goto", object_id="Chair|1")
+    finally:
+        srv.close()
 
 
 def test_observe_returns_state_text_plus_three_images(

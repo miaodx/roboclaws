@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
@@ -27,6 +28,25 @@ def _load_smoke_module():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _fastmcp_tool_names(server: Any) -> set[str]:
+    return set(server._mcp._tool_manager._tools)
+
+
+def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: Path) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+    )
+    try:
+        profile = contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
+
+        assert _fastmcp_tool_names(server) == set(profile.public_tool_names())
+        assert not profile.privileged_tool_names()
+    finally:
+        server.close()
 
 
 def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Path) -> None:
