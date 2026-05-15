@@ -27,5 +27,6 @@ The default decision is: add or improve a skill. Promote behavior into MCP only
 when multiple skills need the same stable capability, the IO belongs in one
 profile, public/private boundaries are clear, and traces can preserve substeps.
 
-See `docs/human/mcp-skills-and-semantic-profiles.md` for the architecture
-rationale and abstraction ladder.
+See `README.md` for the big-picture MCP and skill design principles, and
+`docs/human/mcp-skills-and-semantic-profiles.md` for the detailed profile
+reference.

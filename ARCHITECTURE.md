@@ -57,7 +57,8 @@ contract profiles. Profiles describe the canonical public capability tools,
 capability families, provenance expectations, privileged-tool metadata, and
 private-data exclusions for a selected backend/domain. The current built-ins are
 `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`. For the human design
-logic behind profiles, MCP tools, and agent skills, see
+principles behind profiles, MCP tools, and agent skills, start with
+[`README.md`](README.md). For the detailed profile reference, see
 [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ![Architecture diagram](docs/architecture.svg)
@@ -252,7 +253,8 @@ not) and power the `just chat::view` live viewer.
 | What you want | Where it lives |
 |---------------|----------------|
 | Scenario design rationale, VLM strategy, references | [`docs/human/technical-design.md`](docs/human/technical-design.md) |
-| Skill-first MCP design, semantic profiles, and privileged-tool boundaries | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
+| Big-picture MCP and skill principles | [`README.md`](README.md) |
+| Semantic profiles and privileged-tool boundaries | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
 | MolmoSpaces cleanup settings and proof boundaries | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
 | Domain vocabulary for cleanup/proof language | [`docs/human/domain.md`](docs/human/domain.md) |
 | Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |
