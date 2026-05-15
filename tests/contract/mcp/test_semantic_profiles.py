@@ -12,7 +12,7 @@ from roboclaws.mcp.entrypoint import (
 )
 from roboclaws.mcp.profiles import (
     AI2THOR_NAVIGATION_PROFILE,
-    CLASSIFICATION_ACCELERATOR,
+    CLASSIFICATION_PRIVILEGED_TOOL,
     MOLMOSPACES_CLEANUP_PROFILE,
     ContractProfile,
     ToolDescriptor,
@@ -56,18 +56,18 @@ def test_contract_profile_registry_contains_backend_domain_profiles() -> None:
     )
 
 
-def test_ai2thor_profile_labels_scene_objects_and_goto_as_accelerators() -> None:
+def test_ai2thor_profile_labels_scene_objects_and_goto_as_privileged_tools() -> None:
     metadata = contract_profile_metadata(AI2THOR_NAVIGATION_PROFILE)
 
     public_names = {tool["name"] for tool in metadata["public_tools"]}
-    accelerator_names = {tool["name"] for tool in metadata["accelerator_exclusions"]}
+    privileged_tool_names = {tool["name"] for tool in metadata["privileged_tools"]}
 
     assert {"observe", "observe_archived", "move", "done"} <= public_names
     assert "scene_objects" not in public_names
     assert "goto" not in public_names
-    assert {"scene_objects", "goto"} <= accelerator_names
-    assert {tool["classification"] for tool in metadata["accelerator_exclusions"]} == {
-        CLASSIFICATION_ACCELERATOR
+    assert {"scene_objects", "goto"} <= privileged_tool_names
+    assert {tool["classification"] for tool in metadata["privileged_tools"]} == {
+        CLASSIFICATION_PRIVILEGED_TOOL
     }
 
 
@@ -89,7 +89,7 @@ def test_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
     }
 
 
-def test_profile_validation_rejects_accelerator_public_tool() -> None:
+def test_profile_validation_rejects_privileged_public_tool() -> None:
     profile = ContractProfile(
         profile_id="bad_profile_v1",
         version=1,
@@ -101,15 +101,15 @@ def test_profile_validation_rejects_accelerator_public_tool() -> None:
                 name="goto",
                 semantic_name="navigation.teleport_to_object",
                 family="navigation",
-                classification="accelerator",
+                classification="privileged_tool",
                 provenance=("simulator_metadata",),
-                summary="bad public accelerator",
+                summary="bad public privileged tool",
             ),
         ),
-        accelerators=(),
+        privileged_tools=(),
     )
 
-    with pytest.raises(ValueError, match="public tool 'goto' is classified as accelerator"):
+    with pytest.raises(ValueError, match="public tool 'goto' is classified as privileged_tool"):
         validate_contract_profile(profile)
 
 

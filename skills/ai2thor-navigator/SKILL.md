@@ -14,8 +14,8 @@ You drive one simulated agent through an AI2-THOR indoor room using the MCP tool
 
 `ai2thor_navigation_v1` treats `observe`, `observe_archived`, `move`, and
 `done` as the canonical navigation capability tools. `scene_objects` and `goto`
-are AI2-THOR accelerators for demo and harness efficiency; use them when this
-skill tells you to, but do not treat them as real-robot perception or
+are AI2-THOR privileged tools for demo and harness efficiency; use them when
+this skill tells you to, but do not treat them as real-robot perception or
 navigation capabilities.
 
 - `roboclaws__scene_objects(filter_types="")` — return EVERY object in the scene with world coordinates, bounding boxes, and planar distance from the agent (sorted nearest-first). No images, instant. Pass a comma-separated `filter_types` (e.g. `"Sofa,Chair,ArmChair"`) to cull. **Call this BEFORE any move on a multi-target task** — it replaces "discover targets by collision" with one cheap inventory call. The response shape is `{count, agent_position, agent_yaw_deg, objects: [{objectId, objectType, name, position, bbox_center, bbox_size, visible, distance_xz}]}`. Use `objectId`/`bbox_center` to plan routes without re-observing.

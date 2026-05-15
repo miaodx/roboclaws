@@ -33,13 +33,13 @@ VALID_CAPABILITY_FAMILIES = frozenset(
 
 CLASSIFICATION_CANONICAL = "canonical"
 CLASSIFICATION_COMPOSED = "composed"
-CLASSIFICATION_ACCELERATOR = "accelerator"
+CLASSIFICATION_PRIVILEGED_TOOL = "privileged_tool"
 
 VALID_TOOL_CLASSIFICATIONS = frozenset(
     {
         CLASSIFICATION_CANONICAL,
         CLASSIFICATION_COMPOSED,
-        CLASSIFICATION_ACCELERATOR,
+        CLASSIFICATION_PRIVILEGED_TOOL,
     }
 )
 
@@ -82,15 +82,15 @@ class ContractProfile:
     domain: str
     capability_families: tuple[str, ...]
     public_tools: tuple[ToolDescriptor, ...]
-    accelerators: tuple[ToolDescriptor, ...]
+    privileged_tools: tuple[ToolDescriptor, ...]
     privacy_exclusions: tuple[str, ...] = ()
     summary: str = ""
 
     def public_tool_names(self) -> tuple[str, ...]:
         return tuple(tool.name for tool in self.public_tools)
 
-    def accelerator_names(self) -> tuple[str, ...]:
-        return tuple(tool.name for tool in self.accelerators)
+    def privileged_tool_names(self) -> tuple[str, ...]:
+        return tuple(tool.name for tool in self.privileged_tools)
 
     def metadata(self) -> dict[str, Any]:
         metadata = {
@@ -101,7 +101,7 @@ class ContractProfile:
             "domain": self.domain,
             "capability_families": list(self.capability_families),
             "public_tools": [tool.metadata() for tool in self.public_tools],
-            "accelerator_exclusions": [tool.metadata() for tool in self.accelerators],
+            "privileged_tools": [tool.metadata() for tool in self.privileged_tools],
             "privacy_boundary": bool(self.privacy_exclusions),
             "summary": self.summary,
         }
@@ -146,9 +146,9 @@ def validate_contract_profile(profile: ContractProfile) -> None:
             )
     declared_families = set(profile.capability_families)
     _validate_tools(profile.profile_id, profile.public_tools, declared_families, public=True)
-    _validate_tools(profile.profile_id, profile.accelerators, declared_families, public=False)
+    _validate_tools(profile.profile_id, profile.privileged_tools, declared_families, public=False)
     duplicate_names = _duplicates(
-        [tool.name for tool in (*profile.public_tools, *profile.accelerators)]
+        [tool.name for tool in (*profile.public_tools, *profile.privileged_tools)]
     )
     if duplicate_names:
         names = ", ".join(duplicate_names)
@@ -212,14 +212,14 @@ def _validate_tools(
                 f"profile {profile_id} tool {tool.name!r} has unknown classification "
                 f"{tool.classification!r}"
             )
-        if public and tool.classification == CLASSIFICATION_ACCELERATOR:
+        if public and tool.classification == CLASSIFICATION_PRIVILEGED_TOOL:
             raise ValueError(
-                f"profile {profile_id} public tool {tool.name!r} is classified as accelerator"
+                f"profile {profile_id} public tool {tool.name!r} is classified as privileged_tool"
             )
-        if not public and tool.classification != CLASSIFICATION_ACCELERATOR:
+        if not public and tool.classification != CLASSIFICATION_PRIVILEGED_TOOL:
             raise ValueError(
-                f"profile {profile_id} accelerator {tool.name!r} must use "
-                "accelerator classification"
+                f"profile {profile_id} privileged tool {tool.name!r} must use "
+                "privileged_tool classification"
             )
 
 
@@ -285,12 +285,12 @@ _AI2THOR_PROFILE = ContractProfile(
             "Terminate the current MCP-controlled navigation episode.",
         ),
     ),
-    accelerators=(
+    privileged_tools=(
         _tool(
             "scene_objects",
             "mapping.scene_inventory",
             FAMILY_MAPPING,
-            CLASSIFICATION_ACCELERATOR,
+            CLASSIFICATION_PRIVILEGED_TOOL,
             (PROVENANCE_SIMULATOR_METADATA,),
             "Simulator inventory oracle; useful for demos, not a real robot perception surface.",
         ),
@@ -298,12 +298,14 @@ _AI2THOR_PROFILE = ContractProfile(
             "goto",
             "navigation.teleport_to_object",
             FAMILY_NAVIGATION,
-            CLASSIFICATION_ACCELERATOR,
+            CLASSIFICATION_PRIVILEGED_TOOL,
             (PROVENANCE_SIMULATOR_METADATA,),
-            "Teleport-like target-relative shortcut; excluded from canonical navigation profile.",
+            "Teleport-like target-relative helper; excluded from canonical navigation profile.",
         ),
     ),
-    summary="AI2-THOR navigation profile with simulator shortcuts excluded from public tools.",
+    summary=(
+        "AI2-THOR navigation profile with privileged simulator tools excluded from public tools."
+    ),
 )
 
 _MOLMO_PRIVATE_EXCLUSIONS = (
@@ -450,7 +452,7 @@ _MOLMO_PROFILE = ContractProfile(
             "Terminate the cleanup episode and write artifacts.",
         ),
     ),
-    accelerators=(),
+    privileged_tools=(),
     privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
     summary="MolmoSpaces cleanup profile preserving the ADR-0003 public agent boundary.",
 )
