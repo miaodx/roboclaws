@@ -54,10 +54,16 @@ If you find yourself wanting to write `curl ... 18788`, `rg roboclaws ../robocla
 
 When Codex or Claude Code is connected directly to `python examples/mcp/coding_agent_nav_server.py` (no OpenClaw Gateway), follow this minimal flow:
 
-1. **First call**: `roboclaws__observe(label="preflight")`. This verifies the MCP is alive AND drops a baseline snapshot into the server's snapshots dir. If the tool errors, tell the operator the server isn't ready and stop.
-2. **Read the operator's task.** If it asks you to photograph things in the scene,
-   read `skills/capture-object-photo/SKILL.md` and use that task skill. Otherwise
-   navigate as the task requires.
+1. **Read the operator's task.** If it asks you to photograph things in the scene,
+   read `skills/capture-object-photo/SKILL.md` before the first raw image
+   observation and use that task skill. Photo tasks may use an archived-only
+   flow for text-only models and Kimi coding-profile stability.
+2. **First call for ordinary navigation**: `roboclaws__observe(label="preflight")`.
+   This verifies the MCP is alive AND drops a baseline snapshot into the
+   server's snapshots dir. If the tool errors, tell the operator the server
+   isn't ready and stop. For photo tasks, let `capture-object-photo` decide
+   whether preflight should be raw `observe`, `observe_archived`, or skipped in
+   favor of `scene_objects`.
 3. **Treat new terminal instructions as higher priority.** If the operator types a new message while you're working, re-observe, then choose the next action based on the latest message.
 4. **Close cleanly.** When the task is done, call `roboclaws__done(reason="...")` and list the labels you produced (operator can retrieve them from the snapshots dir by label).
 
@@ -75,7 +81,9 @@ If the capture skill is unavailable, use this fallback shape:
 
 1. `scene_objects(filter_types="Sofa,Chair,ArmChair")`, adjusted to the request.
 2. Visit targets nearest-first with `goto(object_id=..., distance=1.0, face=True)`.
-3. Capture each target with a labeled `observe(label="<type>-<index>")`.
+3. Capture each target with a labeled `observe_archived(label="<type>-<index>")`.
+   Use raw `observe(label=...)` only when the current model is known to handle
+   inline images and you need visual framing feedback.
 4. Call `done(reason="Photographed ...")` with every label listed.
 
 Keep the boundary explicit: `scene_objects` and `goto` are privileged AI2-THOR

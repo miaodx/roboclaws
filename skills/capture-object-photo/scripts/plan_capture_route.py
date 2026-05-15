@@ -13,6 +13,8 @@ from typing import Any
 
 PLAN_SCHEMA = "roboclaws_capture_object_photo_plan_v1"
 DEFAULT_FILTER_TYPES = "Sofa,Chair,ArmChair"
+DEFAULT_CAPTURE_TOOL = "observe_archived"
+CAPTURE_TOOLS = ("observe_archived", "observe")
 
 
 def build_capture_plan(
@@ -20,9 +22,12 @@ def build_capture_plan(
     *,
     filter_types: str = DEFAULT_FILTER_TYPES,
     standoff_m: float = 1.0,
+    capture_tool: str = DEFAULT_CAPTURE_TOOL,
 ) -> dict[str, Any]:
     """Return a route plan using object IDs from a scene_objects payload."""
 
+    if capture_tool not in CAPTURE_TOOLS:
+        raise ValueError(f"capture_tool must be one of {CAPTURE_TOOLS!r}")
     allowed_types = _parse_filter_types(filter_types)
     objects = _extract_objects(scene_objects)
     if allowed_types:
@@ -57,7 +62,7 @@ def build_capture_plan(
                         },
                     },
                     {
-                        "tool": "observe",
+                        "tool": capture_tool,
                         "classification": "canonical",
                         "arguments": {"label": label},
                     },
@@ -72,8 +77,11 @@ def build_capture_plan(
         "filter_types": sorted(allowed_types),
         "target_count": len(targets),
         "privileged_tools_used": ["scene_objects", "goto"],
-        "canonical_tools_used": ["observe", "done"],
-        "optional_tools": ["observe_archived", "move"],
+        "canonical_tools_used": [capture_tool, "done"],
+        "optional_tools": [
+            "observe" if capture_tool == "observe_archived" else "observe_archived",
+            "move",
+        ],
         "targets": targets,
         "done_reason_template": _done_reason(target["label"] for target in targets),
     }
@@ -129,7 +137,7 @@ def _load_payload(path: str) -> dict[str, Any] | list[dict[str, Any]]:
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Plan capture-object-photo goto/observe calls from scene_objects JSON.",
+        description="Plan capture-object-photo goto/capture calls from scene_objects JSON.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -139,6 +147,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--filter-types", default=DEFAULT_FILTER_TYPES)
     parser.add_argument("--standoff", type=float, default=1.0)
+    parser.add_argument(
+        "--capture-tool",
+        choices=CAPTURE_TOOLS,
+        default=DEFAULT_CAPTURE_TOOL,
+        help="Use observe_archived by default to avoid inline image payloads.",
+    )
     parser.add_argument("--pretty", action="store_true")
     return parser.parse_args(argv)
 
@@ -149,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         _load_payload(args.input),
         filter_types=args.filter_types,
         standoff_m=args.standoff,
+        capture_tool=args.capture_tool,
     )
     json.dump(plan, sys.stdout, indent=2 if args.pretty else None, sort_keys=True)
     sys.stdout.write("\n")

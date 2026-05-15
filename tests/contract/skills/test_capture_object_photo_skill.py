@@ -36,7 +36,7 @@ def test_capture_route_plan_sorts_labels_and_preserves_tool_boundary() -> None:
     assert plan["schema"] == "roboclaws_capture_object_photo_plan_v1"
     assert plan["profile"] == "ai2thor_navigation_v1"
     assert plan["privileged_tools_used"] == ["scene_objects", "goto"]
-    assert plan["canonical_tools_used"] == ["observe", "done"]
+    assert plan["canonical_tools_used"] == ["observe_archived", "done"]
     assert [target["label"] for target in plan["targets"]] == [
         "sofa-1",
         "armchair-1",
@@ -53,7 +53,7 @@ def test_capture_route_plan_sorts_labels_and_preserves_tool_boundary() -> None:
         "arguments": {"object_id": "Sofa|1", "distance": 1.0, "face": True},
     }
     assert plan["targets"][0]["actions"][1] == {
-        "tool": "observe",
+        "tool": "observe_archived",
         "classification": "canonical",
         "arguments": {"label": "sofa-1"},
     }
@@ -83,3 +83,19 @@ def test_capture_route_cli_reads_stdin_and_emits_json() -> None:
     assert plan["target_count"] == 1
     assert plan["targets"][0]["label"] == "chair-1"
     assert plan["targets"][0]["actions"][0]["arguments"]["distance"] == 1.5
+    assert plan["targets"][0]["actions"][1]["tool"] == "observe_archived"
+
+
+def test_capture_route_can_opt_into_inline_observe_for_vision_models() -> None:
+    module = _load_script()
+    payload = {"objects": [{"objectId": "Sofa|1", "objectType": "Sofa", "distance_xz": 1.0}]}
+
+    plan = module.build_capture_plan(payload, filter_types="Sofa", capture_tool="observe")
+
+    assert plan["canonical_tools_used"] == ["observe", "done"]
+    assert plan["optional_tools"] == ["observe_archived", "move"]
+    assert plan["targets"][0]["actions"][1] == {
+        "tool": "observe",
+        "classification": "canonical",
+        "arguments": {"label": "sofa-1"},
+    }
