@@ -97,6 +97,9 @@ move with roboclaws__move. For photos, call roboclaws__observe with labels like
 chair-1 or sofa-1. When finished, summarize the labels and call roboclaws__done.
 ```
 
+For photo tasks, also read `skills/capture-object-photo/SKILL.md`. The photo
+behavior is a skill-level composite action, not a separate MCP tool.
+
 ## Artifacts
 
 Runs write to:
@@ -136,6 +139,9 @@ python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
 - `goto(object_id, distance, face)` teleports to a reachable cell near a
   target's bbox center. Pairs with `scene_objects` for target-relative
   motion; replaces 5–10 grid-step move/rotate chains.
+- `skills/capture-object-photo/SKILL.md` owns the reusable photo flow and
+  optional route-planning helper script. Keep that behavior in the skill unless
+  it meets the MCP promotion rule in the skill-first architecture doc.
 - Stop the server with Ctrl-C, or let the agent call `roboclaws__done`.
 
 ## Self-improvement loop

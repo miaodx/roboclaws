@@ -1,0 +1,45 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "molmo-realworld-cleanup",
+  "summary": "Drive the ADR-0003 MolmoSpaces real-world cleanup MCP contract.",
+  "abstraction_level": "agent_skill",
+  "role": "cleanup_task_behavior",
+  "status": "active",
+  "mcp": {
+    "profiles": ["molmospaces_cleanup_v1"],
+    "required_tools": [
+      "metric_map",
+      "fixture_hints",
+      "navigate_to_waypoint",
+      "observe",
+      "navigate_to_object",
+      "pick",
+      "navigate_to_receptacle",
+      "place",
+      "place_inside",
+      "open_receptacle",
+      "close_receptacle",
+      "done"
+    ],
+    "optional_tools": [
+      "navigate_to_room",
+      "infer_camera_model_candidates",
+      "inspect_visible_object"
+    ],
+    "privileged_tools": [],
+    "boundary_notes": "ADR-0003 public/private-safe surface. No scene_objects, target list, hidden destination table, or private scoring truth."
+  },
+  "scripts": [],
+  "evidence_outputs": ["trace.jsonl", "run_result.json", "report.html"],
+  "lifecycle": {
+    "refactor_signals": [
+      "repeated cleanup traces reveal reusable room-sweep or object-selection behavior",
+      "planner-backed manipulation evidence becomes common enough to split into a subskill"
+    ],
+    "promote_to_mcp_when": [
+      "a subproblem is stable across cleanup skills",
+      "it uses only public contract data",
+      "trace and report artifacts preserve the semantic substeps"
+    ]
+  }
+}

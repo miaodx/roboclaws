@@ -55,34 +55,32 @@ If you find yourself wanting to write `curl ... 18788`, `rg roboclaws ../robocla
 When Codex or Claude Code is connected directly to `python examples/mcp/coding_agent_nav_server.py` (no OpenClaw Gateway), follow this minimal flow:
 
 1. **First call**: `roboclaws__observe(label="preflight")`. This verifies the MCP is alive AND drops a baseline snapshot into the server's snapshots dir. If the tool errors, tell the operator the server isn't ready and stop.
-2. **Read the operator's task.** If it asks you to photograph things in the scene, switch to the **Photo protocol** below. Otherwise navigate as the task requires.
+2. **Read the operator's task.** If it asks you to photograph things in the scene,
+   read `skills/capture-object-photo/SKILL.md` and use that task skill. Otherwise
+   navigate as the task requires.
 3. **Treat new terminal instructions as higher priority.** If the operator types a new message while you're working, re-observe, then choose the next action based on the latest message.
 4. **Close cleanly.** When the task is done, call `roboclaws__done(reason="...")` and list the labels you produced (operator can retrieve them from the snapshots dir by label).
 
 In direct mode there is no Control UI and no `MEDIA:` line rendering — your chat reply is plain text. Skip the OpenClaw Gateway specifics at the bottom of this file. Snapshots still archive (the server prints the directory at startup).
 
-## Photo protocol
+## Photo Task Handoff
 
-When the operator asks you to photograph objects in the scene, follow this order — do NOT skip step 1:
+Photo capture is intentionally a separate skill: `skills/capture-object-photo/`.
+That skill owns the composite behavior
+`locate -> navigate -> observe/observe_archived -> done` and the optional route
+planning helper script. This base navigator only documents the tool semantics it
+needs.
 
-1. **Inventory first** — `scene_objects(filter_types="Sofa,Chair,ArmChair")` (adjust types to the task). This returns every matching object's world position + bounding box + planar distance, sorted nearest-first. You now know exactly what targets exist and where they are; you do NOT need to discover them by walking. **Run 001/002 of this skill burned 50–100 tool calls discovering objects by collision; that is what step 1 prevents.**
-2. **Plan a route**. Read the `objects` list and pick a visit order — usually nearest-first works, but check `bbox_center` to avoid placing yourself between two large objects with no reachable cell. If two targets share a `bbox_center` (within ~0.5m), they're likely the same object visible twice; treat the unique `objectId` as authoritative.
-3. **For each target**: call `goto(object_id=<from inventory>, distance=1.0)`. That single call replaces the navigate-rotate-step chain — the server picks a reachable cell ~1m from the target and rotates you to face it. Then call `observe(label="<type>-<index>")` once to verify framing. If the framing is acceptable, that observe IS the capture (it archives a labeled snapshot). If it's not, adjust with `move(LookDown)` or one `move` step and then capture with `observe_archived(label="<type>-<index>")` so you don't pay another image-token round.
-4. **Close**: `done(reason="captured sofa-1, armchair-1, ..., dining-chair-1..4")`.
+If the capture skill is unavailable, use this fallback shape:
 
-**Choose between the two capture tools**:
+1. `scene_objects(filter_types="Sofa,Chair,ArmChair")`, adjusted to the request.
+2. Visit targets nearest-first with `goto(object_id=..., distance=1.0, face=True)`.
+3. Capture each target with a labeled `observe(label="<type>-<index>")`.
+4. Call `done(reason="Photographed ...")` with every label listed.
 
-- **`observe(label="x")`** — capture + see + archive. Use when you need to judge framing, distance, or what's around you to decide the next move.
-- **`observe_archived(label="x")`** — capture + archive ONLY. Use for batch evidence capture where this turn just stores the frame and moves on. Saves ~3 image-token blocks per call from main-session context.
-
-After step 1 you should NOT need to do a 360° rotation survey; the inventory already told you what exists. Only re-issue `observe()` when the next move needs new pixels (e.g., after rotating to face a new target).
-
-- **Always pass `label=` to observe.** Labeled snapshots are persisted to the server's snapshots directory and survive an MCP disconnect; unlabeled `observe()` images are inline-only and gone if the server drops mid-run. There is no downside to labeling — make it the default for any photo task.
-- **One subject per frame.** Get close enough that the target object fills ≥ 60% of the FPV. If two pieces of furniture share the frame, move closer or strafe to a side angle until the target dominates. Use the chase third-person view to verify framing without burning a fresh observe.
-- **Naming convention**: `<type>-<index>` — `chair-1`, `chair-2`, `sofa-1`, `armchair-1`. Use the index to disambiguate identical-looking siblings (e.g. four dining chairs around one table). Lowercase, hyphen-separated, no spaces.
-- **Survey first, then move.** A single `observe` returns FPV + overhead grid map + chase view. That's usually enough to inventory the room and plan a route — don't burn 4 rotations doing a 360° survey unless chase view shows an occluded zone.
-- **Bundle integrity**: every observe returns three views (FPV, chase, map_v2) bound to a single decision moment. Treat them as one unit — don't reason about them in isolation, and when context fills up they prune as a bundle, not per-image. To revisit an earlier view, re-read the snapshot file path with your filesystem tool rather than re-issuing `observe()` which doubles the context cost. The three views complement each other: FPV for immediate obstacles, chase for self-position + blind-spot awareness, map_v2 for global reachability — dropping any one degrades navigation accuracy.
-- **Closing summary**: when the photo task is complete, call `done` with a reason that lists every label you produced — e.g. `done(reason="Photographed sofa-1, armchair-1, armchair-2, dining-chair-1..4 in agent-0/snapshots/")`. The operator retrieves them by label.
+Keep the boundary explicit: `scene_objects` and `goto` are privileged AI2-THOR
+helpers for the demo server. Do not describe them as real-robot perception or
+real-robot navigation.
 
 ## Loop
 

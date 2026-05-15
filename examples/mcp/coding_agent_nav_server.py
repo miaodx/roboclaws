@@ -72,6 +72,7 @@ def _print_setup(output_dir: Path, snapshots_dir: Path, url: str) -> None:
     print(f"  {commands['Claude Code']}")
     print("\nThen start Codex or Claude Code and ask it to drive the robot, for example:")
     print("  Read skills/ai2thor-navigator/SKILL.md, then use roboclaws__observe first.")
+    print("  For photo tasks, also read skills/capture-object-photo/SKILL.md.")
     print("  麻烦给这个屋子里面的每个沙发以及椅子拍个照片...")
     print("\nThis server exits when the agent calls roboclaws__done or you press Ctrl-C.\n")
     sys.stdout.flush()

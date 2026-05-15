@@ -119,6 +119,7 @@ Each report directory is meant to be reviewable without re-running the model.
 | Code map and operating modes     | [ARCHITECTURE.md](ARCHITECTURE.md)                                                                         |
 | Human setup/runbooks/domain docs | [docs/human/README.md](docs/human/README.md)                                                               |
 | Skill-first MCP architecture     | [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md)           |
+| Skill library convention         | [skills/README.md](skills/README.md)                                                                       |
 | Public command grammar           | [just/README.md](just/README.md)                                                                           |
 | Coding-agent navigation guide    | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
 | MolmoSpaces settings             | [docs/human/molmospaces-settings.md](docs/human/molmospaces-settings.md)                                   |
