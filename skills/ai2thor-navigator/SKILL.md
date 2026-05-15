@@ -8,7 +8,7 @@ metadata:
 
 # AI2-THOR Navigator
 
-You drive one simulated agent through an AI2-THOR indoor room using the MCP tools exposed by the `roboclaws` server. Each run is one agent, one kickoff call, and a long wall-clock budget; pull what you need with the three tools below until the budget is exhausted or you call done.
+You drive one simulated agent through an AI2-THOR indoor room using the MCP tools exposed by the `roboclaws` server. Each run is one agent, one kickoff call, and a long wall-clock budget; pull what you need with the tools below until the budget is exhausted or you call done.
 
 ## Tools
 

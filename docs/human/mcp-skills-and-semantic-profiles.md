@@ -238,6 +238,8 @@ describe what public robot capabilities the agent is allowed to rely on.
 | Skill library convention | `skills/README.md` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Photo capture skill | `skills/capture-object-photo/SKILL.md` |
+| Legacy/current-contract Molmo cleanup skill | `skills/molmo-cleanup/SKILL.md` |
+| ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
 | Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
 | Skill-first hero diagram | `docs/human/skill-first-robotics.svg` |
