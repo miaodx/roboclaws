@@ -221,6 +221,7 @@ def run_autonomous_navigation(
     output_dir: Path,
     skip_bootstrap: bool = False,
     kickoff_prompt_builder: Callable[[int], str] | None = None,
+    allow_privileged_tools: bool = False,
 ) -> dict[str, Any]:
     """Run the autonomous loop end-to-end.
 
@@ -273,6 +274,7 @@ def run_autonomous_navigation(
             image_model=runtime_config["image_model"],
             observe_mode=runtime_config["observe_mode"],
             vision_bridge_model=runtime_config["vision_bridge_model"],
+            allow_privileged_tools=allow_privileged_tools,
         )
         mcp_server.run_in_thread()
         # 'sim_server_metrics' stays frozen for report/tests schema compat.

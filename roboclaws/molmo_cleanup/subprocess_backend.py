@@ -118,23 +118,12 @@ class MolmoSpacesSubprocessBackend:
     def observe(self) -> dict[str, Any]:
         return self._run_worker("observe")
 
-    def scene_objects(self, category: str | None = None) -> dict[str, Any]:
-        result = self._run_worker("scene_objects")
-        if category is not None:
-            result["objects"] = [
-                item for item in result["objects"] if item.get("category") == category
-            ]
-        return result
-
     def planner_task_binding(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         return backend_planner_task_binding_from_state(
             self._read_state(),
             object_id=object_id,
             target_receptacle_id=receptacle_id,
         )
-
-    def goto(self, receptacle_id: str) -> dict[str, Any]:
-        return self._run_worker("goto", "--receptacle-id", receptacle_id)
 
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:
         return self._run_worker("navigate_to_object", "--object-id", object_id)
@@ -156,15 +145,6 @@ class MolmoSpacesSubprocessBackend:
 
     def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
         return self._run_worker("close_receptacle", "--receptacle-id", receptacle_id)
-
-    def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
-        return self._run_worker(
-            "object_done",
-            "--object-id",
-            object_id,
-            "--receptacle-id",
-            receptacle_id,
-        )
 
     def done(self, reason: str = "") -> dict[str, Any]:
         return self._run_worker("done", "--reason", reason)

@@ -78,19 +78,22 @@ surface that external agents use over structured-HTTP transport:
 - **`move(direction, reason="", steps=1)`** — one navigation step (or up
   to 5). Returns `pose_delta`, `visited_count_here`, `collisions`, and a
   synthetic `human_message` if the agent has moved blind too many times.
+- **`done(reason)`** — terminates the run cleanly. Idempotent.
+
+By default, the server registers only that canonical `ai2thor_navigation_v1`
+surface. Demo launchers can explicitly opt into privileged simulator helpers:
+
 - **`scene_objects(filter_types="")`** — returns the full AI2-THOR object
   inventory, optionally filtered by object type, so agents can plan
   target-relative routes before moving.
 - **`goto(object_id, distance=1.0, face=True)`** — teleports to a reachable
   cell near an object and optionally faces it. This is a high-leverage
   adapter for object-photo tasks where grid-step navigation is incidental.
-- **`done(reason)`** — terminates the run cleanly. Idempotent.
 
 The semantic profile `ai2thor_navigation_v1` treats `observe`,
 `observe_archived`, `move`, and `done` as canonical navigation capability
-tools. `scene_objects` and `goto` remain concrete AI2-THOR server tools, but
-they are labeled as privileged simulator tools rather than real-robot capability
-claims.
+tools. `scene_objects` and `goto` are privileged opt-in helpers for photo/demo
+runs, not default real-robot capability claims.
 
 Every tool call writes a line to `<run_dir>/trace.jsonl`. The schema is a
 **frozen superset** of `tests/fixtures/trace_schema_reference.json` —
@@ -185,7 +188,7 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/games/territory.py` | `TerritoryGame`: adversarial cell-claiming. Tracks `cells_claimed`, `connectivity_ratio`, `blocking_events`. |
 | `roboclaws/games/coverage.py` | `CoverageGame`: cooperative coverage. Tracks `coverage_pct`, per-agent `contribution`, `work_balance`. |
 | `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
-| `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing `observe`, `observe_archived`, `move`, `scene_objects`, `goto`, and `done`. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
+| `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing canonical `observe`, `observe_archived`, `move`, and `done` tools by default, with privileged `scene_objects` and `goto` helpers only when a launcher opts in. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
 | `roboclaws/mcp/profiles.py`, `roboclaws/mcp/entrypoint.py` | Semantic MCP contract profile declarations and a small router helper for registering one selected profile's public tools. Current profiles represent AI2-THOR navigation and MolmoSpaces cleanup while excluding privileged simulator tools/private evaluator truth from canonical public metadata. |
 | `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
 | `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
@@ -202,7 +205,7 @@ Operator-facing settings and recommended recipes live in
 | `examples/games/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
 | `examples/mcp/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
 | `examples/openclaw/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
-| `examples/molmo_cleanup/molmospaces_cleanup_demo.py`, `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry points: synthetic/current-contract cleanup and ADR-0003 public/private real-world cleanup. |
+| `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry point for ADR-0003 public/private real-world cleanup. |
 | `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
 | `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |

@@ -294,6 +294,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     assert mcp_kwargs["host"] == "0.0.0.0"
     assert mcp_kwargs["port"] == 18788
     assert mcp_kwargs["agent_id"] == 0
+    assert mcp_kwargs["allow_privileged_tools"] is False
 
     ctx.fake_server.run_in_thread.assert_called_once()
     ctx.fake_server.close.assert_called_once()

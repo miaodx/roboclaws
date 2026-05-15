@@ -88,6 +88,9 @@ class Args:
     observe_mode: str | None = None
     """Observe delivery mode. Use 'text-bridge' for split-model setups."""
 
+    allow_privileged_tools: bool = False
+    """Expose AI2-THOR demo helpers such as scene_objects and goto."""
+
     plugin: bool = False
     """Use Anthropic/plugin API path (sets KIMI_PROVIDER_MODE=plugin, MIMO_PROVIDER_MODE=anthropic)."""  # noqa: E501
 
@@ -336,6 +339,7 @@ def main(argv: list[str] | None = None) -> int:
             image_model=runtime_config["image_model"],
             observe_mode=runtime_config["observe_mode"],
             vision_bridge_model=runtime_config["vision_bridge_model"],
+            allow_privileged_tools=args.allow_privileged_tools,
         )
         mcp_server.run_in_thread()
         # Loopback HTTP /reset endpoint — the appliance's nginx routes

@@ -52,7 +52,6 @@ FOCUSED_SEMANTIC_PHASES = (
 FOCUSED_SEMANTIC_ACTION_PREFIXES = tuple(f"{phase} " for phase in FOCUSED_SEMANTIC_PHASES)
 
 SEMANTIC_LOOP_VARIANT = "navigate-pick-navigate-open-place-close"
-CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT = f"{SEMANTIC_LOOP_VARIANT}-object_done"
 SEMANTIC_LOOP_DISPLAY_TEXT = "nav, pick, nav, open when needed, place, close when needed"
 SEMANTIC_LOOP_DISPLAY_NOTE = f"Canonical cleanup loop: {SEMANTIC_LOOP_DISPLAY_TEXT}."
 ROBOT_VIEW_VARIANT = "molmospaces-rby1m-fpv-map-chase-verify"

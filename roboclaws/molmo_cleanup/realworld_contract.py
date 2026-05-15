@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     observed_handle_planner_binding,
 )
@@ -64,15 +64,15 @@ _OBJECT_CATEGORY_TARGETS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = 
 class RealWorldCleanupContract:
     """ADR-0003 public/private cleanup contract.
 
-    The wrapped ``MolmoCleanupToolContract`` still owns state mutation and
+    The wrapped ``CleanupBackendSession`` still owns state mutation and
     deterministic private scoring. This contract is the public agent boundary:
     it exposes metric navigation, room-level fixture hints, and robot-local
-    observed object handles instead of the current-contract global inventory.
+    observed object handles instead of a global object-inventory oracle.
     """
 
     def __init__(
         self,
-        contract: MolmoCleanupToolContract,
+        contract: CleanupBackendSession,
         *,
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",

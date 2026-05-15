@@ -4,13 +4,9 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-from roboclaws.molmo_cleanup.semantic_timeline import (
-    CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT,
-    SEMANTIC_LOOP_VARIANT,
-)
+from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_LOOP_VARIANT
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-CURRENT_SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_agent_bridge_smoke.py"
 REALWORLD_SMOKE_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 )
@@ -23,35 +19,6 @@ def _load_module(path: Path, name: str) -> Any:
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
-
-
-def test_current_contract_mcp_smoke_uses_shared_semantic_loop(
-    tmp_path: Path,
-    monkeypatch: Any,
-) -> None:
-    module = _load_module(CURRENT_SMOKE_PATH, "run_molmo_agent_bridge_smoke_shared_loop")
-    original = module.run_semantic_cleanup_loop
-    calls: list[dict[str, Any]] = []
-
-    def wrapped_shared_loop(**kwargs: Any) -> Any:
-        calls.append(kwargs)
-        return original(**kwargs)
-
-    monkeypatch.setattr(module, "run_semantic_cleanup_loop", wrapped_shared_loop)
-
-    result = module.run_smoke(output_dir=tmp_path, seed=7)
-
-    assert calls
-    call = calls[0]
-    assert call["include_object_done"] is True
-    assert call["targets"]
-    assert call["targets"][0]["target_receptacle"]
-    assert result["semantic_loop_variant"] == CURRENT_CONTRACT_SEMANTIC_LOOP_VARIANT
-    assert any(
-        step["phase"] == "object_done"
-        for item in result["semantic_substeps"]
-        for step in item["steps"]
-    )
 
 
 def test_realworld_mcp_smoke_uses_shared_fixture_style_semantic_loop(
@@ -72,7 +39,6 @@ def test_realworld_mcp_smoke_uses_shared_fixture_style_semantic_loop(
 
     assert calls
     assert all(call["target_request_key"] == "fixture_id" for call in calls)
-    assert all(call["include_object_done"] is False for call in calls)
     assert all(call["include_object_id_in_receptacle_request"] is False for call in calls)
     assert all(call["include_object_id_in_target_requests"] is False for call in calls)
     assert result["semantic_loop_variant"] == SEMANTIC_LOOP_VARIANT

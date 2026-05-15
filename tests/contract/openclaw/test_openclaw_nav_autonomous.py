@@ -242,6 +242,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
     assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5-pro"
     assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2-omni"
     assert mcp_kwargs.get("observe_mode") == "text-bridge"
+    assert mcp_kwargs.get("allow_privileged_tools") is False
     fake_server.run_in_thread.assert_called_once()
     assert fake_server.write_trace_event.call_count == 2
     first_trace = fake_server.write_trace_event.call_args_list[0].kwargs

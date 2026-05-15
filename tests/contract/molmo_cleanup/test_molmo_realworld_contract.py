@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
@@ -17,7 +17,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 
 def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
@@ -41,7 +41,7 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
 
 
 def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
@@ -89,7 +89,7 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -109,7 +109,7 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
 
 
 def test_realworld_contract_rejects_skipped_semantic_phases_without_private_truth() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -137,7 +137,7 @@ def test_realworld_contract_rejects_skipped_semantic_phases_without_private_trut
 
 
 def test_realworld_contract_rejects_done_with_pending_public_candidates() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     observation = _first_non_empty_observation(contract)
     recommended = next(
         item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
@@ -155,7 +155,7 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
 
 
 def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "food")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -187,7 +187,7 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
 
 
 def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "book")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -218,7 +218,7 @@ def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
 
 
 def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     contract.metric_map()
     for waypoint in contract.metric_map()["inspection_waypoints"]:
@@ -235,7 +235,7 @@ def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
 
 def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     contract = RealWorldCleanupContract(
-        MolmoCleanupToolContract(build_cleanup_scenario(seed=7)),
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
 
@@ -261,7 +261,7 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
 
 def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
     contract = RealWorldCleanupContract(
-        MolmoCleanupToolContract(build_cleanup_scenario(seed=7)),
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
 

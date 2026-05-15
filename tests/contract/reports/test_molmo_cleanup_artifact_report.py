@@ -65,10 +65,9 @@ def test_rerender_cleanup_report_from_run_result_uses_shared_visual_core(
     run_result = {
         "backend": "test",
         "cleanup_status": "success",
-        "contract": "current_contract",
-        "current_contract_shortcuts": ["global_scene_objects"],
+        "contract": "realworld_cleanup_v1",
         "agent_driven": True,
-        "mcp_server": "molmo_cleanup",
+        "mcp_server": "molmo_cleanup_realworld",
         "policy": "codex_agent",
         "primitive_provenance": "api_semantic",
         "scenario_id": scenario.scenario_id,
@@ -263,7 +262,7 @@ def _write_minimal_run_result(run_dir: Path) -> Path:
     run_result = {
         "backend": "test",
         "cleanup_status": "success",
-        "contract": "current_contract",
+        "contract": "realworld_cleanup_v1",
         "primitive_provenance": "api_semantic",
         "scenario_id": "scenario_from_run_result",
         "score": {

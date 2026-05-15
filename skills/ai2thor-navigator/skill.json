@@ -9,8 +9,8 @@
     "profiles": ["ai2thor_navigation_v1"],
     "required_tools": ["observe", "move", "done"],
     "optional_tools": ["observe_archived"],
-    "privileged_tools": ["scene_objects", "goto"],
-    "boundary_notes": "The base skill explains the full demo server surface. Task-like photo behavior lives in capture-object-photo."
+    "privileged_tools": [],
+    "boundary_notes": "The base skill uses the canonical navigation surface only. Task-like photo behavior and privileged demo helper usage live in capture-object-photo."
   },
   "scripts": [],
   "evidence_outputs": [

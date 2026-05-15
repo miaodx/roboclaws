@@ -23,7 +23,7 @@ def test_backend_reports_stale_reference_errors_without_crashing() -> None:
     backend = ApiSemanticCleanupBackend(build_cleanup_scenario(seed=7))
 
     missing_object = backend.pick("missing_object")
-    missing_receptacle = backend.goto("missing_receptacle")
+    missing_receptacle = backend.navigate_to_receptacle("missing_receptacle")
 
     assert missing_object["ok"] is False
     assert missing_object["error_reason"] == "stale_reference"

@@ -265,14 +265,17 @@ host-side FastMCP server. The agent sees them as:
 - `roboclaws__move(direction, reason)` — one physical step;
   `direction` is one of `MoveAhead`, `MoveBack`, `MoveLeft`, `MoveRight`,
   `RotateLeft`, `RotateRight`, `LookUp`, `LookDown`
-- `roboclaws__scene_objects(filter_types="")` — room-wide object inventory for target-relative planning
-- `roboclaws__goto(object_id, distance, face)` — teleport to a reachable cell near an object and optionally face it
 - `roboclaws__done(reason)` — end the run cleanly
 
+Photo/demo launchers may explicitly enable privileged helpers:
+
+- `roboclaws__scene_objects(filter_types="")` — room-wide object inventory for target-relative planning
+- `roboclaws__goto(object_id, distance, face)` — teleport to a reachable cell near an object and optionally face it
+
 The agent runs under Gateway tool `profile: "minimal"`, so it gets the Gateway
-minimal built-ins plus the Roboclaws MCP tools above — no `exec`, no generic
-`image`, no `read`/`write`/`browser`. This is enforced at config time by the
-bootstrap script; no prompt-steering needed.
+minimal built-ins plus the Roboclaws MCP tools selected by the launcher — no
+`exec`, no generic `image`, no `read`/`write`/`browser`. This is enforced at
+config time by the bootstrap script; no prompt-steering needed.
 
 Supersedes the Phase 2.5 `curl`-from-`exec` HTTP contract, which is gone
 entirely — `roboclaws/openclaw/sim_server.py` was deleted in plan 02.6-05 and

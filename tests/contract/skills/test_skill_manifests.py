@@ -19,7 +19,8 @@ def _tracked_skill_dirs() -> list[Path]:
         capture_output=True,
         check=True,
     )
-    return sorted((ROOT / line).parent for line in result.stdout.splitlines() if line.strip())
+    skill_paths = (ROOT / line for line in result.stdout.splitlines() if line.strip())
+    return sorted(path.parent for path in skill_paths if path.exists())
 
 
 def _load_manifest(skill_dir: Path) -> dict[str, Any]:
@@ -70,11 +71,3 @@ def test_manifest_scripts_exist_and_stay_inside_skill_dir() -> None:
             script_path = (skill_dir / script["path"]).resolve()
             assert script_path.exists()
             assert skill_dir.resolve() in script_path.parents
-
-
-def test_legacy_molmo_cleanup_is_not_marked_as_realworld_profile() -> None:
-    manifest = _load_manifest(ROOT / "skills" / "molmo-cleanup")
-
-    assert manifest["mcp"]["profiles"] == []
-    assert manifest["mcp"]["surface"] == "legacy_current_contract"
-    assert "scene_objects" in manifest["mcp"]["privileged_tools"]

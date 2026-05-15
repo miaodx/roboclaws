@@ -248,7 +248,7 @@ class RoboclawsMCPServer:
         observe_mode: str | None = None,
         vision_bridge_model: str | None = None,
         vision_bridge: Any | None = None,
-        allow_privileged_tools: bool = True,
+        allow_privileged_tools: bool = False,
     ) -> None:
         self.engine = engine
         self.agent_id = agent_id
@@ -1361,7 +1361,7 @@ def make_roboclaws_mcp(
     observe_mode: str | None = None,
     vision_bridge_model: str | None = None,
     vision_bridge: Any | None = None,
-    allow_privileged_tools: bool = True,
+    allow_privileged_tools: bool = False,
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
 

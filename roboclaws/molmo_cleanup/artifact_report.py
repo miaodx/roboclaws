@@ -94,13 +94,14 @@ def is_cleanup_run_result_artifact(path: Path) -> bool:
 
 def is_cleanup_run_result(run_result: dict[str, Any]) -> bool:
     """Return whether a run_result payload has the cleanup report contract shape."""
+    contract = str(run_result.get("contract") or "")
     return (
         isinstance(run_result.get("score"), dict)
         and isinstance(run_result.get("semantic_substeps"), list)
+        and contract.startswith("realworld")
         and (
             "cleanup_status" in run_result
-            or run_result.get("mcp_server") == "molmo_cleanup"
-            or str(run_result.get("contract") or "").startswith(("current_contract", "realworld"))
+            or run_result.get("mcp_server") == "molmo_cleanup_realworld"
         )
     )
 
