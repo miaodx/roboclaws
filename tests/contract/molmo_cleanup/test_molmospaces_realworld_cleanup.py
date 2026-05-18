@@ -65,13 +65,24 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
+    assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
+    assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
+    assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
     assert "Planner Proof Requests" in report_text
+    assert "Nav2 Map Bundle" in report_text
+    assert "map_bundle/map.yaml" in report_text
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert (tmp_path / "agent_view.json").is_file()
     assert (tmp_path / "private_evaluation.json").is_file()
     assert (tmp_path / "advisory_evaluation.json").is_file()
     assert (tmp_path / "planner_proof_requests.json").is_file()
+    assert (tmp_path / "map_bundle" / "map.yaml").is_file()
+    assert (tmp_path / "map_bundle" / "map.pgm").is_file()
+    assert (tmp_path / "map_bundle" / "semantics.json").is_file()
+    assert (tmp_path / "map_bundle" / "profiles" / "rby1m.yaml").is_file()
+    assert (tmp_path / "map_bundle" / "costmaps" / "rby1m.costmap_params.yaml").is_file()
+    assert (tmp_path / "map_bundle" / "preview.png").is_file()
     assert (tmp_path / "before.png").is_file()
     assert (tmp_path / "after.png").is_file()
     assert (tmp_path / "report.html").is_file()

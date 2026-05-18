@@ -77,6 +77,10 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert metric_map["frame_id"] == "map"
     assert metric_map["origin"] == {"x": 0.0, "y": 0.0, "yaw": 0.0}
     assert metric_map["occupancy_values"] == {"unknown": -1, "free": 0, "occupied": 100}
+    assert metric_map["map_bundle"]["schema"] == "nav2_map_bundle_v1"
+    assert metric_map["map_bundle"]["robot_profile_id"] == "rby1m"
+    assert metric_map["map_bundle"]["artifact_paths"]["map_yaml"] == "map_bundle/map.yaml"
+    assert metric_map["map_bundle"]["parameter_hash"]
     assert waypoint["frame_id"] == "map"
     assert waypoint["purpose"] == "fixture_coverage"
     assert waypoint["waypoint_source"] == "static_map_coverage"

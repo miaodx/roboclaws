@@ -136,6 +136,7 @@ def _cleanup_report_sections(
             _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
             _cleanup_policy_trace_section(run_result),
             _real_robot_readiness_section(run_result),
+            _nav2_map_bundle_section(run_result),
             _score_section(score),
             _manipulation_provenance_section(run_result),
             _attached_planner_proof_section(run_result),
@@ -4464,6 +4465,64 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
         "labelled report_only_simulation_view and is not a policy input.</p>"
         f'{metrics}<div class="badges">{badges}</div>'
         f'<ul class="requirements">{blockers}</ul></section>'
+    )
+
+
+def _nav2_map_bundle_section(run_result: dict[str, Any]) -> str:
+    bundle = run_result.get("nav2_map_bundle") or {}
+    if not bundle:
+        return ""
+    artifacts = bundle.get("artifact_paths") or {}
+    hashes = bundle.get("artifact_hashes") or {}
+    preview = artifacts.get("preview_png")
+    preview_figure = (
+        "<figure>"
+        f'<img src="{html.escape(str(preview))}" alt="Nav2 map bundle preview">'
+        "<figcaption>Nav2 static map preview</figcaption>"
+        "</figure>"
+        if preview
+        else ""
+    )
+    rows = []
+    labels = {
+        "map_yaml": "map.yaml",
+        "occupancy_image": "map.pgm",
+        "semantics_json": "semantics.json",
+        "robot_profile": "profiles/rby1m.yaml",
+        "costmap_params": "costmaps/rby1m.costmap_params.yaml",
+        "preview_png": "preview.png",
+    }
+    for key, label in labels.items():
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(label)}</td>"
+            f"<td>{html.escape(str(artifacts.get(key, '')))}</td>"
+            f"<td><code>{html.escape(str(hashes.get(key, ''))[:16])}</code></td>"
+            "</tr>"
+        )
+    gaps = "".join(
+        f"<li>{html.escape(str(item))}</li>" for item in bundle.get("runtime_costmap_gaps") or []
+    )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Environment', bundle.get('environment_id', 'unknown'))}"
+        f"{_metric('Robot profile', bundle.get('robot_profile_id', 'unknown'))}"
+        f"{_metric('Costmap profile', bundle.get('costmap_profile_id', 'unknown'))}"
+        f"{_metric('Parameter hash', str(bundle.get('parameter_hash', ''))[:16])}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
+        "<th>SHA-256</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel nav2-map-bundle">'
+        "<h2>Nav2 Map Bundle</h2>"
+        '<p class="note">This run snapshots the public static map contract as '
+        "Nav2-shaped artifacts for simulator/hardware parity. Runtime local costmap "
+        "effects remain explicit gaps, not simulated proof.</p>"
+        f"{metrics}{preview_figure}{table}"
+        f'<ul class="requirements">{gaps}</ul></section>'
     )
 
 

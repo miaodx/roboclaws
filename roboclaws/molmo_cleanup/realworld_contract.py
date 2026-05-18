@@ -6,6 +6,7 @@ from typing import Any
 
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
+from roboclaws.molmo_cleanup.nav2_map_bundle import metric_map_bundle_metadata
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     observed_handle_planner_binding,
 )
@@ -210,13 +211,15 @@ class RealWorldCleanupContract:
 
     def metric_map(self) -> dict[str, Any]:
         frame_id = "map"
+        map_id = f"{self.scenario.scenario_id}_semantic_map"
+        map_version = "static-fixture-map-v1"
         return self._ok(
             "metric_map",
             contract=REALWORLD_CONTRACT,
             schema=REAL_ROBOT_MAP_BUNDLE_SCHEMA,
             frame_id=frame_id,
-            map_id=f"{self.scenario.scenario_id}_semantic_map",
-            map_version="static-fixture-map-v1",
+            map_id=map_id,
+            map_version=map_version,
             resolution_m=0.05,
             origin={"x": 0.0, "y": 0.0, "yaw": 0.0},
             width=240,
@@ -227,6 +230,11 @@ class RealWorldCleanupContract:
                 "occupied": 100,
             },
             occupancy_grid_artifact=None,
+            map_bundle=metric_map_bundle_metadata(
+                environment_id=self.scenario.scenario_id,
+                map_id=map_id,
+                map_version=map_version,
+            ),
             rooms=[
                 {
                     "room_id": room["room_id"],
@@ -2261,6 +2269,7 @@ def _map_bundle_fields_present(metric_map: dict[str, Any]) -> bool:
         "width",
         "height",
         "occupancy_values",
+        "map_bundle",
         "robot_pose",
         "inspection_waypoints",
     }

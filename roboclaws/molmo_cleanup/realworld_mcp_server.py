@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
+from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
@@ -548,6 +549,7 @@ class RealWorldMolmoCleanupMCPServer:
             )
             run_result["cleanup_profile"] = profile_metadata["profile"]
             run_result["cleanup_profile_metadata"] = profile_metadata
+        attach_nav2_map_bundle_snapshot(run_result=run_result, run_dir=self.run_dir)
         _add_backend_runtime_metadata(run_result, self.base_contract.backend)
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT

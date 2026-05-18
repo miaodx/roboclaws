@@ -23,6 +23,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
+from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot  # noqa: E402
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
     planner_cleanup_bridge_evidence,
 )
@@ -469,6 +470,7 @@ def run_realworld_cleanup(
     if profile_metadata is not None:
         run_result["cleanup_profile"] = profile_metadata["profile"]
         run_result["cleanup_profile_metadata"] = profile_metadata
+    attach_nav2_map_bundle_snapshot(run_result=run_result, run_dir=output_dir)
     if backend_instance is not None:
         run_result["molmospaces_runtime"] = {
             "python_executable": str(backend_instance.python_executable),
