@@ -22,6 +22,7 @@ from roboclaws.molmo_cleanup.ci_live_reports import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_MATRIX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_ci_live_cleanup_matrix.py"
+RUN_CODEX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 RUN_CLAUDE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
@@ -315,6 +316,29 @@ def test_live_claude_workspace_exposes_skill_at_task_relative_path(
     assert (workspace / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
     readme = (task_dir / "README.md").read_text(encoding="utf-8")
     assert "skills/molmo-realworld-cleanup/SKILL.md" in readme
+
+
+def test_live_codex_normalizes_relative_docker_workspace(tmp_path: Path, monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    repo_root = tmp_path / "repo"
+    skill_dir = repo_root / "skills" / "molmo-realworld-cleanup"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# cleanup skill\n", encoding="utf-8")
+    monkeypatch.delenv("ROBOCLAWS_CODE_AGENT_WORKSPACE", raising=False)
+    monkeypatch.setenv(
+        "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE",
+        "output/molmo/live/seed-7/agent-docker-workspace",
+    )
+
+    prepared_workspace, task_dir = run_codex._prepare_agent_workspace(
+        repo_root=repo_root,
+        task_name="molmo-cleanup",
+        skill_name="molmo-realworld-cleanup",
+    )
+
+    assert prepared_workspace == (repo_root / "output/molmo/live/seed-7/agent-docker-workspace")
+    assert prepared_workspace.is_absolute()
+    assert (task_dir / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
 
 
 def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:

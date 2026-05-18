@@ -164,7 +164,7 @@ class LiveCodexCleanupRunner:
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "molmo-cleanup")
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE", str(agent_workspace))
+        env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
         agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)
         last_message_host_path = agent_task_dir / "codex-last-message.md"
@@ -388,12 +388,7 @@ def _prepare_agent_workspace(
     task_name: str,
     skill_name: str,
 ) -> tuple[Path, Path]:
-    workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE")
-    workspace = (
-        Path(workspace_env)
-        if workspace_env
-        else Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
-    )
+    workspace = _agent_workspace_root(repo_root=repo_root, task_name=task_name)
     task_dir = workspace / "task"
     skills_dir = workspace / "skills"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -421,6 +416,19 @@ def _prepare_agent_workspace(
         encoding="utf-8",
     )
     return workspace, task_dir
+
+
+def _agent_workspace_root(*, repo_root: Path, task_name: str) -> Path:
+    workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE") or os.environ.get(
+        "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"
+    )
+    if not workspace_env:
+        return Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
+
+    workspace = Path(workspace_env).expanduser()
+    if not workspace.is_absolute():
+        workspace = repo_root / workspace
+    return workspace
 
 
 def _shell_quote(value: str) -> str:
