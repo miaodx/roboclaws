@@ -27,6 +27,9 @@ Last updated: 2026-05-18
 - Cleanup reports render a `Nav2 Map Bundle` section with `map.yaml`,
   `map.pgm`, `semantics.json`, robot profile, costmap params, preview, hashes,
   and runtime costmap gaps.
+- Detached Codex Molmo runs pass selected exported API/proxy environment
+  variables into tmux, and the Docker-backed coding-agent wrapper forwards
+  proxy variables into Codex.
 
 ## Verified
 
@@ -35,6 +38,12 @@ Last updated: 2026-05-18
   Nav2 adapter, cleanup artifacts, and Codex provider wiring.
 - Deterministic regression report:
   `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html`
+- Detached Codex env propagation check:
+  `output/molmo/codex-gpt55-nav2-openai-env-pass-check/0518_2219/seed-7`
+  reaches Codex with `openai-responses` and fails on the OpenAI network reset,
+  not on missing `OPENAI_API_KEY`.
+- Shell syntax/routing checks: `bash -n scripts/dev/coding_agent_docker.sh` and
+  `just --list`.
 - Explicit checker passed:
 
 ```bash
@@ -68,7 +77,7 @@ Objective requirements mapped to current evidence:
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, and runtime gap notes. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-regression/0518_2046` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
-| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` attempts fail before agent cleanup (`codex-gpt55-nav2-openai-auth-tmux-check/0518_2214`, `codex-gpt55-nav2-report-postfix/0518_2055`) or are historical runs without Nav2/no-regression evidence. | Blocked |
+| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` attempts fail before agent cleanup (`codex-gpt55-nav2-openai-env-pass-check/0518_2219`, `codex-gpt55-nav2-openai-auth-tmux-check/0518_2214`, `codex-gpt55-nav2-report-postfix/0518_2055`) or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
 Completion rule: do not mark the goal complete until an official Codex GPT-5.5
@@ -114,12 +123,16 @@ Latest task-level OpenAI fallback attempt:
   `ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1`, host Codex auth key
   exported into the detached tmux environment without writing it to `.env`
 - Run directory:
-  `output/molmo/codex-gpt55-nav2-openai-auth-tmux-check/0518_2214/seed-7`
+  `output/molmo/codex-gpt55-nav2-openai-env-pass-check/0518_2219/seed-7`
 - Status: failed, exit `1`
 - Trace: `3` runtime events, `0` cleanup requests, `0` responses
 - Missing artifacts: `run_result.json`, `report.html`
 - Error: `stream disconnected before completion: error sending request for url
   (https://api.openai.com/v1/responses)`
+- Note: the earlier
+  `output/molmo/codex-gpt55-nav2-openai-auth-tmux-check/0518_2214/seed-7`
+  proved the same network blocker when the key was injected into tmux manually;
+  `0518_2219` verifies the normal exported-shell path now reaches that blocker.
 
 Latest unblock/audit check on 2026-05-18:
 

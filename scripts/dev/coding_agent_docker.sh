@@ -290,6 +290,14 @@ run_cli() {
     OPENAI_API_KEY \
     KIMI_API_KEY \
     MIMO_TP_KEY \
+    HTTP_PROXY \
+    HTTPS_PROXY \
+    ALL_PROXY \
+    NO_PROXY \
+    http_proxy \
+    https_proxy \
+    all_proxy \
+    no_proxy \
     ROBOCLAWS_CLAUDE_PROVIDER \
     ROBOCLAWS_CLAUDE_MODEL \
     ROBOCLAWS_CODEX_PROVIDER \

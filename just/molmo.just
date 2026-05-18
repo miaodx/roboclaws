@@ -297,7 +297,19 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           chmod +x "$runner"
           printf '{"phase":"queued","started_at_epoch":%s}\n' "$(date +%s)" > "$status_path"
 
-          tmux new-session -d -s "$session_name" "bash $(printf '%q' "$runner")"
+          tmux_env_args=()
+          for env_name in \
+            OPENAI_API_KEY KIMI_API_KEY MIMO_TP_KEY \
+            HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
+            http_proxy https_proxy all_proxy no_proxy \
+            ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
+            ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS
+          do
+            if [[ -n "${!env_name:-}" ]]; then
+              tmux_env_args+=(-e "${env_name}=${!env_name}")
+            fi
+          done
+          tmux new-session -d -s "$session_name" "${tmux_env_args[@]}" "bash $(printf '%q' "$runner")"
           echo "==> launched detached Codex Molmo cleanup"
           echo "    tmux session : ${session_name}"
           echo "    run dir      : ${run_dir}"

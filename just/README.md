@@ -91,6 +91,11 @@ ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
+Detached live Codex sessions inherit selected API key, provider, model, and
+proxy variables exported in the invoking shell at launch time. They also source
+repo-local `.env` inside the runner, so either route works for local-only
+credentials.
+
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
 the selected OpenAI-compatible endpoint works with the pinned Docker-backed
 Codex CLI.
