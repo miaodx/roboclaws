@@ -262,6 +262,13 @@ Latest unblock/audit check on 2026-05-18:
     `2026-05-18T15:29:18Z`, and the no-redispatch decision was recorded on
     issue #111:
     https://github.com/MiaoDX/roboclaws/issues/111#issuecomment-4481522784
+  - Later bounded watchers on 2026-05-18T20:04:08Z through
+    2026-05-18T20:09:46Z and on 2026-05-18T20:11:48Z through
+    2026-05-18T20:21:31Z polled the same secret 32 more times total. Every
+    poll still returned `OPENAI_API_KEY=2026-05-18T15:29:18Z`, so no official
+    proof redispatch was attempted. The issue tracker evidence is recorded at
+    https://github.com/MiaoDX/roboclaws/issues/111#issuecomment-4481637122 and
+    https://github.com/MiaoDX/roboclaws/issues/111#issuecomment-4481757333
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
