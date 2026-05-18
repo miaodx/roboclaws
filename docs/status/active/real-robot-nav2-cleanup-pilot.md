@@ -222,6 +222,12 @@ Latest unblock/audit check on 2026-05-18:
     passed, `api.openai.com` was reachable, the Docker-backed Codex provider
     smoke failed with `401 invalid_api_key`, the Molmo proof step was skipped,
     and no `report-molmo-official-codex-gpt55-nav2` artifact was uploaded.
+  - Repository-wide artifact-name audit: older failed runs `26045247897`,
+    `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
+    artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
+    the required `seed-7/run_result.json`, `seed-7/report.html`, or
+    `seed-7/map_bundle/map.yaml`; each is only a failed-run bundle with
+    `live_status.json` and partial logs/artifacts.
   - Current CI-side blocker: the `OPENAI_API_KEY` repository secret is present
     but is not a valid key for the official OpenAI Responses API. This
     machine's host Codex auth is configured for
