@@ -440,7 +440,7 @@ def _assert_clean_agent_run(
         if tool == "navigate_to_object":
             request_count += int(counts.get("navigate_to_visual_candidate:request") or 0)
         assert request_count >= 1, (tool, counts, data)
-    diagnostics = data.get("agent_bridge") or {}
+    diagnostics = data.get("agent_diagnostics") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
     assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
     assert int(diagnostics.get("duplicate_post_place_navigation_count") or 0) == 0, data

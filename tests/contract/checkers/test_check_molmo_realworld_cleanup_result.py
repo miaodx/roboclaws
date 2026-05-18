@@ -279,7 +279,7 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
     result = smoke.run_smoke(output_dir=tmp_path, seed=7)
-    result["agent_bridge"]["semantic_order_errors"] = 1
+    result["agent_diagnostics"]["semantic_order_errors"] = 1
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -317,7 +317,7 @@ def test_checker_accepts_clean_run_with_successful_retry_after_failed_attempt(
         }
     )
     retried_item["steps"].insert(pick_index, failed_pick)
-    result["agent_bridge"]["complete_semantic_substep_objects"] = (
+    result["agent_diagnostics"]["complete_semantic_substep_objects"] = (
         int(result["generated_mess_count"]) - 1
     )
 

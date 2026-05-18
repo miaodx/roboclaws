@@ -133,9 +133,9 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["tool_event_counts"]["metric_map:request"] == 1
     assert run_result["tool_event_counts"]["fixture_hints:request"] == 1
     assert run_result["tool_event_counts"]["observe:request"] >= 1
-    assert run_result["agent_bridge"]["premature_done"] is False
-    assert run_result["agent_bridge"]["premature_done_source"] == "sweep_coverage_rate"
-    assert run_result["agent_bridge"]["semantic_order_errors"] == 0
+    assert run_result["agent_diagnostics"]["premature_done"] is False
+    assert run_result["agent_diagnostics"]["premature_done_source"] == "sweep_coverage_rate"
+    assert run_result["agent_diagnostics"]["semantic_order_errors"] == 0
     assert run_result["advisory_evaluation"]["authoritative"] is False
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert run_result["agent_view"]["observed_objects"]

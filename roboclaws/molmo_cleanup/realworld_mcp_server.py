@@ -528,7 +528,7 @@ class RealWorldMolmoCleanupMCPServer:
             "final_containment": done_response.get("final_containment", {}),
             "tool_event_counts": dict(self._tool_event_counts),
             "backend_tool_event_counts": done_response["tool_event_counts"],
-            "agent_bridge": diagnostics,
+            "agent_diagnostics": diagnostics,
             "artifacts": {
                 "agent_view": str(agent_view_path),
                 "private_evaluation": str(private_evaluation_path),

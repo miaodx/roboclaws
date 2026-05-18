@@ -67,10 +67,6 @@ _OPENCLAW_ITEM_COVERAGE = (
     "Phase 2.2 long-running Gateway demo.</div></li>"
 )
 
-# Legacy alias: the single-item _OPENCLAW_ITEMS string that older callers may
-# reference. Points at the demo tile for back-compat.
-_OPENCLAW_ITEMS = _OPENCLAW_ITEM_DEMO
-
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
