@@ -195,6 +195,12 @@ Latest unblock/audit check on 2026-05-18:
   `output/molmo/codex-gpt55-nav2-resume-guard-check/0518_2254/seed-7`, but no
   `run_result.json`, `report.html`, or `map_bundle/map.yaml` exists because the
   official Codex agent was not launched.
+- GitHub-side proof audit: `gh auth status -h github.com` is authenticated as
+  `MiaoDX`, and the `CI` workflow is active, but `gh secret list --repo
+  MiaoDX/roboclaws` currently shows `HF_TOKEN`, `KIMI_API_KEY`, `MIMO_TP_KEY`,
+  and `NV_API_KEY` only. The new opt-in official Codex CI proof is therefore
+  blocked until an `OPENAI_API_KEY` repository secret is explicitly added and
+  the workflow change is available on the dispatch ref.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
     ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
@@ -244,6 +250,10 @@ gh workflow run ci.yml \
   -f molmo_live=false \
   -f molmo_official_codex=true
 ```
+
+Current CI-side blocker: `OPENAI_API_KEY` is not yet present in the GitHub
+repository secrets, and adding it is a human-owned security/configuration
+decision.
 
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report
