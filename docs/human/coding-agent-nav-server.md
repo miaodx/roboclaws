@@ -87,13 +87,20 @@ The wrapper image is `Dockerfile.coding-agents`; default package pins live in
 `scripts/dev/coding_agent_toolchain.env`.
 When these Docker wrappers are used through `just code::cc` or
 `just code::codex`, the launcher sets
-`ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default. The agent
-container then sees only `/workspace/demo` and
-`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
-the source tree are not mounted into the agent context. For Codex, isolated nav
-runs also mount an empty read-only `CODEX_HOME/skills`, so bundled/system Codex
-skills are not available; the navigator skill is read explicitly from
-`../skills/ai2thor-navigator/SKILL.md`.
+`ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE=1`,
+`ROBOCLAWS_CODE_AGENT_DOCKER_TASK=ai2thor-nav`, and
+`ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS=ai2thor-navigator` by default. The agent
+container then sees only `/workspace/task` and
+`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`,
+`.git`, and the source tree are not mounted into the agent context.
+
+The same Docker isolation is task-skill driven rather than nav-specific:
+`molmo-cleanup` live Codex/Claude runs mount only
+`/workspace/skills/molmo-realworld-cleanup`, and a photo-capture coding-agent
+task can mount only `/workspace/skills/capture-object-photo`. For Codex,
+isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
+bundled/system Codex skills are not available; the task skill is read explicitly
+from `../skills/<name>/SKILL.md`.
 
 For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
 to copying host Codex auth plus a minimal provider config into the pinned

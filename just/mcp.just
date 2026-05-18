@@ -71,8 +71,8 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
 
 # Print the canonical kickoff prompt for direct coding-agent usage.
 # Emitted on stderr by `up` so callers that capture stdout (`mcp_url=$(just mcp::up)`)
-# still get the URL clean. Centralised here so demo/, code::cc, and chat::run
-# show the same prompt.
+# still get the URL clean. Centralised here so code::cc / code::codex and
+# chat::run show the same prompt.
 _kickoff_banner url:
     #!/usr/bin/env bash
     echo "==> roboclaws MCP ready at {{url}}"

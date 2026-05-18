@@ -106,11 +106,12 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert (
         'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})' in text
     )
-    isolated_nav_export = (
-        'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="'
-        '${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"'
-    )
-    assert isolated_nav_export in text
+    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="' in text
+    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="' in text
+    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="' in text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator" in text
+    assert "Switching CWD to isolated task workspace" in text
+    assert "cd demo" not in text
     assert 'for entry in "${claude_env_args[@]}"; do' in text
     assert 'export "$entry"' in text
     assert "codex --yolo" not in text
@@ -148,6 +149,11 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
 
     assert "install-wrappers" in docker_script_text
     assert "exec docker" in docker_script_text
+    assert "normalized_skill_names" in docker_script_text
+    assert "prepare_isolated_workspace" in docker_script_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE" in docker_script_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_TASK" in docker_script_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS" in docker_script_text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME" in docker_script_text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_AUTH" in docker_script_text
     assert "prepare_codex_home_from_host_auth" in docker_script_text
@@ -160,11 +166,12 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert '-v "${host_codex_home}:/home/agent/.codex"' not in docker_script_text
     assert '-e "CODEX_HOME=/home/agent/.codex"' in docker_script_text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE" in docker_script_text
-    assert '-v "${nav_workspace}:/workspace"' in docker_script_text
-    assert '-v "${repo_root}/skills/ai2thor-navigator:/workspace/skills/ai2thor-navigator:ro"' in (
-        docker_script_text
+    assert '-v "${isolated_workspace}:/workspace"' in docker_script_text
+    assert '-v "${repo_root}/skills/${skill}:/workspace/skills/${skill}:ro"' in docker_script_text
+    expected_workdir = (
+        'container_workdir="${ROBOCLAWS_CODE_AGENT_DOCKER_CONTAINER_WORKDIR:-/workspace/task}"'
     )
-    assert 'container_workdir="/workspace/${rel_cwd}"' in docker_script_text
+    assert expected_workdir in docker_script_text
     assert "ANTHROPIC_BASE_URL" in docker_script_text
     assert "MIMO_TP_KEY" in docker_script_text
 
@@ -201,11 +208,18 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
+    assert "uses_docker_agent_wrapper" in text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup" in text
     assert "wait_for_mcp_ready" in text
     assert 'tmux new-session -d -s "$session_name"' in text
     assert '"exec"' in runner_text
     assert '"--json"' in runner_text
     assert '"--output-last-message"' in runner_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE" in runner_text
+    expected_agent_cd = (
+        'agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)'
+    )
+    assert expected_agent_cd in runner_text
     assert "*self.args.codex_model_arg" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
     assert '"--cd"' in runner_text

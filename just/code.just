@@ -39,6 +39,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    repo_root="$PWD"
     source scripts/dev/coding_agent_env.sh
     roboclaws_load_dotenv .env
     claude_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CLAUDE_PROVIDER)"
@@ -60,15 +61,9 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
       exit 1
     fi
 
-    if [[ ! -d demo ]]; then
-      echo "error: demo/ directory not found in $(pwd) — required for direct coding-agent mode" >&2
-      echo "       (the agent launches from demo/ so the project CLAUDE.md does not auto-load)" >&2
-      exit 1
-    fi
-
     cleanup() {
       set +e
-      just mcp::down
+      just --justfile "$repo_root/justfile" --working-directory "$repo_root" mcp::down
       set -e
     }
     trap cleanup EXIT INT TERM
@@ -76,18 +71,27 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"
     mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
 
-    # Switch CWD to demo/ for the agent launch. demo/ is intentionally empty
-    # (no CLAUDE.md / AGENTS.md) so the agent's only operating doc is
-    # ../skills/ai2thor-navigator/SKILL.md. The project-level CLAUDE.md is
-    # development guidance for the repo, not robot control — loading it
-    # would mis-route the agent. See demo/README.md for the design.
+    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-ai2thor-nav-{{port}}}"
+    agent_task_dir="${agent_workspace}/task"
+    mkdir -p "$agent_task_dir" "${agent_workspace}/skills"
+    rm -f "$agent_task_dir/AGENTS.md" "$agent_task_dir/CLAUDE.md" \
+      "${agent_workspace}/AGENTS.md" "${agent_workspace}/CLAUDE.md"
+    ln -sfn "$repo_root/skills/ai2thor-navigator" \
+      "${agent_workspace}/skills/ai2thor-navigator"
+    {
+      printf '# Roboclaws AI2-THOR Agent Workspace\n\n'
+      printf 'Read `../skills/ai2thor-navigator/SKILL.md`, then use the roboclaws MCP tools.\n'
+    } >"${agent_task_dir}/README.md"
+
     echo "" >&2
-    echo "==> Switching CWD to demo/ — suppresses project CLAUDE.md / AGENTS.md auto-load." >&2
+    echo "==> Switching CWD to isolated task workspace: ${agent_task_dir}" >&2
     echo "    The agent will rely on ../skills/ai2thor-navigator/SKILL.md as its operating doc." >&2
-    echo "    (See demo/README.md for the design intent.)" >&2
     echo "" >&2
-    cd demo
-    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"
+    cd "$agent_task_dir"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-ai2thor-nav}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${agent_workspace}/docker}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
@@ -125,6 +129,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail
 
+    repo_root="$PWD"
     source scripts/dev/coding_agent_env.sh
     roboclaws_load_dotenv .env
     codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
@@ -138,15 +143,9 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
       exit 1
     fi
 
-    if [[ ! -d demo ]]; then
-      echo "error: demo/ directory not found in $(pwd) — required for direct coding-agent mode" >&2
-      echo "       (the agent launches from demo/ so the project CLAUDE.md does not auto-load)" >&2
-      exit 1
-    fi
-
     cleanup() {
       set +e
-      just mcp::down
+      just --justfile "$repo_root/justfile" --working-directory "$repo_root" mcp::down
       set -e
     }
     trap cleanup EXIT INT TERM
@@ -154,16 +153,27 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"
     mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
 
-    # Switch CWD to demo/ for the agent launch. See `cc` recipe above for
-    # the rationale — demo/ is intentionally empty so the agent's only
-    # operating doc is ../skills/ai2thor-navigator/SKILL.md.
+    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-ai2thor-nav-{{port}}}"
+    agent_task_dir="${agent_workspace}/task"
+    mkdir -p "$agent_task_dir" "${agent_workspace}/skills"
+    rm -f "$agent_task_dir/AGENTS.md" "$agent_task_dir/CLAUDE.md" \
+      "${agent_workspace}/AGENTS.md" "${agent_workspace}/CLAUDE.md"
+    ln -sfn "$repo_root/skills/ai2thor-navigator" \
+      "${agent_workspace}/skills/ai2thor-navigator"
+    {
+      printf '# Roboclaws AI2-THOR Agent Workspace\n\n'
+      printf 'Read `../skills/ai2thor-navigator/SKILL.md`, then use the roboclaws MCP tools.\n'
+    } >"${agent_task_dir}/README.md"
+
     echo "" >&2
-    echo "==> Switching CWD to demo/ — suppresses project CLAUDE.md / AGENTS.md auto-load." >&2
+    echo "==> Switching CWD to isolated task workspace: ${agent_task_dir}" >&2
     echo "    The agent will rely on ../skills/ai2thor-navigator/SKILL.md as its operating doc." >&2
-    echo "    (See demo/README.md for the design intent.)" >&2
     echo "" >&2
-    cd demo
-    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"
+    cd "$agent_task_dir"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-ai2thor-nav}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${agent_workspace}/docker}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"

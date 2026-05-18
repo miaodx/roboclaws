@@ -179,6 +179,17 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         codex_bin="$(command -v codex || true)"
         claude_bin="$(command -v claude || true)"
+        uses_docker_agent_wrapper() {
+          local bin_path="$1"
+          [[ -n "$bin_path" && -f "$bin_path" ]] && grep -q 'coding_agent_docker.sh run' "$bin_path"
+        }
+        if { [[ "$driver" == "codex-live" ]] && uses_docker_agent_wrapper "$codex_bin"; } \
+          || { [[ "$driver" == "claude-live" ]] && uses_docker_agent_wrapper "$claude_bin"; }; then
+          export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-molmo-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
+        fi
         case "$profile" in
           camera-raw)
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call roboclaws__navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), target_fixture_id, evidence_note, and image_region before pick. Do not pre-register raw-FPV candidates with roboclaws__declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."

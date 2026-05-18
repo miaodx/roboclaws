@@ -125,15 +125,22 @@ just task::run molmo-cleanup codex world-labels
 That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
 history, and unrelated user config stay outside the container.
 
-Direct navigation runs launched through `just code::cc` or `just code::codex`
-also set `ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default for
-Docker shims. In that mode the agent container sees only `/workspace/demo` and
-`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
-the implementation tree are not mounted. The MCP server still runs on the host
-and is reached over HTTP. For Codex, isolated nav runs also mount an empty
-read-only `CODEX_HOME/skills`, so bundled/system Codex skills are not available;
-the navigator skill is read explicitly from
-`../skills/ai2thor-navigator/SKILL.md`.
+Docker-backed coding-agent tasks use an isolated generated workspace. The agent
+container sees `/workspace/task` plus only the skill directories named by
+`ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS`, mounted at `/workspace/skills/<name>`.
+Repo-root `AGENTS.md`, `CLAUDE.md`, `.git`, and implementation files are not
+mounted; the MCP implementation stays on the host and is reached over HTTP.
+Current task mappings:
+
+- `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
+- `molmo-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
+- photo capture agents can opt into `capture-object-photo` without mounting the
+  base navigation skill unless that task explicitly needs both.
+
+For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
+bundled/system Codex skills are not available. Task prompts should read the
+mounted skill explicitly, for example `../skills/ai2thor-navigator/SKILL.md` or
+`../skills/molmo-realworld-cleanup/SKILL.md`.
 
 ## Examples
 
