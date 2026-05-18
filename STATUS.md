@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-15
+Last updated: 2026-05-19
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -8,37 +8,34 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
-artifacts visible and honest from local runs through CI-published report pages.
+artifacts visible, honest, and aligned with future real-robot Nav2 pilots.
 
-Phase 135, MolmoSpaces CI live-agent reports, is implemented and non-live
-verified. The opt-in hosted workflow now installs Codex/Claude Code, prewarms
-MolmoSpaces assets, passes explicit Claude MCP config, and reaches the cleanup
-MCP tools with repo-scoped provider secrets.
-
-Phase 136, Generic MCP entrypoint and semantic capability profiles, is
-implemented and verified. It adds an additive profile/router layer for
-AI2-THOR and MolmoSpaces MCP contracts while keeping privileged simulator tools
-and Molmo private evaluator truth out of canonical public profile metadata.
+The active follow-up is the real-robot Nav2 cleanup pilot on draft PR #112. The
+branch implements the direct Nav2 adapter scaffold, `real_robot_cleanup_v1`
+profile, Nav2 map bundle snapshots, report rendering, checker alignment gates,
+and an opt-in official Codex GPT-5.5 proof route.
 
 ## Next Action
 
-Land the current report-surface follow-up and Phase 136 semantic-profile
-commits, then trigger or monitor the next `main` Pages deploy so the dedicated
-Molmo live index and report rerun commands are visible on the public site.
+Replace the GitHub `OPENAI_API_KEY` repository secret with a valid official
+OpenAI API key, then dispatch the opt-in official Codex GPT-5.5 Nav2 cleanup
+proof for `dongxu/dev-0515`.
 
 ## Current Blocker
 
-The latest completed Molmo live dispatch proved both MiMo entries successfully,
-but a later `main` Pages deploy skipped the opt-in Molmo live matrix and erased
-those files from the public site. The preservation patch rehydrates the latest
-successful live dispatch on ordinary Pages deploys; Kimi live still needs
-provider-error follow-up.
+The official Codex GPT-5.5 proof cannot complete yet. GitHub Actions can reach
+`https://api.openai.com/v1/responses`, but the current repository
+`OPENAI_API_KEY` secret is rejected with `401 invalid_api_key`. Issue #111
+tracks the human-owned credential unblock. Do not mark PR #112 ready until the
+official cleanup artifact exists and passes the real-robot-alignment checker.
 
 ## Human Review Surface
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
+- Active Nav2 cleanup status:
+  `docs/status/active/real-robot-nav2-cleanup-pilot.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 
