@@ -180,6 +180,16 @@ Latest unblock/audit check on 2026-05-18:
   on this host: `mimo-openai` and `kimi-openai` provider smokes both currently
   return provider `404` for `/v1/responses`.
 - `ROBOCLAWS_CODEX_PROVIDER=system` is blocked by the work-network guard.
+- Resume check at 22:54 CST with the host Codex auth key injected into only the
+  subprocess environment still fails before Codex launch: `just
+  code::codex-provider-smoke` and the public `just task::run molmo-cleanup codex
+  world-labels output_dir=output/molmo/codex-gpt55-nav2-resume-guard-check
+  seed=7 generated_mess_count=5` both stop at the `openai-responses`
+  `api.openai.com` reachability guard.
+- The resume-check task created
+  `output/molmo/codex-gpt55-nav2-resume-guard-check/0518_2254/seed-7`, but no
+  `run_result.json`, `report.html`, or `map_bundle/map.yaml` exists because the
+  official Codex agent was not launched.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
     ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
