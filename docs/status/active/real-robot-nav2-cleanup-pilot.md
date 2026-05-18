@@ -1,6 +1,6 @@
 # Real Robot Nav2 Cleanup Pilot Active Status
 
-Last updated: 2026-05-18
+Last updated: 2026-05-19
 
 ## Implemented
 
@@ -45,6 +45,8 @@ Last updated: 2026-05-18
   - `f42420e` `docs: link nav2 cleanup draft pr`
   - `066a4ba` `docs: record codex key preflight run`
   - `236bbb2` `docs: record official artifact audit`
+  - `e5a15cf` `docs: sync nav2 cleanup commit ledger`
+  - `4dfda23` `docs: update current nav2 cleanup status`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -118,6 +120,17 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
 
 Result: restored `5/5`, sweep coverage `1.0`, Nav2 map bundle present.
 
+Resume audit on 2026-05-18T18:26:51Z:
+
+- The explicit checker above was rerun and passed.
+- Focused contract tests for the Nav2 adapter, Molmo cleanup report, MCP
+  semantic profile, checker wiring, and CI route passed: `52 passed`.
+- A report content audit confirmed
+  `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` still renders
+  `Nav2 Map Bundle`, `map_bundle/map.yaml`, restored `5/5`, sweep `100%`, and
+  the expected `api_semantic_synthetic` / `realworld_contract_smoke_agent`
+  metadata.
+
 ## Completion Audit Checklist
 
 Objective requirements mapped to current evidence:
@@ -130,7 +143,7 @@ Objective requirements mapped to current evidence:
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, and runtime gap notes. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-regression/0518_2046` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
-| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` CI attempt `26045247897` reaches Codex + MCP, then fails with `401 invalid_api_key` from `https://api.openai.com/v1/responses`; earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
+| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
 Completion rule: do not mark the goal complete until an official Codex GPT-5.5
@@ -238,6 +251,11 @@ Latest unblock/audit check on 2026-05-18:
     passed, `api.openai.com` was reachable, the Docker-backed Codex provider
     smoke failed with `401 invalid_api_key`, the Molmo proof step was skipped,
     and no `report-molmo-official-codex-gpt55-nav2` artifact was uploaded.
+  - Resume audit on 2026-05-18T18:23:06Z through 2026-05-18T18:25:41Z
+    polled `gh secret list --repo MiaoDX/roboclaws` six times. The
+    `OPENAI_API_KEY` repository secret remained timestamped
+    `2026-05-18T15:29:18Z`, the known rejected credential, so no redispatch was
+    attempted.
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
@@ -302,8 +320,10 @@ gh workflow run ci.yml \
 Current CI-side blocker: replace the GitHub `OPENAI_API_KEY` repository secret
 with a valid official OpenAI API key for `https://api.openai.com/v1/responses`,
 then re-dispatch the opt-in proof. The preflight step should pass before the
-Molmo backend starts. Do not mark the goal complete until that artifact exists
-and passes the checker. The human-owned credential unblock is tracked in
+Molmo backend starts. Do not redispatch before `gh secret list --repo
+MiaoDX/roboclaws` shows `OPENAI_API_KEY` updated after
+`2026-05-18T15:29:18Z`. Do not mark the goal complete until that artifact
+exists and passes the checker. The human-owned credential unblock is tracked in
 GitHub issue #111: https://github.com/MiaoDX/roboclaws/issues/111
 
 Review surface: draft PR #112 remains blocked until the official Codex GPT-5.5
