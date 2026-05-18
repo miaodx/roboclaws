@@ -218,6 +218,10 @@ Latest unblock/audit check on 2026-05-18:
     added the Codex MCP server, connected to MCP, and failed only after Codex
     tried `https://api.openai.com/v1/responses` with the repository
     `OPENAI_API_KEY` secret.
+  - Run `26046576875` on `f42420e` validated the latest CI preflight: lint/mock
+    passed, `api.openai.com` was reachable, the Docker-backed Codex provider
+    smoke failed with `401 invalid_api_key`, the Molmo proof step was skipped,
+    and no `report-molmo-official-codex-gpt55-nav2` artifact was uploaded.
   - Current CI-side blocker: the `OPENAI_API_KEY` repository secret is present
     but is not a valid key for the official OpenAI Responses API. This
     machine's host Codex auth is configured for
