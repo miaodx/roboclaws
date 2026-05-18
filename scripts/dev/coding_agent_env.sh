@@ -29,6 +29,9 @@ roboclaws_code_agent_profile_default_model() {
     system)
       printf '\n'
       ;;
+    openai-responses)
+      printf 'gpt-5.5\n'
+      ;;
     kimi-openai)
       printf 'kimi-k2.6\n'
       ;;
@@ -57,6 +60,9 @@ roboclaws_code_agent_profile_base_url() {
     mimo-openai)
       printf 'https://token-plan-cn.xiaomimimo.com/v1\n'
       ;;
+    openai-responses)
+      printf 'https://api.openai.com/v1\n'
+      ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
       ;;
@@ -82,6 +88,9 @@ roboclaws_code_agent_profile_key_env() {
     mimo-openai|mimo-anthropic)
       printf 'MIMO_TP_KEY\n'
       ;;
+    openai-responses)
+      printf 'OPENAI_API_KEY\n'
+      ;;
     system)
       printf '\n'
       ;;
@@ -95,7 +104,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    kimi-openai|mimo-openai)
+    openai-responses|kimi-openai|mimo-openai)
       printf 'responses\n'
       ;;
     kimi-anthropic|mimo-anthropic)
@@ -198,10 +207,10 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    system|kimi-openai|mimo-openai)
+    system|openai-responses|kimi-openai|mimo-openai)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected system, kimi-openai, or mimo-openai" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected system, openai-responses, kimi-openai, or mimo-openai" >&2
       return 2
       ;;
   esac
@@ -228,6 +237,9 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
+  if [[ "$provider" == "openai-responses" ]]; then
+    out_args+=(-c "model_providers.${provider}.supports_websockets=false")
+  fi
   roboclaws_codex_transport_args out_args
 }
 

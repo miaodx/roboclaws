@@ -29,6 +29,7 @@ CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
+    "OPENAI_API_KEY",
 )
 
 
@@ -470,6 +471,48 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
         'model_providers.mimo-openai.env_key="MIMO_TP_KEY"',
         "-c",
         'model_providers.mimo-openai.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_codex_openai_responses_profile_disables_websockets() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=openai-responses
+            OPENAI_API_KEY=fake
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "-c",
+        'model="gpt-5.5"',
+        "-c",
+        'model_provider="openai-responses"',
+        "-c",
+        'model_providers.openai-responses.name="openai-responses"',
+        "-c",
+        'model_providers.openai-responses.base_url="https://api.openai.com/v1"',
+        "-c",
+        'model_providers.openai-responses.env_key="OPENAI_API_KEY"',
+        "-c",
+        'model_providers.openai-responses.wire_api="responses"',
+        "-c",
+        "model_providers.openai-responses.supports_websockets=false",
     ]
 
 

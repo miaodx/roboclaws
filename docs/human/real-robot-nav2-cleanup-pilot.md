@@ -93,6 +93,16 @@ ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
+On networks that still reset the built-in Codex system provider before the
+first MCP tool call, use the official OpenAI API provider profile if an
+`OPENAI_API_KEY` is available:
+
+```bash
+ROBOCLAWS_CODEX_PROVIDER=openai-responses \
+ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
+just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
+```
+
 Review the detached run with:
 
 ```bash
