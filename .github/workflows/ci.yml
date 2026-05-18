@@ -11,6 +11,10 @@ on:
         description: "Run the opt-in MolmoSpaces live cleanup matrix"
         required: false
         default: "true"
+      molmo_official_codex:
+        description: "Run the opt-in official Codex GPT-5.5 Nav2 cleanup proof"
+        required: false
+        default: "false"
 
 # Needed by the deploy-pages job (push to main only) to publish report.html
 # to https://miaodx.github.io/roboclaws/ via GitHub Pages.
@@ -678,6 +682,121 @@ jobs:
         with:
           name: report-molmo-live-${{ matrix.model_entry }}
           path: output/molmo/ci-live-published/${{ matrix.model_entry }}/**
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Job 4e: Opt-in official Codex GPT-5.5 Nav2 cleanup proof.
+  #
+  # This is separate from the normal Molmo live matrix so a manual dispatch can
+  # request the official OpenAI/Codex acceptance artifact without also running
+  # every Kimi/MiMo live report entry.
+  # ---------------------------------------------------------------------------
+  molmo-official-codex-gpt55:
+    name: Molmo official Codex GPT-5.5 Nav2 proof
+    runs-on: ubuntu-latest
+    needs: lint-and-mock
+    if: |
+      github.event_name == 'workflow_dispatch'
+      && github.event.inputs.molmo_official_codex == 'true'
+    timeout-minutes: 75
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('uv.lock') }}
+          restore-keys: ${{ runner.os }}-uv-
+
+      - name: Cache MolmoSpaces runtime assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/molmospaces
+            ~/.cache/molmo-spaces-resources
+          key: ${{ runner.os }}-molmospaces-rby1m-seed7-v1
+          restore-keys: ${{ runner.os }}-molmospaces-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y xvfb libgl1 libglib2.0-0 tmux
+
+      - name: Install just
+        env:
+          JUST_VERSION: "1.50.0"
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" just
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/just" --version
+
+      - name: Install Python dependencies
+        run: uv sync --extra dev --extra molmospaces
+
+      - name: Build pinned coding-agent CLI image
+        env:
+          ROBOCLAWS_CODE_AGENT_IMAGE: roboclaws-coding-agents:${{ github.run_id }}-official-codex-gpt55
+        run: |
+          scripts/dev/coding_agent_docker.sh build
+          scripts/dev/coding_agent_docker.sh install-wrappers .tmp/coding-agent-bin
+          echo "$PWD/.tmp/coding-agent-bin" >> "$GITHUB_PATH"
+          .tmp/coding-agent-bin/codex --version
+
+      - name: Run official Codex GPT-5.5 Nav2 cleanup proof
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ROBOCLAWS_CODEX_PROVIDER: openai-responses
+          ROBOCLAWS_CODEX_MODEL: gpt-5.5
+          ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS: "1"
+        run: |
+          test -n "$OPENAI_API_KEY" || {
+            echo "OPENAI_API_KEY secret is required for the official Codex proof." >&2
+            exit 1
+          }
+          xvfb-run -a just task::run molmo-cleanup codex world-labels \
+            output_dir=output/molmo/official-codex-gpt55-nav2 \
+            seed=7 \
+            generated_mess_count=5
+          seed_dir="$(find output/molmo/official-codex-gpt55-nav2 -path '*/seed-7/run_result.json' -printf '%h\n' | sort | tail -n 1)"
+          test -n "$seed_dir" || {
+            echo "No official Codex seed-7 run_result.json was produced." >&2
+            exit 1
+          }
+          test -f "$seed_dir/report.html"
+          test -f "$seed_dir/map_bundle/map.yaml"
+          uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+            "$(dirname "$seed_dir")" \
+            --expect-backend molmospaces_subprocess \
+            --expect-policy codex_agent \
+            --expect-profile world-labels \
+            --expect-seeds 7 \
+            --min-generated-mess-count 5 \
+            --require-agent-driven \
+            --require-clean-agent-run \
+            --require-advisory-scoring \
+            --min-restored-count 5 \
+            --min-sweep-coverage 1.0 \
+            --require-waypoint-honesty \
+            --require-real-robot-alignment
+
+      - name: Upload official Codex GPT-5.5 proof
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-molmo-official-codex-gpt55-nav2
+          path: output/molmo/official-codex-gpt55-nav2/**
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------

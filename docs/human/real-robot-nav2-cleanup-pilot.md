@@ -115,6 +115,16 @@ just task::run molmo-cleanup codex world-labels \
   generated_mess_count=5
 ```
 
+If local `api.openai.com` access is blocked but GitHub Actions has an official
+`OPENAI_API_KEY` repository secret, dispatch the dedicated opt-in CI proof
+instead of the normal Molmo live matrix:
+
+```bash
+gh workflow run ci.yml \
+  -f molmo_live=false \
+  -f molmo_official_codex=true
+```
+
 Review the detached run with:
 
 ```bash

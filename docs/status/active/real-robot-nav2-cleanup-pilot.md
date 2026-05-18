@@ -43,6 +43,11 @@ Last updated: 2026-05-18
 - `just code::codex-provider-smoke` uses the same `openai-responses`
   reachability guard, so the recommended preflight no longer waits for Codex
   retries when the official endpoint is blocked.
+- CI has a dedicated opt-in official Codex GPT-5.5 Nav2 proof job gated by
+  `workflow_dispatch` input `molmo_official_codex=true` and the repository
+  `OPENAI_API_KEY` secret; it uploads
+  `report-molmo-official-codex-gpt55-nav2` and runs the same no-regression /
+  real-robot-alignment checker.
 - Broken legacy Molmo compatibility symlinks at removed root paths were deleted
   so the repo-wide static gate no longer asks Ruff to lint missing files.
 
@@ -229,6 +234,15 @@ just task::run molmo-cleanup codex world-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   generated_mess_count=5
+```
+
+If local OpenAI access remains blocked but GitHub Actions has the official
+`OPENAI_API_KEY` repository secret, use the dedicated opt-in CI proof:
+
+```bash
+gh workflow run ci.yml \
+  -f molmo_live=false \
+  -f molmo_official_codex=true
 ```
 
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
