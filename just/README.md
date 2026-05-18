@@ -110,6 +110,17 @@ The image is defined by `Dockerfile.coding-agents` and pins
 Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
 agent CLIs.
 
+Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
+into mounting host `~/.codex` without mounting the whole home directory:
+
+```bash
+ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
+PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
+ROBOCLAWS_CODEX_PROVIDER=system \
+ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
+just task::run molmo-cleanup codex world-labels
+```
+
 ## Examples
 
 ```bash

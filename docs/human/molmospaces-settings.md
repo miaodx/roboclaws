@@ -172,6 +172,9 @@ PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
+For GPT/OpenAI Codex runs that should use the developer's normal Codex login,
+add `ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1`; that mounts host
+`~/.codex` into the pinned container without mounting the whole home directory.
 
 `codex-live` is detached by default. `just molmo::codex-report` starts a tmux
 session that owns the cleanup MCP server, `codex exec`, logs, checker, and

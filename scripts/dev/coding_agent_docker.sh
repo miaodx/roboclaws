@@ -86,6 +86,8 @@ run_cli() {
   local network="${ROBOCLAWS_CODE_AGENT_DOCKER_NETWORK:-host}"
   local user_mode="${ROBOCLAWS_CODE_AGENT_DOCKER_USER:-host}"
   local add_host="${ROBOCLAWS_CODE_AGENT_DOCKER_ADD_HOST:-1}"
+  local use_host_codex_home="${ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME:-0}"
+  local host_codex_home="${ROBOCLAWS_CODE_AGENT_DOCKER_HOST_CODEX_HOME:-${CODEX_HOME:-${HOME}/.codex}}"
 
   local docker_args=(run --rm)
   if [[ -t 0 && -t 1 ]]; then
@@ -110,6 +112,16 @@ run_cli() {
     -v "${home_dir}:/home/agent"
     -w "${cwd}"
   )
+  if [[ "${use_host_codex_home}" == "1" ]]; then
+    if [[ ! -d "${host_codex_home}" ]]; then
+      echo "error: host Codex home not found: ${host_codex_home}" >&2
+      exit 1
+    fi
+    docker_args+=(
+      -e "CODEX_HOME=/home/agent/.codex"
+      -v "${host_codex_home}:/home/agent/.codex"
+    )
+  fi
   pass_env_if_set docker_args \
     ANTHROPIC_API_KEY \
     ANTHROPIC_BASE_URL \

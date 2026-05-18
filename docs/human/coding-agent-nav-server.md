@@ -86,6 +86,17 @@ PATH="$PWD/.tmp/coding-agent-bin:$PATH" just code::cc
 The wrapper image is `Dockerfile.coding-agents`; default package pins live in
 `scripts/dev/coding_agent_toolchain.env`.
 
+For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
+to mounting host `~/.codex`:
+
+```bash
+ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
+PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
+ROBOCLAWS_CODEX_PROVIDER=system \
+ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
+just code::codex
+```
+
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):
 

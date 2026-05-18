@@ -143,6 +143,9 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
 
     assert "install-wrappers" in docker_script_text
     assert "exec docker" in docker_script_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME" in docker_script_text
+    assert '-v "${host_codex_home}:/home/agent/.codex"' in docker_script_text
+    assert '-e "CODEX_HOME=/home/agent/.codex"' in docker_script_text
     assert "ANTHROPIC_BASE_URL" in docker_script_text
     assert "MIMO_TP_KEY" in docker_script_text
 
