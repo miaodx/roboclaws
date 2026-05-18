@@ -26,6 +26,7 @@ CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_MODEL",
     "ROBOCLAWS_CODEX_MODEL",
     "ROBOCLAWS_CLAUDE_MODEL",
+    "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
 )
@@ -391,6 +392,41 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
         "codex_args=0",
         "claude_model_args=0",
         "claude_env_args=0",
+    ]
+
+
+def test_coding_agent_codex_can_disable_responses_websockets() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=system
+            ROBOCLAWS_CODEX_MODEL=gpt-5.5
+            ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "--model",
+        "gpt-5.5",
+        "--disable",
+        "responses_websockets",
+        "--disable",
+        "responses_websockets_v2",
     ]
 
 

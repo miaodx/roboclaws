@@ -211,6 +211,7 @@ roboclaws_codex_provider_args() {
     if [[ -n "$model" ]]; then
       out_args=(--model "$model")
     fi
+    roboclaws_codex_transport_args out_args
     return 0
   fi
 
@@ -227,6 +228,17 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
+  roboclaws_codex_transport_args out_args
+}
+
+roboclaws_codex_transport_args() {
+  local -n _codex_transport_out_args="$1"
+  case "${ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS:-0}" in
+    1|true|yes)
+      _codex_transport_out_args+=(--disable responses_websockets)
+      _codex_transport_out_args+=(--disable responses_websockets_v2)
+      ;;
+  esac
 }
 
 roboclaws_claude_provider_args() {
