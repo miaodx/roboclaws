@@ -27,8 +27,24 @@ Last updated: 2026-05-18
   - `4b3385f` `docs: note repo-local codex provider blockers`
   - `3b7c585` `docs: clarify codex provider smoke requirement`
   - `f2bb97b` `fix: guard codex provider smoke reachability`
+  - `31615e9` `docs: sync codex provider blocker evidence`
+  - `f1599c3` `docs: sync codex smoke guard evidence`
+  - `12aee5a` `docs: record codex resume guard blocker`
+  - `d27cce1` `docs: clarify official codex nav2 proof gate`
+  - `8ade104` `ci: add official codex nav2 proof gate`
+  - `a566b7f` `ci: preserve codex proof image tag`
+  - `c6afc65` `docs: record official codex ci secret blocker`
+  - `f6b1825` `docs: mark codex proof approval gate`
+  - `70ccec1` `ci: wait for detached codex proof`
+  - `d5bcf47` `fix: pass display env into codex molmo tmux`
   - `729da81` `ci: keep xvfb alive for codex molmo proof`
   - `fa6042c` `fix: normalize live agent docker workspace`
+  - `771bbca` `docs: record official codex key blocker`
+  - `76c542f` `ci: preflight official codex key`
+  - `082896c` `docs: link codex proof key issue`
+  - `f42420e` `docs: link nav2 cleanup draft pr`
+  - `066a4ba` `docs: record codex key preflight run`
+  - `236bbb2` `docs: record official artifact audit`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
