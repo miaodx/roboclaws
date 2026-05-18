@@ -255,6 +255,10 @@ Current CI-side blocker: `OPENAI_API_KEY` is not yet present in the GitHub
 repository secrets, and adding it is a human-owned security/configuration
 decision.
 
+Hard-stop approval gate: do not upload the local Codex/OpenAI credential to
+GitHub, push this branch, or dispatch the official Codex GPT-5.5 CI proof
+without explicit human approval for all three actions.
+
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report
 exists and has no clear regression.
