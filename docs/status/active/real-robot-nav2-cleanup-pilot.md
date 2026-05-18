@@ -277,6 +277,10 @@ Latest unblock/audit check on 2026-05-18:
     polled the same secret ten more times. Every poll still returned
     `OPENAI_API_KEY=2026-05-18T15:29:18Z`, so no official proof redispatch was
     attempted.
+  - Longer bounded watcher on 2026-05-18T21:33:19Z through
+    2026-05-18T21:48:12Z polled the same secret 30 more times. Every poll still
+    returned `OPENAI_API_KEY=2026-05-18T15:29:18Z`, so no official proof
+    redispatch was attempted.
   - Local official-proof route recheck after that watcher still reported
     `network: work`, `OPENAI_API_KEY_set=false`, no `HTTPS_PROXY` /
     `ALL_PROXY`, and a direct `curl -I --max-time 10
