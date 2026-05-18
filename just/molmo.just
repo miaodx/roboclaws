@@ -302,6 +302,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             OPENAI_API_KEY KIMI_API_KEY MIMO_TP_KEY \
             HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
             http_proxy https_proxy all_proxy no_proxy \
+            DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS
           do
