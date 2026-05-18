@@ -108,6 +108,16 @@ Latest unblock/audit check on 2026-05-18:
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` fails provider-arg construction
   before launch because `OPENAI_API_KEY` is missing.
 - `ROBOCLAWS_CODEX_PROVIDER=system` is blocked by the work-network guard.
+- Public recipe preflight also fails before Codex launch:
+  - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
+    ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
+    molmo-cleanup codex world-labels
+    output_dir=output/molmo/codex-gpt55-nav2-guard-check seed=7
+    generated_mess_count=5` exits `1` at the work-network guard.
+  - `ROBOCLAWS_CODEX_PROVIDER=openai-responses ROBOCLAWS_CODEX_MODEL=gpt-5.5
+    just task::run molmo-cleanup codex world-labels
+    output_dir=output/molmo/codex-gpt55-nav2-openai-key-check seed=7
+    generated_mess_count=5` exits `2` because `OPENAI_API_KEY` is missing.
 
 Historical Codex output audit:
 
