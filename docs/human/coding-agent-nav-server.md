@@ -90,10 +90,14 @@ When these Docker wrappers are used through `just code::cc` or
 `ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default. The agent
 container then sees only `/workspace/demo` and
 `/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
-the source tree are not mounted into the agent context.
+the source tree are not mounted into the agent context. For Codex, isolated nav
+runs also mount an empty read-only `CODEX_HOME/skills`, so bundled/system Codex
+skills are not available; the navigator skill is read explicitly from
+`../skills/ai2thor-navigator/SKILL.md`.
 
 For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
-to mounting host `~/.codex`:
+to copying host Codex auth plus a minimal provider config into the pinned
+container:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
@@ -102,6 +106,9 @@ ROBOCLAWS_CODEX_PROVIDER=system \
 ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just code::codex
 ```
+
+That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
+history, and unrelated user config stay outside the container.
 
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):

@@ -111,7 +111,8 @@ Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
 agent CLIs.
 
 Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
-into mounting host `~/.codex` without mounting the whole home directory:
+into copying host Codex auth plus a minimal provider config into the pinned
+container:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
@@ -121,12 +122,18 @@ ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just task::run molmo-cleanup codex world-labels
 ```
 
+That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
+history, and unrelated user config stay outside the container.
+
 Direct navigation runs launched through `just code::cc` or `just code::codex`
 also set `ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default for
 Docker shims. In that mode the agent container sees only `/workspace/demo` and
 `/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
 the implementation tree are not mounted. The MCP server still runs on the host
-and is reached over HTTP.
+and is reached over HTTP. For Codex, isolated nav runs also mount an empty
+read-only `CODEX_HOME/skills`, so bundled/system Codex skills are not available;
+the navigator skill is read explicitly from
+`../skills/ai2thor-navigator/SKILL.md`.
 
 ## Examples
 
