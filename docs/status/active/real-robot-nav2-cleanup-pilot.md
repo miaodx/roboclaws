@@ -27,6 +27,8 @@ Last updated: 2026-05-18
   - `4b3385f` `docs: note repo-local codex provider blockers`
   - `3b7c585` `docs: clarify codex provider smoke requirement`
   - `f2bb97b` `fix: guard codex provider smoke reachability`
+  - `729da81` `ci: keep xvfb alive for codex molmo proof`
+  - `fa6042c` `fix: normalize live agent docker workspace`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -48,6 +50,9 @@ Last updated: 2026-05-18
   `OPENAI_API_KEY` secret; it uploads
   `report-molmo-official-codex-gpt55-nav2` and runs the same no-regression /
   real-robot-alignment checker.
+- The official CI proof keeps a manually managed Xvfb server alive for the
+  detached tmux runner and normalizes live-agent Docker workspaces to absolute
+  paths before mounting them.
 - Broken legacy Molmo compatibility symlinks at removed root paths were deleted
   so the repo-wide static gate no longer asks Ruff to lint missing files.
 
@@ -69,6 +74,10 @@ Last updated: 2026-05-18
   `bash -n scripts/dev/coding_agent_env.sh`; `just --list`.
 - Maintainer mock gate: `just agent::verify mock` passes after the broken
   legacy symlink cleanup.
+- Latest focused checks for the CI launcher fixes:
+  - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
+  - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+  - pre-commit fast non-integration pytest subset on `fa6042c`
 - Explicit checker passed:
 
 ```bash
@@ -102,7 +111,7 @@ Objective requirements mapped to current evidence:
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, and runtime gap notes. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-regression/0518_2046` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
-| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` attempts fail before agent cleanup (`codex-gpt55-nav2-openai-env-pass-check/0518_2219`, `codex-gpt55-nav2-openai-auth-tmux-check/0518_2214`, `codex-gpt55-nav2-report-postfix/0518_2055`) or are historical runs without Nav2/no-regression evidence. | Blocked |
+| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` CI attempt `26045247897` reaches Codex + MCP, then fails with `401 invalid_api_key` from `https://api.openai.com/v1/responses`; earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
 Completion rule: do not mark the goal complete until an official Codex GPT-5.5
@@ -112,8 +121,11 @@ real-robot-alignment checker without a clear cleanup regression.
 ## Blocked Requirement
 
 The official system-provider Codex GPT-5.5 Molmo cleanup run is not complete on
-this work network. Direct `https://api.openai.com/v1/responses` access is reset,
-and no usable local HTTP/SOCKS proxy was found.
+this work network, and the GitHub Actions official OpenAI route is blocked by
+credentials. Direct local `https://api.openai.com/v1/responses` access is reset,
+and no usable local HTTP/SOCKS proxy was found. In CI, the official endpoint is
+reachable but the configured repository `OPENAI_API_KEY` secret is rejected by
+OpenAI.
 
 Latest fresh attempt:
 
@@ -195,12 +207,19 @@ Latest unblock/audit check on 2026-05-18:
   `output/molmo/codex-gpt55-nav2-resume-guard-check/0518_2254/seed-7`, but no
   `run_result.json`, `report.html`, or `map_bundle/map.yaml` exists because the
   official Codex agent was not launched.
-- GitHub-side proof audit: `gh auth status -h github.com` is authenticated as
-  `MiaoDX`, and the `CI` workflow is active, but `gh secret list --repo
-  MiaoDX/roboclaws` currently shows `HF_TOKEN`, `KIMI_API_KEY`, `MIMO_TP_KEY`,
-  and `NV_API_KEY` only. The new opt-in official Codex CI proof is therefore
-  blocked until an `OPENAI_API_KEY` repository secret is explicitly added and
-  the workflow change is available on the dispatch ref.
+- GitHub-side proof audit after pushing the opt-in CI route:
+  - Run `26044677029` on `729da81` kept Xvfb alive and got past the previous
+    display lifecycle failure, then failed because the live-agent Docker
+    workspace was mounted from a relative path.
+  - Run `26045247897` on `fa6042c` got past Xvfb, started the MCP server,
+    added the Codex MCP server, connected to MCP, and failed only after Codex
+    tried `https://api.openai.com/v1/responses` with the repository
+    `OPENAI_API_KEY` secret.
+  - Current CI-side blocker: the `OPENAI_API_KEY` repository secret is present
+    but is not a valid key for the official OpenAI Responses API. This
+    machine's host Codex auth is configured for
+    `https://api-router.evad.mioffice.cn/v1`, so that credential is not a valid
+    substitute for `api.openai.com`.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
     ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
@@ -251,13 +270,10 @@ gh workflow run ci.yml \
   -f molmo_official_codex=true
 ```
 
-Current CI-side blocker: `OPENAI_API_KEY` is not yet present in the GitHub
-repository secrets, and adding it is a human-owned security/configuration
-decision.
-
-Hard-stop approval gate: do not upload the local Codex/OpenAI credential to
-GitHub, push this branch, or dispatch the official Codex GPT-5.5 CI proof
-without explicit human approval for all three actions.
+Current CI-side blocker: replace the GitHub `OPENAI_API_KEY` repository secret
+with a valid official OpenAI API key for `https://api.openai.com/v1/responses`,
+then re-dispatch the opt-in proof. Do not mark the goal complete until that
+artifact exists and passes the checker.
 
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report
