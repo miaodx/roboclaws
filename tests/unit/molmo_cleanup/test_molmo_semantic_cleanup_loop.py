@@ -5,6 +5,7 @@ from typing import Any
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_loop
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    has_complete_semantic_sequence,
     robot_view_capture_for_tool,
     semantic_substeps,
     visual_grounding_status,
@@ -220,6 +221,36 @@ def test_visual_candidate_navigation_counts_as_object_navigation() -> None:
         "place",
     ]
     assert substeps[0]["steps"][0]["tool"] == "navigate_to_visual_candidate"
+
+
+def test_complete_semantic_sequence_tolerates_later_retries_after_place() -> None:
+    assert has_complete_semantic_sequence(
+        [
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            "place",
+            "navigate_to_object",
+            "navigate_to_object",
+        ]
+    )
+    assert has_complete_semantic_sequence(
+        [
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            "place_inside",
+            "navigate_to_object",
+        ]
+    )
+    assert not has_complete_semantic_sequence(
+        [
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            "navigate_to_object",
+        ]
+    )
 
 
 def test_visual_grounding_only_hides_closed_container_contents() -> None:

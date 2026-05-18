@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -39,11 +40,39 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
         "kimi-k2.6",
         "mimo-v2.5-pro",
         "mimo-v2-omni",
+        "kimi-k2.6-camera-raw",
+        "mimo-v2-omni-camera-raw",
     ]
-    assert entry_by_name("kimi-k2.6").provider_profile == "kimi-anthropic"
-    assert entry_by_name("kimi-k2.6").secret_env == "KIMI_API_KEY"
-    assert entry_by_name("mimo-v2-omni").provider_profile == "mimo-anthropic"
-    assert entry_by_name("mimo-v2-omni").secret_env == "MIMO_TP_KEY"
+    assert {
+        entry.name: (entry.provider_profile, entry.model, entry.secret_env, entry.profile)
+        for entry in MODEL_ENTRIES
+    } == {
+        "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-labels"),
+        "mimo-v2.5-pro": (
+            "mimo-anthropic",
+            "mimo-v2.5-pro",
+            "MIMO_TP_KEY",
+            "world-labels",
+        ),
+        "mimo-v2-omni": (
+            "mimo-anthropic",
+            "mimo-v2-omni",
+            "MIMO_TP_KEY",
+            "world-labels",
+        ),
+        "kimi-k2.6-camera-raw": (
+            "kimi-anthropic",
+            "kimi-k2.6",
+            "KIMI_API_KEY",
+            "camera-raw",
+        ),
+        "mimo-v2-omni-camera-raw": (
+            "mimo-anthropic",
+            "mimo-v2-omni",
+            "MIMO_TP_KEY",
+            "camera-raw",
+        ),
+    }
 
 
 def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
@@ -72,10 +101,19 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
     }
-    assert payload["command"][:4] == ["just", "task::run", "molmo-cleanup", "claude"]
+    assert payload["profile"] == "world-labels"
+    assert payload["generated_mess_count"] == 5
+    assert payload["command"][:5] == [
+        "just",
+        "task::run",
+        "molmo-cleanup",
+        "claude",
+        "world-labels",
+    ]
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
-        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 just task::run molmo-cleanup claude"
+        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
+        "just task::run molmo-cleanup claude world-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -84,6 +122,71 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     )
     assert manifest["schema"] == "molmo_live_ci_report_manifest_v1"
     assert manifest["entries"][0]["entry"] == "kimi-k2.6"
+
+
+def test_dry_run_camera_raw_entry_uses_entry_profile(tmp_path: Path) -> None:
+    run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
+
+    status = run_matrix.main(
+        [
+            "--entry",
+            "kimi-k2.6-camera-raw",
+            "--dry-run",
+            "--skip-uv-sync",
+            "--skip-prewarm",
+            "--skip-version-check",
+            "--output-dir",
+            str(tmp_path / "runs"),
+            "--published-dir",
+            str(tmp_path / "site" / "molmo" / "live"),
+        ]
+    )
+
+    assert status == 0
+    status_path = tmp_path / "site" / "molmo" / "live" / "kimi-k2.6-camera-raw" / "status.json"
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["entry"] == "kimi-k2.6-camera-raw"
+    assert payload["label"] == "Kimi K2.6 RAW_FPV"
+    assert payload["model"] == "kimi-k2.6"
+    assert payload["profile"] == "camera-raw"
+    assert payload["generated_mess_count"] == 10
+    assert payload["command"][:5] == [
+        "just",
+        "task::run",
+        "molmo-cleanup",
+        "claude",
+        "camera-raw",
+    ]
+    assert "generated_mess_count=10" in payload["command"]
+    assert "generated_mess_count=10" in payload["rerun_command"]
+    assert "just task::run molmo-cleanup claude camera-raw" in payload["rerun_command"]
+
+
+def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> None:
+    run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
+
+    status = run_matrix.main(
+        [
+            "--entry",
+            "mimo-v2-omni-camera-raw",
+            "--generated-mess-count",
+            "12",
+            "--dry-run",
+            "--skip-uv-sync",
+            "--skip-prewarm",
+            "--skip-version-check",
+            "--output-dir",
+            str(tmp_path / "runs"),
+            "--published-dir",
+            str(tmp_path / "site" / "molmo" / "live"),
+        ]
+    )
+
+    assert status == 0
+    status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2-omni-camera-raw" / "status.json"
+    payload = json.loads(status_path.read_text(encoding="utf-8"))
+    assert payload["generated_mess_count"] == 12
+    assert "generated_mess_count=12" in payload["command"]
 
 
 def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, monkeypatch) -> None:
@@ -159,7 +262,11 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
     )
     runner = run_claude.LiveClaudeCleanupRunner(args)
 
-    monkeypatch.setattr(run_claude.subprocess, "run", lambda *_, **__: None)
+    monkeypatch.setattr(
+        run_claude.subprocess,
+        "run",
+        lambda *_, **__: SimpleNamespace(stdout="2.1.143 (Claude Code)\n", stderr=""),
+    )
     captured: dict[str, list[str]] = {}
 
     def fake_run_and_tee(command, **_kwargs):
@@ -184,6 +291,43 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
     }
     assert "--strict-mcp-config" in command
     assert "--dangerously-skip-permissions" in command
+    assert (tmp_path / "run" / "claude-version.txt").read_text(encoding="utf-8") == (
+        "2.1.143 (Claude Code)\n"
+    )
+
+
+def test_live_claude_workspace_exposes_skill_at_task_relative_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    workspace = tmp_path / "agent-workspace"
+    monkeypatch.setenv("ROBOCLAWS_CODE_AGENT_WORKSPACE", str(workspace))
+
+    prepared_workspace, task_dir = run_claude._prepare_agent_workspace(
+        repo_root=REPO_ROOT,
+        task_name="molmo-cleanup",
+        skill_name="molmo-realworld-cleanup",
+    )
+
+    assert prepared_workspace == workspace
+    assert (task_dir / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
+    assert (workspace / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
+    readme = (task_dir / "README.md").read_text(encoding="utf-8")
+    assert "skills/molmo-realworld-cleanup/SKILL.md" in readme
+
+
+def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+
+    class NonBlockingConsole(io.BytesIO):
+        def write(self, _payload):
+            raise BlockingIOError("console buffer full")
+
+    artifact = io.BytesIO()
+
+    run_claude._tee_stream(io.BytesIO(b'{"type":"result"}\n'), [artifact, NonBlockingConsole()])
+
+    assert artifact.getvalue() == b'{"type":"result"}\n'
 
 
 def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path) -> None:
@@ -202,6 +346,13 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         seed=7,
     )
     assert (published / "report.html").is_file()
+    camera_raw_published = publish_seed_run(
+        source_seed_dir=source_seed,
+        publish_root=live_root,
+        entry_name="kimi-k2.6-camera-raw",
+        seed=7,
+    )
+    assert (camera_raw_published / "report.html").is_file()
 
     success = base_status(
         entry_by_name("kimi-k2.6"),
@@ -224,13 +375,30 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         task="帮我收拾这个房间",
     )
     skipped.update({"status": "skipped", "reason": "missing required secret/env MIMO_TP_KEY"})
+    camera_raw = base_status(
+        entry_by_name("kimi-k2.6-camera-raw"),
+        seed=7,
+        generated_mess_count=5,
+        profile="camera-raw",
+        task="帮我收拾这个房间",
+    )
+    camera_raw.update(
+        {
+            "status": "success",
+            "report_path": report_path_for_entry("kimi-k2.6-camera-raw", seed=7),
+        }
+    )
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), success)
     write_status(status_path_for_entry(live_root, "mimo-v2.5-pro"), skipped)
+    write_status(status_path_for_entry(live_root, "kimi-k2.6-camera-raw"), camera_raw)
     write_manifest(live_root)
     live_index = write_live_index(live_root)
     live_html = live_index.read_text(encoding="utf-8")
     assert "MolmoSpaces Live Cleanup Reports" in live_html
     assert "kimi-k2.6/seed-7/report.html" in live_html
+    assert "kimi-k2.6-camera-raw/seed-7/report.html" in live_html
+    assert "Kimi K2.6 RAW_FPV" in live_html
+    assert "camera-raw" in live_html
     assert "Rerun locally" in live_html
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
@@ -238,6 +406,9 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     assert "MolmoSpaces Live Cleanup (main-only / opt-in CI)" in html
     assert "molmo/live/" in html
     assert "molmo/live/kimi-k2.6/seed-7/report.html" in html
+    assert "molmo/live/kimi-k2.6-camera-raw/seed-7/report.html" in html
+    assert "Kimi K2.6 RAW_FPV" in html
+    assert "camera-raw" in html
     assert "MiMo v2.5 Pro" in html
     assert "missing required secret/env MIMO_TP_KEY" in html
 

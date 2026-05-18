@@ -14,6 +14,13 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     infer_target_fixture_for_detection,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.molmo_cleanup.types import (
+    CleanupObject,
+    CleanupReceptacle,
+    CleanupScenario,
+    PrivateScoringManifest,
+    TargetRule,
+)
 
 
 def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
@@ -348,6 +355,20 @@ def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
         )
         assert declared["model_declared_observations"][0]["grounding_status"] == "unresolved"
 
+    early_done = contract.done("finished with unresolved false positives")
+
+    assert early_done["ok"] is False
+    assert early_done["error_reason"] == "insufficient_sweep_coverage"
+    assert early_done["required_tool"] == "navigate_to_waypoint"
+    assert early_done["next_waypoint_id"]
+    assert early_done["sweep_coverage_rate"] < 0.90
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        if waypoint["visited"]:
+            continue
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
     done = contract.done("finished with unresolved false positives")
 
     assert done["ok"] is True
@@ -488,6 +509,51 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
     _assert_no_forbidden_keys(declared)
 
 
+def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(_live_style_alias_scenario()),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+
+    electronics = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="electronics",
+        target_fixture_id="tvstand_01",
+        source_fixture_id="tvstand_01",
+        evidence_note="black laptop on the sofa cushion",
+        image_region={"type": "point", "value": [390, 230]},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+    toy = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="toy",
+        target_fixture_id="toybin_01",
+        evidence_note="teddy bear plush on the sofa",
+        image_region={"type": "verbal_region", "value": "sofa cushion"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert electronics["ok"] is True
+    assert electronics["model_declared_observation"]["grounding_status"] == "resolved"
+    assert (
+        "source fixture hint did not match"
+        in electronics["model_declared_observation"]["grounding_basis"]
+    )
+    assert electronics["candidate_fixture_id"] == "tvstand_01"
+    assert electronics["recommended_tool"] == "place"
+    assert toy["ok"] is True
+    assert toy["model_declared_observation"]["grounding_status"] == "resolved"
+    assert toy["candidate_fixture_id"] == "sofa_01"
+    _assert_no_forbidden_keys(electronics)
+    _assert_no_forbidden_keys(toy)
+
+
 def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -571,3 +637,53 @@ def _first_detection_by_category(
             if detection["category"] == category:
                 return detection
     raise AssertionError(f"expected visible detection with category {category}")
+
+
+def _live_style_alias_scenario() -> CleanupScenario:
+    return CleanupScenario(
+        scenario_id="live-style-alias-test",
+        task="clean broad raw camera declarations",
+        seed=7,
+        objects=(
+            CleanupObject(
+                object_id="laptop_01",
+                name="Laptop (Laptop|surface|3|39)",
+                category="Laptop",
+                location_id="sofa_01",
+            ),
+            CleanupObject(
+                object_id="teddybear_01",
+                name="TeddyBear (TeddyBear|surface|3|35)",
+                category="TeddyBear",
+                location_id="sofa_01",
+            ),
+        ),
+        receptacles=(
+            CleanupReceptacle(
+                receptacle_id="sofa_01",
+                name="Sofa (Sofa|3|0|1)",
+                room_area="living_area",
+                category="Sofa",
+            ),
+            CleanupReceptacle(
+                receptacle_id="toybin_01",
+                name="ToyBin (ToyBin|3|2)",
+                room_area="living_area",
+                category="ToyBin",
+            ),
+            CleanupReceptacle(
+                receptacle_id="tvstand_01",
+                name="TVStand (TVStand|3|0|0)",
+                room_area="living_area",
+                category="TVStand",
+            ),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="live-style-alias-test",
+            targets=(
+                TargetRule("laptop_01", ("tvstand_01",)),
+                TargetRule("teddybear_01", ("toybin_01",)),
+            ),
+            success_threshold=2,
+        ),
+    )

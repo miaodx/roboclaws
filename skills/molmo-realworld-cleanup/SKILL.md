@@ -15,10 +15,14 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 
 1. Call `roboclaws__metric_map()` and `roboclaws__fixture_hints()` first.
 2. Treat `inspection_waypoints` as static map/fixture coverage candidates, not
-   mess hints. For each useful waypoint or current-room area, call
+   mess hints. Build an exact checklist from
+   `metric_map.inspection_waypoints`, then for each useful waypoint or
+   current-room area, call
    `roboclaws__navigate_to_waypoint(waypoint_id)`, then
-   `roboclaws__observe()`. Build your own semantic map from returned
-   `observed_*` object handles and support estimates.
+   `roboclaws__observe()`. Mark a waypoint complete only after an `observe`
+   response at that `waypoint_id`; before `done`, compare the checklist against
+   observed waypoint ids and visit any missing waypoint. Build your own semantic
+   map from returned `observed_*` object handles and support estimates.
    In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
    structured labels. Inspect the image, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
@@ -28,6 +32,13 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
    `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
    over-specific guesses that are likely to miss the public grounding resolver.
+   Omit `source_fixture_id` when you are not confident which public fixture the
+   image object is resting on. When `navigate_to_visual_candidate` resolves, use
+   its returned `candidate_fixture_id` and `recommended_tool` for placement if
+   present.
+   If raw-FPV visual grounding is unresolved, continue the waypoint sweep; do
+   not call `done` as a system-assessment shortcut while map waypoints remain
+   unvisited.
    In `camera-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled
    candidates before cleanup selection.
@@ -56,8 +67,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 5. After any successful place/place_inside and required close, call
    `roboclaws__observe()` once in the current room/fixture area before choosing
    the next object or waypoint.
-6. Call `roboclaws__done(reason)` only after you have swept the map and cleaned
-   every public recommended candidate. If `done` returns
+6. Call `roboclaws__done(reason)` only after every
+   `metric_map.inspection_waypoints` waypoint id has an `observe` response and
+   you have cleaned every public recommended candidate. If `done` returns
    `pending_cleanup_candidates`, clean those listed observed handles with their
    `candidate_fixture_id`, then call `done` again. Do not stop because you
    guess the hidden target count.

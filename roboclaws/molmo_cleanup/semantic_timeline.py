@@ -417,9 +417,8 @@ def semantic_diagnostics(
 def has_complete_semantic_sequence(phases: list[str]) -> bool:
     if phases[: len(CANONICAL_BASE_CLEANUP_PHASES)] != list(CANONICAL_BASE_CLEANUP_PHASES):
         return False
-    if phases[-1:] == [OBJECT_DONE_PHASE]:
-        return any(phase in phases for phase in PLACE_CLEANUP_PHASES)
-    return phases[-1:] in ([PLACE_PHASE], [PLACE_INSIDE_PHASE], [CLOSE_RECEPTACLE_PHASE])
+    completed_phases = set(phases[len(CANONICAL_BASE_CLEANUP_PHASES) :])
+    return bool(completed_phases.intersection(PLACE_CLEANUP_PHASES))
 
 
 def successful_semantic_phases(steps: list[dict[str, Any]]) -> list[str]:

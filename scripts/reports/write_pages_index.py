@@ -207,6 +207,7 @@ def _molmo_live_section(site_dir: Path) -> str:
         model = html.escape(str(entry.get("model") or "unknown model"))
         provider = html.escape(str(entry.get("provider_profile") or "unknown provider"))
         status = html.escape(str(entry.get("status") or "unknown"))
+        profile = html.escape(str(entry.get("profile") or "unknown profile"))
         reason = html.escape(str(entry.get("reason") or ""))
         report_path = str(entry.get("report_path") or "")
         diagnostic_path = str(entry.get("diagnostic_path") or "")
@@ -220,7 +221,8 @@ def _molmo_live_section(site_dir: Path) -> str:
             title = f"<span>{label}</span>"
         desc = (
             f'      <div class="desc">Claude Code live cleanup via '
-            f"<code>{provider}</code> / <code>{model}</code>. Status: "
+            f"<code>{provider}</code> / <code>{model}</code> using "
+            f"<code>{profile}</code>. Status: "
             f"<code>{status}</code>"
         )
         if reason:
