@@ -50,6 +50,16 @@ ensure_image() {
   fi
 }
 
+prepare_nav_workspace() {
+  local workspace_dir="${ROBOCLAWS_CODE_AGENT_DOCKER_NAV_WORKSPACE:-${repo_root}/.tmp/coding-agent-nav-workspace}"
+  mkdir -p "${workspace_dir}/demo" "${workspace_dir}/skills"
+  if [[ -f "${repo_root}/demo/README.md" ]]; then
+    cp "${repo_root}/demo/README.md" "${workspace_dir}/demo/README.md"
+  fi
+  rm -f "${workspace_dir}/AGENTS.md" "${workspace_dir}/CLAUDE.md"
+  printf '%s\n' "${workspace_dir}"
+}
+
 pass_env_if_set() {
   local -n out_args="$1"
   local name
@@ -88,6 +98,30 @@ run_cli() {
   local add_host="${ROBOCLAWS_CODE_AGENT_DOCKER_ADD_HOST:-1}"
   local use_host_codex_home="${ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME:-0}"
   local host_codex_home="${ROBOCLAWS_CODE_AGENT_DOCKER_HOST_CODEX_HOME:-${CODEX_HOME:-${HOME}/.codex}}"
+  local isolate_nav_workspace="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-0}"
+  local container_workdir="${cwd}"
+  local workspace_mount_args=()
+
+  if [[ "${isolate_nav_workspace}" == "1" ]]; then
+    if [[ "${cwd}" != "${repo_root}" && "${cwd}" != "${repo_root}/"* ]]; then
+      echo "error: isolated nav workspace requires cwd under ${repo_root}; got ${cwd}" >&2
+      exit 1
+    fi
+    local nav_workspace
+    nav_workspace="$(prepare_nav_workspace)"
+    local rel_cwd="${cwd#${repo_root}}"
+    rel_cwd="${rel_cwd#/}"
+    container_workdir="/workspace"
+    if [[ -n "${rel_cwd}" ]]; then
+      container_workdir="/workspace/${rel_cwd}"
+    fi
+    workspace_mount_args=(
+      -v "${nav_workspace}:/workspace"
+      -v "${repo_root}/skills/ai2thor-navigator:/workspace/skills/ai2thor-navigator:ro"
+    )
+  else
+    workspace_mount_args=(-v "${repo_root}:${repo_root}")
+  fi
 
   local docker_args=(run --rm)
   if [[ -t 0 && -t 1 ]]; then
@@ -108,9 +142,9 @@ run_cli() {
   docker_args+=(
     -e "HOME=/home/agent"
     -e "TERM=${TERM:-xterm-256color}"
-    -v "${repo_root}:${repo_root}"
     -v "${home_dir}:/home/agent"
-    -w "${cwd}"
+    -w "${container_workdir}"
+    "${workspace_mount_args[@]}"
   )
   if [[ "${use_host_codex_home}" == "1" ]]; then
     if [[ ! -d "${host_codex_home}" ]]; then

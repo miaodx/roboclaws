@@ -106,6 +106,11 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert (
         'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})' in text
     )
+    isolated_nav_export = (
+        'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="'
+        '${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"'
+    )
+    assert isolated_nav_export in text
     assert 'for entry in "${claude_env_args[@]}"; do' in text
     assert 'export "$entry"' in text
     assert "codex --yolo" not in text
@@ -146,6 +151,12 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME" in docker_script_text
     assert '-v "${host_codex_home}:/home/agent/.codex"' in docker_script_text
     assert '-e "CODEX_HOME=/home/agent/.codex"' in docker_script_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE" in docker_script_text
+    assert '-v "${nav_workspace}:/workspace"' in docker_script_text
+    assert '-v "${repo_root}/skills/ai2thor-navigator:/workspace/skills/ai2thor-navigator:ro"' in (
+        docker_script_text
+    )
+    assert 'container_workdir="/workspace/${rel_cwd}"' in docker_script_text
     assert "ANTHROPIC_BASE_URL" in docker_script_text
     assert "MIMO_TP_KEY" in docker_script_text
 

@@ -121,6 +121,13 @@ ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just task::run molmo-cleanup codex world-labels
 ```
 
+Direct navigation runs launched through `just code::cc` or `just code::codex`
+also set `ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default for
+Docker shims. In that mode the agent container sees only `/workspace/demo` and
+`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
+the implementation tree are not mounted. The MCP server still runs on the host
+and is reached over HTTP.
+
 ## Examples
 
 ```bash

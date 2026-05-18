@@ -85,6 +85,12 @@ PATH="$PWD/.tmp/coding-agent-bin:$PATH" just code::cc
 
 The wrapper image is `Dockerfile.coding-agents`; default package pins live in
 `scripts/dev/coding_agent_toolchain.env`.
+When these Docker wrappers are used through `just code::cc` or
+`just code::codex`, the launcher sets
+`ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE=1` by default. The agent
+container then sees only `/workspace/demo` and
+`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`, and
+the source tree are not mounted into the agent context.
 
 For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
 to mounting host `~/.codex`:

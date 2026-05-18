@@ -8,6 +8,12 @@ Running `claude` (or `codex`) from inside this folder means **no repo
 as its operating doc. If the agent can drive the robot from here,
 SKILL.md is genuinely self-contained.
 
+When the pinned Docker `codex` / `claude` shims are used through
+`just code::cc` or `just code::codex`, this isolation is stricter: the container
+mounts a minimal `/workspace` containing only this demo folder and the
+`ai2thor-navigator` skill. Repo-root `AGENTS.md`, `CLAUDE.md`, and the source
+tree are not mounted into the agent container.
+
 ## Kickoff (paste this as your first message)
 
 ```

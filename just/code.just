@@ -87,6 +87,7 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     echo "    (See demo/README.md for the design intent.)" >&2
     echo "" >&2
     cd demo
+    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
@@ -162,6 +163,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     echo "    (See demo/README.md for the design intent.)" >&2
     echo "" >&2
     cd demo
+    export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-1}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
     codex mcp add roboclaws --url "$mcp_url"
