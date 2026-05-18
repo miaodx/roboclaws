@@ -101,7 +101,8 @@ from `../skills/<name>/SKILL.md`.
 
 For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
 to copying host Codex auth plus a minimal provider config into the pinned
-container:
+container. Do this only off the work network; system-provider Codex is blocked
+there because `api.openai.com` is reset before MCP tool calls:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \

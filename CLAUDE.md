@@ -84,11 +84,14 @@ Work-network restriction: if `just dev::network-status` reports `network: work`
 (the probe can reach `https://api-router.evad.mioffice.cn/`), do not run
 OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
 `just chat::run`, `just appliance::run`, and OpenClaw local/integration
-verification gates. System-provider Claude Code is also blocked on the work
-network, but `just code::cc`, `just harness::navigator`, and
-`just molmo::claude-report` may run there when `.env` selects a repo-local
+verification gates. System-provider Claude Code and system-provider Codex are
+also blocked on the work network. `just code::cc`, `just harness::navigator`,
+and `just molmo::claude-report` may run there when `.env` selects a repo-local
 Claude provider such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
-`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Model-only overrides do not bypass
+`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Codex recipes may run there only
+with an explicit provider profile such as `ROBOCLAWS_CODEX_PROVIDER=kimi-openai`,
+`ROBOCLAWS_CODEX_PROVIDER=mimo-openai`, or a reachable
+`ROBOCLAWS_CODEX_PROVIDER=openai-responses`. Model-only overrides do not bypass
 the guard.
 
 Coding-agent runtime contract: run direct Codex / Claude Code demos through

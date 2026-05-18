@@ -111,7 +111,9 @@ manual debugging where a `codex` or `claude` command path is required.
 
 Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
 into copying host Codex auth plus a minimal provider config into the pinned
-container:
+container. Run this mode only off the work network; system-provider Codex is
+guarded there because direct `api.openai.com` traffic is reset before MCP tool
+calls:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \

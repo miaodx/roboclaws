@@ -67,7 +67,8 @@ Latest fresh attempt:
 
 ## Next Action
 
-Run from a non-work network or with an official OpenAI API key:
+Run from a non-work network or with an official OpenAI API key on a network
+where `api.openai.com` is reachable:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=openai-responses \

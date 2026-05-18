@@ -95,7 +95,7 @@ just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 
 On networks that still reset the built-in Codex system provider before the
 first MCP tool call, use the official OpenAI API provider profile if an
-`OPENAI_API_KEY` is available:
+`OPENAI_API_KEY` is available and `api.openai.com` is reachable:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=openai-responses \

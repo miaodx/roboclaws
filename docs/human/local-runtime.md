@@ -27,8 +27,8 @@ ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic
 ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni
 ```
 
-Run `just dev::network-status` before OpenClaw or system-provider Claude Code
-workflows; work-network restrictions are documented in
+Run `just dev::network-status` before OpenClaw, system-provider Claude Code, or
+system-provider Codex workflows; work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see

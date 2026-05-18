@@ -154,6 +154,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           client_url="http://host.docker.internal:${port}/mcp"
         elif [[ "$driver" == "claude-live" ]]; then
           roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"
+        elif [[ "$driver" == "codex-live" ]]; then
+          roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
         fi
         codex_model=""
         codex_profile_summary="system defaults"

@@ -152,6 +152,8 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav"
       exit 1
     fi
 
+    roboclaws_assert_codex_network_allowed "Codex direct MCP run"
+
     scripts/dev/coding_agent_docker.sh ensure
 
     cleanup() {

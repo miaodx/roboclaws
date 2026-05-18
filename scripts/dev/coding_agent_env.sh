@@ -331,6 +331,45 @@ roboclaws_assert_claude_code_network_allowed() {
   esac
 }
 
+roboclaws_assert_codex_network_allowed() {
+  local label="${1:-Codex}"
+  local provider
+  provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
+  case "$provider" in
+    system|openai-responses|kimi-openai|mimo-openai)
+      ;;
+    *)
+      echo "error: unsupported Codex provider '${provider}'; expected system, openai-responses, kimi-openai, or mimo-openai" >&2
+      return 2
+      ;;
+  esac
+
+  local rc
+  if bash scripts/dev/network_status.sh --is-work-network >/dev/null 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  case "$rc" in
+    0)
+      if [[ "$provider" == "system" ]]; then
+        echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
+        echo "       Set ROBOCLAWS_CODEX_PROVIDER=kimi-openai or mimo-openai with repo-local .env keys, use openai-responses only when api.openai.com is reachable, or switch off the work network." >&2
+        return 1
+      fi
+      echo "==> network guard ok: work network with explicit Codex provider (${provider})" >&2
+      ;;
+    1)
+      echo "==> network guard ok: off work network" >&2
+      ;;
+    *)
+      echo "error: cannot determine network status; curl is required for ${label}." >&2
+      return 2
+      ;;
+  esac
+}
+
 roboclaws_code_agent_profile_summary() {
   local provider_var="$1"
   local model_var="$2"
