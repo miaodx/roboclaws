@@ -42,6 +42,8 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
     ("coverage", "vlm"),
     ("coverage", "script"),
     ("photo-chairs", "openclaw"),
+    ("photo-chairs", "codex"),
+    ("photo-chairs", "claude"),
     ("molmo-cleanup", "direct"),
     ("molmo-cleanup", "mcp-smoke"),
     ("molmo-cleanup", "codex"),

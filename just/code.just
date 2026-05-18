@@ -35,7 +35,7 @@ docker-install-wrappers shim_dir=".tmp/coding-agent-bin":
     @scripts/dev/coding_agent_docker.sh ensure
     @scripts/dev/coding_agent_docker.sh install-wrappers "{{shim_dir}}"
 
-cc scene="FloorPlan201" host="127.0.0.1" port="18788":
+cc scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav" skill_name="ai2thor-navigator" allow_privileged_tools="0":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -48,6 +48,16 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     claude_model_args=()
     claude_env_args=()
     roboclaws_claude_provider_args claude_model_args claude_env_args
+    task_name="{{task_name}}"
+    skill_name="{{skill_name}}"
+    skill_name="${skill_name#skills/}"
+    skill_name="${skill_name%/}"
+    allow_privileged_tools="{{allow_privileged_tools}}"
+    skill_path="../skills/${skill_name}/SKILL.md"
+    if [[ ! -f "$repo_root/skills/$skill_name/SKILL.md" ]]; then
+      echo "error: missing task skill: skills/${skill_name}/SKILL.md" >&2
+      exit 1
+    fi
 
     roboclaws_assert_claude_code_network_allowed "Claude Code direct MCP run"
 
@@ -69,28 +79,29 @@ cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     trap cleanup EXIT INT TERM
 
     roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"
-    mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
+    mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}" "$allow_privileged_tools" "$skill_path")"
 
-    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-ai2thor-nav-{{port}}}"
+    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-${task_name}-{{port}}}"
     agent_task_dir="${agent_workspace}/task"
     mkdir -p "$agent_task_dir" "${agent_workspace}/skills"
     rm -f "$agent_task_dir/AGENTS.md" "$agent_task_dir/CLAUDE.md" \
       "${agent_workspace}/AGENTS.md" "${agent_workspace}/CLAUDE.md"
-    ln -sfn "$repo_root/skills/ai2thor-navigator" \
-      "${agent_workspace}/skills/ai2thor-navigator"
+    find "${agent_workspace}/skills" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    ln -sfn "$repo_root/skills/$skill_name" \
+      "${agent_workspace}/skills/$skill_name"
     {
-      printf '# Roboclaws AI2-THOR Agent Workspace\n\n'
-      printf 'Read `../skills/ai2thor-navigator/SKILL.md`, then use the roboclaws MCP tools.\n'
+      printf '# Roboclaws %s Agent Workspace\n\n' "$task_name"
+      printf 'Read `%s`, then use the roboclaws MCP tools.\n' "$skill_path"
     } >"${agent_task_dir}/README.md"
 
     echo "" >&2
     echo "==> Switching CWD to isolated task workspace: ${agent_task_dir}" >&2
-    echo "    The agent will rely on ../skills/ai2thor-navigator/SKILL.md as its operating doc." >&2
+    echo "    The agent will rely on ${skill_path} as its operating doc." >&2
     echo "" >&2
     cd "$agent_task_dir"
     export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-ai2thor-nav}"
-    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
     export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${agent_workspace}/docker}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true
@@ -125,7 +136,7 @@ view run_dir="" port="8787" agent="0":
     [[ -n "{{run_dir}}" ]] && args+=(--run-dir "{{run_dir}}")
     exec .venv/bin/python scripts/openclaw/view-snapshots.py "${args[@]}"
 
-codex scene="FloorPlan201" host="127.0.0.1" port="18788":
+codex scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav" skill_name="ai2thor-navigator" allow_privileged_tools="0":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -137,6 +148,16 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
     codex_model_args=()
     roboclaws_codex_provider_args codex_model_args
+    task_name="{{task_name}}"
+    skill_name="{{skill_name}}"
+    skill_name="${skill_name#skills/}"
+    skill_name="${skill_name%/}"
+    allow_privileged_tools="{{allow_privileged_tools}}"
+    skill_path="../skills/${skill_name}/SKILL.md"
+    if [[ ! -f "$repo_root/skills/$skill_name/SKILL.md" ]]; then
+      echo "error: missing task skill: skills/${skill_name}/SKILL.md" >&2
+      exit 1
+    fi
 
     if ! command -v codex >/dev/null 2>&1; then
       echo "error: codex command not found; install or activate Codex before running code:codex" >&2
@@ -151,28 +172,29 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788":
     trap cleanup EXIT INT TERM
 
     roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"
-    mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}")"
+    mcp_url="$(just mcp::up "{{scene}}" "{{host}}" "{{port}}" "$allow_privileged_tools" "$skill_path")"
 
-    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-ai2thor-nav-{{port}}}"
+    agent_workspace="${ROBOCLAWS_CODE_AGENT_WORKSPACE:-/tmp/roboclaws-code-${task_name}-{{port}}}"
     agent_task_dir="${agent_workspace}/task"
     mkdir -p "$agent_task_dir" "${agent_workspace}/skills"
     rm -f "$agent_task_dir/AGENTS.md" "$agent_task_dir/CLAUDE.md" \
       "${agent_workspace}/AGENTS.md" "${agent_workspace}/CLAUDE.md"
-    ln -sfn "$repo_root/skills/ai2thor-navigator" \
-      "${agent_workspace}/skills/ai2thor-navigator"
+    find "${agent_workspace}/skills" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    ln -sfn "$repo_root/skills/$skill_name" \
+      "${agent_workspace}/skills/$skill_name"
     {
-      printf '# Roboclaws AI2-THOR Agent Workspace\n\n'
-      printf 'Read `../skills/ai2thor-navigator/SKILL.md`, then use the roboclaws MCP tools.\n'
+      printf '# Roboclaws %s Agent Workspace\n\n' "$task_name"
+      printf 'Read `%s`, then use the roboclaws MCP tools.\n' "$skill_path"
     } >"${agent_task_dir}/README.md"
 
     echo "" >&2
     echo "==> Switching CWD to isolated task workspace: ${agent_task_dir}" >&2
-    echo "    The agent will rely on ../skills/ai2thor-navigator/SKILL.md as its operating doc." >&2
+    echo "    The agent will rely on ${skill_path} as its operating doc." >&2
     echo "" >&2
     cd "$agent_task_dir"
     export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-ai2thor-nav}"
-    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
+    export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
     export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${agent_workspace}/docker}"
 
     codex mcp remove roboclaws >/dev/null 2>&1 || true

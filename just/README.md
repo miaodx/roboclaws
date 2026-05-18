@@ -133,9 +133,8 @@ mounted; the MCP implementation stays on the host and is reached over HTTP.
 Current task mappings:
 
 - `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
+- `photo-chairs` direct Codex/Claude: `capture-object-photo`
 - `molmo-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
-- photo capture agents can opt into `capture-object-photo` without mounting the
-  base navigation skill unless that task explicitly needs both.
 
 For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
 bundled/system Codex skills are not available. Task prompts should read the
@@ -150,6 +149,7 @@ just task::run molmo-cleanup codex smoke
 just task::run molmo-cleanup direct camera-raw
 just task::run molmo-cleanup direct camera-labels
 just task::run ai2thor-nav openclaw
+just task::run photo-chairs codex
 just task::run territory vlm steps=20 agents=2
 just task::run coverage script output_dir=output/script/coverage-smoke
 just task::run molmo-planner-proof direct mode=dry-run

@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from roboclaws.devtools.commands import resolve_task_run
+
 
 def _repo_root() -> Path:
     for parent in Path(__file__).resolve().parents:
@@ -27,6 +29,7 @@ def _repo_root() -> Path:
 REPO_ROOT = _repo_root()
 JUST_DIR = REPO_ROOT / "just"
 CODE_JUST = JUST_DIR / "code.just"
+AGENT_JUST = JUST_DIR / "agent.just"
 MCP_JUST = JUST_DIR / "mcp.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
@@ -109,7 +112,7 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="' in text
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="' in text
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="' in text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-ai2thor-navigator" in text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in text
     assert "Switching CWD to isolated task workspace" in text
     assert "cd demo" not in text
     assert 'for entry in "${claude_env_args[@]}"; do' in text
@@ -201,6 +204,33 @@ def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> Non
     assert 'export MODEL="$model"' in env_text
     assert "mimo-v2.5|mimo-v2.5-pro" in env_text
     assert "MCP observe(auto) will not inline raw images" in env_text
+
+
+def test_photo_coding_agent_routes_use_photo_skill_only() -> None:
+    """Photo coding-agent tasks should not inherit the base navigator skill."""
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    code_text = CODE_JUST.read_text(encoding="utf-8")
+    mcp_text = MCP_JUST.read_text(encoding="utf-8")
+
+    assert "photo-chairs:codex|photo-chairs:claude" in agent_text
+    assert 'code::codex "$scene" "$host" "$port" photo-chairs capture-object-photo 1' in (
+        agent_text
+    )
+    assert 'code::cc "$scene" "$host" "$port" photo-chairs capture-object-photo 1' in (agent_text)
+    assert 'skill_name="${skill_name#skills/}"' in code_text
+    assert 'ln -sfn "$repo_root/skills/$skill_name"' in code_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}" in code_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in code_text
+    assert "allow_privileged_tools" in mcp_text
+    assert "server_args+=(--allow-privileged-tools)" in mcp_text
+
+
+def test_photo_task_facade_accepts_coding_agent_drivers() -> None:
+    codex = resolve_task_run(("photo-chairs", "codex"))
+    claude = resolve_task_run(("photo-chairs", "claude"))
+
+    assert codex.argv == ("just", "agent::run", "photo-chairs", "codex", "visual")
+    assert claude.argv == ("just", "agent::run", "photo-chairs", "claude", "visual")
 
 
 def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:

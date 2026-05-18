@@ -30,9 +30,11 @@ _wait_for_port host port:
     echo "error: MCP endpoint not ready at {{host}}:{{port}}" >&2
     exit 1
 
-up scene="FloorPlan201" host="127.0.0.1" port="18788":
+up scene="FloorPlan201" host="127.0.0.1" port="18788" allow_privileged_tools="0" skill_path="../skills/ai2thor-navigator/SKILL.md":
     #!/usr/bin/env bash
     set -euo pipefail
+    allow_privileged_tools="{{allow_privileged_tools}}"
+    skill_path="{{skill_path}}"
 
     if [[ ! -x .venv/bin/python ]]; then
       echo "error: .venv/bin/python not found — run 'uv sync --extra dev' first" >&2
@@ -44,17 +46,25 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
     if [[ -f "{{server_pid_file}}" ]]; then
       existing_pid="$(cat "{{server_pid_file}}" || true)"
       if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
-        mcp_url="http://{{host}}:{{port}}/mcp"
-        printf '%s\n' "$mcp_url" > "{{server_url_file}}"
-        just mcp::_kickoff_banner "$mcp_url" >&2
-        echo "$mcp_url"
-        exit 0
+        if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
+          echo "==> restarting roboclaws MCP server with privileged helpers enabled" >&2
+          just mcp::down
+        else
+          mcp_url="http://{{host}}:{{port}}/mcp"
+          printf '%s\n' "$mcp_url" > "{{server_url_file}}"
+          just mcp::_kickoff_banner "$mcp_url" "$skill_path" >&2
+          echo "$mcp_url"
+          exit 0
+        fi
       fi
     fi
 
     echo "==> starting roboclaws MCP server (scene={{scene}}, host={{host}}, port={{port}})" >&2
-    .venv/bin/python examples/mcp/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}" \
-      > "{{server_log_file}}" 2>&1 &
+    server_args=(.venv/bin/python examples/mcp/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
+    if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
+      server_args+=(--allow-privileged-tools)
+    fi
+    "${server_args[@]}" > "{{server_log_file}}" 2>&1 &
     SERVER_PID=$!
     printf '%s\n' "$SERVER_PID" > "{{server_pid_file}}"
 
@@ -66,18 +76,18 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     mcp_url="http://{{host}}:{{port}}/mcp"
     printf '%s\n' "$mcp_url" > "{{server_url_file}}"
-    just mcp::_kickoff_banner "$mcp_url" >&2
+    just mcp::_kickoff_banner "$mcp_url" "$skill_path" >&2
     echo "$mcp_url"
 
 # Print the canonical kickoff prompt for direct coding-agent usage.
 # Emitted on stderr by `up` so callers that capture stdout (`mcp_url=$(just mcp::up)`)
 # still get the URL clean. Centralised here so code::cc / code::codex and
 # chat::run show the same prompt.
-_kickoff_banner url:
+_kickoff_banner url skill_path="../skills/ai2thor-navigator/SKILL.md":
     #!/usr/bin/env bash
     echo "==> roboclaws MCP ready at {{url}}"
     echo "==> Kickoff prompt (paste as the first message to Claude / Codex):"
-    echo '    Read ../skills/ai2thor-navigator/SKILL.md, then call roboclaws__observe(label="preflight") to verify the MCP is alive. After that, wait for my actual task.'
+    echo '    Read {{skill_path}}, then use the roboclaws MCP tools for the requested task.'
 
 down:
     #!/usr/bin/env bash
