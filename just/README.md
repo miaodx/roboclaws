@@ -81,8 +81,9 @@ active or the requested MCP port is already accepting connections, the launcher
 fails instead of choosing another port. `claude` and `openclaw` live cleanup
 drivers still use their existing interactive launch paths.
 
-Repo-local `.env` provider profiles can route the live Codex / Claude launchers
-through Kimi or MiMo without editing user-level CLI config:
+Repo-local `.env` provider profiles can route live Claude launchers, and may
+route live Codex launchers when the selected endpoint supports Codex's
+configured wire API, without editing user-level CLI config:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=mimo-openai
@@ -98,7 +99,8 @@ credentials.
 
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
 the selected OpenAI-compatible endpoint works with the pinned Docker-backed
-Codex CLI.
+Codex CLI. Do not assume a repo-local OpenAI-compatible provider supports Codex
+until this smoke passes; some endpoints may not expose `/v1/responses`.
 When `ROBOCLAWS_CODEX_PROVIDER=openai-responses`, live Codex launchers also
 probe `api.openai.com` before starting the detached tmux run and fail fast if
 the official endpoint is unreachable.
