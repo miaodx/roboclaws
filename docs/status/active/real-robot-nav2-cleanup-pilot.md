@@ -280,6 +280,10 @@ Molmo backend starts. Do not mark the goal complete until that artifact exists
 and passes the checker. The human-owned credential unblock is tracked in
 GitHub issue #111: https://github.com/MiaoDX/roboclaws/issues/111
 
+Review surface: draft PR #112 remains blocked until the official Codex GPT-5.5
+artifact exists and passes the checker:
+https://github.com/MiaoDX/roboclaws/pull/112
+
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report
 exists and has no clear regression.
