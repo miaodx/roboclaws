@@ -32,6 +32,8 @@ Last updated: 2026-05-18
 - Detached Codex Molmo runs pass selected exported API/proxy environment
   variables into tmux, and the Docker-backed coding-agent wrapper forwards
   proxy variables into Codex.
+- `openai-responses` Codex runs now fail fast before detached launch when
+  `api.openai.com` is unreachable from the invoking shell.
 
 ## Verified
 
@@ -44,8 +46,11 @@ Last updated: 2026-05-18
   `output/molmo/codex-gpt55-nav2-openai-env-pass-check/0518_2219/seed-7`
   reaches Codex with `openai-responses` and fails on the OpenAI network reset,
   not on missing `OPENAI_API_KEY`.
+- Fast guard check:
+  `output/molmo/codex-gpt55-nav2-openai-fast-guard-check/0518_2228` fails
+  before tmux launch because `api.openai.com` is not reachable.
 - Shell syntax/routing checks: `bash -n scripts/dev/coding_agent_docker.sh` and
-  `just --list`.
+  `bash -n scripts/dev/coding_agent_env.sh`; `just --list`.
 - Explicit checker passed:
 
 ```bash

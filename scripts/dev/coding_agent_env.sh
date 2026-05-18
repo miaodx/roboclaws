@@ -331,6 +331,12 @@ roboclaws_assert_claude_code_network_allowed() {
   esac
 }
 
+roboclaws_openai_responses_reachable() {
+  command -v curl >/dev/null 2>&1 || return 2
+  curl -sS --connect-timeout 5 --max-time 8 -o /dev/null \
+    https://api.openai.com/v1/models >/dev/null 2>&1
+}
+
 roboclaws_assert_codex_network_allowed() {
   local label="${1:-Codex}"
   local provider
@@ -368,6 +374,15 @@ roboclaws_assert_codex_network_allowed() {
       return 2
       ;;
   esac
+
+  if [[ "$provider" == "openai-responses" ]]; then
+    if ! roboclaws_openai_responses_reachable; then
+      echo "error: ${label} uses openai-responses, but api.openai.com is not reachable from this shell." >&2
+      echo "       Run just code::codex-provider-smoke after fixing network/proxy access, or switch to a repo-local provider profile for non-official smoke runs." >&2
+      return 1
+    fi
+    echo "==> network guard ok: api.openai.com reachable for openai-responses" >&2
+  fi
 }
 
 roboclaws_code_agent_profile_summary() {

@@ -99,6 +99,9 @@ credentials.
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
 the selected OpenAI-compatible endpoint works with the pinned Docker-backed
 Codex CLI.
+When `ROBOCLAWS_CODEX_PROVIDER=openai-responses`, live Codex launchers also
+probe `api.openai.com` before starting the detached tmux run and fail fast if
+the official endpoint is unreachable.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
