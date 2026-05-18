@@ -169,6 +169,11 @@ candidate fixtures.
 This profile is the one that can exercise real image reasoning when paired with
 a model that supports image input and a launcher that passes images correctly.
 
+Planned refinement: `camera-raw` should let the main cleanup agent create
+Model-Declared Observations from FPV image evidence. The agent still receives no
+structured labels before declaration, but it may call a narrow declaration or
+inline navigation tool when it is ready to act on a visual candidate.
+
 ### `camera-labels`
 
 Camera-derived structured labels.
@@ -189,8 +194,42 @@ model.
 
 Current implementation note: the existing `camera_model_policy` path uses
 deterministic simulated camera-model evidence. It does not call a real VLM or
-detector. A future implementation can keep the same profile and change
+detector. The planned Model-Declared Observation refactor keeps the public
+`camera-labels` profile and replaces producer-specific registration with the
+same declaration schema used by `camera-raw`; a future implementation can change
 `input_provenance` to `vlm_detector` or `object_detector`.
+
+## Model-Declared Observation Bridge
+
+The durable bridge between camera evidence and cleanup handles is a
+Model-Declared Observation: a public `observed_*` handle created from a camera
+inference producer's interpretation of a public FPV observation.
+
+This keeps the MCP boundary narrow. The contract does not expose a whole
+`cleanup_room()` task tool, and it does not leak private scoring truth. It only
+lets the agent or another producer turn camera evidence into an auditable public
+handle, after which the normal semantic cleanup loop still applies:
+
+```text
+observe raw FPV
+  -> declare or inline-navigate visual candidate
+  -> navigate_to_object
+  -> pick
+  -> navigate_to_receptacle
+  -> open? -> place/place_inside -> close?
+```
+
+Two implementation variants should stay harness-selectable:
+
+| Variant | Shape | Expected default |
+| --- | --- | --- |
+| `separate_registration` | producer calls `declare_visual_candidates` before cleanup selection | Good for separate camera inference models. |
+| `inline_on_navigate` | cleanup agent declares a candidate only when trying to act on it | Preferred first live default for `camera-raw`. |
+
+Hidden grounding may use execution geometry or camera calibration to bind a
+declaration to an executable object, but model-facing feedback must stay public:
+resolved/ambiguous/unresolved status, confidence, basis, and recovery hint. An
+unresolved declaration can be shown in reports but must not be pickable.
 
 ## Metadata Kept Behind Profiles
 
@@ -258,8 +297,8 @@ The refactor should make these gaps visible and testable:
 | --- | --- |
 | `profile=smoke` | Cheap contract sanity still works. |
 | `profile=world-labels` | Current structured cleanup path still produces robot-view artifacts and does not imply image input. |
-| `profile=camera-raw` | Raw camera artifacts are actually used and structured labels are withheld. |
-| `profile=camera-labels` | Camera-derived label path is separate from world-label path and records provenance. |
+| `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
+| `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 
 The most important regression test is:
 

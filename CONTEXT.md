@@ -23,6 +23,18 @@ _Avoid_: Robot capability claim, MCP contract, backend primitive
 A composable robot ability exposed to an agent for perception, navigation, or manipulation.
 _Avoid_: Task, demo, scenario
 
+**Model-Declared Observation**:
+A public observed handle created from an agent's own interpretation of camera evidence.
+_Avoid_: Simulator detection, private target, local note
+
+**Camera Inference Producer**:
+The agent, model, detector, or perception service that interprets camera evidence into Model-Declared Observations.
+_Avoid_: Scorer, simulator oracle, execution backend
+
+**Active Camera Observation**:
+A public camera observation made after the agent deliberately changes a bounded camera orientation.
+_Avoid_: Report-only view, private evaluator camera, teleport view
+
 **Environment Primitive**:
 A backend-specific implementation of a physical or simulated robot action.
 _Avoid_: Agent-facing task, universal capability
@@ -103,6 +115,12 @@ _Avoid_: Backend profile, task recipe
   create, or refine an **Agent Skill**.
 - A **Contract Profile** defines which **Capability Tools** are available and
   what information they may expose.
+- A **Model-Declared Observation** must be traceable to public camera evidence
+  and may become the handle used by manipulation **Capability Tools**.
+- A **Camera Inference Producer** may be the main cleanup agent, a specialist
+  model, a detector, or a robot perception service.
+- An **Active Camera Observation** is public perception evidence and may support
+  a **Model-Declared Observation**.
 - A **Contract Profile** is named by both environment and task domain when both
   matter, such as `ai2thor_navigation_v1` or `molmospaces_cleanup_v1`.
 - A **Contract Profile** declares the **Capability Families** it supports.
