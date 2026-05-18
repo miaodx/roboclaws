@@ -769,6 +769,31 @@ jobs:
             output_dir=output/molmo/official-codex-gpt55-nav2 \
             seed=7 \
             generated_mess_count=5
+          seed_dir="$(find output/molmo/official-codex-gpt55-nav2 -mindepth 2 -maxdepth 2 -type d -name seed-7 | sort | tail -n 1)"
+          test -n "$seed_dir" || {
+            echo "No official Codex seed-7 run directory was created." >&2
+            exit 1
+          }
+          for attempt in $(seq 1 240); do
+            phase="$(jq -r '.phase // "unknown"' "$seed_dir/live_status.json" 2>/dev/null || echo missing)"
+            exit_status="$(jq -r '.exit_status // ""' "$seed_dir/live_status.json" 2>/dev/null || true)"
+            echo "official Codex proof status: attempt=${attempt} phase=${phase}"
+            case "$phase" in
+              finished)
+                break
+                ;;
+              failed)
+                test -f "$seed_dir/driver.log" && tail -n 200 "$seed_dir/driver.log"
+                exit "${exit_status:-1}"
+                ;;
+            esac
+            if [ "$attempt" = 240 ]; then
+              echo "Timed out waiting for official Codex proof to finish." >&2
+              test -f "$seed_dir/driver.log" && tail -n 200 "$seed_dir/driver.log"
+              exit 1
+            fi
+            sleep 15
+          done
           seed_dir="$(find output/molmo/official-codex-gpt55-nav2 -path '*/seed-7/run_result.json' -printf '%h\n' | sort | tail -n 1)"
           test -n "$seed_dir" || {
             echo "No official Codex seed-7 run_result.json was produced." >&2
