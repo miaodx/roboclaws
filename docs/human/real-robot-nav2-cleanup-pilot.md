@@ -103,21 +103,45 @@ ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
+For the official GPT-5.5 Nav2 acceptance proof, write to a stable proof root
+and use the smaller five-object gate so the no-regression expectation is exact:
+
+```bash
+ROBOCLAWS_CODEX_PROVIDER=openai-responses \
+ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
+just task::run molmo-cleanup codex world-labels \
+  output_dir=output/molmo/codex-gpt55-nav2-report \
+  seed=7 \
+  generated_mess_count=5
+```
+
 Review the detached run with:
 
 ```bash
 just molmo::status
 ```
 
-The simulator report must pass the real-robot alignment checker before a
-hardware pilot:
+The simulator report must pass the real-robot alignment checker and the cleanup
+no-regression gate before a hardware pilot. Point the checker at the timestamped
+run directory that contains `seed-7/run_result.json`:
 
 ```bash
-.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  output/molmo/codex-gpt55-nav2-report/<stamp> \
   --expect-backend molmospaces_subprocess \
+  --expect-policy codex_agent \
   --expect-profile world-labels \
-  --require-robot-views \
+  --expect-seeds 7 \
+  --min-generated-mess-count 5 \
+  --require-agent-driven \
+  --require-clean-agent-run \
+  --require-advisory-scoring \
+  --min-restored-count 5 \
+  --min-sweep-coverage 1.0 \
   --require-waypoint-honesty \
-  --require-real-robot-alignment \
-  output/molmo/codex-report/<stamp>/seed-7/run_result.json
+  --require-real-robot-alignment
 ```
+
+Acceptance evidence is incomplete until the official Codex run produces
+`run_result.json`, `report.html`, and `map_bundle/map.yaml` under that
+timestamped `seed-7/` directory.
