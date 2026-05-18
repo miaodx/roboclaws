@@ -115,8 +115,10 @@ Latest unblock/audit check on 2026-05-18:
 - Non-standard local listeners on `31080`, `31443`, `31055`, `31056`, `19514`,
   and `5345` were also probed as HTTP/SOCKS/HTTPS CONNECT candidates; none
   successfully tunnel `api.openai.com`.
-- Direct OpenAI reachability is still unavailable: IPv4 resets connections to
-  `api.openai.com`; IPv6 does not resolve.
+- Direct OpenAI reachability is still unavailable: both resolved IPv4 addresses
+  reset connections to `api.openai.com`; HTTP/1.1, HTTP/2, TLS 1.2, TLS 1.3,
+  and raw `openssl s_client` probes all fail before TLS completes; no native
+  IPv6 route is available.
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` fails provider-arg construction
   before launch because `OPENAI_API_KEY` is missing.
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` with the host Codex auth key fails
