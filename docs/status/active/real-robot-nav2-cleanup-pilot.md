@@ -46,6 +46,25 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
 
 Result: restored `5/5`, sweep coverage `1.0`, Nav2 map bundle present.
 
+## Completion Audit Checklist
+
+Objective requirements mapped to current evidence:
+
+| Requirement | Evidence | Status |
+| --- | --- | --- |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
+| Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
+| Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
+| Add Nav2 nav maps to report file | `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, and runtime gap notes. | Verified on deterministic report |
+| Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-regression/0518_2046` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
+| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest explicit `gpt-5.5` attempts either fail before agent cleanup (`codex-gpt55-nav2-report-postfix/0518_2055`) or are historical runs without Nav2/no-regression evidence. | Blocked |
+| Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
+
+Completion rule: do not mark the goal complete until an official Codex GPT-5.5
+Molmo cleanup run has a `run_result.json` and `report.html` that pass the
+real-robot-alignment checker without a clear cleanup regression.
+
 ## Blocked Requirement
 
 The official system-provider Codex GPT-5.5 Molmo cleanup run is not complete on
