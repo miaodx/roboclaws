@@ -65,6 +65,13 @@ Latest fresh attempt:
 - Error: stream disconnected before completion while sending request to
   `https://api.openai.com/v1/responses`
 
+The official OpenAI API fallback is wired but cannot run on this machine yet:
+
+- Command profile: `ROBOCLAWS_CODEX_PROVIDER=openai-responses`,
+  `ROBOCLAWS_CODEX_MODEL=gpt-5.5`
+- Status: failed before launch
+- Error: `openai-responses requires OPENAI_API_KEY`
+
 ## Next Action
 
 Run from a non-work network or with an official OpenAI API key on a network
