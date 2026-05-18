@@ -9,6 +9,11 @@ Last updated: 2026-05-18
   - `fd01173` `feat: add real robot cleanup profile`
   - `7f7f987` `fix: allow codex responses websocket fallback`
   - `daff692` `fix: add openai codex http provider fallback`
+  - `0c67850` `docs: record nav2 cleanup pilot blocker`
+  - `f27f552` `fix: guard system codex on work network`
+  - `0a7ebb7` `docs: note openai codex fallback key blocker`
+  - `61c5903` `docs: audit codex nav2 cleanup blocker`
+  - `4c5c185` `docs: add nav2 cleanup completion audit`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -52,7 +57,7 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
