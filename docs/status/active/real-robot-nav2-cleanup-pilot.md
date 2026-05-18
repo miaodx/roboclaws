@@ -72,6 +72,35 @@ The official OpenAI API fallback is wired but cannot run on this machine yet:
 - Status: failed before launch
 - Error: `openai-responses requires OPENAI_API_KEY`
 
+Latest unblock/audit check on 2026-05-18:
+
+- `just dev::network-status` still reports `network: work`.
+- `OPENAI_API_KEY`, `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` are unset after
+  loading `.env`.
+- Common local proxy ports `7890`, `7891`, `7897`, `1080`, `1087`, `20171`,
+  `8080`, and `3128` are closed.
+- Direct OpenAI reachability is still unavailable: IPv4 resets connections to
+  `api.openai.com`; IPv6 does not resolve.
+- `ROBOCLAWS_CODEX_PROVIDER=openai-responses` fails provider-arg construction
+  before launch because `OPENAI_API_KEY` is missing.
+- `ROBOCLAWS_CODEX_PROVIDER=system` is blocked by the work-network guard.
+
+Historical Codex output audit:
+
+- `output/molmo/codex-camera-raw/0518_0956/seed-7` is a system Codex
+  `--model gpt-5.5` run and finished, but restored `0/10` and has no Nav2 map
+  bundle.
+- `output/molmo/codex-camera-raw/0518_1357/seed-7` is a system Codex
+  `--model gpt-5.5` run, but live status is failed/checker exit `1`, exact
+  restoration was `5/10`, and it has no Nav2 map bundle.
+- `output/molmo/codex-report/0512_2307/seed-7` passed the older cleanup checker
+  with `8/10` exact restoration and sweep coverage `1.0`, but its recorded
+  Codex command does not explicitly pin `gpt-5.5` and the run predates Nav2 map
+  bundle snapshots.
+- No existing `output/molmo/codex*/**/run_result.json` currently satisfies all
+  three remaining evidence requirements: explicit official Codex GPT-5.5,
+  no-clear-regression cleanup result, and Nav2 map bundle report artifacts.
+
 ## Next Action
 
 Run from a non-work network or with an official OpenAI API key on a network
