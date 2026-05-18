@@ -1,1 +1,0 @@
-molmo_cleanup/run_molmo_agent_bridge_smoke.py

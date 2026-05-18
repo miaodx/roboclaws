@@ -36,6 +36,8 @@ Last updated: 2026-05-18
   proxy variables into Codex.
 - `openai-responses` Codex runs now fail fast before detached launch when
   `api.openai.com` is unreachable from the invoking shell.
+- Broken legacy Molmo compatibility symlinks at removed root paths were deleted
+  so the repo-wide static gate no longer asks Ruff to lint missing files.
 
 ## Verified
 
@@ -53,6 +55,8 @@ Last updated: 2026-05-18
   before tmux launch because `api.openai.com` is not reachable.
 - Shell syntax/routing checks: `bash -n scripts/dev/coding_agent_docker.sh` and
   `bash -n scripts/dev/coding_agent_env.sh`; `just --list`.
+- Maintainer mock gate: `just agent::verify mock` passes after the broken
+  legacy symlink cleanup.
 - Explicit checker passed:
 
 ```bash
