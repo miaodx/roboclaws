@@ -170,6 +170,9 @@ Latest unblock/audit check on 2026-05-18:
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` with the host Codex auth key fails
   the cheap provider smoke with request errors to
   `https://api.openai.com/v1/responses`; no system-provider fallback was used.
+- Repo-local Codex control profiles are not substitutes for the official proof
+  on this host: `mimo-openai` and `kimi-openai` provider smokes both currently
+  return provider `404` for `/v1/responses`.
 - `ROBOCLAWS_CODEX_PROVIDER=system` is blocked by the work-network guard.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
