@@ -274,6 +274,9 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
 
     assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
     assert observation["visible_object_detections"] == []
+    assert "inline_on_navigate" in observation["instruction"]
+    assert "navigate_to_visual_candidate" in observation["instruction"]
+    assert "declare_visual_candidates" not in observation["instruction"]
     assert raw["image_artifacts"]["fpv"].endswith(".png")
     assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
     image_block = observation_blocks[1]

@@ -218,19 +218,20 @@ handle, after which the normal semantic cleanup loop still applies:
 
 ```text
 observe raw FPV
-  -> declare or inline-navigate visual candidate
-  -> navigate_to_object
+  -> navigate_to_visual_candidate
   -> pick
   -> navigate_to_receptacle
   -> open? -> place/place_inside -> close?
 ```
 
-Two implementation variants should stay harness-selectable:
+`camera-raw` uses one live-agent strategy: `inline_on_navigate`. The cleanup
+agent declares a candidate only when trying to act on it, through
+`navigate_to_visual_candidate`. Do not add a separate pre-registration knob to
+normal raw-FPV runs unless future harness evidence shows a clear win.
 
-| Variant | Shape | Expected default |
-| --- | --- | --- |
-| `separate_registration` | producer calls `declare_visual_candidates` before cleanup selection | Good for separate camera inference models. |
-| `inline_on_navigate` | cleanup agent declares a candidate only when trying to act on it | Preferred first live default for `camera-raw`. |
+Explicit registration still belongs to producer-style perception flows:
+`camera-labels` uses `declare_visual_candidates` after an observation, then the
+cleanup policy chooses among the resulting `observed_*` handles.
 
 Hidden grounding may use execution geometry or camera calibration to bind a
 declaration to an executable object, but model-facing feedback must stay public:

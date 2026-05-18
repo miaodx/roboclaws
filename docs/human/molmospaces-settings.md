@@ -65,8 +65,14 @@ scoring truth. It applies to both camera profiles:
 
 | Profile | Producer | Declaration timing |
 |---------|----------|--------------------|
-| `camera-raw` | Main cleanup agent reasoning over FPV image blocks. | Prefer inline declaration when the agent attempts to navigate to a candidate. |
-| `camera-labels` | Separate camera inference producer, detector, or deterministic harness producer. | Prefer explicit batch declaration after an observation. |
+| `camera-raw` | Main cleanup agent reasoning over FPV image blocks. | Inline only: call `navigate_to_visual_candidate` when acting on a candidate. |
+| `camera-labels` | Separate camera inference producer, detector, or deterministic harness producer. | Producer registration: call `declare_visual_candidates` after an observation. |
+
+`camera-raw` deliberately has no separate pre-registration strategy in normal
+agent runs. That keeps the live image-agent loop close to the operator's mental
+model: observe a raw camera frame, choose one plausible cleanup object, navigate
+to it, then pick and place it. Explicit registration remains useful for
+`camera-labels`, where perception and cleanup selection are separate roles.
 
 The declaration evidence should include source observation id, category, target
 fixture id, evidence note, image region, producer metadata, grounding status,

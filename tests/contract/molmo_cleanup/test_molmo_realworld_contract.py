@@ -249,6 +249,9 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert observation["visible_object_detections"] == []
     assert observation["raw_fpv_observation"]["observation_id"].startswith("raw_fpv_")
     assert observation["raw_fpv_observation"]["image_artifacts"] == {}
+    assert "inline_on_navigate" in observation["instruction"]
+    assert "navigate_to_visual_candidate" in observation["instruction"]
+    assert "declare_visual_candidates" not in observation["instruction"]
     assert agent_view["perception_mode"] == RAW_FPV_ONLY_MODE
     assert agent_view["structured_detections_available"] is False
     assert agent_view["observed_objects"] == []
@@ -378,6 +381,7 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     assert response["ok"] is True
     assert response["tool"] == "navigate_to_visual_candidate"
     assert response["object_id"].startswith("observed_")
+    assert response["declaration_strategy"] == "inline_on_navigate"
     assert response["required_next_tool"] == "pick"
     assert response["model_declared_observation"]["grounding_status"] == "resolved"
     assert contract.pick(response["object_id"])["ok"] is True

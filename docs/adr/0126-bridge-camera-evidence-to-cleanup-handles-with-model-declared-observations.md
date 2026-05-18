@@ -38,8 +38,11 @@ The cleanup contract should:
   reasoning;
 - let `camera-labels` producers register structured candidates through the same
   declaration schema;
-- prefer `inline_on_navigate` for live raw-FPV agents, while keeping separate
-  registration as a harness-selectable variant;
+- use `inline_on_navigate` as the live raw-FPV behavior: the cleanup agent
+  declares a candidate only when attempting to navigate to it;
+- reserve explicit `declare_visual_candidates` registration for producer-style
+  perception flows such as `camera-labels`, not as a normal `camera-raw`
+  strategy choice;
 - use public declaration fields such as source observation id, category, target
   fixture id, evidence note, image region, producer metadata, and confidence;
 - treat declarations as append-only evidence;
@@ -67,4 +70,3 @@ observation becomes its own raw FPV evidence row.
 - Private generated mess sets, acceptable destinations, scorer object results,
   and internal object ids remain outside Agent View, traces, and model-facing
   grounding feedback.
-

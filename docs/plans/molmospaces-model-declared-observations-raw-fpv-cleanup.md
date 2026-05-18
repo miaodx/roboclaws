@@ -59,16 +59,16 @@ observed-handle lifecycle.
 
 ## Public Tool Shape
 
-Expose two declaration strategies as harness-selectable variants:
+Expose one live raw-FPV action path:
 
-| Variant | Tool shape | Use |
+| Profile | Tool shape | Use |
 | --- | --- | --- |
-| `separate_registration` | `declare_visual_candidates(observation_id, candidates, producer_type, producer_id)` | Best for separate camera inference producers and explicit batch registration. |
-| `inline_on_navigate` | `navigate_to_visual_candidate(source_observation_id, category, target_fixture_id, evidence_note, image_region, ...)` | Best for raw-FPV live agents; the agent declares only when it attempts to act. |
+| `camera-raw` | `navigate_to_visual_candidate(source_observation_id, category, target_fixture_id, evidence_note, image_region, ...)` | The live agent declares only when it attempts to act. |
+| `camera-labels` | `declare_visual_candidates(observation_id, candidates, producer_type, producer_id)` | Separate camera inference producers and explicit batch registration. |
 
-Both variants should call the same internal registration path. The default live
-strategy should be `inline_on_navigate` unless harness evidence shows that
-separate registration is more reliable.
+Both paths call the same internal registration path. The live `camera-raw`
+strategy is `inline_on_navigate`; explicit registration is reserved for
+producer-style `camera-labels` flows.
 
 Replace the producer-specific `infer_camera_model_candidates` path with the
 producer-agnostic `declare_visual_candidates`. No compatibility layer is needed
@@ -324,11 +324,8 @@ semantic-loop checks.
    - semantic timeline/checker handling for `navigate_to_visual_candidate`;
    - public insufficiency errors without forbidden keys;
    - no private-truth leakage in Agent View or trace.
-9. Run the harness comparison:
-   - `separate_registration`;
-   - `inline_on_navigate`;
-   - default chosen by restoration rate, declaration count, semantic-order
-     errors, and private-boundary checks.
+9. Run the live `camera-raw` gate with `inline_on_navigate`, and run
+   producer-registration checks under `camera-labels`.
 
 ## Non-Goals
 

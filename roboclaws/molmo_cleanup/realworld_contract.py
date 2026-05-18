@@ -30,6 +30,8 @@ CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
+RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
+RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 REALWORLD_PERCEPTION_MODES = frozenset(
@@ -39,6 +41,20 @@ REALWORLD_PERCEPTION_MODES = frozenset(
         CAMERA_MODEL_POLICY_MODE,
     }
 )
+
+
+def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> str:
+    subject = (
+        f"observation_id={observation_id}" if observation_id else "the current raw FPV observation"
+    )
+    return (
+        f"Raw FPV-only mode uses {RAW_FPV_DECLARATION_STRATEGY}: inspect the FPV "
+        f"image block for {subject}, do not batch-register candidates first, "
+        "and call navigate_to_visual_candidate only when acting on a plausible "
+        "cleanup object. Use broad cleanup categories such as "
+        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain."
+    )
+
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
     {
@@ -325,11 +341,8 @@ class RealWorldCleanupContract:
                 perception_source = CAMERA_MODEL_POLICY_MODE
                 camera_model_available = True
             else:
-                instruction = (
-                    "Raw FPV-only mode: infer any cleanup candidates from the FPV image. "
-                    "No structured movable-object detections, categories, support estimates, "
-                    "target labels, or generated mess truth are provided. Use "
-                    "navigate_to_visual_candidate when acting on a visual candidate."
+                instruction = raw_fpv_inline_candidate_instruction(
+                    str(raw_observation["observation_id"])
                 )
                 perception_source = RAW_FPV_ONLY_MODE
                 camera_model_available = False
@@ -564,7 +577,7 @@ class RealWorldCleanupContract:
             **payload,
             object_id=handle,
             model_declared_observation=declaration,
-            declaration_strategy="inline_on_navigate",
+            declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
             required_next_tool="pick",
         )
 

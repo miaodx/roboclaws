@@ -23,8 +23,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    structured labels. Inspect the image, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
    target_fixture_id, evidence_note, image_region, ...)` only when you intend to
-   act on a visual candidate. Prefer broad cleanup categories when uncertain
-   (`food`, `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
+   act on a visual candidate. Do not pre-register raw-FPV candidates with
+   `roboclaws__declare_visual_candidates`; that producer-registration path is
+   for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
+   `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
    over-specific guesses that are likely to miss the public grounding resolver.
    In `camera-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled

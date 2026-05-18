@@ -34,6 +34,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
     cleanup_policy_trace_from_events,
+    raw_fpv_inline_candidate_instruction,
     real_robot_readiness_from_events,
 )
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
@@ -410,12 +411,8 @@ class RealWorldMolmoCleanupMCPServer:
             )
         if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
-            augmented["instruction"] = (
-                "Inspect the FPV image block for observation_id="
-                f"{raw.get('observation_id', '')}, then call navigate_to_visual_candidate "
-                "when acting on a plausible cleanup object. Use broad cleanup categories "
-                "such as food, dish, book, linen, toy, electronics, or pillow when the "
-                "exact object class is uncertain."
+            augmented["instruction"] = raw_fpv_inline_candidate_instruction(
+                str(raw.get("observation_id") or "")
             )
         if tool == "fixture_hints":
             augmented["instruction"] = (
