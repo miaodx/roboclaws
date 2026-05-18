@@ -18,6 +18,23 @@ default:
 codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"
 claude_full_permission_args := "--dangerously-skip-permissions --permission-mode bypassPermissions"
 
+# Build the pinned Codex / Claude Code Docker image used by CI and optional
+# local runs.
+docker-build:
+    @scripts/dev/coding_agent_docker.sh build
+
+# Print versions from the pinned Docker image.
+docker-versions:
+    @scripts/dev/coding_agent_docker.sh versions
+
+# Install codex/claude wrapper shims that route through the pinned Docker image.
+# Usage:
+#   just code::docker-install-wrappers .tmp/coding-agent-bin
+#   Add .tmp/coding-agent-bin to PATH before running the public task facade.
+docker-install-wrappers shim_dir=".tmp/coding-agent-bin":
+    @scripts/dev/coding_agent_docker.sh ensure
+    @scripts/dev/coding_agent_docker.sh install-wrappers "{{shim_dir}}"
+
 cc scene="FloorPlan201" host="127.0.0.1" port="18788":
     #!/usr/bin/env bash
     set -euo pipefail

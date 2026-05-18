@@ -32,6 +32,10 @@ MOLMO_JUST = JUST_DIR / "molmo.just"
 HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
+CODING_AGENT_DOCKERFILE = REPO_ROOT / "Dockerfile.coding-agents"
+CODING_AGENT_DOCKER_SH = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
+CODING_AGENT_TOOLCHAIN = REPO_ROOT / "scripts" / "dev" / "coding_agent_toolchain.env"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 # Matches an inter-recipe call to mcp::up and captures the trailing argument
 # list up to end-of-line. Excludes the recipe definition header.
@@ -107,6 +111,48 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
     assert "codex --yolo" not in text
     assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
     assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
+
+
+def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
+    """CI should run live agents through one pinned Codex/Claude Code image."""
+    code_text = CODE_JUST.read_text(encoding="utf-8")
+    dockerfile_text = CODING_AGENT_DOCKERFILE.read_text(encoding="utf-8")
+    docker_script_text = CODING_AGENT_DOCKER_SH.read_text(encoding="utf-8")
+    toolchain_text = CODING_AGENT_TOOLCHAIN.read_text(encoding="utf-8")
+    ci_text = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "docker-build:" in code_text
+    assert 'docker-install-wrappers shim_dir=".tmp/coding-agent-bin":' in code_text
+    assert "scripts/dev/coding_agent_docker.sh install-wrappers" in code_text
+
+    assert (
+        "ARG ROBOCLAWS_NODE_IMAGE=node:22-bookworm-slim@sha256:"
+        "689c11043dad91472750cd824c97dd5e2318e9dd6f954e492fe7af0135d33ceb"
+    ) in dockerfile_text
+    assert "ARG CODEX_NPM_PACKAGE=@openai/codex@0.130.0" in dockerfile_text
+    assert "ARG CLAUDE_CODE_NPM_PACKAGE=@anthropic-ai/claude-code@2.1.143" in dockerfile_text
+    assert 'npm install -g "${CODEX_NPM_PACKAGE}" "${CLAUDE_CODE_NPM_PACKAGE}"' in (dockerfile_text)
+
+    assert "ROBOCLAWS_CODEX_NPM_PACKAGE:=@openai/codex@0.130.0" in toolchain_text
+    assert (
+        "ROBOCLAWS_CODE_AGENT_NODE_IMAGE:=node:22-bookworm-slim@sha256:"
+        "689c11043dad91472750cd824c97dd5e2318e9dd6f954e492fe7af0135d33ceb"
+    ) in toolchain_text
+    assert "ROBOCLAWS_CLAUDE_CODE_NPM_PACKAGE:=@anthropic-ai/claude-code@2.1.143" in toolchain_text
+    assert "roboclaws-coding-agents:codex-0.130.0-claude-2.1.143" in toolchain_text
+
+    assert "install-wrappers" in docker_script_text
+    assert "exec docker" in docker_script_text
+    assert "ANTHROPIC_BASE_URL" in docker_script_text
+    assert "MIMO_TP_KEY" in docker_script_text
+
+    assert "Build pinned coding-agent CLI image" in ci_text
+    assert "scripts/dev/coding_agent_docker.sh build" in ci_text
+    assert "scripts/dev/coding_agent_docker.sh install-wrappers .tmp/coding-agent-bin" in ci_text
+    assert 'echo "$PWD/.tmp/coding-agent-bin" >> "$GITHUB_PATH"' in ci_text
+    assert 'npm install -g "$CODEX_NPM_PACKAGE" "$CLAUDE_CODE_NPM_PACKAGE"' not in ci_text
+    assert "vars.CODEX_NPM_PACKAGE" not in ci_text
+    assert "vars.CLAUDE_CODE_NPM_PACKAGE" not in ci_text
 
 
 def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> None:

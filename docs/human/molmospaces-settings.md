@@ -159,6 +159,20 @@ shared fallbacks. Before a long Codex visual cleanup run, use:
 just code::codex-provider-smoke
 ```
 
+CI runs the live Claude Code matrix through the pinned coding-agent Docker
+toolchain. Use the same toolchain locally when comparing Kimi/MiMo results
+across machines:
+
+```bash
+just code::docker-install-wrappers .tmp/coding-agent-bin
+PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
+  ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic \
+  ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni \
+  just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
+```
+
+Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
+
 `codex-live` is detached by default. `just molmo::codex-report` starts a tmux
 session that owns the cleanup MCP server, `codex exec`, logs, checker, and
 artifacts, then returns with status/attach/tail commands. Probe it without

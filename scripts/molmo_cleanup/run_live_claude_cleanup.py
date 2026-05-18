@@ -193,6 +193,19 @@ class LiveClaudeCleanupRunner:
         if self.args.claude_provider_summary != "system defaults":
             print(f"==> Claude Code provider for this run: {self.args.claude_provider_summary}")
         print(f"==> kickoff: {self.args.kickoff_prompt}")
+        version_proc = subprocess.run(
+            [self.args.claude_bin, "--version"],
+            cwd=self.args.repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        version_text = (
+            (getattr(version_proc, "stdout", "") or "")
+            + (getattr(version_proc, "stderr", "") or "")
+        ).strip()
+        if version_text:
+            (self.run_dir / "claude-version.txt").write_text(version_text + "\n", encoding="utf-8")
 
         command = [
             self.args.claude_bin,

@@ -16,6 +16,7 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+.tmp/
 
 # Editor
 .vscode/

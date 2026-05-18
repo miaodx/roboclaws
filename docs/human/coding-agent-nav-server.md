@@ -75,6 +75,17 @@ against the current Codex CLI wire API:
 just code::codex-provider-smoke
 ```
 
+For version-stable local runs that match the live CI agent toolchain, use the
+pinned Docker wrappers instead of the machine-wide `codex` / `claude` binaries:
+
+```bash
+just code::docker-install-wrappers .tmp/coding-agent-bin
+PATH="$PWD/.tmp/coding-agent-bin:$PATH" just code::cc
+```
+
+The wrapper image is `Dockerfile.coding-agents`; default package pins live in
+`scripts/dev/coding_agent_toolchain.env`.
+
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):
 
