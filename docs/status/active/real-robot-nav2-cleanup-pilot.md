@@ -273,6 +273,15 @@ Latest unblock/audit check on 2026-05-18:
     showed `OPENAI_API_KEY=2026-05-18T15:29:18Z`. Latest normal push/PR CI is
     green on branch head `3d60857`, PR #112 is still draft, and no official
     proof redispatch was attempted because the secret timestamp is unchanged.
+  - Bounded watcher on 2026-05-18T21:12:22Z through 2026-05-18T21:16:58Z
+    polled the same secret ten more times. Every poll still returned
+    `OPENAI_API_KEY=2026-05-18T15:29:18Z`, so no official proof redispatch was
+    attempted.
+  - Local official-proof route recheck after that watcher still reported
+    `network: work`, `OPENAI_API_KEY_set=false`, no `HTTPS_PROXY` /
+    `ALL_PROXY`, and a direct `curl -I --max-time 10
+    https://api.openai.com/v1/responses` connection reset. This host still
+    cannot run the official OpenAI-backed Codex proof directly.
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
