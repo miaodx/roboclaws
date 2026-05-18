@@ -1,8 +1,10 @@
 # Direct Coding-Agent Robot Driver
 
-Run AI2-THOR locally and let Codex or Claude Code drive the robot through the
-existing `roboclaws__observe`, `roboclaws__move`, and `roboclaws__done` MCP
-tools. This path does not use the OpenClaw Gateway.
+Run AI2-THOR locally and let Docker-backed Codex or Claude Code drive the robot
+through the existing `roboclaws__observe`, `roboclaws__move`, and
+`roboclaws__done` MCP tools. This path does not use the OpenClaw Gateway: the
+MCP server and AI2-THOR stay on the host, while the coding-agent CLI runs in
+the pinned `Dockerfile.coding-agents` image.
 
 ## Start the Server
 
@@ -24,18 +26,21 @@ Cleanup:
 just mcp::down
 ```
 
-The `code::cc` and `code::codex` recipes start the MCP server, wait for it to come
-up, register `roboclaws`, then launch Claude Code or Codex and clean up everything
-on exit.
+The `code::cc` and `code::codex` recipes start the MCP server, wait for it to
+come up, register `roboclaws` inside the Docker-backed agent runtime, then
+launch Claude Code or Codex and clean up everything on exit.
 
-Both recipes default to full agent permissions for local demo operation:
+Both recipes run with full agent permissions for local demo operation:
 `code::codex` uses Codex's bypass-approvals-and-sandbox mode, and `code::cc`
-uses Claude Code's bypass-permissions mode. Run them only in a trusted local
-checkout.
+uses Claude Code's bypass-permissions mode. Docker is required. Run them only
+in a trusted local checkout.
 
-To run these demos through Kimi or MiMo without changing the machine-wide Codex
-or Claude Code defaults, add optional provider overrides to the repo-local
-`.env`:
+Bare host `codex` or `claude` launches are not part of the supported path. Use
+them only when a human explicitly asks for a system-CLI debugging run, and label
+that run as outside the supported demo path.
+
+To run these demos through Kimi or MiMo without editing user-level Codex or
+Claude Code config, add optional provider overrides to the repo-local `.env`:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=mimo-openai
@@ -50,7 +55,8 @@ and `system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` are accepted as
 shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
 var, protocol, and `CLAUDE_CODE_SIMPLE=1` together for the launched process
-only; unset variables leave the CLIs on their normal configured defaults.
+only. The `system` provider uses the container's configured auth; for host
+Codex login, use the explicit opt-in below.
 
 The `code::cc` and `code::codex` launchers also pass the selected coding-agent
 model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
@@ -75,18 +81,9 @@ against the current Codex CLI wire API:
 just code::codex-provider-smoke
 ```
 
-For version-stable local runs that match the live CI agent toolchain, use the
-pinned Docker wrappers instead of the machine-wide `codex` / `claude` binaries:
-
-```bash
-just code::docker-install-wrappers .tmp/coding-agent-bin
-PATH="$PWD/.tmp/coding-agent-bin:$PATH" just code::cc
-```
-
-The wrapper image is `Dockerfile.coding-agents`; default package pins live in
-`scripts/dev/coding_agent_toolchain.env`.
-When these Docker wrappers are used through `just code::cc` or
-`just code::codex`, the launcher sets
+The coding-agent image is `Dockerfile.coding-agents`; default package pins live
+in `scripts/dev/coding_agent_toolchain.env`. The public launchers call this
+Docker runtime directly and set
 `ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE=1`,
 `ROBOCLAWS_CODE_AGENT_DOCKER_TASK=ai2thor-nav`, and
 `ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS=ai2thor-navigator` by default. The agent
@@ -108,7 +105,6 @@ container:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
 ROBOCLAWS_CODEX_PROVIDER=system \
 ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just code::codex
@@ -132,22 +128,23 @@ default it listens on localhost:
 http://127.0.0.1:18788/mcp
 ```
 
-## Connect a Coding Agent
+## Low-Level Debugging
 
-In another terminal from this repo:
+For manual MCP debugging, keep the same Docker-backed runtime. In another
+terminal from this repo:
 
 ```bash
-codex mcp add roboclaws --url http://127.0.0.1:18788/mcp
+scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws --url http://127.0.0.1:18788/mcp
 ```
 
 or:
 
 ```bash
-claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
+scripts/dev/coding_agent_docker.sh run claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp
 ```
 
-Then start Codex or Claude Code normally and ask it to use the tools. A good
-first message is:
+Then start the same Docker-backed Codex or Claude Code runtime and ask it to use
+the tools. A good first message is:
 
 ```text
 Read skills/ai2thor-navigator/SKILL.md. Use roboclaws__observe first, then

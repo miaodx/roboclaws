@@ -538,10 +538,13 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "roboclaws_load_dotenv .env" in code_text
     assert "roboclaws_codex_provider_args codex_model_args" in code_text
     assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in code_text
-    assert 'codex "${codex_model_args[@]}" {{codex_full_permission_args}}' in code_text
+    assert 'docker_codex=("$repo_root/scripts/dev/coding_agent_docker.sh" run codex)' in code_text
+    assert '"${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}' in (
+        code_text
+    )
     assert (
-        'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})'
-        in code_text
+        'claude_command=("${docker_claude[@]}" "${claude_model_args[@]}" '
+        "{{claude_full_permission_args}})" in code_text
     )
     assert 'for entry in "${claude_env_args[@]}"; do' in code_text
     assert 'export "$entry"' in code_text
@@ -550,15 +553,14 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "source scripts/dev/coding_agent_env.sh" in molmo_text
     assert "roboclaws_codex_provider_args codex_model_args" in molmo_text
     assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in molmo_text
+    assert "scripts/dev/coding_agent_docker.sh ensure" in molmo_text
+    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in molmo_text
     assert '"--codex-model-arg=$arg"' in molmo_text
     assert "--codex-provider-summary" in molmo_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
-    assert (
-        'claude_command=("$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}})'
-        in molmo_text
-    )
+    assert '--claude-bin "$claude_bin"' in molmo_text
     assert "ANTHROPIC_BASE_URL" in helper_text
     assert "ANTHROPIC_API_KEY" in helper_text
 

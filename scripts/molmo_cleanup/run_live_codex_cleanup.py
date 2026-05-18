@@ -156,6 +156,7 @@ class LiveCodexCleanupRunner:
     def _run_codex(self) -> None:
         self._write_status("running-codex")
         env = os.environ.copy()
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
             task_name="molmo-cleanup",

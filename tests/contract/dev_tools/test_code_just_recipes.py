@@ -105,10 +105,16 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
         'claude_full_permission_args := "--dangerously-skip-permissions '
         '--permission-mode bypassPermissions"'
     ) in text
-    assert 'codex "${codex_model_args[@]}" {{codex_full_permission_args}}' in text
+    assert "scripts/dev/coding_agent_docker.sh ensure" in text
+    assert 'docker_codex=("$repo_root/scripts/dev/coding_agent_docker.sh" run codex)' in text
+    assert '"${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}' in text
+    assert 'docker_claude=("$repo_root/scripts/dev/coding_agent_docker.sh" run claude)' in text
     assert (
-        'claude_command=(claude "${claude_model_args[@]}" {{claude_full_permission_args}})' in text
-    )
+        'claude_command=("${docker_claude[@]}" "${claude_model_args[@]}" '
+        "{{claude_full_permission_args}})"
+    ) in text
+    assert "command -v codex" not in text
+    assert "command -v claude" not in text
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="' in text
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="' in text
     assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="' in text
@@ -238,7 +244,8 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "uses_docker_agent_wrapper" in text
+    assert "scripts/dev/coding_agent_docker.sh ensure" in text
+    assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup" in text
     assert "wait_for_mcp_ready" in text
     assert 'tmux new-session -d -s "$session_name"' in text
@@ -246,6 +253,7 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     assert '"--json"' in runner_text
     assert '"--output-last-message"' in runner_text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE" in runner_text
+    assert 'env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")' in (runner_text)
     expected_agent_cd = (
         'agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)'
     )

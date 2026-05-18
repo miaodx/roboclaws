@@ -154,6 +154,7 @@ class LiveClaudeCleanupRunner:
     def _run_claude(self) -> None:
         self._write_status("running-claude")
         env = os.environ.copy()
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         for item in self.args.claude_env:
             key, sep, value = item.partition("=")
             if not sep:

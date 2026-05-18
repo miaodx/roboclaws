@@ -92,23 +92,22 @@ ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
-the selected OpenAI-compatible endpoint works with the installed Codex CLI.
+the selected OpenAI-compatible endpoint works with the pinned Docker-backed
+Codex CLI.
 
-For more reproducible local and CI live-agent runs, build the pinned Docker
-toolchain and put its `codex` / `claude` shims first on `PATH`:
+Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just code::docker-install-wrappers .tmp/coding-agent-bin
-PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
-  ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic \
-  ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 \
-  just task::run molmo-cleanup claude world-labels
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic \
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 \
+just task::run molmo-cleanup claude world-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
 `@openai/codex@0.130.0` plus `@anthropic-ai/claude-code@2.1.143` by default.
 Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
-agent CLIs.
+agent CLIs. `just code::docker-install-wrappers` still exists for CI setup and
+manual debugging where a `codex` or `claude` command path is required.
 
 Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
 into copying host Codex auth plus a minimal provider config into the pinned
@@ -116,7 +115,6 @@ container:
 
 ```bash
 ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
 ROBOCLAWS_CODEX_PROVIDER=system \
 ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just task::run molmo-cleanup codex world-labels

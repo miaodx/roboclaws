@@ -149,9 +149,10 @@ ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
-`system` leaves the system CLI defaults unchanged. Kimi/MiMo profiles select
-model, base URL, API-key env var, protocol, and `CLAUDE_CODE_SIMPLE=1` for the
-launched process only.
+`system` means the pinned container uses its configured auth/provider state.
+Kimi/MiMo profiles select model, base URL, API-key env var, protocol, and
+`CLAUDE_CODE_SIMPLE=1` for the launched process only. Bare system CLIs are
+outside the supported path unless a human explicitly asks for a debugging run.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
 shared fallbacks. Before a long Codex visual cleanup run, use:
 
@@ -159,16 +160,14 @@ shared fallbacks. Before a long Codex visual cleanup run, use:
 just code::codex-provider-smoke
 ```
 
-CI runs the live Claude Code matrix through the pinned coding-agent Docker
-toolchain. Use the same toolchain locally when comparing Kimi/MiMo results
-across machines:
+CI and local public live-agent recipes support Codex / Claude only through the
+pinned coding-agent Docker toolchain. Use the same provider settings when
+comparing Kimi/MiMo results across machines:
 
 ```bash
-just code::docker-install-wrappers .tmp/coding-agent-bin
-PATH="$PWD/.tmp/coding-agent-bin:$PATH" \
-  ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic \
-  ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni \
-  just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
+ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic \
+ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni \
+just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.

@@ -87,8 +87,11 @@ def mcp_url(host: str, port: int) -> str:
 def client_setup_commands(url: str) -> dict[str, str]:
     port = url.rsplit(":", 1)[-1].split("/", 1)[0]
     return {
-        "Codex": f"codex mcp add roboclaws --url {url}",
-        "Claude Code": f"claude mcp add --transport http roboclaws {url}",
+        "Codex": f"scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws --url {url}",
+        "Claude Code": (
+            f"scripts/dev/coding_agent_docker.sh run claude mcp add --transport http "
+            f"roboclaws {url}"
+        ),
         "OpenClaw": (
             "SKILLS_DIR=$PWD/skills/molmo-realworld-cleanup "
             f"ROBOCLAWS_MCP_URL=http://host.docker.internal:{port}/mcp "
