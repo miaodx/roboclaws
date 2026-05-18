@@ -378,7 +378,7 @@ roboclaws_assert_codex_network_allowed() {
   if [[ "$provider" == "openai-responses" ]]; then
     if ! roboclaws_openai_responses_reachable; then
       echo "error: ${label} uses openai-responses, but api.openai.com is not reachable from this shell." >&2
-      echo "       Run just code::codex-provider-smoke after fixing network/proxy access, or switch to a repo-local provider profile for non-official smoke runs." >&2
+      echo "       Fix network/proxy access before launching Codex, or switch to a repo-local provider profile for non-official smoke runs after its provider smoke passes." >&2
       return 1
     fi
     echo "==> network guard ok: api.openai.com reachable for openai-responses" >&2

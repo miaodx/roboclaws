@@ -39,6 +39,9 @@ Last updated: 2026-05-18
   proxy variables into Codex.
 - `openai-responses` Codex runs now fail fast before detached launch when
   `api.openai.com` is unreachable from the invoking shell.
+- `just code::codex-provider-smoke` uses the same `openai-responses`
+  reachability guard, so the recommended preflight no longer waits for Codex
+  retries when the official endpoint is blocked.
 - Broken legacy Molmo compatibility symlinks at removed root paths were deleted
   so the repo-wide static gate no longer asks Ruff to lint missing files.
 

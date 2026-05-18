@@ -101,9 +101,9 @@ Run `just code::codex-provider-smoke` before long Codex visual runs to verify
 the selected OpenAI-compatible endpoint works with the pinned Docker-backed
 Codex CLI. Do not assume a repo-local OpenAI-compatible provider supports Codex
 until this smoke passes; some endpoints may not expose `/v1/responses`.
-When `ROBOCLAWS_CODEX_PROVIDER=openai-responses`, live Codex launchers also
-probe `api.openai.com` before starting the detached tmux run and fail fast if
-the official endpoint is unreachable.
+When `ROBOCLAWS_CODEX_PROVIDER=openai-responses`, the provider smoke and live
+Codex launchers also probe `api.openai.com` before starting Codex and fail fast
+if the official endpoint is unreachable.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 

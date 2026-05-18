@@ -215,6 +215,7 @@ codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
       echo "error: no Codex provider profile selected; set ROBOCLAWS_CODEX_PROVIDER=kimi-openai or mimo-openai in .env" >&2
       exit 1
     fi
+    roboclaws_assert_codex_network_allowed "Codex provider smoke"
     codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
     codex_model_args=()
     roboclaws_codex_provider_args codex_model_args
