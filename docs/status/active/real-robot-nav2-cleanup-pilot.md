@@ -50,6 +50,9 @@ Last updated: 2026-05-18
   `OPENAI_API_KEY` secret; it uploads
   `report-molmo-official-codex-gpt55-nav2` and runs the same no-regression /
   real-robot-alignment checker.
+- The official CI job now runs a cheap Docker-backed Codex provider smoke before
+  launching the Molmo backend, so missing or invalid official OpenAI credentials
+  fail before Xvfb/tmux/Molmo runtime startup.
 - The official CI proof keeps a manually managed Xvfb server alive for the
   detached tmux runner and normalizes live-agent Docker workspaces to absolute
   paths before mounting them.
@@ -272,8 +275,9 @@ gh workflow run ci.yml \
 
 Current CI-side blocker: replace the GitHub `OPENAI_API_KEY` repository secret
 with a valid official OpenAI API key for `https://api.openai.com/v1/responses`,
-then re-dispatch the opt-in proof. Do not mark the goal complete until that
-artifact exists and passes the checker.
+then re-dispatch the opt-in proof. The preflight step should pass before the
+Molmo backend starts. Do not mark the goal complete until that artifact exists
+and passes the checker.
 
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report

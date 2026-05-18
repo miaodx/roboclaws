@@ -754,6 +754,19 @@ jobs:
           echo "$PWD/.tmp/coding-agent-bin" >> "$GITHUB_PATH"
           .tmp/coding-agent-bin/codex --version
 
+      - name: Preflight official Codex GPT-5.5 OpenAI key
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ROBOCLAWS_CODEX_PROVIDER: openai-responses
+          ROBOCLAWS_CODEX_MODEL: gpt-5.5
+          ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS: "1"
+        run: |
+          test -n "$OPENAI_API_KEY" || {
+            echo "OPENAI_API_KEY secret is required for the official Codex proof." >&2
+            exit 1
+          }
+          just code::codex-provider-smoke
+
       - name: Run official Codex GPT-5.5 Nav2 cleanup proof
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
