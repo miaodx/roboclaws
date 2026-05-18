@@ -286,6 +286,10 @@ Latest unblock/audit check on 2026-05-18:
     `ALL_PROXY`, and a direct `curl -I --max-time 10
     https://api.openai.com/v1/responses` connection reset. This host still
     cannot run the official OpenAI-backed Codex proof directly.
+  - Follow-up bounded watcher on 2026-05-18T22:26:24Z through
+    2026-05-18T22:31:01Z polled the same secret ten more times. Every poll still
+    returned `OPENAI_API_KEY=2026-05-18T15:29:18Z`, so no official proof
+    redispatch was attempted.
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
