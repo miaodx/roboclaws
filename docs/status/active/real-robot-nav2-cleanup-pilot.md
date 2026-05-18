@@ -277,7 +277,8 @@ Current CI-side blocker: replace the GitHub `OPENAI_API_KEY` repository secret
 with a valid official OpenAI API key for `https://api.openai.com/v1/responses`,
 then re-dispatch the opt-in proof. The preflight step should pass before the
 Molmo backend starts. Do not mark the goal complete until that artifact exists
-and passes the checker.
+and passes the checker. The human-owned credential unblock is tracked in
+GitHub issue #111: https://github.com/MiaoDX/roboclaws/issues/111
 
 Then validate the resulting report with `--require-real-robot-alignment`. Do not
 mark the active goal complete until that official Codex GPT-5.5 cleanup report
