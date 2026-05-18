@@ -89,24 +89,36 @@ Latest fresh attempt:
 - Error: stream disconnected before completion while sending request to
   `https://api.openai.com/v1/responses`
 
-The official OpenAI API fallback is wired but cannot run on this machine yet:
+The official OpenAI API fallback is wired but cannot complete on this machine
+yet:
 
 - Command profile: `ROBOCLAWS_CODEX_PROVIDER=openai-responses`,
   `ROBOCLAWS_CODEX_MODEL=gpt-5.5`
-- Status: failed before launch
-- Error: `openai-responses requires OPENAI_API_KEY`
+- Status with repo `.env`: failed before launch because `.env` does not export
+  `OPENAI_API_KEY`
+- Status with host Codex auth key exported in-process: cheap
+  `just code::codex-provider-smoke` reaches Codex startup but fails all retries
+  against `https://api.openai.com/v1/responses`
+- Error: `stream disconnected before completion: error sending request for url
+  (https://api.openai.com/v1/responses)`
 
 Latest unblock/audit check on 2026-05-18:
 
 - `just dev::network-status` still reports `network: work`.
 - `OPENAI_API_KEY`, `HTTP_PROXY`, `HTTPS_PROXY`, and `ALL_PROXY` are unset after
   loading `.env`.
+- Host Codex auth has an `OPENAI_API_KEY`-named credential, but using it only
+  moves `openai-responses` from key preflight to the same `api.openai.com`
+  network reset.
 - Common local proxy ports `7890`, `7891`, `7897`, `1080`, `1087`, `20171`,
   `8080`, and `3128` are closed.
 - Direct OpenAI reachability is still unavailable: IPv4 resets connections to
   `api.openai.com`; IPv6 does not resolve.
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` fails provider-arg construction
   before launch because `OPENAI_API_KEY` is missing.
+- `ROBOCLAWS_CODEX_PROVIDER=openai-responses` with the host Codex auth key fails
+  the cheap provider smoke with request errors to
+  `https://api.openai.com/v1/responses`; no system-provider fallback was used.
 - `ROBOCLAWS_CODEX_PROVIDER=system` is blocked by the work-network guard.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
