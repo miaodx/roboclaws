@@ -160,6 +160,26 @@ The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
 `is_misplaced`, private scoring truth, or AI2-THOR object inventory helpers.
 
+### `real_robot_cleanup_v1`
+
+The first physical cleanup-facing profile keeps the cleanup-shaped public tool
+list but narrows executable capability to navigation and perception:
+
+- `metric_map` returns the prebuilt Nav2-shaped map bundle contract.
+- `fixture_hints` returns authored static fixture semantics and preferred
+  waypoints.
+- `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
+  `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
+  bounded Nav2 navigation actions when enough public grounding is available.
+- `observe`, `adjust_camera`, `declare_visual_candidates`, and
+  `inspect_visible_object` stay grounded in robot-camera artifacts.
+- `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`
+  are present only as structured `blocked_capability` responses until physical
+  manipulation is proven.
+
+This profile exists so reports can distinguish
+`physical_navigation_pilot=true` from `physical_cleanup_ready=false`.
+
 ## Design Considerations
 
 ### Keep Profiles Backend/Domain Specific
@@ -170,7 +190,6 @@ names while exposing different tools.
 
 Future profiles can combine environment and task domain, for example:
 
-- `real_robot_cleanup_v1`
 - `ai2thor_photo_v1`
 - `molmospaces_camera_cleanup_v1`
 

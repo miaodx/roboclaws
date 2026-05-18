@@ -24,13 +24,15 @@ operator-authored fixture/waypoint semantic map. Runtime movable objects remain
 robot-local observations or model-declared observations; live SLAM and live
 fixture discovery are later capabilities.
 
-For the day-one Navigation + Perception Pilot, expose the cleanup-shaped tool
-list but make only navigation and perception executable: `metric_map`,
-`fixture_hints`, `navigate_to_waypoint`, `observe`, and
-`navigate_to_receptacle`. Physical `navigate_to_receptacle` means "navigate to
-the fixture's preferred public waypoint" through Nav2; it does not require a
-held object and does not imply manipulation readiness. Physical manipulation
-tools such as `pick`, `place`, `place_inside`, `open_receptacle`, and
+For the day-one Navigation + Perception Pilot, expose the cleanup-shaped public
+tool list but make only navigation and perception executable. Room, waypoint,
+object, visual-candidate, and fixture navigation tools resolve public grounding
+to bounded Nav2 goals when possible. Observation, active camera adjustment,
+visual-candidate declaration, and object inspection stay grounded in public
+camera artifacts. Physical `navigate_to_receptacle` means "navigate to the
+fixture's preferred public waypoint" through Nav2; it does not require a held
+object and does not imply manipulation readiness. Physical manipulation tools
+such as `pick`, `place`, `place_inside`, `open_receptacle`, and
 `close_receptacle` must return structured `blocked_capability` until a separate
 manipulation gate proves them.
 
