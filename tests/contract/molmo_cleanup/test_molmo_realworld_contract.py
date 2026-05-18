@@ -259,6 +259,231 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    contract.navigate_to_waypoint(str(waypoints[0]["waypoint_id"]))
+    adjusted = contract.adjust_camera(yaw_delta_deg=90, pitch_delta_deg=-90)
+    observation = contract.observe()
+    contract.navigate_to_waypoint(str(waypoints[1]["waypoint_id"]))
+    reset_observation = contract.observe()
+
+    assert adjusted["camera_offset"] == {"yaw_delta_deg": 45.0, "pitch_delta_deg": -20.0}
+    assert observation["raw_fpv_observation"]["camera_offset"] == adjusted["camera_offset"]
+    assert reset_observation["raw_fpv_observation"]["camera_offset"] == {
+        "yaw_delta_deg": 0.0,
+        "pitch_delta_deg": 0.0,
+    }
+
+
+def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    declared = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+        candidates=[
+            {
+                "category": "imaginary widget",
+                "target_fixture_id": "sink_01",
+                "evidence_note": "ambiguous tiny object in the far corner",
+                "image_region": {"type": "verbal_region", "value": "far corner"},
+            }
+        ],
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+    candidate = declared["model_declared_observations"][0]
+    picked = contract.pick(candidate["object_id"])
+
+    assert candidate["grounding_status"] == "unresolved"
+    assert picked["ok"] is False
+    assert picked["error_reason"] == "visual_candidate_not_resolved"
+    worklist_item = next(
+        item
+        for item in contract.cleanup_worklist_payload()["objects"]
+        if item["object_id"] == candidate["object_id"]
+    )
+    assert worklist_item["state"] == "grounding_unresolved"
+    assert worklist_item["cleanup_recommended"] is False
+    assert candidate["private_truth_included"] is False
+    _assert_no_forbidden_keys(declared)
+    _assert_no_forbidden_keys(picked)
+
+
+def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    for index in range(7):
+        declared = contract.declare_visual_candidates(
+            observation["raw_fpv_observation"]["observation_id"],
+            candidates=[
+                {
+                    "category": f"imaginary widget {index}",
+                    "target_fixture_id": "sink_01",
+                    "evidence_note": "unresolved visual guess",
+                    "image_region": {"type": "verbal_region", "value": f"far corner {index}"},
+                }
+            ],
+            producer_type="main_cleanup_agent",
+            producer_id="test_agent",
+        )
+        assert declared["model_declared_observations"][0]["grounding_status"] == "unresolved"
+
+    done = contract.done("finished with unresolved false positives")
+
+    assert done["ok"] is True
+    assert done["tool"] == "done"
+    _assert_no_forbidden_keys(done)
+
+
+def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "work_area"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="tomato",
+        target_fixture_id="fridge_01",
+        evidence_note="round produce item on the desk",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is True
+    assert response["tool"] == "navigate_to_visual_candidate"
+    assert response["object_id"].startswith("observed_")
+    assert response["required_next_tool"] == "pick"
+    assert response["model_declared_observation"]["grounding_status"] == "resolved"
+    assert contract.pick(response["object_id"])["ok"] is True
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_rejects_malformed_model_declared_candidate() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    declared = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+        candidates=[
+            {
+                "category": "mug",
+                "target_fixture_id": "sink_01",
+                "evidence_note": "small item near the sink",
+                "image_region": {"type": "polygon", "value": [1, 2, 3]},
+            }
+        ],
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert declared["ok"] is False
+    assert declared["error_reason"] == "invalid_visual_candidate"
+    assert declared["candidate_error"]["field"] == "image_region.type"
+    assert (
+        contract.agent_view_payload()["model_declared_observation_evidence"]["observation_count"]
+        == 0
+    )
+    _assert_no_forbidden_keys(declared)
+
+
+def test_realworld_model_declared_grounding_accepts_public_category_families() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "work_area"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    declared = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+        candidates=[
+            {
+                "category": "tomato",
+                "target_fixture_id": "fridge_01",
+                "evidence_note": "round produce item on the desk",
+                "image_region": {"type": "verbal_region", "value": "front of desk"},
+            }
+        ],
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    candidate = declared["model_declared_observations"][0]
+    assert candidate["grounding_status"] == "resolved"
+    assert candidate["target_plausibility"]["status"] == "plausible"
+    _assert_no_forbidden_keys(declared)
+
+
+def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "living_area"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    declared = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+        candidates=[
+            {
+                "category": "toy",
+                "target_fixture_id": "bookshelf_01",
+                "evidence_note": "toy-like object on the coffee table",
+                "image_region": {"type": "verbal_region", "value": "coffee table"},
+            }
+        ],
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    candidate = declared["model_declared_observations"][0]
+    assert candidate["grounding_status"] == "resolved"
+    assert candidate["target_plausibility"]["status"] == "weak"
+    assert candidate["target_plausibility"]["expected_fixture_id"] == "toy_bin_01"
+    _assert_no_forbidden_keys(declared)
+
+
 def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -270,7 +495,7 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
     for waypoint in contract.metric_map()["inspection_waypoints"]:
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         observation = contract.observe()
-        candidate_response = contract.infer_camera_model_candidates(
+        candidate_response = contract.declare_visual_candidates(
             observation["raw_fpv_observation"]["observation_id"]
         )
         if candidate_response["camera_model_candidates"]:
@@ -284,17 +509,27 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
     assert candidate_response["ok"] is True
     assert candidate_response["visible_object_detections"] == []
     assert candidate_response["camera_model_candidates"]
+    assert candidate_response["model_declared_observations"]
     candidate = candidate_response["camera_model_candidates"][0]
     assert candidate["object_id"].startswith("observed_")
-    assert candidate["perception_source"] == CAMERA_MODEL_POLICY_MODE
+    assert candidate["perception_source"] == "model_declared_observation"
     assert candidate["model_provenance"] == SIMULATED_CAMERA_MODEL_PROVENANCE
     assert candidate["source_observation_id"].startswith("raw_fpv_")
-    assert candidate["support_estimate"]["source"] == CAMERA_MODEL_POLICY_MODE
+    assert candidate["support_estimate"]["source"] == "model_declared_observation"
+    declaration = candidate_response["model_declared_observations"][0]
+    assert declaration["source_observation_id"].startswith("raw_fpv_")
+    assert declaration["producer_type"] == SIMULATED_CAMERA_MODEL_PROVENANCE
+    assert declaration["grounding_status"] == "resolved"
+    assert declaration["target_plausibility"]["status"] in {"plausible", "weak"}
     evidence = agent_view["camera_model_policy_evidence"]
     assert evidence["schema"] == CAMERA_MODEL_POLICY_SCHEMA
     assert evidence["enabled"] is True
     assert evidence["event_count"] >= 1
     assert evidence["candidate_count"] >= len(candidate_response["camera_model_candidates"])
+    assert evidence["events"][0]["schema"] == "model_declared_observations_v1"
+    model_evidence = agent_view["model_declared_observation_evidence"]
+    assert model_evidence["schema"] == "model_declared_observations_v1"
+    assert model_evidence["resolved_count"] >= 1
     assert agent_view["observed_objects"]
     _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(candidate_response)

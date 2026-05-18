@@ -135,11 +135,9 @@ def print_setup(
     print("  Sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe.")
     if perception_mode == RAW_FPV_ONLY_MODE:
         print("  Raw FPV mode returns camera observations, not observed_* detections.")
-        print(
-            "  Sweep waypoints, inspect the FPV artifacts, and call done when evidence is recorded."
-        )
+        print("  Inspect image blocks and call navigate_to_visual_candidate before pick.")
     elif perception_mode == CAMERA_MODEL_POLICY_MODE:
-        print("  Observe returns raw FPV evidence first; call infer_camera_model_candidates.")
+        print("  Observe returns raw FPV evidence first; call declare_visual_candidates.")
         print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
         print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")

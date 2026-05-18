@@ -158,7 +158,7 @@ agent_input=raw_camera
 input_provenance=camera_artifact
 world_backend=molmospaces_sim
 report=robot_view_report
-verifier=image_input_contract + robot_view_honesty
+verifier=image_input_contract + cleanup_success + robot_view_honesty
 ```
 
 This is the profile to use when the test is meant to prove that the model path
@@ -169,10 +169,16 @@ candidate fixtures.
 This profile is the one that can exercise real image reasoning when paired with
 a model that supports image input and a launcher that passes images correctly.
 
-Planned refinement: `camera-raw` should let the main cleanup agent create
+Implemented refinement: `camera-raw` lets the main cleanup agent create
 Model-Declared Observations from FPV image evidence. The agent still receives no
 structured labels before declaration, but it may call a narrow declaration or
 inline navigation tool when it is ready to act on a visual candidate.
+
+The first live-agent gate for this profile should use semantic acceptability
+rather than only exact hidden restoration. Exact private restoration remains
+visible in the report, but preferred/acceptable advisory placements are the
+better first-pass signal for raw-FPV cleanup because image-derived tidy choices
+can legitimately differ from a generated exact fixture.
 
 ### `camera-labels`
 
@@ -192,12 +198,12 @@ The agent receives structured object candidates, but those candidates are
 registered from a camera-observation step rather than directly from the world
 model.
 
-Current implementation note: the existing `camera_model_policy` path uses
-deterministic simulated camera-model evidence. It does not call a real VLM or
-detector. The planned Model-Declared Observation refactor keeps the public
-`camera-labels` profile and replaces producer-specific registration with the
-same declaration schema used by `camera-raw`; a future implementation can change
-`input_provenance` to `vlm_detector` or `object_detector`.
+Current implementation note: the internal `camera_model_policy` path uses
+deterministic simulated camera-label producer evidence. It does not call a real
+VLM or detector. The Model-Declared Observation bridge keeps the public
+`camera-labels` profile on the same declaration schema used by `camera-raw`; a
+future implementation can change `input_provenance` to `vlm_detector` or
+`object_detector`.
 
 ## Model-Declared Observation Bridge
 

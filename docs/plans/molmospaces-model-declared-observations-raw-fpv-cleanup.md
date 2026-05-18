@@ -1,7 +1,10 @@
+<!-- /autoplan restore point: /home/mi/.gstack/projects/roboclaws/dongxu-dev-0515-autoplan-restore-20260518-120347.md -->
 # MolmoSpaces Model-Declared Observations For Raw FPV Cleanup
 
-**Status:** Planned
+**Status:** Implemented 2026-05-18
 **Created:** 2026-05-18
+**Review:** Autoplan precheck reconciled 2026-05-18; accepted findings are
+folded into this plan as soft continuations.
 **Source:** `CONTEXT.md`, ADR-0003, ADR-0013, ADR-0020, failed Codex camera-raw run `output/molmo/codex-camera-raw/0518_0956/seed-7`
 **Workflow:** docs-first refactor plan; implementation should use the harness/refactor loop
 
@@ -71,6 +74,13 @@ Replace the producer-specific `infer_camera_model_candidates` path with the
 producer-agnostic `declare_visual_candidates`. No compatibility layer is needed
 for obsolete active surfaces.
 
+`navigate_to_visual_candidate` is an inline declaration plus object-navigation
+adapter. On success it must return the newly created public `observed_*` handle
+and be treated as the `navigate_to_object` semantic phase by robot-view capture,
+semantic substep extraction, cleanup policy trace, planner-proof request
+generation, and checkers. After that, the normal public loop remains
+`pick -> navigate_to_receptacle -> open? -> place/place_inside -> close?`.
+
 ## Declaration Schema
 
 Every declared candidate should include:
@@ -103,11 +113,36 @@ Declarations are append-only. A correction creates a new handle or a new
 declaration that supersedes an earlier one; it should not mutate the prior
 declaration in place.
 
+Validate declaration payloads before registration:
+
+- reject missing `source_observation_id`, `category`, `target_fixture_id`,
+  `evidence_note`, or `image_region`;
+- reject unknown `image_region.type` values and malformed bbox/point shapes;
+- record coordinates as agent-declared image evidence, not as private metric
+  truth;
+- normalize missing `producer_type` to the profile default
+  (`main_cleanup_agent` for `camera-raw`, `simulated_camera_model` for the
+  deterministic `camera-labels` harness).
+
+Public handle lifecycle rows should include declaration state:
+
+- `declared`;
+- `grounding_resolved`;
+- `grounding_ambiguous`;
+- `grounding_unresolved`;
+- existing cleanup states such as `navigating_to_object`, `held`, and `placed`.
+
 ## Grounding Boundary
 
 The hidden grounding resolver may use execution-world geometry, segmentation,
 camera calibration, and current public waypoint context to bind a declaration to
 an executable object.
+
+Keep the public declaration record separate from the private grounding binding.
+The private binding may contain internal object ids and resolver diagnostics;
+the public declaration, tool responses, traces, Agent View, and reports must not.
+Every success and error response on this path should continue through the
+existing forbidden-key checks.
 
 It must not use or expose:
 
@@ -132,6 +167,10 @@ public handle for auditability, but `pick` must be blocked until the declaration
 is resolved. Recovery hints should ask for a tighter bbox/point, a clearer
 source fixture, or another observation.
 
+Use public error fields for blocked picks and insufficient declarations. Do not
+emit forbidden keys such as `target_count`, `generated_mess_count`, internal
+object ids, acceptable destinations, or scorer results in agent-facing payloads.
+
 ## Active Camera Observation
 
 Add bounded camera orientation control as a public perception aid:
@@ -146,6 +185,10 @@ Add bounded camera orientation control as a public perception aid:
 
 This should be available across profiles but mainly graded under `camera-raw`.
 The first live gate should track usage, not require it.
+
+Clamp or reject out-of-range camera deltas consistently, and include the active
+camera offset in the raw FPV observation row, trace event, and report card so
+reviewers can tell which image evidence produced a declaration.
 
 ## MCP Image Delivery
 
@@ -162,6 +205,11 @@ The JSON state should still include artifact paths for trace/report reuse, but
 the model-facing observation must contain the image block when the launcher
 selects an image-capable model.
 
+Keep direct in-process `server.call_tool("observe")` tests JSON-only so existing
+contract tests can inspect dictionaries without an MCP content wrapper. The
+live FastMCP transport should be the layer that wraps the same public JSON state
+with image content blocks.
+
 ## Reports And Checkers
 
 Reports should add or extend a **Model-Declared Observations** section showing:
@@ -177,12 +225,28 @@ Reports should add or extend a **Model-Declared Observations** section showing:
 - target plausibility;
 - whether the handle was acted on.
 
+Replace the current camera-model-specific report/checker surface with
+Model-Declared Observations while preserving profile clarity:
+
+- `camera-raw` report rows should show raw FPV evidence, model declarations,
+  grounding state, and cleanup actions from declarations;
+- `camera-labels` should show the same declaration schema with producer
+  metadata set to the simulated camera producer in deterministic tests;
+- `world-labels` must remain described as structured world labels, not image
+  reasoning;
+- checker flags should distinguish the raw-FPV contract gate from the
+  live-agent success gate.
+
 Checker requirements for `camera-raw` should be split:
 
 - contract gate: raw FPV observations exist, image blocks/artifacts were
   delivered, and structured labels did not leak before declaration;
 - live-agent gate: model-declared observations exist and drive cleanup actions;
-- success gate: restoration, coverage, disturbance, and semantic-loop checks.
+- success gate: declaration-driven semantic cleanup quality, coverage,
+  disturbance, and semantic-loop checks. The exact private restoration score
+  remains reported, but it is too brittle as the first raw-FPV live gate because
+  semantically tidy camera-derived placements can disagree with the generated
+  exact target.
 
 For the first official Codex `gpt-5.5` gate, use:
 
@@ -192,14 +256,25 @@ For the first official Codex `gpt-5.5` gate, use:
 | `raw_fpv_observations` | `>= 10` |
 | `model_declared_observations` | `>= 7` |
 | cleanup actions attempted from declarations | `>= 7` |
-| restored objects | `>= 7/10` |
+| semantically accepted placements | `>= 7/10` |
 | structured label leakage before declaration | `0` |
+
+The strict exact private scorer can still be required with
+`--min-restored-count` for regression/debug runs. The official first-pass
+raw-FPV gate should require `--min-semantic-accepted-count 7` so a run with
+preferred/acceptable placements is not rejected only because hidden exact
+targets chose a different tidy fixture.
 
 `done()` should return a public insufficiency error when the agent attempts to
 finish with too few declarations for a raw-FPV cleanup run. That error may name
 public counts and recovery hints, but it must not reveal target ids, hidden
 target count beyond the requested generated mess count already known to the
 operator, acceptable destinations, or private scorer detail.
+
+The raw-FPV contract-only gate remains useful for plumbing evidence and should
+not require cleanup success. The live-agent success gate is the one that enforces
+declaration count, declaration-driven actions, semantic acceptability, and
+semantic-loop checks.
 
 ## Implementation Scope
 
@@ -209,6 +284,7 @@ operator, acceptable destinations, or private scorer detail.
    - add `adjust_camera`;
    - unify `camera-raw` and `camera-labels` around Model-Declared Observation
      evidence;
+   - keep public declaration evidence separate from private grounding bindings;
    - keep unresolved handles unpickable.
 2. Refactor `realworld_mcp_server`:
    - register the new tools;
@@ -226,14 +302,29 @@ operator, acceptable destinations, or private scorer detail.
    - add Model-Declared Observations reporting;
    - reject raw-FPV structured leakage before declaration;
    - require declaration evidence for raw-FPV cleanup-success claims.
-6. Add focused tests:
+6. Update semantic integration:
+   - make `navigate_to_visual_candidate` count as the `navigate_to_object`
+     semantic phase in `semantic_timeline`;
+   - include declaration-driven actions in cleanup policy trace, robot-view
+     capture, planner-proof request generation, and checkers.
+7. Update profile/docs/operator surfaces:
+   - keep `camera-raw`, `camera-labels`, and `world-labels` semantics aligned in
+     `profiles.py`, `just` prompts, `skills/molmo-realworld-cleanup`, and human
+     MolmoSpaces settings docs;
+   - remove stale `camera_model_policy` wording from user-facing instructions
+     once the replacement tools land.
+8. Add focused tests:
    - contract registration and grounding;
+   - declaration schema validation and malformed region rejection;
    - unresolved handle pick blocking;
-   - MCP image content delivery;
+   - direct JSON observe plus live MCP image content delivery;
+   - active camera bounds, trace/report offset recording, and navigation reset;
    - report rendering;
    - checker gates;
+   - semantic timeline/checker handling for `navigate_to_visual_candidate`;
+   - public insufficiency errors without forbidden keys;
    - no private-truth leakage in Agent View or trace.
-7. Run the harness comparison:
+9. Run the harness comparison:
    - `separate_registration`;
    - `inline_on_navigate`;
    - default chosen by restoration rate, declaration count, semantic-order
@@ -295,5 +386,59 @@ validation blocker rather than claiming the gate passed.
   region, grounding status, and target plausibility.
 - Unresolved declarations are visible in reports but blocked from `pick`.
 - Official Codex `gpt-5.5` can run the `camera-raw` harness with the first-pass
-  gate above or produces an artifact that pinpoints the remaining failure.
+  semantic gate above or produces an artifact that pinpoints the remaining
+  failure.
 
+## Implementation Result
+
+Implemented in the Molmo cleanup contract, MCP server, report, checker, operator
+recipes, agent skill, profile docs, and focused tests.
+
+Official Codex `gpt-5.5` raw-FPV artifact:
+
+- run: `output/molmo/codex-camera-raw/0518_1357/seed-7/run_result.json`
+- report: `output/molmo/codex-camera-raw/0518_1357/seed-7/report.html`
+- raw FPV observations: 21
+- model-declared observations: 22
+- declaration-driven pick attempts: 7
+- sweep coverage: 1.0
+- disturbance count: 0
+- semantic acceptability: 8/10 accepted (`preferred`: 7, `acceptable`: 1)
+- exact private restoration: 5/10, retained as diagnostic evidence
+
+The result passes the first-pass raw-FPV live gate with:
+
+```bash
+.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  --expect-task '帮我收拾这个房间' \
+  --expect-backend molmospaces_subprocess \
+  --expect-policy codex_agent \
+  --expect-profile camera-raw \
+  --expect-mcp-server molmo_cleanup_realworld \
+  --min-generated-mess-count 10 \
+  --require-agent-driven \
+  --require-advisory-scoring \
+  --require-robot-views \
+  --require-raw-fpv-observations \
+  --require-model-declared-observations \
+  --min-model-declared-observations 7 \
+  --min-model-declared-actions 7 \
+  --min-semantic-accepted-count 7 \
+  --min-sweep-coverage 1.0 \
+  --require-clean-agent-run \
+  output/molmo/codex-camera-raw/0518_1357/seed-7/run_result.json
+```
+
+## Autoplan Precheck Reconciliation
+
+Review date: 2026-05-18.
+
+| ID | Review area | Decision | Classification | Plan impact |
+| --- | --- | --- | --- | --- |
+| AP-1 | Scope | Keep this as one coherent perception-contract refactor, not a GSD split. | Soft continuation | Added semantic integration and profile/docs tasks inside the same delivery unit. |
+| AP-2 | Architecture | Treat `navigate_to_visual_candidate` as a declaration plus `navigate_to_object` adapter. | Soft continuation | Added timeline, robot-view, planner-proof, and checker integration requirements. |
+| AP-3 | Privacy/security | Separate public declarations from private grounding bindings and keep forbidden-key checks on success and error paths. | Soft continuation | Tightened the grounding boundary and insufficiency-error requirements. |
+| AP-4 | Test plan | Cover direct JSON tests separately from live MCP image content delivery. | Soft continuation | Expanded focused tests without adding implementation scope. |
+| AP-5 | DX/execution | Update operator-facing profiles, just prompts, skill instructions, and human docs in the same change. | Soft continuation | Added stale wording cleanup for `camera_model_policy` user surfaces. |
+
+Hard-stop review decisions: none.

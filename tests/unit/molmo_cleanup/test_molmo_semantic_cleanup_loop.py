@@ -6,6 +6,7 @@ from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_loop
 from roboclaws.molmo_cleanup.semantic_timeline import (
     robot_view_capture_for_tool,
+    semantic_substeps,
     visual_grounding_status,
 )
 
@@ -149,6 +150,76 @@ def test_robot_view_capture_records_close_receptacle_focus() -> None:
     assert capture["label_suffix"] == "close_receptacle_fridge_01"
     assert capture["focus_object_id"] == "observed_001"
     assert capture["focus_receptacle_id"] == "fridge_01"
+
+
+def test_visual_candidate_navigation_counts_as_object_navigation() -> None:
+    capture = robot_view_capture_for_tool(
+        "navigate_to_visual_candidate",
+        {"source_observation_id": "raw_fpv_001"},
+        {
+            "ok": True,
+            "tool": "navigate_to_visual_candidate",
+            "object_id": "observed_001",
+            "source_receptacle_id": "counter_01",
+        },
+        object_id_transform=lambda value: "apple_01" if value == "observed_001" else value,
+    )
+
+    assert capture is not None
+    assert capture["action"] == "navigate_to_object observed_001"
+    assert capture["label_suffix"] == "navigate_object_observed_001"
+    assert capture["focus_object_id"] == "apple_01"
+    assert capture["focus_receptacle_id"] == "counter_01"
+    assert capture["semantic_phase"] == "navigate_to_object"
+
+    substeps = semantic_substeps(
+        [
+            {
+                "event": "response",
+                "tool": "navigate_to_visual_candidate",
+                "response": {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                    "source_receptacle_id": "counter_01",
+                },
+            },
+            {
+                "event": "response",
+                "tool": "pick",
+                "response": {"ok": True, "tool": "pick", "object_id": "observed_001"},
+            },
+            {
+                "event": "response",
+                "tool": "navigate_to_receptacle",
+                "response": {
+                    "ok": True,
+                    "tool": "navigate_to_receptacle",
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                },
+            },
+            {
+                "event": "response",
+                "tool": "place",
+                "response": {
+                    "ok": True,
+                    "tool": "place",
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                },
+            },
+        ],
+        {"sink_01": {"category": "Sink"}},
+    )
+
+    assert [step["phase"] for step in substeps[0]["steps"]] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "place",
+    ]
+    assert substeps[0]["steps"][0]["tool"] == "navigate_to_visual_candidate"
 
 
 def test_visual_grounding_only_hides_closed_container_contents() -> None:

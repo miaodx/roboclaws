@@ -124,16 +124,24 @@ _PROFILES: dict[str, CleanupProfile] = {
         input_provenance=CAMERA_ARTIFACT_PROVENANCE,
         world_backend=MOLMOSPACES_SIM_BACKEND,
         report=ROBOT_VIEW_REPORT,
-        verifiers=(IMAGE_INPUT_CONTRACT_VERIFIER, ROBOT_VIEW_HONESTY_VERIFIER),
+        verifiers=(
+            IMAGE_INPUT_CONTRACT_VERIFIER,
+            CLEANUP_SUCCESS_VERIFIER,
+            ROBOT_VIEW_HONESTY_VERIFIER,
+        ),
         backend=MOLMOSPACES_SUBPROCESS_BACKEND,
         perception_mode=RAW_FPV_ONLY_MODE,
         include_robot=True,
         record_robot_views=True,
-        requires_clean_success=False,
-        summary="Raw camera-input contract with structured object labels withheld.",
+        requires_clean_success=True,
+        summary=(
+            "Raw camera-input cleanup via model-declared visual observations with "
+            "structured object labels withheld before declaration."
+        ),
         model_input_note=(
-            "The agent receives raw camera artifacts and must not receive observed "
-            "object handles, categories, support estimates, or candidate fixtures."
+            "The agent receives raw camera image blocks first, then creates "
+            "model-declared observed handles from public image evidence. Structured "
+            "labels remain withheld before declaration."
         ),
     ),
     CAMERA_LABELS_PROFILE: CleanupProfile(

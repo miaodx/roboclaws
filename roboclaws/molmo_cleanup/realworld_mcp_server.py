@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Image as MCPImage
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
@@ -26,8 +27,10 @@ from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
+    MAIN_CLEANUP_AGENT_PRODUCER,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
     cleanup_policy_trace_from_events,
@@ -199,16 +202,55 @@ class RealWorldMolmoCleanupMCPServer:
             return server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
 
         @self._mcp.tool()
-        def observe() -> dict:
+        def observe() -> Any:
             """Observe robot-local visible objects at the current waypoint."""
-            return server.call_tool("observe")
+            return server._mcp_observe_response()
 
         @self._mcp.tool()
-        def infer_camera_model_candidates(observation_id: str = "") -> dict:
-            """Register camera-model cleanup candidates from a raw FPV observation."""
+        def adjust_camera(yaw_delta_deg: float = 0.0, pitch_delta_deg: float = 0.0) -> dict:
+            """Adjust bounded active camera yaw/pitch at the current waypoint."""
             return server.call_tool(
-                "infer_camera_model_candidates",
+                "adjust_camera",
+                yaw_delta_deg=yaw_delta_deg,
+                pitch_delta_deg=pitch_delta_deg,
+            )
+
+        @self._mcp.tool()
+        def declare_visual_candidates(
+            observation_id: str = "",
+            candidates: list[dict[str, Any]] | None = None,
+            producer_type: str = "",
+            producer_id: str = "",
+        ) -> dict:
+            """Register model-declared cleanup candidates from raw FPV evidence."""
+            return server.call_tool(
+                "declare_visual_candidates",
                 observation_id=observation_id,
+                candidates=candidates or [],
+                producer_type=producer_type,
+                producer_id=producer_id,
+            )
+
+        @self._mcp.tool()
+        def navigate_to_visual_candidate(
+            source_observation_id: str = "",
+            category: str = "",
+            target_fixture_id: str = "",
+            evidence_note: str = "",
+            image_region: dict[str, Any] | str | None = None,
+            source_fixture_id: str = "",
+            confidence: float | None = None,
+        ) -> dict:
+            """Declare one visual candidate and navigate to it when grounded."""
+            return server.call_tool(
+                "navigate_to_visual_candidate",
+                source_observation_id=source_observation_id,
+                category=category,
+                target_fixture_id=target_fixture_id,
+                evidence_note=evidence_note,
+                image_region=image_region,
+                source_fixture_id=source_fixture_id,
+                confidence=confidence,
             )
 
         @self._mcp.tool()
@@ -271,8 +313,38 @@ class RealWorldMolmoCleanupMCPServer:
                 str(kwargs.get("waypoint_id", ""))
             ),
             "observe": self.contract.observe,
-            "infer_camera_model_candidates": lambda: self.contract.infer_camera_model_candidates(
-                str(kwargs.get("observation_id", ""))
+            "adjust_camera": lambda: self.contract.adjust_camera(
+                float(kwargs.get("yaw_delta_deg") or 0.0),
+                float(kwargs.get("pitch_delta_deg") or 0.0),
+            ),
+            "declare_visual_candidates": lambda: self.contract.declare_visual_candidates(
+                str(kwargs.get("observation_id", "")),
+                candidates=list(kwargs.get("candidates") or []),
+                producer_type=str(
+                    kwargs.get("producer_type")
+                    or (
+                        SIMULATED_CAMERA_MODEL_PROVENANCE
+                        if self.perception_mode == CAMERA_MODEL_POLICY_MODE
+                        else MAIN_CLEANUP_AGENT_PRODUCER
+                    )
+                ),
+                producer_id=str(
+                    kwargs.get("producer_id")
+                    or (
+                        "camera_labels_agent"
+                        if self.perception_mode == CAMERA_MODEL_POLICY_MODE
+                        else "cleanup_agent"
+                    )
+                ),
+            ),
+            "navigate_to_visual_candidate": lambda: self.contract.navigate_to_visual_candidate(
+                str(kwargs.get("source_observation_id", "")),
+                category=str(kwargs.get("category", "")),
+                target_fixture_id=str(kwargs.get("target_fixture_id", "")),
+                evidence_note=str(kwargs.get("evidence_note", "")),
+                image_region=kwargs.get("image_region"),
+                source_fixture_id=str(kwargs.get("source_fixture_id", "")),
+                confidence=kwargs.get("confidence"),
             ),
             "inspect_visible_object": lambda: self.contract.inspect_visible_object(
                 str(kwargs.get("object_id", ""))
@@ -333,8 +405,17 @@ class RealWorldMolmoCleanupMCPServer:
         if tool == "observe" and self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
             augmented["instruction"] = (
-                "Call infer_camera_model_candidates with observation_id="
+                "Call declare_visual_candidates with observation_id="
                 f"{raw.get('observation_id', '')} before choosing cleanup candidates."
+            )
+        if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
+            raw = augmented.get("raw_fpv_observation") or {}
+            augmented["instruction"] = (
+                "Inspect the FPV image block for observation_id="
+                f"{raw.get('observation_id', '')}, then call navigate_to_visual_candidate "
+                "when acting on a plausible cleanup object. Use broad cleanup categories "
+                "such as food, dish, book, linen, toy, electronics, or pillow when the "
+                "exact object class is uncertain."
             )
         if tool == "fixture_hints":
             augmented["instruction"] = (
@@ -438,6 +519,11 @@ class RealWorldMolmoCleanupMCPServer:
             "agent_view": agent_view,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
             "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
+            "model_declared_observations": agent_view.get("model_declared_observations", []),
+            "model_declared_observation_evidence": agent_view.get(
+                "model_declared_observation_evidence",
+                {},
+            ),
             "private_evaluation": private_evaluation,
             "advisory_evaluation": advisory_evaluation,
             "score": done_response["score"],
@@ -544,6 +630,25 @@ class RealWorldMolmoCleanupMCPServer:
         updated = dict(response)
         updated["raw_fpv_observation"] = attached
         return updated
+
+    def _mcp_observe_response(self) -> dict[str, Any] | list[Any]:
+        response = self.call_tool("observe")
+        if (
+            self.perception_mode != RAW_FPV_ONLY_MODE
+            or not response.get("ok")
+            or not self.record_robot_views
+        ):
+            return response
+        raw = response.get("raw_fpv_observation") or {}
+        image_artifacts = raw.get("image_artifacts") or {}
+        fpv_path = image_artifacts.get("fpv") or raw.get("fpv_image")
+        if not fpv_path:
+            return response
+        resolved = _resolve_artifact_path(self.run_dir, str(fpv_path))
+        if not resolved.is_file():
+            return response
+        state_text = json.dumps(response, sort_keys=True)
+        return [state_text, MCPImage(data=resolved.read_bytes(), format="png")]
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
         self._write_trace(tool="<runtime>", event=event, **data)
@@ -727,6 +832,11 @@ def _backend_name(backend: Any) -> str:
     if backend.__class__.__name__ == "MolmoSpacesSubprocessBackend":
         return "molmospaces_subprocess"
     return "api_semantic_synthetic"
+
+
+def _resolve_artifact_path(run_dir: Path, value: str) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else run_dir / path
 
 
 def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:

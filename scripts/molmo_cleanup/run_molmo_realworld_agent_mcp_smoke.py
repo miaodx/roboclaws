@@ -157,7 +157,7 @@ def _detections_for_observation(server: Any, observation: dict[str, Any]) -> lis
         return detections
     raw = observation.get("raw_fpv_observation") or {}
     observation_id = str(raw.get("observation_id") or "")
-    response = server.call_tool("infer_camera_model_candidates", observation_id=observation_id)
+    response = server.call_tool("declare_visual_candidates", observation_id=observation_id)
     return list(response.get("camera_model_candidates", []))
 
 

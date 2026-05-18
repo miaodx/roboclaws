@@ -49,8 +49,10 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_NAME,
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
+    MAIN_CLEANUP_AGENT_PRODUCER,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
     cleanup_policy_trace_from_events,
@@ -441,6 +443,11 @@ def run_realworld_cleanup(
         "agent_view": agent_view,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
+        "model_declared_observations": agent_view.get("model_declared_observations", []),
+        "model_declared_observation_evidence": agent_view.get(
+            "model_declared_observation_evidence",
+            {},
+        ),
         "agent_memory": agent_memory,
         "private_evaluation": private_evaluation,
         "advisory_evaluation": advisory_evaluation,
@@ -510,15 +517,33 @@ def _detections_for_policy(
     observation: dict[str, Any],
     perception_mode: str,
 ) -> list[dict[str, Any]]:
-    if perception_mode != CAMERA_MODEL_POLICY_MODE:
+    if perception_mode not in {CAMERA_MODEL_POLICY_MODE, RAW_FPV_ONLY_MODE}:
         return list(observation.get("visible_object_detections", []))
     raw = observation.get("raw_fpv_observation") or {}
+    producer_type = (
+        SIMULATED_CAMERA_MODEL_PROVENANCE
+        if perception_mode == CAMERA_MODEL_POLICY_MODE
+        else MAIN_CLEANUP_AGENT_PRODUCER
+    )
+    producer_id = (
+        CAMERA_MODEL_POLICY_NAME
+        if perception_mode == CAMERA_MODEL_POLICY_MODE
+        else "deterministic_raw_fpv_agent"
+    )
     candidates = _call_tool(
         trace_events,
         started_at,
-        "infer_camera_model_candidates",
-        {"observation_id": raw.get("observation_id", "")},
-        lambda: contract.infer_camera_model_candidates(str(raw.get("observation_id", ""))),
+        "declare_visual_candidates",
+        {
+            "observation_id": raw.get("observation_id", ""),
+            "producer_type": producer_type,
+            "producer_id": producer_id,
+        },
+        lambda: contract.declare_visual_candidates(
+            str(raw.get("observation_id", "")),
+            producer_type=producer_type,
+            producer_id=producer_id,
+        ),
     )
     return list(candidates.get("camera_model_candidates", []))
 
@@ -526,6 +551,8 @@ def _detections_for_policy(
 def _decision_reason(perception_mode: str) -> str:
     if perception_mode == CAMERA_MODEL_POLICY_MODE:
         return "camera model category/fixture affordance heuristic"
+    if perception_mode == RAW_FPV_ONLY_MODE:
+        return "model-declared raw FPV category/fixture affordance heuristic"
     return "public category/fixture affordance heuristic"
 
 
