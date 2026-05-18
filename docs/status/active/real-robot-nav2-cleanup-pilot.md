@@ -112,6 +112,9 @@ Latest unblock/audit check on 2026-05-18:
   network reset.
 - Common local proxy ports `7890`, `7891`, `7897`, `1080`, `1087`, `20171`,
   `8080`, and `3128` are closed.
+- Non-standard local listeners on `31080`, `31443`, `31055`, `31056`, `19514`,
+  and `5345` were also probed as HTTP/SOCKS/HTTPS CONNECT candidates; none
+  successfully tunnel `api.openai.com`.
 - Direct OpenAI reachability is still unavailable: IPv4 resets connections to
   `api.openai.com`; IPv6 does not resolve.
 - `ROBOCLAWS_CODEX_PROVIDER=openai-responses` fails provider-arg construction
