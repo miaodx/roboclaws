@@ -256,6 +256,12 @@ Latest unblock/audit check on 2026-05-18:
     `OPENAI_API_KEY` repository secret remained timestamped
     `2026-05-18T15:29:18Z`, the known rejected credential, so no redispatch was
     attempted.
+  - Follow-up bounded watcher on 2026-05-18T19:52:52Z through
+    2026-05-18T19:57:30Z polled the same secret ten more times. The
+    `OPENAI_API_KEY` repository secret still remained timestamped
+    `2026-05-18T15:29:18Z`, and the no-redispatch decision was recorded on
+    issue #111:
+    https://github.com/MiaoDX/roboclaws/issues/111#issuecomment-4481522784
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
