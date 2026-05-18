@@ -7,6 +7,7 @@ from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_l
 from roboclaws.molmo_cleanup.semantic_timeline import (
     has_complete_semantic_sequence,
     robot_view_capture_for_tool,
+    semantic_diagnostics,
     semantic_substeps,
     visual_grounding_status,
 )
@@ -253,6 +254,69 @@ def test_complete_semantic_sequence_tolerates_later_retries_after_place() -> Non
     )
 
 
+def test_semantic_diagnostics_flags_duplicate_post_place_visual_navigation() -> None:
+    diagnostics = semantic_diagnostics(
+        [
+            _trace_response("observe", {"ok": True, "tool": "observe"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+            _trace_response("pick", {"ok": True, "tool": "pick", "object_id": "observed_001"}),
+            _trace_response("place", {"ok": True, "tool": "place", "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+        ],
+        [],
+        {"score": {"restored_count": 1, "total_targets": 1}},
+    )
+
+    assert diagnostics["duplicate_post_place_navigation_count"] == 1
+    assert diagnostics["duplicate_post_place_navigation_handles"] == ["observed_001"]
+
+
+def test_semantic_diagnostics_allows_normal_visual_cleanup_sequence() -> None:
+    diagnostics = semantic_diagnostics(
+        [
+            _trace_response("observe", {"ok": True, "tool": "observe"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+            _trace_response("pick", {"ok": True, "tool": "pick", "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_receptacle",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_receptacle",
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                },
+            ),
+            _trace_response("place", {"ok": True, "tool": "place", "object_id": "observed_001"}),
+        ],
+        [],
+        {"score": {"restored_count": 1, "total_targets": 1}},
+    )
+
+    assert diagnostics["duplicate_post_place_navigation_count"] == 0
+    assert diagnostics["duplicate_post_place_navigation_handles"] == []
+
+
 def test_visual_grounding_only_hides_closed_container_contents() -> None:
     visibility = {"status": "ok", "object_pixels": 0}
 
@@ -292,6 +356,10 @@ def _record_call(
 ) -> dict[str, Any]:
     calls.append((tool, dict(request)))
     return fn()
+
+
+def _trace_response(tool: str, response: dict[str, Any]) -> dict[str, Any]:
+    return {"event": "response", "tool": tool, "response": response}
 
 
 class _FakeCleanupContract:

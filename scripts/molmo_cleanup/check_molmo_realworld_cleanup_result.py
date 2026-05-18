@@ -56,6 +56,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     SEMANTIC_LOOP_VARIANT,
     SEMANTIC_RESPONSE_PHASES,
     annotate_focus_visual_grounding,
+    duplicate_post_place_navigations,
     has_complete_semantic_sequence,
     successful_semantic_phases,
 )
@@ -273,7 +274,9 @@ def _assert_result(
 
     agent_view = data.get("agent_view") or {}
     _assert_public_agent_view(agent_view)
-    _assert_trace_is_public(_resolve_path(base, data["artifacts"]["trace"]))
+    trace_path = _resolve_path(base, data["artifacts"]["trace"])
+    _assert_trace_is_public(trace_path)
+    _assert_no_duplicate_post_place_navigation(trace_path)
     private = data.get("private_evaluation") or {}
     assert private.get("generated_mess_count") == data.get("generated_mess_count"), data
     assert private.get("generated_mess_count", 0) >= min_generated_mess_count, data
@@ -440,6 +443,7 @@ def _assert_clean_agent_run(
     diagnostics = data.get("agent_bridge") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
     assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
+    assert int(diagnostics.get("duplicate_post_place_navigation_count") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
     required_complete = min_complete_count or int(data.get("generated_mess_count") or 0)
@@ -539,8 +543,7 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
 
 
 def _assert_trace_is_public(trace_path: Path) -> None:
-    for line in trace_path.read_text(encoding="utf-8").splitlines():
-        payload = json.loads(line)
+    for payload in _trace_events_from_path(trace_path):
         assert payload.get("tool") != "scene_objects", payload
         if payload.get("tool") == "done":
             continue
@@ -550,6 +553,20 @@ def _assert_trace_is_public(trace_path: Path) -> None:
         if isinstance(response, dict):
             assert "objects" not in response, response
             assert "scene_objects" not in response, response
+
+
+def _assert_no_duplicate_post_place_navigation(trace_path: Path) -> None:
+    duplicates = duplicate_post_place_navigations(_trace_events_from_path(trace_path))
+    assert not duplicates, (trace_path, duplicates)
+
+
+def _trace_events_from_path(trace_path: Path) -> list[dict[str, Any]]:
+    events = []
+    for line in trace_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        events.append(json.loads(line))
+    return events
 
 
 def _without_internal_proof_evidence(payload: Any) -> Any:

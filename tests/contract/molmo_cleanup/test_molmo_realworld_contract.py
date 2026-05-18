@@ -9,6 +9,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
+    VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     RealWorldCleanupContract,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
@@ -407,6 +408,75 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     assert response["model_declared_observation"]["grounding_status"] == "resolved"
     assert contract.pick(response["object_id"])["ok"] is True
     _assert_no_forbidden_keys(response)
+
+
+def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navigation() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    work_waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "work_area"
+    )
+    contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
+    observation = contract.observe()
+    raw_observation_id = observation["raw_fpv_observation"]["observation_id"]
+    first = contract.navigate_to_visual_candidate(
+        raw_observation_id,
+        category="tomato",
+        target_fixture_id="fridge_01",
+        evidence_note="round produce item on the desk",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+    retry_before_place = contract.navigate_to_visual_candidate(
+        raw_observation_id,
+        category="tomato",
+        target_fixture_id="fridge_01",
+        evidence_note="same produce item before pick",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    handle = first["object_id"]
+    assert first["ok"] is True
+    assert retry_before_place["ok"] is True
+    assert retry_before_place["object_id"] == handle
+    assert contract.pick(handle)["ok"] is True
+    assert contract.navigate_to_receptacle("fridge_01")["ok"] is True
+    assert contract.open_receptacle("fridge_01")["ok"] is True
+    assert contract.place_inside("fridge_01")["ok"] is True
+    assert contract.close_receptacle("fridge_01")["ok"] is True
+
+    contract.navigate_to_waypoint(contract._preferred_waypoint_for_fixture("fridge_01"))
+    later_observation = contract.observe()
+    lifecycle_before = dict(contract._object_lifecycle[handle])
+    current_handle_before = contract._current_object_handle
+    held_handle_before = contract._held_handle
+    duplicate = contract.navigate_to_visual_candidate(
+        later_observation["raw_fpv_observation"]["observation_id"],
+        category="food",
+        target_fixture_id="fridge_01",
+        evidence_note="produce-like object already in the fridge area",
+        image_region={"type": "verbal_region", "value": "inside fridge area"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert duplicate["ok"] is False
+    assert duplicate["error_reason"] == VISUAL_CANDIDATE_ALREADY_HANDLED_REASON
+    assert duplicate["object_id"] == handle
+    assert duplicate["required_next_tool"] == "observe"
+    assert duplicate["model_declared_observation"]["actionability_status"] == "already_handled"
+    assert contract._current_object_handle == current_handle_before
+    assert contract._held_handle == held_handle_before
+    assert contract._object_lifecycle[handle] == lifecycle_before
+    _assert_no_forbidden_keys(duplicate)
 
 
 def test_realworld_rejects_malformed_model_declared_candidate() -> None:

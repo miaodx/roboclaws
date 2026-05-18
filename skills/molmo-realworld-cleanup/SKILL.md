@@ -36,6 +36,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    image object is resting on. When `navigate_to_visual_candidate` resolves, use
    its returned `candidate_fixture_id` and `recommended_tool` for placement if
    present.
+   After a successful pick/place for an observed handle, do not act on that same
+   handle again. If a later raw-FPV declaration resolves to an already-handled
+   object, continue the waypoint sweep and observe for other objects instead of
+   navigating to that handle again.
    If raw-FPV visual grounding is unresolved, continue the waypoint sweep; do
    not call `done` as a system-assessment shortcut while map waypoints remain
    unvisited.

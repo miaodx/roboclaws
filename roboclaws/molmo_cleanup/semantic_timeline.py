@@ -402,16 +402,48 @@ def semantic_diagnostics(
             and response.get("error_reason") == "semantic_order"
         ):
             semantic_order_errors += 1
+    duplicate_navigation = duplicate_post_place_navigations(trace_events)
     score = done_response.get("score", {})
     return {
         "stale_reference_errors": stale_reference_errors,
         "semantic_order_errors": semantic_order_errors,
+        "duplicate_post_place_navigation_count": len(duplicate_navigation),
+        "duplicate_post_place_navigation_handles": sorted(
+            {str(item["object_id"]) for item in duplicate_navigation}
+        ),
+        "duplicate_post_place_navigation_events": duplicate_navigation[:10],
         "premature_done": int(score.get("restored_count", 0)) < int(score.get("total_targets", 0)),
         "object_done_count": object_done_count,
         "attempted_semantic_substeps": attempted_semantic_substeps,
         "complete_semantic_substep_objects": complete_objects,
         "fridge_inside_sequence_ok": fridge_inside_sequence_ok,
     }
+
+
+def duplicate_post_place_navigations(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    placed_handles: set[str] = set()
+    duplicates: list[dict[str, Any]] = []
+    for index, event in enumerate(trace_events, start=1):
+        if event.get("event") != "response":
+            continue
+        response = event.get("response")
+        if not isinstance(response, dict) or response.get("ok") is not True:
+            continue
+        tool = str(event.get("tool") or response.get("tool") or "")
+        phase = semantic_phase_for_tool(tool)
+        object_id = str(response.get("object_id") or "")
+        if phase == NAVIGATE_TO_OBJECT_PHASE and object_id in placed_handles:
+            duplicates.append(
+                {
+                    "index": index,
+                    "tool": tool,
+                    "object_id": object_id,
+                    "phase": phase,
+                }
+            )
+        if phase in PLACE_CLEANUP_PHASES and object_id:
+            placed_handles.add(object_id)
+    return duplicates
 
 
 def has_complete_semantic_sequence(phases: list[str]) -> bool:

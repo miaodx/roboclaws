@@ -34,6 +34,7 @@ RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
 RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
+VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
         VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -41,6 +42,7 @@ REALWORLD_PERCEPTION_MODES = frozenset(
         CAMERA_MODEL_POLICY_MODE,
     }
 )
+_NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
 
 
 def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> str:
@@ -52,7 +54,10 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         f"image block for {subject}, do not batch-register candidates first, "
         "and call navigate_to_visual_candidate only when acting on a plausible "
         "cleanup object. Use broad cleanup categories such as "
-        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain."
+        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain. "
+        "After a successful pick/place for an observed handle, do not act on "
+        "that same handle again; if grounding resolves to an already-handled "
+        "object, continue the waypoint sweep."
     )
 
 
@@ -565,6 +570,20 @@ class RealWorldCleanupContract:
         declarations = declaration_response.get("model_declared_observations") or []
         declaration = declarations[0] if declarations else {}
         handle = str(declaration.get("object_id") or "")
+        if declaration.get("actionability_status") == "already_handled":
+            return self._error(
+                "navigate_to_visual_candidate",
+                VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
+                model_declared_observation=declaration,
+                object_id=handle,
+                grounding_status=declaration.get("grounding_status", "unresolved"),
+                actionability_status="already_handled",
+                required_next_tool="observe",
+                recovery_hint=declaration.get(
+                    "recovery_hint",
+                    "This observed handle was already handled; continue the waypoint sweep.",
+                ),
+            )
         if declaration.get("grounding_status") != "resolved":
             return self._error(
                 "navigate_to_visual_candidate",
@@ -1405,6 +1424,9 @@ class RealWorldCleanupContract:
         match = self._resolve_visual_candidate(waypoint, normalized)
         declaration = self._declaration_from_resolution(normalized, match)
         handle = str(declaration["object_id"])
+        if match["status"] == "already_handled":
+            self._model_declared_observations.append(declaration)
+            return dict(declaration)
         if match["status"] == "resolved":
             obj = match["objects"][0]
             location_id = str(match["location_ids"][0])
@@ -1534,10 +1556,17 @@ class RealWorldCleanupContract:
     ) -> dict[str, Any]:
         candidates = []
         location_ids = []
+        handled_candidates = []
+        handled_location_ids = []
         for obj, location_id in self._objects_visible_from_waypoint(waypoint):
             if category_norm and not _declared_category_matches_object(category_norm, obj):
                 continue
             if source_fixture_id and location_id != source_fixture_id:
+                continue
+            existing_handle = self._observed_handles_by_object_id.get(obj.object_id)
+            if existing_handle and self._handle_is_non_actionable(existing_handle):
+                handled_candidates.append(obj)
+                handled_location_ids.append(location_id)
                 continue
             candidates.append(obj)
             location_ids.append(location_id)
@@ -1545,6 +1574,12 @@ class RealWorldCleanupContract:
             return {"status": "resolved", "objects": candidates, "location_ids": location_ids}
         if len(candidates) > 1:
             return {"status": "ambiguous", "objects": candidates, "location_ids": location_ids}
+        if handled_candidates:
+            return {
+                "status": "already_handled",
+                "objects": handled_candidates,
+                "location_ids": handled_location_ids,
+            }
         return {"status": "unresolved", "objects": [], "location_ids": []}
 
     def _declaration_from_resolution(
@@ -1565,6 +1600,19 @@ class RealWorldCleanupContract:
                 basis = "single public camera-context object matched category/source/target hints"
             confidence = _grounding_confidence(candidate, "resolved")
             recovery_hint = ""
+            grounding_status = "resolved"
+            actionability_status = "actionable"
+        elif status == "already_handled":
+            handle = self._handle_for_object(objects[0].object_id)
+            lifecycle = self._object_lifecycle.get(handle, {})
+            basis = "only matching public camera-context object was already handled"
+            confidence = _grounding_confidence(candidate, "unresolved")
+            recovery_hint = (
+                "The matching observed handle has already been placed or otherwise "
+                "handled. Continue the waypoint sweep and observe for other objects."
+            )
+            grounding_status = "unresolved"
+            actionability_status = "already_handled"
         else:
             handle = self._new_unresolved_handle()
             basis = (
@@ -1578,6 +1626,8 @@ class RealWorldCleanupContract:
                 if status == "ambiguous"
                 else "Reobserve from another waypoint or declare a clearer category/source fixture."
             )
+            grounding_status = status
+            actionability_status = "needs_clarification"
         target_fixture_id = str(candidate.get("target_fixture_id") or "")
         target_fixture = self._fixtures.get(target_fixture_id, {})
         target_plausibility = self._target_plausibility(
@@ -1601,13 +1651,16 @@ class RealWorldCleanupContract:
             "producer_type": str(candidate["producer_type"]),
             "producer_id": str(candidate["producer_id"]),
             "supersedes_observation_id": str(candidate.get("supersedes_observation_id") or ""),
-            "grounding_status": status,
+            "grounding_status": grounding_status,
             "grounding_confidence": confidence,
             "grounding_basis": basis,
             "recovery_hint": recovery_hint,
             "target_plausibility": target_plausibility,
+            "actionability_status": actionability_status,
             "private_truth_included": False,
         }
+        if status == "already_handled":
+            declaration["handled_state"] = str(lifecycle.get("state") or "handled")
         _assert_no_forbidden_agent_view_keys(declaration)
         return declaration
 
@@ -1890,6 +1943,12 @@ class RealWorldCleanupContract:
             return float(confidence)
         except (TypeError, ValueError):
             return 0.5
+
+    def _handle_is_non_actionable(self, handle: str) -> bool:
+        if handle in self._handled_handles:
+            return True
+        state = str((self._object_lifecycle.get(handle) or {}).get("state") or "")
+        return state in _NON_ACTIONABLE_HANDLE_STATES
 
     def _preferred_waypoint_for_fixture(self, fixture_id: str) -> str:
         for waypoint in self._waypoints:
@@ -2179,6 +2238,7 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
         )
     if tool in {
         "navigate_to_object",
+        "navigate_to_visual_candidate",
         "pick",
         "navigate_to_receptacle",
         "open_receptacle",

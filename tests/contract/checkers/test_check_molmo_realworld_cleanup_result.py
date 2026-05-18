@@ -494,6 +494,70 @@ def test_checker_rejects_raw_fpv_model_declared_semantic_shortfall(tmp_path: Pat
         )
 
 
+def test_checker_rejects_duplicate_post_place_visual_navigation(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    trace_path = tmp_path / "trace.jsonl"
+    _write_trace(
+        trace_path,
+        [
+            _trace_response("observe", {"ok": True, "tool": "observe"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+            _trace_response("pick", {"ok": True, "tool": "pick", "object_id": "observed_001"}),
+            _trace_response("place", {"ok": True, "tool": "place", "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+        ],
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_no_duplicate_post_place_navigation(trace_path)
+
+
+def test_checker_allows_normal_visual_cleanup_trace(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    trace_path = tmp_path / "trace.jsonl"
+    _write_trace(
+        trace_path,
+        [
+            _trace_response("observe", {"ok": True, "tool": "observe"}),
+            _trace_response(
+                "navigate_to_visual_candidate",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_visual_candidate",
+                    "object_id": "observed_001",
+                },
+            ),
+            _trace_response("pick", {"ok": True, "tool": "pick", "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_receptacle",
+                {
+                    "ok": True,
+                    "tool": "navigate_to_receptacle",
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                },
+            ),
+            _trace_response("place", {"ok": True, "tool": "place", "object_id": "observed_001"}),
+        ],
+    )
+
+    checker._assert_no_duplicate_post_place_navigation(trace_path)
+
+
 def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -1033,6 +1097,17 @@ def _robot_step(action: str) -> dict[str, object]:
             "visibility": {"status": "ok"},
         },
     }
+
+
+def _trace_response(tool: str, response: dict[str, object]) -> dict[str, object]:
+    return {"event": "response", "tool": tool, "response": response}
+
+
+def _write_trace(path: Path, events: list[dict[str, object]]) -> None:
+    path.write_text(
+        "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
+        encoding="utf-8",
+    )
 
 
 def _seed7_cleanup_bindings() -> list[dict[str, object]]:
