@@ -1,0 +1,785 @@
+{
+  "driveable_ways": [
+    {
+      "from_room_id": "room_2",
+      "kind": "doorway",
+      "to_room_id": "room_3"
+    },
+    {
+      "from_room_id": "room_3",
+      "kind": "doorway",
+      "to_room_id": "room_4"
+    },
+    {
+      "from_room_id": "room_4",
+      "kind": "doorway",
+      "to_room_id": "room_5"
+    },
+    {
+      "from_room_id": "room_5",
+      "kind": "doorway",
+      "to_room_id": "room_6"
+    },
+    {
+      "from_room_id": "room_6",
+      "kind": "doorway",
+      "to_room_id": "room_7"
+    },
+    {
+      "from_room_id": "room_7",
+      "kind": "doorway",
+      "to_room_id": "room_8"
+    }
+  ],
+  "environment_id": "molmospaces-procthor-val-0-7",
+  "fixtures": [
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "CounterTop",
+      "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "manipulation_frame": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2_manipulation",
+      "name": "CounterTop (CounterTop|2|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 0.34,
+        "y": 0.285,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_2_scan_1",
+      "preferred_manipulation_waypoint_id": "room_2_scan_1",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+      "footprint": {
+        "depth_m": 0.37,
+        "shape": "rectangle",
+        "width_m": 0.48
+      },
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2_manipulation",
+      "name": "DiningTable (DiningTable|2|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 1.66,
+        "y": 0.285,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_2_scan_2",
+      "preferred_manipulation_waypoint_id": "room_2_scan_2",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place",
+        "open",
+        "place_inside",
+        "close"
+      ],
+      "category": "Fridge",
+      "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "manipulation_frame": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2_manipulation",
+      "name": "Fridge (Fridge|2|2)",
+      "pose": {
+        "frame_id": "map",
+        "x": 0.385,
+        "y": 1.685,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_2_scan_1",
+      "preferred_manipulation_waypoint_id": "room_2_scan_1",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place",
+        "place_inside"
+      ],
+      "category": "ShelvingUnit",
+      "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+      "footprint": {
+        "depth_m": 0.39,
+        "shape": "rectangle",
+        "width_m": 0.51
+      },
+      "manipulation_frame": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2_manipulation",
+      "name": "ShelvingUnit (ShelvingUnit|2|3)",
+      "pose": {
+        "frame_id": "map",
+        "x": 1.645,
+        "y": 1.705,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_2_scan_2",
+      "preferred_manipulation_waypoint_id": "room_2_scan_2",
+      "room_id": "room_2"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "manipulation_frame": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3_manipulation",
+      "name": "DiningTable (DiningTable|3|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 3.37,
+        "y": 0.305,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_3_scan_1",
+      "preferred_manipulation_waypoint_id": "room_3_scan_1",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sofa",
+      "fixture_id": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3",
+      "footprint": {
+        "depth_m": 0.45,
+        "shape": "rectangle",
+        "width_m": 0.6
+      },
+      "manipulation_frame": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3_manipulation",
+      "name": "Sofa (Sofa|3|0|1)",
+      "pose": {
+        "frame_id": "map",
+        "x": 4.6,
+        "y": 0.325,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_3_scan_2",
+      "preferred_manipulation_waypoint_id": "room_3_scan_2",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "manipulation_frame": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3_manipulation",
+      "name": "TVStand (TVStand|3|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 3.385,
+        "y": 1.685,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_3_scan_1",
+      "preferred_manipulation_waypoint_id": "room_3_scan_1",
+      "room_id": "room_3"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "DiningTable",
+      "fixture_id": "diningtable_15d4d7c88896632c7f36ae642a41eb46_1_0_4",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "manipulation_frame": "diningtable_15d4d7c88896632c7f36ae642a41eb46_1_0_4_manipulation",
+      "name": "DiningTable (DiningTable|4|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 6.415,
+        "y": 0.335,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_4_scan_1",
+      "preferred_manipulation_waypoint_id": "room_4_scan_1",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_4",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "manipulation_frame": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_4_manipulation",
+      "name": "TVStand (TVStand|4|3)",
+      "pose": {
+        "frame_id": "map",
+        "x": 7.585,
+        "y": 0.335,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_4_scan_2",
+      "preferred_manipulation_waypoint_id": "room_4_scan_2",
+      "room_id": "room_4"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Sink",
+      "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+      "footprint": {
+        "depth_m": 0.41,
+        "shape": "rectangle",
+        "width_m": 0.54
+      },
+      "manipulation_frame": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5_manipulation",
+      "name": "Sink (Sink|5|1|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 9.37,
+        "y": 0.305,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_5_scan_1",
+      "preferred_manipulation_waypoint_id": "room_5_scan_1",
+      "room_id": "room_5"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+      "footprint": {
+        "depth_m": 0.35,
+        "shape": "rectangle",
+        "width_m": 0.45
+      },
+      "manipulation_frame": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6_manipulation",
+      "name": "Bed (Bed|6|0|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 12.325,
+        "y": 0.275,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_6_scan_1",
+      "preferred_manipulation_waypoint_id": "room_6_scan_1",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "TVStand",
+      "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+      "footprint": {
+        "depth_m": 0.39,
+        "shape": "rectangle",
+        "width_m": 0.51
+      },
+      "manipulation_frame": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6_manipulation",
+      "name": "TVStand (TVStand|6|2|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 13.645,
+        "y": 0.295,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_6_scan_2",
+      "preferred_manipulation_waypoint_id": "room_6_scan_2",
+      "room_id": "room_6"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_7",
+      "footprint": {
+        "depth_m": 0.43,
+        "shape": "rectangle",
+        "width_m": 0.57
+      },
+      "manipulation_frame": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_7_manipulation",
+      "name": "Bed (Bed|7|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 15.385,
+        "y": 0.315,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_7_scan_1",
+      "preferred_manipulation_waypoint_id": "room_7_scan_1",
+      "room_id": "room_7"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Desk",
+      "fixture_id": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7",
+      "footprint": {
+        "depth_m": 0.35,
+        "shape": "rectangle",
+        "width_m": 0.45
+      },
+      "manipulation_frame": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7_manipulation",
+      "name": "Desk (Desk|7|3)",
+      "pose": {
+        "frame_id": "map",
+        "x": 16.675,
+        "y": 0.275,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_7_scan_2",
+      "preferred_manipulation_waypoint_id": "room_7_scan_2",
+      "room_id": "room_7"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Bed",
+      "fixture_id": "bed_a830c3c80bd030e6cc4fe9d07eb42b2f_1_0_8",
+      "footprint": {
+        "depth_m": 0.39,
+        "shape": "rectangle",
+        "width_m": 0.51
+      },
+      "manipulation_frame": "bed_a830c3c80bd030e6cc4fe9d07eb42b2f_1_0_8_manipulation",
+      "name": "Bed (Bed|8|0)",
+      "pose": {
+        "frame_id": "map",
+        "x": 18.355,
+        "y": 0.295,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_8_scan_1",
+      "preferred_manipulation_waypoint_id": "room_8_scan_1",
+      "room_id": "room_8"
+    },
+    {
+      "affordances": [
+        "place"
+      ],
+      "category": "Desk",
+      "fixture_id": "desk_869732f43717e1c85a3df51d75404e51_1_0_8",
+      "footprint": {
+        "depth_m": 0.47,
+        "shape": "rectangle",
+        "width_m": 0.63
+      },
+      "manipulation_frame": "desk_869732f43717e1c85a3df51d75404e51_1_0_8_manipulation",
+      "name": "Desk (Desk|8|3)",
+      "pose": {
+        "frame_id": "map",
+        "x": 19.585,
+        "y": 0.335,
+        "yaw": 0.0
+      },
+      "position_detail": "room_only",
+      "preferred_inspection_waypoint_id": "room_8_scan_2",
+      "preferred_manipulation_waypoint_id": "room_8_scan_2",
+      "room_id": "room_8"
+    }
+  ],
+  "frame_ids": {
+    "base": "base_link",
+    "camera": "head_camera_rgb_optical_frame",
+    "map": "map"
+  },
+  "inspection_waypoints": [
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 2 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_2",
+      "visited": true,
+      "waypoint_id": "room_2_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 1.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 2 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_2",
+      "visited": true,
+      "waypoint_id": "room_2_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 1.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 3 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_3",
+      "visited": true,
+      "waypoint_id": "room_3_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 4.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 3 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_3",
+      "visited": true,
+      "waypoint_id": "room_3_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 4.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 4 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_4",
+      "visited": true,
+      "waypoint_id": "room_4_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 7.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 4 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_4",
+      "visited": true,
+      "waypoint_id": "room_4_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 7.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 5 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_5",
+      "visited": true,
+      "waypoint_id": "room_5_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 10.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 5 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_5",
+      "visited": true,
+      "waypoint_id": "room_5_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 10.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 6 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_6",
+      "visited": true,
+      "waypoint_id": "room_6_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 13.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 6 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_6",
+      "visited": true,
+      "waypoint_id": "room_6_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 13.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 7 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_7",
+      "visited": true,
+      "waypoint_id": "room_7_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 16.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 7 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_7",
+      "visited": true,
+      "waypoint_id": "room_7_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 16.0,
+      "y": 1.45,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 8 scan 1",
+      "purpose": "fixture_coverage",
+      "room_id": "room_8",
+      "visited": true,
+      "waypoint_id": "room_8_scan_1",
+      "waypoint_source": "static_map_coverage",
+      "x": 19.0,
+      "y": 1.0,
+      "yaw": 0.0
+    },
+    {
+      "coverage_estimate": 0.5,
+      "frame_id": "map",
+      "label": "room 8 scan 2",
+      "purpose": "fixture_coverage",
+      "room_id": "room_8",
+      "visited": true,
+      "waypoint_id": "room_8_scan_2",
+      "waypoint_source": "static_map_coverage",
+      "x": 19.0,
+      "y": 1.45,
+      "yaw": 0.0
+    }
+  ],
+  "map_id": "molmospaces-procthor-val-0-7_semantic_map",
+  "map_version": "static-fixture-map-v1",
+  "provenance": {
+    "contains_private_scoring_truth": false,
+    "contains_runtime_observations": false,
+    "source": "molmospaces_public_semantic_map"
+  },
+  "rooms": [
+    {
+      "fixture_count": 4,
+      "polygon": [
+        {
+          "x": 0.0,
+          "y": 0.0
+        },
+        {
+          "x": 2.0,
+          "y": 0.0
+        },
+        {
+          "x": 2.0,
+          "y": 2.0
+        },
+        {
+          "x": 0.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_2",
+      "room_label": "room 2"
+    },
+    {
+      "fixture_count": 3,
+      "polygon": [
+        {
+          "x": 3.0,
+          "y": 0.0
+        },
+        {
+          "x": 5.0,
+          "y": 0.0
+        },
+        {
+          "x": 5.0,
+          "y": 2.0
+        },
+        {
+          "x": 3.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_3",
+      "room_label": "room 3"
+    },
+    {
+      "fixture_count": 2,
+      "polygon": [
+        {
+          "x": 6.0,
+          "y": 0.0
+        },
+        {
+          "x": 8.0,
+          "y": 0.0
+        },
+        {
+          "x": 8.0,
+          "y": 2.0
+        },
+        {
+          "x": 6.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_4",
+      "room_label": "room 4"
+    },
+    {
+      "fixture_count": 1,
+      "polygon": [
+        {
+          "x": 9.0,
+          "y": 0.0
+        },
+        {
+          "x": 11.0,
+          "y": 0.0
+        },
+        {
+          "x": 11.0,
+          "y": 2.0
+        },
+        {
+          "x": 9.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_5",
+      "room_label": "room 5"
+    },
+    {
+      "fixture_count": 2,
+      "polygon": [
+        {
+          "x": 12.0,
+          "y": 0.0
+        },
+        {
+          "x": 14.0,
+          "y": 0.0
+        },
+        {
+          "x": 14.0,
+          "y": 2.0
+        },
+        {
+          "x": 12.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_6",
+      "room_label": "room 6"
+    },
+    {
+      "fixture_count": 2,
+      "polygon": [
+        {
+          "x": 15.0,
+          "y": 0.0
+        },
+        {
+          "x": 17.0,
+          "y": 0.0
+        },
+        {
+          "x": 17.0,
+          "y": 2.0
+        },
+        {
+          "x": 15.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_7",
+      "room_label": "room 7"
+    },
+    {
+      "fixture_count": 2,
+      "polygon": [
+        {
+          "x": 18.0,
+          "y": 0.0
+        },
+        {
+          "x": 20.0,
+          "y": 0.0
+        },
+        {
+          "x": 20.0,
+          "y": 2.0
+        },
+        {
+          "x": 18.0,
+          "y": 2.0
+        }
+      ],
+      "room_id": "room_8",
+      "room_label": "room 8"
+    }
+  ],
+  "schema": "nav2_cleanup_semantics_v1"
+}

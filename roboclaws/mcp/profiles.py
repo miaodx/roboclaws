@@ -10,6 +10,7 @@ PROFILE_SCHEMA = "roboclaws_mcp_contract_profile_v1"
 
 AI2THOR_NAVIGATION_PROFILE = "ai2thor_navigation_v1"
 MOLMOSPACES_CLEANUP_PROFILE = "molmospaces_cleanup_v1"
+REAL_ROBOT_CLEANUP_PROFILE = "real_robot_cleanup_v1"
 
 FAMILY_PERCEPTION = "perception"
 FAMILY_LOCALIZATION = "localization"
@@ -473,9 +474,169 @@ _MOLMO_PROFILE = ContractProfile(
     summary="MolmoSpaces cleanup profile preserving the ADR-0003 public agent boundary.",
 )
 
+_REAL_ROBOT_PROFILE = ContractProfile(
+    profile_id=REAL_ROBOT_CLEANUP_PROFILE,
+    version=1,
+    backend="ros2_nav2",
+    domain="cleanup",
+    capability_families=(
+        FAMILY_PERCEPTION,
+        FAMILY_LOCALIZATION,
+        FAMILY_MAPPING,
+        FAMILY_NAVIGATION,
+        FAMILY_MANIPULATION,
+        FAMILY_EPISODE,
+    ),
+    public_tools=(
+        _tool(
+            "metric_map",
+            "mapping.metric_map",
+            FAMILY_MAPPING,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION,),
+            "Return a prebuilt Nav2 map bundle plus public fixture semantics.",
+        ),
+        _tool(
+            "fixture_hints",
+            "mapping.fixture_hints",
+            FAMILY_MAPPING,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION,),
+            "Return public fixture identities, affordances, and preferred waypoints.",
+        ),
+        _tool(
+            "navigate_to_room",
+            "navigation.navigate_to_room",
+            FAMILY_NAVIGATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Resolve a room-level cleanup goal to a bounded Nav2 waypoint action.",
+        ),
+        _tool(
+            "navigate_to_waypoint",
+            "navigation.navigate_to_waypoint",
+            FAMILY_NAVIGATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Send a bounded waypoint goal through a direct Nav2 backend adapter.",
+        ),
+        _tool(
+            "observe",
+            "perception.observe",
+            FAMILY_PERCEPTION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+            "Observe robot-local public candidates at the reached waypoint.",
+        ),
+        _tool(
+            "adjust_camera",
+            "perception.adjust_camera",
+            FAMILY_PERCEPTION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+            "Adjust bounded active camera yaw/pitch when the robot camera supports it.",
+        ),
+        _tool(
+            "declare_visual_candidates",
+            "perception.declare_visual_candidates",
+            FAMILY_PERCEPTION,
+            CLASSIFICATION_COMPOSED,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+            "Register model-declared cleanup candidates from public robot-camera evidence.",
+        ),
+        _tool(
+            "navigate_to_visual_candidate",
+            "navigation.navigate_to_visual_candidate",
+            FAMILY_NAVIGATION,
+            CLASSIFICATION_COMPOSED,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Ground one visual cleanup candidate and navigate toward it with Nav2 when possible.",
+        ),
+        _tool(
+            "inspect_visible_object",
+            "perception.inspect_visible_object",
+            FAMILY_PERCEPTION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+            "Inspect a robot-camera-visible public object handle.",
+        ),
+        _tool(
+            "navigate_to_object",
+            "navigation.navigate_to_object",
+            FAMILY_NAVIGATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Navigate toward a public observed object handle using the Nav2 pilot boundary.",
+        ),
+        _tool(
+            "navigate_to_receptacle",
+            "navigation.navigate_to_receptacle",
+            FAMILY_NAVIGATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Resolve a fixture to its preferred public waypoint and navigate there.",
+        ),
+        _tool(
+            "pick",
+            "manipulation.pick",
+            FAMILY_MANIPULATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "place",
+            "manipulation.place",
+            FAMILY_MANIPULATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "place_inside",
+            "manipulation.place_inside",
+            FAMILY_MANIPULATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "open_receptacle",
+            "manipulation.open_receptacle",
+            FAMILY_MANIPULATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "close_receptacle",
+            "manipulation.close_receptacle",
+            FAMILY_MANIPULATION,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "done",
+            "episode.done",
+            FAMILY_EPISODE,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            "Terminate the navigation and perception pilot episode.",
+        ),
+    ),
+    privileged_tools=(),
+    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
+    summary=(
+        "Real robot cleanup-shaped profile for the first Nav2 navigation and "
+        "perception pilot; manipulation remains blocked."
+    ),
+)
+
 _PROFILES = {
     AI2THOR_NAVIGATION_PROFILE: _AI2THOR_PROFILE,
     MOLMOSPACES_CLEANUP_PROFILE: _MOLMO_PROFILE,
+    REAL_ROBOT_CLEANUP_PROFILE: _REAL_ROBOT_PROFILE,
 }
 
 validate_all_contract_profiles()

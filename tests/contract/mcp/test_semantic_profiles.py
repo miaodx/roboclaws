@@ -14,6 +14,7 @@ from roboclaws.mcp.profiles import (
     AI2THOR_NAVIGATION_PROFILE,
     CLASSIFICATION_PRIVILEGED_TOOL,
     MOLMOSPACES_CLEANUP_PROFILE,
+    REAL_ROBOT_CLEANUP_PROFILE,
     ContractProfile,
     ToolDescriptor,
     assert_public_profile_metadata_safe,
@@ -53,6 +54,7 @@ def test_contract_profile_registry_contains_backend_domain_profiles() -> None:
     assert contract_profile_names() == (
         AI2THOR_NAVIGATION_PROFILE,
         MOLMOSPACES_CLEANUP_PROFILE,
+        REAL_ROBOT_CLEANUP_PROFILE,
     )
 
 
@@ -87,6 +89,34 @@ def test_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
         "place",
         "done",
     }
+
+
+def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
+    profile = contract_profile(REAL_ROBOT_CLEANUP_PROFILE)
+    metadata = profile.metadata()
+    tools = {tool["name"]: tool for tool in metadata["public_tools"]}
+
+    assert {
+        "metric_map",
+        "fixture_hints",
+        "navigate_to_room",
+        "navigate_to_waypoint",
+        "observe",
+        "adjust_camera",
+        "declare_visual_candidates",
+        "navigate_to_visual_candidate",
+        "inspect_visible_object",
+        "navigate_to_object",
+        "navigate_to_receptacle",
+        "done",
+    } <= set(tools)
+    assert "scene_objects" not in json.dumps(metadata)
+    assert "goto" not in tools
+    assert "nav2_action" in tools["navigate_to_waypoint"]["provenance"]
+    assert "nav2_action" in tools["navigate_to_visual_candidate"]["provenance"]
+    assert "camera_artifact" in tools["declare_visual_candidates"]["provenance"]
+    for tool_name in {"pick", "place", "place_inside", "open_receptacle", "close_receptacle"}:
+        assert tools[tool_name]["provenance"] == ["blocked_capability"]
 
 
 def test_profile_validation_rejects_privileged_public_tool() -> None:
@@ -148,7 +178,9 @@ def test_register_profile_tools_helper_registers_selected_public_tools() -> None
 
 def test_router_rejects_unknown_profile_with_allowed_ids() -> None:
     with pytest.raises(
-        ValueError, match="allowed profiles: ai2thor_navigation_v1, molmospaces_cleanup_v1"
+        ValueError,
+        match="allowed profiles: ai2thor_navigation_v1, molmospaces_cleanup_v1, "
+        "real_robot_cleanup_v1",
     ):
         load_contract_profile("missing_profile")
 

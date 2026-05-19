@@ -19,6 +19,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 
 
 def _load_smoke_module():
@@ -54,6 +55,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -72,6 +74,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
     assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
     assert fixture_hints["fixture_hint_mode"] == "room_only"
@@ -143,13 +146,17 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["cleanup_policy_trace"]["post_place_observe_complete"] is True
     assert run_result["real_robot_readiness"]["schema"] == "real_robot_readiness_v1"
     assert run_result["real_robot_readiness"]["semantic_navigation_only"] is True
+    assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
     assert "planner_object_id" not in json.dumps(run_result["agent_view"])
     assert run_result["planner_proof_requests"]["schema"] == "planner_cleanup_proof_requests_v1"
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
+    assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
     assert "Planner Proof Requests" in report_text
     assert "Waypoint Honesty & Cleanup Loop" in report_text
     assert "Real-Robot Readiness" in report_text
+    assert "Nav2 Map Bundle" in report_text
+    assert "map_bundle/map.yaml" in report_text
     assert "report_only_simulation_view" in report_text
     assert "metric_map" in trace_text
     assert "fixture_hints" in trace_text
@@ -160,6 +167,10 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert (tmp_path / "private_evaluation.json").is_file()
     assert (tmp_path / "advisory_evaluation.json").is_file()
     assert (tmp_path / "planner_proof_requests.json").is_file()
+    assert (tmp_path / "map_bundle" / "map.yaml").is_file()
+    assert (tmp_path / "map_bundle" / "map.pgm").is_file()
+    assert (tmp_path / "map_bundle" / "semantics.json").is_file()
+    assert (tmp_path / "map_bundle" / "preview.png").is_file()
 
 
 class _FakeVisualBackend(ApiSemanticCleanupBackend):

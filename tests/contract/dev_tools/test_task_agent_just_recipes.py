@@ -26,8 +26,12 @@ CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_MODEL",
     "ROBOCLAWS_CODEX_MODEL",
     "ROBOCLAWS_CLAUDE_MODEL",
+    "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
+    "OPENAI_API_KEY",
+    "CODEX_BASE_URL",
+    "CODEX_API_KEY",
 )
 
 
@@ -287,6 +291,50 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
+def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "codex",
+        "world-labels",
+        "map_bundle=molmo-cleanup-default-7",
+    )
+
+    assert route[:10] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/molmo/codex-report",
+        "帮我收拾这个房间",
+        "10",
+        "127.0.0.1",
+        "18788",
+    ]
+    assert route[10] == "molmo-cleanup-default-7"
+
+
+def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'map_bundle="auto"' in text
+    assert 'map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"' in text
+    assert "--map-bundle-dir" in text
+    assert "--require-map-bundle" in text
+
+
+def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"world-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "--require-waypoint-honesty" in body
+    assert "--require-real-robot-alignment" in body
+    assert "--min-semantic-accepted-count 5" in body
+    assert "--min-sweep-coverage 1.0" in body
+
+
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
     labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
@@ -322,6 +370,31 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "mark a waypoint complete only after" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
+
+
+def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r'\*\)\n\s+kickoff_prompt="([^"]+)"', text)
+    assert match is not None
+    prompt = match.group(1)
+
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
+    assert "selected Nav2 map bundle" in prompt
+    assert "not raw occupancy images" in prompt
+    assert "mark a waypoint complete only after" in prompt
+    assert "compare the checklist before roboclaws__done" in prompt
+    assert "visit any missing waypoint_id" in prompt
+
+
+def test_ci_does_not_define_codex_live_proof() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "molmo_official_codex" not in workflow
+    assert "molmo-official-codex" not in workflow
+    assert "report-molmo-official-codex" not in workflow
+    assert "codex-provider-smoke" not in workflow
+    assert ".tmp/coding-agent-bin/codex" not in workflow
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
@@ -368,13 +441,10 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            codex_args=()
             claude_model_args=()
             claude_env_args=()
-            roboclaws_codex_provider_args codex_args
             roboclaws_claude_provider_args claude_model_args claude_env_args
             roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
-            printf 'codex_args=%s\n' "${#codex_args[@]}"
             printf 'claude_model_args=%s\n' "${#claude_model_args[@]}"
             printf 'claude_env_args=%s\n' "${#claude_env_args[@]}"
             """,
@@ -388,13 +458,12 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
 
     assert result.stdout.splitlines() == [
         "system",
-        "codex_args=0",
         "claude_model_args=0",
         "claude_env_args=0",
     ]
 
 
-def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
+def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -404,11 +473,9 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=kimi-openai
-            ROBOCLAWS_CODE_AGENT_MODEL=shared-model
-            ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-            ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
-            MIMO_TP_KEY=fake
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -423,21 +490,25 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
 
     assert result.stdout.splitlines() == [
         "-c",
-        'model="mimo-v2.5-pro"',
+        'model="gpt-5.5"',
         "-c",
-        'model_provider="mimo-openai"',
+        'model_provider="codex-env"',
         "-c",
-        'model_providers.mimo-openai.name="mimo-openai"',
+        'model_providers.codex-env.name="codex-env"',
         "-c",
-        'model_providers.mimo-openai.base_url="https://token-plan-cn.xiaomimimo.com/v1"',
+        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
         "-c",
-        'model_providers.mimo-openai.env_key="MIMO_TP_KEY"',
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.mimo-openai.wire_api="responses"',
+        'model_providers.codex-env.wire_api="responses"',
+        "--disable",
+        "responses_websockets",
+        "--disable",
+        "responses_websockets_v2",
     ]
 
 
-def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> None:
+def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -447,7 +518,87 @@ def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> N
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=kimi-openai
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "-c",
+        'model="gpt-5.5"',
+        "-c",
+        'model_provider="codex-env"',
+        "-c",
+        'model_providers.codex-env.name="codex-env"',
+        "-c",
+        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
+        "-c",
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        "-c",
+        'model_providers.codex-env.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_codex_official_openai_uses_same_key_contract() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            CODEX_BASE_URL=https://api.openai.com/v1
+            CODEX_API_KEY=fake-openai-key
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "-c",
+        'model="gpt-5.5"',
+        "-c",
+        'model_provider="codex-env"',
+        "-c",
+        'model_providers.codex-env.name="codex-env"',
+        "-c",
+        'model_providers.codex-env.base_url="https://api.openai.com/v1"',
+        "-c",
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        "-c",
+        'model_providers.codex-env.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_codex_env_profile_requires_base_url() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    env["CODEX_API_KEY"] = "fake-codex-key"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
             args=()
             roboclaws_codex_provider_args args
             """,
@@ -460,8 +611,35 @@ def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> N
     )
 
     assert result.returncode == 2
-    assert "kimi-openai requires KIMI_API_KEY" in result.stderr
+    assert "codex-env requires CODEX_BASE_URL" in result.stderr
     assert "sk-" not in result.stderr
+
+
+def test_coding_agent_codex_env_profile_requires_api_key_without_printing_secret() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    env["CODEX_BASE_URL"] = "https://codex.example.test/v1"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "codex-env requires CODEX_API_KEY" in result.stderr
+    assert "fake" not in result.stderr
 
 
 def test_coding_agent_claude_profile_builds_scoped_env() -> None:
@@ -474,7 +652,6 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
             MIMO_TP_KEY=fake-mimo-key
             model_args=()
             env_args=()
@@ -510,7 +687,6 @@ def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
             MIMO_TP_KEY=fake-mimo-key
             model_args=()
             env_args=()
@@ -565,11 +741,11 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "ANTHROPIC_API_KEY" in helper_text
 
 
-def test_codex_provider_smoke_is_explicit_and_profile_only() -> None:
+def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
-    assert "no Codex provider profile selected" in code_text
+    assert "no repo-local Codex endpoint configured" in code_text
     assert "--sandbox read-only" in code_text
     assert "--ephemeral" in code_text
     assert "--ignore-user-config" in code_text

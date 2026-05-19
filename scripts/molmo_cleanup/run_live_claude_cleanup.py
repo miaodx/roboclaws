@@ -36,6 +36,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--lock-path", type=Path, required=True)
     parser.add_argument("--claude-bin", required=True)
     parser.add_argument("--claude-provider-summary", default="system defaults")
+    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--policy", required=True)
@@ -140,7 +141,7 @@ class LiveClaudeCleanupRunner:
     def _wait_for_mcp_ready(self) -> None:
         assert self.server_proc is not None
         probe_host = _probe_host(self.args.host)
-        deadline = time.monotonic() + 120.0
+        deadline = time.monotonic() + self.args.server_startup_timeout_s
         while time.monotonic() < deadline:
             if self.server_proc.poll() is not None:
                 raise RuntimeError("cleanup MCP server exited before becoming ready")
@@ -148,7 +149,8 @@ class LiveClaudeCleanupRunner:
                 return
             time.sleep(0.5)
         raise RuntimeError(
-            f"cleanup MCP server did not become ready at {self.args.host}:{self.args.port}"
+            f"cleanup MCP server did not become ready at {self.args.host}:{self.args.port} "
+            f"within {self.args.server_startup_timeout_s:g}s"
         )
 
     def _run_claude(self) -> None:
@@ -459,7 +461,7 @@ def _prepare_agent_workspace(
             shutil.rmtree(task_skills_link)
         else:
             task_skills_link.unlink()
-    task_skills_link.symlink_to(skills_dir, target_is_directory=True)
+    task_skills_link.symlink_to(Path("..") / "skills", target_is_directory=True)
     (task_dir / "README.md").write_text(
         "# Roboclaws Molmo Cleanup Agent Workspace\n\n"
         f"Read `skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
