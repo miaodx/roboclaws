@@ -1,9 +1,9 @@
 ## Conflict Detection Report
 
 > **UPDATE 2026-05-14:** Merge ingest for
-> `docs/plans/generic-mcp-entrypoint-semantic-capabilities.md` used the
+> `docs/retrospectives/plans/generic-mcp-entrypoint-semantic-capabilities.md` used the
 > manifest
-> `docs/plans/generic-mcp-entrypoint-semantic-capabilities.ingest.yaml`.
+> `docs/retrospectives/plans/generic-mcp-entrypoint-semantic-capabilities.ingest.yaml`.
 > Autoplan evidence was already reconciled in the PRD. Repo search found no
 > existing phase for this exact generic MCP profile/router scope, so the merge
 > created Phase 136 as one coherent phase. No LOCKED decision contradiction,

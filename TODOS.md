@@ -16,7 +16,7 @@ One entry = one self-contained missing item. Shipped phases are tracked under
 
 - **Phase 2.6 deferred-items sweep**
   Re-check
-  `.planning/phases/02.6-openclaw-mcp-tools-integration/deferred-items.md`.
+  `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/deferred-items.md`.
   Close it with evidence if the Kimi-era / Phase 2.2 lint drift is already
   obsolete.
 
