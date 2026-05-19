@@ -24,13 +24,14 @@ Last updated: 2026-05-19
 - `scripts/maps/export_bundle.py` exports a public `agent_view` into a
   prebuilt bundle, and `scripts/maps/check_bundle.py` validates required
   Nav2/cleanup artifacts before agent runtime.
-- `assets/maps/molmo-cleanup-default-7/` is a checked-in prebuilt map bundle
+- `assets/maps/molmo-cleanup-default-7/` and
+  `assets/maps/molmospaces-procthor-val-0-7/` are checked-in prebuilt map bundles
   with `map.yaml`, `map.pgm`, `semantics.json`, `profiles/rby1m.yaml`,
   `costmaps/rby1m.costmap_params.yaml`, and `preview.png`.
 - Direct, MCP smoke, and live-agent cleanup entrypoints now accept
   `--map-bundle-dir` plus `--require-map-bundle`; non-smoke public
   `just task::run molmo-cleanup ...` profiles default to
-  `assets/maps/molmo-cleanup-default-7` and fail before cleanup startup when
+  `assets/maps/molmospaces-procthor-val-0-7` and fail before cleanup startup when
   the selected bundle is missing or invalid.
 - `RealWorldCleanupContract.metric_map()` and `fixture_hints()` can project
   from the selected prebuilt bundle, and run finalizers copy that selected
@@ -50,21 +51,30 @@ Last updated: 2026-05-19
   Hosted CI does not support Codex, Codex provider smoke, or Codex acceptance
   artifacts.
 - The local Codex Nav2 cleanup command explicitly selects
-  `map_bundle=molmo-cleanup-default-7`, validates the run-local
+  `map_bundle=molmospaces-procthor-val-0-7`, validates the run-local
   `seed-7/map_bundle/` snapshot with `scripts/maps/check_bundle.py`, and uses a
   stricter world-labels kickoff prompt that tells Codex to plan through
   `metric_map` / `fixture_hints`, build an exact waypoint checklist, and avoid
   raw occupancy-image planning.
 - The shared `world-labels` checker gate now requires waypoint honesty,
-  real-robot alignment, `--min-restored-count 5`, and
-  `--min-sweep-coverage 1.0`; local/operator Codex runs fail against that same
-  cleanup bar.
+  real-robot alignment, `--min-semantic-accepted-count 5`, and
+  `--min-sweep-coverage 1.0`; exact private restoration remains reported but
+  is not the pass/fail gate when semantic placement is preferred.
 - The Codex live runner now tolerates nonblocking console mirrors while keeping
   `codex-events.jsonl`, `codex.stderr.log`, and checker artifacts intact, matching
   the existing Claude runner behavior.
 - The Codex live runner now defaults `world-labels` runs to the no-regression /
   real-robot-alignment checker floor even if a caller bypasses
   the public `just` recipe and invokes `run_live_codex_cleanup.py` directly.
+- Codex and Claude live-run workspaces expose `skills/molmo-realworld-cleanup/`
+  through a container-relative `../skills` link so the Docker-backed local CLI
+  can read the task skill inside the isolated workspace.
+- Local Codex proof through the repo-local `.env` route completed at
+  `output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html`.
+  The run used `molmospaces-procthor-val-0-7`, validated the run-local
+  `map_bundle/`, completed every public inspection waypoint, reached semantic
+  cleanup acceptance `5/5`, and kept exact private restoration visible as
+  `4/5` against the scenario threshold of `4`.
 - Broken legacy Molmo compatibility symlinks at removed root paths were deleted
   so the repo-wide static gate no longer asks Ruff to lint missing files.
 
@@ -161,6 +171,14 @@ Last updated: 2026-05-19
   - `git diff --check`
   - push CI `26094330522` and PR CI `26094327321` passed on branch head
     `9f87bd0`; hosted live/Pages jobs skipped as expected on this branch event.
+- Latest local Codex proof checks:
+  - `just task::run molmo-cleanup codex world-labels output_dir=output/molmo/codex-local-env-nav2-report seed=7 generated_mess_count=5 map_bundle=molmospaces-procthor-val-0-7`
+  - `uv run python scripts/maps/check_bundle.py output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/map_bundle --json`
+  - `uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/molmo/codex-local-env-nav2-report/0519_2041 --expect-backend molmospaces_subprocess --expect-policy codex_agent --expect-profile world-labels --expect-seeds 7 --min-generated-mess-count 5 --require-agent-driven --require-robot-views --require-waypoint-honesty --require-real-robot-alignment --min-semantic-accepted-count 5 --min-sweep-coverage 1.0`
+  - Result: `completion_status=success`, `cleanup_status=success`,
+    semantic accepted `5/5`, exact private restored `4/5`, scenario success
+    threshold `4`, sweep coverage `1.0`, and all 14 public inspection
+    waypoints visited.
 - Explicit checker passed:
 
 ```bash
@@ -198,14 +216,14 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`, `9f78781`, `e603873`, `b7dc8e0`, `c93a760`, `2f2b19c`, `e2582c4`; this status file tracks the local Codex consumption boundary cleanup. | Implemented; local Codex proof remains operator-run |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`, `9f78781`, `e603873`, `b7dc8e0`, `c93a760`, `2f2b19c`, `e2582c4`, `2090445`, and the current local proof-gate commit; this status file tracks the local Codex consumption boundary cleanup. | Implemented; local Codex proof verified locally |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, runtime gap notes, and `Static costmap routes`. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-selected-bundle-smoke/0519_1728` passed checker with restored `5/5`, sweep coverage `1.0`, selected bundle projection, and run-local selected bundle snapshot. | Verified for deterministic smoke |
 | First hardware pilot acceptance path | Deterministic artifact `output/molmo/physical-nav2-pilot-local-check/report.html` loads the selected prebuilt bundle and `rby1m` profile, attempts 8 inspection waypoints plus 10 fixture preferred waypoints through `DirectNav2Adapter`, observes every reached waypoint, blocks `pick`/`place`/`place_inside`/`open_receptacle`/`close_receptacle`, snapshots `map_bundle/`, and renders `physical_navigation_pilot=true` / `physical_cleanup_ready=false`. | Implemented with mock Nav2 client; real hardware still operator-run |
-| Keep MolmoSpaces cleanup consumable by local Codex | The local Codex route uses the pinned coding-agent runtime, passes repo-local `.env` API/provider settings into detached Molmo runs, explicitly selects `map_bundle=molmo-cleanup-default-7`, checks `seed-7/map_bundle/`, and runs the no-regression / real-robot-alignment checker. Hosted CI no longer supports Codex and must not publish Codex acceptance artifacts. | Local route implemented; live proof is operator-run |
+| Keep MolmoSpaces cleanup consumable by local Codex | The local Codex route uses the pinned coding-agent runtime, passes repo-local `.env` API/provider settings into detached Molmo runs, explicitly selects `map_bundle=molmospaces-procthor-val-0-7`, checks `seed-7/map_bundle/`, and runs the no-regression / real-robot-alignment checker. The local proof at `output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html` completed successfully with semantic accepted `5/5`, exact private restored `4/5`, threshold `4`, and sweep `1.0`. Hosted CI no longer supports Codex and must not publish Codex acceptance artifacts. | Verified locally |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
 Completion rule: hosted CI Codex artifacts are not a completion gate. Codex
@@ -236,19 +254,12 @@ Current local Codex evidence:
 - `world-labels` runs default to the no-regression /
   real-robot-alignment checker floor even when invoked through
   `run_live_codex_cleanup.py` directly.
+- `output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html`
+  is the current local proof artifact. Its `run_result.json` passed the
+  real-robot-alignment checker with semantic accepted `5/5`, exact private
+  restored `4/5`, scenario success threshold `4`, and sweep coverage `1.0`.
 
 ## Next Action
 
-Run any Codex cleanup proof locally through the repo-local `.env` configuration:
-
-```bash
-just task::run molmo-cleanup codex world-labels \
-  output_dir=output/molmo/codex-gpt55-nav2-report \
-  seed=7 \
-  generated_mess_count=5 \
-  map_bundle=molmo-cleanup-default-7
-```
-
-Validate the resulting local report with `scripts/maps/check_bundle.py` and the
-cleanup checker using `--require-real-robot-alignment`. Do not use GitHub
-Actions or repository `OPENAI_API_KEY` secrets for Codex proof.
+Review the two local proof-alignment commits and the local Codex proof artifact.
+Do not push unless the human explicitly asks.

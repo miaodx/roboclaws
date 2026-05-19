@@ -318,7 +318,7 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert 'map_bundle="auto"' in text
-    assert 'map_bundle_dir="assets/maps/molmo-cleanup-default-7"' in text
+    assert 'map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"' in text
     assert "--map-bundle-dir" in text
     assert "--require-map-bundle" in text
 
@@ -331,7 +331,7 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
 
     assert "--require-waypoint-honesty" in body
     assert "--require-real-robot-alignment" in body
-    assert "--min-restored-count 5" in body
+    assert "--min-semantic-accepted-count 5" in body
     assert "--min-sweep-coverage 1.0" in body
 
 

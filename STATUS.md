@@ -19,10 +19,11 @@ checker alignment gates, and local Codex consumption through the repo-local
 
 ## Next Action
 
-Run any Codex cleanup proof locally through the repo-local `.env` route, then
-validate the resulting `seed-7/run_result.json`, `report.html`, and
-`map_bundle/map.yaml` with the map bundle checker and real-robot-alignment
-cleanup checker.
+Review the two local proof-alignment commits and the local Codex proof artifact;
+do not push unless the human explicitly asks. The current local Codex proof is
+`output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html`, with
+its run-local `map_bundle/` validated by the map bundle checker and its
+`run_result.json` validated by the real-robot-alignment cleanup checker.
 
 ## Current Blocker
 

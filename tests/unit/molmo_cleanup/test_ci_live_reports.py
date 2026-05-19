@@ -313,6 +313,7 @@ def test_live_claude_workspace_exposes_skill_at_task_relative_path(
 
     assert prepared_workspace == workspace
     assert (task_dir / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
+    assert (task_dir / "skills").readlink() == Path("..") / "skills"
     assert (workspace / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
     readme = (task_dir / "README.md").read_text(encoding="utf-8")
     assert "skills/molmo-realworld-cleanup/SKILL.md" in readme
@@ -339,6 +340,162 @@ def test_live_codex_normalizes_relative_docker_workspace(tmp_path: Path, monkeyp
     assert prepared_workspace == (repo_root / "output/molmo/live/seed-7/agent-docker-workspace")
     assert prepared_workspace.is_absolute()
     assert (task_dir / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
+    assert (task_dir / "skills").readlink() == Path("..") / "skills"
+
+
+def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+
+    codex_args = run_codex.parse_args(
+        [
+            "--run-dir",
+            str(tmp_path / "codex-run"),
+            "--repo-root",
+            str(REPO_ROOT),
+            "--status-path",
+            str(tmp_path / "codex-status.json"),
+            "--client-url",
+            "http://127.0.0.1:18788/mcp",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "18788",
+            "--lock-path",
+            str(tmp_path / "codex.lock"),
+            "--tmux-session",
+            "roboclaws-test",
+            "--codex-bin",
+            "codex",
+            "--kickoff-prompt",
+            "clean",
+            "--backend",
+            "molmospaces_subprocess",
+            "--policy",
+            "codex_agent",
+            "--task",
+            "帮我收拾这个房间",
+            "--min-generated-mess-count",
+            "5",
+            "--profile",
+            "world-labels",
+        ]
+    )
+    claude_args = run_claude.parse_args(
+        [
+            "--run-dir",
+            str(tmp_path / "claude-run"),
+            "--repo-root",
+            str(REPO_ROOT),
+            "--status-path",
+            str(tmp_path / "claude-status.json"),
+            "--client-url",
+            "http://127.0.0.1:18788/mcp",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "18788",
+            "--lock-path",
+            str(tmp_path / "claude.lock"),
+            "--claude-bin",
+            "claude",
+            "--kickoff-prompt",
+            "clean",
+            "--backend",
+            "molmospaces_subprocess",
+            "--policy",
+            "claude_agent",
+            "--task",
+            "帮我收拾这个房间",
+            "--min-generated-mess-count",
+            "5",
+            "--profile",
+            "world-labels",
+        ]
+    )
+
+    assert codex_args.server_startup_timeout_s == 600.0
+    assert claude_args.server_startup_timeout_s == 600.0
+
+
+def test_live_codex_wait_for_mcp_ready_uses_configured_timeout(tmp_path: Path, monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    args = SimpleNamespace(
+        run_dir=tmp_path / "run",
+        status_path=tmp_path / "status.json",
+        host="127.0.0.1",
+        port=18788,
+        server_startup_timeout_s=200.0,
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    ticks = iter([0.0, 100.0, 130.0])
+    checks = {"count": 0}
+
+    def fake_port_accepting(_host: str, _port: int) -> bool:
+        checks["count"] += 1
+        return checks["count"] == 2
+
+    monkeypatch.setattr(run_codex.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(run_codex.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(run_codex, "_port_accepting", fake_port_accepting)
+
+    runner._wait_for_mcp_ready()
+
+    assert checks["count"] == 2
+
+
+def test_live_claude_wait_for_mcp_ready_uses_configured_timeout(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    args = SimpleNamespace(
+        run_dir=tmp_path / "run",
+        status_path=tmp_path / "status.json",
+        host="127.0.0.1",
+        port=18788,
+        server_startup_timeout_s=200.0,
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    ticks = iter([0.0, 100.0, 130.0])
+    checks = {"count": 0}
+
+    def fake_port_accepting(_host: str, _port: int) -> bool:
+        checks["count"] += 1
+        return checks["count"] == 2
+
+    monkeypatch.setattr(run_claude.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(run_claude.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(run_claude, "_port_accepting", fake_port_accepting)
+
+    runner._wait_for_mcp_ready()
+
+    assert checks["count"] == 2
+
+
+def test_live_codex_failure_status_includes_reason(tmp_path: Path, monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    args = SimpleNamespace(
+        run_dir=tmp_path / "run",
+        status_path=tmp_path / "live_status.json",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+
+    monkeypatch.setattr(runner, "_acquire_lock", lambda: None)
+    monkeypatch.setattr(runner, "_start_server", lambda: None)
+    monkeypatch.setattr(
+        runner,
+        "_wait_for_mcp_ready",
+        lambda: (_ for _ in ()).throw(RuntimeError("startup failed")),
+    )
+    monkeypatch.setattr(runner, "_cleanup_server", lambda: None)
+
+    assert runner.run() == 1
+    payload = json.loads(args.status_path.read_text(encoding="utf-8"))
+    assert payload["phase"] == "failed"
+    assert payload["exit_status"] == 1
+    assert payload["reason"] == "startup failed"
 
 
 def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(
@@ -373,7 +530,7 @@ def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(
     command = captured["command"]
     assert "--require-waypoint-honesty" in command
     assert "--require-real-robot-alignment" in command
-    assert command[command.index("--min-restored-count") + 1] == "5"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "5"
     assert command[command.index("--min-sweep-coverage") + 1] == "1.0"
     assert command[-1] == str(run_dir / "run_result.json")
 
@@ -397,7 +554,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
         checker_visual_arg=[
             "--require-waypoint-honesty",
             "--require-real-robot-alignment",
-            "--min-restored-count",
+            "--min-semantic-accepted-count",
             "5",
             "--min-sweep-coverage",
             "1.0",
@@ -417,7 +574,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
     command = captured["command"]
     assert command.count("--require-waypoint-honesty") == 1
     assert command.count("--require-real-robot-alignment") == 1
-    assert command.count("--min-restored-count") == 1
+    assert command.count("--min-semantic-accepted-count") == 1
     assert command.count("--min-sweep-coverage") == 1
 
 

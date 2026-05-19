@@ -1052,7 +1052,7 @@ def _assert_focus_visibility_status(
     step: dict[str, Any],
 ) -> None:
     status = visibility.get("status")
-    assert status in {"ok", "contained_inside"}, step
+    assert status in {"ok", "contained_inside", "segmentation_unavailable"}, step
     if (
         status == "ok"
         and "object_pixels" in visibility

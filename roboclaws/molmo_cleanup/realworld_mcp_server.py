@@ -712,7 +712,15 @@ class RealWorldMolmoCleanupMCPServer:
         output_path = self.run_dir / filename
         writer = getattr(self.base_contract.backend, "write_snapshot", None)
         if callable(writer):
-            return writer(output_path, title=title)
+            try:
+                return writer(output_path, title=title)
+            except Exception as exc:
+                self.write_runtime_event(
+                    "snapshot_capture_failed",
+                    filename=filename,
+                    error=str(exc),
+                    fallback="state_snapshot",
+                )
         return write_state_snapshot(
             self.scenario,
             self.base_contract.backend.object_locations(),
@@ -759,17 +767,27 @@ class RealWorldMolmoCleanupMCPServer:
             raise RuntimeError("robot view capture requires backend.write_robot_views")
         previous_count = len(self.robot_view_steps)
         capture_started = time.monotonic()
-        self._robot_view_index = record_robot_view_step(
-            steps=self.robot_view_steps,
-            backend=self.base_contract.backend,
-            output_dir=self.run_dir,
-            index=self._robot_view_index,
-            action=action,
-            label_suffix=label_suffix,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-            semantic_phase=semantic_phase,
-        )
+        try:
+            self._robot_view_index = record_robot_view_step(
+                steps=self.robot_view_steps,
+                backend=self.base_contract.backend,
+                output_dir=self.run_dir,
+                index=self._robot_view_index,
+                action=action,
+                label_suffix=label_suffix,
+                focus_object_id=focus_object_id,
+                focus_receptacle_id=focus_receptacle_id,
+                semantic_phase=semantic_phase,
+            )
+        except Exception as exc:
+            self.write_runtime_event(
+                "robot_view_capture_failed",
+                action=action,
+                label_suffix=label_suffix,
+                elapsed_s=round(time.monotonic() - capture_started, 6),
+                error=str(exc),
+            )
+            return None
         if len(self.robot_view_steps) <= previous_count:
             return None
         capture_elapsed_s = round(time.monotonic() - capture_started, 6)

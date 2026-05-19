@@ -92,7 +92,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-robot-views
           --require-waypoint-honesty
           --require-real-robot-alignment
-          --min-restored-count 5
+          --min-semantic-accepted-count 5
           --min-sweep-coverage 1.0
         )
         ;;
@@ -130,7 +130,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ "$profile" == "smoke" ]]; then
           map_bundle_dir=""
         else
-          map_bundle_dir="assets/maps/molmo-cleanup-default-7"
+          map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"
         fi
         ;;
       none|false|off)
@@ -180,6 +180,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         policy="${driver%-live}_agent"
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
+        server_startup_timeout_s="${ROBOCLAWS_MOLMO_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
         source scripts/dev/coding_agent_env.sh
         roboclaws_load_dotenv .env
         if [[ "$driver" == "openclaw-live" ]]; then
@@ -300,6 +301,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --codex-bin "$codex_bin"
             --codex-model "$codex_model"
             --codex-provider-summary "$codex_profile_summary"
+            --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --policy "$policy"
@@ -390,6 +392,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --lock-path output/molmo/.live-claude.lock
             --claude-bin "$claude_bin"
             --claude-provider-summary "$claude_profile_summary"
+            --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --policy "$policy"
