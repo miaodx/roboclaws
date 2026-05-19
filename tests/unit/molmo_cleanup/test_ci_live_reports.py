@@ -355,6 +355,20 @@ def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:
     assert artifact.getvalue() == b'{"type":"result"}\n'
 
 
+def test_live_codex_tee_keeps_artifact_when_console_is_nonblocking() -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    class NonBlockingConsole(io.BytesIO):
+        def write(self, _payload):
+            raise BlockingIOError("console buffer full")
+
+    artifact = io.BytesIO()
+
+    run_codex._tee_stream(io.BytesIO(b'{"type":"result"}\n'), [artifact, NonBlockingConsole()])
+
+    assert artifact.getvalue() == b'{"type":"result"}\n'
+
+
 def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path) -> None:
     write_pages_index = _load_module(PAGES_INDEX_PATH, "write_pages_index")
 

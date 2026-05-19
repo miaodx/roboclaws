@@ -359,8 +359,13 @@ def _run_and_tee(
 def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO]) -> None:
     for chunk in iter(lambda: stream.readline(), b""):
         for output in outputs:
-            output.write(chunk)
-            output.flush()
+            try:
+                output.write(chunk)
+                output.flush()
+            except BlockingIOError:
+                # Interactive terminals may be nonblocking under agent control. Keep
+                # teeing to the artifact file even if live console mirroring drops a chunk.
+                continue
 
 
 def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
