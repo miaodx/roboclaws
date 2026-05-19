@@ -219,10 +219,10 @@ tokens vs 11,335 tokens — ratio 0.568, measured with the Phase 2.6 tool set).
 That saves budget for Kimi's
 multi-image reasoning on long autonomous runs. Full live-probed numbers
 + the spike-vs-live baseline comparison live in
-`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`
+`.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md`
 (Probe 6). Spike evidence for the transport-key and SIGUSR1 gotchas lives
 in
-`.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`.
+`.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md`.
 The Phase 2.6 lessons narrative lives in
 [`docs/retrospectives/phase-2.6.md`](../../retrospectives/phase-2.6.md).
 

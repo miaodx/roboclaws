@@ -1,11 +1,11 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Better Views
+milestone: v1.98
+milestone_name: Planning Archive
 status: active
-stopped_at: Phase 136 Generic MCP entrypoint and semantic capability profiles implemented and verified; Phase 135 hosted-provider follow-up remains the repo-level external blocker.
-last_updated: "2026-05-14T22:03:09+08:00"
-last_activity: 2026-05-14
+stopped_at: Planning archive complete; no active GSD execution phase. Phase 135 hosted-provider follow-up remains the repo-level external blocker.
+last_updated: "2026-05-19T00:00:00+08:00"
+last_activity: 2026-05-19
 progress:
   total_phases: 137
   completed_phases: 133
@@ -18,23 +18,27 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-04-21)
+See: .planning/PROJECT.md (updated 2026-05-19)
 
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
-**Current focus:** Phase 136 has added the generic MCP semantic profile/router
-layer for AI2-THOR and MolmoSpaces contracts. Phase 135's hosted Molmo live
-proof still reaches cleanup MCP tools, and the repo-level follow-up remains
-publishing useful diagnostics for provider/runtime failures and preserving live
-report artifacts on Pages deploys.
+**Current focus:** GSD history through Phase 136 is archived under
+`.planning/milestones/v1.98-phases/`; `.planning/phases/` now holds only
+planned follow-ups 02.7 and 02.8. The repo-level follow-up remains the
+official Codex GPT-5.5 Nav2 cleanup proof blocker called out in `STATUS.md`.
 
 ## Current Position
 
-**Current Phase:** 136
-**Current Phase Name:** Generic MCP entrypoint and semantic capability profiles
-**Current Plan:** 1
-**Total Plans in Phase:** 1
+**Current Phase:** None
+**Current Phase Name:** No active GSD execution phase
+**Current Plan:** -
+**Total Plans in Phase:** -
 **Total Phases:** 137
 **Progress:** 92%
+
+Archive milestone `v1.98 Planning Archive` moved completed, superseded, and
+historical GSD phase directories to `.planning/milestones/v1.98-phases/` and
+historical pre-GSD plan documents to `docs/retrospectives/plans/`. Current
+planned phase directories left in `.planning/phases/` are 02.7 and 02.8.
 
 Phase: 136 (generic-mcp-entrypoint-and-semantic-capability-profiles) - COMPLETE
 Plan: 1 of 1 complete - `136-01` added semantic MCP contract profiles, built-in
@@ -805,10 +809,10 @@ Recent decisions affecting current work:
 - **Cross-phase local follow-up (2026-04-22):** The Phase 02.4 view family is now shared with the shipped Phase 02.6 autonomous MCP path. `examples/openclaw_nav_autonomous.py --views map-v2+chase` completed locally with real Kimi + AI2-THOR (`done`, 2 observes + 1 move + 1 done in the summary-fix smoke), and the MCP server now fails fast on bind collisions instead of burning the full wall-clock budget behind a dead listener.
 - **Phase 02.4 decision lock (2026-04-24):** The old `baseline` / `map-v2` / `map-v2+chase` A/B study is now historical only. Runtime support was standardized on `map-v2+chase`, user-facing `--views` flags were removed from the main examples, and `02.4-04` was superseded rather than executed.
 - **Phase 5 completion (2026-04-23):** The codebase-simplification phase closed all 9 plans in a single verified worktree batch. Eighteen target files finished at or below their original line caps (`9,378` → `9,175`, net `-203`), targeted example/API guards stayed green, and the final repo-wide `pytest`, `ruff check`, and `ruff format --check` gates passed after a small pre-existing lint cleanup in unrelated scripts/tests.
-- **Phase 02.7 planning completion (2026-04-22):** The queued autonomous follow-up now has a full GSD planning bundle under `.planning/phases/02.7-openclaw-intermediate-message-capture/`: four executable plan files plus `02.7-RESEARCH.md` and `02.7-VALIDATION.md`. Scope remains unchanged: compare real Gateway streaming vs terminal-body capture, persist transcript artifacts additively, surface them in `report.html`, and validate the shipped path locally. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
-- **Phase 5 planning completion (2026-04-23):** Iterative codebase simplification phase now has a full GSD planning bundle under `.planning/phases/05-iterative-codebase-simplification/`: nine executable plan files covering all major source files (visualizer.py, mcp_server.py, reporter.py, transport.py, game modules, provider modules, supporting modules, and example scripts). All plans wave 1, independent, atomic commits, pytest + ruff gate per commit. Verification passed. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
-- **Phase 4 planning completion (2026-04-23):** The queued refactor-safety follow-up now has a full GSD planning bundle under `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/`: four executable plan files plus `04-RESEARCH.md` and `04-VALIDATION.md`. Scope is locked to tiny contract fixtures, a thin capture harness, a separate baseline-vs-candidate analyzer, and a local baseline-refresh workflow. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
-- **Phase 4 execution completion (2026-04-23):** The refactor-regression harness phase is now implemented. Added `roboclaws/regression.py`, capture/analyze CLIs, operator docs, contract/analyzer tests, and the first real local evidence bundle in `.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md`. Live probe feedback tightened the harness in two places: `openclaw-autonomous` now treats `terminated_by=error` / zero-observe runs as capture failures, and `explore-vlm` analyzer thresholds now use ratio-or-absolute slack (`usd` +$0.01, `wallclock` +120s) so small same-commit Kimi workflow proofs do not fail on cold-start variance alone. This does **not** change the active phase; Phase 02.4 remains the current blocked milestone work.
+- **Phase 02.7 planning completion (2026-04-22):** The queued autonomous follow-up now has a full GSD planning bundle under `.planning/phases/02.7-openclaw-intermediate-message-capture/`: four executable plan files plus `02.7-RESEARCH.md` and `02.7-VALIDATION.md`. Scope remains unchanged: compare real Gateway streaming vs terminal-body capture, persist transcript artifacts additively, surface them in `report.html`, and validate the shipped path locally. The phase remains planned, not active.
+- **Phase 5 planning completion (2026-04-23):** Iterative codebase simplification phase now has a full GSD planning bundle under `.planning/milestones/v1.98-phases/05-iterative-codebase-simplification/`: nine executable plan files covering all major source files (visualizer.py, mcp_server.py, reporter.py, transport.py, game modules, provider modules, supporting modules, and example scripts). All plans wave 1, independent, atomic commits, pytest + ruff gate per commit. Verification passed. This note is retained as historical planning context.
+- **Phase 4 planning completion (2026-04-23):** The queued refactor-safety follow-up now has a full GSD planning bundle under `.planning/milestones/v1.98-phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/`: four executable plan files plus `04-RESEARCH.md` and `04-VALIDATION.md`. Scope is locked to tiny contract fixtures, a thin capture harness, a separate baseline-vs-candidate analyzer, and a local baseline-refresh workflow. This note is retained as historical planning context.
+- **Phase 4 execution completion (2026-04-23):** The refactor-regression harness phase is now implemented. Added `roboclaws/regression.py`, capture/analyze CLIs, operator docs, contract/analyzer tests, and the first real local evidence bundle in `.planning/milestones/v1.98-phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md`. Live probe feedback tightened the harness in two places: `openclaw-autonomous` now treats `terminated_by=error` / zero-observe runs as capture failures, and `explore-vlm` analyzer thresholds now use ratio-or-absolute slack (`usd` +$0.01, `wallclock` +120s) so small same-commit Kimi workflow proofs do not fail on cold-start variance alone. This note is retained as historical execution context.
 - **Phase 02.6 plan 01 (2026-04-21)**: MCP server default bind is `127.0.0.1` (localhost-only) per threat model T-02.6-01; Gateway container reaches via `host.docker.internal` → host-gateway → loopback. Bind is NOT env-configurable — only via explicit argument.
 - **Phase 02.6 plan 01 (2026-04-21)**: Trace schema additive-only rule: `tests/fixtures/trace_schema_reference.json` freezes sim_server.py key-sets at phase entry; MCP server emits a SUPERSET. `snapshot_metrics` is the one exception — EQUALITY checked because `run_result_json["sim_server_metrics"]` consumers depend on exact names.
 - **Phase 02.6 plan 01 (2026-04-21)**: `mcp[cli]>=1.27` in `dev` + new `openclaw` extra; NOT in top-level `[project].dependencies` (core library stays installable without the Gateway path, mirroring ai2thor).
@@ -833,7 +837,7 @@ Recent decisions affecting current work:
   layer for AI2-THOR and MolmoSpaces contracts, excluding AI2-THOR accelerators
   from canonical profile metadata and preserving Molmo ADR-0003 private
   evaluator boundaries. Verification is recorded in
-  `.planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
+  `.planning/milestones/v1.98-phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
 - Phase 2.4 closed (2026-04-24): **Better Views** now has a locked product decision. The repo keeps only the `map-v2+chase` runtime path; the old multi-variant experiment is retained as historical context plus analysis tooling, not as an active gate.
 - Phase 12 completed (2026-05-08): **MolmoSpaces current-contract agent
   bridge** — current semantic cleanup contract exposed through FastMCP and
@@ -1044,7 +1048,7 @@ Recent decisions affecting current work:
 - Phase 64 completed (2026-05-10): **MolmoSpaces fallback runtime alias
   discovery** - prior exact-scene `KeyError` valid-name lists now produce
   same-family runtime sibling fallback commands and report discovered aliases.
-- Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/phases/05-iterative-codebase-simplification/`.
+- Phase 5 completed (2026-04-23): **Iterative codebase simplification** — all 9 plans closed, 18 target files simplified, net `-203` targeted lines, and final repo-wide `pytest` + `ruff` gates passed. Per-plan summaries live under `.planning/milestones/v1.98-phases/05-iterative-codebase-simplification/`.
 - Phase 4 added (2026-04-23): **Refactor regression harnesses for VLM, territory/coverage, and OpenClaw**. The phase was added via the `phase.add` workflow, then tightened for this repo: root `PLAN.md` is explicitly kept as a source context file, `04-CONTEXT.md` seeds the planning bundle, and the intended harness shape follows existing repo patterns (`results.jsonl` runner + separate analyzer + small fixture-backed contract tests).
 
 ### Pending Todos
@@ -1145,9 +1149,10 @@ Items acknowledged and carried forward from the new-mode ingest:
 ## Session Continuity
 
 Last session: 2026-05-14T22:03:09+08:00
-Stopped at: Phase 136 Generic MCP entrypoint and semantic capability profiles
-implemented and verified. Phase 135 hosted live-provider follow-up remains the
-repo-level external blocker; the next external validation should run
+Stopped at: Planning archive `v1.98` created after Phase 136. Phase 136 Generic
+MCP entrypoint and semantic capability profiles remains implemented and
+verified. Phase 135 hosted live-provider follow-up remains the repo-level
+external blocker; the next external validation should run
 `workflow_dispatch` with `molmo_live=true` on `main` or push to `main` with
 `[molmo-live]` in the commit message, using the configured GitHub Actions
 secrets `KIMI_API_KEY` and `MIMO_TP_KEY`.
@@ -1159,8 +1164,8 @@ to one selected command, and executable `--cleanup-tools` now matches the
 report rail.
 Latest phase artifacts are
 `docs/adr/0125-canonicalize-proof-command-cleanup-tool-order.md`,
-`docs/plans/molmospaces-canonical-proof-command-tool-order.md`, and
-`.planning/phases/134-molmospaces-canonical-proof-command-tool-order/134-01-canonical-proof-command-tool-order-PLAN.md`.
+`docs/retrospectives/plans/molmospaces-canonical-proof-command-tool-order.md`, and
+`.planning/milestones/v1.98-phases/134-molmospaces-canonical-proof-command-tool-order/134-01-canonical-proof-command-tool-order-PLAN.md`.
 Phase 37 evidence lives under
 `output/molmospaces-planner-cleanup-bridge-readiness/` and remains bridge-blocked
 for full cleanup because it predates proof-bundle coverage.
@@ -1210,8 +1215,9 @@ Latest focused cleanup report examples:
 Latest Molmo CI live dry-run manifest:
 `output/molmo/ci-rehearsal-all/site/molmo/live/live-report-manifest.json`.
 Latest semantic MCP profile verification:
-`.planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
-Resume file: .planning/phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-01-generic-mcp-entrypoint-semantic-capabilities-PLAN.md
+`.planning/milestones/v1.98-phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-VERIFICATION.md`.
+Archived Phase 136 plan:
+.planning/milestones/v1.98-phases/136-generic-mcp-entrypoint-and-semantic-capability-profiles/136-01-generic-mcp-entrypoint-semantic-capabilities-PLAN.md
 
 ## Dual-Stack Workflow
 

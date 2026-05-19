@@ -1,0 +1,3 @@
+docs:
+  - path: docs/retrospectives/plans/generic-mcp-entrypoint-semantic-capabilities.md
+    type: PRD

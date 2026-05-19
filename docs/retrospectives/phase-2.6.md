@@ -1,7 +1,7 @@
 # Phase 2.6 — Autonomous OpenClaw loop (v2, MCP tool surface)
 
 Filed 2026-04-21 after all seven plans under
-`.planning/phases/02.6-openclaw-mcp-tools-integration/` shipped.
+`.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/` shipped.
 Supersedes Phase 2.5 (never executed; see
 [`phase-2.5-local-dev.md`](phase-2.5-local-dev.md) and
 [`openclaw-kimi-provider-debug-2026-04-21.md`](openclaw-kimi-provider-debug-2026-04-21.md)
@@ -21,7 +21,7 @@ no amount of prompt-steering could keep Kimi from drifting back to those
 tools when they were available on the agent's surface.
 
 The spike on the morning of 2026-04-21 (see
-[`.planning/phases/02.6-.../02.6-SPIKE-FINDINGS.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md))
+[`.planning/milestones/v1.98-phases/02.6-.../02.6-SPIKE-FINDINGS.md`](../../.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md))
 proved both load-bearing assumptions for the replacement architecture:
 
 - MCP `ImageContent` flows through Gateway's `sanitizeToolResultImages`
@@ -50,7 +50,7 @@ from STATE.md performance metrics.
 | 02.6-06 (live-probe-gate) | Six live probes against real Gateway + real Kimi + real AI2-THOR; 5 PASS + 1 threshold-revised; evidence in `02.6-LOCAL-PROBE-RESULTS.md` | ~32 min |
 | 02.6-07 (docs-update) | `openclw/openclaw-local.md` + `openclw/openclaw-gateway-internals.md` aligned to MCP-era; this retro | — |
 
-Plan-level SUMMARYs in `.planning/phases/02.6-openclaw-mcp-tools-integration/`
+Plan-level SUMMARYs in `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/`
 contain the full task-level commit hashes and decision logs.
 
 ## The two surprises worth remembering
@@ -163,14 +163,14 @@ MCP swap — the `sim_server_metrics` JSON key stays frozen on purpose, and
 Follow-on work (multi-agent MCP routing, MCP over stdio, per-tool rate
 limiting, image-cache tool) is deliberately deferred — see the
 `<deferred>` block in
-[`.planning/phases/02.6-.../02.6-CONTEXT.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-CONTEXT.md).
+[`.planning/milestones/v1.98-phases/02.6-.../02.6-CONTEXT.md`](../../.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-CONTEXT.md).
 
 ## Pointers
 
 - Live evidence:
-  [`.planning/phases/02.6-.../02.6-LOCAL-PROBE-RESULTS.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md)
+  [`.planning/milestones/v1.98-phases/02.6-.../02.6-LOCAL-PROBE-RESULTS.md`](../../.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-LOCAL-PROBE-RESULTS.md)
 - Spike findings:
-  [`.planning/phases/02.6-.../02.6-SPIKE-FINDINGS.md`](../../.planning/phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md)
+  [`.planning/milestones/v1.98-phases/02.6-.../02.6-SPIKE-FINDINGS.md`](../../.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-SPIKE-FINDINGS.md)
 - Operator recipe:
   [`docs/openclw/openclaw-local.md` § MCP tool surface (Phase 2.6)](../openclw/openclaw-local.md#mcp-tool-surface-phase-26)
 - Gateway internals (config gotchas):

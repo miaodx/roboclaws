@@ -155,7 +155,7 @@ docker ps --format '{{.Names}}\t{{.Image}}'
 
 After your run, leave the Gateway on `profile: minimal` (production-intent state) or
 tear it down explicitly: `docker rm -f openclaw-gateway`. Do NOT leave it on
-`profile: coding` — see `.planning/phases/02.6-openclaw-mcp-tools-integration/` threat T-02.6-27.
+`profile: coding` — see `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/` threat T-02.6-27.
 
 ### 1.5 Pytest env isolation (machine-local)
 
