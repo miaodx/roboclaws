@@ -615,11 +615,6 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
       - name: Cache uv
         uses: actions/cache@v4
         with:
@@ -654,14 +649,15 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --extra dev --extra molmospaces
 
-      - name: Install coding-agent CLIs
+      - name: Build pinned coding-agent CLI image
         env:
-          CODEX_NPM_PACKAGE: ${{ vars.CODEX_NPM_PACKAGE || '@openai/codex' }}
-          CLAUDE_CODE_NPM_PACKAGE: ${{ vars.CLAUDE_CODE_NPM_PACKAGE || '@anthropic-ai/claude-code' }}
+          ROBOCLAWS_CODE_AGENT_IMAGE: roboclaws-coding-agents:${{ github.run_id }}-${{ matrix.model_entry }}
         run: |
-          npm install -g "$CODEX_NPM_PACKAGE" "$CLAUDE_CODE_NPM_PACKAGE"
-          codex --version
-          claude --version
+          scripts/dev/coding_agent_docker.sh build
+          scripts/dev/coding_agent_docker.sh install-wrappers .tmp/coding-agent-bin
+          echo "$PWD/.tmp/coding-agent-bin" >> "$GITHUB_PATH"
+          .tmp/coding-agent-bin/codex --version
+          .tmp/coding-agent-bin/claude --version
 
       - name: Run Molmo live cleanup entry
         env:

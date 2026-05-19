@@ -139,8 +139,10 @@ routing. The roboclaws side:
 
 `examples/mcp/coding_agent_nav_server.py`. Boots `MultiAgentEngine` +
 `RoboclawsMCPServer` over HTTP. No Gateway, no VLM key needed
-server-side — the coding agent (Codex / Claude Code) is the model.
-Output: `output/runs/<timestamp>/` unless `--output-dir` is passed. Operating instructions
+server-side — the coding agent (Codex / Claude Code) is the model. Public
+launchers run that agent in the pinned `Dockerfile.coding-agents` runtime while
+the MCP server and AI2-THOR stay host-side. Output:
+`output/runs/<timestamp>/` unless `--output-dir` is passed. Operating instructions
 for the agent itself live in
 [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md).
 

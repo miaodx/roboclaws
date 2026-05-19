@@ -61,8 +61,11 @@ def _mcp_url(host: str, port: int) -> str:
 
 def _client_setup_commands(url: str) -> dict[str, str]:
     return {
-        "Codex": f"codex mcp add roboclaws --url {url}",
-        "Claude Code": f"claude mcp add --transport http roboclaws {url}",
+        "Codex": f"scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws --url {url}",
+        "Claude Code": (
+            f"scripts/dev/coding_agent_docker.sh run claude mcp add --transport http "
+            f"roboclaws {url}"
+        ),
     }
 
 

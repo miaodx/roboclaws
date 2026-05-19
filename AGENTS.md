@@ -97,12 +97,16 @@ work-network probe is reachable and no repo-local Claude provider is selected.
 
 ### 1.1.2 Coding-agent permissions
 
-Local Codex / Claude Code demo launchers default to full agent permissions.
-Use `just code::codex` or `just code::cc` for direct coding-agent demos; those
-recipes carry the required bypass-approval / bypass-sandbox flags. New `just`
-recipes that launch Codex or Claude Code must either call those recipes or use
-the same full-permission defaults. Do not add bare `codex` or `claude` launches
-that silently fall back to read-only or prompt-for-approval modes.
+The pinned coding-agent Docker runtime is the only supported public route for
+local Codex / Claude Code demos. Use `just code::codex` or `just code::cc` for
+direct coding-agent demos; those recipes carry the required bypass-approval /
+bypass-sandbox flags and isolate the agent to the task skill. New `just`
+recipes that launch Codex or Claude Code must call those recipes or
+`scripts/dev/coding_agent_docker.sh`.
+
+Bare host `codex` or `claude` launches are unsupported and must not be used
+unless the human explicitly asks for a system-CLI debugging run. If that happens,
+state that it is outside the supported demo path.
 
 ### 1.2 Verify AI2-THOR is available
 

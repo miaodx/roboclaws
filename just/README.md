@@ -92,7 +92,52 @@ ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
-the selected OpenAI-compatible endpoint works with the installed Codex CLI.
+the selected OpenAI-compatible endpoint works with the pinned Docker-backed
+Codex CLI.
+
+Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
+
+```bash
+ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic \
+ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 \
+just task::run molmo-cleanup claude world-labels
+```
+
+The image is defined by `Dockerfile.coding-agents` and pins
+`@openai/codex@0.130.0` plus `@anthropic-ai/claude-code@2.1.143` by default.
+Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
+agent CLIs. `just code::docker-install-wrappers` still exists for CI setup and
+manual debugging where a `codex` or `claude` command path is required.
+
+Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
+into copying host Codex auth plus a minimal provider config into the pinned
+container:
+
+```bash
+ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
+ROBOCLAWS_CODEX_PROVIDER=system \
+ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
+just task::run molmo-cleanup codex world-labels
+```
+
+That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
+history, and unrelated user config stay outside the container.
+
+Docker-backed coding-agent tasks use an isolated generated workspace. The agent
+container sees `/workspace/task` plus only the skill directories named by
+`ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS`, mounted at `/workspace/skills/<name>`.
+Repo-root `AGENTS.md`, `CLAUDE.md`, `.git`, and implementation files are not
+mounted; the MCP implementation stays on the host and is reached over HTTP.
+Current task mappings:
+
+- `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
+- `photo-chairs` direct Codex/Claude: `capture-object-photo`
+- `molmo-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
+
+For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
+bundled/system Codex skills are not available. Task prompts should read the
+mounted skill explicitly, for example `../skills/ai2thor-navigator/SKILL.md` or
+`../skills/molmo-realworld-cleanup/SKILL.md`.
 
 ## Examples
 
@@ -102,6 +147,7 @@ just task::run molmo-cleanup codex smoke
 just task::run molmo-cleanup direct camera-raw
 just task::run molmo-cleanup direct camera-labels
 just task::run ai2thor-nav openclaw
+just task::run photo-chairs codex
 just task::run territory vlm steps=20 agents=2
 just task::run coverage script output_dir=output/script/coverage-smoke
 just task::run molmo-planner-proof direct mode=dry-run

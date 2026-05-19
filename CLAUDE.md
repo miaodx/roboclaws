@@ -91,11 +91,13 @@ Claude provider such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
 `ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Model-only overrides do not bypass
 the guard.
 
-Coding-agent permission default: run direct Codex / Claude Code demos through
-`just code::codex` or `just code::cc`. Those recipes launch with full local-demo
-permissions by default. New `just` recipes that launch Codex or Claude Code must
-reuse those wrappers or the same bypass-approval / bypass-sandbox flags; do not
-add bare `codex` or `claude` launches.
+Coding-agent runtime contract: run direct Codex / Claude Code demos through
+`just code::codex` or `just code::cc`. The pinned Docker-backed coding-agent
+runtime is the only supported public route; it runs with full local-demo
+permissions and an isolated task-skill workspace. New `just` recipes that launch
+Codex or Claude Code must reuse those recipes or `scripts/dev/coding_agent_docker.sh`.
+Bare host `codex` or `claude` launches are unsupported unless the human
+explicitly asks for a system-CLI debugging run.
 
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line `just` install + tab completion. See [`just/README.md`](just/README.md)

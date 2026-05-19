@@ -2,13 +2,12 @@
 
 Spins up a tools-less FastMCP server on a free localhost port (no AI2-THOR,
 no Engine), exercises the same recipe wiring `just code::cc` would, and
-verifies both `claude mcp` and `codex mcp` register the URL cleanly. For
-claude (which health-probes every entry on `mcp list`), we additionally
-assert the entry comes back as `✓ Connected` — proof that the streamable-
-HTTP handshake completed end-to-end.
+verifies Docker-backed `claude mcp` and `codex mcp` register the URL cleanly.
+For claude (which health-probes every entry on `mcp list`), we additionally
+assert the entry comes back as `Connected` — proof that the streamable-HTTP
+handshake completed end-to-end.
 
-Skipped on hosts without `just`, the matching CLI, or the `mcp` package
-(e.g., bare cloud sandboxes).
+Skipped on hosts without `just`, Docker, or the `mcp` package.
 """
 
 from __future__ import annotations
@@ -28,6 +27,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SERVER_DIR = REPO_ROOT / ".tmp" / "roboclaws-mcp"
 PID_FILE = SERVER_DIR / "server.pid"
+DOCKER_AGENT = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 
 # Unique per process so concurrent runs (and the user's real `roboclaws`
 # registration) never collide.
@@ -53,6 +53,10 @@ def _wait_for_port(host: str, port: int, timeout: float = 10.0) -> None:
 
 def _have(cmd: str) -> bool:
     return shutil.which(cmd) is not None
+
+
+def _agent_cmd(binary: str) -> list[str]:
+    return [str(DOCKER_AGENT), "run", binary]
 
 
 @pytest.fixture(scope="module")
@@ -120,27 +124,39 @@ def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
     assert last_line == empty_mcp_url, f"recipe emitted {last_line!r}, want {empty_mcp_url!r}"
 
 
-@pytest.mark.skipif(not _have("claude"), reason="claude CLI required")
+@pytest.mark.skipif(not _have("docker"), reason="Docker required")
 def test_claude_binds_and_connects(empty_mcp_url: str) -> None:
-    """`claude mcp add <name> <url>` registers and probes successfully."""
+    """Docker-backed `claude mcp add <name> <url>` registers and probes successfully."""
     # Pre-cleanup in case a prior run left this name behind.
-    subprocess.run(["claude", "mcp", "remove", TEST_NAME], cwd=REPO_ROOT, capture_output=True)
+    subprocess.run(
+        [*_agent_cmd("claude"), "mcp", "remove", TEST_NAME],
+        cwd=REPO_ROOT,
+        capture_output=True,
+    )
     try:
         add = subprocess.run(
-            ["claude", "mcp", "add", "--transport", "http", TEST_NAME, empty_mcp_url],
+            [
+                *_agent_cmd("claude"),
+                "mcp",
+                "add",
+                "--transport",
+                "http",
+                TEST_NAME,
+                empty_mcp_url,
+            ],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=180,
         )
         assert add.returncode == 0, f"claude mcp add failed: {add.stderr}"
 
         lst = subprocess.run(
-            ["claude", "mcp", "list"],
+            [*_agent_cmd("claude"), "mcp", "list"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            timeout=45,
+            timeout=180,
         )
         assert lst.returncode == 0, f"claude mcp list failed: {lst.stderr}"
 
@@ -156,32 +172,44 @@ def test_claude_binds_and_connects(empty_mcp_url: str) -> None:
             f"the streamable-HTTP handshake did not complete. Line: {match!r}"
         )
     finally:
-        subprocess.run(["claude", "mcp", "remove", TEST_NAME], cwd=REPO_ROOT, capture_output=True)
+        subprocess.run(
+            [*_agent_cmd("claude"), "mcp", "remove", TEST_NAME],
+            cwd=REPO_ROOT,
+            capture_output=True,
+        )
 
 
-@pytest.mark.skipif(not _have("codex"), reason="codex CLI required")
+@pytest.mark.skipif(not _have("docker"), reason="Docker required")
 def test_codex_binds_url(empty_mcp_url: str) -> None:
-    """`codex mcp add <name> --url <url>` stores the registration verbatim."""
-    subprocess.run(["codex", "mcp", "remove", TEST_NAME], cwd=REPO_ROOT, capture_output=True)
+    """Docker-backed `codex mcp add <name> --url <url>` stores the registration."""
+    subprocess.run(
+        [*_agent_cmd("codex"), "mcp", "remove", TEST_NAME],
+        cwd=REPO_ROOT,
+        capture_output=True,
+    )
     try:
         add = subprocess.run(
-            ["codex", "mcp", "add", TEST_NAME, "--url", empty_mcp_url],
+            [*_agent_cmd("codex"), "mcp", "add", TEST_NAME, "--url", empty_mcp_url],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=180,
         )
         assert add.returncode == 0, f"codex mcp add failed: {add.stderr}"
 
         lst = subprocess.run(
-            ["codex", "mcp", "list"],
+            [*_agent_cmd("codex"), "mcp", "list"],
             cwd=REPO_ROOT,
             capture_output=True,
             text=True,
-            timeout=15,
+            timeout=180,
         )
         assert lst.returncode == 0, f"codex mcp list failed: {lst.stderr}"
         assert TEST_NAME in lst.stdout, f"binding missing in `codex mcp list`:\n{lst.stdout}"
         assert empty_mcp_url in lst.stdout, f"URL missing in codex listing:\n{lst.stdout}"
     finally:
-        subprocess.run(["codex", "mcp", "remove", TEST_NAME], cwd=REPO_ROOT, capture_output=True)
+        subprocess.run(
+            [*_agent_cmd("codex"), "mcp", "remove", TEST_NAME],
+            cwd=REPO_ROOT,
+            capture_output=True,
+        )

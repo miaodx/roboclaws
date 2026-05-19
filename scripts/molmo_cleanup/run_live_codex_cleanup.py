@@ -7,9 +7,11 @@ import argparse
 import fcntl
 import json
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -153,16 +155,37 @@ class LiveCodexCleanupRunner:
 
     def _run_codex(self) -> None:
         self._write_status("running-codex")
+        env = os.environ.copy()
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
+        agent_workspace, agent_task_dir = _prepare_agent_workspace(
+            repo_root=self.args.repo_root,
+            task_name="molmo-cleanup",
+            skill_name="molmo-realworld-cleanup",
+        )
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "molmo-cleanup")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE", str(agent_workspace))
+        container_isolated = _docker_isolated_workspace_enabled(env)
+        agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)
+        last_message_host_path = agent_task_dir / "codex-last-message.md"
+        last_message_cli_path = (
+            "/workspace/task/codex-last-message.md"
+            if container_isolated
+            else str(last_message_host_path)
+        )
+
         subprocess.run(
-            ["codex", "mcp", "remove", "roboclaws"],
-            cwd=self.args.repo_root,
+            [self.args.codex_bin, "mcp", "remove", "roboclaws"],
+            cwd=agent_task_dir,
+            env=env,
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         subprocess.run(
-            ["codex", "mcp", "add", "roboclaws", "--url", self.args.client_url],
-            cwd=self.args.repo_root,
+            [self.args.codex_bin, "mcp", "add", "roboclaws", "--url", self.args.client_url],
+            cwd=agent_task_dir,
+            env=env,
             check=True,
         )
 
@@ -176,11 +199,11 @@ class LiveCodexCleanupRunner:
             "exec",
             "--json",
             "--output-last-message",
-            str(self.run_dir / "codex-last-message.md"),
+            last_message_cli_path,
             *self.args.codex_model_arg,
             FULL_PERMISSION_ARG,
             "--cd",
-            str(self.args.repo_root),
+            agent_cd,
             self.args.kickoff_prompt,
         ]
         (self.run_dir / "codex-command.txt").write_text(
@@ -189,10 +212,13 @@ class LiveCodexCleanupRunner:
         )
         status = _run_and_tee(
             command,
-            cwd=self.args.repo_root,
+            cwd=agent_task_dir,
             stdout_path=self.run_dir / "codex-events.jsonl",
             stderr_path=self.run_dir / "codex.stderr.log",
+            env=env,
         )
+        if last_message_host_path.is_file():
+            shutil.copyfile(last_message_host_path, self.run_dir / "codex-last-message.md")
         if status != 0:
             raise RuntimeError(f"Codex exec exited with status {status}")
 
@@ -245,6 +271,7 @@ class LiveCodexCleanupRunner:
             cwd=self.args.repo_root,
             stdout_path=self.run_dir / "checker.log",
             stderr_path=self.run_dir / "checker.log",
+            env=os.environ.copy(),
         )
         if status != 0:
             raise RuntimeError(f"cleanup checker exited with status {status}")
@@ -278,12 +305,14 @@ def _run_and_tee(
     cwd: Path,
     stdout_path: Path,
     stderr_path: Path,
+    env: dict[str, str],
 ) -> int:
     proc = subprocess.Popen(
         command,
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
     )
     assert proc.stdout is not None
     assert proc.stderr is not None
@@ -344,6 +373,47 @@ def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
 
 def _probe_host(host: str) -> str:
     return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+
+
+def _docker_isolated_workspace_enabled(env: dict[str, str]) -> bool:
+    return (
+        env.get("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE") == "1"
+        or env.get("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE") == "1"
+    )
+
+
+def _prepare_agent_workspace(
+    *,
+    repo_root: Path,
+    task_name: str,
+    skill_name: str,
+) -> tuple[Path, Path]:
+    workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE")
+    workspace = (
+        Path(workspace_env)
+        if workspace_env
+        else Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
+    )
+    task_dir = workspace / "task"
+    skills_dir = workspace / "skills"
+    task_dir.mkdir(parents=True, exist_ok=True)
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        (workspace / name).unlink(missing_ok=True)
+        (task_dir / name).unlink(missing_ok=True)
+    skill_link = skills_dir / skill_name
+    if skill_link.exists() or skill_link.is_symlink():
+        if skill_link.is_dir() and not skill_link.is_symlink():
+            shutil.rmtree(skill_link)
+        else:
+            skill_link.unlink()
+    skill_link.symlink_to(repo_root / "skills" / skill_name, target_is_directory=True)
+    (task_dir / "README.md").write_text(
+        "# Roboclaws Molmo Cleanup Agent Workspace\n\n"
+        f"Read `../skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
+        encoding="utf-8",
+    )
+    return workspace, task_dir
 
 
 def _shell_quote(value: str) -> str:
