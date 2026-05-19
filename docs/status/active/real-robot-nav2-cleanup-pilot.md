@@ -159,6 +159,8 @@ Last updated: 2026-05-19
   - `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
   - `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex world-labels map_bundle=molmo-cleanup-default-7`
   - `git diff --check`
+  - push CI `26094330522` and PR CI `26094327321` passed on branch head
+    `9f87bd0`; hosted live/Pages jobs skipped as expected on this branch event.
 - Explicit checker passed:
 
 ```bash
@@ -237,9 +239,7 @@ Current local Codex evidence:
 
 ## Next Action
 
-Continue removing stale hosted-CI Codex assumptions from the workflow and docs,
-then validate the local route shape. A local operator Codex proof uses the
-repo-local `.env` configuration:
+Run any Codex cleanup proof locally through the repo-local `.env` configuration:
 
 ```bash
 just task::run molmo-cleanup codex world-labels \
