@@ -50,6 +50,7 @@ Last updated: 2026-05-19
   - `31637c4` `feat: add nav2 map bundle contract gate`
   - `d70ca89` `feat: gate cleanup runs on selected map bundles`
   - `cb41d9c` `feat: add physical nav2 pilot artifact`
+  - `9f78781` `fix: pin official codex cleanup map bundle`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -160,6 +161,10 @@ Last updated: 2026-05-19
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_ci_live_reports.py -q`
   - `just task::run molmo-cleanup codex world-labels map_bundle=molmo-cleanup-default-7` traces to the Codex live route with the selected bundle override.
+  - commit hook fast non-integration pytest subset passed on `9f78781`.
+  - push CI `26090699226` and PR CI `26090702438` passed on branch head
+    `9f78781`; the opt-in official Codex proof jobs were skipped as expected on
+    normal push / pull_request events.
 - Latest focused checks for the CI launcher fixes:
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
@@ -201,7 +206,7 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`, `9f78781`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
@@ -402,6 +407,12 @@ Latest unblock/audit check on 2026-05-18:
     machine's host Codex auth is configured for
     `https://api-router.evad.mioffice.cn/v1`, so that credential is not a valid
     substitute for `api.openai.com`.
+  - Fresh continuation check on 2026-05-19T10:17:36Z confirmed branch head
+    `9f78781`, green push CI `26090699226`, green PR CI `26090702438`, and
+    draft PR #112 still open. `gh secret list --repo MiaoDX/roboclaws` still
+    returned `OPENAI_API_KEY=2026-05-18T15:29:18Z`, and
+    `just dev::network-status` still reported `network: work`, so no official
+    proof redispatch was attempted.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
     ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
