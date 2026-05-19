@@ -302,6 +302,10 @@ Latest unblock/audit check on 2026-05-18:
     2026-05-18T23:42:16Z still returned
     `OPENAI_API_KEY=2026-05-18T15:29:18Z`. No official proof redispatch was
     attempted.
+  - Follow-up delayed guard checks from 2026-05-18T23:45:50Z through
+    2026-05-19T00:02:09Z still returned
+    `OPENAI_API_KEY=2026-05-18T15:29:18Z`. No official proof redispatch was
+    attempted.
   - Repository-wide artifact-name audit: older failed runs `26045247897`,
     `26044677029`, `26044165616`, `26043711467`, and `26043342849` do have
     artifacts named `report-molmo-official-codex-gpt55-nav2`, but none contains
