@@ -785,7 +785,8 @@ jobs:
           just task::run molmo-cleanup codex world-labels \
             output_dir=output/molmo/official-codex-gpt55-nav2 \
             seed=7 \
-            generated_mess_count=5
+            generated_mess_count=5 \
+            map_bundle=molmo-cleanup-default-7
           seed_dir="$(find output/molmo/official-codex-gpt55-nav2 -mindepth 2 -maxdepth 2 -type d -name seed-7 | sort | tail -n 1)"
           test -n "$seed_dir" || {
             echo "No official Codex seed-7 run directory was created." >&2
@@ -818,6 +819,7 @@ jobs:
           }
           test -f "$seed_dir/report.html"
           test -f "$seed_dir/map_bundle/map.yaml"
+          uv run python scripts/maps/check_bundle.py "$seed_dir/map_bundle"
           uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
             "$(dirname "$seed_dir")" \
             --expect-backend molmospaces_subprocess \

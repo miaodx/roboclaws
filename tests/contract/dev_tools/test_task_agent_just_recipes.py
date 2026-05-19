@@ -360,6 +360,28 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "visit any missing waypoint_id" in prompt
 
 
+def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r'\*\)\n\s+kickoff_prompt="([^"]+)"', text)
+    assert match is not None
+    prompt = match.group(1)
+
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
+    assert "selected Nav2 map bundle" in prompt
+    assert "not raw occupancy images" in prompt
+    assert "mark a waypoint complete only after" in prompt
+    assert "compare the checklist before roboclaws__done" in prompt
+    assert "visit any missing waypoint_id" in prompt
+
+
+def test_official_codex_ci_proof_pins_selected_map_bundle() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "map_bundle=molmo-cleanup-default-7" in workflow
+    assert 'scripts/maps/check_bundle.py "$seed_dir/map_bundle"' in workflow
+
+
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
