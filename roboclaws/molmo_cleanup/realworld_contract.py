@@ -4,9 +4,10 @@ import re
 from collections import defaultdict
 from typing import Any
 
+from roboclaws.maps.bundle import metric_map_bundle_metadata
+from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.nav2_map_bundle import metric_map_bundle_metadata
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     observed_handle_planner_binding,
 )
@@ -333,6 +334,25 @@ class RealWorldCleanupContract:
         waypoint = self._waypoint_by_id(waypoint_id)
         if waypoint is None:
             return self._error("navigate_to_waypoint", "stale_reference", waypoint_id=waypoint_id)
+        start_waypoint_id = self._current_waypoint_id
+        route = validate_metric_map_route(
+            self.metric_map(),
+            self.fixture_hints(),
+            start_waypoint_id=start_waypoint_id,
+            goal_waypoint_id=waypoint_id,
+        )
+        if not route.ok:
+            return self._error(
+                "navigate_to_waypoint",
+                "blocked_capability",
+                navigation_backend=SIM_COSTMAP_PLANNER,
+                primitive_provenance=API_SEMANTIC_PROVENANCE,
+                route_validation=route.as_dict(),
+                waypoint_id=waypoint_id,
+                room_id=waypoint["room_id"],
+                goal_pose={"frame_id": "map", **self._waypoint_pose(waypoint)},
+                pose_source="inspection_waypoint",
+            )
         self._current_waypoint_id = waypoint_id
         self._reset_camera_adjustment()
         fixture_id = _first_fixture_for_waypoint(waypoint)
@@ -341,8 +361,9 @@ class RealWorldCleanupContract:
             navigation = self.contract.navigate_to_receptacle(fixture_id)
         return self._ok(
             "navigate_to_waypoint",
-            navigation_backend=API_SEMANTIC_PROVENANCE,
+            navigation_backend=SIM_COSTMAP_PLANNER,
             primitive_provenance=API_SEMANTIC_PROVENANCE,
+            route_validation=route.as_dict(),
             goal_pose={"frame_id": "map", **self._waypoint_pose(waypoint)},
             pose_source="inspection_waypoint",
             staleness_s=0.0,
@@ -1930,8 +1951,28 @@ class RealWorldCleanupContract:
         }
 
     def _fixture_pose(self, fixture_id: str) -> dict[str, Any]:
-        waypoint = self._waypoint_by_id(self._preferred_waypoint_for_fixture(fixture_id))
-        pose = self._waypoint_pose(waypoint or {})
+        room = next((item for item in self._rooms if fixture_id in item["fixture_ids"]), None)
+        if room is None:
+            waypoint = self._waypoint_by_id(self._preferred_waypoint_for_fixture(fixture_id))
+            pose = self._waypoint_pose(waypoint or {})
+            return {"frame_id": "map", **pose}
+        polygon = room.get("polygon") or []
+        xs = [float(point.get("x", 0.0)) for point in polygon] or [0.0, 2.0]
+        ys = [float(point.get("y", 0.0)) for point in polygon] or [0.0, 2.0]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        fixture_ids = sorted(str(item) for item in room["fixture_ids"])
+        index = fixture_ids.index(fixture_id) if fixture_id in fixture_ids else 0
+        slots = (
+            (min_x + 0.35, min_y + 0.35),
+            (max_x - 0.35, min_y + 0.35),
+            (min_x + 0.35, max_y - 0.35),
+            (max_x - 0.35, max_y - 0.35),
+            (min_x + 0.35, (min_y + max_y) / 2.0),
+            (max_x - 0.35, (min_y + max_y) / 2.0),
+        )
+        x, y = slots[index % len(slots)]
+        pose = {"x": round(x, 3), "y": round(y, 3), "yaw": 0.0}
         return {"frame_id": "map", **pose}
 
     def _object_goal_pose(self, handle: str) -> dict[str, Any]:
@@ -2213,7 +2254,14 @@ def real_robot_readiness_from_events(
         "report_only_simulation_view_label": "report_only_simulation_view",
         "navigation_backend_summary": navigation_backends,
         "pose_source_summary": pose_sources,
-        "semantic_navigation_only": set(navigation_backends) <= {API_SEMANTIC_PROVENANCE},
+        "semantic_navigation_only": set(navigation_backends)
+        <= {
+            API_SEMANTIC_PROVENANCE,
+            SIM_COSTMAP_PLANNER,
+        },
+        "sim_costmap_route_validation": navigation_backends.get(SIM_COSTMAP_PLANNER, 0) > 0,
+        "physical_navigation_pilot": False,
+        "physical_cleanup_ready": False,
         "blocked_capabilities": [
             "nav2_action_backend",
             "live_ros_graph",

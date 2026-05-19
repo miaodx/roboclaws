@@ -4454,15 +4454,20 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
                 "Chase excluded from policy",
                 readiness.get("policy_view_chase_excluded", False),
             ),
-            _badge("Semantic navigation only", readiness.get("semantic_navigation_only", False)),
+            _badge("Sim/static navigation only", readiness.get("semantic_navigation_only", False)),
+            _badge(
+                "Static costmap routes",
+                readiness.get("sim_costmap_route_validation", False),
+            ),
         )
     )
     return (
         '<section class="panel real-robot-readiness">'
         "<h2>Real-Robot Readiness</h2>"
         '<p class="note">This section checks contract shape, not live ROS/Nav2. '
-        "Current semantic simulator navigation remains api_semantic; chase imagery is "
-        "labelled report_only_simulation_view and is not a policy input.</p>"
+        "Current simulator navigation is validated against a static Nav2-shaped "
+        "costmap and still is not a physical nav2_action; chase imagery is labelled "
+        "report_only_simulation_view and is not a policy input.</p>"
         f'{metrics}<div class="badges">{badges}</div>'
         f'<ul class="requirements">{blockers}</ul></section>'
     )

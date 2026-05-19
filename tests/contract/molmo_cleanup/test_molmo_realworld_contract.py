@@ -87,7 +87,8 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
     assert fixture_hints["contains_runtime_observations"] is False
     assert "observations" not in fixture_hints
-    assert waypoint_nav["navigation_backend"] == "api_semantic"
+    assert waypoint_nav["navigation_backend"] == "sim_costmap_planner"
+    assert waypoint_nav["route_validation"]["ok"] is True
     assert waypoint_nav["pose_source"] == "inspection_waypoint"
     assert object_nav["navigation_backend"] == "api_semantic"
     assert object_nav["pose_source"] == "latest_observation"

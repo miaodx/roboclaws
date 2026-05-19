@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -968,10 +969,13 @@ def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: 
     assert readiness.get("static_fixture_semantic_map") is True, readiness
     assert readiness.get("policy_view_chase_excluded") is True, readiness
     assert readiness.get("semantic_navigation_only") is True, readiness
+    assert readiness.get("sim_costmap_route_validation") is True, readiness
     assert readiness.get("real_robot_ready") is False, readiness
+    assert readiness.get("physical_navigation_pilot") is False, readiness
+    assert readiness.get("physical_cleanup_ready") is False, readiness
     assert readiness.get("map_bundle_snapshot_present") is True, readiness
     assert readiness.get("map_bundle_parameter_hash"), readiness
-    assert readiness.get("navigation_backend_summary", {}).get(API_SEMANTIC_PROVENANCE), readiness
+    assert readiness.get("navigation_backend_summary", {}).get(SIM_COSTMAP_PLANNER), readiness
     nav2_bundle = data.get("nav2_map_bundle") or {}
     assert nav2_bundle.get("schema") == "nav2_map_bundle_snapshot_v1", nav2_bundle
     assert nav2_bundle.get("snapshot_complete") is True, nav2_bundle

@@ -23,6 +23,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    response at that `waypoint_id`; before `done`, compare the checklist against
    observed waypoint ids and visit any missing waypoint. Build your own semantic
    map from returned `observed_*` object handles and support estimates.
+   `navigate_to_waypoint` may return `navigation_backend:
+   sim_costmap_planner` with `route_validation`; treat `ok: false` /
+   `blocked_capability` as a real navigation failure and choose another public
+   waypoint instead of inventing hidden targets or reading map images directly.
    In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
    structured labels. Inspect the image, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
@@ -84,7 +88,8 @@ Do not call `scene_objects`, read private manifests, inspect scoring code,
 replay deterministic baselines, or bypass MCP with scripts. The Scorer may show
 Private Evaluation after the run, but that information is not agent input.
 
-Metric maps are shaped like a real-robot map bundle, but this phase still labels
-semantic simulator navigation as `api_semantic`. Chase or third-person views may
-appear in the report as `report_only_simulation_view`; they are not policy
-inputs.
+Metric maps are shaped like a real-robot map bundle. In simulator rehearsals,
+waypoint navigation is checked against a static Nav2-shaped costmap and labelled
+`sim_costmap_planner`, while manipulation remains semantic unless explicitly
+planner-backed in the report. Chase or third-person views may appear in the
+report as `report_only_simulation_view`; they are not policy inputs.

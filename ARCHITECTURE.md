@@ -42,8 +42,10 @@ The cleanup/proof stack has four core abstractions:
    actions, and private scoring separation (`roboclaws/molmo_cleanup/realworld_contract.py`).
 2. **Semantic cleanup loop + report underlay** — deterministic cleanup policy,
    semantic substep timeline, Agent View, Private Evaluation, advisory scoring,
-   Nav2-shaped map bundle snapshots, and visual report rendering
+   Nav2-shaped map bundle snapshots, static costmap route checks, and visual
+   report rendering
    (`roboclaws/molmo_cleanup/semantic_cleanup_loop.py`,
+   `roboclaws/maps/`,
    `roboclaws/molmo_cleanup/nav2_map_bundle.py`,
    `roboclaws/molmo_cleanup/report.py`).
 3. **Planner-proof request and bundle flow** — turns completed cleanup substeps
@@ -197,7 +199,8 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/mcp/profiles.py`, `roboclaws/mcp/entrypoint.py` | Semantic MCP contract profile declarations and a small router helper for registering one selected profile's public tools. Current profiles represent AI2-THOR navigation, MolmoSpaces cleanup, and the first real-robot Nav2 cleanup pilot while excluding privileged simulator tools/private evaluator truth from canonical public metadata. |
 | `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
 | `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
-| `roboclaws/molmo_cleanup/nav2_map_bundle.py` | Nav2-shaped static map bundle metadata and run-local snapshot writer for `map.yaml`, occupancy image, semantics, robot profile, costmap params, and report preview. |
+| `roboclaws/maps/` | Reusable Nav2-shaped map artifact package: bundle writing/validation, metric-map projection, occupancy rasterization, and pure-Python static costmap route validation. |
+| `roboclaws/molmo_cleanup/nav2_map_bundle.py` | Molmo cleanup compatibility wrapper that attaches run-local map bundle snapshots to cleanup artifacts. |
 | `roboclaws/molmo_cleanup/nav2_adapter.py` | Mockable direct Nav2 backend adapter for the first physical navigation/perception pilot. |
 | `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
 | `roboclaws/molmo_cleanup/report.py`, `report_visual_core.py` | Shared Cleanup Artifact Report renderer: Agent View, Private Evaluation, semantic substeps, robot timeline, planner proof, and bridge readiness sections. |

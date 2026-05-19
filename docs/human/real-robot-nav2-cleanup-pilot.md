@@ -15,6 +15,12 @@ while physical manipulation stays `blocked_capability`.
   - `costmaps/<robot>.costmap_params.yaml`
 - The selected robot profile matches the real base footprint, map/base frames,
   camera frame, and navigation tolerances.
+- The map bundle passes the deterministic contract gate before an agent starts:
+
+```bash
+uv run python scripts/maps/check_bundle.py assets/maps/<environment_id>
+```
+
 - The MCP-facing backend exposes only cleanup tools. Agents must not receive
   direct ROS topic, service, or action access.
 
@@ -64,6 +70,8 @@ The pilot is accepted only when the report shows:
 - manipulation tools remain blocked
 - `map_bundle/` contains the run-local Nav2 artifact snapshot and appears in
   `report.html`
+- simulator rehearsal navigation is labelled `sim_costmap_planner` with static
+  route metadata; hardware success is the first place `nav2_action` may appear
 
 ## Simulator Rehearsal
 
@@ -80,11 +88,14 @@ For a live Codex cleanup rehearsal with the supported Docker runtime, set
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
-For an official OpenAI API proof, use the same Codex path: set
-`CODEX_BASE_URL=https://api.openai.com/v1` and put the official OpenAI key in
-`CODEX_API_KEY`.
+For an official OpenAI API proof, use the dedicated Responses provider path:
+set `ROBOCLAWS_CODEX_PROVIDER=openai-responses`,
+`ROBOCLAWS_CODEX_MODEL=gpt-5.5`, and provide a valid `OPENAI_API_KEY` for
+`https://api.openai.com/v1/responses`.
 
 ```bash
+ROBOCLAWS_CODEX_PROVIDER=openai-responses \
+ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
@@ -133,6 +144,13 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
   --min-sweep-coverage 1.0 \
   --require-waypoint-honesty \
   --require-real-robot-alignment
+```
+
+Validate the immutable map snapshot directly when debugging map issues:
+
+```bash
+uv run python scripts/maps/check_bundle.py \
+  output/molmo/codex-gpt55-nav2-report/<stamp>/seed-7/map_bundle
 ```
 
 Acceptance evidence is incomplete until the official Codex run produces
