@@ -89,10 +89,10 @@ also blocked on the work network. `just code::cc`, `just harness::navigator`,
 and `just molmo::claude-report` may run there when `.env` selects a repo-local
 Claude provider such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
 `ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Codex recipes may run there only
-with an explicit provider profile such as `ROBOCLAWS_CODEX_PROVIDER=kimi-openai`,
-`ROBOCLAWS_CODEX_PROVIDER=mimo-openai`, or a reachable
-`ROBOCLAWS_CODEX_PROVIDER=openai-responses`. Model-only overrides do not bypass
-the guard.
+with `ROBOCLAWS_CODEX_PROVIDER=codex-env` plus repo-local
+`CODEX_BASE_URL` / `CODEX_API_KEY` (or the dedicated
+`ROBOCLAWS_CODEX_PROVIDER=openai-responses` official proof route when
+`api.openai.com` is reachable). Model-only overrides do not bypass the guard.
 
 Coding-agent runtime contract: run direct Codex / Claude Code demos through
 `just code::codex` or `just code::cc`. The pinned Docker-backed coding-agent

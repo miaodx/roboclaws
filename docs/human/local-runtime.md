@@ -13,15 +13,16 @@ Real provider runs read keys from the environment or the gitignored repo-local
 export KIMI_API_KEY=...       # Kimi / Moonshot
 export MIMO_TP_KEY=...        # MiMo provider profiles
 export NV_API_KEY=...         # NVIDIA NIM, optional
+export CODEX_BASE_URL=...     # Codex Responses-compatible endpoint
+export CODEX_API_KEY=...      # Codex endpoint key
 ```
 
 Repo-local coding-agent provider profiles can route Codex or Claude Code
-through Kimi/MiMo without changing user-level CLI config:
+without changing user-level CLI config:
 
 ```bash
-# Codex provider routing is present but not the validated README path yet.
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+ROBOCLAWS_CODEX_PROVIDER=codex-env
+ROBOCLAWS_CODEX_MODEL=gpt-5.5
 
 ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic
 ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni

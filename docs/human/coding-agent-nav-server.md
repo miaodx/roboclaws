@@ -39,24 +39,27 @@ Bare host `codex` or `claude` launches are not part of the supported path. Use
 them only when a human explicitly asks for a system-CLI debugging run, and label
 that run as outside the supported demo path.
 
-To run these demos through Kimi or MiMo without editing user-level Codex or
-Claude Code config, add optional provider overrides to the repo-local `.env`:
+To run these demos without editing user-level Codex or Claude Code config, add
+provider overrides to the repo-local `.env`. Codex uses the single
+Responses-compatible `codex-env` profile:
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+ROBOCLAWS_CODEX_PROVIDER=codex-env
+ROBOCLAWS_CODEX_MODEL=gpt-5.5
+CODEX_BASE_URL=https://example.internal/v1
+CODEX_API_KEY=...
 
 ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
-Supported profiles are `system`, `kimi-openai`, and `mimo-openai` for Codex,
-and `system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
+Supported profiles are `codex-env` for normal Codex repo workflows and
+`system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` are accepted as
-shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
-var, protocol, and `CLAUDE_CODE_SIMPLE=1` together for the launched process
-only. The `system` provider uses the container's configured auth; for host
-Codex login, use the explicit opt-in below.
+shared fallbacks. The Codex profile selects model, base URL, API-key env var,
+and Responses protocol through per-invocation config. Claude Kimi/MiMo profiles
+select model, base URL, API-key env var, protocol, and `CLAUDE_CODE_SIMPLE=1`
+together for the launched process only.
 
 The `code::cc` and `code::codex` launchers also pass the selected coding-agent
 model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
@@ -99,20 +102,14 @@ isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
 bundled/system Codex skills are not available; the task skill is read explicitly
 from `../skills/<name>/SKILL.md`.
 
-For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
-to copying host Codex auth plus a minimal provider config into the pinned
-container. Do this only off the work network; system-provider Codex is blocked
-there because `api.openai.com` is reset before MCP tool calls:
+For Docker-backed Codex runs, use repo-local `.env` credentials. Host
+`~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-ROBOCLAWS_CODEX_PROVIDER=system \
-ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
+ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just code::codex
 ```
-
-That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
-history, and unrelated user config stay outside the container.
 
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):

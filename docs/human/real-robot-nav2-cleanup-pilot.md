@@ -73,22 +73,21 @@ Use the MolmoSpaces world-label report before hardware:
 just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=10
 ```
 
-For a live Codex cleanup rehearsal with the supported Docker runtime:
+For a live Codex cleanup rehearsal with the supported Docker runtime, set
+`CODEX_BASE_URL` and `CODEX_API_KEY` in the repo-local `.env`, then run:
 
 ```bash
-ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-ROBOCLAWS_CODEX_PROVIDER=system \
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
 ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
 If the local network resets Codex Responses websocket connections, keep the
-same official Codex provider and switch only the transport:
+same repo-local Codex provider and switch only the transport:
 
 ```bash
 ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 \
-ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-ROBOCLAWS_CODEX_PROVIDER=system \
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
 ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```

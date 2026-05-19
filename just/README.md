@@ -81,13 +81,17 @@ active or the requested MCP port is already accepting connections, the launcher
 fails instead of choosing another port. `claude` and `openclaw` live cleanup
 drivers still use their existing interactive launch paths.
 
-Repo-local `.env` provider profiles can route live Claude launchers, and may
-route live Codex launchers when the selected endpoint supports Codex's
-configured wire API, without editing user-level CLI config:
+Repo-local `.env` provider profiles can route live Codex and Claude launchers
+without editing user-level CLI config. Codex uses the single repo-local
+`codex-env` profile, which reads a Responses-compatible `CODEX_BASE_URL` and
+`CODEX_API_KEY`:
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+ROBOCLAWS_CODEX_PROVIDER=codex-env
+ROBOCLAWS_CODEX_MODEL=gpt-5.5
+CODEX_BASE_URL=https://example.internal/v1
+CODEX_API_KEY=...
+
 ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
@@ -98,12 +102,10 @@ repo-local `.env` inside the runner, so either route works for local-only
 credentials.
 
 Run `just code::codex-provider-smoke` before long Codex visual runs to verify
-the selected OpenAI-compatible endpoint works with the pinned Docker-backed
-Codex CLI. Do not assume a repo-local OpenAI-compatible provider supports Codex
-until this smoke passes; some endpoints may not expose `/v1/responses`.
-When `ROBOCLAWS_CODEX_PROVIDER=openai-responses`, the provider smoke and live
-Codex launchers also probe `api.openai.com` before starting Codex and fail fast
-if the official endpoint is unreachable.
+the configured Responses-compatible endpoint works with the pinned
+Docker-backed Codex CLI. The dedicated
+`ROBOCLAWS_CODEX_PROVIDER=openai-responses` profile is reserved for official
+OpenAI proof runs and also probes `api.openai.com` before starting Codex.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
@@ -119,21 +121,14 @@ Update `scripts/dev/coding_agent_toolchain.env` deliberately when advancing the
 agent CLIs. `just code::docker-install-wrappers` still exists for CI setup and
 manual debugging where a `codex` or `claude` command path is required.
 
-Codex runs that should use a developer's normal GPT/OpenAI Codex login can opt
-into copying host Codex auth plus a minimal provider config into the pinned
-container. Run this mode only off the work network; system-provider Codex is
-guarded there because direct `api.openai.com` traffic is reset before MCP tool
-calls:
+Codex runs use repo-local `.env` credentials in the pinned container. Host
+`~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-ROBOCLAWS_CODEX_PROVIDER=system \
-ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
+ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels
 ```
-
-That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
-history, and unrelated user config stay outside the container.
 
 Docker-backed coding-agent tasks use an isolated generated workspace. The agent
 container sees `/workspace/task` plus only the skill directories named by

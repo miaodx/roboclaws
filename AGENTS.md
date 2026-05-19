@@ -94,12 +94,13 @@ Do not run `just code::codex` or Codex Molmo live reports with the default
 `ROBOCLAWS_CODEX_PROVIDER=system`. Claude Code recipes may run on the work
 network only when `.env` selects a repo-local provider profile such as
 `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
-`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`; Codex recipes may run only when an
-explicit provider profile such as `ROBOCLAWS_CODEX_PROVIDER=kimi-openai`,
-`ROBOCLAWS_CODEX_PROVIDER=mimo-openai`, or a reachable
-`ROBOCLAWS_CODEX_PROVIDER=openai-responses` is selected. Model-only overrides do
-not bypass the guard. Guarded recipes should fail before launching when the
-work-network probe is reachable and no allowed provider profile is selected.
+`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`; Codex recipes may run only when
+`.env` selects `ROBOCLAWS_CODEX_PROVIDER=codex-env` with
+`CODEX_BASE_URL` / `CODEX_API_KEY` (or the dedicated
+`openai-responses` official proof route when `api.openai.com` is reachable).
+Model-only overrides do not bypass the guard. Guarded recipes should fail before
+launching when the work-network probe is reachable and no allowed provider
+profile is selected.
 
 ### 1.1.2 Coding-agent permissions
 

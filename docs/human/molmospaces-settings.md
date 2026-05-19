@@ -142,15 +142,18 @@ For live Codex / Claude reports, optional repo-local `.env` provider overrides
 are honored the same way as the direct navigation demos:
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
+ROBOCLAWS_CODEX_PROVIDER=codex-env
+ROBOCLAWS_CODEX_MODEL=gpt-5.5
+CODEX_BASE_URL=https://example.internal/v1
+CODEX_API_KEY=...
 
 ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
-`system` means the pinned container uses its configured auth/provider state.
-Kimi/MiMo profiles select model, base URL, API-key env var, protocol, and
+Codex repo workflows use `codex-env`, which selects model, base URL, API-key
+env var, and Responses protocol through per-invocation config. Claude Kimi/MiMo
+profiles select model, base URL, API-key env var, protocol, and
 `CLAUDE_CODE_SIMPLE=1` for the launched process only. Bare system CLIs are
 outside the supported path unless a human explicitly asks for a debugging run.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
@@ -171,9 +174,8 @@ just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
-For GPT/OpenAI Codex runs that should use the developer's normal Codex login,
-add `ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1`; that mounts host
-`~/.codex` into the pinned container without mounting the whole home directory.
+Docker-backed Codex runs use repo-local `.env` credentials; host `~/.codex`
+auth/config is not copied into repo workflows.
 
 `codex-live` is detached by default. `just molmo::codex-report` starts a tmux
 session that owns the cleanup MCP server, `codex exec`, logs, checker, and

@@ -138,7 +138,7 @@ def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: P
 
 def test_codex_provider_guard_allows_explicit_provider_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "mimo-openai"
+    env["ROBOCLAWS_CODEX_PROVIDER"] = "codex-env"
 
     result = subprocess.run(
         [
@@ -157,7 +157,7 @@ def test_codex_provider_guard_allows_explicit_provider_on_work_network(tmp_path:
         text=True,
     )
 
-    assert "explicit Codex provider (mimo-openai)" in result.stderr
+    assert "explicit Codex provider (codex-env)" in result.stderr
 
 
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:

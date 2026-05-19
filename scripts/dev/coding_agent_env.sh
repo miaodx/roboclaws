@@ -29,14 +29,11 @@ roboclaws_code_agent_profile_default_model() {
     system)
       printf '\n'
       ;;
-    openai-responses)
+    codex-env)
       printf 'gpt-5.5\n'
       ;;
-    kimi-openai)
-      printf 'kimi-k2.6\n'
-      ;;
-    mimo-openai)
-      printf 'mimo-v2.5-pro\n'
+    openai-responses)
+      printf 'gpt-5.5\n'
       ;;
     kimi-anthropic)
       printf 'kimi-k2.6\n'
@@ -54,11 +51,12 @@ roboclaws_code_agent_profile_default_model() {
 roboclaws_code_agent_profile_base_url() {
   local provider="$1"
   case "$provider" in
-    kimi-openai)
-      printf 'https://api.kimi.com/coding/v1\n'
-      ;;
-    mimo-openai)
-      printf 'https://token-plan-cn.xiaomimimo.com/v1\n'
+    codex-env)
+      if [[ -z "${CODEX_BASE_URL:-}" ]]; then
+        echo "error: codex-env requires CODEX_BASE_URL; add it to the repo-local .env or export it for this shell" >&2
+        return 2
+      fi
+      printf '%s\n' "${CODEX_BASE_URL}"
       ;;
     openai-responses)
       printf 'https://api.openai.com/v1\n'
@@ -82,10 +80,13 @@ roboclaws_code_agent_profile_base_url() {
 roboclaws_code_agent_profile_key_env() {
   local provider="$1"
   case "$provider" in
-    kimi-openai|kimi-anthropic)
+    codex-env)
+      printf 'CODEX_API_KEY\n'
+      ;;
+    kimi-anthropic)
       printf 'KIMI_API_KEY\n'
       ;;
-    mimo-openai|mimo-anthropic)
+    mimo-anthropic)
       printf 'MIMO_TP_KEY\n'
       ;;
     openai-responses)
@@ -104,7 +105,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    openai-responses|kimi-openai|mimo-openai)
+    codex-env|openai-responses)
       printf 'responses\n'
       ;;
     kimi-anthropic|mimo-anthropic)
@@ -207,23 +208,15 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    system|openai-responses|kimi-openai|mimo-openai)
+    codex-env|openai-responses)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected system, openai-responses, kimi-openai, or mimo-openai" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env or openai-responses" >&2
       return 2
       ;;
   esac
 
   model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
-  if [[ "$provider" == "system" ]]; then
-    if [[ -n "$model" ]]; then
-      out_args=(--model "$model")
-    fi
-    roboclaws_codex_transport_args out_args
-    return 0
-  fi
-
   base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
   key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
   wire_api="$(roboclaws_code_agent_profile_wire_api "$provider")" || return
@@ -342,10 +335,10 @@ roboclaws_assert_codex_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    system|openai-responses|kimi-openai|mimo-openai)
+    system|codex-env|openai-responses)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected system, openai-responses, kimi-openai, or mimo-openai" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env or openai-responses" >&2
       return 2
       ;;
   esac
@@ -361,7 +354,7 @@ roboclaws_assert_codex_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
-        echo "       Set ROBOCLAWS_CODEX_PROVIDER=kimi-openai or mimo-openai with repo-local .env keys, use openai-responses only when api.openai.com is reachable, or switch off the work network." >&2
+        echo "       Set ROBOCLAWS_CODEX_PROVIDER=codex-env with repo-local .env keys, use openai-responses only for official OpenAI proof when api.openai.com is reachable, or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with explicit Codex provider (${provider})" >&2

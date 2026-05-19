@@ -30,6 +30,8 @@ CODE_AGENT_ENV_VARS = (
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
     "OPENAI_API_KEY",
+    "CODEX_BASE_URL",
+    "CODEX_API_KEY",
 )
 
 
@@ -370,13 +372,10 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            codex_args=()
             claude_model_args=()
             claude_env_args=()
-            roboclaws_codex_provider_args codex_args
             roboclaws_claude_provider_args claude_model_args claude_env_args
             roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
-            printf 'codex_args=%s\n' "${#codex_args[@]}"
             printf 'claude_model_args=%s\n' "${#claude_model_args[@]}"
             printf 'claude_env_args=%s\n' "${#claude_env_args[@]}"
             """,
@@ -390,7 +389,6 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
 
     assert result.stdout.splitlines() == [
         "system",
-        "codex_args=0",
         "claude_model_args=0",
         "claude_env_args=0",
     ]
@@ -406,8 +404,9 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=system
-            ROBOCLAWS_CODEX_MODEL=gpt-5.5
+            ROBOCLAWS_CODEX_PROVIDER=codex-env
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1
             args=()
             roboclaws_codex_provider_args args
@@ -422,8 +421,18 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     )
 
     assert result.stdout.splitlines() == [
-        "--model",
-        "gpt-5.5",
+        "-c",
+        'model="gpt-5.5"',
+        "-c",
+        'model_provider="codex-env"',
+        "-c",
+        'model_providers.codex-env.name="codex-env"',
+        "-c",
+        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
+        "-c",
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        "-c",
+        'model_providers.codex-env.wire_api="responses"',
         "--disable",
         "responses_websockets",
         "--disable",
@@ -441,11 +450,12 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=kimi-openai
+            ROBOCLAWS_CODE_AGENT_PROVIDER=openai-responses
             ROBOCLAWS_CODE_AGENT_MODEL=shared-model
-            ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-            ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
-            MIMO_TP_KEY=fake
+            ROBOCLAWS_CODEX_PROVIDER=codex-env
+            ROBOCLAWS_CODEX_MODEL=gpt-5.5
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -460,17 +470,17 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
 
     assert result.stdout.splitlines() == [
         "-c",
-        'model="mimo-v2.5-pro"',
+        'model="gpt-5.5"',
         "-c",
-        'model_provider="mimo-openai"',
+        'model_provider="codex-env"',
         "-c",
-        'model_providers.mimo-openai.name="mimo-openai"',
+        'model_providers.codex-env.name="codex-env"',
         "-c",
-        'model_providers.mimo-openai.base_url="https://token-plan-cn.xiaomimimo.com/v1"',
+        'model_providers.codex-env.base_url="https://codex.example.test/v1"',
         "-c",
-        'model_providers.mimo-openai.env_key="MIMO_TP_KEY"',
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.mimo-openai.wire_api="responses"',
+        'model_providers.codex-env.wire_api="responses"',
     ]
 
 
@@ -516,9 +526,10 @@ def test_coding_agent_codex_openai_responses_profile_disables_websockets() -> No
     ]
 
 
-def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> None:
+def test_coding_agent_codex_env_profile_requires_base_url() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    env["CODEX_API_KEY"] = "fake-codex-key"
     result = subprocess.run(
         [
             "bash",
@@ -526,7 +537,7 @@ def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> N
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=kimi-openai
+            ROBOCLAWS_CODEX_PROVIDER=codex-env
             args=()
             roboclaws_codex_provider_args args
             """,
@@ -539,8 +550,36 @@ def test_coding_agent_profiles_require_driver_key_without_printing_secret() -> N
     )
 
     assert result.returncode == 2
-    assert "kimi-openai requires KIMI_API_KEY" in result.stderr
+    assert "codex-env requires CODEX_BASE_URL" in result.stderr
     assert "sk-" not in result.stderr
+
+
+def test_coding_agent_codex_env_profile_requires_api_key_without_printing_secret() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    env["CODEX_BASE_URL"] = "https://codex.example.test/v1"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=codex-env
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "codex-env requires CODEX_API_KEY" in result.stderr
+    assert "fake" not in result.stderr
 
 
 def test_coding_agent_claude_profile_builds_scoped_env() -> None:

@@ -201,7 +201,7 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav"
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
     "${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}
 
-# Cheap live check for a repo-local Codex OpenAI-compatible provider profile.
+# Cheap live check for the repo-local Codex Responses-compatible provider profile.
 # This intentionally refuses `system` so a misspelled profile does not silently
 # validate the user's machine default.
 codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
@@ -212,7 +212,7 @@ codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
     roboclaws_load_dotenv .env
     codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
     if [[ "$codex_provider" == "system" ]]; then
-      echo "error: no Codex provider profile selected; set ROBOCLAWS_CODEX_PROVIDER=kimi-openai or mimo-openai in .env" >&2
+      echo "error: no Codex provider profile selected; set ROBOCLAWS_CODEX_PROVIDER=codex-env in .env" >&2
       exit 1
     fi
     roboclaws_assert_codex_network_allowed "Codex provider smoke"
