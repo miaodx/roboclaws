@@ -79,6 +79,21 @@ The pilot is accepted only when the report shows:
 - simulator rehearsal navigation is labelled `sim_costmap_planner` with static
   route metadata; hardware success is the first place `nav2_action` may appear
 
+For a deterministic local contract/artifact rehearsal with a mock Nav2 client:
+
+```bash
+uv run python scripts/molmo_cleanup/run_physical_nav2_cleanup_pilot.py \
+  --map-bundle-dir assets/maps/molmo-cleanup-default-7 \
+  --run-dir output/molmo/physical-nav2-pilot-local-check
+
+uv run python scripts/maps/check_bundle.py \
+  output/molmo/physical-nav2-pilot-local-check/map_bundle
+```
+
+That command exercises the physical-pilot report path without a live ROS graph.
+For a real robot run, keep the same `DirectNav2Adapter` contract and replace the
+deterministic client with an operator-approved ROS/Nav2 action client.
+
 ## Simulator Rehearsal
 
 Use the MolmoSpaces world-label report before hardware:

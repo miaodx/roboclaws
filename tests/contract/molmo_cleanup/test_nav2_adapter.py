@@ -49,6 +49,9 @@ def test_direct_nav2_adapter_reports_success_as_nav2_action() -> None:
     assert result["navigation_backend"] == NAV2_ACTION_PROVENANCE
     assert result["primitive_provenance"] == NAV2_ACTION_PROVENANCE
     assert result["operator_stop_channel_configured"] is True
+    assert result["pose_source"] == "inspection_waypoint"
+    assert result["physical_navigation_pilot"] is True
+    assert result["physical_cleanup_ready"] is False
     assert result["manipulation_ready"] is False
     assert client.goals[0].goal_id == "waypoint:kitchen_scan_1"
 
@@ -100,6 +103,59 @@ def test_direct_nav2_adapter_rejects_unreachable_goal_distance() -> None:
     assert result["ok"] is False
     assert result["failure_type"] == "goal_distance_exceeded"
     assert result["navigation_backend"] == BLOCKED_CAPABILITY_PROVENANCE
+    assert result["physical_navigation_pilot"] is True
+    assert result["physical_cleanup_ready"] is False
+    assert client.goals == []
+
+
+def test_direct_nav2_adapter_navigates_to_fixture_preferred_waypoint() -> None:
+    client = MockNav2Client(
+        Nav2ActionResult(
+            status="succeeded",
+            final_pose=Nav2Pose(frame_id="map", x=2.0, y=3.0, yaw=1.0),
+        )
+    )
+    adapter = DirectNav2Adapter(client)
+
+    result = adapter.navigate_to_fixture_preferred_waypoint(
+        fixture_id="sink_01",
+        fixture={"preferred_manipulation_waypoint_id": "sink_scan_1"},
+        waypoints_by_id={
+            "sink_scan_1": {
+                "waypoint_id": "sink_scan_1",
+                "frame_id": "map",
+                "x": 2.0,
+                "y": 3.0,
+                "yaw": 1.0,
+            }
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["tool"] == "navigate_to_receptacle"
+    assert result["fixture_id"] == "sink_01"
+    assert result["preferred_waypoint_id"] == "sink_scan_1"
+    assert result["goal_source"] == "fixture_preferred_waypoint"
+    assert result["navigation_backend"] == NAV2_ACTION_PROVENANCE
+    assert result["manipulation_ready"] is False
+    assert client.goals[0].source == "fixture_preferred_waypoint"
+
+
+def test_direct_nav2_adapter_blocks_fixture_without_preferred_waypoint() -> None:
+    client = MockNav2Client(Nav2ActionResult(status="succeeded"))
+    adapter = DirectNav2Adapter(client)
+
+    result = adapter.navigate_to_fixture_preferred_waypoint(
+        fixture_id="sink_01",
+        fixture={},
+        waypoints_by_id={},
+    )
+
+    assert result["ok"] is False
+    assert result["tool"] == "navigate_to_receptacle"
+    assert result["failure_type"] == "missing_fixture_preferred_waypoint"
+    assert result["navigation_backend"] == BLOCKED_CAPABILITY_PROVENANCE
+    assert result["manipulation_ready"] is False
     assert client.goals == []
 
 

@@ -53,6 +53,12 @@ Last updated: 2026-05-19
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
   distance rejection, and blocked manipulation.
+- `run_physical_nav2_cleanup_pilot()` loads a validated prebuilt bundle plus
+  robot profile, attempts every public inspection waypoint and every fixture
+  preferred waypoint through `DirectNav2Adapter`, observes from reached
+  waypoints with public camera-label evidence, keeps manipulation tools
+  `blocked_capability`, snapshots `map_bundle/`, and renders
+  `physical_navigation_pilot=true` / `physical_cleanup_ready=false`.
 - Reusable Nav2 map bundle logic now lives under `roboclaws/maps/` with bundle
   writing/validation, metric-map projection, occupancy rasterization, and
   static costmap route validation.
@@ -134,6 +140,15 @@ Last updated: 2026-05-19
   - `just task::run molmo-cleanup direct smoke output_dir=output/molmo/nav2-selected-bundle-smoke seed=7 generated_mess_count=5 map_bundle=molmo-cleanup-default-7`
   - `uv run python scripts/maps/check_bundle.py output/molmo/nav2-selected-bundle-smoke/0519_1728/seed-7/map_bundle`
   - `uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/molmo/nav2-selected-bundle-smoke/0519_1728 --expect-backend api_semantic_synthetic --expect-policy deterministic_sweep_baseline --expect-profile smoke --expect-seeds 7 --min-generated-mess-count 5 --require-advisory-scoring --min-restored-count 5 --min-sweep-coverage 1.0 --require-waypoint-honesty --require-real-robot-alignment`
+- Latest deterministic physical-pilot contract checks:
+  - `uv run ruff check roboclaws/molmo_cleanup/nav2_adapter.py roboclaws/molmo_cleanup/physical_nav2_pilot.py roboclaws/molmo_cleanup/report.py scripts/molmo_cleanup/run_physical_nav2_cleanup_pilot.py tests/contract/molmo_cleanup/test_nav2_adapter.py tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`
+  - `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_nav2_adapter.py tests/contract/molmo_cleanup/test_physical_nav2_pilot.py tests/contract/reports/test_molmo_cleanup_report.py -q`
+  - `uv run python scripts/molmo_cleanup/run_physical_nav2_cleanup_pilot.py --map-bundle-dir assets/maps/molmo-cleanup-default-7 --run-dir output/molmo/physical-nav2-pilot-local-check`
+  - `uv run python scripts/maps/check_bundle.py output/molmo/physical-nav2-pilot-local-check/map_bundle`
+  - report content audit confirmed `physical_navigation_pilot=true`,
+    `physical_cleanup_ready=false`, `nav2_action=18`, and `Nav2 Map Bundle`
+    render in
+    `output/molmo/physical-nav2-pilot-local-check/report.html`.
 - Latest focused checks for the CI launcher fixes:
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
@@ -181,6 +196,7 @@ Objective requirements mapped to current evidence:
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, runtime gap notes, and `Static costmap routes`. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-selected-bundle-smoke/0519_1728` passed checker with restored `5/5`, sweep coverage `1.0`, selected bundle projection, and run-local selected bundle snapshot. | Verified for deterministic smoke |
+| First hardware pilot acceptance path | Deterministic artifact `output/molmo/physical-nav2-pilot-local-check/report.html` loads the selected prebuilt bundle and `rby1m` profile, attempts 8 inspection waypoints plus 10 fixture preferred waypoints through `DirectNav2Adapter`, observes every reached waypoint, blocks `pick`/`place`/`place_inside`/`open_receptacle`/`close_receptacle`, snapshots `map_bundle/`, and renders `physical_navigation_pilot=true` / `physical_cleanup_ready=false`. | Implemented with mock Nav2 client; real hardware still operator-run |
 | Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 

@@ -201,7 +201,7 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
 | `roboclaws/maps/` | Reusable Nav2-shaped map artifact package: bundle writing/validation, metric-map projection, occupancy rasterization, and pure-Python static costmap route validation. |
 | `roboclaws/molmo_cleanup/nav2_map_bundle.py` | Molmo cleanup compatibility wrapper that resolves/validates selected prebuilt bundles and attaches run-local map bundle snapshots to cleanup artifacts. |
-| `roboclaws/molmo_cleanup/nav2_adapter.py` | Mockable direct Nav2 backend adapter for the first physical navigation/perception pilot. |
+| `roboclaws/molmo_cleanup/nav2_adapter.py`, `physical_nav2_pilot.py` | Mockable direct Nav2 backend adapter plus the first physical navigation/perception pilot runner: load a prebuilt map bundle, attempt inspection and fixture preferred waypoints, observe reached waypoints, and keep manipulation blocked. |
 | `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
 | `roboclaws/molmo_cleanup/report.py`, `report_visual_core.py` | Shared Cleanup Artifact Report renderer: Agent View, Private Evaluation, semantic substeps, robot timeline, planner proof, and bridge readiness sections. |
 | `roboclaws/molmo_cleanup/planner_proof_requests.py` | Converts cleanup substeps into private bound planner-proof requests, proof-bundle manifests, selection memory, fallback filtering, and cleanup rerun commands. |
