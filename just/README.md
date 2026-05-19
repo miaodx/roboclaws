@@ -95,11 +95,9 @@ Detached live Codex sessions inherit selected API keys and proxy variables
 exported in the invoking shell at launch time. They also source repo-local
 `.env` inside the runner, so either route works for local-only credentials.
 
-Run `just code::codex-provider-smoke` before long Codex visual runs to verify
-the configured Responses-compatible endpoint works with the pinned
-Docker-backed Codex CLI. For official OpenAI proof runs, point
-`CODEX_BASE_URL` at `https://api.openai.com/v1` and put the official key in
-`CODEX_API_KEY`; the launch path is otherwise the same.
+Run `just code::codex-provider-smoke` locally before long Codex visual runs to
+verify the `.env`-configured Responses-compatible endpoint works with the pinned
+Docker-backed Codex CLI. Hosted CI does not run Codex or Codex provider smoke.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 

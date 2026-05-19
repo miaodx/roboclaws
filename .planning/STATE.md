@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.98
 milestone_name: Planning Archive
 status: active
-stopped_at: Planning archive complete; no active GSD execution phase. Phase 135 hosted-provider follow-up remains the repo-level external blocker.
+stopped_at: Planning archive complete; no active GSD execution phase. Current repo-level cleanup is the local/CI coding-agent runtime boundary.
 last_updated: "2026-05-19T00:00:00+08:00"
 last_activity: 2026-05-19
 progress:
@@ -23,8 +23,10 @@ See: .planning/PROJECT.md (updated 2026-05-19)
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
 **Current focus:** GSD history through Phase 136 is archived under
 `.planning/milestones/v1.98-phases/`; `.planning/phases/` now holds only
-planned follow-ups 02.7 and 02.8. The repo-level follow-up remains the
-official Codex GPT-5.5 Nav2 cleanup proof blocker called out in `STATUS.md`.
+planned follow-ups 02.7 and 02.8. The repo-level follow-up is the runtime
+boundary called out in `STATUS.md`: local Codex/Claude use repo-local `.env`,
+local non-work-network also supports OpenClaw, and hosted CI does not support
+Codex.
 
 ## Current Position
 

@@ -387,11 +387,14 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "visit any missing waypoint_id" in prompt
 
 
-def test_official_codex_ci_proof_pins_selected_map_bundle() -> None:
+def test_ci_does_not_define_codex_live_proof() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert "map_bundle=molmo-cleanup-default-7" in workflow
-    assert 'scripts/maps/check_bundle.py "$seed_dir/map_bundle"' in workflow
+    assert "molmo_official_codex" not in workflow
+    assert "molmo-official-codex" not in workflow
+    assert "report-molmo-official-codex" not in workflow
+    assert "codex-provider-smoke" not in workflow
+    assert ".tmp/coding-agent-bin/codex" not in workflow
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:

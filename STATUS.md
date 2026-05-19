@@ -14,21 +14,22 @@ The active follow-up is the real-robot Nav2 cleanup pilot on draft PR #112. The
 branch implements the reusable Nav2 map bundle package/checker, static
 sim-costmap route validation, the direct Nav2 adapter scaffold,
 `real_robot_cleanup_v1` profile, Nav2 map bundle snapshots, report rendering,
-checker alignment gates, and an opt-in official Codex GPT-5.5 proof route.
+checker alignment gates, and local Codex consumption through the repo-local
+`.env` coding-agent route.
 
 ## Next Action
 
-Replace the GitHub `OPENAI_API_KEY` repository secret with a valid official
-OpenAI API key, then dispatch the opt-in official Codex GPT-5.5 Nav2 cleanup
-proof for `dongxu/dev-0515`.
+Run any Codex cleanup proof locally through the repo-local `.env` route, then
+validate the resulting `seed-7/run_result.json`, `report.html`, and
+`map_bundle/map.yaml` with the map bundle checker and real-robot-alignment
+cleanup checker.
 
 ## Current Blocker
 
-The official Codex GPT-5.5 proof cannot complete yet. GitHub Actions can reach
-`https://api.openai.com/v1/responses`, but the current repository
-`OPENAI_API_KEY` secret is rejected with `401 invalid_api_key`. Issue #111
-tracks the human-owned credential unblock. Do not mark PR #112 ready until the
-official cleanup artifact exists and passes the real-robot-alignment checker.
+No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
+provider smoke, or block on Codex acceptance artifacts. Local work-network runs
+support Codex and Claude Code only through repo-local `.env` configuration;
+local non-work-network runs also support OpenClaw.
 
 ## Human Review Surface
 

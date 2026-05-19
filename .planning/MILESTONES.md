@@ -30,7 +30,9 @@ execution history through Phase 136.
 - `molmospaces-waypoint-honest-cleanup-flow.md`
 
 **Known context:** This is an archive milestone, not a product release tag. The
-open external blocker remains the official Codex GPT-5.5 Nav2 cleanup proof
-called out in `STATUS.md`.
+current repo-level follow-up is the runtime support boundary called out in
+`STATUS.md`: Codex is local-only through repo-local `.env`, hosted CI may run
+supported Claude Code and OpenClaw routes, and hosted CI must not publish Codex
+acceptance artifacts.
 
 ---

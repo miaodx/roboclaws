@@ -129,7 +129,7 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
 
 
 def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
-    """CI should run live agents through one pinned Codex/Claude Code image."""
+    """CI should run Claude Code live agents through the pinned coding-agent image."""
     code_text = CODE_JUST.read_text(encoding="utf-8")
     dockerfile_text = CODING_AGENT_DOCKERFILE.read_text(encoding="utf-8")
     docker_script_text = CODING_AGENT_DOCKER_SH.read_text(encoding="utf-8")
@@ -192,6 +192,9 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert "scripts/dev/coding_agent_docker.sh build" in ci_text
     assert "scripts/dev/coding_agent_docker.sh install-wrappers .tmp/coding-agent-bin" in ci_text
     assert 'echo "$PWD/.tmp/coding-agent-bin" >> "$GITHUB_PATH"' in ci_text
+    assert ".tmp/coding-agent-bin/codex" not in ci_text
+    assert "codex-provider-smoke" not in ci_text
+    assert "molmo_official_codex" not in ci_text
     assert 'npm install -g "$CODEX_NPM_PACKAGE" "$CLAUDE_CODE_NPM_PACKAGE"' not in ci_text
     assert "vars.CODEX_NPM_PACKAGE" not in ci_text
     assert "vars.CLAUDE_CODE_NPM_PACKAGE" not in ci_text

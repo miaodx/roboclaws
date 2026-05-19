@@ -144,6 +144,19 @@ _Avoid_: Everything is an MCP tool, premature universal robot API
 A runnable operator command that packages one scenario, driver, report mode, and evidence path.
 _Avoid_: Robot ability, task prompt
 
+**Local Coding-Agent Route**:
+An operator-run Codex or Claude Code path that launches the local CLI/runtime and
+receives provider API configuration from the repo-local `.env`. On the work
+network, this is the only supported Codex or Claude Code route. On a non-work
+network, OpenClaw routes may also run.
+_Avoid_: Hosted CI proof, repository secret contract, official provider gate
+
+**CI Coding-Agent Boundary**:
+The rule that hosted CI may run deterministic checks plus supported Claude Code
+and OpenClaw routes, but must not launch Codex, run Codex provider smoke, or
+publish Codex acceptance artifacts.
+_Avoid_: Codex acceptance artifact, official Codex CI route, hosted model proof
+
 **Contract Profile**:
 A backend-specific public capability surface with explicit policy inputs, tool
 names, and evidence boundaries.
@@ -220,7 +233,18 @@ _Avoid_: Backend profile, task recipe
   mocked synthetic tests may use explicit lightweight fixtures.
 - Map-layer acceptance should be deterministic before live-agent proof: a valid
   **Nav2 Map Artifact**, **Metric Map Projection**, and **Sim Costmap Route
-  Validation** should pass before Codex, Claude, or OpenClaw runs.
+  Validation** should pass before any **Local Coding-Agent Route** or OpenClaw
+  run.
+- Local work-network runs support only Codex and Claude Code through the
+  **Local Coding-Agent Route**, using API base/key and provider/model settings
+  from the repo-local `.env`; OpenClaw is not supported on the work network.
+- Local non-work-network runs support the same `.env`-configured Codex and
+  Claude Code routes, plus OpenClaw.
+- Hosted CI does not support Codex at all. It should not launch Codex, run
+  Codex provider smoke, or block a pipeline on a Codex acceptance artifact.
+- Hosted CI may run supported Claude Code and OpenClaw routes. Claude Code test
+  models must stay within the provider/model configuration represented by the
+  repo-local `.env`; do not add arbitrary CI-only Claude model assumptions.
 - **Sim Costmap Route Validation** may consume a **Nav2 Map Artifact** in
   simulation, while physical robot execution consumes that artifact through a
   Nav2 action backend.

@@ -164,9 +164,10 @@ visual cleanup run, use:
 just code::codex-provider-smoke
 ```
 
-CI and local public live-agent recipes support Codex / Claude only through the
-pinned coding-agent Docker toolchain. Use the same key set when comparing
-Kimi/MiMo results across machines:
+Local public live-agent recipes support Codex and Claude Code only through the
+pinned coding-agent Docker toolchain and repo-local `.env`. Hosted CI does not
+support Codex, but may run supported Claude Code and OpenClaw routes. Use the
+same key set when comparing Kimi/MiMo results across machines:
 
 ```bash
 just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5

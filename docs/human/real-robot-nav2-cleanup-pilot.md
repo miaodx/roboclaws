@@ -102,26 +102,16 @@ Use the MolmoSpaces world-label report before hardware:
 just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=10
 ```
 
-For a live Codex cleanup rehearsal with the supported Docker runtime, set
-`CODEX_BASE_URL` and `CODEX_API_KEY` in the repo-local `.env`, then run:
+For a live Codex cleanup rehearsal with the supported local runtime, set
+`CODEX_BASE_URL`, `CODEX_API_KEY`, and the desired repo-supported Codex model in
+the repo-local `.env`, then run:
 
 ```bash
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
-For an official OpenAI API proof, use the dedicated Responses provider path:
-set `ROBOCLAWS_CODEX_PROVIDER=openai-responses`,
-`ROBOCLAWS_CODEX_MODEL=gpt-5.5`, and provide a valid `OPENAI_API_KEY` for
-`https://api.openai.com/v1/responses`.
-
-```bash
-ROBOCLAWS_CODEX_PROVIDER=openai-responses \
-ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
-just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
-```
-
-For the official GPT-5.5 Nav2 acceptance proof, write to a stable proof root
-and use the smaller five-object gate so the no-regression expectation is exact:
+For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
+the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
 just task::run molmo-cleanup codex world-labels \
@@ -131,15 +121,10 @@ just task::run molmo-cleanup codex world-labels \
   map_bundle=molmo-cleanup-default-7
 ```
 
-If local `api.openai.com` access is blocked but GitHub Actions has an official
-`OPENAI_API_KEY` repository secret, dispatch the dedicated opt-in CI proof
-instead of the normal Molmo live matrix:
-
-```bash
-gh workflow run ci.yml \
-  -f molmo_live=false \
-  -f molmo_official_codex=true
-```
+Hosted CI does not support Codex runs. Do not add a CI Codex provider smoke,
+repository-secret OpenAI route, or Codex acceptance artifact. CI may exercise
+supported Claude Code and OpenClaw routes; Codex proof stays local and uses the
+repo-local `.env`.
 
 Review the detached run with:
 
@@ -175,6 +160,6 @@ uv run python scripts/maps/check_bundle.py \
   output/molmo/codex-gpt55-nav2-report/<stamp>/seed-7/map_bundle
 ```
 
-Acceptance evidence is incomplete until the official Codex run produces
+Local Codex acceptance evidence is incomplete until the run produces
 `run_result.json`, `report.html`, and `map_bundle/map.yaml` under that
 timestamped `seed-7/` directory.
