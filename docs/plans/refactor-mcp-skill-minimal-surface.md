@@ -4,7 +4,7 @@ status: DONE
 accepted_severities:
   - P1
   - P2
-last_verified: 2026-05-15
+last_verified: 2026-05-18
 ---
 
 # Refactor Scope: MCP / Skill Minimal Surface
@@ -44,11 +44,18 @@ cleanup. The current profile contracts are canonical:
       canonical public spelling.
 - [x] Update human docs so profile cleanup is forward-only, not additive/stable
       compatibility.
+- [x] Remove follow-up current-code compatibility leftovers found after the
+      origin/main delta grew: stale Molmo `agent_bridge` run-result naming,
+      deprecated `--backend direct` game aliases, and unused report-page
+      back-compat constants.
 
 ## Parked Cross-Seam / Future Ideas
 
 - Broader Just module consolidation is outside this pass unless it is needed to
   remove accepted compatibility aliases.
+- Historical ADR and plan files may still mention removed legacy paths as
+  dated evidence. Do not rewrite that history unless a current entrypoint,
+  human doc, test, or recipe depends on it.
 
 ## Evidence Ladder
 
@@ -87,3 +94,19 @@ the work is committed in one or more coherent review units.
   `ruff check` / `ruff format --check` on existing changed Python;
   focused MCP/skill/Molmo/report/command contract tests;
   full `./scripts/dev/run_pytest_standalone.sh -q`.
+- 2026-05-18: Reopened for one bounded entropy-reduction follow-up after the
+  branch diverged significantly from `origin/main`. Scope is current-code
+  compatibility leftovers only; historical ADR/plan references stay parked as
+  dated evidence.
+- 2026-05-18: Completed follow-up cleanup. Renamed current Molmo run-result
+  diagnostics from `agent_bridge` to `agent_diagnostics`; removed the
+  deprecated `--backend direct` alias from the territory/coverage example CLIs
+  and tests; removed the unused `_OPENCLAW_ITEMS` back-compat constant from
+  the Pages index generator. Evidence:
+  `uv sync --extra dev`;
+  `.venv/bin/python -c "import ai2thor; print(f'ai2thor {ai2thor.__version__} ok')"`;
+  `.venv/bin/ruff check examples/games/territory_game.py examples/games/coverage_game.py roboclaws/molmo_cleanup/realworld_mcp_server.py scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/reports/write_pages_index.py tests/unit/examples/test_territory_example.py tests/unit/examples/test_coverage_example.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/unit/molmo_cleanup/test_ci_live_reports.py`;
+  `.venv/bin/ruff format --check examples/games/territory_game.py examples/games/coverage_game.py roboclaws/molmo_cleanup/realworld_mcp_server.py scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py scripts/reports/write_pages_index.py tests/unit/examples/test_territory_example.py tests/unit/examples/test_coverage_example.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/unit/molmo_cleanup/test_ci_live_reports.py`;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/examples/test_territory_example.py tests/unit/examples/test_coverage_example.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/unit/molmo_cleanup/test_ci_live_reports.py`;
+  stale current-surface search for `agent_bridge`, `--backend direct`, and
+  `_OPENCLAW_ITEMS`.

@@ -48,7 +48,6 @@ from territory_game import (  # noqa: E402
             },
         ),
         (["--backend", "openclaw"], {"backend": "openclaw"}),
-        (["--backend", "direct"], {"backend": "direct"}),
         (
             ["--backend", "openclaw", "--gateway-url", "http://custom:9999"],
             {"backend": "openclaw", "gateway_url": "http://custom:9999"},
@@ -85,6 +84,11 @@ from territory_game import (  # noqa: E402
 def test_parse_args(argv: list[str], expected: dict[str, object]) -> None:
     args = _parse_args(argv)
     assert {name: getattr(args, name) for name in expected} == expected
+
+
+def test_parse_args_rejects_direct_backend_alias() -> None:
+    with pytest.raises(SystemExit):
+        _parse_args(["--backend", "direct"])
 
 
 # ---------------------------------------------------------------------------

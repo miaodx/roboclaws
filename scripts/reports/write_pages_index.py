@@ -67,10 +67,6 @@ _OPENCLAW_ITEM_COVERAGE = (
     "Phase 2.2 long-running Gateway demo.</div></li>"
 )
 
-# Legacy alias: the single-item _OPENCLAW_ITEMS string that older callers may
-# reference. Points at the demo tile for back-compat.
-_OPENCLAW_ITEMS = _OPENCLAW_ITEM_DEMO
-
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8">
@@ -207,6 +203,7 @@ def _molmo_live_section(site_dir: Path) -> str:
         model = html.escape(str(entry.get("model") or "unknown model"))
         provider = html.escape(str(entry.get("provider_profile") or "unknown provider"))
         status = html.escape(str(entry.get("status") or "unknown"))
+        profile = html.escape(str(entry.get("profile") or "unknown profile"))
         reason = html.escape(str(entry.get("reason") or ""))
         report_path = str(entry.get("report_path") or "")
         diagnostic_path = str(entry.get("diagnostic_path") or "")
@@ -220,7 +217,8 @@ def _molmo_live_section(site_dir: Path) -> str:
             title = f"<span>{label}</span>"
         desc = (
             f'      <div class="desc">Claude Code live cleanup via '
-            f"<code>{provider}</code> / <code>{model}</code>. Status: "
+            f"<code>{provider}</code> / <code>{model}</code> using "
+            f"<code>{profile}</code>. Status: "
             f"<code>{status}</code>"
         )
         if reason:

@@ -65,10 +65,6 @@ def _pos_to_world_idx(pos: dict[str, float]) -> tuple[int, int]:
     return shared_pos_to_world_idx(pos, grid_size=_GRID_SIZE)
 
 
-def _normalize_backend(backend: str) -> str:
-    return "vlm" if backend == "direct" else backend
-
-
 def _resolve_wall_budget(max_wall_seconds: float) -> float | None:
     return max_wall_seconds if max_wall_seconds > 0 else None
 
@@ -131,7 +127,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     p.add_argument(
         "--backend",
-        choices=["vlm", "openclaw", "direct"],  # "direct" is a deprecated alias for "vlm"
+        choices=["vlm", "openclaw"],
         default="vlm",
         dest="backend",
         help="VLM transport: 'vlm' (cloud API) or 'openclaw' (local Gateway). "
@@ -205,14 +201,12 @@ def run_coverage_game(
     from roboclaws.openclaw.bridge import OpenClawUnavailable
 
     _install_sigterm_handler()
-    effective_backend = _normalize_backend(backend)
-
     souls_env = os.environ.get("AGENT_SOULS", "")
     souls_dir = os.environ.get("SOULS_DIR", _DEFAULT_SOULS_DIR)
     agent_labels, agent_soul_content = load_agent_souls(souls_env, agent_count, souls_dir)
 
     provider = create_game_provider(
-        backend=effective_backend,
+        backend=backend,
         gateway_url=gateway_url,
         agent_count=agent_count,
         model=model,
@@ -316,7 +310,7 @@ def run_coverage_game(
                 turn_metrics["payload"],
                 turn_metrics["timings"]["image_encode_seconds"],
             ) = prepare_prompt_payload(
-                backend=effective_backend,
+                backend=backend,
                 prompt_image_frames=prompt_bundle.prompt_images,
                 prompt_state_text=prompt_state_text,
                 prompt_state_metrics=prompt_state_metrics,
@@ -452,15 +446,11 @@ def run_coverage_game(
 def main() -> None:
     args = _parse_args()
 
-    effective_backend = _normalize_backend(args.backend)
-    if args.backend == "direct":
-        print("Warning: --backend direct is deprecated; use --backend vlm")
-
     print(f"Scene      : {args.scene}")
     print(f"Agents     : {args.agents}")
     print(f"Steps      : {args.steps}")
     print(f"Model      : {args.model}")
-    print(f"Backend    : {effective_backend}")
+    print(f"Backend    : {args.backend}")
     print(f"THOR step timeout  : {args.thor_server_timeout}")
     print(f"THOR start timeout : {args.thor_server_start_timeout}")
     wall_budget = _resolve_wall_budget(args.max_wall_seconds)

@@ -1,1 +1,0 @@
-molmo_cleanup/check_molmo_agent_bridge_result.py

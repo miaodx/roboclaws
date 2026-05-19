@@ -408,9 +408,16 @@ def _prepare_agent_workspace(
         else:
             skill_link.unlink()
     skill_link.symlink_to(repo_root / "skills" / skill_name, target_is_directory=True)
+    task_skills_link = task_dir / "skills"
+    if task_skills_link.exists() or task_skills_link.is_symlink():
+        if task_skills_link.is_dir() and not task_skills_link.is_symlink():
+            shutil.rmtree(task_skills_link)
+        else:
+            task_skills_link.unlink()
+    task_skills_link.symlink_to(skills_dir, target_is_directory=True)
     (task_dir / "README.md").write_text(
         "# Roboclaws Molmo Cleanup Agent Workspace\n\n"
-        f"Read `../skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
+        f"Read `skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
         encoding="utf-8",
     )
     return workspace, task_dir

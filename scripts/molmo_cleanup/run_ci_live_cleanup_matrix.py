@@ -45,8 +45,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=Path("output/molmo/ci-live"))
     parser.add_argument("--published-dir", type=Path)
     parser.add_argument("--seed", type=int, default=7)
-    parser.add_argument("--generated-mess-count", type=int, default=5)
-    parser.add_argument("--profile", default="world-labels")
+    parser.add_argument(
+        "--generated-mess-count",
+        type=int,
+        default=None,
+        help=(
+            "Generated mess count override. Defaults to 5 for world-labels entries "
+            "and 10 for camera-raw entries so the RAW_FPV success gate can require "
+            "7 accepted placements."
+        ),
+    )
+    parser.add_argument(
+        "--profile",
+        default=None,
+        help="Override the cleanup profile declared by the selected live entry.",
+    )
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18788)
@@ -77,14 +90,16 @@ def main(argv: list[str] | None = None) -> int:
             if not args.skip_uv_sync:
                 _run_checked([args.uv_bin, "sync", "--extra", "dev", "--extra", "molmospaces"])
             if not args.skip_prewarm:
-                _prewarm(args)
+                _prewarm(args, generated_mess_count=_prewarm_generated_mess_count(entries, args))
         except Exception as exc:
             for entry in entries:
+                profile = _entry_profile(entry, args)
+                generated_mess_count = _entry_generated_mess_count(entry, args)
                 status = base_status(
                     entry,
                     seed=args.seed,
-                    generated_mess_count=args.generated_mess_count,
-                    profile=args.profile,
+                    generated_mess_count=generated_mess_count,
+                    profile=profile,
                     task=args.task,
                 )
                 status["status"] = "failed"
@@ -113,15 +128,17 @@ def _run_entry(
     *,
     publish_root: Path,
 ) -> dict[str, Any]:
+    profile = _entry_profile(entry, args)
+    generated_mess_count = _entry_generated_mess_count(entry, args)
     status = base_status(
         entry,
         seed=args.seed,
-        generated_mess_count=args.generated_mess_count,
-        profile=args.profile,
+        generated_mess_count=generated_mess_count,
+        profile=profile,
         task=args.task,
     )
     entry_output_dir = args.output_dir / entry.name
-    command = _live_command(entry_output_dir, args)
+    command = _live_command(entry, entry_output_dir, args)
     rerun_command = _live_report_rerun_command(entry, args)
     status.update(
         {
@@ -197,15 +214,40 @@ def _finalize_status(status: dict[str, Any], publish_root: Path) -> dict[str, An
     return status
 
 
-def _live_command(entry_output_dir: Path, args: argparse.Namespace) -> list[str]:
+def _entry_profile(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> str:
+    return args.profile or entry.profile
+
+
+def _entry_generated_mess_count(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> int:
+    if args.generated_mess_count is not None:
+        return int(args.generated_mess_count)
+    if _entry_profile(entry, args) == "camera-raw":
+        return 10
+    return 5
+
+
+def _prewarm_generated_mess_count(
+    entries: tuple[MolmoLiveModelEntry, ...],
+    args: argparse.Namespace,
+) -> int:
+    return max(_entry_generated_mess_count(entry, args) for entry in entries)
+
+
+def _live_command(
+    entry: MolmoLiveModelEntry,
+    entry_output_dir: Path,
+    args: argparse.Namespace,
+) -> list[str]:
+    profile = _entry_profile(entry, args)
+    generated_mess_count = _entry_generated_mess_count(entry, args)
     return [
         args.just_bin,
         "task::run",
         "molmo-cleanup",
         "claude",
-        args.profile,
+        profile,
         f"seed={args.seed}",
-        f"generated_mess_count={args.generated_mess_count}",
+        f"generated_mess_count={generated_mess_count}",
         f"output_dir={entry_output_dir}",
         f"task={args.task}",
         f"host={args.host}",
@@ -214,14 +256,16 @@ def _live_command(entry_output_dir: Path, args: argparse.Namespace) -> list[str]
 
 
 def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> str:
+    profile = _entry_profile(entry, args)
+    generated_mess_count = _entry_generated_mess_count(entry, args)
     command = [
         "just",
         "task::run",
         "molmo-cleanup",
         "claude",
-        args.profile,
+        profile,
         f"seed={args.seed}",
-        f"generated_mess_count={args.generated_mess_count}",
+        f"generated_mess_count={generated_mess_count}",
         f"task={args.task}",
     ]
     return (
@@ -231,7 +275,7 @@ def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namesp
     )
 
 
-def _prewarm(args: argparse.Namespace) -> None:
+def _prewarm(args: argparse.Namespace, *, generated_mess_count: int) -> None:
     _run_checked(
         [
             args.python_bin,
@@ -241,7 +285,7 @@ def _prewarm(args: argparse.Namespace) -> None:
             "--seed",
             str(args.seed),
             "--generated-mess-count",
-            str(args.generated_mess_count),
+            str(generated_mess_count),
             "--robot-name",
             "rby1m",
         ]
