@@ -51,6 +51,7 @@ Last updated: 2026-05-19
   - `d70ca89` `feat: gate cleanup runs on selected map bundles`
   - `cb41d9c` `feat: add physical nav2 pilot artifact`
   - `9f78781` `fix: pin official codex cleanup map bundle`
+  - `e603873` `fix: tighten molmo world labels gate`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -104,6 +105,10 @@ Last updated: 2026-05-19
   stricter world-labels kickoff prompt that tells Codex to plan through
   `metric_map` / `fixture_hints`, build an exact waypoint checklist, and avoid
   raw occupancy-image planning.
+- The shared `world-labels` checker gate now matches the official no-regression
+  floor by requiring waypoint honesty, real-robot alignment,
+  `--min-restored-count 5`, and `--min-sweep-coverage 1.0`; local/operator
+  Codex runs and the opt-in CI proof now fail against the same cleanup bar.
 - The official CI job now runs a cheap Docker-backed Codex provider smoke before
   launching the Molmo backend, so missing or invalid official OpenAI credentials
   fail before Xvfb/tmux/Molmo runtime startup.
@@ -165,6 +170,20 @@ Last updated: 2026-05-19
   - push CI `26090699226` and PR CI `26090702438` passed on branch head
     `9f78781`; the opt-in official Codex proof jobs were skipped as expected on
     normal push / pull_request events.
+  - `uv sync --extra dev --extra molmospaces`
+  - `uv run ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  - `uv run ruff format --check tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  - `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_ci_live_reports.py -q`
+  - `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex world-labels map_bundle=molmo-cleanup-default-7`
+  - `git diff --check`
+  - commit hook fast non-integration pytest subset passed on `e603873`.
+  - Attempted deterministic artifact exercise:
+    `just task::run molmo-cleanup direct world-labels output_dir=output/molmo/world-labels-strict-gate-check seed=7 generated_mess_count=5 map_bundle=molmo-cleanup-default-7`.
+    After installing the declared `molmospaces` extra, the run remained stuck
+    in the Molmo subprocess worker `snapshot` step before producing
+    `before.png`; it was terminated with exit `143`, leaving no
+    `run_result.json`, `report.html`, or `map_bundle/` artifact for this
+    local check.
 - Latest focused checks for the CI launcher fixes:
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
@@ -206,14 +225,14 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`, `9f78781`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`, `cb41d9c`, `9f78781`, `e603873`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, runtime gap notes, and `Static costmap routes`. | Verified on deterministic report |
 | Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-selected-bundle-smoke/0519_1728` passed checker with restored `5/5`, sweep coverage `1.0`, selected bundle projection, and run-local selected bundle snapshot. | Verified for deterministic smoke |
 | First hardware pilot acceptance path | Deterministic artifact `output/molmo/physical-nav2-pilot-local-check/report.html` loads the selected prebuilt bundle and `rby1m` profile, attempts 8 inspection waypoints plus 10 fixture preferred waypoints through `DirectNav2Adapter`, observes every reached waypoint, blocks `pick`/`place`/`place_inside`/`open_receptacle`/`close_receptacle`, snapshots `map_bundle/`, and renders `physical_navigation_pilot=true` / `physical_cleanup_ready=false`. | Implemented with mock Nav2 client; real hardware still operator-run |
-| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | The official route is wired to Docker-backed Codex GPT-5.5, explicitly selects `map_bundle=molmo-cleanup-default-7`, checks `seed-7/map_bundle/`, and runs the no-regression / real-robot-alignment checker. Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
+| Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | The official route is wired to Docker-backed Codex GPT-5.5, explicitly selects `map_bundle=molmo-cleanup-default-7`, checks `seed-7/map_bundle/`, and runs the no-regression / real-robot-alignment checker. The shared `world-labels` recipe now carries the same `--min-restored-count 5` and `--min-sweep-coverage 1.0` acceptance floor used by the official proof. Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
 Completion rule: do not mark the goal complete until an official Codex GPT-5.5
@@ -413,6 +432,9 @@ Latest unblock/audit check on 2026-05-18:
     returned `OPENAI_API_KEY=2026-05-18T15:29:18Z`, and
     `just dev::network-status` still reported `network: work`, so no official
     proof redispatch was attempted.
+  - Fresh continuation check on 2026-05-19T10:34:43Z still showed
+    `OPENAI_API_KEY=2026-05-18T15:29:18Z`, green branch/PR CI at head
+    `68343c0`, and `network: work`; no official proof redispatch was attempted.
 - Public recipe preflight also fails before Codex launch:
   - `ROBOCLAWS_CODEX_PROVIDER=system ROBOCLAWS_CODEX_MODEL=gpt-5.5
     ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 just task::run
