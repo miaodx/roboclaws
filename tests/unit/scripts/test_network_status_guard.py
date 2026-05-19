@@ -89,7 +89,7 @@ def test_claude_provider_guard_blocks_system_provider_on_work_network(tmp_path: 
 
 def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CLAUDE_PROVIDER"] = "kimi-anthropic"
+    env["KIMI_API_KEY"] = "fake-kimi-key"
 
     result = subprocess.run(
         [
@@ -111,6 +111,56 @@ def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_pa
     assert "repo-local Claude provider (kimi-anthropic)" in result.stderr
 
 
+def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env.pop("ROBOCLAWS_CODEX_PROVIDER", None)
+    env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_codex_network_allowed "Codex"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "blocked while using system Codex provider" in result.stderr
+
+
+def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["CODEX_BASE_URL"] = "https://codex.example.test/v1"
+    env["CODEX_API_KEY"] = "fake-codex-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_codex_network_allowed "Codex"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local Codex provider (codex-env)" in result.stderr
+
+
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
     openclaw_guarded_files = (
         JUST_DIR / "openclaw.just",
@@ -127,5 +177,9 @@ def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
     for path in (JUST_DIR / "code.just", JUST_DIR / "harness.just", JUST_DIR / "molmo.just"):
         text = path.read_text(encoding="utf-8")
         assert "roboclaws_assert_claude_code_network_allowed" in text, path
+
+    for path in (JUST_DIR / "code.just", JUST_DIR / "molmo.just"):
+        text = path.read_text(encoding="utf-8")
+        assert "roboclaws_assert_codex_network_allowed" in text, path
 
     assert "network-status:" in (JUST_DIR / "dev.just").read_text(encoding="utf-8")

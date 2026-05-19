@@ -106,7 +106,7 @@ adding keys is fine; removing or renaming is a breaking change because
 `scripts/reports/render_autonomous_replay.py` consumes it.
 
 The server binds to `127.0.0.1:18788` by default. Loopback-only is part
-of the threat model (see `.planning/phases/02.6-openclaw-mcp-tools-integration/`
+of the threat model (see `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/`
 threat T-02.6-01); changing the bind address requires a deliberate
 decision, not a one-liner.
 

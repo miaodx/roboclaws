@@ -76,8 +76,9 @@ need normal GitHub access or a local network proxy.
 
 ### 1.1.1 Work-network guard
 
-OpenClaw Gateway runs and system-provider Claude Code runs are not allowed on
-the work network. The work network is detected by reachability of
+OpenClaw Gateway runs, system-provider Claude Code runs, and system-provider
+Codex runs are not allowed on the work network. The work network is detected by
+reachability of
 `https://api-router.evad.mioffice.cn/`.
 Check the current network before those workflows with:
 
@@ -87,13 +88,13 @@ just dev::network-status
 
 If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, `just appliance::run`, or OpenClaw integration/local
-verification gates. Do not run `just code::cc`, `just harness::navigator`, or
-`just molmo::claude-report` with the default `ROBOCLAWS_CLAUDE_PROVIDER=system`.
-Those Claude Code recipes may run on the work network only when `.env` selects a
-repo-local provider profile such as `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic`
-or `ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`; model-only overrides do not
-bypass the guard. Guarded recipes should fail before launching when the
-work-network probe is reachable and no repo-local Claude provider is selected.
+verification gates. Do not run system-provider Claude Code or Codex workflows
+on the work network. Claude Code recipes may run there only when the repo-local
+`.env` contains a supported MiMo or Kimi key. Codex recipes may run there only
+when `CODEX_BASE_URL` and `CODEX_API_KEY` configure the repo-local Codex route.
+Model-only overrides do not bypass the guard. Guarded recipes should fail
+before launching when the work-network probe is reachable and no allowed
+repo-local key route is available.
 
 ### 1.1.2 Coding-agent permissions
 
@@ -127,13 +128,13 @@ set -a && source .env && set +a
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
-#   ANTHROPIC_API_KEY or OPENAI_API_KEY — direct VLM path (optional)
+#   CODEX_BASE_URL / CODEX_API_KEY — Codex-compatible endpoint for live agents
 ```
 
 Sanity check:
 
 ```bash
-python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('OPENAI_API_KEY'), 'No VLM API key set — did you source .env?'"
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
 ```
 
 `.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.
@@ -154,7 +155,7 @@ docker ps --format '{{.Names}}\t{{.Image}}'
 
 After your run, leave the Gateway on `profile: minimal` (production-intent state) or
 tear it down explicitly: `docker rm -f openclaw-gateway`. Do NOT leave it on
-`profile: coding` — see `.planning/phases/02.6-openclaw-mcp-tools-integration/` threat T-02.6-27.
+`profile: coding` — see `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/` threat T-02.6-27.
 
 ### 1.5 Pytest env isolation (machine-local)
 

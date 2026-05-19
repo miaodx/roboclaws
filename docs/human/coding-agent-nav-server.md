@@ -39,24 +39,22 @@ Bare host `codex` or `claude` launches are not part of the supported path. Use
 them only when a human explicitly asks for a system-CLI debugging run, and label
 that run as outside the supported demo path.
 
-To run these demos through Kimi or MiMo without editing user-level Codex or
-Claude Code config, add optional provider overrides to the repo-local `.env`:
+To run these demos without editing user-level Codex or Claude Code config, copy
+`.env.example` to `.env` and fill the keys you have. Normal users configure
+keys only; command shape controls behavior. Codex uses `CODEX_BASE_URL` and
+`CODEX_API_KEY`; Claude Code prefers `MIMO_TP_KEY` when present, then
+`KIMI_API_KEY`, and otherwise falls back to the host system provider only off
+the work network.
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=mimo-openai
-ROBOCLAWS_CODEX_MODEL=mimo-v2.5-pro
-
-ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
-ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
+CODEX_BASE_URL=https://example.internal/v1
+CODEX_API_KEY=...
+MIMO_TP_KEY=...
+KIMI_API_KEY=...
 ```
 
-Supported profiles are `system`, `kimi-openai`, and `mimo-openai` for Codex,
-and `system`, `kimi-anthropic`, and `mimo-anthropic` for Claude Code.
-`ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` are accepted as
-shared fallbacks. The Kimi/MiMo profiles select model, base URL, API-key env
-var, protocol, and `CLAUDE_CODE_SIMPLE=1` together for the launched process
-only. The `system` provider uses the container's configured auth; for host
-Codex login, use the explicit opt-in below.
+The launchers select the model, base URL, API-key env var, and protocol for the
+launched process. Those choices are recipe-owned for normal runs.
 
 The `code::cc` and `code::codex` launchers also pass the selected coding-agent
 model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
@@ -83,13 +81,10 @@ just code::codex-provider-smoke
 
 The coding-agent image is `Dockerfile.coding-agents`; default package pins live
 in `scripts/dev/coding_agent_toolchain.env`. The public launchers call this
-Docker runtime directly and set
-`ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE=1`,
-`ROBOCLAWS_CODE_AGENT_DOCKER_TASK=ai2thor-nav`, and
-`ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS=ai2thor-navigator` by default. The agent
-container then sees only `/workspace/task` and
-`/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`, `CLAUDE.md`,
-`.git`, and the source tree are not mounted into the agent context.
+Docker runtime directly. The agent container then sees only `/workspace/task`
+and `/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`,
+`CLAUDE.md`, `.git`, and the source tree are not mounted into the agent
+context.
 
 The same Docker isolation is task-skill driven rather than nav-specific:
 `molmo-cleanup` live Codex/Claude runs mount only
@@ -99,19 +94,12 @@ isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
 bundled/system Codex skills are not available; the task skill is read explicitly
 from `../skills/<name>/SKILL.md`.
 
-For GPT/OpenAI Codex runs that should use your normal host Codex login, opt in
-to copying host Codex auth plus a minimal provider config into the pinned
-container:
+For Docker-backed Codex runs, use repo-local `.env` credentials. Host
+`~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1 \
-ROBOCLAWS_CODEX_PROVIDER=system \
-ROBOCLAWS_CODEX_MODEL=gpt-5.2 \
 just code::codex
 ```
-
-That mode does not mount the full host `~/.codex`: host agents, hooks, skills,
-history, and unrelated user config stay outside the container.
 
 You can also manage the MCP lifecycle directly (shared with `chat::run` /
 `appliance::run`; project policy is one roboclaws MCP per machine):
