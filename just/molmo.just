@@ -92,6 +92,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-robot-views
           --require-waypoint-honesty
           --require-real-robot-alignment
+          --min-restored-count 5
+          --min-sweep-coverage 1.0
         )
         ;;
       camera-raw)

@@ -323,6 +323,18 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     assert "--require-map-bundle" in text
 
 
+def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"world-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "--require-waypoint-honesty" in body
+    assert "--require-real-robot-alignment" in body
+    assert "--min-restored-count 5" in body
+    assert "--min-sweep-coverage 1.0" in body
+
+
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
     labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
