@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Shared helpers for Codex / Claude Code demo launchers.
+#
+# Normal users configure only provider keys in the repo-local .env. The
+# ROBOCLAWS_* provider/model variables handled in this file are maintainer-only
+# escape hatches for tests, CI, and one-off debugging.
 
 roboclaws_load_dotenv() {
   local env_file="${1:-.env}"
@@ -13,12 +17,35 @@ roboclaws_load_dotenv() {
 
 roboclaws_code_agent_provider() {
   local primary_var="$1"
-  local provider="${!primary_var:-}"
+  local provider=""
+  if [[ -n "$primary_var" ]]; then
+    provider="${!primary_var:-}"
+  fi
   if [[ -z "$provider" ]]; then
     provider="${ROBOCLAWS_CODE_AGENT_PROVIDER:-}"
   fi
   if [[ -z "$provider" ]]; then
-    provider="system"
+    case "$primary_var" in
+      ROBOCLAWS_CODEX_PROVIDER)
+        if [[ -n "${CODEX_BASE_URL:-}" || -n "${CODEX_API_KEY:-}" ]]; then
+          provider="codex-env"
+        else
+          provider="system"
+        fi
+        ;;
+      ROBOCLAWS_CLAUDE_PROVIDER)
+        if [[ -n "${MIMO_TP_KEY:-}" ]]; then
+          provider="mimo-anthropic"
+        elif [[ -n "${KIMI_API_KEY:-}" ]]; then
+          provider="kimi-anthropic"
+        else
+          provider="system"
+        fi
+        ;;
+      *)
+        provider="system"
+        ;;
+    esac
   fi
   printf '%s\n' "$provider"
 }
@@ -29,11 +56,8 @@ roboclaws_code_agent_profile_default_model() {
     system)
       printf '\n'
       ;;
-    kimi-openai)
-      printf 'kimi-k2.6\n'
-      ;;
-    mimo-openai)
-      printf 'mimo-v2.5-pro\n'
+    codex-env)
+      printf 'gpt-5.5\n'
       ;;
     kimi-anthropic)
       printf 'kimi-k2.6\n'
@@ -51,11 +75,12 @@ roboclaws_code_agent_profile_default_model() {
 roboclaws_code_agent_profile_base_url() {
   local provider="$1"
   case "$provider" in
-    kimi-openai)
-      printf 'https://api.kimi.com/coding/v1\n'
-      ;;
-    mimo-openai)
-      printf 'https://token-plan-cn.xiaomimimo.com/v1\n'
+    codex-env)
+      if [[ -z "${CODEX_BASE_URL:-}" ]]; then
+        echo "error: codex-env requires CODEX_BASE_URL; add it to the repo-local .env or export it for this shell" >&2
+        return 2
+      fi
+      printf '%s\n' "${CODEX_BASE_URL}"
       ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
@@ -76,10 +101,13 @@ roboclaws_code_agent_profile_base_url() {
 roboclaws_code_agent_profile_key_env() {
   local provider="$1"
   case "$provider" in
-    kimi-openai|kimi-anthropic)
+    codex-env)
+      printf 'CODEX_API_KEY\n'
+      ;;
+    kimi-anthropic)
       printf 'KIMI_API_KEY\n'
       ;;
-    mimo-openai|mimo-anthropic)
+    mimo-anthropic)
       printf 'MIMO_TP_KEY\n'
       ;;
     system)
@@ -95,7 +123,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    kimi-openai|mimo-openai)
+    codex-env)
       printf 'responses\n'
       ;;
     kimi-anthropic|mimo-anthropic)
@@ -198,22 +226,19 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    system|kimi-openai|mimo-openai)
+    codex-env)
+      ;;
+    system)
+      echo "error: Codex repo workflows require CODEX_BASE_URL and CODEX_API_KEY; add them to the repo-local .env or export them for this shell" >&2
+      return 2
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected system, kimi-openai, or mimo-openai" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
       return 2
       ;;
   esac
 
   model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
-  if [[ "$provider" == "system" ]]; then
-    if [[ -n "$model" ]]; then
-      out_args=(--model "$model")
-    fi
-    return 0
-  fi
-
   base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
   key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
   wire_api="$(roboclaws_code_agent_profile_wire_api "$provider")" || return
@@ -227,6 +252,17 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
+  roboclaws_codex_transport_args out_args
+}
+
+roboclaws_codex_transport_args() {
+  local -n _codex_transport_out_args="$1"
+  case "${ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS:-0}" in
+    1|true|yes)
+      _codex_transport_out_args+=(--disable responses_websockets)
+      _codex_transport_out_args+=(--disable responses_websockets_v2)
+      ;;
+  esac
 }
 
 roboclaws_claude_provider_args() {
@@ -292,10 +328,49 @@ roboclaws_assert_claude_code_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Claude Code provider." >&2
-        echo "       Set ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic or mimo-anthropic with repo-local .env keys, or switch off the work network." >&2
+        echo "       Configure MIMO_TP_KEY or KIMI_API_KEY in the repo-local .env, or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with repo-local Claude provider (${provider})" >&2
+      ;;
+    1)
+      echo "==> network guard ok: off work network" >&2
+      ;;
+    *)
+      echo "error: cannot determine network status; curl is required for ${label}." >&2
+      return 2
+      ;;
+  esac
+}
+
+roboclaws_assert_codex_network_allowed() {
+  local label="${1:-Codex}"
+  local provider
+  provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
+  case "$provider" in
+    system|codex-env)
+      ;;
+    *)
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
+      return 2
+      ;;
+  esac
+
+  local rc
+  if bash scripts/dev/network_status.sh --is-work-network >/dev/null 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  case "$rc" in
+    0)
+      if [[ "$provider" == "system" ]]; then
+        echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
+        echo "       Configure CODEX_BASE_URL and CODEX_API_KEY in the repo-local .env, or switch off the work network." >&2
+        return 1
+      fi
+      echo "==> network guard ok: work network with repo-local Codex provider (${provider})" >&2
       ;;
     1)
       echo "==> network guard ok: off work network" >&2

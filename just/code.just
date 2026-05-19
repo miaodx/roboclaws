@@ -152,6 +152,8 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav"
       exit 1
     fi
 
+    roboclaws_assert_codex_network_allowed "Codex direct MCP run"
+
     scripts/dev/coding_agent_docker.sh ensure
 
     cleanup() {
@@ -199,8 +201,8 @@ codex scene="FloorPlan201" host="127.0.0.1" port="18788" task_name="ai2thor-nav"
     echo "==> Paste the kickoff prompt printed above as your first message." >&2
     "${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}
 
-# Cheap live check for a repo-local Codex OpenAI-compatible provider profile.
-# This intentionally refuses `system` so a misspelled profile does not silently
+# Cheap live check for the repo-local Codex Responses-compatible provider profile.
+# This intentionally refuses `system` so missing repo-local keys do not silently
 # validate the user's machine default.
 codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
     #!/usr/bin/env bash
@@ -210,9 +212,10 @@ codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
     roboclaws_load_dotenv .env
     codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
     if [[ "$codex_provider" == "system" ]]; then
-      echo "error: no Codex provider profile selected; set ROBOCLAWS_CODEX_PROVIDER=kimi-openai or mimo-openai in .env" >&2
+      echo "error: no repo-local Codex endpoint configured; set CODEX_BASE_URL and CODEX_API_KEY in .env" >&2
       exit 1
     fi
+    roboclaws_assert_codex_network_allowed "Codex provider smoke"
     codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
     codex_model_args=()
     roboclaws_codex_provider_args codex_model_args
