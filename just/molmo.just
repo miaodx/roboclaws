@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -49,6 +49,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_count="{{generated_mess_count}}"
     host="{{host}}"
     port="{{port}}"
+    map_bundle="{{map_bundle}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -61,6 +62,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
     host="${host#host=}"
     port="${port#port=}"
+    map_bundle="${map_bundle#map_bundle=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -120,6 +122,35 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         ;;
     esac
 
+    map_bundle_dir="$map_bundle"
+    case "$map_bundle_dir" in
+      auto)
+        if [[ "$profile" == "smoke" ]]; then
+          map_bundle_dir=""
+        else
+          map_bundle_dir="assets/maps/molmo-cleanup-default-7"
+        fi
+        ;;
+      none|false|off)
+        map_bundle_dir=""
+        ;;
+    esac
+    if [[ -n "$map_bundle_dir" && "$map_bundle_dir" != */* && -d "assets/maps/${map_bundle_dir}" ]]; then
+      map_bundle_dir="assets/maps/${map_bundle_dir}"
+    fi
+    map_bundle_args=()
+    if [[ -n "$map_bundle_dir" ]]; then
+      .venv/bin/python scripts/maps/check_bundle.py "$map_bundle_dir" >/dev/null
+      map_bundle_args=(--map-bundle-dir "$map_bundle_dir")
+    fi
+    if [[ "$profile" != "smoke" ]]; then
+      if [[ -z "$map_bundle_dir" ]]; then
+        echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
+        exit 1
+      fi
+      map_bundle_args+=(--require-map-bundle)
+    fi
+
     stamp="$({{timestamp_cmd}})"
     run_root="${output_dir}/${stamp}"
     mkdir -p "$run_root"
@@ -129,6 +160,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    profile  : ${profile}"
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
+    echo "    map      : ${map_bundle_dir:-not required}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
 
@@ -207,6 +239,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --generated-mess-count "$generated_mess_count"
           --perception-mode "$perception_mode"
           --cleanup-profile "$profile"
+          "${map_bundle_args[@]}"
           "${visual_args[@]}"
         )
 
@@ -460,6 +493,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --fixture-hint-mode room_only \
             --perception-mode "$perception_mode" \
             --cleanup-profile "$profile" \
+            "${map_bundle_args[@]}" \
             --generated-mess-count "$generated_mess_count" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
@@ -477,6 +511,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --generated-mess-count "$generated_mess_count" \
             --perception-mode "$perception_mode" \
             --cleanup-profile "$profile" \
+            "${map_bundle_args[@]}" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
           ;;

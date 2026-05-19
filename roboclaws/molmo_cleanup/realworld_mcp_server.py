@@ -82,6 +82,7 @@ def make_molmo_realworld_cleanup_mcp(
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
+    map_bundle_dir: str | Path | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
         run_dir=run_dir,
@@ -98,6 +99,7 @@ def make_molmo_realworld_cleanup_mcp(
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
         planner_proof_run_result=planner_proof_run_result,
+        map_bundle_dir=map_bundle_dir,
     )
 
 
@@ -121,6 +123,7 @@ class RealWorldMolmoCleanupMCPServer:
         record_robot_views: bool = False,
         cleanup_profile: str | None = None,
         planner_proof_run_result: Path | None = None,
+        map_bundle_dir: str | Path | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -129,6 +132,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.policy = policy
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
+        self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
             base_contract = base_contract or CleanupBackendSession(scenario)
@@ -137,6 +141,7 @@ class RealWorldMolmoCleanupMCPServer:
                 task_prompt=task_prompt,
                 fixture_hint_mode=fixture_hint_mode,
                 perception_mode=perception_mode,
+                map_bundle_dir=self.map_bundle_dir,
             )
         self.contract = contract
         self.base_contract = contract.contract
@@ -549,7 +554,11 @@ class RealWorldMolmoCleanupMCPServer:
             )
             run_result["cleanup_profile"] = profile_metadata["profile"]
             run_result["cleanup_profile_metadata"] = profile_metadata
-        attach_nav2_map_bundle_snapshot(run_result=run_result, run_dir=self.run_dir)
+        attach_nav2_map_bundle_snapshot(
+            run_result=run_result,
+            run_dir=self.run_dir,
+            source_bundle_dir=self.map_bundle_dir,
+        )
         _add_backend_runtime_metadata(run_result, self.base_contract.backend)
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT

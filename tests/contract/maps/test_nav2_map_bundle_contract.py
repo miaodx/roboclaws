@@ -14,6 +14,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "maps" / "check_bundle.py"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 
 
 def test_nav2_bundle_writer_exports_valid_projection_and_static_route(tmp_path: Path) -> None:
@@ -103,6 +104,26 @@ def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
     assert result.ok is False
     assert result.status == "blocked_capability"
     assert result.failure_type == "goal_occupied"
+
+
+def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_bundle_dir=PREBUILT_BUNDLE,
+    )
+
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+    waypoints = metric_map["inspection_waypoints"]
+    navigation = contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
+
+    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
+    assert metric_map["map_id"] == "molmo-cleanup-default-7_semantic_map"
+    assert all(item["visited"] is False for item in waypoints)
+    assert fixture_hints["rooms"][0]["fixtures"][0]["fixture_id"] == "laundry_hamper_01"
+    assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
+    assert navigation["route_validation"]["ok"] is True
+    assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
 
 
 def _agent_view() -> dict:

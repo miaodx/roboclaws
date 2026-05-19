@@ -291,6 +291,38 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
+def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "codex",
+        "world-labels",
+        "map_bundle=molmo-cleanup-default-7",
+    )
+
+    assert route[:10] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/molmo/codex-report",
+        "帮我收拾这个房间",
+        "10",
+        "127.0.0.1",
+        "18788",
+    ]
+    assert route[10] == "molmo-cleanup-default-7"
+
+
+def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'map_bundle="auto"' in text
+    assert 'map_bundle_dir="assets/maps/molmo-cleanup-default-7"' in text
+    assert "--map-bundle-dir" in text
+    assert "--require-map-bundle" in text
+
+
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
     labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")

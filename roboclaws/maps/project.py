@@ -37,7 +37,7 @@ def metric_map_from_bundle(
     for item in semantics.get("inspection_waypoints") or []:
         waypoint = dict(item)
         waypoint.setdefault("frame_id", (semantics.get("frame_ids") or {}).get("map", "map"))
-        waypoint.setdefault("visited", False)
+        waypoint["visited"] = False
         waypoints.append(waypoint)
     robot_pose = (
         {

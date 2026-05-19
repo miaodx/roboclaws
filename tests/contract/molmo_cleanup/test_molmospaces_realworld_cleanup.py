@@ -19,6 +19,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 
 
 def _load_demo_module():
@@ -33,7 +34,12 @@ def _load_demo_module():
 def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) -> None:
     demo = _load_demo_module()
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_bundle_dir=PREBUILT_BUNDLE,
+        require_map_bundle=True,
+    )
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     trace_lines = (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
@@ -66,6 +72,10 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert run_result["planner_proof_requests"]["agent_view_exposed"] is False
     assert run_result["artifacts"]["planner_proof_requests"].endswith("planner_proof_requests.json")
     assert run_result["nav2_map_bundle"]["snapshot_complete"] is True
+    assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(PREBUILT_BUNDLE)
+    assert run_result["agent_view"]["metric_map"]["map_bundle"]["environment_id"] == (
+        "molmo-cleanup-default-7"
+    )
     assert run_result["artifacts"]["nav2_map_yaml"].endswith("map_bundle/map.yaml")
     assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
     assert "Planner Proof Requests" in report_text
@@ -89,6 +99,35 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert any('"tool": "metric_map"' in line for line in trace_lines)
     assert any('"tool": "observe"' in line for line in trace_lines)
     assert not any('"tool": "scene_objects"' in line for line in trace_lines)
+
+
+def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: Path) -> None:
+    demo = _load_demo_module()
+
+    try:
+        demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, require_map_bundle=True)
+    except ValueError as exc:
+        assert "map_bundle_dir is required" in str(exc)
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("expected require_map_bundle to fail without a selected bundle")
+
+
+def test_realworld_cleanup_live_bundle_gate_rejects_invalid_bundle(tmp_path: Path) -> None:
+    demo = _load_demo_module()
+    invalid_bundle = tmp_path / "invalid-bundle"
+    invalid_bundle.mkdir()
+
+    try:
+        demo.run_realworld_cleanup(
+            output_dir=tmp_path / "run",
+            seed=7,
+            map_bundle_dir=invalid_bundle,
+            require_map_bundle=True,
+        )
+    except ValueError as exc:
+        assert "invalid Nav2 map bundle" in str(exc)
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("expected invalid selected bundle to fail before cleanup")
 
 
 def test_realworld_cleanup_report_separates_agent_view_and_private_eval(

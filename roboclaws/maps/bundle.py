@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -132,6 +133,33 @@ def write_nav2_map_bundle_snapshot(
     return snapshot
 
 
+def copy_nav2_map_bundle_snapshot(
+    *,
+    source_bundle_dir: Path,
+    run_dir: Path,
+) -> dict[str, Any]:
+    """Copy a validated prebuilt Nav2 map bundle into a run-local snapshot."""
+    source_bundle_dir = Path(source_bundle_dir)
+    validation = validate_nav2_map_bundle(source_bundle_dir)
+    validation.raise_for_errors()
+
+    bundle_dir = Path(run_dir) / "map_bundle"
+    for key, relative in _bundle_local_paths().items():
+        source = source_bundle_dir / relative
+        destination = bundle_dir / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+    snapshot = _existing_bundle_snapshot(
+        bundle_dir=bundle_dir,
+        run_dir=Path(run_dir),
+        source_bundle_dir=source_bundle_dir,
+    )
+    snapshot["schema"] = NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA
+    snapshot["snapshot_root"] = "map_bundle"
+    return snapshot
+
+
 def write_nav2_map_bundle(
     bundle_dir: Path,
     *,
@@ -212,6 +240,53 @@ def write_nav2_map_bundle(
             "They do not encode movable-object target truth or private scoring data."
         ),
     }
+
+
+def _existing_bundle_snapshot(
+    *,
+    bundle_dir: Path,
+    run_dir: Path,
+    source_bundle_dir: Path | None = None,
+) -> dict[str, Any]:
+    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    environment_id = str(semantics.get("environment_id") or bundle_dir.name)
+    map_id = str(semantics.get("map_id") or f"{environment_id}_semantic_map")
+    map_version = str(semantics.get("map_version") or "static-fixture-map-v1")
+    metadata = metric_map_bundle_metadata(
+        environment_id=environment_id,
+        map_id=map_id,
+        map_version=map_version,
+    )
+    artifact_paths = {key: bundle_dir / relative for key, relative in _bundle_local_paths().items()}
+    hashes = {key: _file_sha256(path) for key, path in artifact_paths.items() if path.is_file()}
+    payload = {
+        "schema": NAV2_MAP_BUNDLE_SCHEMA,
+        "source_schema": semantics.get("schema", ""),
+        "environment_id": environment_id,
+        "map_id": map_id,
+        "map_version": map_version,
+        "source_provenance": (semantics.get("provenance") or {}).get(
+            "source",
+            "prebuilt_nav2_map_bundle",
+        ),
+        "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
+        "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
+        "parameter_hash": metadata["parameter_hash"],
+        "snapshot_root": bundle_dir.name,
+        "snapshot_complete": set(artifact_paths) <= set(hashes),
+        "artifact_paths": {
+            key: path.relative_to(run_dir).as_posix() for key, path in artifact_paths.items()
+        },
+        "artifact_hashes": hashes,
+        "runtime_costmap_gaps": list(RUNTIME_COSTMAP_GAPS),
+        "public_contract_note": (
+            "Snapshot files freeze the selected prebuilt Nav2 map bundle used by this run. "
+            "They do not encode movable-object target truth or private scoring data."
+        ),
+    }
+    if source_bundle_dir is not None:
+        payload["source_bundle_root"] = str(source_bundle_dir)
+    return payload
 
 
 def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:

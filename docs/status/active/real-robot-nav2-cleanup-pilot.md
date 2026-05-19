@@ -61,6 +61,14 @@ Last updated: 2026-05-19
 - `assets/maps/molmo-cleanup-default-7/` is a checked-in prebuilt map bundle
   with `map.yaml`, `map.pgm`, `semantics.json`, `profiles/rby1m.yaml`,
   `costmaps/rby1m.costmap_params.yaml`, and `preview.png`.
+- Direct, MCP smoke, and live-agent cleanup entrypoints now accept
+  `--map-bundle-dir` plus `--require-map-bundle`; non-smoke public
+  `just task::run molmo-cleanup ...` profiles default to
+  `assets/maps/molmo-cleanup-default-7` and fail before cleanup startup when
+  the selected bundle is missing or invalid.
+- `RealWorldCleanupContract.metric_map()` and `fixture_hints()` can project
+  from the selected prebuilt bundle, and run finalizers copy that selected
+  bundle into the immutable per-run `map_bundle/` snapshot.
 - Molmo `navigate_to_waypoint` now records `navigation_backend:
   sim_costmap_planner` with route metadata while keeping manipulation
   primitives honestly semantic unless planner-backed evidence is attached.
@@ -117,6 +125,14 @@ Last updated: 2026-05-19
   - report content audit confirmed `Static costmap routes`,
     `sim_costmap_planner`, `Nav2 Map Bundle`, and `map_bundle/map.yaml` render
     in `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html`.
+- Latest selected-bundle runtime gate checks:
+  - `uv sync --extra dev`
+  - `uv run ruff check roboclaws/maps roboclaws/molmo_cleanup/nav2_map_bundle.py roboclaws/molmo_cleanup/realworld_contract.py roboclaws/molmo_cleanup/realworld_mcp_server.py examples/molmo_cleanup/molmospaces_realworld_cleanup.py examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py just tests/contract/maps tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+  - `just --list`
+  - `just task::run molmo-cleanup direct smoke output_dir=output/molmo/nav2-selected-bundle-smoke seed=7 generated_mess_count=5 map_bundle=molmo-cleanup-default-7`
+  - `uv run python scripts/maps/check_bundle.py output/molmo/nav2-selected-bundle-smoke/0519_1728/seed-7/map_bundle`
+  - `uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/molmo/nav2-selected-bundle-smoke/0519_1728 --expect-backend api_semantic_synthetic --expect-policy deterministic_sweep_baseline --expect-profile smoke --expect-seeds 7 --min-generated-mess-count 5 --require-advisory-scoring --min-restored-count 5 --min-sweep-coverage 1.0 --require-waypoint-honesty --require-real-robot-alignment`
 - Latest focused checks for the CI launcher fixes:
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
@@ -161,9 +177,9 @@ Objective requirements mapped to current evidence:
 | Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
-| Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers snapshot `map_bundle/`; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
+| Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
 | Add Nav2 nav maps to report file | `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, runtime gap notes, and `Static costmap routes`. | Verified on deterministic report |
-| Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-package-smoke/0519_1700` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
+| Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-selected-bundle-smoke/0519_1728` passed checker with restored `5/5`, sweep coverage `1.0`, selected bundle projection, and run-local selected bundle snapshot. | Verified for deterministic smoke |
 | Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 
