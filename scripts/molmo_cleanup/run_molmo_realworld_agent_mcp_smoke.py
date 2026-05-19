@@ -12,7 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
@@ -99,10 +99,10 @@ def run_smoke(
             generated_mess_count=generated_mess_count,
         )
         scenario = backend_instance.scenario
-        base_contract = MolmoCleanupToolContract(scenario, backend=backend_instance)
+        base_contract = CleanupBackendSession(scenario, backend=backend_instance)
     else:
         scenario = build_cleanup_scenario(seed=seed)
-        base_contract = MolmoCleanupToolContract(scenario)
+        base_contract = CleanupBackendSession(scenario)
 
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=output_dir,
@@ -174,7 +174,6 @@ def _clean_handle(server: Any, *, handle: str, fixture: dict[str, Any]) -> None:
         contract=_RealWorldMcpLoop(server),
         call_tool=_invoke_shared_loop_tool,
         target_request_key="fixture_id",
-        include_object_done=False,
         include_object_id_in_receptacle_request=False,
         include_object_id_in_target_requests=False,
     )

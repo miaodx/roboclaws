@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
     validate_cleanup_primitive_evidence,
 )
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
     planner_cleanup_bridge_evidence,
     validate_planner_cleanup_bridge_evidence,
@@ -99,7 +99,7 @@ def test_probe_backed_executor_rejects_target_mismatch() -> None:
 def test_probe_backed_executor_drives_shared_loop_when_bound_to_cleanup_target() -> None:
     scenario = build_cleanup_scenario(seed=7)
     receptacles = _receptacles_by_id(scenario)
-    base_contract = MolmoCleanupToolContract(scenario)
+    base_contract = CleanupBackendSession(scenario)
     probe_executor = ProbeBackedCleanupPrimitiveExecutor(
         _attachment(
             binding={

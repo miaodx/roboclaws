@@ -141,9 +141,10 @@ Privileged tools:
 - `scene_objects` is an AI2-THOR object-inventory oracle.
 - `goto` is a target-relative teleport-style helper.
 
-Those tools remain available on the demo server because they make photo tasks
-and harness iterations efficient. They are not presented as real robot
-perception or real robot navigation capabilities.
+Those tools are disabled on the default server surface. A photo/demo launcher
+must opt in explicitly when it needs the AI2-THOR inventory oracle or
+target-relative teleport helper. They are not presented as real robot perception
+or real robot navigation capabilities.
 
 ### `molmospaces_cleanup_v1`
 
@@ -182,11 +183,13 @@ whole-goal tools like `cleanup_room()`.
 This keeps behavior inspectable: the report can show the steps the agent or
 skill chose instead of hiding the work behind one tool call.
 
-### Keep Existing Servers Stable
+### Prefer Forward-Only Cleanup
 
-The profile/router layer is additive. Existing servers, command recipes, and
-reports continue to work. Profiles give us a cleaner way to describe and later
-route selected tool surfaces.
+Profiles define the current public surface. When a profile replaces an older
+server, recipe, or skill shape, update in-repo callers and remove the stale
+surface instead of keeping compatibility shims. Historical report rendering can
+keep reading archived artifacts, but active MCP and skill entrypoints should
+live at the current profile head.
 
 ## How a Request Flows
 
@@ -199,10 +202,10 @@ Open-ended goal
   -> trace/report/eval feeds skill maintenance
 ```
 
-For AI2-THOR photo tasks, a skill may still tell the agent to use
-`scene_objects` and `goto` when the goal is an efficient demo artifact. The
-semantic profile still records that these are privileged tools, not general
-robot capabilities.
+For AI2-THOR photo tasks, the `capture-object-photo` skill may use
+`scene_objects` and `goto` only when the launcher has enabled privileged
+helpers. The semantic profile still records that these are privileged tools,
+not general robot capabilities.
 
 For Molmo cleanup, the profile keeps the public cleanup surface separate from
 private scoring and planner proof evidence. A clean report can therefore be
@@ -238,6 +241,7 @@ describe what public robot capabilities the agent is allowed to rely on.
 | Skill library convention | `skills/README.md` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Photo capture skill | `skills/capture-object-photo/SKILL.md` |
+| ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
 | Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
 | Skill-first hero diagram | `docs/human/skill-first-robotics.svg` |

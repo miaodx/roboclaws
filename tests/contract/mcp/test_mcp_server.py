@@ -150,17 +150,17 @@ def _fastmcp_tool_names(server: RoboclawsMCPServer) -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_registered_tools_match_ai2thor_profile_with_privileged_demo_tools(
+def test_default_registered_tools_match_canonical_ai2thor_profile(
     server: RoboclawsMCPServer,
 ) -> None:
     profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
-    expected = set(profile.public_tool_names()) | set(profile.privileged_tool_names())
+    expected = set(profile.public_tool_names())
 
     assert _fastmcp_tool_names(server) == expected
     assert set(server.registered_tool_names) == expected
 
 
-def test_canonical_only_mode_excludes_privileged_ai2thor_tools(
+def test_privileged_demo_mode_must_be_explicit(
     engine: FakeEngine,
     tmp_path: Path,
 ) -> None:
@@ -169,17 +169,21 @@ def test_canonical_only_mode_excludes_privileged_ai2thor_tools(
         agent_id=0,
         run_dir=tmp_path,
         port=0,
-        allow_privileged_tools=False,
+        allow_privileged_tools=True,
     )
     try:
         profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
+        expected = set(profile.public_tool_names()) | set(profile.privileged_tool_names())
 
-        assert _fastmcp_tool_names(srv) == set(profile.public_tool_names())
-        assert set(srv.registered_tool_names) == set(profile.public_tool_names())
-        with pytest.raises(ValueError, match="privileged"):
-            srv.call_tool("goto", object_id="Chair|1")
+        assert _fastmcp_tool_names(srv) == expected
+        assert set(srv.registered_tool_names) == expected
     finally:
         srv.close()
+
+
+def test_default_mode_excludes_privileged_ai2thor_tools(server: RoboclawsMCPServer) -> None:
+    with pytest.raises(ValueError, match="privileged"):
+        server.call_tool("goto", object_id="Chair|1")
 
 
 def test_observe_returns_state_text_plus_three_images(
@@ -392,6 +396,7 @@ def test_call_tool_exposes_mcp_facing_navigation_contracts(
         run_dir=tmp_path / "run",
         port=0,
         snapshots_dir=snap_dir,
+        allow_privileged_tools=True,
     )
     try:
         observe_result = srv.call_tool("observe")

@@ -11,12 +11,6 @@
 # - just verify::local-sim         real AI2-THOR regression harness
 # - just verify::local-openclaw    real OpenClaw/Gateway regression harness
 # - just verify::navigator <task>  coding-agent navigator harness
-# - just verify::molmo-cleanup     MolmoSpaces cleanup contract + harness
-# - just verify::molmo-prompt-cleanup  prompt-driven public cleanup proof
-# - just verify::molmo-real-cleanup    real MolmoSpaces/MuJoCo cleanup proof
-# - just verify::molmo-robot-visual    real MolmoSpaces/RBY1M visual proof
-# - just verify::molmo-agent-bridge    current-contract Molmo MCP bridge proof
-# - just verify::molmo-agent-bridge-visual  current-contract MCP bridge visual proof
 # - just verify::molmo-realworld-cleanup  ADR-0003 public/private cleanup proof
 # - just verify::molmo-realworld-agent-mcp  ADR-0003 MCP smoke-agent proof
 # - just verify::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit proof
@@ -76,86 +70,6 @@ local-openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock
 # L6: coding-agent navigator harness.
 navigator task cap="900":
     just harness::navigator "{{task}}" "{{cap}}"
-
-# Focused MolmoSpaces cleanup pilot gate.
-molmo-cleanup:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_scenario.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_scoring.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_backend.py \
-      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_contract.py \
-      tests/contract/reports/test_molmo_cleanup_report.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-cleanup
-
-# Prompt-driven public-policy MolmoSpaces cleanup gate.
-molmo-prompt-cleanup:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-prompt-cleanup
-
-# Real upstream MolmoSpaces/MuJoCo prompt-cleanup gate. Requires the repo-local
-# uv MolmoSpaces runtime; set ROBOCLAWS_MOLMOSPACES_PYTHON only for overrides.
-molmo-real-cleanup:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-real-cleanup
-
-# Real upstream MolmoSpaces/MuJoCo robot visual gate. Requires the repo-local
-# uv MolmoSpaces runtime and local robot assets.
-molmo-robot-visual:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_demo.py \
-      tests/contract/reports/test_molmo_cleanup_report.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-robot-visual
-
-# Current-contract Molmo MCP bridge gate. Real Codex/Claude/OpenClaw dogfood is
-# local-operator evidence; this focused gate proves the server, skill, reports,
-# checker, and rule-based comparison stay wired.
-molmo-agent-bridge:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_server.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_agent_server.py \
-      tests/contract/checkers/test_check_molmo_agent_bridge_result.py \
-      tests/contract/molmo_cleanup/test_molmo_mcp_smoke_shared_semantic_loop.py \
-      tests/contract/reports/test_molmo_cleanup_report.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-agent-bridge
-
-# Current-contract Molmo MCP bridge visual gate. Requires the isolated Python
-# 3.11 MolmoSpaces runtime and local robot assets.
-molmo-agent-bridge-visual:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{standalone_pytest}} -q \
-      tests/contract/molmo_cleanup/test_molmo_cleanup_mcp_server.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_agent_server.py \
-      tests/contract/checkers/test_check_molmo_agent_bridge_result.py \
-      tests/contract/reports/test_molmo_cleanup_report.py \
-      tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py \
-      tests/contract/dev_tools/test_verify_just_recipes.py
-    just harness::molmo-agent-bridge-visual
 
 # ADR-0003 public/private cleanup gate. Requires the repo-local uv MolmoSpaces
 # runtime for the harness; focused tests use the synthetic backend.

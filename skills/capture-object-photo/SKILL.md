@@ -20,7 +20,10 @@ The skill runs over `ai2thor_navigation_v1`:
 
 Use the privileged helpers when the goal is an efficient AI2-THOR demo or
 harness run. Do not describe them as real-robot perception or real-robot
-navigation.
+navigation. This skill requires a launcher that explicitly enabled privileged
+tools. If `roboclaws__scene_objects` or `roboclaws__goto` is missing from the
+tool schema, stop and ask the operator to rerun the photo/demo task with the
+privileged helper surface enabled.
 
 ## Model Sanity Check
 

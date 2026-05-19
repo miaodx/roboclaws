@@ -81,8 +81,6 @@ Molmo cleanup profiles:
 - `smoke` for cheap synthetic contract iteration.
 - `camera-raw` for raw camera input evidence.
 - `camera-labels` for camera-derived structured candidates.
-- Compatibility aliases preserve the older report vocabulary:
-  `visual` means `world-labels`, and `minimal` means `smoke`.
 
 `agent::*` public recipes:
 

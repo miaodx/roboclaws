@@ -38,6 +38,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--host", default=_DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=_DEFAULT_PORT)
     parser.add_argument("--output-dir", type=Path, default=None)
+    parser.add_argument(
+        "--allow-privileged-tools",
+        action="store_true",
+        help="Opt into AI2-THOR demo helpers such as scene_objects and goto.",
+    )
     return parser.parse_args(argv)
 
 
@@ -72,7 +77,10 @@ def _print_setup(output_dir: Path, snapshots_dir: Path, url: str) -> None:
     print(f"  {commands['Claude Code']}")
     print("\nThen start Codex or Claude Code and ask it to drive the robot, for example:")
     print("  Read skills/ai2thor-navigator/SKILL.md, then use roboclaws__observe first.")
-    print("  For photo tasks, also read skills/capture-object-photo/SKILL.md.")
+    print(
+        "  For photo tasks, restart this server with --allow-privileged-tools and "
+        "read skills/capture-object-photo/SKILL.md."
+    )
     print("  麻烦给这个屋子里面的每个沙发以及椅子拍个照片...")
     print("\nThis server exits when the agent calls roboclaws__done or you press Ctrl-C.\n")
     sys.stdout.flush()
@@ -86,6 +94,7 @@ def run_coding_agent_nav_server(
     port: int = _DEFAULT_PORT,
     poll_interval_s: float = 0.25,
     print_setup: bool = True,
+    allow_privileged_tools: bool = False,
 ) -> dict[str, Any]:
     """Start the direct MCP server and block until done or Ctrl-C."""
     lifecycle = NavigationRunLifecycle(
@@ -113,6 +122,7 @@ def run_coding_agent_nav_server(
             host=host,
             port=port,
             snapshots_dir=snapshots_dir,
+            allow_privileged_tools=allow_privileged_tools,
         )
         mcp_server.run_in_thread()
         mcp_server.write_runtime_event(
@@ -164,6 +174,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=output_dir,
             host=args.host,
             port=args.port,
+            allow_privileged_tools=args.allow_privileged_tools,
         )
     except Exception as exc:
         print(f"coding-agent nav server failed: {exc}", file=sys.stderr)

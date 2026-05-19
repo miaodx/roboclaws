@@ -115,8 +115,9 @@ under the Gateway's agent framework in its default config.
 Phase 2.6 added an MCP tool surface — the autonomous-loop agent reaches the
 AI2-THOR engine through first-class `roboclaws__*` MCP tools over
 streamable-http, not via the Phase 2.5 `exec`-and-`curl` contract. The current
-host server exposes `observe`, `observe_archived`, `move`, `scene_objects`,
-`goto`, and `done`. The Gateway's MCP loader lives at
+host server exposes canonical `observe`, `observe_archived`, `move`, and
+`done` tools by default. Photo/demo launchers can explicitly opt into
+privileged `scene_objects` and `goto` helpers. The Gateway's MCP loader lives at
 `/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (originally probed on an
 older content-hash; re-grep the bundle on the current image) and
 expects this exact shape under `mcp.servers.<name>`:
@@ -162,9 +163,9 @@ accepts exactly three values: `"minimal"`, `"coding"`, or `"messaging"`
 
 - `minimal` — `session_status` + `update_plan` only, plus whatever MCP
   servers expose. No `exec`, no `read`/`write`, no generic `image`, no
-  `browser`, no `web_fetch`. Phase 2.6 uses this profile; the old live probe
-  saw the then-current three Roboclaws MCP tools, while the current host server
-  adds `observe_archived`, `scene_objects`, and `goto`.
+  `browser`, no `web_fetch`. Phase 2.6 uses this profile; the current default
+  Roboclaws MCP surface is canonical-only, with privileged helpers added only
+  by explicit launcher opt-in.
 - `coding` — the default if `tools` is unset. ~25 tools including the
   escape hatches (`exec`, fs, `image`, `browser`). Correct for general agent
   work; wrong for autonomous AI2-THOR navigation — Phase 2.5 proved the

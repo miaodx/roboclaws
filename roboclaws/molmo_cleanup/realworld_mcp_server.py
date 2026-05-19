@@ -13,13 +13,13 @@ from mcp.server.fastmcp import FastMCP
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
@@ -65,7 +65,7 @@ def make_molmo_realworld_cleanup_mcp(
     *,
     run_dir: Path,
     scenario: CleanupScenario | None = None,
-    base_contract: MolmoCleanupToolContract | None = None,
+    base_contract: CleanupBackendSession | None = None,
     contract: RealWorldCleanupContract | None = None,
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
@@ -104,7 +104,7 @@ class RealWorldMolmoCleanupMCPServer:
         *,
         run_dir: Path,
         scenario: CleanupScenario | None = None,
-        base_contract: MolmoCleanupToolContract | None = None,
+        base_contract: CleanupBackendSession | None = None,
         contract: RealWorldCleanupContract | None = None,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
@@ -126,7 +126,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.policy_uses_private_truth = False
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
-            base_contract = base_contract or MolmoCleanupToolContract(scenario)
+            base_contract = base_contract or CleanupBackendSession(scenario)
             contract = RealWorldCleanupContract(
                 base_contract,
                 task_prompt=task_prompt,

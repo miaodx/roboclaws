@@ -57,8 +57,9 @@ model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
 capability catalog:
 
 - `mimo-v2.5-pro` and `mimo-v2.5` are text-only. They should use
-  `scene_objects`, `goto`, and `observe_archived` for photo evidence, or a
-  configured vision bridge for ordinary navigation observations.
+  `observe_archived` for photo evidence or a configured vision bridge for
+  ordinary navigation observations. `scene_objects` and `goto` are available
+  only when the server is started with privileged helpers enabled.
 - `mimo-v2-omni` is the MiMo image-capable route and can receive raw
   `observe` images.
 - `kimi-k2.6` is image-capable, but the Claude Code Kimi coding endpoint has
@@ -140,11 +141,12 @@ python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
 - Semantic contract profile: `ai2thor_navigation_v1` describes this server as
   an AI2-THOR navigation profile. Its canonical public capability tools are
   `observe`, `observe_archived`, `move`, and `done`.
-- Privileged tools: `scene_objects` and `goto` remain available on this
-  AI2-THOR demo server for photo tasks and harness iteration, but they are
-  privileged simulator helpers. They are excluded from the canonical profile
-  metadata and must not be described as real-robot perception or navigation
-  capabilities.
+- Privileged tools: `scene_objects` and `goto` are not part of the default
+  server surface. Start `examples/mcp/coding_agent_nav_server.py` with
+  `--allow-privileged-tools` only for photo tasks or harness iteration that
+  intentionally needs simulator helpers. They are excluded from the canonical
+  profile metadata and must not be described as real-robot perception or
+  navigation capabilities.
 - `observe(label="...")` is the framing-and-archive action; the cheaper
   `observe_archived(label="...")` captures without inlining images when
   this turn does not need to see pixels.

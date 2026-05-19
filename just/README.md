@@ -51,8 +51,6 @@ Molmo cleanup profiles:
 - `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
 - `camera-labels` registers structured candidates from camera observations.
-- Compatibility aliases from the older report vocabulary are still accepted:
-  `minimal` maps to `smoke`, and `visual` maps to `world-labels`.
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
 omitted and keeps the task default (`visual` for non-Molmo tasks,
@@ -113,9 +111,9 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the molmospace cleanup task with codex" | `just task::run molmo-cleanup codex world-labels` |
-| "run the molmospace cleanup task with codex with smoke profile" | `just task::run molmo-cleanup codex smoke` |
-| "run the molmospace cleanup camera raw profile" | `just task::run molmo-cleanup direct camera-raw` |
+| "run the MolmoSpaces cleanup task with codex" | `just task::run molmo-cleanup codex world-labels` |
+| "run the MolmoSpaces cleanup task with codex with smoke profile" | `just task::run molmo-cleanup codex smoke` |
+| "run the MolmoSpaces cleanup camera raw profile" | `just task::run molmo-cleanup direct camera-raw` |
 | "run the ai2thor nav task with openclaw" | `just task::run ai2thor-nav openclaw visual` |
 
 ## Maintainer Dispatch

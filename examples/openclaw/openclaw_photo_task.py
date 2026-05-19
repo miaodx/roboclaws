@@ -111,6 +111,7 @@ def main() -> None:
         output_dir=output_dir,
         skip_bootstrap=args.skip_bootstrap,
         kickoff_prompt_builder=photo_task_kickoff_prompt,
+        allow_privileged_tools=True,
     )
     print(f"terminated_by: {result['terminated_by']}")
     print(f"wallclock_s: {result['wallclock_s']:.1f}")

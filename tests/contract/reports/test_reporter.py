@@ -136,8 +136,8 @@ def _write_molmo_cleanup_artifact(run_dir: Path) -> Path:
     run_result = {
         "backend": "molmospaces_subprocess",
         "cleanup_status": "success",
-        "contract": "current_contract",
-        "mcp_server": "molmo_cleanup",
+        "contract": "realworld_cleanup_v1",
+        "mcp_server": "molmo_cleanup_realworld",
         "primitive_provenance": "api_semantic",
         "scenario_id": "report_router_scenario",
         "score": {
