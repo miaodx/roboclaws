@@ -1,0 +1,638 @@
+{
+  "captured_at": "2026-05-19T09:05:48.889270+00:00",
+  "source_page": "https://support.agibot.com/?gdk_version=2.6.3#contents/reference/Python/robot.md",
+  "remote_base": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs",
+  "gdk_version": "2.6.3",
+  "docs_count": 43,
+  "asset_count": 0,
+  "documents": [
+    {
+      "index": "index.md",
+      "title": "主页",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/index.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/index.md"
+    },
+    {
+      "index": "contents/getting-started/quick-start.md",
+      "title": "概览",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start.md"
+    },
+    {
+      "index": "contents/getting-started/quick-start/cpp.md",
+      "title": "C++",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/cpp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/cpp.md"
+    },
+    {
+      "index": "contents/getting-started/quick-start/python.md",
+      "title": "Python",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/python.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/python.md"
+    },
+    {
+      "index": "contents/getting-started/quick-start/ros2.md",
+      "title": "ROS",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/ros2.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/ros2.md"
+    },
+    {
+      "index": "contents/concepts/hybrid_deploy.md",
+      "title": "混合部署",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/concepts/hybrid_deploy.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/concepts/hybrid_deploy.md"
+    },
+    {
+      "index": "contents/concepts/transform.md",
+      "title": "TF坐标变换",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/concepts/transform.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/concepts/transform.md"
+    },
+    {
+      "index": "contents/howto/deploy.md",
+      "title": "部署",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/deploy.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/deploy.md"
+    },
+    {
+      "index": "contents/howto/ptp.md",
+      "title": "时间同步",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/ptp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/ptp.md"
+    },
+    {
+      "index": "contents/howto/cpp.md",
+      "title": "C++",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/cpp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/cpp.md"
+    },
+    {
+      "index": "contents/howto/python.md",
+      "title": "python使用",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/python.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/python.md"
+    },
+    {
+      "index": "contents/howto/ros2.md",
+      "title": "ROS2使用",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/ros2.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/ros2.md"
+    },
+    {
+      "index": "contents/tools/mc_example.md",
+      "title": "关节控制工具",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/tools/mc_example.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/tools/mc_example.md"
+    },
+    {
+      "index": "contents/tools/camera_web_viewer.md",
+      "title": "Web相机查看器",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/tools/camera_web_viewer.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/tools/camera_web_viewer.md"
+    },
+    {
+      "index": "contents/reference/Python/common.md",
+      "title": "Common",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/common.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/common.md"
+    },
+    {
+      "index": "contents/reference/Python/types.md",
+      "title": "Types",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/types.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/types.md"
+    },
+    {
+      "index": "contents/reference/Python/tf.md",
+      "title": "TF",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/tf.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/tf.md"
+    },
+    {
+      "index": "contents/reference/Python/robot.md",
+      "title": "Robot",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/robot.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/robot.md"
+    },
+    {
+      "index": "contents/reference/Python/imu.md",
+      "title": "IMU",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/imu.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/imu.md"
+    },
+    {
+      "index": "contents/reference/Python/camera.md",
+      "title": "Camera",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/camera.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/camera.md"
+    },
+    {
+      "index": "contents/reference/Python/lidar.md",
+      "title": "Lidar",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/lidar.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/lidar.md"
+    },
+    {
+      "index": "contents/reference/Python/pnc.md",
+      "title": "PNC",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/pnc.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/pnc.md"
+    },
+    {
+      "index": "contents/reference/Python/slam.md",
+      "title": "SLAM",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/slam.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/slam.md"
+    },
+    {
+      "index": "contents/reference/Python/map.md",
+      "title": "Map",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/map.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/map.md"
+    },
+    {
+      "index": "contents/reference/Python/interaction.md",
+      "title": "Interaction",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/interaction.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/interaction.md"
+    },
+    {
+      "index": "contents/reference/Python/uss.md",
+      "title": "UltrasonicRadar",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/uss.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/uss.md"
+    },
+    {
+      "index": "contents/reference/cpp/common.md",
+      "title": "Common",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/common.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/common.md"
+    },
+    {
+      "index": "contents/reference/cpp/imu.md",
+      "title": "IMU",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/imu.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/imu.md"
+    },
+    {
+      "index": "contents/reference/cpp/camera.md",
+      "title": "Camera",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/camera.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/camera.md"
+    },
+    {
+      "index": "contents/reference/cpp/lidar.md",
+      "title": "Lidar",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/lidar.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/lidar.md"
+    },
+    {
+      "index": "contents/reference/cpp/tf.md",
+      "title": "TF",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/tf.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/tf.md"
+    },
+    {
+      "index": "contents/reference/cpp/robot.md",
+      "title": "Robot",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/robot.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/robot.md"
+    },
+    {
+      "index": "contents/reference/cpp/pnc.md",
+      "title": "PNC",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/pnc.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/pnc.md"
+    },
+    {
+      "index": "contents/reference/cpp/slam.md",
+      "title": "SLAM",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/slam.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/slam.md"
+    },
+    {
+      "index": "contents/reference/cpp/map.md",
+      "title": "Map",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/map.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/map.md"
+    },
+    {
+      "index": "contents/reference/cpp/interaction.md",
+      "title": "Interaction",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/interaction.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/interaction.md"
+    },
+    {
+      "index": "contents/reference/cpp/uss.md",
+      "title": "UltrasonicRadar",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/uss.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/uss.md"
+    },
+    {
+      "index": "contents/reference/ROS2/imu_node.md",
+      "title": "IMU",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/imu_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/imu_node.md"
+    },
+    {
+      "index": "contents/reference/ROS2/camera_node.md",
+      "title": "Camera",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_node.md"
+    },
+    {
+      "index": "contents/reference/ROS2/camera_compress_node.md",
+      "title": "Camera Compress",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_compress_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_compress_node.md"
+    },
+    {
+      "index": "contents/reference/ROS2/lidar_node.md",
+      "title": "Lidar",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/lidar_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/lidar_node.md"
+    },
+    {
+      "index": "contents/reference/ROS2/control_node.md",
+      "title": "Control",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/control_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/control_node.md"
+    },
+    {
+      "index": "contents/appendices/joint_error_code.md",
+      "title": "关节错误码",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/appendices/joint_error_code.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/appendices/joint_error_code.md"
+    }
+  ],
+  "files": [
+    {
+      "kind": "support-page",
+      "source_url": "https://support.agibot.com/?gdk_version=2.6.3",
+      "path": "vendors/agibot/docs/gdk_api_docs/support-page.html",
+      "bytes": 560,
+      "sha256": "d69b85596bea0ae595f698c828fee47a46097c4252a11a834f133a8124a60262",
+      "content_type": "text/html"
+    },
+    {
+      "kind": "global-config",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/globalConfig.json",
+      "path": "vendors/agibot/docs/gdk_api_docs/globalConfig.json",
+      "bytes": 87,
+      "sha256": "956f33dd1c215dd9bebb7baa86dec8cdcc389a3ea99b738e9fe237f30a2918b5",
+      "content_type": "application/json"
+    },
+    {
+      "kind": "version-config",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/config.json",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/config.json",
+      "bytes": 6912,
+      "sha256": "da1dcea5a8c5e05863676270417dec794506b17e0a40a324955077e155f4197e",
+      "content_type": "application/json"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/index.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/index.md",
+      "bytes": 3370,
+      "sha256": "ffad957bdd95e2547b9614f6c86ca3608900d2a093a3f736d0048df5884efd31",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start.md",
+      "bytes": 822,
+      "sha256": "4b513955db0e5ae5676bf3d46c8300c86131e3095abd864a997f10a878781320",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/cpp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/cpp.md",
+      "bytes": 1314,
+      "sha256": "f2467b08f632328b6ef021fb4a10b537e9bc682fa38e08d772712dccd379ab90",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/python.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/python.md",
+      "bytes": 643,
+      "sha256": "551a380a8576b9ee25b23d5e161c88cf665ccea9162f899946cd6d0d87fb9d8c",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/ros2.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/getting-started/quick-start/ros2.md",
+      "bytes": 812,
+      "sha256": "cbf90c806f517cdc75831ab5b9d34e991c446f5f16373ddd9c911625cd5be51b",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/concepts/hybrid_deploy.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/concepts/hybrid_deploy.md",
+      "bytes": 660,
+      "sha256": "a28cb7431b41f86d24eff09d06508aeaea2635790ca16eb649f780b32f5ac56a",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/concepts/transform.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/concepts/transform.md",
+      "bytes": 289,
+      "sha256": "ca4e89a7e211d009765f347aa91331d0ff0e8010eb815b26fc8c4e8c00707b9d",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/deploy.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/deploy.md",
+      "bytes": 1477,
+      "sha256": "1d5cb1f24438b752dee3dae35275ee0db07aa9898cfb82ff9a8a5eaa5744f7d3",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/ptp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/ptp.md",
+      "bytes": 1953,
+      "sha256": "459874d6fe685ab5fe56f6c3d97399704352ed64bfa8376f307799e6cdad6d0c",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/cpp.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/cpp.md",
+      "bytes": 2716,
+      "sha256": "faabdc6482ca671cd73ab761872888f7e4435d4268e2708e82ea07b616f372a9",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/python.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/python.md",
+      "bytes": 1558,
+      "sha256": "28d3fd721c559b5286bf0b113c1cdee48d497d463afb40fc90ba6b2ec58c9db0",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/howto/ros2.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/howto/ros2.md",
+      "bytes": 2703,
+      "sha256": "cb785b1803222b5e880c8dac4e08619b5e029a2a2fb19413df85226cd31daa36",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/tools/mc_example.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/tools/mc_example.md",
+      "bytes": 3988,
+      "sha256": "55064572182294ec99089076cf2f2d82121795b12f5a8b01993b2336d9c3589f",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/tools/camera_web_viewer.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/tools/camera_web_viewer.md",
+      "bytes": 3866,
+      "sha256": "b9bb4aa42995ad3426ff3c3db291880c6bc32a3f898daa04a7aa9c9e41ed7796",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/common.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/common.md",
+      "bytes": 3571,
+      "sha256": "86af0f7f25ef3d7a11721eca151fd1870895e62093a56783c6e6ae4f06decb79",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/types.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/types.md",
+      "bytes": 18387,
+      "sha256": "2fbf79d3960c2f7293e251b428d0d19a93729a443a636b525b0dcd0e9277c425",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/tf.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/tf.md",
+      "bytes": 23506,
+      "sha256": "b6209eab2304ecb3386734407badc23950181309f2980b520cce7e2b32e76e7a",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/robot.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/robot.md",
+      "bytes": 100221,
+      "sha256": "4a5d40568491e6d1c36a7e8f3f268380365ceb0c231dcf234c7dd6cda9704c0a",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/imu.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/imu.md",
+      "bytes": 9057,
+      "sha256": "5096d9628c7ffc30f9ddc78cd180d29680ff1c2e071c8009ca4433687bdc90b6",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/camera.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/camera.md",
+      "bytes": 16698,
+      "sha256": "6abf18df31c90fc531c3c967718c50a4ad9521919c29a5e7160573af807a48de",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/lidar.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/lidar.md",
+      "bytes": 10169,
+      "sha256": "fdca4e9ba14c7bc435797881b2aba611dca643f03982d023c0d60852f7f65715",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/pnc.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/pnc.md",
+      "bytes": 13540,
+      "sha256": "d7b7d52a2adae1fb3204863c4495e028a9c18b92b6217f74c98f4b8f0bfe881e",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/slam.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/slam.md",
+      "bytes": 12002,
+      "sha256": "286a5aeddfd8d2bd6b3f282f398f53e4e9cb7d42f890a2584b81c7791c32df75",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/map.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/map.md",
+      "bytes": 5804,
+      "sha256": "8e93c91c72972ce745f6478301d20eaa6976ccc65afc8c5cbc349bb27ff0c48e",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/interaction.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/interaction.md",
+      "bytes": 14952,
+      "sha256": "a1047fe45b6ec432e40e9b6bb11f8810a8d574b91ef9717645d959ae32df0537",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/Python/uss.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/Python/uss.md",
+      "bytes": 11415,
+      "sha256": "c3a79d07b698729918db8ab9f59ee238f0b1bee5f0c69e21a06c028a560a519a",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/common.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/common.md",
+      "bytes": 4956,
+      "sha256": "d957790c41c9d34fec1978fd2ba4c9901a2adc94f7e5b4dc96dd8552c88f2f50",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/imu.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/imu.md",
+      "bytes": 14298,
+      "sha256": "84263d266e8f41386e9f4ad4b10f93bec1e70581e8f31b3e26e983d846b73609",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/camera.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/camera.md",
+      "bytes": 27037,
+      "sha256": "e16351dcb429c79b0bb3cab8ae76dca6e79151bbf594f53618fc04e4afeed1e7",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/lidar.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/lidar.md",
+      "bytes": 18611,
+      "sha256": "6b096d659ed3ad102a5221221079fab8f40b70fe2ade1c8ca93ecf583e4631b5",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/tf.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/tf.md",
+      "bytes": 22356,
+      "sha256": "a7f438583e9f24a4be80e791cb026dd12d56d53a977d1783ec8fd67988fedf36",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/robot.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/robot.md",
+      "bytes": 125234,
+      "sha256": "0fad03dbf2304acd099c6b1aa15425ecb1be643aecd31c3c8a3866128e3df6f1",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/pnc.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/pnc.md",
+      "bytes": 19430,
+      "sha256": "1ecb535b6e310dc87ec3ce6e12e6154af9625021be70617b8962279b81cfbc1e",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/slam.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/slam.md",
+      "bytes": 18625,
+      "sha256": "dca3ed1036b5180478397c19847acf098d0d43b9b3bf2889acaa7227b1375873",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/map.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/map.md",
+      "bytes": 8324,
+      "sha256": "355b7a0da541e481ae489fb1c3a246d7d6df723d6685660a968a7a272529c8d3",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/interaction.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/interaction.md",
+      "bytes": 22266,
+      "sha256": "c3412d89a70526ced023f38b9aaf79e97bb490a8ee8191bd773c50a421f8982a",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/cpp/uss.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/cpp/uss.md",
+      "bytes": 14091,
+      "sha256": "dd99ce5ccb82d2f5cbce455375c56a9c10f262fcf27925e7c6c02dfd4b50dd52",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/imu_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/imu_node.md",
+      "bytes": 1094,
+      "sha256": "12307d270e939f59a50f1d0940a10d4f8a3ede816555ab98113baf7b9771ceeb",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_node.md",
+      "bytes": 2959,
+      "sha256": "032f69f34782884bf09f1c09860be551bbc364d66f23c41e83401c4e232ab4e1",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_compress_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/camera_compress_node.md",
+      "bytes": 3328,
+      "sha256": "4b96ec0d89f4d9b5d03a50419f1aaf0e6c7e9a86d20773ad33b28ea55d484d97",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/lidar_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/lidar_node.md",
+      "bytes": 1868,
+      "sha256": "cdb723d1ba520c30dd2700bc38a1f7968caf40a21f5337063e4dcd1772a5f7dd",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/control_node.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/reference/ROS2/control_node.md",
+      "bytes": 2306,
+      "sha256": "0e7fe905233dbea8df8491a0811b9a24b83a982e352e1edae4949d48064d7063",
+      "content_type": "text/markdown; charset=utf-8"
+    },
+    {
+      "kind": "markdown",
+      "source_url": "https://genie-data-support-1347244451.oss-cn-shanghai.aliyuncs.com/gdk_api_docs/2.6.3/docs/contents/appendices/joint_error_code.md",
+      "path": "vendors/agibot/docs/gdk_api_docs/2.6.3/docs/contents/appendices/joint_error_code.md",
+      "bytes": 27131,
+      "sha256": "08b65787c9f84167be7a34d29d4607b249408068451b4b2d468aecb56dba6f00",
+      "content_type": "text/markdown; charset=utf-8"
+    }
+  ]
+}
