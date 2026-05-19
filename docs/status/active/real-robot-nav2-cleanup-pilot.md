@@ -47,14 +47,27 @@ Last updated: 2026-05-19
   - `236bbb2` `docs: record official artifact audit`
   - `e5a15cf` `docs: sync nav2 cleanup commit ledger`
   - `4dfda23` `docs: update current nav2 cleanup status`
+  - `31637c4` `feat: add nav2 map bundle contract gate`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
   distance rejection, and blocked manipulation.
+- Reusable Nav2 map bundle logic now lives under `roboclaws/maps/` with bundle
+  writing/validation, metric-map projection, occupancy rasterization, and
+  static costmap route validation.
+- `scripts/maps/export_bundle.py` exports a public `agent_view` into a
+  prebuilt bundle, and `scripts/maps/check_bundle.py` validates required
+  Nav2/cleanup artifacts before agent runtime.
+- `assets/maps/molmo-cleanup-default-7/` is a checked-in prebuilt map bundle
+  with `map.yaml`, `map.pgm`, `semantics.json`, `profiles/rby1m.yaml`,
+  `costmaps/rby1m.costmap_params.yaml`, and `preview.png`.
+- Molmo `navigate_to_waypoint` now records `navigation_backend:
+  sim_costmap_planner` with route metadata while keeping manipulation
+  primitives honestly semantic unless planner-backed evidence is attached.
 - Molmo cleanup finalizers snapshot a Nav2-shaped `map_bundle/` into each run.
 - Cleanup reports render a `Nav2 Map Bundle` section with `map.yaml`,
   `map.pgm`, `semantics.json`, robot profile, costmap params, preview, hashes,
-  and runtime costmap gaps.
+  runtime costmap gaps, and static route-validation readiness.
 - Detached Codex Molmo runs pass selected exported API/proxy environment
   variables into tmux, and the Docker-backed coding-agent wrapper forwards
   proxy variables into Codex.
@@ -82,8 +95,8 @@ Last updated: 2026-05-19
 - Pre-commit fast subset passed on each implementation commit.
 - Focused contract checks passed for skill manifests, semantic profiles,
   Nav2 adapter, cleanup artifacts, and Codex provider wiring.
-- Deterministic regression report:
-  `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html`
+- Latest deterministic map-package smoke:
+  `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html`
 - Detached Codex env propagation check:
   `output/molmo/codex-gpt55-nav2-openai-env-pass-check/0518_2219/seed-7`
   reaches Codex with `openai-responses` and fails on the OpenAI network reset,
@@ -95,6 +108,15 @@ Last updated: 2026-05-19
   `bash -n scripts/dev/coding_agent_env.sh`; `just --list`.
 - Maintainer mock gate: `just agent::verify mock` passes after the broken
   legacy symlink cleanup.
+- Latest focused checks for the map contract slice:
+  - `uv run ruff check roboclaws/maps roboclaws/molmo_cleanup/nav2_map_bundle.py roboclaws/molmo_cleanup/realworld_contract.py roboclaws/molmo_cleanup/report.py scripts/maps tests/contract/maps tests/contract/molmo_cleanup/test_molmo_realworld_contract.py scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+  - `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py -q`
+  - pre-commit fast non-integration pytest subset on `31637c4`
+  - `uv run python scripts/maps/check_bundle.py assets/maps/molmo-cleanup-default-7`
+  - `uv run python scripts/maps/check_bundle.py output/molmo/nav2-map-package-smoke/0519_1700/seed-7/map_bundle`
+  - report content audit confirmed `Static costmap routes`,
+    `sim_costmap_planner`, `Nav2 Map Bundle`, and `map_bundle/map.yaml` render
+    in `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html`.
 - Latest focused checks for the CI launcher fixes:
   - `uv run python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml', encoding='utf-8')); print('yaml ok')"`
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_ci_live_reports.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
@@ -103,14 +125,12 @@ Last updated: 2026-05-19
 
 ```bash
 uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
-  output/molmo/nav2-map-regression/0518_2046 \
+  output/molmo/nav2-map-package-smoke/0519_1700 \
   --expect-backend api_semantic_synthetic \
-  --expect-policy realworld_contract_smoke_agent \
+  --expect-policy deterministic_sweep_baseline \
   --expect-profile smoke \
   --expect-seeds 7 \
   --min-generated-mess-count 5 \
-  --require-agent-driven \
-  --require-clean-agent-run \
   --require-advisory-scoring \
   --min-restored-count 5 \
   --min-sweep-coverage 1.0 \
@@ -118,7 +138,8 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
   --require-real-robot-alignment
 ```
 
-Result: restored `5/5`, sweep coverage `1.0`, Nav2 map bundle present.
+Result: restored `5/5`, sweep coverage `1.0`, Nav2 map bundle present,
+`sim_costmap_planner` route validation present.
 
 Resume audit on 2026-05-18T18:26:51Z:
 
@@ -137,12 +158,12 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
-| Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/molmo_cleanup/nav2_map_bundle.py`; `metric_map()` bundle metadata; direct and MCP finalizers snapshot `map_bundle/`. | Implemented |
-| Add Nav2 nav maps to report file | `output/molmo/nav2-map-regression/0518_2046/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, and runtime gap notes. | Verified on deterministic report |
-| Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-regression/0518_2046` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
+| Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers snapshot `map_bundle/`; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
+| Add Nav2 nav maps to report file | `output/molmo/nav2-map-package-smoke/0519_1700/seed-7/report.html` contains `Nav2 Map Bundle`, `map_bundle/map.yaml`, preview, hashes, runtime gap notes, and `Static costmap routes`. | Verified on deterministic report |
+| Ensure cleanup report has no clear regression | Deterministic smoke `output/molmo/nav2-map-package-smoke/0519_1700` passed checker with restored `5/5` and sweep coverage `1.0`. | Verified for deterministic smoke |
 | Use MolmoSpaces cleanup by official Codex GPT-5.5 as main implementation target | Latest opt-in official CI preflight `26046576875` reaches the official proof preflight, verifies `api.openai.com` is reachable, then fails Docker-backed Codex provider smoke with `401 invalid_api_key`; the Molmo proof step is skipped and no valid proof artifact is uploaded. Earlier local attempts fail on work-network OpenAI reachability or are historical runs without Nav2/no-regression evidence. | Blocked |
 | Commit in scoped chunks | Current branch contains small implementation, fallback, guard, and blocker/audit commits. | Satisfied |
 

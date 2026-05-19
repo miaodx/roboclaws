@@ -11,9 +11,10 @@ Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible, honest, and aligned with future real-robot Nav2 pilots.
 
 The active follow-up is the real-robot Nav2 cleanup pilot on draft PR #112. The
-branch implements the direct Nav2 adapter scaffold, `real_robot_cleanup_v1`
-profile, Nav2 map bundle snapshots, report rendering, checker alignment gates,
-and an opt-in official Codex GPT-5.5 proof route.
+branch implements the reusable Nav2 map bundle package/checker, static
+sim-costmap route validation, the direct Nav2 adapter scaffold,
+`real_robot_cleanup_v1` profile, Nav2 map bundle snapshots, report rendering,
+checker alignment gates, and an opt-in official Codex GPT-5.5 proof route.
 
 ## Next Action
 
