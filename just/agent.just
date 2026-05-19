@@ -223,6 +223,20 @@ run task driver mode="" *overrides:
           "$output_dir" "$max_moves" "$wall_budget" "$scene"
         ;;
 
+      photo-chairs:codex|photo-chairs:claude)
+        scene="$(get scene "$(get photo_scene FloorPlan201)")"
+        host="$(get host 127.0.0.1)"
+        port="$(get port 18788)"
+        case "$driver" in
+          codex)
+            run_just code::codex "$scene" "$host" "$port" photo-chairs capture-object-photo 1
+            ;;
+          claude)
+            run_just code::cc "$scene" "$host" "$port" photo-chairs capture-object-photo 1
+            ;;
+        esac
+        ;;
+
       molmo-cleanup:direct|molmo-cleanup:mcp-smoke|molmo-cleanup:codex|\
       molmo-cleanup:claude|molmo-cleanup:openclaw)
         case "$driver" in

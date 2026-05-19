@@ -58,8 +58,14 @@ def test_client_setup_commands_match_current_http_mcp_cli_syntax() -> None:
     url = "http://127.0.0.1:18788/mcp"
     assert _mcp_url("127.0.0.1", 18788) == url
     assert _client_setup_commands(url) == {
-        "Codex": "codex mcp add roboclaws --url http://127.0.0.1:18788/mcp",
-        "Claude Code": ("claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp"),
+        "Codex": (
+            "scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws "
+            "--url http://127.0.0.1:18788/mcp"
+        ),
+        "Claude Code": (
+            "scripts/dev/coding_agent_docker.sh run claude mcp add --transport http "
+            "roboclaws http://127.0.0.1:18788/mcp"
+        ),
     }
 
 
@@ -90,8 +96,14 @@ def test_run_direct_server_starts_mcp_and_writes_result(
         )
 
     captured = capsys.readouterr().out
-    assert "codex mcp add roboclaws --url http://127.0.0.1:18788/mcp" in captured
-    assert "claude mcp add --transport http roboclaws http://127.0.0.1:18788/mcp" in captured
+    assert (
+        "scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws "
+        "--url http://127.0.0.1:18788/mcp"
+    ) in captured
+    assert (
+        "scripts/dev/coding_agent_docker.sh run claude mcp add --transport http "
+        "roboclaws http://127.0.0.1:18788/mcp"
+    ) in captured
     engine_cls.assert_called_once_with(scene="FloorPlan201", agent_count=1)
     _, mcp_kwargs = mcp_factory.call_args
     assert mcp_kwargs["agent_id"] == 0

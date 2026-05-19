@@ -172,7 +172,8 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
 
     command = captured["command"]
     assert command[:5] == ["claude", "-p", "--verbose", "--output-format", "stream-json"]
-    mcp_config_path = Path(command[command.index("--mcp-config") + 1])
+    assert command[command.index("--mcp-config") + 1] == "/workspace/task/claude-mcp-config.json"
+    mcp_config_path = run_dir / "claude-mcp-config.json"
     mcp_config = json.loads(mcp_config_path.read_text(encoding="utf-8"))
     assert mcp_config == {
         "mcpServers": {

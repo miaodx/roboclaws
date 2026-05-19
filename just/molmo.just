@@ -155,14 +155,6 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         elif [[ "$driver" == "claude-live" ]]; then
           roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"
         fi
-        if [[ "$driver" == "codex-live" ]] && ! command -v codex >/dev/null 2>&1; then
-          echo "error: codex command not found; install or activate Codex before running molmo::codex-report" >&2
-          exit 1
-        fi
-        if [[ "$driver" == "claude-live" ]] && ! command -v claude >/dev/null 2>&1; then
-          echo "error: claude command not found; install or activate Claude Code before running molmo::claude-report" >&2
-          exit 1
-        fi
         codex_model=""
         codex_profile_summary="system defaults"
         claude_profile_summary="system defaults"
@@ -177,8 +169,19 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CLAUDE_PROVIDER ROBOCLAWS_CLAUDE_MODEL)"
           roboclaws_claude_provider_args claude_model_args claude_env_args
         fi
-        codex_bin="$(command -v codex || true)"
-        claude_bin="$(command -v claude || true)"
+        codex_bin=""
+        claude_bin=""
+        if [[ "$driver" == "codex-live" || "$driver" == "claude-live" ]]; then
+          scripts/dev/coding_agent_docker.sh ensure
+          docker_shim_dir=".tmp/coding-agent-bin"
+          scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir" >/dev/null
+          codex_bin="$PWD/${docker_shim_dir}/codex"
+          claude_bin="$PWD/${docker_shim_dir}/claude"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-molmo-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
+        fi
         case "$profile" in
           camera-raw)
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call roboclaws__navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), target_fixture_id, evidence_note, and image_region before pick. Do not pre-register raw-FPV candidates with roboclaws__declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
@@ -390,36 +393,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           exit 1
         fi
 
-        case "$driver" in
-          claude-live)
-            claude mcp remove roboclaws >/dev/null 2>&1 || true
-            claude mcp add --transport http roboclaws "$client_url"
-            echo "==> launching Claude Code with full permissions"
-            if [[ "$claude_profile_summary" != "system defaults" ]]; then
-              echo "==> Claude Code provider for this run: ${claude_profile_summary}"
-            fi
-            echo "==> MCP URL: ${client_url}"
-            echo "==> kickoff: ${kickoff_prompt}"
-            claude_command=("$claude_bin" "${claude_model_args[@]}" {{claude_full_permission_args}})
-            if [[ "${#claude_env_args[@]}" -gt 0 ]]; then
-              (
-                for entry in "${claude_env_args[@]}"; do
-                  export "$entry"
-                done
-                "${claude_command[@]}"
-              )
-            else
-              "${claude_command[@]}"
-            fi
-            ;;
-          openclaw-live)
-            echo "==> launching OpenClaw Gateway chat with cleanup skill"
-            echo "==> MCP URL from Gateway container: ${client_url}"
-            SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup" \
-              ROBOCLAWS_MCP_URL="$client_url" \
-              just chat::run
-            ;;
-        esac
+        echo "==> launching OpenClaw Gateway chat with cleanup skill"
+        echo "==> MCP URL from Gateway container: ${client_url}"
+        SKILLS_DIR="$PWD/skills/molmo-realworld-cleanup" \
+          ROBOCLAWS_MCP_URL="$client_url" \
+          just chat::run
 
         echo "==> waiting for cleanup MCP server to finish after agent done"
         wait "$server_pid"

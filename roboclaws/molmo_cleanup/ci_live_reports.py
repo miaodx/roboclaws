@@ -166,6 +166,7 @@ def _write_diagnostic_index(seed_dir: Path) -> Path:
     common_files = (
         "live_status.json",
         "claude-command.txt",
+        "claude-version.txt",
         "claude-events.jsonl",
         "claude.stderr.log",
         "checker.log",

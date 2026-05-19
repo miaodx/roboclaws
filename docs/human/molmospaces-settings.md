@@ -149,15 +149,31 @@ ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
 ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
 ```
 
-`system` leaves the system CLI defaults unchanged. Kimi/MiMo profiles select
-model, base URL, API-key env var, protocol, and `CLAUDE_CODE_SIMPLE=1` for the
-launched process only.
+`system` means the pinned container uses its configured auth/provider state.
+Kimi/MiMo profiles select model, base URL, API-key env var, protocol, and
+`CLAUDE_CODE_SIMPLE=1` for the launched process only. Bare system CLIs are
+outside the supported path unless a human explicitly asks for a debugging run.
 `ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
 shared fallbacks. Before a long Codex visual cleanup run, use:
 
 ```bash
 just code::codex-provider-smoke
 ```
+
+CI and local public live-agent recipes support Codex / Claude only through the
+pinned coding-agent Docker toolchain. Use the same provider settings when
+comparing Kimi/MiMo results across machines:
+
+```bash
+ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic \
+ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni \
+just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
+```
+
+Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
+For GPT/OpenAI Codex runs that should use the developer's normal Codex login,
+add `ROBOCLAWS_CODE_AGENT_DOCKER_USE_HOST_CODEX_HOME=1`; that mounts host
+`~/.codex` into the pinned container without mounting the whole home directory.
 
 `codex-live` is detached by default. `just molmo::codex-report` starts a tmux
 session that owns the cleanup MCP server, `codex exec`, logs, checker, and

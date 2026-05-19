@@ -48,7 +48,7 @@ harness/run-next.sh ──── auto-numbers next run_id ───┐
                        │                      server.log              trace.jsonl
                        │                                              snapshots/agent-0/
                        ▼
-                claude --dangerously-skip-permissions
+                Docker-backed Claude Code with bypass permissions
                        │ (sends tool calls via MCP)
                        ▼
                 roboclaws MCP server
