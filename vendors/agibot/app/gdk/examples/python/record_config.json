@@ -1,0 +1,11 @@
+[
+    {
+        "name": "/hal/joint_state"
+    },
+    {
+        "name": "/hal/joint_cmd"
+    },
+    {
+        "name": "/wbc/joint_control_low_delay"
+    }
+]
