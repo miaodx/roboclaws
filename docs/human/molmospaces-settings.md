@@ -138,38 +138,32 @@ Convenience report recipes:
 | `just molmo::claude-report` | `claude-live world-labels` | Live Claude Code agent report. |
 | `just molmo::openclaw-report` | `openclaw-live world-labels` | Live OpenClaw Gateway report. |
 
-For live Codex / Claude reports, optional repo-local `.env` provider overrides
-are honored the same way as the direct navigation demos:
+For live Codex / Claude reports, repo-local `.env` keys are honored the same
+way as the direct navigation demos. Normal users configure keys only; command
+shape controls behavior.
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=codex-env
-ROBOCLAWS_CODEX_MODEL=gpt-5.5
 CODEX_BASE_URL=https://example.internal/v1
 CODEX_API_KEY=...
-
-ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic
-ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6
+MIMO_TP_KEY=...
+KIMI_API_KEY=...
 ```
 
-Codex repo workflows use `codex-env`, which selects model, base URL, API-key
-env var, and Responses protocol through per-invocation config. Claude Kimi/MiMo
-profiles select model, base URL, API-key env var, protocol, and
-`CLAUDE_CODE_SIMPLE=1` for the launched process only. Bare system CLIs are
-outside the supported path unless a human explicitly asks for a debugging run.
-`ROBOCLAWS_CODE_AGENT_PROVIDER` and `ROBOCLAWS_CODE_AGENT_MODEL` can be used as
-shared fallbacks. Before a long Codex visual cleanup run, use:
+Codex repo workflows infer the endpoint from `CODEX_BASE_URL` and
+`CODEX_API_KEY`. Claude Code prefers MiMo when `MIMO_TP_KEY` is present, then
+Kimi when `KIMI_API_KEY` is present. Bare system CLIs are outside the supported
+path unless a human explicitly asks for a debugging run. Before a long Codex
+visual cleanup run, use:
 
 ```bash
 just code::codex-provider-smoke
 ```
 
 CI and local public live-agent recipes support Codex / Claude only through the
-pinned coding-agent Docker toolchain. Use the same provider settings when
-comparing Kimi/MiMo results across machines:
+pinned coding-agent Docker toolchain. Use the same key set when comparing
+Kimi/MiMo results across machines:
 
 ```bash
-ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic \
-ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni \
 just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
 ```
 
@@ -263,10 +257,9 @@ just molmo::openclaw-report
 ```
 
 `openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
-on the work network only when using the system Claude Code provider; it may run
-there with `ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
-`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`. Run `just dev::network-status` first
-if you are unsure which network you are on.
+on the work network unless the repo-local `.env` contains a supported MiMo or
+Kimi key. Run `just dev::network-status` first if you are unsure which network
+you are on.
 
 Planner proof-bundle dry run:
 

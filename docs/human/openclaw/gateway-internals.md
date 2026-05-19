@@ -25,6 +25,35 @@ will want on hand. Keeps you from re-spelunking `/app/dist/` every time.
   logs `Error: Unknown model: <id>` + `model_not_found` and `/v1/chat/completions`
   surfaces a failover error.
 
+## Bootstrap maintainer overrides
+
+The human quick start intentionally hides bootstrap knobs. Maintainers touching
+`scripts/openclaw/openclaw-bootstrap.sh` may still need the internal contract:
+
+| Var | Default | Notes |
+| --- | --- | --- |
+| `PROVIDER` | `nvidia` if an NVIDIA key is set, else `mimo` if a MiMo key is set, else `kimi` | Curated provider selector for bootstrap debugging. |
+| `KIMI_PROVIDER_MODE` | `custom` | Kimi only: repo custom provider or stock Gateway plugin path. |
+| `AGENTS` | `2` | Number of named agents (`1..8`). |
+| `AGENT_PREFIX` | `agent-` | Must match the demo agent prefix. |
+| `AGENT_SOULS` | empty | CSV or sparse dict of soul names from `skills/ai2thor-navigator/souls`. |
+| `SOULS_DIR` | `skills/ai2thor-navigator/souls` | Directory containing `<name>.md` SOUL files. |
+| `PERSONALITY_PROBE` | `1` | Set to `0` only when intentionally skipping divergence checks. |
+| `IMAGE` | `OPENCLAW_IMAGE_DEFAULT` from `scripts/openclaw/openclaw-defaults.env` | Pinned Gateway image under test. |
+| `MODEL` | per-provider default | Explicit Gateway model override in `<provider>/<model-id>` form. |
+| `IMAGE_MODEL` | same as `MODEL` | Vision model for OpenClaw's generic image tool. |
+| `READY_TIMEOUT` | `180` | Seconds to wait for `/readyz`. |
+| `HOST_IP` | `127.0.0.1` | Gateway port remains localhost-only by default. |
+| `PORT` | `18789` | Gateway HTTP port. |
+| `CONTAINER` | `openclaw-gateway` | Docker container name. |
+| `VOLUME` | `openclaw-gateway-config` | Docker volume holding config and state. |
+
+The curated bootstrap model list is deliberately narrow. Navigation turns may
+send multiple images, so direct-vision models must be multi-image-capable and
+must cooperate with the Gateway tool-bearing agent framework. Re-enable broader
+models only by updating the bootstrap curation and
+`tests/contract/openclaw/test_openclaw_bootstrap.py` together.
+
 ## Provider plugin manifests
 
 - `/app/dist/extensions/<plugin-id>/openclaw.plugin.json` declares:

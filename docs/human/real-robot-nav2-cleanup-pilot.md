@@ -77,28 +77,14 @@ For a live Codex cleanup rehearsal with the supported Docker runtime, set
 `CODEX_BASE_URL` and `CODEX_API_KEY` in the repo-local `.env`, then run:
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=codex-env \
-ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
-If the local network resets Codex Responses websocket connections, keep the
-same repo-local Codex provider and switch only the transport:
+For an official OpenAI API proof, use the same Codex path: set
+`CODEX_BASE_URL=https://api.openai.com/v1` and put the official OpenAI key in
+`CODEX_API_KEY`.
 
 ```bash
-ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1 \
-ROBOCLAWS_CODEX_PROVIDER=codex-env \
-ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
-just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
-```
-
-On networks that still reset the built-in Codex system provider before the
-first MCP tool call, use the official OpenAI API provider profile if an
-`OPENAI_API_KEY` is available and `api.openai.com` is reachable:
-
-```bash
-ROBOCLAWS_CODEX_PROVIDER=openai-responses \
-ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
@@ -106,8 +92,6 @@ For the official GPT-5.5 Nav2 acceptance proof, write to a stable proof root
 and use the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-ROBOCLAWS_CODEX_PROVIDER=openai-responses \
-ROBOCLAWS_CODEX_MODEL=gpt-5.5 \
 just task::run molmo-cleanup codex world-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \

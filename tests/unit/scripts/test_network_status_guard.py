@@ -89,7 +89,7 @@ def test_claude_provider_guard_blocks_system_provider_on_work_network(tmp_path: 
 
 def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CLAUDE_PROVIDER"] = "kimi-anthropic"
+    env["KIMI_API_KEY"] = "fake-kimi-key"
 
     result = subprocess.run(
         [
@@ -136,9 +136,10 @@ def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: P
     assert "blocked while using system Codex provider" in result.stderr
 
 
-def test_codex_provider_guard_allows_explicit_provider_on_work_network(tmp_path: Path) -> None:
+def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
-    env["ROBOCLAWS_CODEX_PROVIDER"] = "codex-env"
+    env["CODEX_BASE_URL"] = "https://codex.example.test/v1"
+    env["CODEX_API_KEY"] = "fake-codex-key"
 
     result = subprocess.run(
         [
@@ -157,7 +158,7 @@ def test_codex_provider_guard_allows_explicit_provider_on_work_network(tmp_path:
         text=True,
     )
 
-    assert "explicit Codex provider (codex-env)" in result.stderr
+    assert "repo-local Codex provider (codex-env)" in result.stderr
 
 
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:

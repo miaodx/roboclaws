@@ -88,19 +88,13 @@ just dev::network-status
 
 If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, `just appliance::run`, or OpenClaw integration/local
-verification gates. Do not run `just code::cc`, `just harness::navigator`, or
-`just molmo::claude-report` with the default `ROBOCLAWS_CLAUDE_PROVIDER=system`.
-Do not run `just code::codex` or Codex Molmo live reports with the default
-`ROBOCLAWS_CODEX_PROVIDER=system`. Claude Code recipes may run on the work
-network only when `.env` selects a repo-local provider profile such as
-`ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic` or
-`ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic`; Codex recipes may run only when
-`.env` selects `ROBOCLAWS_CODEX_PROVIDER=codex-env` with
-`CODEX_BASE_URL` / `CODEX_API_KEY` (or the dedicated
-`openai-responses` official proof route when `api.openai.com` is reachable).
-Model-only overrides do not bypass the guard. Guarded recipes should fail before
-launching when the work-network probe is reachable and no allowed provider
-profile is selected.
+verification gates. Do not run system-provider Claude Code or Codex workflows
+on the work network. Claude Code recipes may run there only when the repo-local
+`.env` contains a supported MiMo or Kimi key. Codex recipes may run there only
+when `CODEX_BASE_URL` and `CODEX_API_KEY` configure the repo-local Codex route.
+Model-only overrides do not bypass the guard. Guarded recipes should fail
+before launching when the work-network probe is reachable and no allowed
+repo-local key route is available.
 
 ### 1.1.2 Coding-agent permissions
 
@@ -134,13 +128,13 @@ set -a && source .env && set +a
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
-#   ANTHROPIC_API_KEY or OPENAI_API_KEY — direct VLM path (optional)
+#   CODEX_BASE_URL / CODEX_API_KEY — Codex-compatible endpoint for live agents
 ```
 
 Sanity check:
 
 ```bash
-python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('ANTHROPIC_API_KEY') or os.environ.get('OPENAI_API_KEY'), 'No VLM API key set — did you source .env?'"
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
 ```
 
 `.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.

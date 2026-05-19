@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Shared helpers for Codex / Claude Code demo launchers.
+#
+# Normal users configure only provider keys in the repo-local .env. The
+# ROBOCLAWS_* provider/model variables handled in this file are maintainer-only
+# escape hatches for tests, CI, and one-off debugging.
 
 roboclaws_load_dotenv() {
   local env_file="${1:-.env}"
@@ -13,12 +17,35 @@ roboclaws_load_dotenv() {
 
 roboclaws_code_agent_provider() {
   local primary_var="$1"
-  local provider="${!primary_var:-}"
+  local provider=""
+  if [[ -n "$primary_var" ]]; then
+    provider="${!primary_var:-}"
+  fi
   if [[ -z "$provider" ]]; then
     provider="${ROBOCLAWS_CODE_AGENT_PROVIDER:-}"
   fi
   if [[ -z "$provider" ]]; then
-    provider="system"
+    case "$primary_var" in
+      ROBOCLAWS_CODEX_PROVIDER)
+        if [[ -n "${CODEX_BASE_URL:-}" || -n "${CODEX_API_KEY:-}" ]]; then
+          provider="codex-env"
+        else
+          provider="system"
+        fi
+        ;;
+      ROBOCLAWS_CLAUDE_PROVIDER)
+        if [[ -n "${MIMO_TP_KEY:-}" ]]; then
+          provider="mimo-anthropic"
+        elif [[ -n "${KIMI_API_KEY:-}" ]]; then
+          provider="kimi-anthropic"
+        else
+          provider="system"
+        fi
+        ;;
+      *)
+        provider="system"
+        ;;
+    esac
   fi
   printf '%s\n' "$provider"
 }
@@ -30,9 +57,6 @@ roboclaws_code_agent_profile_default_model() {
       printf '\n'
       ;;
     codex-env)
-      printf 'gpt-5.5\n'
-      ;;
-    openai-responses)
       printf 'gpt-5.5\n'
       ;;
     kimi-anthropic)
@@ -57,9 +81,6 @@ roboclaws_code_agent_profile_base_url() {
         return 2
       fi
       printf '%s\n' "${CODEX_BASE_URL}"
-      ;;
-    openai-responses)
-      printf 'https://api.openai.com/v1\n'
       ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
@@ -89,9 +110,6 @@ roboclaws_code_agent_profile_key_env() {
     mimo-anthropic)
       printf 'MIMO_TP_KEY\n'
       ;;
-    openai-responses)
-      printf 'OPENAI_API_KEY\n'
-      ;;
     system)
       printf '\n'
       ;;
@@ -105,7 +123,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    codex-env|openai-responses)
+    codex-env)
       printf 'responses\n'
       ;;
     kimi-anthropic|mimo-anthropic)
@@ -208,10 +226,14 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    codex-env|openai-responses)
+    codex-env)
+      ;;
+    system)
+      echo "error: Codex repo workflows require CODEX_BASE_URL and CODEX_API_KEY; add them to the repo-local .env or export them for this shell" >&2
+      return 2
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected codex-env or openai-responses" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
       return 2
       ;;
   esac
@@ -230,9 +252,6 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
-  if [[ "$provider" == "openai-responses" ]]; then
-    out_args+=(-c "model_providers.${provider}.supports_websockets=false")
-  fi
   roboclaws_codex_transport_args out_args
 }
 
@@ -309,7 +328,7 @@ roboclaws_assert_claude_code_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Claude Code provider." >&2
-        echo "       Set ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic or mimo-anthropic with repo-local .env keys, or switch off the work network." >&2
+        echo "       Configure MIMO_TP_KEY or KIMI_API_KEY in the repo-local .env, or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with repo-local Claude provider (${provider})" >&2
@@ -324,21 +343,15 @@ roboclaws_assert_claude_code_network_allowed() {
   esac
 }
 
-roboclaws_openai_responses_reachable() {
-  command -v curl >/dev/null 2>&1 || return 2
-  curl -sS --connect-timeout 5 --max-time 8 -o /dev/null \
-    https://api.openai.com/v1/models >/dev/null 2>&1
-}
-
 roboclaws_assert_codex_network_allowed() {
   local label="${1:-Codex}"
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    system|codex-env|openai-responses)
+    system|codex-env)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected codex-env or openai-responses" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
       return 2
       ;;
   esac
@@ -354,10 +367,10 @@ roboclaws_assert_codex_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
-        echo "       Set ROBOCLAWS_CODEX_PROVIDER=codex-env with repo-local .env keys, use openai-responses only for official OpenAI proof when api.openai.com is reachable, or switch off the work network." >&2
+        echo "       Configure CODEX_BASE_URL and CODEX_API_KEY in the repo-local .env, or switch off the work network." >&2
         return 1
       fi
-      echo "==> network guard ok: work network with explicit Codex provider (${provider})" >&2
+      echo "==> network guard ok: work network with repo-local Codex provider (${provider})" >&2
       ;;
     1)
       echo "==> network guard ok: off work network" >&2
@@ -367,15 +380,6 @@ roboclaws_assert_codex_network_allowed() {
       return 2
       ;;
   esac
-
-  if [[ "$provider" == "openai-responses" ]]; then
-    if ! roboclaws_openai_responses_reachable; then
-      echo "error: ${label} uses openai-responses, but api.openai.com is not reachable from this shell." >&2
-      echo "       Fix network/proxy access before launching Codex, or switch to a repo-local provider profile for non-official smoke runs after its provider smoke passes." >&2
-      return 1
-    fi
-    echo "==> network guard ok: api.openai.com reachable for openai-responses" >&2
-  fi
 }
 
 roboclaws_code_agent_profile_summary() {

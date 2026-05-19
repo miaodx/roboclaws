@@ -404,7 +404,6 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=codex-env
             CODEX_BASE_URL=https://codex.example.test/v1
             CODEX_API_KEY=fake-codex-key
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS=1
@@ -440,7 +439,7 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     ]
 
 
-def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
+def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -450,10 +449,6 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=openai-responses
-            ROBOCLAWS_CODE_AGENT_MODEL=shared-model
-            ROBOCLAWS_CODEX_PROVIDER=codex-env
-            ROBOCLAWS_CODEX_MODEL=gpt-5.5
             CODEX_BASE_URL=https://codex.example.test/v1
             CODEX_API_KEY=fake-codex-key
             args=()
@@ -484,7 +479,7 @@ def test_coding_agent_codex_profile_builds_scoped_config_args() -> None:
     ]
 
 
-def test_coding_agent_codex_openai_responses_profile_disables_websockets() -> None:
+def test_coding_agent_codex_official_openai_uses_same_key_contract() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -494,8 +489,8 @@ def test_coding_agent_codex_openai_responses_profile_disables_websockets() -> No
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=openai-responses
-            OPENAI_API_KEY=fake
+            CODEX_BASE_URL=https://api.openai.com/v1
+            CODEX_API_KEY=fake-openai-key
             args=()
             roboclaws_codex_provider_args args
             printf '%s\n' "${args[@]}"
@@ -512,17 +507,15 @@ def test_coding_agent_codex_openai_responses_profile_disables_websockets() -> No
         "-c",
         'model="gpt-5.5"',
         "-c",
-        'model_provider="openai-responses"',
+        'model_provider="codex-env"',
         "-c",
-        'model_providers.openai-responses.name="openai-responses"',
+        'model_providers.codex-env.name="codex-env"',
         "-c",
-        'model_providers.openai-responses.base_url="https://api.openai.com/v1"',
+        'model_providers.codex-env.base_url="https://api.openai.com/v1"',
         "-c",
-        'model_providers.openai-responses.env_key="OPENAI_API_KEY"',
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
         "-c",
-        'model_providers.openai-responses.wire_api="responses"',
-        "-c",
-        "model_providers.openai-responses.supports_websockets=false",
+        'model_providers.codex-env.wire_api="responses"',
     ]
 
 
@@ -537,7 +530,6 @@ def test_coding_agent_codex_env_profile_requires_base_url() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=codex-env
             args=()
             roboclaws_codex_provider_args args
             """,
@@ -565,7 +557,6 @@ def test_coding_agent_codex_env_profile_requires_api_key_without_printing_secret
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODEX_PROVIDER=codex-env
             args=()
             roboclaws_codex_provider_args args
             """,
@@ -592,7 +583,6 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
             MIMO_TP_KEY=fake-mimo-key
             model_args=()
             env_args=()
@@ -628,7 +618,6 @@ def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
             """
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
-            ROBOCLAWS_CODE_AGENT_PROVIDER=mimo-anthropic
             MIMO_TP_KEY=fake-mimo-key
             model_args=()
             env_args=()
@@ -683,11 +672,11 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "ANTHROPIC_API_KEY" in helper_text
 
 
-def test_codex_provider_smoke_is_explicit_and_profile_only() -> None:
+def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
-    assert "no Codex provider profile selected" in code_text
+    assert "no repo-local Codex endpoint configured" in code_text
     assert "--sandbox read-only" in code_text
     assert "--ephemeral" in code_text
     assert "--ignore-user-config" in code_text

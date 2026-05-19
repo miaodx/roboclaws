@@ -1,35 +1,32 @@
 # Local Runtime Reference
 
-This page holds local runtime details that are too operational for the root
-`README.md`: provider keys, coding-agent provider profiles, and report artifact
-locations.
+This page holds the small amount of local runtime setup that normal demo users
+need. The rule is:
+
+```text
+Normal users configure keys only; command shape controls behavior.
+```
 
 ## Provider Keys
 
-Real provider runs read keys from the environment or the gitignored repo-local
-`.env` file:
+Copy `.env.example` to `.env`, then fill only the keys you have:
 
 ```bash
-export KIMI_API_KEY=...       # Kimi / Moonshot
-export MIMO_TP_KEY=...        # MiMo provider profiles
-export NV_API_KEY=...         # NVIDIA NIM, optional
-export CODEX_BASE_URL=...     # Codex Responses-compatible endpoint
-export CODEX_API_KEY=...      # Codex endpoint key
+KIMI_API_KEY=        # Kimi / Moonshot
+MIMO_TP_KEY=        # MiMo
+NV_API_KEY=          # NVIDIA NIM, optional
+
+CODEX_BASE_URL=      # Codex Responses-compatible endpoint
+CODEX_API_KEY=       # Codex endpoint key
 ```
 
-Repo-local coding-agent provider profiles can route Codex or Claude Code
-without changing user-level CLI config:
+The launch recipes infer the repo-local runtime route from those keys. Codex
+uses `CODEX_BASE_URL` / `CODEX_API_KEY`. Claude Code prefers a MiMo key when
+available, then Kimi, and otherwise falls back to the host system provider only
+off the work network.
 
-```bash
-ROBOCLAWS_CODEX_PROVIDER=codex-env
-ROBOCLAWS_CODEX_MODEL=gpt-5.5
-
-ROBOCLAWS_CLAUDE_PROVIDER=mimo-anthropic
-ROBOCLAWS_CLAUDE_MODEL=mimo-v2-omni
-```
-
-Run `just dev::network-status` before OpenClaw, system-provider Claude Code, or
-system-provider Codex workflows; work-network restrictions are documented in
+Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
+workflows; work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see

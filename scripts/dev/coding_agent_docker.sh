@@ -197,6 +197,8 @@ run_cli() {
     empty_codex_skills_dir="$(prepare_empty_codex_skills_dir "${empty_codex_skills_parent}")"
     docker_args+=(-v "${empty_codex_skills_dir}:/home/agent/.codex/skills:ro")
   fi
+  # ROBOCLAWS_* provider/model names are maintainer-only override channels.
+  # Normal runs derive provider routing from API keys before reaching Docker.
   pass_env_if_set docker_args \
     ANTHROPIC_API_KEY \
     ANTHROPIC_BASE_URL \

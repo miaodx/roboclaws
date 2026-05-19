@@ -756,12 +756,11 @@ jobs:
 
       - name: Preflight official Codex GPT-5.5 OpenAI key
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ROBOCLAWS_CODEX_PROVIDER: openai-responses
-          ROBOCLAWS_CODEX_MODEL: gpt-5.5
+          CODEX_BASE_URL: https://api.openai.com/v1
+          CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS: "1"
         run: |
-          test -n "$OPENAI_API_KEY" || {
+          test -n "$CODEX_API_KEY" || {
             echo "OPENAI_API_KEY secret is required for the official Codex proof." >&2
             exit 1
           }
@@ -769,13 +768,12 @@ jobs:
 
       - name: Run official Codex GPT-5.5 Nav2 cleanup proof
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ROBOCLAWS_CODEX_PROVIDER: openai-responses
-          ROBOCLAWS_CODEX_MODEL: gpt-5.5
+          CODEX_BASE_URL: https://api.openai.com/v1
+          CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS: "1"
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
-          test -n "$OPENAI_API_KEY" || {
+          test -n "$CODEX_API_KEY" || {
             echo "OPENAI_API_KEY secret is required for the official Codex proof." >&2
             exit 1
           }
