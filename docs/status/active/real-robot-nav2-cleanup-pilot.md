@@ -48,6 +48,7 @@ Last updated: 2026-05-19
   - `e5a15cf` `docs: sync nav2 cleanup commit ledger`
   - `4dfda23` `docs: update current nav2 cleanup status`
   - `31637c4` `feat: add nav2 map bundle contract gate`
+  - `d70ca89` `feat: gate cleanup runs on selected map bundles`
 - `real_robot_cleanup_v1` exists and is included in
   `skills/molmo-realworld-cleanup/skill.json`.
 - `DirectNav2Adapter` exists with mocked tests for success, timeout, cancel,
@@ -174,7 +175,7 @@ Objective requirements mapped to current evidence:
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`; this status file tracks the remaining gate. | Implemented except official Codex proof |
+| Implement `docs/plans/real-robot-nav2-cleanup-pilot.md` | Commits `1d76f0d`, `fd01173`, `7f7f987`, `daff692`, `0c67850`, `f27f552`, `0a7ebb7`, `61c5903`, `4c5c185`, `d9e0c00`, `4734fab`, `49ecbee`, `d568bc7`, `3e4de60`, `2ac1d44`, `764a806`, `1d61de9`, `31b42d4`, `90a80d9`, `4b3385f`, `3b7c585`, `f2bb97b`, `31637c4`, `d70ca89`; this status file tracks the remaining gate. | Implemented except official Codex proof |
 | Honor ADR-0127 direct Nav2 adapter before ROSClaw | `roboclaws/molmo_cleanup/nav2_adapter.py`; `tests/contract/molmo_cleanup/test_nav2_adapter.py` covers success, timeout, cancel, max-distance rejection, and blocked manipulation. | Implemented |
 | Honor ADR-0128 `real_robot_cleanup_v1` profile | `roboclaws/mcp/profiles.py`; `skills/molmo-realworld-cleanup/skill.json`; semantic profile tests. | Implemented |
 | Honor ADR-0129 Nav2 map artifacts for simulator/hardware parity | `roboclaws/maps/`; `scripts/maps/check_bundle.py`; `assets/maps/molmo-cleanup-default-7/`; direct and MCP finalizers copy the selected prebuilt bundle into `map_bundle/`; `metric_map()` / `fixture_hints()` project from selected bundles; `navigate_to_waypoint` records `sim_costmap_planner` route metadata. | Implemented |
