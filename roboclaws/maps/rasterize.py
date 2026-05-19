@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -34,12 +35,21 @@ def occupancy_grid_from_metric_map(
     metric_map: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> OccupancyGrid:
-    width = _bounded_int(metric_map.get("width"), default=240, lower=16, upper=2048)
-    height = _bounded_int(metric_map.get("height"), default=180, lower=16, upper=2048)
     resolution = max(float(metric_map.get("resolution_m") or 0.05), 0.001)
     origin = metric_map.get("origin") if isinstance(metric_map.get("origin"), dict) else {}
     origin_x = float(origin.get("x") or 0.0)
     origin_y = float(origin.get("y") or 0.0)
+    width = _bounded_int(metric_map.get("width"), default=240, lower=16, upper=4096)
+    height = _bounded_int(metric_map.get("height"), default=180, lower=16, upper=4096)
+    width, height = _expand_dimensions_for_public_geometry(
+        metric_map,
+        fixture_hints,
+        width=width,
+        height=height,
+        resolution_m=resolution,
+        origin_x=origin_x,
+        origin_y=origin_y,
+    )
     image = Image.new("L", (width, height), OCCUPIED_PIXEL)
     draw = ImageDraw.Draw(image)
     grid_shell = OccupancyGrid(
@@ -188,3 +198,47 @@ def _bounded_int(value: Any, *, default: int, lower: int, upper: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(lower, min(parsed, upper))
+
+
+def _expand_dimensions_for_public_geometry(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+    resolution_m: float,
+    origin_x: float,
+    origin_y: float,
+) -> tuple[int, int]:
+    max_x = origin_x + (width - 1) * resolution_m
+    max_y = origin_y + (height - 1) * resolution_m
+    for x, y in _public_geometry_points(metric_map, fixture_hints):
+        max_x = max(max_x, x)
+        max_y = max(max_y, y)
+    margin_m = 0.5
+    required_width = int(math.ceil((max_x + margin_m - origin_x) / resolution_m)) + 1
+    required_height = int(math.ceil((max_y + margin_m - origin_y) / resolution_m)) + 1
+    return (
+        _bounded_int(required_width, default=width, lower=width, upper=4096),
+        _bounded_int(required_height, default=height, lower=height, upper=4096),
+    )
+
+
+def _public_geometry_points(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+):
+    for room in metric_map.get("rooms") or []:
+        for point in room.get("polygon") or []:
+            yield float(point.get("x", 0.0)), float(point.get("y", 0.0))
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        yield float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))
+    for fixture in fixtures_from_hints(fixture_hints):
+        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+        footprint = fixture.get("footprint") if isinstance(fixture.get("footprint"), dict) else {}
+        x = float(pose.get("x") or 0.0)
+        y = float(pose.get("y") or 0.0)
+        half_width = float(footprint.get("width_m") or 0.45) / 2.0
+        half_depth = float(footprint.get("depth_m") or 0.35) / 2.0
+        yield x - half_width, y - half_depth
+        yield x + half_width, y + half_depth

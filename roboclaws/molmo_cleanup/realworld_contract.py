@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import copy
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
-from roboclaws.maps.bundle import metric_map_bundle_metadata
+from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
+from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
@@ -149,6 +152,7 @@ class RealWorldCleanupContract:
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
+        map_bundle_dir: str | Path | None = None,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
@@ -161,11 +165,36 @@ class RealWorldCleanupContract:
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = perception_mode
-        self._fixtures = {
-            item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
-        }
-        self._rooms = _rooms_from_fixtures(self._fixtures)
-        self._waypoints = _inspection_waypoints(self._rooms)
+        self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
+        self.map_bundle_validation: dict[str, Any] | None = None
+        self._bundle_metric_map_template: dict[str, Any] | None = None
+        self._bundle_fixture_hints_template: dict[str, Any] | None = None
+        if self.map_bundle_dir is not None:
+            validation = validate_nav2_map_bundle(self.map_bundle_dir)
+            validation.raise_for_errors()
+            self.map_bundle_validation = validation.as_dict()
+            self._bundle_metric_map_template = metric_map_from_bundle(self.map_bundle_dir)
+            self._bundle_fixture_hints_template = fixture_hints_from_bundle(
+                self.map_bundle_dir,
+                fixture_hint_mode=fixture_hint_mode,
+            )
+            self._fixtures = _fixtures_from_bundle_fixture_hints(
+                self._bundle_fixture_hints_template
+            )
+            self._rooms = _rooms_from_bundle_projection(
+                self._bundle_metric_map_template,
+                self._bundle_fixture_hints_template,
+            )
+            self._waypoints = _inspection_waypoints_from_bundle_projection(
+                self._bundle_metric_map_template,
+                self._bundle_fixture_hints_template,
+            )
+        else:
+            self._fixtures = {
+                item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
+            }
+            self._rooms = _rooms_from_fixtures(self._fixtures)
+            self._waypoints = _inspection_waypoints(self._rooms)
         first_waypoint = self._waypoints[0]["waypoint_id"] if self._waypoints else ""
         self._current_waypoint_id = first_waypoint
         self._observed_waypoint_ids: set[str] = set()
@@ -211,6 +240,35 @@ class RealWorldCleanupContract:
         return {fixture_id: dict(fixture) for fixture_id, fixture in self._fixtures.items()}
 
     def metric_map(self) -> dict[str, Any]:
+        if self._bundle_metric_map_template is not None:
+            metric_map = copy.deepcopy(self._bundle_metric_map_template)
+            frame_id = str(metric_map.get("frame_id") or "map")
+            metric_map["robot_pose"] = {
+                "frame_id": frame_id,
+                **self._current_pose(),
+                "room_id": self._current_room_id(),
+                "waypoint_id": self._current_waypoint_id,
+                "pose_source": "selected_nav2_map_bundle_waypoint",
+            }
+            metric_map["inspection_waypoints"] = [
+                {
+                    **dict(item),
+                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
+                }
+                for item in metric_map.get("inspection_waypoints") or []
+            ]
+            metric_map["contract"] = REALWORLD_CONTRACT
+            metric_map["tool"] = "metric_map"
+            metric_map["status"] = "ok"
+            metric_map["ok"] = True
+            metric_map["public_contract_note"] = (
+                "Metric map projection was derived from the selected prebuilt Nav2 "
+                "map bundle. Runtime movable objects and private scoring truth are "
+                "not encoded."
+            )
+            _assert_no_forbidden_agent_view_keys(metric_map)
+            return metric_map
+
         frame_id = "map"
         map_id = f"{self.scenario.scenario_id}_semantic_map"
         map_version = "static-fixture-map-v1"
@@ -277,6 +335,21 @@ class RealWorldCleanupContract:
         )
 
     def fixture_hints(self) -> dict[str, Any]:
+        if self._bundle_fixture_hints_template is not None:
+            fixture_hints = copy.deepcopy(self._bundle_fixture_hints_template)
+            fixture_hints["contract"] = REALWORLD_CONTRACT
+            fixture_hints["tool"] = "fixture_hints"
+            fixture_hints["status"] = "ok"
+            fixture_hints["ok"] = True
+            fixture_hints["fixture_hint_mode"] = self.fixture_hint_mode
+            fixture_hints["public_contract_note"] = (
+                "Static fixture hints are projected from the selected prebuilt Nav2 "
+                "map bundle. Runtime movable-object observations remain separate "
+                "observed_* handles."
+            )
+            _assert_no_forbidden_agent_view_keys(fixture_hints)
+            return fixture_hints
+
         rooms = []
         for room in self._rooms:
             fixtures = []
@@ -1951,6 +2024,15 @@ class RealWorldCleanupContract:
         }
 
     def _fixture_pose(self, fixture_id: str) -> dict[str, Any]:
+        fixture = self._fixtures.get(fixture_id) or {}
+        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+        if pose:
+            return {
+                "frame_id": str(pose.get("frame_id") or "map"),
+                "x": float(pose.get("x", 0.0)),
+                "y": float(pose.get("y", 0.0)),
+                "yaw": float(pose.get("yaw", 0.0)),
+            }
         room = next((item for item in self._rooms if fixture_id in item["fixture_ids"]), None)
         if room is None:
             waypoint = self._waypoint_by_id(self._preferred_waypoint_for_fixture(fixture_id))
@@ -2000,6 +2082,11 @@ class RealWorldCleanupContract:
         return state in _NON_ACTIONABLE_HANDLE_STATES
 
     def _preferred_waypoint_for_fixture(self, fixture_id: str) -> str:
+        fixture = self._fixtures.get(fixture_id) or {}
+        for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
+            preferred = str(fixture.get(key) or "")
+            if preferred and self._waypoint_by_id(preferred) is not None:
+                return preferred
         for waypoint in self._waypoints:
             if fixture_id in set(waypoint.get("fixture_ids") or []):
                 return str(waypoint["waypoint_id"])
@@ -2338,6 +2425,110 @@ def _pose_stamped_waypoints_present(metric_map: dict[str, Any]) -> bool:
         "purpose",
     }
     return bool(waypoints) and all(required <= set(item) for item in waypoints)
+
+
+def _fixtures_from_bundle_fixture_hints(fixture_hints: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    fixtures: dict[str, dict[str, Any]] = {}
+    for room in fixture_hints.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        room_id = str(room.get("room_id") or "")
+        room_label = str(room.get("room_label") or room_id)
+        for raw_fixture in room.get("fixtures") or []:
+            if not isinstance(raw_fixture, dict):
+                continue
+            fixture = dict(raw_fixture)
+            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
+            if not fixture_id:
+                continue
+            fixture.setdefault("fixture_id", fixture_id)
+            fixture.setdefault("receptacle_id", fixture_id)
+            fixture.setdefault("room_id", room_id)
+            fixture.setdefault("room_area", room_label or room_id)
+            fixture.setdefault("kind", "receptacle")
+            fixture.setdefault("name", fixture_id)
+            fixture.setdefault("category", fixture.get("name", fixture_id))
+            fixtures[fixture_id] = fixture
+    return fixtures
+
+
+def _rooms_from_bundle_projection(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fixture_ids_by_room: dict[str, list[str]] = defaultdict(list)
+    for room in fixture_hints.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        room_id = str(room.get("room_id") or "")
+        for fixture in room.get("fixtures") or []:
+            if not isinstance(fixture, dict):
+                continue
+            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
+            if fixture_id:
+                fixture_ids_by_room[room_id].append(fixture_id)
+
+    rooms = []
+    for raw_room in metric_map.get("rooms") or []:
+        if not isinstance(raw_room, dict):
+            continue
+        room = dict(raw_room)
+        room_id = str(room.get("room_id") or "")
+        room["fixture_ids"] = sorted(fixture_ids_by_room.get(room_id, []))
+        room.setdefault("room_label", room_id.replace("_", " "))
+        room.setdefault("map_center", _polygon_center_world(room.get("polygon") or []))
+        rooms.append(room)
+    return rooms
+
+
+def _inspection_waypoints_from_bundle_projection(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> list[dict[str, Any]]:
+    fixture_waypoint_ids: dict[str, list[str]] = defaultdict(list)
+    room_fixture_ids: dict[str, list[str]] = defaultdict(list)
+    for room in fixture_hints.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        room_id = str(room.get("room_id") or "")
+        for fixture in room.get("fixtures") or []:
+            if not isinstance(fixture, dict):
+                continue
+            fixture_id = str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "")
+            if not fixture_id:
+                continue
+            room_fixture_ids[room_id].append(fixture_id)
+            for key in ("preferred_inspection_waypoint_id", "preferred_manipulation_waypoint_id"):
+                waypoint_id = str(fixture.get(key) or "")
+                if waypoint_id and fixture_id not in fixture_waypoint_ids[waypoint_id]:
+                    fixture_waypoint_ids[waypoint_id].append(fixture_id)
+
+    waypoints = []
+    frame_id = str(metric_map.get("frame_id") or "map")
+    for raw_waypoint in metric_map.get("inspection_waypoints") or []:
+        if not isinstance(raw_waypoint, dict):
+            continue
+        waypoint = dict(raw_waypoint)
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        room_id = str(waypoint.get("room_id") or "")
+        waypoint.setdefault("frame_id", frame_id)
+        waypoint["visited"] = False
+        if not waypoint.get("fixture_ids"):
+            waypoint["fixture_ids"] = sorted(
+                fixture_waypoint_ids.get(waypoint_id) or room_fixture_ids.get(room_id, [])
+            )
+        waypoints.append(waypoint)
+    return waypoints
+
+
+def _polygon_center_world(polygon: list[Any]) -> dict[str, float]:
+    points = [point for point in polygon if isinstance(point, dict)]
+    if not points:
+        return {"x": 0.0, "y": 0.0}
+    return {
+        "x": round(sum(float(point.get("x", 0.0)) for point in points) / len(points), 3),
+        "y": round(sum(float(point.get("y", 0.0)) for point in points) / len(points), 3),
+    }
 
 
 def _rooms_from_fixtures(fixtures: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

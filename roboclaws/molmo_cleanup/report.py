@@ -4443,6 +4443,8 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Navigation backends', nav_summary or 'none')}"
         f"{_metric('Pose sources', pose_summary or 'none')}"
         f"{_metric('Report-only sim views', readiness.get('report_only_simulation_view_count', 0))}"
+        f"{_metric('physical_navigation_pilot', readiness.get('physical_navigation_pilot', False))}"
+        f"{_metric('physical_cleanup_ready', readiness.get('physical_cleanup_ready', False))}"
         "</div>"
     )
     badges = "".join(
@@ -4459,15 +4461,31 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
                 "Static costmap routes",
                 readiness.get("sim_costmap_route_validation", False),
             ),
+            _badge("Physical navigation pilot", readiness.get("physical_navigation_pilot", False)),
+            _badge("Manipulation blocked", readiness.get("manipulation_blocked", False)),
         )
     )
+    if readiness.get("physical_navigation_pilot"):
+        physical_flags = (
+            f"physical_navigation_pilot={str(readiness.get('physical_navigation_pilot')).lower()}, "
+            f"physical_cleanup_ready={str(readiness.get('physical_cleanup_ready')).lower()}."
+        )
+        note = (
+            "This section is a physical Navigation + Perception Pilot. Nav2 waypoint "
+            "navigation may execute, reached waypoints are observed, and physical "
+            f"cleanup manipulation remains blocked_capability. {physical_flags}"
+        )
+    else:
+        note = (
+            "This section checks contract shape, not live ROS/Nav2. Current simulator "
+            "navigation is validated against a static Nav2-shaped costmap and still is "
+            "not a physical nav2_action; chase imagery is labelled "
+            "report_only_simulation_view and is not a policy input."
+        )
     return (
         '<section class="panel real-robot-readiness">'
         "<h2>Real-Robot Readiness</h2>"
-        '<p class="note">This section checks contract shape, not live ROS/Nav2. '
-        "Current simulator navigation is validated against a static Nav2-shaped "
-        "costmap and still is not a physical nav2_action; chase imagery is labelled "
-        "report_only_simulation_view and is not a policy input.</p>"
+        f'<p class="note">{html.escape(note)}</p>'
         f'{metrics}<div class="badges">{badges}</div>'
         f'<ul class="requirements">{blockers}</ul></section>'
     )

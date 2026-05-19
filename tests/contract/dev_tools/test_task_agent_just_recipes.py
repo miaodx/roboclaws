@@ -291,6 +291,50 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
+def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "codex",
+        "world-labels",
+        "map_bundle=molmo-cleanup-default-7",
+    )
+
+    assert route[:10] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/molmo/codex-report",
+        "帮我收拾这个房间",
+        "10",
+        "127.0.0.1",
+        "18788",
+    ]
+    assert route[10] == "molmo-cleanup-default-7"
+
+
+def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'map_bundle="auto"' in text
+    assert 'map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"' in text
+    assert "--map-bundle-dir" in text
+    assert "--require-map-bundle" in text
+
+
+def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"world-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "--require-waypoint-honesty" in body
+    assert "--require-real-robot-alignment" in body
+    assert "--min-semantic-accepted-count 5" in body
+    assert "--min-sweep-coverage 1.0" in body
+
+
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
     labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
@@ -326,6 +370,31 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "mark a waypoint complete only after" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
+
+
+def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r'\*\)\n\s+kickoff_prompt="([^"]+)"', text)
+    assert match is not None
+    prompt = match.group(1)
+
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
+    assert "selected Nav2 map bundle" in prompt
+    assert "not raw occupancy images" in prompt
+    assert "mark a waypoint complete only after" in prompt
+    assert "compare the checklist before roboclaws__done" in prompt
+    assert "visit any missing waypoint_id" in prompt
+
+
+def test_ci_does_not_define_codex_live_proof() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert "molmo_official_codex" not in workflow
+    assert "molmo-official-codex" not in workflow
+    assert "report-molmo-official-codex" not in workflow
+    assert "codex-provider-smoke" not in workflow
+    assert ".tmp/coding-agent-bin/codex" not in workflow
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:

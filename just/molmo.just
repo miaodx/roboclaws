@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -49,6 +49,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_count="{{generated_mess_count}}"
     host="{{host}}"
     port="{{port}}"
+    map_bundle="{{map_bundle}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -61,6 +62,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
     host="${host#host=}"
     port="${port#port=}"
+    map_bundle="${map_bundle#map_bundle=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -90,6 +92,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-robot-views
           --require-waypoint-honesty
           --require-real-robot-alignment
+          --min-semantic-accepted-count 5
+          --min-sweep-coverage 1.0
         )
         ;;
       camera-raw)
@@ -120,6 +124,35 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         ;;
     esac
 
+    map_bundle_dir="$map_bundle"
+    case "$map_bundle_dir" in
+      auto)
+        if [[ "$profile" == "smoke" ]]; then
+          map_bundle_dir=""
+        else
+          map_bundle_dir="assets/maps/molmospaces-procthor-val-0-7"
+        fi
+        ;;
+      none|false|off)
+        map_bundle_dir=""
+        ;;
+    esac
+    if [[ -n "$map_bundle_dir" && "$map_bundle_dir" != */* && -d "assets/maps/${map_bundle_dir}" ]]; then
+      map_bundle_dir="assets/maps/${map_bundle_dir}"
+    fi
+    map_bundle_args=()
+    if [[ -n "$map_bundle_dir" ]]; then
+      .venv/bin/python scripts/maps/check_bundle.py "$map_bundle_dir" >/dev/null
+      map_bundle_args=(--map-bundle-dir "$map_bundle_dir")
+    fi
+    if [[ "$profile" != "smoke" ]]; then
+      if [[ -z "$map_bundle_dir" ]]; then
+        echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
+        exit 1
+      fi
+      map_bundle_args+=(--require-map-bundle)
+    fi
+
     stamp="$({{timestamp_cmd}})"
     run_root="${output_dir}/${stamp}"
     mkdir -p "$run_root"
@@ -129,6 +162,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    profile  : ${profile}"
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
+    echo "    map      : ${map_bundle_dir:-not required}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
 
@@ -146,6 +180,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         policy="${driver%-live}_agent"
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
+        server_startup_timeout_s="${ROBOCLAWS_MOLMO_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
         source scripts/dev/coding_agent_env.sh
         roboclaws_load_dotenv .env
         if [[ "$driver" == "openclaw-live" ]]; then
@@ -189,10 +224,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, sweep every inspection waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, and mark a waypoint complete only after that waypoint_id has a roboclaws__observe response. Inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call roboclaws__navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), target_fixture_id, evidence_note, and image_region before pick. Omit source_fixture_id unless you are confident. If visual candidate grounding is unresolved, continue the waypoint sweep instead of calling done. When grounding succeeds, pick the returned object and place it using candidate_fixture_id and recommended_tool from the response when present. Do not pre-register raw-FPV candidates with roboclaws__declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place when grounding succeeds, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
             ;;
           camera-labels)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
             ;;
           *)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
             ;;
         esac
 
@@ -207,6 +242,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --generated-mess-count "$generated_mess_count"
           --perception-mode "$perception_mode"
           --cleanup-profile "$profile"
+          "${map_bundle_args[@]}"
           "${visual_args[@]}"
         )
 
@@ -265,6 +301,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --codex-bin "$codex_bin"
             --codex-model "$codex_model"
             --codex-provider-summary "$codex_profile_summary"
+            --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --policy "$policy"
@@ -355,6 +392,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --lock-path output/molmo/.live-claude.lock
             --claude-bin "$claude_bin"
             --claude-provider-summary "$claude_profile_summary"
+            --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --policy "$policy"
@@ -460,6 +498,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --fixture-hint-mode room_only \
             --perception-mode "$perception_mode" \
             --cleanup-profile "$profile" \
+            "${map_bundle_args[@]}" \
             --generated-mess-count "$generated_mess_count" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
@@ -477,6 +516,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --generated-mess-count "$generated_mess_count" \
             --perception-mode "$perception_mode" \
             --cleanup-profile "$profile" \
+            "${map_bundle_args[@]}" \
             "${visual_args[@]}" \
             --output-dir "$run_dir"
           ;;

@@ -19,6 +19,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
+PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 
 
 def _load_smoke_module():
@@ -54,6 +55,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
+        map_bundle_dir=PREBUILT_BUNDLE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -72,6 +74,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
 
     assert metric_map["contract"] == REALWORLD_CONTRACT
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
     assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
     assert fixture_hints["fixture_hint_mode"] == "room_only"

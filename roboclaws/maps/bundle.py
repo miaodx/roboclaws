@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import re
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -132,12 +134,40 @@ def write_nav2_map_bundle_snapshot(
     return snapshot
 
 
+def copy_nav2_map_bundle_snapshot(
+    *,
+    source_bundle_dir: Path,
+    run_dir: Path,
+) -> dict[str, Any]:
+    """Copy a validated prebuilt Nav2 map bundle into a run-local snapshot."""
+    source_bundle_dir = Path(source_bundle_dir)
+    validation = validate_nav2_map_bundle(source_bundle_dir)
+    validation.raise_for_errors()
+
+    bundle_dir = Path(run_dir) / "map_bundle"
+    for key, relative in _bundle_local_paths().items():
+        source = source_bundle_dir / relative
+        destination = bundle_dir / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+
+    snapshot = _existing_bundle_snapshot(
+        bundle_dir=bundle_dir,
+        run_dir=Path(run_dir),
+        source_bundle_dir=source_bundle_dir,
+    )
+    snapshot["schema"] = NAV2_MAP_BUNDLE_SNAPSHOT_SCHEMA
+    snapshot["snapshot_root"] = "map_bundle"
+    return snapshot
+
+
 def write_nav2_map_bundle(
     bundle_dir: Path,
     *,
     metric_map: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> dict[str, Any]:
+    metric_map, fixture_hints = _normalized_bundle_inputs(metric_map, fixture_hints)
     profiles_dir = bundle_dir / "profiles"
     costmaps_dir = bundle_dir / "costmaps"
     profiles_dir.mkdir(parents=True, exist_ok=True)
@@ -212,6 +242,53 @@ def write_nav2_map_bundle(
             "They do not encode movable-object target truth or private scoring data."
         ),
     }
+
+
+def _existing_bundle_snapshot(
+    *,
+    bundle_dir: Path,
+    run_dir: Path,
+    source_bundle_dir: Path | None = None,
+) -> dict[str, Any]:
+    semantics = json.loads((bundle_dir / "semantics.json").read_text(encoding="utf-8"))
+    environment_id = str(semantics.get("environment_id") or bundle_dir.name)
+    map_id = str(semantics.get("map_id") or f"{environment_id}_semantic_map")
+    map_version = str(semantics.get("map_version") or "static-fixture-map-v1")
+    metadata = metric_map_bundle_metadata(
+        environment_id=environment_id,
+        map_id=map_id,
+        map_version=map_version,
+    )
+    artifact_paths = {key: bundle_dir / relative for key, relative in _bundle_local_paths().items()}
+    hashes = {key: _file_sha256(path) for key, path in artifact_paths.items() if path.is_file()}
+    payload = {
+        "schema": NAV2_MAP_BUNDLE_SCHEMA,
+        "source_schema": semantics.get("schema", ""),
+        "environment_id": environment_id,
+        "map_id": map_id,
+        "map_version": map_version,
+        "source_provenance": (semantics.get("provenance") or {}).get(
+            "source",
+            "prebuilt_nav2_map_bundle",
+        ),
+        "robot_profile_id": DEFAULT_ROBOT_PROFILE_ID,
+        "costmap_profile_id": DEFAULT_COSTMAP_PROFILE_ID,
+        "parameter_hash": metadata["parameter_hash"],
+        "snapshot_root": bundle_dir.name,
+        "snapshot_complete": set(artifact_paths) <= set(hashes),
+        "artifact_paths": {
+            key: path.relative_to(run_dir).as_posix() for key, path in artifact_paths.items()
+        },
+        "artifact_hashes": hashes,
+        "runtime_costmap_gaps": list(RUNTIME_COSTMAP_GAPS),
+        "public_contract_note": (
+            "Snapshot files freeze the selected prebuilt Nav2 map bundle used by this run. "
+            "They do not encode movable-object target truth or private scoring data."
+        ),
+    }
+    if source_bundle_dir is not None:
+        payload["source_bundle_root"] = str(source_bundle_dir)
+    return payload
 
 
 def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
@@ -323,7 +400,7 @@ def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
         )
         if preferred not in waypoint_by_id:
             errors.append(f"fixture has no reachable preferred waypoint: {fixture_id}")
-    route_failures = _validate_declared_routes(semantics)
+    route_failures = _validate_declared_routes(semantics, grid=grid)
     errors.extend(route_failures)
 
     metadata = {
@@ -356,7 +433,7 @@ def parse_map_yaml(text: str) -> dict[str, Any]:
     return payload
 
 
-def _validate_declared_routes(semantics: dict[str, Any]) -> list[str]:
+def _validate_declared_routes(semantics: dict[str, Any], *, grid: Any | None) -> list[str]:
     rooms = semantics.get("rooms") or []
     waypoints = semantics.get("inspection_waypoints") or []
     fixtures = semantics.get("fixtures") or []
@@ -369,10 +446,16 @@ def _validate_declared_routes(semantics: dict[str, Any]) -> list[str]:
         ]
         fixture_hints["rooms"].append(item)
     metric_map = {
-        "resolution_m": DEFAULT_COSTMAP_PARAMETERS["resolution_m"],
-        "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
-        "width": 240,
-        "height": 180,
+        "resolution_m": (
+            grid.resolution_m if grid is not None else DEFAULT_COSTMAP_PARAMETERS["resolution_m"]
+        ),
+        "origin": {
+            "x": grid.origin_x if grid is not None else 0.0,
+            "y": grid.origin_y if grid is not None else 0.0,
+            "yaw": 0.0,
+        },
+        "width": grid.width if grid is not None else 240,
+        "height": grid.height if grid is not None else 180,
         "rooms": rooms,
         "driveable_ways": semantics.get("driveable_ways") or [],
         "inspection_waypoints": waypoints,
@@ -461,6 +544,127 @@ def _costmap_yaml(metric_map: dict[str, Any]) -> str:
         }
     }
     return _simple_yaml(payload)
+
+
+def _normalized_bundle_inputs(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    normalized_map = copy.deepcopy(metric_map)
+    normalized_hints = copy.deepcopy(fixture_hints)
+    _normalize_room_only_fixture_poses(normalized_map, normalized_hints)
+    return normalized_map, normalized_hints
+
+
+def _normalize_room_only_fixture_poses(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> None:
+    rooms_by_id = {str(room.get("room_id") or ""): room for room in metric_map.get("rooms") or []}
+    waypoints_by_room: dict[str, list[dict[str, Any]]] = {}
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        waypoints_by_room.setdefault(str(waypoint.get("room_id") or ""), []).append(waypoint)
+
+    next_slot_by_room: dict[str, int] = {}
+    for hint_room in fixture_hints.get("rooms") or []:
+        if not isinstance(hint_room, dict):
+            continue
+        room_id = str(hint_room.get("room_id") or "")
+        room = rooms_by_id.get(room_id) or hint_room
+        waypoints = waypoints_by_room.get(room_id, [])
+        if not waypoints:
+            continue
+        for fixture in hint_room.get("fixtures") or []:
+            if not isinstance(fixture, dict):
+                continue
+            if str(fixture.get("position_detail") or "") != "room_only":
+                continue
+            if not _fixture_blocks_waypoint(fixture, waypoints):
+                continue
+            candidates = _fixture_slot_candidates(room, fixture)
+            offset = next_slot_by_room.get(room_id, 0)
+            ordered_candidates = candidates[offset:] + candidates[:offset]
+            for index, candidate in enumerate(ordered_candidates):
+                if _fixture_pose_blocks_waypoint(fixture, candidate, waypoints):
+                    continue
+                pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+                fixture["pose"] = {
+                    "frame_id": str(pose.get("frame_id") or "map"),
+                    "x": round(candidate[0], 3),
+                    "y": round(candidate[1], 3),
+                    "yaw": float(pose.get("yaw") or 0.0),
+                }
+                next_slot_by_room[room_id] = (offset + index + 1) % max(len(candidates), 1)
+                break
+
+
+def _fixture_blocks_waypoint(
+    fixture: dict[str, Any],
+    waypoints: list[dict[str, Any]],
+) -> bool:
+    pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+    center = (float(pose.get("x") or 0.0), float(pose.get("y") or 0.0))
+    return _fixture_pose_blocks_waypoint(fixture, center, waypoints)
+
+
+def _fixture_pose_blocks_waypoint(
+    fixture: dict[str, Any],
+    center: tuple[float, float],
+    waypoints: list[dict[str, Any]],
+) -> bool:
+    width_m, depth_m = _fixture_footprint_size(fixture)
+    half_width = width_m / 2.0 + 0.05
+    half_depth = depth_m / 2.0 + 0.05
+    center_x, center_y = center
+    for waypoint in waypoints:
+        waypoint_x = float(waypoint.get("x", 0.0))
+        waypoint_y = float(waypoint.get("y", 0.0))
+        if abs(waypoint_x - center_x) <= half_width and abs(waypoint_y - center_y) <= half_depth:
+            return True
+    return False
+
+
+def _fixture_slot_candidates(
+    room: dict[str, Any],
+    fixture: dict[str, Any],
+) -> list[tuple[float, float]]:
+    min_x, min_y, max_x, max_y = _room_bounds(room)
+    width_m, depth_m = _fixture_footprint_size(fixture)
+    x_pad = max(width_m / 2.0 + 0.1, 0.2)
+    y_pad = max(depth_m / 2.0 + 0.1, 0.2)
+    left = min(max_x, min_x + x_pad)
+    right = max(min_x, max_x - x_pad)
+    bottom = min(max_y, min_y + y_pad)
+    top = max(min_y, max_y - y_pad)
+    mid_x = (min_x + max_x) / 2.0
+    mid_y = (min_y + max_y) / 2.0
+    return [
+        (left, bottom),
+        (right, bottom),
+        (left, top),
+        (right, top),
+        (left, mid_y),
+        (right, mid_y),
+        (mid_x, bottom),
+        (mid_x, top),
+    ]
+
+
+def _fixture_footprint_size(fixture: dict[str, Any]) -> tuple[float, float]:
+    footprint = fixture.get("footprint") if isinstance(fixture.get("footprint"), dict) else {}
+    return (
+        float(footprint.get("width_m") or 0.45),
+        float(footprint.get("depth_m") or 0.35),
+    )
+
+
+def _room_bounds(room: dict[str, Any]) -> tuple[float, float, float, float]:
+    polygon = room.get("polygon") or []
+    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
+    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
+    if not xs or not ys:
+        return (0.0, 0.0, 2.0, 2.0)
+    return (min(xs), min(ys), max(xs), max(ys))
 
 
 def _semantics_payload(metric_map: dict[str, Any], fixture_hints: dict[str, Any]) -> dict[str, Any]:
