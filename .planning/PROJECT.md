@@ -38,11 +38,10 @@ visible output (GIFs, report.html) for every feature.
 
 <!-- Current scope. Building toward these. -->
 
-- [ ] **REQ-view-experiment-ab** — A/B/C experiment across baseline / map-v2 /
-      map-v2+chase-cam; Kimi workhorse sweep + NVIDIA confirm; decision record
-      on which variant graduates as default. Planned in GSD under
-      `.planning/phases/02.4-view-experiment-ab/`; `02.4-01` scopes the
-      single-agent `openclaw_demo.py` path first.
+- [x] **REQ-view-experiment-ab** — historical Phase 2.4 view experiment scope.
+      The repo standardized on `map-v2+chase` on 2026-04-24 and archived the
+      Phase 2.4 execution bundle under
+      `.planning/milestones/v1.98-phases/02.4-view-experiment-ab/`.
 - [ ] **REQ-vlm-provider-pluggable — NvidiaProvider extension** — extend the
       provider protocol with a fourth curated provider (`nvidia/nvidia/nemotron-nano-12b-v2-vl`)
       for the A/B NVIDIA confirm arm. Subsumed under REQ-vlm-provider-pluggable.
@@ -175,4 +174,4 @@ visible output (GIFs, report.html) for every feature.
 | **DEC-phase-2.2-matrix-not-showdown**. Ship 3 symmetric Layer 3 tiles (nav / territory / coverage); reject UC1 "Persona Showdown" framing. | User strategic call at 2026-04-16 final gate despite subagent CEO critique. | ✓ Good |
 
 ---
-*Last updated: 2026-04-21 after planning Phase 2.4 into GSD (`.planning/phases/02.4-view-experiment-ab/`)*
+*Last updated: 2026-05-19 after v1.98 planning archive*

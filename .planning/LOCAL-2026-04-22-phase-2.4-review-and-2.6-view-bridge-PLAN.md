@@ -6,9 +6,9 @@ scope:
   - phase-02.4-local-review
   - phase-02.6-view-bridge-followup
 related:
-  - .planning/phases/02.4-view-experiment-ab/02.4-04-analysis-local-dev-and-writeup-PLAN.md
-  - .planning/phases/02.6-openclaw-mcp-tools-integration/02.6-04-example-rewire-to-mcp-PLAN.md
-  - .planning/phases/02.6-openclaw-mcp-tools-integration/02.6-06-live-probe-gate-PLAN.md
+  - .planning/milestones/v1.98-phases/02.4-view-experiment-ab/02.4-04-analysis-local-dev-and-writeup-PLAN.md
+  - .planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-04-example-rewire-to-mcp-PLAN.md
+  - .planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/02.6-06-live-probe-gate-PLAN.md
 artifacts:
   - output/openclaw-demo-kimi-mapv2chase-50/
   - output/openclaw-autonomous-mapv2chase-smoke-rerun/

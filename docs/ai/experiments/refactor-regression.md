@@ -94,4 +94,4 @@ steps in `AGENTS.md §1` before capturing those suites.
 ## Evidence
 
 The first real baseline-refresh evidence for this phase belongs in
-[04-LOCAL-PROBE-RESULTS](../../../.planning/phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md).
+[04-LOCAL-PROBE-RESULTS](../../../.planning/milestones/v1.98-phases/04-refactor-regression-harnesses-for-vlm-territory-coverage-and/04-LOCAL-PROBE-RESULTS.md).
