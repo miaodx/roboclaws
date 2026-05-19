@@ -127,7 +127,6 @@ def _cleanup_report_sections(
     return _present_sections(
         [
             _cleanup_summary_section(scenario=scenario, run_result=run_result, score=score),
-            _current_contract_note(run_result),
             _realworld_contract_note(run_result),
             _cleanup_profile_note(run_result),
             _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
@@ -741,20 +740,6 @@ def _generated_mess_summary(run_result: dict[str, Any]) -> str:
     if requested is None or requested == actual:
         return actual
     return f"{actual} actual / {requested} requested"
-
-
-def _current_contract_note(run_result: dict[str, Any]) -> str:
-    if run_result.get("contract") != "current_contract":
-        return ""
-    shortcuts = ", ".join(str(item) for item in run_result.get("current_contract_shortcuts", []))
-    note = (
-        "Current-contract bridge run. Global scene_objects is intentionally "
-        "available for agent/tool viability dogfood; this artifact does not "
-        "satisfy ADR-0003 robot-local perception."
-    )
-    if shortcuts:
-        note += f" Shortcut(s): {shortcuts}."
-    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
 def _realworld_contract_note(run_result: dict[str, Any]) -> str:

@@ -9,7 +9,7 @@ import pytest
 
 from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.realworld_mcp_server import (
     MCP_SERVER_NAME,
@@ -219,7 +219,7 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     smoke = _load_smoke_module()
     scenario = build_cleanup_scenario(seed=7)
     backend = _FakeVisualBackend(scenario)
-    base_contract = MolmoCleanupToolContract(scenario, backend=backend)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=scenario,
@@ -248,7 +248,7 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
 def test_realworld_mcp_raw_fpv_mode_attaches_fpv_artifacts(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     backend = _FakeVisualBackend(scenario)
-    base_contract = MolmoCleanupToolContract(scenario, backend=backend)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=scenario,

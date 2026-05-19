@@ -47,24 +47,6 @@ class ApiSemanticCleanupBackend:
             held_object_id=self._held_object_id,
         )
 
-    def scene_objects(self, category: str | None = None) -> dict[str, Any]:
-        self._count("scene_objects")
-        objects = []
-        for obj in self.scenario.objects:
-            if category is not None and obj.category != category:
-                continue
-            item = obj.to_public_dict()
-            item["location_id"] = self._locations[obj.object_id]
-            containment = self._containment.get(obj.object_id)
-            if containment is not None:
-                item.update(containment)
-            objects.append(item)
-        return self._ok(
-            "scene_objects",
-            objects=objects,
-            receptacles=[item.to_public_dict() for item in self.scenario.receptacles],
-        )
-
     def planner_task_binding(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
         from roboclaws.molmo_cleanup.planner_observed_binding import (
             backend_planner_task_binding,
@@ -103,10 +85,6 @@ class ApiSemanticCleanupBackend:
             pickup_obj_name=obj.object_id,
             place_receptacle_name=receptacle.receptacle_id,
         )
-
-    def goto(self, receptacle_id: str) -> dict[str, Any]:
-        self._count("goto")
-        return self._navigate_to_receptacle("goto", receptacle_id)
 
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:
         self._count("navigate_to_object")
@@ -242,24 +220,6 @@ class ApiSemanticCleanupBackend:
             contained_in=receptacle_id if relation == "inside" else None,
             location_relation=relation,
             placement_diagnostic=diagnostic,
-        )
-
-    def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
-        self._count("object_done")
-        if object_id not in self._known_objects:
-            return self._stale_reference("object_done", object_id=object_id)
-        if receptacle_id not in self._known_receptacles:
-            return self._stale_reference("object_done", receptacle_id=receptacle_id)
-        containment = self._containment.get(object_id, {})
-        actual_location = self._locations.get(object_id)
-        return self._ok(
-            "object_done",
-            object_id=object_id,
-            receptacle_id=receptacle_id,
-            location_id=actual_location,
-            contained_in=containment.get("contained_in") or None,
-            location_relation=containment.get("location_relation") or "on",
-            matches_expected_location=actual_location == receptacle_id,
         )
 
     def done(self, reason: str = "") -> dict[str, Any]:

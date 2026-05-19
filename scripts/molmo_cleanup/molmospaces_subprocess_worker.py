@@ -42,7 +42,6 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("--generated-mess-count", type=int, default=5)
 
     subparsers.add_parser("observe")
-    subparsers.add_parser("scene_objects")
     subparsers.add_parser("locations")
 
     snapshot = subparsers.add_parser("snapshot")
@@ -54,9 +53,6 @@ def main(argv: list[str] | None = None) -> None:
     robot_views.add_argument("--label", required=True)
     robot_views.add_argument("--focus-object-id")
     robot_views.add_argument("--focus-receptacle-id")
-
-    goto = subparsers.add_parser("goto")
-    goto.add_argument("--receptacle-id", required=True)
 
     navigate_object = subparsers.add_parser("navigate_to_object")
     navigate_object.add_argument("--object-id", required=True)
@@ -79,10 +75,6 @@ def main(argv: list[str] | None = None) -> None:
     place_inside_parser = subparsers.add_parser("place_inside")
     place_inside_parser.add_argument("--receptacle-id", required=True)
 
-    object_done_parser = subparsers.add_parser("object_done")
-    object_done_parser.add_argument("--object-id", required=True)
-    object_done_parser.add_argument("--receptacle-id", required=True)
-
     done = subparsers.add_parser("done")
     done.add_argument("--reason", default="")
 
@@ -102,9 +94,6 @@ def main(argv: list[str] | None = None) -> None:
         if args.command == "observe":
             result = observe(state)
             _write_state(args.state_path, state)
-        elif args.command == "scene_objects":
-            result = scene_objects(state)
-            _write_state(args.state_path, state)
         elif args.command == "locations":
             result = _ok("locations", final_locations=_read_locations(state))
         elif args.command == "snapshot":
@@ -117,9 +106,6 @@ def main(argv: list[str] | None = None) -> None:
                 focus_object_id=args.focus_object_id,
                 focus_receptacle_id=args.focus_receptacle_id,
             )
-        elif args.command == "goto":
-            result = goto_receptacle(state, args.receptacle_id)
-            _write_state(args.state_path, state)
         elif args.command == "navigate_to_object":
             result = navigate_to_object(state, args.object_id)
             _write_state(args.state_path, state)
@@ -140,9 +126,6 @@ def main(argv: list[str] | None = None) -> None:
             _write_state(args.state_path, state)
         elif args.command == "place_inside":
             result = place_inside_object(state, args.receptacle_id)
-            _write_state(args.state_path, state)
-        elif args.command == "object_done":
-            result = object_done(state, args.object_id, args.receptacle_id)
             _write_state(args.state_path, state)
         elif args.command == "done":
             result = done_cleanup(state, args.reason)
@@ -294,19 +277,6 @@ def observe(state: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def scene_objects(state: dict[str, Any]) -> dict[str, Any]:
-    _count(state, "scene_objects")
-    state["scenario_public"] = _public_scenario(state)
-    return _ok(
-        "scene_objects",
-        backend=BACKEND,
-        objects=state["scenario_public"]["objects"],
-        receptacles=state["scenario_public"]["receptacles"],
-        inventory_source="molmospaces_metadata+mujoco_state",
-        metadata_object_count=state["metadata_object_count"],
-    )
-
-
 def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict[str, Any]:
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
@@ -405,11 +375,6 @@ def write_robot_views(
             "map": [420, 620, 3],
         },
     )
-
-
-def goto_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
-    _count(state, "goto")
-    return _navigate_to_receptacle(state, receptacle_id, tool="goto")
 
 
 def navigate_to_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
@@ -702,26 +667,6 @@ def close_receptacle(state: dict[str, Any], receptacle_id: str) -> dict[str, Any
             bool(closed_joints),
             held_object_pose is not None,
         ),
-        backend=BACKEND,
-    )
-
-
-def object_done(state: dict[str, Any], object_id: str, receptacle_id: str) -> dict[str, Any]:
-    _count(state, "object_done")
-    if object_id not in state["objects"]:
-        return _error("object_done", "stale_reference", object_id=object_id)
-    if receptacle_id not in state["receptacles"]:
-        return _error("object_done", "stale_reference", receptacle_id=receptacle_id)
-    final_locations = _read_locations(state)
-    obj = state["objects"][object_id]
-    return _ok(
-        "object_done",
-        object_id=object_id,
-        receptacle_id=receptacle_id,
-        location_id=final_locations.get(object_id),
-        contained_in=obj.get("contained_in"),
-        location_relation=obj.get("location_relation", "on"),
-        matches_expected_location=final_locations.get(object_id) == receptacle_id,
         backend=BACKEND,
     )
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
     backend_planner_task_binding_from_state,
@@ -13,7 +13,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -44,7 +44,7 @@ def test_realworld_observed_handle_planner_binding_stays_private() -> None:
 
 
 def test_observed_handle_planner_binding_requires_registered_handle() -> None:
-    contract = RealWorldCleanupContract(MolmoCleanupToolContract(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     binding = contract.planner_observed_handle_binding("observed_999", "sink_01")
 

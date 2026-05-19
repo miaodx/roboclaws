@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.devtools.commands import resolve_task_run
+from roboclaws.devtools.commands import CommandError, resolve_task_run
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JUSTFILE = REPO_ROOT / "justfile"
@@ -66,6 +66,23 @@ def trace_task_run(*args: str) -> list[str]:
         text=True,
     )
     return result.stdout.strip().split("\t")
+
+
+def assert_task_run_fails(*args: str) -> str:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "task::run", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    return result.stderr
 
 
 def clean_code_agent_env() -> dict[str, str]:
@@ -156,9 +173,21 @@ def test_task_module_exposes_only_run_publicly() -> None:
     assert "-m roboclaws.devtools.commands task run" in text
     assert "normalize_task()" not in text
     assert "normalize_driver()" not in text
-    assert "[private]\nnavigate " in text
-    assert "[private]\nterritory " in text
-    assert "[private]\ncleanup-report " in text
+
+    removed_wrappers = (
+        "navigate",
+        "photo-chairs",
+        "territory",
+        "coverage",
+        "control-ui",
+        "cleanup-quick-check",
+        "cleanup-report",
+        "cleanup-camera-raw",
+        "planner-proof",
+        "check",
+    )
+    for wrapper in removed_wrappers:
+        assert not re.search(rf"^\[private\]\n{re.escape(wrapper)}\b", text, re.MULTILINE)
 
     summary = just_summary()
     assert "task::run" in summary
@@ -192,31 +221,27 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
     ]
 
 
-def test_task_router_preserves_molmo_report_compatibility_aliases() -> None:
-    minimal_route = trace_task_run("molmo-cleanup", "codex", "minimal")
-    visual_route = trace_task_run("molmo-cleanup", "codex", "visual")
-
-    assert minimal_route[:6] == [
-        "just",
-        "molmo::cleanup",
-        "codex-live",
-        "smoke",
-        "7",
-        "output/molmo/codex-smoke",
-    ]
-    assert visual_route[:6] == [
-        "just",
-        "molmo::cleanup",
-        "codex-live",
-        "world-labels",
-        "7",
-        "output/molmo/codex-report",
-    ]
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    (
+        (("molmospace-cleanup", "codex"), "unsupported task 'molmospace-cleanup'"),
+        (("molmospaces-cleanup", "codex"), "unsupported task 'molmospaces-cleanup'"),
+        (("cleanup-report", "direct"), "unsupported task 'cleanup-report'"),
+        (("molmo-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
+        (("molmo-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
+        (("molmo-cleanup", "codex", "minimal"), "unsupported molmo-cleanup profile"),
+        (("molmo-cleanup", "codex", "visual"), "unsupported molmo-cleanup profile"),
+    ),
+)
+def test_task_router_rejects_removed_compatibility_aliases(
+    args: tuple[str, ...], expected: str
+) -> None:
+    assert expected in assert_task_run_fails(*args)
 
 
 def test_task_router_is_importable_source_of_truth() -> None:
     resolved = resolve_task_run(
-        ("molmospace-cleanup", "codex-live", "profile=minimal", "output_dir=output/custom")
+        ("molmo-cleanup", "codex", "profile=smoke", "output_dir=output/custom")
     )
 
     assert resolved.argv == (
@@ -230,6 +255,9 @@ def test_task_router_is_importable_source_of_truth() -> None:
     assert resolved.task == "molmo-cleanup"
     assert resolved.driver == "codex"
     assert resolved.mode == "smoke"
+
+    with pytest.raises(CommandError, match="unsupported task 'molmospace-cleanup'"):
+        resolve_task_run(("molmospace-cleanup", "codex"))
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:

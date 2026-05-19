@@ -12,48 +12,23 @@ import sys
 from dataclasses import dataclass
 from typing import NoReturn
 
-TASK_ALIASES: dict[str, str] = {
-    "ai2thor-nav": "ai2thor-nav",
-    "nav": "ai2thor-nav",
-    "navigate": "ai2thor-nav",
-    "navigation": "ai2thor-nav",
-    "ai2thor-navigation": "ai2thor-nav",
-    "territory": "territory",
-    "territory-game": "territory",
-    "coverage": "coverage",
-    "coverage-game": "coverage",
-    "photo-chairs": "photo-chairs",
-    "photo": "photo-chairs",
-    "photo-task": "photo-chairs",
-    "chairs": "photo-chairs",
-    "chairs-photo": "photo-chairs",
-    "molmo-cleanup": "molmo-cleanup",
-    "molmospaces-cleanup": "molmo-cleanup",
-    "molmospace-cleanup": "molmo-cleanup",
-    "cleanup": "molmo-cleanup",
-    "cleanup-report": "molmo-cleanup",
-    "molmo-planner-proof": "molmo-planner-proof",
-    "planner-proof": "molmo-planner-proof",
-    "proof-bundle": "molmo-planner-proof",
+CANONICAL_TASKS: set[str] = {
+    "ai2thor-nav",
+    "territory",
+    "coverage",
+    "photo-chairs",
+    "molmo-cleanup",
+    "molmo-planner-proof",
 }
 
-DRIVER_ALIASES: dict[str, str] = {
-    "openclaw": "openclaw",
-    "openclaw-live": "openclaw",
-    "vlm": "vlm",
-    "direct-vlm": "vlm",
-    "codex": "codex",
-    "codex-live": "codex",
-    "claude": "claude",
-    "claudecode": "claude",
-    "cc": "claude",
-    "claude-live": "claude",
-    "script": "script",
-    "mock": "script",
-    "direct": "direct",
-    "mcp-smoke": "mcp-smoke",
-    "mcp_smoke": "mcp-smoke",
-    "mcp": "mcp-smoke",
+CANONICAL_DRIVERS: set[str] = {
+    "openclaw",
+    "vlm",
+    "codex",
+    "claude",
+    "script",
+    "direct",
+    "mcp-smoke",
 }
 
 SUPPORTED_ROUTES: set[tuple[str, str]] = {
@@ -79,10 +54,6 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
 
 NON_MOLMO_REPORTS = {"visual", "minimal"}
 MOLMO_CLEANUP_PROFILES = {"smoke", "world-labels", "camera-raw", "camera-labels"}
-MOLMO_CLEANUP_PROFILE_ALIASES = {
-    "minimal": "smoke",
-    "visual": "world-labels",
-}
 
 
 class CommandError(ValueError):
@@ -113,25 +84,23 @@ def _strip_named(value: str, name: str) -> str:
 
 def _normalize_task(value: str) -> str:
     task = _strip_named(value, "task")
-    try:
-        return TASK_ALIASES[task]
-    except KeyError as exc:
+    if task not in CANONICAL_TASKS:
         raise CommandError(
             f"unsupported task '{task}'",
             "expected ai2thor-nav|territory|coverage|photo-chairs|"
             "molmo-cleanup|molmo-planner-proof",
-        ) from exc
+        )
+    return task
 
 
 def _normalize_driver(value: str) -> str:
     driver = _strip_named(value, "driver")
-    try:
-        return DRIVER_ALIASES[driver]
-    except KeyError as exc:
+    if driver not in CANONICAL_DRIVERS:
         raise CommandError(
             f"unsupported driver '{driver}'",
             "expected openclaw|vlm|codex|claude|script|direct|mcp-smoke",
-        ) from exc
+        )
+    return driver
 
 
 def _split_mode_and_overrides(
@@ -154,12 +123,10 @@ def _split_mode_and_overrides(
 def _resolve_dispatch_mode(task: str, raw_mode: str) -> str:
     if task == "molmo-cleanup":
         profile = raw_mode or "world-labels"
-        profile = MOLMO_CLEANUP_PROFILE_ALIASES.get(profile, profile)
         if profile not in MOLMO_CLEANUP_PROFILES:
             raise CommandError(
                 f"unsupported molmo-cleanup profile '{raw_mode}'",
-                "expected smoke|world-labels|camera-raw|camera-labels "
-                "(compatibility aliases: visual->world-labels, minimal->smoke)",
+                "expected smoke|world-labels|camera-raw|camera-labels",
             )
         return profile
 

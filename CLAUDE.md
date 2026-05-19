@@ -178,6 +178,19 @@ see `docs/human/openclaw/local.md`.
 | **Make it work first** | Day 1-2: simplest pipeline to validate core hypothesis. Day 3+: add OpenClaw |
 | **Visualization first** | Every feature must produce visible output (screenshots/GIFs/video) |
 
+### Legacy support policy
+
+This repo has no backward-compatibility burden for obsolete demo surfaces. Code,
+docs, tests, skills, or recipes labeled `legacy`, `current-contract`, or kept
+only for compatibility are removal or replacement candidates, not APIs to
+preserve.
+
+Prefer the current docs and active profile contracts over preserving old paths.
+If a legacy surface conflicts with a cleaner current design, update or delete
+the legacy surface and its tests/docs in the same scoped change. Preserve a
+legacy path only when the user explicitly asks for it or when it is still the
+sole working route for the requested demo.
+
 ## Gotchas
 
 - AI2-THOR downloads a Unity build (~1GB) on first run

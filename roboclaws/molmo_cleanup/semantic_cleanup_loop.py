@@ -8,7 +8,6 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     CLOSE_RECEPTACLE_PHASE,
     NAVIGATE_TO_OBJECT_PHASE,
     NAVIGATE_TO_RECEPTACLE_PHASE,
-    OBJECT_DONE_PHASE,
     OPEN_RECEPTACLE_PHASE,
     PICK_PHASE,
     PLACE_INSIDE_PHASE,
@@ -33,7 +32,6 @@ def run_semantic_cleanup_loop(
     call_tool: ToolCall,
     receptacles_by_id: Mapping[str, Mapping[str, Any]] | None = None,
     record_tool_view: ToolViewRecorder | None = None,
-    include_object_done: bool = False,
     target_request_key: str = "receptacle_id",
     include_object_id_in_receptacle_request: bool = True,
     include_object_id_in_target_requests: bool = True,
@@ -57,7 +55,6 @@ def run_semantic_cleanup_loop(
             object_id=object_id,
             target_receptacle_id=target_receptacle_id,
             source_receptacle_id=source_receptacle_id,
-            include_object_done=include_object_done,
             target_request_key=target_request_key,
             include_object_id_in_receptacle_request=include_object_id_in_receptacle_request,
             include_object_id_in_target_requests=include_object_id_in_target_requests,
@@ -90,7 +87,6 @@ def _run_one_object(
     object_id: str,
     target_receptacle_id: str,
     source_receptacle_id: str,
-    include_object_done: bool,
     target_request_key: str,
     include_object_id_in_receptacle_request: bool,
     include_object_id_in_target_requests: bool,
@@ -196,17 +192,6 @@ def _run_one_object(
         )
         if not response.get("ok"):
             return False, _failed_step(CLOSE_RECEPTACLE_PHASE, response)
-
-    if include_object_done:
-        response = _invoke(
-            call_tool,
-            record_tool_view,
-            OBJECT_DONE_PHASE,
-            {"object_id": object_id, "receptacle_id": target_receptacle_id},
-            lambda: contract.object_done(object_id, target_receptacle_id),
-        )
-        if not response.get("ok"):
-            return False, _failed_step(OBJECT_DONE_PHASE, response)
 
     return True, {}
 

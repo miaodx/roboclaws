@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation  # noqa: E402
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
+from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (  # noqa: E402
     cleanup_primitive_evidence_from_substeps,
 )
@@ -22,7 +23,6 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
-from roboclaws.molmo_cleanup.mcp_contract import MolmoCleanupToolContract  # noqa: E402
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
     planner_cleanup_bridge_evidence,
 )
@@ -180,7 +180,7 @@ def run_realworld_cleanup(
     else:
         scenario = build_cleanup_scenario(seed=seed)
 
-    base_contract = MolmoCleanupToolContract(scenario, backend=backend_instance)
+    base_contract = CleanupBackendSession(scenario, backend=backend_instance)
     contract = RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
@@ -546,7 +546,7 @@ def _clean_visible_object(
     trace_events: list[dict[str, Any]],
     started_at: float,
     contract: RealWorldCleanupContract,
-    base_contract: MolmoCleanupToolContract,
+    base_contract: CleanupBackendSession,
     detection: dict[str, Any],
     target_fixture: dict[str, Any],
     robot_view_steps: list[dict[str, Any]],
@@ -641,7 +641,7 @@ def _clean_visible_object(
 def _write_snapshot(
     *,
     backend: str,
-    contract: MolmoCleanupToolContract,
+    contract: CleanupBackendSession,
     scenario: Any,
     output_path: Path,
     title: str,
@@ -720,7 +720,7 @@ def _attach_raw_fpv_robot_view(
     *,
     response: dict[str, Any],
     contract: RealWorldCleanupContract,
-    base_contract: MolmoCleanupToolContract,
+    base_contract: CleanupBackendSession,
     robot_view_steps: list[dict[str, Any]],
     output_dir: Path,
     view_index_ref: list[int],

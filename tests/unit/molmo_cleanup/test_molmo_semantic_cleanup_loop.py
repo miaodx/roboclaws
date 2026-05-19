@@ -25,7 +25,6 @@ def test_semantic_cleanup_loop_runs_canonical_fridge_sequence() -> None:
             }
         ],
         contract=contract,
-        include_object_done=True,
         call_tool=lambda tool, request, fn: _record_call(calls, tool, request, fn),
         record_tool_view=lambda tool, _request, _response: recorded.append(tool),
     )
@@ -40,7 +39,6 @@ def test_semantic_cleanup_loop_runs_canonical_fridge_sequence() -> None:
         "open_receptacle",
         "place_inside",
         "close_receptacle",
-        "object_done",
     ]
     assert recorded == [tool for tool, _request in calls]
     assert calls[0][1] == {
@@ -104,7 +102,6 @@ def test_semantic_cleanup_loop_places_inside_open_shelf_without_close() -> None:
             }
         ],
         contract=contract,
-        include_object_done=True,
         call_tool=lambda tool, request, fn: _record_call(calls, tool, request, fn),
     )
 
@@ -114,7 +111,6 @@ def test_semantic_cleanup_loop_places_inside_open_shelf_without_close() -> None:
         "pick",
         "navigate_to_receptacle",
         "place_inside",
-        "object_done",
     ]
 
 
@@ -229,9 +225,6 @@ class _FakeCleanupContract:
 
     def close_receptacle(self, receptacle_id: str) -> dict[str, Any]:
         return _ok("close_receptacle", object_id="held_object", receptacle_id=receptacle_id)
-
-    def object_done(self, object_id: str, receptacle_id: str) -> dict[str, Any]:
-        return _ok("object_done", object_id=object_id, receptacle_id=receptacle_id)
 
 
 def _ok(tool: str, **payload: Any) -> dict[str, Any]:

@@ -99,6 +99,7 @@ def test_run_direct_server_starts_mcp_and_writes_result(
     assert mcp_kwargs["host"] == "127.0.0.1"
     assert mcp_kwargs["port"] == 18788
     assert mcp_kwargs["snapshots_dir"] == output_dir / "snapshots" / "agent-0"
+    assert mcp_kwargs["allow_privileged_tools"] is False
     fake_server.run_in_thread.assert_called_once()
     fake_server.close.assert_called_once()
     engine_cls.return_value.close.assert_called_once()

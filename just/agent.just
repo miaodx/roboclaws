@@ -327,9 +327,7 @@ verify target="mock" *args:
 
     case "$target" in
       static|mock|contract|regression-mock|local-sim|local-openclaw|navigator|\
-      molmo-cleanup|molmo-prompt-cleanup|molmo-real-cleanup|molmo-robot-visual|\
-      molmo-agent-bridge|molmo-agent-bridge-visual|molmo-realworld-cleanup|\
-      molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
+      molmo-realworld-cleanup|molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
       molmo-planner-proof-bundle-runner|molmo-planner-proof-bundle-execute-rerun|\
@@ -363,9 +361,7 @@ harness target *args:
     }
 
     case "$target" in
-      run|navigator|regression|sim|openclaw|molmo-cleanup|molmo-prompt-cleanup|\
-      molmo-real-cleanup|molmo-robot-visual|molmo-agent-bridge|\
-      molmo-agent-bridge-visual|molmo-realworld-cleanup|\
+      run|navigator|regression|sim|openclaw|molmo-realworld-cleanup|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
