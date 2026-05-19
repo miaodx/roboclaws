@@ -19,6 +19,7 @@ class MolmoLiveModelEntry:
     provider_profile: str
     model: str
     secret_env: str
+    profile: str
 
 
 MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
@@ -28,6 +29,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="kimi-anthropic",
         model="kimi-k2.6",
         secret_env="KIMI_API_KEY",
+        profile="world-labels",
     ),
     MolmoLiveModelEntry(
         name="mimo-v2.5-pro",
@@ -35,6 +37,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="mimo-anthropic",
         model="mimo-v2.5-pro",
         secret_env="MIMO_TP_KEY",
+        profile="world-labels",
     ),
     MolmoLiveModelEntry(
         name="mimo-v2-omni",
@@ -42,6 +45,23 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="mimo-anthropic",
         model="mimo-v2-omni",
         secret_env="MIMO_TP_KEY",
+        profile="world-labels",
+    ),
+    MolmoLiveModelEntry(
+        name="kimi-k2.6-camera-raw",
+        label="Kimi K2.6 RAW_FPV",
+        provider_profile="kimi-anthropic",
+        model="kimi-k2.6",
+        secret_env="KIMI_API_KEY",
+        profile="camera-raw",
+    ),
+    MolmoLiveModelEntry(
+        name="mimo-v2-omni-camera-raw",
+        label="MiMo v2 Omni RAW_FPV",
+        provider_profile="mimo-anthropic",
+        model="mimo-v2-omni",
+        secret_env="MIMO_TP_KEY",
+        profile="camera-raw",
     ),
 )
 
@@ -245,7 +265,7 @@ def write_live_index(root: Path, statuses: list[dict[str, Any]] | None = None) -
         rows = "\n".join(_live_index_row(status) for status in statuses)
     else:
         rows = (
-            '<tr><td colspan="6">No MolmoSpaces live cleanup statuses were '
+            '<tr><td colspan="7">No MolmoSpaces live cleanup statuses were '
             "published in this Pages build.</td></tr>"
         )
 
@@ -274,7 +294,7 @@ def write_live_index(root: Path, statuses: list[dict[str, Any]] | None = None) -
                 "MolmoSpaces cleanup runs. Each row links to the report or diagnostics "
                 "for one provider-backed Claude Code run.</p>",
                 "<table>",
-                "<thead><tr><th>Model</th><th>Status</th><th>Report</th>"
+                "<thead><tr><th>Model</th><th>Status</th><th>Profile</th><th>Report</th>"
                 "<th>Provider</th><th>Rerun locally</th><th>Reason</th></tr></thead>",
                 f"<tbody>{rows}</tbody>",
                 "</table>",
@@ -292,6 +312,7 @@ def _live_index_row(status: dict[str, Any]) -> str:
     state = html.escape(str(status.get("status") or "unknown"))
     provider = html.escape(str(status.get("provider_profile") or "unknown provider"))
     model = html.escape(str(status.get("model") or "unknown model"))
+    profile = html.escape(str(status.get("profile") or "unknown profile"))
     reason = html.escape(str(status.get("reason") or ""))
     report_path = str(status.get("report_path") or "")
     diagnostic_path = str(status.get("diagnostic_path") or "")
@@ -310,6 +331,7 @@ def _live_index_row(status: dict[str, Any]) -> str:
         "<tr>"
         f"<td>{label}<br><code>{model}</code></td>"
         f"<td><code>{state}</code></td>"
+        f"<td><code>{profile}</code></td>"
         f"<td>{report}</td>"
         f"<td><code>{provider}</code></td>"
         f"<td><code>{rerun_command}</code></td>"

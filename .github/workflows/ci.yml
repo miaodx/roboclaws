@@ -603,6 +603,8 @@ jobs:
           - kimi-k2.6
           - mimo-v2.5-pro
           - mimo-v2-omni
+          - kimi-k2.6-camera-raw
+          - mimo-v2-omni-camera-raw
 
     steps:
       - uses: actions/checkout@v4
@@ -777,6 +779,22 @@ jobs:
           name: report-molmo-live-mimo-v2-omni
           path: molmo-live-src/mimo-v2-omni
 
+      - name: Download Molmo live Kimi RAW_FPV artifact (best-effort)
+        id: download_molmo_live_kimi_camera_raw
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: report-molmo-live-kimi-k2.6-camera-raw
+          path: molmo-live-src/kimi-k2.6-camera-raw
+
+      - name: Download Molmo live MiMo Omni RAW_FPV artifact (best-effort)
+        id: download_molmo_live_mimo_omni_camera_raw
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: report-molmo-live-mimo-v2-omni-camera-raw
+          path: molmo-live-src/mimo-v2-omni-camera-raw
+
       # Normal main pushes do not run the opt-in Molmo live matrix, but they
       # still redeploy Pages. Rehydrate the latest successful live dispatch so
       # routine report publishes do not erase the public Molmo live section.
@@ -787,7 +805,9 @@ jobs:
         run: |
           if [ -f molmo-live-src/kimi-k2.6/status.json ] \
              || [ -f molmo-live-src/mimo-v2.5-pro/status.json ] \
-             || [ -f molmo-live-src/mimo-v2-omni/status.json ]; then
+             || [ -f molmo-live-src/mimo-v2-omni/status.json ] \
+             || [ -f molmo-live-src/kimi-k2.6-camera-raw/status.json ] \
+             || [ -f molmo-live-src/mimo-v2-omni-camera-raw/status.json ]; then
             echo "Molmo live artifacts are already present in this workflow run."
             exit 0
           fi
@@ -815,6 +835,12 @@ jobs:
           gh run download "$run_id" \
             --name report-molmo-live-mimo-v2-omni \
             --dir molmo-live-src/mimo-v2-omni || true
+          gh run download "$run_id" \
+            --name report-molmo-live-kimi-k2.6-camera-raw \
+            --dir molmo-live-src/kimi-k2.6-camera-raw || true
+          gh run download "$run_id" \
+            --name report-molmo-live-mimo-v2-omni-camera-raw \
+            --dir molmo-live-src/mimo-v2-omni-camera-raw || true
 
       # Slot replays at /smoke/{territory,coverage}/ and (when present)
       # /openclaw/{demo,territory,coverage}/, then rewrite index.html so

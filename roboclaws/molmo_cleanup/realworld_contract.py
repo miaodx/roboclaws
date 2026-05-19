@@ -34,6 +34,7 @@ RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
 RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
+VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
         VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -41,6 +42,7 @@ REALWORLD_PERCEPTION_MODES = frozenset(
         CAMERA_MODEL_POLICY_MODE,
     }
 )
+_NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
 
 
 def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> str:
@@ -52,7 +54,10 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         f"image block for {subject}, do not batch-register candidates first, "
         "and call navigate_to_visual_candidate only when acting on a plausible "
         "cleanup object. Use broad cleanup categories such as "
-        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain."
+        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain. "
+        "After a successful pick/place for an observed handle, do not act on "
+        "that same handle again; if grounding resolves to an already-handled "
+        "object, continue the waypoint sweep."
     )
 
 
@@ -96,13 +101,33 @@ _OBJECT_CATEGORY_TARGETS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = 
         ),
         ("fridge", "refrigerator"),
     ),
-    (("remotecontrol", "remote", "electronics", "phone", "controller"), ("tvstand", "tv stand")),
+    (
+        (
+            "remotecontrol",
+            "remote",
+            "electronics",
+            "phone",
+            "cellphone",
+            "smartphone",
+            "mobilephone",
+            "laptop",
+            "computer",
+            "tablet",
+            "controller",
+            "alarmclock",
+            "clock",
+        ),
+        ("tvstand", "tv stand"),
+    ),
     (("pillow", "teddybear", "teddy", "plush", "cushion"), ("bed", "sofa")),
     (
         ("linen", "towel", "cloth", "blanket", "shirt", "clothing", "clothes"),
         ("laundryhamper", "laundry hamper", "hamper"),
     ),
-    (("toy", "toycar", "ball", "basketball", "soccer", "game"), ("toybin", "toy bin")),
+    (
+        ("toy", "toycar", "ball", "basketball", "soccer", "game", "teddybear", "teddy", "plush"),
+        ("toybin", "toy bin"),
+    ),
 )
 
 
@@ -545,6 +570,20 @@ class RealWorldCleanupContract:
         declarations = declaration_response.get("model_declared_observations") or []
         declaration = declarations[0] if declarations else {}
         handle = str(declaration.get("object_id") or "")
+        if declaration.get("actionability_status") == "already_handled":
+            return self._error(
+                "navigate_to_visual_candidate",
+                VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
+                model_declared_observation=declaration,
+                object_id=handle,
+                grounding_status=declaration.get("grounding_status", "unresolved"),
+                actionability_status="already_handled",
+                required_next_tool="observe",
+                recovery_hint=declaration.get(
+                    "recovery_hint",
+                    "This observed handle was already handled; continue the waypoint sweep.",
+                ),
+            )
         if declaration.get("grounding_status") != "resolved":
             return self._error(
                 "navigate_to_visual_candidate",
@@ -572,11 +611,16 @@ class RealWorldCleanupContract:
             for key, value in navigation.items()
             if key not in {"tool", "ok", "status", "object_id"}
         }
+        detection = self._detections_by_handle.get(handle, {})
         return self._ok(
             "navigate_to_visual_candidate",
             **payload,
             object_id=handle,
             model_declared_observation=declaration,
+            candidate_fixture_id=detection.get("candidate_fixture_id", ""),
+            candidate_fixture_category=detection.get("candidate_fixture_category", ""),
+            cleanup_recommended=bool(detection.get("cleanup_recommended", False)),
+            recommended_tool=detection.get("recommended_tool", ""),
             declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
             required_next_tool="pick",
         )
@@ -782,6 +826,38 @@ class RealWorldCleanupContract:
         )
 
     def done(self, reason: str = "") -> dict[str, Any]:
+        pending = self._pending_cleanup_candidates()
+        if pending:
+            return self._error(
+                "done",
+                "pending_cleanup_candidates",
+                required_tool="navigate_to_object",
+                pending_observed_handles=[str(item["object_id"]) for item in pending],
+                pending_cleanup_candidates=pending,
+                recovery_hint=(
+                    "Clean pending observed handles before done: navigate_to_object -> pick -> "
+                    "navigate_to_receptacle(candidate_fixture_id) -> place/place_inside, using "
+                    "open_receptacle/close_receptacle for fridge-like fixtures."
+                ),
+            )
+        coverage = self._sweep_coverage()
+        if coverage["sweep_coverage_rate"] < 0.90:
+            next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
+            return self._error(
+                "done",
+                "insufficient_sweep_coverage",
+                required_tool="navigate_to_waypoint",
+                next_waypoint_id=next_waypoint_id,
+                sweep_coverage_rate=coverage["sweep_coverage_rate"],
+                observed_waypoint_count=coverage["observed_waypoint_count"],
+                total_waypoints=coverage["total_waypoints"],
+                unvisited_waypoint_ids=coverage["unvisited_waypoint_ids"],
+                recovery_hint=(
+                    "Continue the public sweep before done: call navigate_to_waypoint("
+                    f"{next_waypoint_id}) and observe. Do not use done as a system "
+                    "assessment while static-map inspection waypoints remain unvisited."
+                ),
+            )
         if self.perception_mode == RAW_FPV_ONLY_MODE:
             declaration_count = len(self._model_declared_observations)
             if declaration_count < 7:
@@ -797,20 +873,6 @@ class RealWorldCleanupContract:
                         "seen in raw FPV images before calling done."
                     ),
                 )
-        pending = self._pending_cleanup_candidates()
-        if pending:
-            return self._error(
-                "done",
-                "pending_cleanup_candidates",
-                required_tool="navigate_to_object",
-                pending_observed_handles=[str(item["object_id"]) for item in pending],
-                pending_cleanup_candidates=pending,
-                recovery_hint=(
-                    "Clean pending observed handles before done: navigate_to_object -> pick -> "
-                    "navigate_to_receptacle(candidate_fixture_id) -> place/place_inside, using "
-                    "open_receptacle/close_receptacle for fridge-like fixtures."
-                ),
-            )
         done = self.contract.done(reason=reason)
         if not done.get("ok"):
             return done
@@ -829,6 +891,22 @@ class RealWorldCleanupContract:
             contract=REALWORLD_CONTRACT,
             policy_uses_private_truth=False,
         )
+
+    def _sweep_coverage(self) -> dict[str, Any]:
+        total_waypoints = len(self._waypoints)
+        unvisited = [
+            str(item["waypoint_id"])
+            for item in self._waypoints
+            if str(item["waypoint_id"]) not in self._observed_waypoint_ids
+        ]
+        observed_count = total_waypoints - len(unvisited)
+        rate = observed_count / total_waypoints if total_waypoints else 1.0
+        return {
+            "sweep_coverage_rate": round(rate, 6),
+            "observed_waypoint_count": observed_count,
+            "total_waypoints": total_waypoints,
+            "unvisited_waypoint_ids": unvisited,
+        }
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [
@@ -1346,6 +1424,9 @@ class RealWorldCleanupContract:
         match = self._resolve_visual_candidate(waypoint, normalized)
         declaration = self._declaration_from_resolution(normalized, match)
         handle = str(declaration["object_id"])
+        if match["status"] == "already_handled":
+            self._model_declared_observations.append(declaration)
+            return dict(declaration)
         if match["status"] == "resolved":
             obj = match["objects"][0]
             location_id = str(match["location_ids"][0])
@@ -1449,12 +1530,43 @@ class RealWorldCleanupContract:
     ) -> dict[str, Any]:
         category_norm = _norm(candidate.get("category"))
         source_fixture_id = str(candidate.get("source_fixture_id") or "")
+        match = self._visual_candidate_match_for_source(
+            waypoint,
+            category_norm=category_norm,
+            source_fixture_id=source_fixture_id,
+        )
+        if match["status"] != "unresolved" or not source_fixture_id:
+            return match
+        fallback = self._visual_candidate_match_for_source(
+            waypoint,
+            category_norm=category_norm,
+            source_fixture_id="",
+        )
+        if fallback["status"] != "unresolved":
+            fallback["source_fixture_fallback"] = True
+            fallback["requested_source_fixture_id"] = source_fixture_id
+        return fallback
+
+    def _visual_candidate_match_for_source(
+        self,
+        waypoint: dict[str, Any],
+        *,
+        category_norm: str,
+        source_fixture_id: str,
+    ) -> dict[str, Any]:
         candidates = []
         location_ids = []
+        handled_candidates = []
+        handled_location_ids = []
         for obj, location_id in self._objects_visible_from_waypoint(waypoint):
             if category_norm and not _declared_category_matches_object(category_norm, obj):
                 continue
             if source_fixture_id and location_id != source_fixture_id:
+                continue
+            existing_handle = self._observed_handles_by_object_id.get(obj.object_id)
+            if existing_handle and self._handle_is_non_actionable(existing_handle):
+                handled_candidates.append(obj)
+                handled_location_ids.append(location_id)
                 continue
             candidates.append(obj)
             location_ids.append(location_id)
@@ -1462,6 +1574,12 @@ class RealWorldCleanupContract:
             return {"status": "resolved", "objects": candidates, "location_ids": location_ids}
         if len(candidates) > 1:
             return {"status": "ambiguous", "objects": candidates, "location_ids": location_ids}
+        if handled_candidates:
+            return {
+                "status": "already_handled",
+                "objects": handled_candidates,
+                "location_ids": handled_location_ids,
+            }
         return {"status": "unresolved", "objects": [], "location_ids": []}
 
     def _declaration_from_resolution(
@@ -1473,9 +1591,28 @@ class RealWorldCleanupContract:
         objects = match.get("objects") or []
         if status == "resolved":
             handle = self._handle_for_object(objects[0].object_id)
-            basis = "single public camera-context object matched category/source/target hints"
+            if match.get("source_fixture_fallback"):
+                basis = (
+                    "single public camera-context object matched category after "
+                    "source fixture hint did not match"
+                )
+            else:
+                basis = "single public camera-context object matched category/source/target hints"
             confidence = _grounding_confidence(candidate, "resolved")
             recovery_hint = ""
+            grounding_status = "resolved"
+            actionability_status = "actionable"
+        elif status == "already_handled":
+            handle = self._handle_for_object(objects[0].object_id)
+            lifecycle = self._object_lifecycle.get(handle, {})
+            basis = "only matching public camera-context object was already handled"
+            confidence = _grounding_confidence(candidate, "unresolved")
+            recovery_hint = (
+                "The matching observed handle has already been placed or otherwise "
+                "handled. Continue the waypoint sweep and observe for other objects."
+            )
+            grounding_status = "unresolved"
+            actionability_status = "already_handled"
         else:
             handle = self._new_unresolved_handle()
             basis = (
@@ -1489,6 +1626,8 @@ class RealWorldCleanupContract:
                 if status == "ambiguous"
                 else "Reobserve from another waypoint or declare a clearer category/source fixture."
             )
+            grounding_status = status
+            actionability_status = "needs_clarification"
         target_fixture_id = str(candidate.get("target_fixture_id") or "")
         target_fixture = self._fixtures.get(target_fixture_id, {})
         target_plausibility = self._target_plausibility(
@@ -1512,13 +1651,16 @@ class RealWorldCleanupContract:
             "producer_type": str(candidate["producer_type"]),
             "producer_id": str(candidate["producer_id"]),
             "supersedes_observation_id": str(candidate.get("supersedes_observation_id") or ""),
-            "grounding_status": status,
+            "grounding_status": grounding_status,
             "grounding_confidence": confidence,
             "grounding_basis": basis,
             "recovery_hint": recovery_hint,
             "target_plausibility": target_plausibility,
+            "actionability_status": actionability_status,
             "private_truth_included": False,
         }
+        if status == "already_handled":
+            declaration["handled_state"] = str(lifecycle.get("state") or "handled")
         _assert_no_forbidden_agent_view_keys(declaration)
         return declaration
 
@@ -1801,6 +1943,12 @@ class RealWorldCleanupContract:
             return float(confidence)
         except (TypeError, ValueError):
             return 0.5
+
+    def _handle_is_non_actionable(self, handle: str) -> bool:
+        if handle in self._handled_handles:
+            return True
+        state = str((self._object_lifecycle.get(handle) or {}).get("state") or "")
+        return state in _NON_ACTIONABLE_HANDLE_STATES
 
     def _preferred_waypoint_for_fixture(self, fixture_id: str) -> str:
         for waypoint in self._waypoints:
@@ -2090,6 +2238,7 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
         )
     if tool in {
         "navigate_to_object",
+        "navigate_to_visual_candidate",
         "pick",
         "navigate_to_receptacle",
         "open_receptacle",
@@ -2376,18 +2525,24 @@ def _declared_category_matches_object(category_norm: str, obj: Any) -> bool:
     object_norm = _norm(f"{getattr(obj, 'category', '')} {getattr(obj, 'name', '')}")
     if not category_norm or category_norm in object_norm or object_norm in category_norm:
         return True
-    declared_family = _category_alias_family(category_norm)
-    object_family = _category_alias_family(object_norm)
-    return declared_family != "" and declared_family == object_family
+    declared_families = _category_alias_families(category_norm)
+    object_families = _category_alias_families(object_norm)
+    return bool(declared_families.intersection(object_families))
 
 
 def _category_alias_family(text_norm: str) -> str:
+    families = _category_alias_families(text_norm)
+    return next(iter(families), "")
+
+
+def _category_alias_families(text_norm: str) -> set[str]:
+    families = set()
     for aliases, _targets in _OBJECT_CATEGORY_TARGETS:
         for alias in aliases:
             alias_norm = _norm(alias)
             if alias_norm and (alias_norm in text_norm or text_norm in alias_norm):
-                return aliases[0]
-    return ""
+                families.add(aliases[0])
+    return families
 
 
 def _room_id(room_area: str) -> str:

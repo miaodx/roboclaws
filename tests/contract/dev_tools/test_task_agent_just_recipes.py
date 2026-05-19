@@ -311,6 +311,19 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     ]
 
 
+def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r'camera-raw\)\n\s+kickoff_prompt="([^"]+)"', text)
+    assert match is not None
+    prompt = match.group(1)
+
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
+    assert "mark a waypoint complete only after" in prompt
+    assert "compare the checklist before roboclaws__done" in prompt
+    assert "visit any missing waypoint_id" in prompt
+
+
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
