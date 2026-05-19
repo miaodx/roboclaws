@@ -18,6 +18,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
@@ -59,6 +60,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--map-bundle-dir",
+        type=Path,
+        help="Prebuilt Nav2 map bundle path, or environment id under assets/maps.",
+    )
+    parser.add_argument("--require-map-bundle", action="store_true")
     parser.add_argument(
         "--perception-mode",
         choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
@@ -165,6 +172,8 @@ def run_molmo_realworld_cleanup_agent_server(
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
+    map_bundle_dir: str | Path | None = None,
+    require_map_bundle: bool = False,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
@@ -176,6 +185,10 @@ def run_molmo_realworld_cleanup_agent_server(
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    selected_bundle_dir = selected_nav2_map_bundle_dir(
+        map_bundle_dir,
+        required=require_map_bundle,
+    )
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
         raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
     if record_robot_views and (backend != MOLMOSPACES_SUBPROCESS_BACKEND or not include_robot):
@@ -212,6 +225,7 @@ def run_molmo_realworld_cleanup_agent_server(
             task_prompt=task_prompt,
             fixture_hint_mode="room_only",
             perception_mode=perception_mode,
+            map_bundle_dir=selected_bundle_dir,
             record_robot_views=record_robot_views,
             cleanup_profile=cleanup_profile,
         )
@@ -271,6 +285,8 @@ def main(argv: list[str] | None = None) -> int:
             task_prompt=args.task,
             backend=args.backend,
             generated_mess_count=args.generated_mess_count,
+            map_bundle_dir=args.map_bundle_dir,
+            require_map_bundle=args.require_map_bundle,
             perception_mode=args.perception_mode,
             include_robot=args.include_robot,
             robot_name=args.robot_name,

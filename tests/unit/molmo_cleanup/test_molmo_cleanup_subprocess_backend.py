@@ -3,9 +3,11 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from roboclaws.molmo_cleanup import subprocess_backend
 from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
@@ -53,6 +55,56 @@ def test_subprocess_backend_reports_missing_runtime(tmp_path: Path) -> None:
             run_dir=tmp_path,
             python_executable=tmp_path / "missing-python",
         )
+
+
+def test_subprocess_backend_worker_defaults_to_egl_for_mujoco(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    backend = MolmoSpacesSubprocessBackend.__new__(MolmoSpacesSubprocessBackend)
+    backend.state_path = tmp_path / "state.json"
+    backend.python_executable = fake_python
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["env"] = kwargs["env"]
+        captured["timeout"] = kwargs["timeout"]
+        return SimpleNamespace(
+            returncode=0, stdout='{"ok": true, "tool": "locations"}\n', stderr=""
+        )
+
+    monkeypatch.delenv("MUJOCO_GL", raising=False)
+    monkeypatch.setattr(subprocess_backend.subprocess, "run", fake_run)
+
+    result = backend._run_worker("locations")
+
+    assert result["ok"] is True
+    assert captured["env"]["MUJOCO_GL"] == "egl"
+    assert captured["timeout"] == 120.0
+
+
+def test_subprocess_backend_worker_times_out_hung_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    backend = MolmoSpacesSubprocessBackend.__new__(MolmoSpacesSubprocessBackend)
+    backend.state_path = tmp_path / "state.json"
+    backend.python_executable = fake_python
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["timeout"] = kwargs["timeout"]
+        raise subprocess_backend.subprocess.TimeoutExpired(command, kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess_backend.subprocess, "run", fake_run)
+
+    with pytest.raises(RuntimeError, match="worker timed out"):
+        backend._run_worker("snapshot", "--output-path", str(tmp_path / "before.png"))
+
+    assert captured["timeout"] == 60.0
 
 
 def test_worker_select_targets_honors_requested_generated_count() -> None:

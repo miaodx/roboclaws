@@ -43,6 +43,11 @@ _Avoid_: False-positive failure
 A public map of rooms, walls, doors, driveable ways, and robot pose.
 _Avoid_: Semantic object oracle
 
+**Prebuilt Robot Map Bundle**:
+A static operator-prepared map package containing navigation geometry, frame
+metadata, fixture semantics, and inspection waypoints.
+_Avoid_: Live SLAM result, hidden target map
+
 **Inspection Waypoint**:
 A public Metric Map pose where the Cleanup Agent can observe part of a room
 during a cleanup sweep.
@@ -126,6 +131,8 @@ _Avoid_: assuming object assets imply usable cached grasps
 - A **Scorer** may use the **Private Scoring Truth** only after the run ends.
 - A **Cleanup Agent** may receive public map, fixture, and robot-local
   perception data.
+- A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
+  fixture semantics before runtime observations begin.
 - Small movable objects should be discovered through **Observed Object
   Handles**, not pre-run global object IDs.
 - Reports must separate **Agent View** from **Private Evaluation**.

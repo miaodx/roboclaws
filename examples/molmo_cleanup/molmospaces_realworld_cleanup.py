@@ -23,6 +23,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
+from roboclaws.molmo_cleanup.nav2_map_bundle import (  # noqa: E402
+    attach_nav2_map_bundle_snapshot,
+    selected_nav2_map_bundle_dir,
+)
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
     planner_cleanup_bridge_evidence,
 )
@@ -115,6 +119,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
     parser.add_argument(
+        "--map-bundle-dir",
+        type=Path,
+        help=(
+            "Prebuilt Nav2 map bundle path, or environment id under assets/maps, "
+            "to project metric_map/fixture_hints and snapshot into the run."
+        ),
+    )
+    parser.add_argument(
+        "--require-map-bundle",
+        action="store_true",
+        help="Fail fast if --map-bundle-dir is missing or invalid.",
+    )
+    parser.add_argument(
         "--planner-proof-run-result",
         type=Path,
         action="append",
@@ -146,6 +163,8 @@ def run_realworld_cleanup(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
+    map_bundle_dir: str | Path | None = None,
+    require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
@@ -160,6 +179,10 @@ def run_realworld_cleanup(
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    selected_bundle_dir = selected_nav2_map_bundle_dir(
+        map_bundle_dir,
+        required=require_map_bundle,
+    )
     planner_proof_paths = _planner_proof_paths(
         planner_proof_run_result=planner_proof_run_result,
         planner_proof_run_results=planner_proof_run_results,
@@ -188,6 +211,7 @@ def run_realworld_cleanup(
         task_prompt=task_prompt,
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
+        map_bundle_dir=selected_bundle_dir,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -469,6 +493,11 @@ def run_realworld_cleanup(
     if profile_metadata is not None:
         run_result["cleanup_profile"] = profile_metadata["profile"]
         run_result["cleanup_profile_metadata"] = profile_metadata
+    attach_nav2_map_bundle_snapshot(
+        run_result=run_result,
+        run_dir=output_dir,
+        source_bundle_dir=selected_bundle_dir,
+    )
     if backend_instance is not None:
         run_result["molmospaces_runtime"] = {
             "python_executable": str(backend_instance.python_executable),
@@ -820,6 +849,8 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
+        map_bundle_dir=args.map_bundle_dir,
+        require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,

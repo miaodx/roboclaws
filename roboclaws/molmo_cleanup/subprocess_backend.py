@@ -20,6 +20,13 @@ from roboclaws.molmo_cleanup.types import (
 
 MOLMOSPACES_SUBPROCESS_BACKEND = "molmospaces_subprocess"
 DEFAULT_MOLMOSPACES_PYTHON = Path(sys.executable)
+DEFAULT_MOLMOSPACES_MUJOCO_GL = "egl"
+DEFAULT_WORKER_TIMEOUT_S = 120.0
+WORKER_TIMEOUTS_S = {
+    "init": 300.0,
+    "snapshot": 60.0,
+    "robot_views": 120.0,
+}
 WORKER_SCRIPT = (
     Path(__file__).resolve().parents[2]
     / "scripts"
@@ -158,19 +165,29 @@ class MolmoSpacesSubprocessBackend:
                 "MolmoSpaces Python runtime is missing: "
                 f"{self.python_executable}. Set ROBOCLAWS_MOLMOSPACES_PYTHON."
             )
-        completed = subprocess.run(
-            [
-                str(self.python_executable),
-                str(WORKER_SCRIPT),
-                "--state-path",
-                str(self.state_path),
-                command,
-                *args,
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        worker_env = _worker_env()
+        timeout_s = _worker_timeout_s(command)
+        worker_command = [
+            str(self.python_executable),
+            str(WORKER_SCRIPT),
+            "--state-path",
+            str(self.state_path),
+            command,
+            *args,
+        ]
+        try:
+            completed = subprocess.run(
+                worker_command,
+                check=False,
+                capture_output=True,
+                text=True,
+                env=worker_env,
+                timeout=timeout_s,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"MolmoSpaces subprocess worker timed out ({command}, {timeout_s:g}s)"
+            ) from exc
         if completed.returncode != 0:
             raise RuntimeError(
                 "MolmoSpaces subprocess worker failed "
@@ -188,6 +205,23 @@ def _parse_last_json_object(stdout: str) -> dict[str, Any]:
         if isinstance(payload, dict):
             return payload
     raise RuntimeError(f"MolmoSpaces worker returned no JSON object: {stdout!r}")
+
+
+def _worker_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if "MUJOCO_GL" not in env:
+        env["MUJOCO_GL"] = env.get(
+            "ROBOCLAWS_MOLMOSPACES_MUJOCO_GL",
+            DEFAULT_MOLMOSPACES_MUJOCO_GL,
+        )
+    return env
+
+
+def _worker_timeout_s(command: str) -> float:
+    override = os.environ.get("ROBOCLAWS_MOLMOSPACES_WORKER_TIMEOUT_S")
+    if override:
+        return float(override)
+    return WORKER_TIMEOUTS_S.get(command, DEFAULT_WORKER_TIMEOUT_S)
 
 
 def _scenario_from_worker_payload(

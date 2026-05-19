@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-15
+Last updated: 2026-05-19
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -8,37 +8,37 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
-artifacts visible and honest from local runs through CI-published report pages.
+artifacts visible, honest, and aligned with future real-robot Nav2 pilots.
 
-Phase 135, MolmoSpaces CI live-agent reports, is implemented and non-live
-verified. The opt-in hosted workflow now installs Codex/Claude Code, prewarms
-MolmoSpaces assets, passes explicit Claude MCP config, and reaches the cleanup
-MCP tools with repo-scoped provider secrets.
-
-Phase 136, Generic MCP entrypoint and semantic capability profiles, is
-implemented and verified. It adds an additive profile/router layer for
-AI2-THOR and MolmoSpaces MCP contracts while keeping privileged simulator tools
-and Molmo private evaluator truth out of canonical public profile metadata.
+The active follow-up is the real-robot Nav2 cleanup pilot on draft PR #112. The
+branch implements the reusable Nav2 map bundle package/checker, static
+sim-costmap route validation, the direct Nav2 adapter scaffold,
+`real_robot_cleanup_v1` profile, Nav2 map bundle snapshots, report rendering,
+checker alignment gates, and local Codex consumption through the repo-local
+`.env` coding-agent route.
 
 ## Next Action
 
-Land the current report-surface follow-up and Phase 136 semantic-profile
-commits, then trigger or monitor the next `main` Pages deploy so the dedicated
-Molmo live index and report rerun commands are visible on the public site.
+Review the two local proof-alignment commits and the local Codex proof artifact;
+do not push unless the human explicitly asks. The current local Codex proof is
+`output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html`, with
+its run-local `map_bundle/` validated by the map bundle checker and its
+`run_result.json` validated by the real-robot-alignment cleanup checker.
 
 ## Current Blocker
 
-The latest completed Molmo live dispatch proved both MiMo entries successfully,
-but a later `main` Pages deploy skipped the opt-in Molmo live matrix and erased
-those files from the public site. The preservation patch rehydrates the latest
-successful live dispatch on ordinary Pages deploys; Kimi live still needs
-provider-error follow-up.
+No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
+provider smoke, or block on Codex acceptance artifacts. Local work-network runs
+support Codex and Claude Code only through repo-local `.env` configuration;
+local non-work-network runs also support OpenClaw.
 
 ## Human Review Surface
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
+- Active Nav2 cleanup status:
+  `docs/status/active/real-robot-nav2-cleanup-pilot.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 

@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
+from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
@@ -81,6 +82,7 @@ def make_molmo_realworld_cleanup_mcp(
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
+    map_bundle_dir: str | Path | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
         run_dir=run_dir,
@@ -97,6 +99,7 @@ def make_molmo_realworld_cleanup_mcp(
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
         planner_proof_run_result=planner_proof_run_result,
+        map_bundle_dir=map_bundle_dir,
     )
 
 
@@ -120,6 +123,7 @@ class RealWorldMolmoCleanupMCPServer:
         record_robot_views: bool = False,
         cleanup_profile: str | None = None,
         planner_proof_run_result: Path | None = None,
+        map_bundle_dir: str | Path | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -128,6 +132,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.policy = policy
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
+        self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
             base_contract = base_contract or CleanupBackendSession(scenario)
@@ -136,6 +141,7 @@ class RealWorldMolmoCleanupMCPServer:
                 task_prompt=task_prompt,
                 fixture_hint_mode=fixture_hint_mode,
                 perception_mode=perception_mode,
+                map_bundle_dir=self.map_bundle_dir,
             )
         self.contract = contract
         self.base_contract = contract.contract
@@ -548,6 +554,11 @@ class RealWorldMolmoCleanupMCPServer:
             )
             run_result["cleanup_profile"] = profile_metadata["profile"]
             run_result["cleanup_profile_metadata"] = profile_metadata
+        attach_nav2_map_bundle_snapshot(
+            run_result=run_result,
+            run_dir=self.run_dir,
+            source_bundle_dir=self.map_bundle_dir,
+        )
         _add_backend_runtime_metadata(run_result, self.base_contract.backend)
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT
@@ -701,7 +712,15 @@ class RealWorldMolmoCleanupMCPServer:
         output_path = self.run_dir / filename
         writer = getattr(self.base_contract.backend, "write_snapshot", None)
         if callable(writer):
-            return writer(output_path, title=title)
+            try:
+                return writer(output_path, title=title)
+            except Exception as exc:
+                self.write_runtime_event(
+                    "snapshot_capture_failed",
+                    filename=filename,
+                    error=str(exc),
+                    fallback="state_snapshot",
+                )
         return write_state_snapshot(
             self.scenario,
             self.base_contract.backend.object_locations(),
@@ -748,17 +767,27 @@ class RealWorldMolmoCleanupMCPServer:
             raise RuntimeError("robot view capture requires backend.write_robot_views")
         previous_count = len(self.robot_view_steps)
         capture_started = time.monotonic()
-        self._robot_view_index = record_robot_view_step(
-            steps=self.robot_view_steps,
-            backend=self.base_contract.backend,
-            output_dir=self.run_dir,
-            index=self._robot_view_index,
-            action=action,
-            label_suffix=label_suffix,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-            semantic_phase=semantic_phase,
-        )
+        try:
+            self._robot_view_index = record_robot_view_step(
+                steps=self.robot_view_steps,
+                backend=self.base_contract.backend,
+                output_dir=self.run_dir,
+                index=self._robot_view_index,
+                action=action,
+                label_suffix=label_suffix,
+                focus_object_id=focus_object_id,
+                focus_receptacle_id=focus_receptacle_id,
+                semantic_phase=semantic_phase,
+            )
+        except Exception as exc:
+            self.write_runtime_event(
+                "robot_view_capture_failed",
+                action=action,
+                label_suffix=label_suffix,
+                elapsed_s=round(time.monotonic() - capture_started, 6),
+                error=str(exc),
+            )
+            return None
         if len(self.robot_view_steps) <= previous_count:
             return None
         capture_elapsed_s = round(time.monotonic() - capture_started, 6)

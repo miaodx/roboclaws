@@ -77,13 +77,18 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert metric_map["frame_id"] == "map"
     assert metric_map["origin"] == {"x": 0.0, "y": 0.0, "yaw": 0.0}
     assert metric_map["occupancy_values"] == {"unknown": -1, "free": 0, "occupied": 100}
+    assert metric_map["map_bundle"]["schema"] == "nav2_map_bundle_v1"
+    assert metric_map["map_bundle"]["robot_profile_id"] == "rby1m"
+    assert metric_map["map_bundle"]["artifact_paths"]["map_yaml"] == "map_bundle/map.yaml"
+    assert metric_map["map_bundle"]["parameter_hash"]
     assert waypoint["frame_id"] == "map"
     assert waypoint["purpose"] == "fixture_coverage"
     assert waypoint["waypoint_source"] == "static_map_coverage"
     assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
     assert fixture_hints["contains_runtime_observations"] is False
     assert "observations" not in fixture_hints
-    assert waypoint_nav["navigation_backend"] == "api_semantic"
+    assert waypoint_nav["navigation_backend"] == "sim_costmap_planner"
+    assert waypoint_nav["route_validation"]["ok"] is True
     assert waypoint_nav["pose_source"] == "inspection_waypoint"
     assert object_nav["navigation_backend"] == "api_semantic"
     assert object_nav["pose_source"] == "latest_observation"

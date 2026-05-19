@@ -6,7 +6,7 @@
   "role": "cleanup_task_behavior",
   "status": "active",
   "mcp": {
-    "profiles": ["molmospaces_cleanup_v1"],
+    "profiles": ["molmospaces_cleanup_v1", "real_robot_cleanup_v1"],
     "required_tools": [
       "metric_map",
       "fixture_hints",

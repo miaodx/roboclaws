@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -374,7 +375,7 @@ def _assert_result(
     if require_waypoint_honesty:
         _assert_waypoint_honesty(data, report_text)
     if require_real_robot_alignment:
-        _assert_real_robot_alignment(data, report_text)
+        _assert_real_robot_alignment(data, base, report_text)
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -922,7 +923,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert "post_place_observe" in report_text, report_text[:500]
 
 
-def _assert_real_robot_alignment(data: dict[str, Any], report_text: str) -> None:
+def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:
     agent_view = data.get("agent_view") or {}
     metric_map = agent_view.get("metric_map") or {}
     fixture_hints = agent_view.get("fixture_hints") or {}
@@ -936,9 +937,14 @@ def _assert_real_robot_alignment(data: dict[str, Any], report_text: str) -> None
         "width",
         "height",
         "occupancy_values",
+        "map_bundle",
         "robot_pose",
     ):
         assert key in metric_map, metric_map
+    map_bundle_metadata = metric_map.get("map_bundle") or {}
+    assert map_bundle_metadata.get("schema") == "nav2_map_bundle_v1", map_bundle_metadata
+    assert map_bundle_metadata.get("robot_profile_id") == "rby1m", map_bundle_metadata
+    assert map_bundle_metadata.get("parameter_hash"), map_bundle_metadata
     waypoints = metric_map.get("inspection_waypoints") or []
     assert waypoints, metric_map
     for waypoint in waypoints:
@@ -963,9 +969,33 @@ def _assert_real_robot_alignment(data: dict[str, Any], report_text: str) -> None
     assert readiness.get("static_fixture_semantic_map") is True, readiness
     assert readiness.get("policy_view_chase_excluded") is True, readiness
     assert readiness.get("semantic_navigation_only") is True, readiness
+    assert readiness.get("sim_costmap_route_validation") is True, readiness
     assert readiness.get("real_robot_ready") is False, readiness
-    assert readiness.get("navigation_backend_summary", {}).get(API_SEMANTIC_PROVENANCE), readiness
+    assert readiness.get("physical_navigation_pilot") is False, readiness
+    assert readiness.get("physical_cleanup_ready") is False, readiness
+    assert readiness.get("map_bundle_snapshot_present") is True, readiness
+    assert readiness.get("map_bundle_parameter_hash"), readiness
+    assert readiness.get("navigation_backend_summary", {}).get(SIM_COSTMAP_PLANNER), readiness
+    nav2_bundle = data.get("nav2_map_bundle") or {}
+    assert nav2_bundle.get("schema") == "nav2_map_bundle_snapshot_v1", nav2_bundle
+    assert nav2_bundle.get("snapshot_complete") is True, nav2_bundle
+    artifact_paths = nav2_bundle.get("artifact_paths") or {}
+    artifact_hashes = nav2_bundle.get("artifact_hashes") or {}
+    for key in (
+        "map_yaml",
+        "occupancy_image",
+        "semantics_json",
+        "robot_profile",
+        "costmap_params",
+        "preview_png",
+    ):
+        assert key in artifact_paths, nav2_bundle
+        assert key in artifact_hashes, nav2_bundle
+        assert len(str(artifact_hashes[key])) == 64, artifact_hashes
+        assert _resolve_path(base, str(artifact_paths[key])).is_file(), artifact_paths[key]
     assert "Real-Robot Readiness" in report_text, report_text[:500]
+    assert "Nav2 Map Bundle" in report_text, report_text[:500]
+    assert "map_bundle/map.yaml" in report_text, report_text[:500]
     assert "report_only_simulation_view" in report_text, report_text[:500]
 
 
@@ -1022,7 +1052,7 @@ def _assert_focus_visibility_status(
     step: dict[str, Any],
 ) -> None:
     status = visibility.get("status")
-    assert status in {"ok", "contained_inside"}, step
+    assert status in {"ok", "contained_inside", "segmentation_unavailable"}, step
     if (
         status == "ok"
         and "object_pixels" in visibility

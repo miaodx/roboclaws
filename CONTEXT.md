@@ -45,6 +45,61 @@ as mock-only proof, AI2-THOR, MolmoSpaces, Unitree G1, RBY1M, AGIbot G2, or a
 future robot.
 _Avoid_: Semantic capability, task prompt
 
+**Navigation + Perception Pilot**:
+A first physical-robot deployment milestone that proves public navigation goals
+and robot-local observations without claiming autonomous physical manipulation.
+_Avoid_: Full cleanup deployment, physical cleanup proof
+
+**Simulator/Hardware Contract Parity**:
+The expectation that simulator and physical-robot profiles share the same
+public capability shape while differing only in declared backend provenance and
+known blocked capabilities.
+_Avoid_: Identical implementation, pretending simulation is hardware proof
+
+**Nav2 Map Artifact**:
+A Nav2-shaped public map bundle that is the source of truth for static cleanup
+map context across simulator and physical-robot profiles.
+_Avoid_: Simulator-only map, report-only drawing, hidden object map, agent prompt map
+
+**Metric Map Projection**:
+An agent-facing JSON view derived from a Nav2 Map Artifact and public semantic
+annotations.
+_Avoid_: Raw occupancy map, private scene graph, independent map source
+
+**Cleanup Map Semantics**:
+Public room, fixture, affordance, waypoint, and frame annotations that make a
+Nav2 Map Artifact usable for cleanup planning.
+_Avoid_: Private target truth, movable-object manifest, raw occupancy grid
+
+**Static Fixture Footprint**:
+The occupied navigation footprint of a fixed receptacle or furniture object in
+a cleanup map.
+_Avoid_: Movable object, manipulation target point, private target location
+
+**Cleanup Map Exporter**:
+A process that turns public static scene geometry and cleanup semantics into a
+Nav2 Map Artifact.
+_Avoid_: Runtime scorer, private manifest reader, agent planner
+
+**Map Bundle Snapshot**:
+An immutable copy of the Nav2 Map Artifact used by a single cleanup run.
+_Avoid_: Newly generated report map, mutable asset map, private evaluation artifact
+
+**Map Contract Harness**:
+A deterministic pre-agent gate that validates a Nav2 Map Artifact can support
+cleanup navigation semantics.
+_Avoid_: Live agent run, cleanup scorer, map generator
+
+**Sim Costmap Route Validation**:
+A simulator-side check that uses a Nav2-shaped static costmap to judge waypoint
+reachability without claiming ROS 2/Nav2 execution.
+_Avoid_: Full Nav2 sim, semantic teleport, physical navigation proof
+
+**Robot Profile**:
+A named robot configuration for navigation and perception parameters such as
+footprint, inflation radius, frames, camera pose, and goal tolerances.
+_Avoid_: Environment map, scene id, embodiment proof
+
 **Semantic Capability**:
 A backend-neutral robot ability exposed to an agent with stable meaning across environments.
 _Avoid_: Environment primitive, opaque composite action
@@ -122,13 +177,55 @@ _Avoid_: Backend profile, task recipe
 - An **Active Camera Observation** is public perception evidence and may support
   a **Model-Declared Observation**.
 - A **Contract Profile** is named by both environment and task domain when both
-  matter, such as `ai2thor_navigation_v1` or `molmospaces_cleanup_v1`.
+  matter, such as `ai2thor_navigation_v1`, `molmospaces_cleanup_v1`, or
+  `real_robot_cleanup_v1`.
 - A **Contract Profile** declares the **Capability Families** it supports.
 - An **MCP Entrypoint** may be generic while the exposed **Contract Profile**
   remains backend-specific.
 - A **Semantic Capability** may be backed by different **Environment
   Primitives** in AI2-THOR, MuJoCo, or a real robot.
 - An **Environment Primitive** runs in one **Execution Backend**.
+- A **Navigation + Perception Pilot** may use the same **Task Prompt** and
+  **Contract Profile** shape as cleanup while proving only navigation and
+  observation capabilities.
+- **Simulator/Hardware Contract Parity** lets a simulator run exercise the same
+  **Capability Tools** as hardware while reports still distinguish
+  **Execution Backends** and blocked capabilities.
+- A **Nav2 Map Artifact** may be generated from MolmoSpaces scene geometry or
+  provided by a physical robot map workflow, but it must preserve the same
+  public contract shape.
+- A **Metric Map Projection** is generated from a **Nav2 Map Artifact** for
+  agent planning; it should not be maintained as an independent map source.
+- A cleanup-capable **Nav2 Map Artifact** must include **Cleanup Map
+  Semantics**; a raw occupancy map alone is insufficient for cleanup planning.
+- A **Static Fixture Footprint** should be occupied in a **Nav2 Map Artifact**,
+  while its preferred inspection or manipulation waypoint should be a nearby
+  free pose.
+- A **Cleanup Map Exporter** may use public simulator room and fixture metadata
+  plus authored overrides; raw simulator XML parsing is an optional later
+  enrichment, not the first source of truth.
+- A cleanup run should consume a prebuilt **Nav2 Map Artifact** and copy a
+  **Map Bundle Snapshot** into its report artifacts.
+- A cleanup run should fail fast when its required prebuilt **Nav2 Map
+  Artifact** is missing; map generation is a preparation step, not an implicit
+  runtime side effect.
+- Supported simulator demo **Nav2 Map Artifacts** may be committed for
+  deterministic harness use, while physical robot map artifacts may remain
+  operator-provided local inputs.
+- A **Map Contract Harness** should validate a **Nav2 Map Artifact** before a
+  live agent attempts a cleanup run.
+- A **Map Contract Harness** is a deterministic checker, not an agent-driven
+  cleanup run.
+- Live agent cleanup runs should require the **Map Contract Harness** to pass;
+  mocked synthetic tests may use explicit lightweight fixtures.
+- Map-layer acceptance should be deterministic before live-agent proof: a valid
+  **Nav2 Map Artifact**, **Metric Map Projection**, and **Sim Costmap Route
+  Validation** should pass before Codex, Claude, or OpenClaw runs.
+- **Sim Costmap Route Validation** may consume a **Nav2 Map Artifact** in
+  simulation, while physical robot execution consumes that artifact through a
+  Nav2 action backend.
+- A **Robot Profile** is combined with a **Nav2 Map Artifact** to derive
+  robot-specific costmap parameters without rewriting the environment map.
 - A **Composed Semantic Capability** is built from **Atomic Semantic
   Capabilities**, Semantic Services, or both.
 - A **Semantic Service** may compose **Environment Primitives** and support
@@ -200,3 +297,14 @@ _Avoid_: Backend profile, task recipe
   **Semantic Capability**, and **Composite Action** for those distinct levels.
 - Current AI2-THOR `scene_objects` and teleport-like `goto` are
   **Privileged Tools** unless redesigned as decomposed semantic services.
+- "real world robot integration" was used ambiguously for physical navigation,
+  physical observation, and full physical cleanup. Resolved: the first milestone
+  is a **Navigation + Perception Pilot**; physical manipulation remains a
+  separate proof target.
+- "Nav2 map consumption" was used ambiguously for agent-visible planning input,
+  simulator route validation, and full ROS 2/Nav2 execution. Resolved: in
+  MolmoSpaces simulation, use **Sim Costmap Route Validation**; reserve full
+  Nav2 execution claims for a physical or explicit ROS 2 backend.
+- "metric map" was used ambiguously as both source data and agent projection.
+  Resolved: use **Nav2 Map Artifact** for the static source of truth and
+  **Metric Map Projection** for the JSON view exposed to agents.

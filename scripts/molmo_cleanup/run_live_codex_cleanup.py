@@ -38,6 +38,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
     parser.add_argument("--codex-provider-summary", default="system defaults")
+    parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--policy", required=True)
@@ -81,7 +82,7 @@ class LiveCodexCleanupRunner:
             return 130
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
-            self._write_status("failed", 1)
+            self._write_status("failed", 1, reason=str(exc))
             self._cleanup_server()
             return 1
 
@@ -142,7 +143,7 @@ class LiveCodexCleanupRunner:
     def _wait_for_mcp_ready(self) -> None:
         assert self.server_proc is not None
         probe_host = _probe_host(self.args.host)
-        deadline = time.monotonic() + 120.0
+        deadline = time.monotonic() + self.args.server_startup_timeout_s
         while time.monotonic() < deadline:
             if self.server_proc.poll() is not None:
                 raise RuntimeError("cleanup MCP server exited before becoming ready")
@@ -150,7 +151,8 @@ class LiveCodexCleanupRunner:
                 return
             time.sleep(0.5)
         raise RuntimeError(
-            f"cleanup MCP server did not become ready at {self.args.host}:{self.args.port}"
+            f"cleanup MCP server did not become ready at {self.args.host}:{self.args.port} "
+            f"within {self.args.server_startup_timeout_s:g}s"
         )
 
     def _run_codex(self) -> None:
@@ -164,7 +166,7 @@ class LiveCodexCleanupRunner:
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "molmo-cleanup")
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE", str(agent_workspace))
+        env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
         agent_cd = "/workspace/task" if container_isolated else str(agent_task_dir)
         last_message_host_path = agent_task_dir / "codex-last-message.md"
@@ -258,6 +260,11 @@ class LiveCodexCleanupRunner:
         ]
         if self.args.profile in {"smoke", "world-labels", "camera-labels", "camera-raw"}:
             checker_args.append("--require-clean-agent-run")
+        if self.args.profile == "world-labels":
+            _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
+            _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
+            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
+            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
@@ -288,11 +295,19 @@ class LiveCodexCleanupRunner:
             proc.kill()
             proc.wait(timeout=5)
 
-    def _write_status(self, phase: str, exit_status: int | None = None) -> None:
+    def _write_status(
+        self,
+        phase: str,
+        exit_status: int | None = None,
+        *,
+        reason: str = "",
+    ) -> None:
         payload: dict[str, object] = {
             "phase": phase,
             "started_at_epoch": self.started_at_epoch,
         }
+        if reason:
+            payload["reason"] = reason
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -359,8 +374,13 @@ def _run_and_tee(
 def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO]) -> None:
     for chunk in iter(lambda: stream.readline(), b""):
         for output in outputs:
-            output.write(chunk)
-            output.flush()
+            try:
+                output.write(chunk)
+                output.flush()
+            except BlockingIOError:
+                # Interactive terminals may be nonblocking under agent control. Keep
+                # teeing to the artifact file even if live console mirroring drops a chunk.
+                continue
 
 
 def _port_accepting(host: str, port: int, *, timeout_s: float = 0.2) -> bool:
@@ -388,12 +408,7 @@ def _prepare_agent_workspace(
     task_name: str,
     skill_name: str,
 ) -> tuple[Path, Path]:
-    workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE")
-    workspace = (
-        Path(workspace_env)
-        if workspace_env
-        else Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
-    )
+    workspace = _agent_workspace_root(repo_root=repo_root, task_name=task_name)
     task_dir = workspace / "task"
     skills_dir = workspace / "skills"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -414,13 +429,26 @@ def _prepare_agent_workspace(
             shutil.rmtree(task_skills_link)
         else:
             task_skills_link.unlink()
-    task_skills_link.symlink_to(skills_dir, target_is_directory=True)
+    task_skills_link.symlink_to(Path("..") / "skills", target_is_directory=True)
     (task_dir / "README.md").write_text(
         "# Roboclaws Molmo Cleanup Agent Workspace\n\n"
         f"Read `skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
         encoding="utf-8",
     )
     return workspace, task_dir
+
+
+def _agent_workspace_root(*, repo_root: Path, task_name: str) -> Path:
+    workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE") or os.environ.get(
+        "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"
+    )
+    if not workspace_env:
+        return Path(tempfile.mkdtemp(prefix=f"roboclaws-{task_name}-agent-"))
+
+    workspace = Path(workspace_env).expanduser()
+    if not workspace.is_absolute():
+        workspace = repo_root / workspace
+    return workspace
 
 
 def _shell_quote(value: str) -> str:
