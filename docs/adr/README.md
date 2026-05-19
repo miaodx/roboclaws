@@ -134,6 +134,7 @@ one decision per file, sequential numbering, explicit status.
 | [0123](0123-render-proof-command-semantic-subphases.md) | Render Proof Command Semantic Subphases | Accepted |
 | [0124](0124-bound-proof-bundle-runs-by-request-id.md) | Bound Proof Bundle Runs By Request ID | Accepted |
 | [0125](0125-canonicalize-proof-command-cleanup-tool-order.md) | Canonicalize Proof Command Cleanup Tool Order | Accepted |
+| [0126](0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md) | Bridge Camera Evidence To Cleanup Handles With Model-Declared Observations | Accepted |
 
 ## Adding a new ADR
 

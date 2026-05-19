@@ -27,6 +27,12 @@ RAW_FPV_ONLY_MODE = "raw_fpv_only"
 CAMERA_MODEL_POLICY_MODE = "camera_model_policy"
 CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
+MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
+MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
+MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
+RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
+RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
+MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
@@ -35,6 +41,20 @@ REALWORLD_PERCEPTION_MODES = frozenset(
         CAMERA_MODEL_POLICY_MODE,
     }
 )
+
+
+def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> str:
+    subject = (
+        f"observation_id={observation_id}" if observation_id else "the current raw FPV observation"
+    )
+    return (
+        f"Raw FPV-only mode uses {RAW_FPV_DECLARATION_STRATEGY}: inspect the FPV "
+        f"image block for {subject}, do not batch-register candidates first, "
+        "and call navigate_to_visual_candidate only when acting on a plausible "
+        "cleanup object. Use broad cleanup categories such as "
+        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain."
+    )
+
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
     {
@@ -51,13 +71,38 @@ _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
 )
 
 _OBJECT_CATEGORY_TARGETS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
-    (("dish", "cup", "mug", "plate", "bowl"), ("sink", "countertop")),
-    (("book", "newspaper"), ("shelvingunit", "bookshelf", "shelf", "desk")),
-    (("food", "apple", "bread", "egg", "potato", "lettuce"), ("fridge", "refrigerator")),
-    (("remotecontrol", "remote", "electronics"), ("tvstand", "tv stand")),
-    (("pillow", "teddybear", "teddy"), ("bed", "sofa")),
-    (("linen", "towel"), ("laundryhamper", "laundry hamper", "hamper")),
-    (("toy", "toycar"), ("toybin", "toy bin")),
+    (
+        ("dish", "cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"),
+        ("sink", "countertop"),
+    ),
+    (
+        ("book", "newspaper", "notebook", "paper", "magazine"),
+        ("shelvingunit", "bookshelf", "shelf", "desk"),
+    ),
+    (
+        (
+            "food",
+            "apple",
+            "bread",
+            "egg",
+            "potato",
+            "lettuce",
+            "tomato",
+            "banana",
+            "orange",
+            "fruit",
+            "vegetable",
+            "produce",
+        ),
+        ("fridge", "refrigerator"),
+    ),
+    (("remotecontrol", "remote", "electronics", "phone", "controller"), ("tvstand", "tv stand")),
+    (("pillow", "teddybear", "teddy", "plush", "cushion"), ("bed", "sofa")),
+    (
+        ("linen", "towel", "cloth", "blanket", "shirt", "clothing", "clothes"),
+        ("laundryhamper", "laundry hamper", "hamper"),
+    ),
+    (("toy", "toycar", "ball", "basketball", "soccer", "game"), ("toybin", "toy bin")),
 )
 
 
@@ -103,6 +148,9 @@ class RealWorldCleanupContract:
         self._object_lifecycle: dict[str, dict[str, Any]] = {}
         self._raw_fpv_observations: list[dict[str, Any]] = []
         self._camera_model_policy_events: list[dict[str, Any]] = []
+        self._model_declared_observations: list[dict[str, Any]] = []
+        self._camera_yaw_offset_deg = 0.0
+        self._camera_pitch_offset_deg = 0.0
         self._handled_handles: set[str] = set()
         self._held_handle: str | None = None
         self._current_object_handle: str | None = None
@@ -118,7 +166,9 @@ class RealWorldCleanupContract:
             "navigate_to_room",
             "navigate_to_waypoint",
             "observe",
-            "infer_camera_model_candidates",
+            "adjust_camera",
+            "declare_visual_candidates",
+            "navigate_to_visual_candidate",
             "inspect_visible_object",
             "navigate_to_object",
             "pick",
@@ -251,6 +301,7 @@ class RealWorldCleanupContract:
         if waypoint is None:
             return self._error("navigate_to_waypoint", "stale_reference", waypoint_id=waypoint_id)
         self._current_waypoint_id = waypoint_id
+        self._reset_camera_adjustment()
         fixture_id = _first_fixture_for_waypoint(waypoint)
         navigation = None
         if fixture_id is not None:
@@ -283,17 +334,15 @@ class RealWorldCleanupContract:
             )
             if self.perception_mode == CAMERA_MODEL_POLICY_MODE:
                 instruction = (
-                    "Camera model policy mode: call infer_camera_model_candidates "
-                    "with this observation_id to register model-labelled cleanup "
-                    "candidates. Built-in visible_object_detections remain empty."
+                    "Camera-labels mode: call declare_visual_candidates with this "
+                    "observation_id to register model-declared cleanup candidates. "
+                    "Built-in visible_object_detections remain empty."
                 )
                 perception_source = CAMERA_MODEL_POLICY_MODE
                 camera_model_available = True
             else:
-                instruction = (
-                    "Raw FPV-only mode: infer any cleanup candidates from the FPV image. "
-                    "No structured movable-object detections, categories, support estimates, "
-                    "target labels, or generated mess truth are provided."
+                instruction = raw_fpv_inline_candidate_instruction(
+                    str(raw_observation["observation_id"])
                 )
                 perception_source = RAW_FPV_ONLY_MODE
                 camera_model_available = False
@@ -312,6 +361,7 @@ class RealWorldCleanupContract:
                 visible_object_detections=[],
                 raw_fpv_observation=raw_observation,
                 camera_model_policy_available=camera_model_available,
+                model_declaration_available=True,
                 held_object_id=self._held_handle,
                 private_target_truth_included=False,
                 instruction=instruction,
@@ -334,61 +384,201 @@ class RealWorldCleanupContract:
             private_target_truth_included=False,
         )
 
-    def infer_camera_model_candidates(
+    def adjust_camera(
+        self,
+        yaw_delta_deg: float = 0.0,
+        pitch_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        previous = self._camera_offset()
+        self._camera_yaw_offset_deg = _clamp(
+            self._camera_yaw_offset_deg + _float_or_zero(yaw_delta_deg),
+            -45.0,
+            45.0,
+        )
+        self._camera_pitch_offset_deg = _clamp(
+            self._camera_pitch_offset_deg + _float_or_zero(pitch_delta_deg),
+            -20.0,
+            20.0,
+        )
+        current = self._camera_offset()
+        return self._ok(
+            "adjust_camera",
+            camera_offset=current,
+            previous_camera_offset=previous,
+            yaw_bounds_deg=[-45, 45],
+            pitch_bounds_deg=[-20, 20],
+            waypoint_id=self._current_waypoint_id,
+            public_contract_note=(
+                "Camera adjustment is bounded public perception control and resets on navigation."
+            ),
+        )
+
+    def declare_visual_candidates(
         self,
         observation_id: str | None = None,
         *,
-        model_provenance: str = SIMULATED_CAMERA_MODEL_PROVENANCE,
+        candidates: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+        producer_type: str = SIMULATED_CAMERA_MODEL_PROVENANCE,
+        producer_id: str = CAMERA_MODEL_POLICY_NAME,
     ) -> dict[str, Any]:
-        if self.perception_mode != CAMERA_MODEL_POLICY_MODE:
+        if self.perception_mode not in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
             return self._error(
-                "infer_camera_model_candidates",
+                "declare_visual_candidates",
                 "unsupported_perception_mode",
                 perception_mode=self.perception_mode,
             )
         raw_observation = self._raw_fpv_observation_by_id(observation_id)
         if raw_observation is None:
             return self._error(
-                "infer_camera_model_candidates",
+                "declare_visual_candidates",
                 "missing_raw_fpv_observation",
                 observation_id=observation_id or "",
             )
         waypoint = self._waypoint_by_id(str(raw_observation["waypoint_id"]))
         if waypoint is None:
             return self._error(
-                "infer_camera_model_candidates",
+                "declare_visual_candidates",
                 "missing_waypoint",
                 observation_id=str(raw_observation["observation_id"]),
             )
-        candidates = self._camera_model_candidates_for_waypoint(
-            waypoint,
-            observation_id=str(raw_observation["observation_id"]),
-            model_provenance=model_provenance,
-        )
+
+        candidate_inputs = list(candidates or [])
+        if not candidate_inputs:
+            candidate_inputs = self._simulated_declaration_inputs_for_waypoint(
+                waypoint,
+                observation_id=str(raw_observation["observation_id"]),
+            )
+        declared = []
+        for index, candidate in enumerate(candidate_inputs):
+            candidate_error = _visual_candidate_validation_error(candidate)
+            if candidate_error is not None:
+                return self._error(
+                    "declare_visual_candidates",
+                    "invalid_visual_candidate",
+                    observation_id=str(raw_observation["observation_id"]),
+                    candidate_index=index,
+                    candidate_error=candidate_error,
+                    recovery_hint=(
+                        "Declare category, target_fixture_id, evidence_note, and a valid "
+                        "bbox, point, or verbal_region image_region from public FPV evidence."
+                    ),
+                )
+            declared.append(
+                self._register_model_declared_candidate(
+                    raw_observation=raw_observation,
+                    waypoint=waypoint,
+                    candidate=candidate,
+                    producer_type=producer_type,
+                    producer_id=producer_id,
+                )
+            )
+        resolved_candidates = [
+            dict(self._detections_by_handle[str(item["object_id"])])
+            for item in declared
+            if item.get("grounding_status") == "resolved"
+            and str(item.get("object_id") or "") in self._detections_by_handle
+        ]
         evidence = {
-            "schema": CAMERA_MODEL_POLICY_SCHEMA,
-            "perception_mode": CAMERA_MODEL_POLICY_MODE,
+            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
+            "perception_mode": self.perception_mode,
             "observation_id": str(raw_observation["observation_id"]),
             "waypoint_id": str(raw_observation["waypoint_id"]),
             "room_id": str(raw_observation["room_id"]),
-            "model_provenance": model_provenance,
-            "candidate_count": len(candidates),
-            "registered_observed_handles": [str(item["object_id"]) for item in candidates],
+            "producer_type": producer_type,
+            "producer_id": producer_id,
+            "candidate_count": len(declared),
+            "registered_observed_handles": [str(item["object_id"]) for item in declared],
             "private_truth_included": False,
             "policy_note": (
-                "Deterministic simulated camera-model evidence derived from the "
-                "current public raw FPV observation; not real VLM pixel inference."
+                "Model-declared observations are derived from public camera evidence "
+                "and public fixture metadata; private scoring truth is not exposed."
             ),
         }
         _assert_no_forbidden_agent_view_keys(evidence)
-        self._camera_model_policy_events.append(evidence)
+        if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
+            self._camera_model_policy_events.append(evidence)
         return self._ok(
-            "infer_camera_model_candidates",
+            "declare_visual_candidates",
             contract=REALWORLD_CONTRACT,
-            camera_model_policy=evidence,
-            camera_model_candidates=candidates,
+            model_declared_observation_evidence=evidence,
+            model_declared_observations=declared,
+            camera_model_candidates=resolved_candidates,
             visible_object_detections=[],
             private_target_truth_included=False,
+        )
+
+    def navigate_to_visual_candidate(
+        self,
+        source_observation_id: str | None = None,
+        category: str = "",
+        target_fixture_id: str = "",
+        evidence_note: str = "",
+        image_region: dict[str, Any] | str | None = None,
+        *,
+        source_fixture_id: str = "",
+        confidence: float | None = None,
+        producer_type: str = MAIN_CLEANUP_AGENT_PRODUCER,
+        producer_id: str = "cleanup_agent",
+    ) -> dict[str, Any]:
+        declaration_response = self.declare_visual_candidates(
+            source_observation_id,
+            candidates=[
+                {
+                    "category": category,
+                    "target_fixture_id": target_fixture_id,
+                    "evidence_note": evidence_note,
+                    "image_region": image_region,
+                    "source_fixture_id": source_fixture_id,
+                    "confidence": confidence,
+                }
+            ],
+            producer_type=producer_type,
+            producer_id=producer_id,
+        )
+        if not declaration_response.get("ok"):
+            return self._error(
+                "navigate_to_visual_candidate",
+                str(declaration_response.get("error_reason") or "declaration_failed"),
+                candidate_error=declaration_response.get("candidate_error", {}),
+                recovery_hint=declaration_response.get("recovery_hint", ""),
+            )
+        declarations = declaration_response.get("model_declared_observations") or []
+        declaration = declarations[0] if declarations else {}
+        handle = str(declaration.get("object_id") or "")
+        if declaration.get("grounding_status") != "resolved":
+            return self._error(
+                "navigate_to_visual_candidate",
+                "visual_candidate_not_resolved",
+                model_declared_observation=declaration,
+                object_id=handle,
+                grounding_status=declaration.get("grounding_status", "unresolved"),
+                grounding_confidence=declaration.get("grounding_confidence", 0.0),
+                recovery_hint=declaration.get(
+                    "recovery_hint",
+                    "Declare a tighter image_region or include a source_fixture_id.",
+                ),
+            )
+        navigation = self.navigate_to_object(handle)
+        if not navigation.get("ok"):
+            return self._error(
+                "navigate_to_visual_candidate",
+                str(navigation.get("error_reason") or "navigation_failed"),
+                model_declared_observation=declaration,
+                object_id=handle,
+                recovery_hint=navigation.get("recovery_hint", ""),
+            )
+        payload = {
+            key: value
+            for key, value in navigation.items()
+            if key not in {"tool", "ok", "status", "object_id"}
+        }
+        return self._ok(
+            "navigate_to_visual_candidate",
+            **payload,
+            object_id=handle,
+            model_declared_observation=declaration,
+            declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
+            required_next_tool="pick",
         )
 
     def inspect_visible_object(self, object_id: str) -> dict[str, Any]:
@@ -421,7 +611,13 @@ class RealWorldCleanupContract:
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:
         internal_id = self._internal_object_id(object_id)
         if internal_id is None:
+            grounding_error = self._unresolved_visual_candidate_error(
+                "navigate_to_object", object_id
+            )
+            if grounding_error is not None:
+                return grounding_error
             return self._error("navigate_to_object", "stale_reference", object_id=object_id)
+        self._reset_camera_adjustment()
         response = self.contract.navigate_to_object(internal_id)
         if not response.get("ok"):
             return self._public_error_from_private("navigate_to_object", object_id, response)
@@ -451,6 +647,9 @@ class RealWorldCleanupContract:
     def pick(self, object_id: str) -> dict[str, Any]:
         internal_id = self._internal_object_id(object_id)
         if internal_id is None:
+            grounding_error = self._unresolved_visual_candidate_error("pick", object_id)
+            if grounding_error is not None:
+                return grounding_error
             return self._error("pick", "stale_reference", object_id=object_id)
         if getattr(self, "_current_object_handle", None) != object_id:
             return self._semantic_order_error(
@@ -494,6 +693,7 @@ class RealWorldCleanupContract:
                 response,
             )
         self._current_waypoint_id = self._preferred_waypoint_for_fixture(fixture_id)
+        self._reset_camera_adjustment()
         self._current_receptacle_for_handle = (self._held_handle, fixture_id)
         self._opened_receptacle_for_handle = None
         return self._ok(
@@ -582,6 +782,21 @@ class RealWorldCleanupContract:
         )
 
     def done(self, reason: str = "") -> dict[str, Any]:
+        if self.perception_mode == RAW_FPV_ONLY_MODE:
+            declaration_count = len(self._model_declared_observations)
+            if declaration_count < 7:
+                return self._error(
+                    "done",
+                    "insufficient_model_declared_observations",
+                    model_declared_observations=declaration_count,
+                    raw_fpv_observations=len(self._raw_fpv_observations),
+                    required_model_declared_observations=7,
+                    recovery_hint=(
+                        "Continue sweeping public waypoints and use "
+                        "navigate_to_visual_candidate for plausible cleanup objects "
+                        "seen in raw FPV images before calling done."
+                    ),
+                )
         pending = self._pending_cleanup_candidates()
         if pending:
             return self._error(
@@ -632,6 +847,10 @@ class RealWorldCleanupContract:
             "observed_objects": observed_objects,
             "raw_fpv_observations": [dict(item) for item in self._raw_fpv_observations],
             "camera_model_policy_evidence": self.camera_model_policy_payload(),
+            "model_declared_observations": self.model_declared_observations_payload()[
+                "observations"
+            ],
+            "model_declared_observation_evidence": (self.model_declared_observations_payload()),
             "policy_view": self.policy_view_payload(),
             "cleanup_worklist": self.cleanup_worklist_payload(fixture_hints=fixture_hints),
             "observed_waypoint_ids": sorted(self._observed_waypoint_ids),
@@ -650,6 +869,7 @@ class RealWorldCleanupContract:
                 "observed_objects",
                 "raw_fpv_observations",
                 "camera_model_policy_evidence",
+                "model_declared_observations",
                 "navigation_status",
             ],
             "excluded_report_only_views": [
@@ -677,9 +897,18 @@ class RealWorldCleanupContract:
             detection = self._detections_by_handle[handle]
             lifecycle = dict(self._object_lifecycle.get(handle, {}))
             support = detection.get("support_estimate") or {}
+            declaration = detection.get("model_declared_observation") or {}
+            grounding_status = str(
+                detection.get("grounding_status") or declaration.get("grounding_status") or ""
+            )
             public_candidate = infer_target_fixture_for_detection(detection, public_fixtures)
             candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
             source_fixture_id = str(support.get("fixture_id") or "")
+            cleanup_recommended = bool(
+                grounding_status not in {"ambiguous", "unresolved"}
+                and candidate_fixture_id
+                and candidate_fixture_id != source_fixture_id
+            )
             lifecycle_rows.append(
                 {
                     "object_id": handle,
@@ -688,9 +917,8 @@ class RealWorldCleanupContract:
                     "room_id": detection.get("current_room_id", lifecycle.get("room_id", "")),
                     "source_fixture_id": source_fixture_id,
                     "candidate_fixture_id": candidate_fixture_id,
-                    "cleanup_recommended": bool(
-                        candidate_fixture_id and candidate_fixture_id != source_fixture_id
-                    ),
+                    "cleanup_recommended": cleanup_recommended,
+                    "grounding_status": grounding_status,
                     "candidate_source": "public_category_fixture_affordance",
                     "last_waypoint_id": lifecycle.get("waypoint_id", ""),
                     "perception_source": lifecycle.get("perception_source", "visible_detection"),
@@ -742,7 +970,7 @@ class RealWorldCleanupContract:
             "waypoints": waypoint_rows,
             "rooms": rooms,
             "public_policy_note": (
-                "Observed handles come from observe/infer_camera_model_candidates. "
+                "Observed handles come from observe or model-declared camera evidence. "
                 "Candidate fixtures are public category/fixture-affordance guesses, "
                 "not private acceptable-destination truth."
             ),
@@ -755,6 +983,8 @@ class RealWorldCleanupContract:
         pending = []
         for item in worklist.get("objects", []):
             if item.get("state") != "pending":
+                continue
+            if item.get("grounding_status") in {"ambiguous", "unresolved"}:
                 continue
             candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
             source_fixture_id = str(item.get("source_fixture_id") or "")
@@ -790,6 +1020,27 @@ class RealWorldCleanupContract:
                 "Camera-model policy candidates must be explicitly labelled and "
                 "must not include private scoring truth."
             ),
+        }
+
+    def model_declared_observations_payload(self) -> dict[str, Any]:
+        observations = [dict(item) for item in self._model_declared_observations]
+        acted_handles = {
+            handle
+            for handle, lifecycle in self._object_lifecycle.items()
+            if lifecycle.get("state") not in {None, "pending"}
+        }
+        for item in observations:
+            item["acted_on"] = str(item.get("object_id") or "") in acted_handles
+        return {
+            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
+            "perception_mode": self.perception_mode,
+            "observation_count": len(observations),
+            "resolved_count": sum(
+                1 for item in observations if item.get("grounding_status") == "resolved"
+            ),
+            "acted_count": sum(1 for item in observations if item.get("acted_on")),
+            "observations": observations,
+            "private_truth_included": False,
         }
 
     def private_evaluation_payload(self, score: dict[str, Any]) -> dict[str, Any]:
@@ -1031,6 +1282,7 @@ class RealWorldCleanupContract:
             "held_object_id": self._held_handle,
             "perception_mode": perception_mode,
             "structured_detections_available": False,
+            "camera_offset": self._camera_offset(),
             "image_artifacts": {},
             "artifact_status": "pending_robot_view_capture",
             "public_contract_note": (
@@ -1041,6 +1293,351 @@ class RealWorldCleanupContract:
         self._raw_fpv_observations.append(item)
         return dict(item)
 
+    def _simulated_declaration_inputs_for_waypoint(
+        self,
+        waypoint: dict[str, Any],
+        *,
+        observation_id: str,
+    ) -> list[dict[str, Any]]:
+        inputs = []
+        for obj, location_id in self._objects_visible_from_waypoint(waypoint):
+            handle = self._handle_for_object(obj.object_id)
+            detection = self._detection_for_object_at_location(
+                obj,
+                location_id=location_id,
+                handle=handle,
+                waypoint=waypoint,
+                perception_source=CAMERA_MODEL_POLICY_MODE,
+                producer_type=SIMULATED_CAMERA_MODEL_PROVENANCE,
+                source_observation_id=observation_id,
+            )
+            target = infer_target_fixture_for_detection(detection, self.fixture_hints())
+            target_fixture_id = str((target or {}).get("fixture_id") or location_id)
+            inputs.append(
+                {
+                    "category": obj.category,
+                    "source_fixture_id": location_id,
+                    "target_fixture_id": target_fixture_id,
+                    "evidence_note": (
+                        "simulated camera model declared a public camera-derived "
+                        f"{obj.category} candidate"
+                    ),
+                    "image_region": {"type": "bbox", "value": detection["image_bbox"]},
+                    "confidence": detection.get("visibility_confidence", 0.68),
+                }
+            )
+        return inputs
+
+    def _register_model_declared_candidate(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        waypoint: dict[str, Any],
+        candidate: dict[str, Any],
+        producer_type: str,
+        producer_id: str,
+    ) -> dict[str, Any]:
+        normalized = self._normalized_visual_candidate(
+            raw_observation=raw_observation,
+            candidate=candidate,
+            producer_type=producer_type,
+            producer_id=producer_id,
+        )
+        match = self._resolve_visual_candidate(waypoint, normalized)
+        declaration = self._declaration_from_resolution(normalized, match)
+        handle = str(declaration["object_id"])
+        if match["status"] == "resolved":
+            obj = match["objects"][0]
+            location_id = str(match["location_ids"][0])
+            detection = self._detection_for_object_at_location(
+                obj,
+                location_id=location_id,
+                handle=handle,
+                waypoint=waypoint,
+                perception_source=MODEL_DECLARED_OBSERVATION_SOURCE,
+                producer_type=producer_type,
+                source_observation_id=str(raw_observation["observation_id"]),
+            )
+            detection.update(
+                {
+                    "model_declared_observation": declaration,
+                    "model_declared_observation_id": declaration["declaration_id"],
+                    "producer_type": producer_type,
+                    "producer_id": producer_id,
+                    "image_region": declaration["image_region"],
+                    "evidence_note": declaration["evidence_note"],
+                    "grounding_status": declaration["grounding_status"],
+                    "grounding_confidence": declaration["grounding_confidence"],
+                    "grounding_basis": declaration["grounding_basis"],
+                }
+            )
+            _assert_no_forbidden_agent_view_keys(detection)
+            self._detections_by_handle[handle] = detection
+            self._record_detection_lifecycle(handle, detection, waypoint)
+        else:
+            self._detections_by_handle[handle] = {
+                "object_id": handle,
+                "category": declaration["category"],
+                "current_room_id": declaration["room_id"],
+                "perception_source": MODEL_DECLARED_OBSERVATION_SOURCE,
+                "model_declared_observation": declaration,
+                "model_declared_observation_id": declaration["declaration_id"],
+                "producer_type": producer_type,
+                "producer_id": producer_id,
+                "source_observation_id": declaration["source_observation_id"],
+                "image_region": declaration["image_region"],
+                "evidence_note": declaration["evidence_note"],
+                "grounding_status": declaration["grounding_status"],
+                "grounding_confidence": declaration["grounding_confidence"],
+                "grounding_basis": declaration["grounding_basis"],
+                "recovery_hint": declaration["recovery_hint"],
+                "target_fixture_id": declaration["target_fixture_id"],
+                "target_fixture_category": declaration["target_fixture_category"],
+                "target_plausibility": declaration["target_plausibility"],
+            }
+            self._set_handle_state(
+                handle,
+                f"grounding_{declaration['grounding_status']}",
+                tool="declare_visual_candidates",
+                waypoint_id=str(waypoint["waypoint_id"]),
+                room_id=str(waypoint["room_id"]),
+                source_fixture_id=declaration.get("source_fixture_id", ""),
+                category=declaration["category"],
+                perception_source=MODEL_DECLARED_OBSERVATION_SOURCE,
+                grounding_status=declaration["grounding_status"],
+            )
+        self._model_declared_observations.append(declaration)
+        return dict(declaration)
+
+    def _normalized_visual_candidate(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        candidate: dict[str, Any],
+        producer_type: str,
+        producer_id: str,
+    ) -> dict[str, Any]:
+        image_region = _normalize_image_region(candidate.get("image_region"))
+        target_fixture_id = str(candidate.get("target_fixture_id") or "")
+        target_fixture = self._fixtures.get(target_fixture_id, {})
+        category = str(candidate.get("category") or "object").strip() or "object"
+        confidence = candidate.get("confidence")
+        try:
+            confidence_value = float(confidence) if confidence is not None else None
+        except (TypeError, ValueError):
+            confidence_value = None
+        return {
+            "source_observation_id": str(raw_observation["observation_id"]),
+            "waypoint_id": str(raw_observation["waypoint_id"]),
+            "room_id": str(raw_observation["room_id"]),
+            "category": category,
+            "target_fixture_id": target_fixture_id,
+            "target_fixture_category": str(target_fixture.get("category") or ""),
+            "source_fixture_id": str(candidate.get("source_fixture_id") or ""),
+            "evidence_note": str(candidate.get("evidence_note") or ""),
+            "image_region": image_region,
+            "confidence": confidence_value,
+            "producer_type": str(candidate.get("producer_type") or producer_type),
+            "producer_id": str(candidate.get("producer_id") or producer_id),
+            "supersedes_observation_id": str(candidate.get("supersedes_observation_id") or ""),
+        }
+
+    def _resolve_visual_candidate(
+        self,
+        waypoint: dict[str, Any],
+        candidate: dict[str, Any],
+    ) -> dict[str, Any]:
+        category_norm = _norm(candidate.get("category"))
+        source_fixture_id = str(candidate.get("source_fixture_id") or "")
+        candidates = []
+        location_ids = []
+        for obj, location_id in self._objects_visible_from_waypoint(waypoint):
+            if category_norm and not _declared_category_matches_object(category_norm, obj):
+                continue
+            if source_fixture_id and location_id != source_fixture_id:
+                continue
+            candidates.append(obj)
+            location_ids.append(location_id)
+        if len(candidates) == 1:
+            return {"status": "resolved", "objects": candidates, "location_ids": location_ids}
+        if len(candidates) > 1:
+            return {"status": "ambiguous", "objects": candidates, "location_ids": location_ids}
+        return {"status": "unresolved", "objects": [], "location_ids": []}
+
+    def _declaration_from_resolution(
+        self,
+        candidate: dict[str, Any],
+        match: dict[str, Any],
+    ) -> dict[str, Any]:
+        status = str(match["status"])
+        objects = match.get("objects") or []
+        if status == "resolved":
+            handle = self._handle_for_object(objects[0].object_id)
+            basis = "single public camera-context object matched category/source/target hints"
+            confidence = _grounding_confidence(candidate, "resolved")
+            recovery_hint = ""
+        else:
+            handle = self._new_unresolved_handle()
+            basis = (
+                "multiple public camera-context objects matched"
+                if status == "ambiguous"
+                else "no public camera-context object matched"
+            )
+            confidence = _grounding_confidence(candidate, status)
+            recovery_hint = (
+                "Provide a tighter bbox/point or source_fixture_id before picking."
+                if status == "ambiguous"
+                else "Reobserve from another waypoint or declare a clearer category/source fixture."
+            )
+        target_fixture_id = str(candidate.get("target_fixture_id") or "")
+        target_fixture = self._fixtures.get(target_fixture_id, {})
+        target_plausibility = self._target_plausibility(
+            category=str(candidate.get("category") or ""),
+            target_fixture_id=target_fixture_id,
+        )
+        declaration = {
+            "schema": MODEL_DECLARED_OBSERVATION_SCHEMA,
+            "declaration_id": f"declared_{len(self._model_declared_observations) + 1:03d}",
+            "object_id": handle,
+            "source_observation_id": str(candidate["source_observation_id"]),
+            "waypoint_id": str(candidate["waypoint_id"]),
+            "room_id": str(candidate["room_id"]),
+            "category": str(candidate["category"]),
+            "target_fixture_id": target_fixture_id,
+            "target_fixture_category": str(target_fixture.get("category") or ""),
+            "source_fixture_id": str(candidate.get("source_fixture_id") or ""),
+            "evidence_note": str(candidate.get("evidence_note") or ""),
+            "image_region": candidate["image_region"],
+            "confidence": candidate.get("confidence"),
+            "producer_type": str(candidate["producer_type"]),
+            "producer_id": str(candidate["producer_id"]),
+            "supersedes_observation_id": str(candidate.get("supersedes_observation_id") or ""),
+            "grounding_status": status,
+            "grounding_confidence": confidence,
+            "grounding_basis": basis,
+            "recovery_hint": recovery_hint,
+            "target_plausibility": target_plausibility,
+            "private_truth_included": False,
+        }
+        _assert_no_forbidden_agent_view_keys(declaration)
+        return declaration
+
+    def _target_plausibility(self, *, category: str, target_fixture_id: str) -> dict[str, Any]:
+        fixture = self._fixtures.get(target_fixture_id)
+        if fixture is None:
+            return {
+                "status": "unknown_fixture",
+                "basis": "target fixture id is not in public fixture hints",
+            }
+        pseudo_detection = {
+            "category": category,
+            "name": category,
+            "support_estimate": {"fixture_id": ""},
+        }
+        public_target = infer_target_fixture_for_detection(pseudo_detection, self.fixture_hints())
+        expected = str((public_target or {}).get("fixture_id") or "")
+        return {
+            "status": "plausible" if not expected or expected == target_fixture_id else "weak",
+            "basis": "public category/fixture affordance",
+            "expected_fixture_id": expected,
+        }
+
+    def _detection_for_object_at_location(
+        self,
+        obj: Any,
+        *,
+        location_id: str,
+        handle: str,
+        waypoint: dict[str, Any],
+        perception_source: str,
+        producer_type: str,
+        source_observation_id: str,
+    ) -> dict[str, Any]:
+        fixture = self._fixtures.get(location_id, {})
+        room_id = _room_id(str(fixture.get("room_area", waypoint["room_id"])))
+        detection = {
+            "object_id": handle,
+            "category": obj.category,
+            "name": obj.name,
+            "current_room_id": room_id,
+            "visibility_confidence": _visibility_confidence(handle),
+            "image_bbox": _image_bbox(handle),
+            "perception_source": perception_source,
+            "producer_type": producer_type,
+            "source_observation_id": source_observation_id,
+            "candidate_source": MODEL_DECLARED_OBSERVATION_SOURCE
+            if perception_source == MODEL_DECLARED_OBSERVATION_SOURCE
+            else "raw_fpv_observation",
+            "support_estimate": {
+                "fixture_id": location_id,
+                "relation": _location_relation(obj.object_id, self.backend),
+                "confidence": 0.68,
+                "source": perception_source,
+                "perception_source": perception_source,
+                "producer_type": producer_type,
+                "source_observation_id": source_observation_id,
+            },
+        }
+        if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
+            detection["model_provenance"] = producer_type
+            detection["support_estimate"]["model_provenance"] = producer_type
+        detection.update(self._public_candidate_hint(detection))
+        _assert_no_forbidden_agent_view_keys(detection)
+        return detection
+
+    def _objects_visible_from_waypoint(self, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:
+        locations = self.backend.object_locations()
+        fixture_ids = set(waypoint.get("fixture_ids") or [])
+        visible = []
+        for obj in self.scenario.objects:
+            location_id = locations.get(obj.object_id)
+            if not location_id or location_id == "held_by_agent":
+                continue
+            fixture = self._fixtures.get(location_id)
+            if fixture is None:
+                continue
+            room_id = _room_id(str(fixture.get("room_area", "unknown")))
+            if room_id != waypoint["room_id"]:
+                continue
+            if fixture_ids and location_id not in fixture_ids:
+                continue
+            visible.append((obj, str(location_id)))
+        return visible
+
+    def _unresolved_visual_candidate_error(
+        self,
+        tool: str,
+        object_id: str,
+    ) -> dict[str, Any] | None:
+        detection = self._detections_by_handle.get(object_id)
+        if not detection:
+            return None
+        declaration = detection.get("model_declared_observation") or {}
+        status = declaration.get("grounding_status") or detection.get("grounding_status")
+        if status not in {"ambiguous", "unresolved"}:
+            return None
+        return self._error(
+            tool,
+            "visual_candidate_not_resolved",
+            object_id=object_id,
+            grounding_status=status,
+            grounding_confidence=declaration.get(
+                "grounding_confidence",
+                detection.get("grounding_confidence", 0.0),
+            ),
+            grounding_basis=declaration.get(
+                "grounding_basis",
+                detection.get("grounding_basis", ""),
+            ),
+            recovery_hint=declaration.get(
+                "recovery_hint",
+                detection.get(
+                    "recovery_hint",
+                    "Declare a tighter image_region or source_fixture_id before picking.",
+                ),
+            ),
+        )
+
     def _raw_fpv_observation_by_id(self, observation_id: str | None) -> dict[str, Any] | None:
         if observation_id:
             for item in self._raw_fpv_observations:
@@ -1048,6 +1645,16 @@ class RealWorldCleanupContract:
                     return item
             return None
         return self._raw_fpv_observations[-1] if self._raw_fpv_observations else None
+
+    def _camera_offset(self) -> dict[str, float]:
+        return {
+            "yaw_delta_deg": round(self._camera_yaw_offset_deg, 3),
+            "pitch_delta_deg": round(self._camera_pitch_offset_deg, 3),
+        }
+
+    def _reset_camera_adjustment(self) -> None:
+        self._camera_yaw_offset_deg = 0.0
+        self._camera_pitch_offset_deg = 0.0
 
     def _realworld_metrics(
         self,
@@ -1220,6 +1827,7 @@ class RealWorldCleanupContract:
             room_id=str(waypoint["room_id"]),
             source_fixture_id=str((detection.get("support_estimate") or {}).get("fixture_id", "")),
             category=str(detection.get("category", "")),
+            grounding_status=str(detection.get("grounding_status") or ""),
             perception_source=str(
                 detection.get("perception_source")
                 or detection.get("support_estimate", {}).get("source")
@@ -1245,13 +1853,25 @@ class RealWorldCleanupContract:
         existing = self._observed_handles_by_object_id.get(object_id)
         if existing is not None:
             return existing
-        handle = f"observed_{len(self._observed_handles_by_object_id) + 1:03d}"
+        handle = self._new_observed_handle()
         self._observed_handles_by_object_id[object_id] = handle
         self._object_ids_by_handle[handle] = object_id
         return handle
 
     def _internal_object_id(self, handle: str) -> str | None:
         return self._object_ids_by_handle.get(handle)
+
+    def _new_unresolved_handle(self) -> str:
+        return self._new_observed_handle()
+
+    def _new_observed_handle(self) -> str:
+        used = set(self._observed_handles_by_object_id.values()) | set(self._detections_by_handle)
+        index = 1
+        while True:
+            handle = f"observed_{index:03d}"
+            if handle not in used:
+                return handle
+            index += 1
 
     @staticmethod
     def _ok(tool: str, **payload: Any) -> dict[str, Any]:
@@ -1659,6 +2279,115 @@ def _visibility_confidence(handle: str) -> float:
 def _image_bbox(handle: str) -> list[int]:
     suffix = int(handle.rsplit("_", 1)[-1])
     return [72 + suffix * 9, 58 + suffix * 7, 42, 31]
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_zero(value: Any) -> float:
+    number = _float_or_none(value)
+    return number if number is not None else 0.0
+
+
+def _clamp(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, value))
+
+
+def _normalize_image_region(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        region_type = str(value.get("type") or "verbal_region")
+        raw_region_value = value.get("value")
+    else:
+        region_type = "verbal_region"
+        raw_region_value = str(value or "unspecified")
+    if region_type == "bbox" and isinstance(raw_region_value, (list, tuple)):
+        numbers = [_float_or_none(item) for item in raw_region_value[:4]]
+        if len(numbers) == 4 and all(number is not None for number in numbers):
+            return {"type": "bbox", "value": numbers}
+    if region_type == "point" and isinstance(raw_region_value, (list, tuple)):
+        numbers = [_float_or_none(item) for item in raw_region_value[:2]]
+        if len(numbers) == 2 and all(number is not None for number in numbers):
+            return {"type": "point", "value": numbers}
+    return {"type": "verbal_region", "value": str(raw_region_value or "unspecified")}
+
+
+def _visual_candidate_validation_error(candidate: Any) -> dict[str, str] | None:
+    if not isinstance(candidate, dict):
+        return {"field": "candidate", "reason": "candidate must be an object"}
+    for field in ("category", "target_fixture_id", "evidence_note"):
+        if not str(candidate.get(field) or "").strip():
+            return {"field": field, "reason": f"{field} is required"}
+    region_error = _image_region_validation_error(candidate.get("image_region"))
+    if region_error is not None:
+        return region_error
+    return None
+
+
+def _image_region_validation_error(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, dict):
+        if str(value or "").strip():
+            return None
+        return {"field": "image_region", "reason": "image_region is required"}
+    region_type = str(value.get("type") or "")
+    raw_region_value = value.get("value")
+    if region_type not in {"bbox", "point", "verbal_region"}:
+        return {
+            "field": "image_region.type",
+            "reason": "image_region.type must be bbox, point, or verbal_region",
+        }
+    if region_type == "verbal_region":
+        if str(raw_region_value or "").strip():
+            return None
+        return {"field": "image_region.value", "reason": "verbal_region value is required"}
+    if not isinstance(raw_region_value, (list, tuple)):
+        return {"field": "image_region.value", "reason": f"{region_type} value must be a list"}
+    expected = 4 if region_type == "bbox" else 2
+    if len(raw_region_value) != expected:
+        return {
+            "field": "image_region.value",
+            "reason": f"{region_type} value must contain {expected} numbers",
+        }
+    if any(_float_or_none(item) is None for item in raw_region_value):
+        return {"field": "image_region.value", "reason": f"{region_type} values must be numbers"}
+    return None
+
+
+def _grounding_confidence(candidate: dict[str, Any], status: str) -> float:
+    base = candidate.get("confidence")
+    try:
+        score = float(base) if base is not None else 0.72
+    except (TypeError, ValueError):
+        score = 0.72
+    region = candidate.get("image_region") or {}
+    if region.get("type") == "verbal_region":
+        score -= 0.12
+    if status == "ambiguous":
+        score -= 0.24
+    elif status == "unresolved":
+        score -= 0.38
+    return round(_clamp(score, 0.05, 0.99), 3)
+
+
+def _declared_category_matches_object(category_norm: str, obj: Any) -> bool:
+    object_norm = _norm(f"{getattr(obj, 'category', '')} {getattr(obj, 'name', '')}")
+    if not category_norm or category_norm in object_norm or object_norm in category_norm:
+        return True
+    declared_family = _category_alias_family(category_norm)
+    object_family = _category_alias_family(object_norm)
+    return declared_family != "" and declared_family == object_family
+
+
+def _category_alias_family(text_norm: str) -> str:
+    for aliases, _targets in _OBJECT_CATEGORY_TARGETS:
+        for alias in aliases:
+            alias_norm = _norm(alias)
+            if alias_norm and (alias_norm in text_norm or text_norm in alias_norm):
+                return aliases[0]
+    return ""
 
 
 def _room_id(room_area: str) -> str:

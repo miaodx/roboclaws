@@ -245,7 +245,7 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     assert "Robot View Timeline" in report_text
 
 
-def test_realworld_mcp_raw_fpv_mode_attaches_fpv_artifacts(tmp_path: Path) -> None:
+def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     backend = _FakeVisualBackend(scenario)
     base_contract = CleanupBackendSession(scenario, backend=backend)
@@ -263,21 +263,23 @@ def test_realworld_mcp_raw_fpv_mode_attaches_fpv_artifacts(tmp_path: Path) -> No
             "navigate_to_waypoint",
             waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
         )
-        observation = server.call_tool("observe")
-        done = server.call_tool("done", reason="raw fpv evidence recorded")
+        observation_blocks = server._mcp_observe_response()
     finally:
         server.close()
 
-    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
-    report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert isinstance(observation_blocks, list)
+    assert len(observation_blocks) == 2
+    observation = json.loads(observation_blocks[0])
     raw = observation["raw_fpv_observation"]
 
-    assert done["status"] == "ok"
     assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
     assert observation["visible_object_detections"] == []
+    assert "inline_on_navigate" in observation["instruction"]
+    assert "navigate_to_visual_candidate" in observation["instruction"]
+    assert "declare_visual_candidates" not in observation["instruction"]
     assert raw["image_artifacts"]["fpv"].endswith(".png")
     assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
-    assert run_result["perception_mode"] == RAW_FPV_ONLY_MODE
-    assert run_result["agent_view"]["observed_objects"] == []
-    assert run_result["raw_fpv_observations"][0]["image_artifacts"]["fpv"].endswith(".png")
-    assert "Raw FPV Observations" in report_text
+    image_block = observation_blocks[1]
+    assert hasattr(image_block, "data")
+    assert isinstance(image_block.data, bytes)
+    assert len(image_block.data) > 0

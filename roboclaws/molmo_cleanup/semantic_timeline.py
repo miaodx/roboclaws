@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 NAVIGATE_TO_OBJECT_PHASE = "navigate_to_object"
+NAVIGATE_TO_VISUAL_CANDIDATE_TOOL = "navigate_to_visual_candidate"
 PICK_PHASE = "pick"
 NAVIGATE_TO_RECEPTACLE_PHASE = "navigate_to_receptacle"
 OPEN_RECEPTACLE_PHASE = "open_receptacle"
@@ -35,6 +36,7 @@ CANONICAL_CLEANUP_TOOL_ORDER = (
 PLACE_CLEANUP_PHASES = (PLACE_PHASE, PLACE_INSIDE_PHASE)
 SEMANTIC_RESPONSE_PHASES = (
     *CANONICAL_BASE_CLEANUP_PHASES,
+    NAVIGATE_TO_VISUAL_CANDIDATE_TOOL,
     OPEN_RECEPTACLE_PHASE,
     PLACE_PHASE,
     PLACE_INSIDE_PHASE,
@@ -158,7 +160,7 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": None,
             "semantic_phase": None,
         }
-    if tool == NAVIGATE_TO_OBJECT_PHASE:
+    if tool in {NAVIGATE_TO_OBJECT_PHASE, NAVIGATE_TO_VISUAL_CANDIDATE_TOOL}:
         object_id = optional_str(response.get("object_id") or request.get("object_id"))
         return {
             "action": f"navigate_to_object {object_id}",
@@ -235,23 +237,24 @@ def semantic_substeps(
         if event.get("event") != "response":
             continue
         tool = str(event.get("tool", ""))
-        if tool not in SEMANTIC_RESPONSE_PHASE_SET:
+        phase = semantic_phase_for_tool(tool)
+        if phase not in SEMANTIC_RESPONSE_PHASE_SET:
             continue
         response = event.get("response")
         if not isinstance(response, dict):
             continue
         object_id = response.get("object_id") or active_object_id
-        if tool == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
+        if phase == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
             object_id = str(response["object_id"])
             active_object_id = object_id
-        elif tool == PICK_PHASE and response.get("ok") and response.get("object_id"):
+        elif phase == PICK_PHASE and response.get("ok") and response.get("object_id"):
             object_id = str(response["object_id"])
             active_object_id = object_id
-        elif tool == PLACE_PHASE and response.get("ok"):
+        elif phase == PLACE_PHASE and response.get("ok"):
             active_object_id = None
-        elif tool == CLOSE_RECEPTACLE_PHASE and response.get("ok"):
+        elif phase == CLOSE_RECEPTACLE_PHASE and response.get("ok"):
             active_object_id = None
-        elif tool == OBJECT_DONE_PHASE and response.get("object_id"):
+        elif phase == OBJECT_DONE_PHASE and response.get("object_id"):
             object_id = str(response["object_id"])
 
         if not object_id:
@@ -276,9 +279,15 @@ def semantic_substeps(
                 receptacles_by_id,
                 target_id,
             )
-        item["steps"].append(semantic_step(tool, response))
+        item["steps"].append(semantic_step(phase, response))
 
     return [steps_by_object[object_id] for object_id in order]
+
+
+def semantic_phase_for_tool(tool: str) -> str:
+    if tool == NAVIGATE_TO_VISUAL_CANDIDATE_TOOL:
+        return NAVIGATE_TO_OBJECT_PHASE
+    return tool
 
 
 def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:

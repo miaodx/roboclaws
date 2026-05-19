@@ -37,6 +37,8 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_POLICY_TRACE_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
+    MODEL_DECLARED_OBSERVATION_SOURCE,
+    MODEL_DECLARED_OBSERVATIONS_SCHEMA,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REAL_ROBOT_READINESS_SCHEMA,
     REALWORLD_CONTRACT,
@@ -78,6 +80,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
+    parser.add_argument("--require-model-declared-observations", action="store_true")
+    parser.add_argument("--min-model-declared-observations", type=int, default=1)
+    parser.add_argument("--min-model-declared-actions", type=int, default=0)
+    parser.add_argument("--min-restored-count", type=int, default=None)
+    parser.add_argument("--min-semantic-accepted-count", type=int, default=None)
+    parser.add_argument("--min-sweep-coverage", type=float, default=None)
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--require-planner-proof-quality", action="store_true")
     parser.add_argument(
@@ -148,6 +156,12 @@ def main() -> None:
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_camera_model_policy=args.require_camera_model_policy,
+            require_model_declared_observations=args.require_model_declared_observations,
+            min_model_declared_observations=args.min_model_declared_observations,
+            min_model_declared_actions=args.min_model_declared_actions,
+            min_restored_count=args.min_restored_count,
+            min_semantic_accepted_count=args.min_semantic_accepted_count,
+            min_sweep_coverage=args.min_sweep_coverage,
             require_planner_proof_attachment=args.require_planner_proof_attachment,
             require_planner_proof_quality=args.require_planner_proof_quality,
             require_planner_proof_min_steps=args.require_planner_proof_min_steps,
@@ -198,6 +212,12 @@ def _assert_result(
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
     require_camera_model_policy: bool = False,
+    require_model_declared_observations: bool = False,
+    min_model_declared_observations: int = 1,
+    min_model_declared_actions: int = 0,
+    min_restored_count: int | None = None,
+    min_semantic_accepted_count: int | None = None,
+    min_sweep_coverage: float | None = None,
     require_planner_proof_attachment: bool = False,
     require_planner_proof_quality: bool = False,
     require_planner_proof_min_steps: int | None = None,
@@ -219,14 +239,29 @@ def _assert_result(
     assert data.get("planner_uses_private_manifest") is False, data
     assert data.get("fixture_hint_mode") == "room_only", data
     assert data.get("generated_mess_count", 0) >= min_generated_mess_count, data
+    raw_contract_only = (
+        require_raw_fpv_observations
+        and not require_model_declared_observations
+        and not require_clean_agent_run
+    )
     enforce_success = (
         require_clean_agent_run or not require_openclaw_minimum
-    ) and not require_raw_fpv_observations
+    ) and not raw_contract_only
+    semantic_success_gate = min_semantic_accepted_count is not None
     if enforce_success:
-        assert data.get("mess_restoration_rate", 0) >= 0.70, data
         assert data.get("sweep_coverage_rate", 0) >= 0.90, data
         assert data.get("disturbance_count", 999) <= 2, data
-        assert data.get("cleanup_status") == "success", data
+        if semantic_success_gate:
+            _assert_semantic_acceptability(data, min_semantic_accepted_count)
+        else:
+            assert data.get("mess_restoration_rate", 0) >= 0.70, data
+            assert data.get("cleanup_status") == "success", data
+    if min_restored_count is not None:
+        assert int((data.get("score") or {}).get("restored_count") or 0) >= min_restored_count, data
+    if min_semantic_accepted_count is not None:
+        _assert_semantic_acceptability(data, min_semantic_accepted_count)
+    if min_sweep_coverage is not None:
+        assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
     if expect_task is not None:
         assert data.get("task_prompt") == expect_task, data
     if expect_backend is not None:
@@ -243,10 +278,12 @@ def _assert_result(
     assert private.get("generated_mess_count") == data.get("generated_mess_count"), data
     assert private.get("generated_mess_count", 0) >= min_generated_mess_count, data
     assert private.get("acceptable_destination_sets"), data
-    if enforce_success:
+    if enforce_success and not semantic_success_gate:
         for item in data.get("semantic_substeps") or []:
             phases = successful_semantic_phases(item.get("steps", []))
             assert has_complete_semantic_sequence(phases), (phases, item)
+    elif enforce_success and semantic_success_gate:
+        assert _complete_semantic_substep_count(data) >= min_semantic_accepted_count, data
 
     artifacts = data.get("artifacts") or {}
     for key in (
@@ -281,7 +318,7 @@ def _assert_result(
     if require_openclaw_minimum:
         _assert_openclaw_minimum(data)
     if require_clean_agent_run:
-        _assert_clean_agent_run(data)
+        _assert_clean_agent_run(data, min_complete_count=min_semantic_accepted_count)
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
     if require_advisory_scoring:
@@ -290,6 +327,13 @@ def _assert_result(
         _assert_raw_fpv_observations(data, base, report_text)
     if require_camera_model_policy:
         _assert_camera_model_policy(data, report_text)
+    if require_model_declared_observations:
+        _assert_model_declared_observations(
+            data,
+            report_text,
+            min_observations=min_model_declared_observations,
+            min_actions=min_model_declared_actions,
+        )
     if (
         require_planner_proof_attachment
         or require_planner_proof_quality
@@ -373,7 +417,11 @@ def _assert_cleanup_profile(
         assert "not model input" in report_text.lower(), report_text[:500]
 
 
-def _assert_clean_agent_run(data: dict[str, Any]) -> None:
+def _assert_clean_agent_run(
+    data: dict[str, Any],
+    *,
+    min_complete_count: int | None = None,
+) -> None:
     assert data.get("agent_driven") is True, data
     assert data.get("mcp_server") == "molmo_cleanup_realworld", data
     counts = data.get("tool_event_counts") or {}
@@ -385,15 +433,27 @@ def _assert_clean_agent_run(data: dict[str, Any]) -> None:
         *CANONICAL_SURFACE_CLEANUP_PHASES,
         "done",
     ):
-        assert int(counts.get(f"{tool}:request") or 0) >= 1, (tool, counts, data)
+        request_count = int(counts.get(f"{tool}:request") or 0)
+        if tool == "navigate_to_object":
+            request_count += int(counts.get("navigate_to_visual_candidate:request") or 0)
+        assert request_count >= 1, (tool, counts, data)
     diagnostics = data.get("agent_bridge") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
     assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
-    assert _complete_semantic_substep_count(data) >= int(data.get("generated_mess_count") or 0), (
-        data
-    )
+    required_complete = min_complete_count or int(data.get("generated_mess_count") or 0)
+    assert _complete_semantic_substep_count(data) >= required_complete, data
+
+
+def _assert_semantic_acceptability(data: dict[str, Any], min_accepted_count: int) -> None:
+    summary = (data.get("score") or {}).get("semantic_acceptability") or {}
+    assert summary, data
+    assert summary.get("status") == "success", summary
+    accepted_count = int(summary.get("accepted_count") or 0)
+    assert accepted_count >= min_accepted_count, (accepted_count, min_accepted_count, data)
+    accepted_levels = set(summary.get("accepted_levels") or [])
+    assert accepted_levels <= {"preferred", "acceptable"}, summary
 
 
 def _complete_semantic_substep_count(data: dict[str, Any]) -> int:
@@ -422,7 +482,6 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
     _assert_no_forbidden_keys(agent_view)
     if agent_view.get("perception_mode") == "raw_fpv_only":
         assert agent_view.get("structured_detections_available") is False, agent_view
-        assert not agent_view.get("observed_objects"), agent_view
         raw = agent_view.get("raw_fpv_observations") or []
         assert raw, agent_view
         for item in raw:
@@ -430,6 +489,16 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
             assert item.get("structured_detections_available") is False, item
             forbidden = {"category", "name", "support_estimate", "target_receptacle_id"}
             assert not forbidden.intersection(item), item
+        declared = agent_view.get("model_declared_observations") or []
+        observed = agent_view.get("observed_objects") or []
+        if declared:
+            assert observed, agent_view
+            for item in observed:
+                assert item.get("perception_source") == MODEL_DECLARED_OBSERVATION_SOURCE, item
+                assert item.get("source_observation_id"), item
+                assert "target_receptacle_id" not in item, item
+        else:
+            assert not observed, agent_view
         return
     if agent_view.get("perception_mode") == CAMERA_MODEL_POLICY_MODE:
         assert agent_view.get("structured_detections_available") is False, agent_view
@@ -442,12 +511,21 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
         assert observed, agent_view
         for item in observed:
             assert str(item.get("object_id", "")).startswith("observed_"), item
-            assert item.get("perception_source") == CAMERA_MODEL_POLICY_MODE, item
-            assert item.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert item.get("perception_source") in {
+                CAMERA_MODEL_POLICY_MODE,
+                MODEL_DECLARED_OBSERVATION_SOURCE,
+            }, item
+            assert item.get("producer_type") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert item.get("model_provenance") in {
+                SIMULATED_CAMERA_MODEL_PROVENANCE,
+                None,
+            }, item
             assert item.get("source_observation_id"), item
             support = item.get("support_estimate") or {}
-            assert support.get("source") == CAMERA_MODEL_POLICY_MODE, item
-            assert support.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert support.get("source") in {
+                CAMERA_MODEL_POLICY_MODE,
+                MODEL_DECLARED_OBSERVATION_SOURCE,
+            }, item
             assert "is_misplaced" not in item, item
             assert "target_receptacle_id" not in item, item
         return
@@ -553,7 +631,6 @@ def _assert_raw_fpv_observations(
     agent_view = data.get("agent_view") or {}
     assert agent_view.get("perception_mode") == "raw_fpv_only", agent_view
     assert agent_view.get("structured_detections_available") is False, agent_view
-    assert not agent_view.get("observed_objects"), agent_view
     observations = data.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
     assert observations, data
     assert "Raw FPV Observations" in report_text, report_text[:500]
@@ -590,10 +667,49 @@ def _assert_camera_model_policy(data: dict[str, Any], report_text: str) -> None:
     assert evidence.get("events"), evidence
     assert data.get("raw_fpv_observations"), data
     counts = data.get("tool_event_counts") or {}
-    assert int(counts.get("infer_camera_model_candidates:request") or 0) >= 1, counts
+    assert int(counts.get("declare_visual_candidates:request") or 0) >= 1, counts
     assert "Camera Model Policy" in report_text, report_text[:500]
     assert "Raw FPV Observations" in report_text, report_text[:500]
     assert "simulated_camera_model" in report_text, report_text[:500]
+
+
+def _assert_model_declared_observations(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    min_observations: int,
+    min_actions: int,
+) -> None:
+    evidence = data.get("model_declared_observation_evidence") or (
+        (data.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+    )
+    observations = data.get("model_declared_observations") or evidence.get("observations") or []
+    assert evidence.get("schema") == MODEL_DECLARED_OBSERVATIONS_SCHEMA, evidence
+    assert evidence.get("private_truth_included") is False, evidence
+    assert len(observations) >= min_observations, (len(observations), min_observations, data)
+    assert int(evidence.get("observation_count") or 0) >= min_observations, evidence
+    assert int(evidence.get("resolved_count") or 0) >= min_observations, evidence
+    assert int(evidence.get("acted_count") or 0) >= min_actions, evidence
+    for item in observations:
+        assert str(item.get("object_id", "")).startswith("observed_"), item
+        assert item.get("source_observation_id"), item
+        assert item.get("producer_type"), item
+        assert item.get("category"), item
+        assert item.get("target_fixture_id") is not None, item
+        assert item.get("image_region"), item
+        assert item.get("evidence_note") is not None, item
+        assert item.get("grounding_status") in {"resolved", "ambiguous", "unresolved"}, item
+        assert "grounding_confidence" in item, item
+        assert "grounding_basis" in item, item
+        assert "target_plausibility" in item, item
+        assert item.get("private_truth_included") is False, item
+        _assert_no_forbidden_keys(item)
+    counts = data.get("tool_event_counts") or {}
+    declaration_requests = int(counts.get("declare_visual_candidates:request") or 0) + int(
+        counts.get("navigate_to_visual_candidate:request") or 0
+    )
+    assert declaration_requests >= 1, counts
+    assert "Model-Declared Observations" in report_text, report_text[:500]
 
 
 def _assert_planner_proof_attachment(
@@ -860,7 +976,10 @@ def _assert_planner_proof_requests(data: dict[str, Any], base: Path, report_text
         assert len(requests) == len(semantic_substeps), manifest
     for request in requests:
         assert request.get("object_id"), request
-        assert request.get("target_receptacle_id"), request
+        if request.get("ready") is False:
+            assert request.get("blockers"), request
+        else:
+            assert request.get("target_receptacle_id"), request
         assert "planner_probe_args" in request, request
     assert "planner_proof_requests" not in data.get("agent_view", {}), data.get("agent_view")
 

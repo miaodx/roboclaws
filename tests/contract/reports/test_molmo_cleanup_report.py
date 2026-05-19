@@ -690,11 +690,43 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
                     }
                 ],
             },
+            "model_declared_observation_evidence": {
+                "schema": "model_declared_observations_v1",
+                "observation_count": 1,
+                "resolved_count": 1,
+                "acted_count": 1,
+                "private_truth_included": False,
+                "observations": [
+                    {
+                        "object_id": "observed_001",
+                        "source_observation_id": "raw_fpv_001",
+                        "producer_type": "simulated_camera_model",
+                        "producer_id": "camera_labels_agent",
+                        "category": "dish",
+                        "target_fixture_id": "sink_01",
+                        "image_region": {"type": "bbox", "value": [1, 2, 3, 4]},
+                        "evidence_note": "mug on table",
+                        "grounding_status": "resolved",
+                        "grounding_confidence": 0.81,
+                        "grounding_basis": "single public match",
+                        "recovery_hint": "",
+                        "target_plausibility": {"status": "plausible"},
+                        "acted_on": True,
+                        "private_truth_included": False,
+                    }
+                ],
+            },
         },
     }
     run_result["raw_fpv_observations"] = run_result["agent_view"]["raw_fpv_observations"]
     run_result["camera_model_policy_evidence"] = run_result["agent_view"][
         "camera_model_policy_evidence"
+    ]
+    run_result["model_declared_observations"] = run_result["agent_view"][
+        "model_declared_observation_evidence"
+    ]["observations"]
+    run_result["model_declared_observation_evidence"] = run_result["agent_view"][
+        "model_declared_observation_evidence"
     ]
 
     report_path = render_cleanup_report(
@@ -708,6 +740,7 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
 
     html = report_path.read_text(encoding="utf-8")
     assert "Camera Model Policy" in html
+    assert "Model-Declared Observations" in html
     assert "simulated_camera_model" in html
     assert "observed_001" in html
     assert "raw_fpv_001" in html

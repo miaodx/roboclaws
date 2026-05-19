@@ -230,8 +230,14 @@ class LiveCodexCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.profile in {"smoke", "world-labels", "camera-labels"}:
+        if self.args.profile in {"smoke", "world-labels", "camera-labels", "camera-raw"}:
             checker_args.append("--require-clean-agent-run")
+        if self.args.profile == "camera-raw":
+            _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
+            _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
+            _append_missing_checker_value(checker_args, "--min-model-declared-actions", "7")
+            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
+            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
         status = _run_and_tee(
@@ -347,6 +353,16 @@ def _shell_quote(value: str) -> str:
     if all(char in safe for char in value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def _append_missing_checker_flag(args: list[str], flag: str) -> None:
+    if flag not in args:
+        args.append(flag)
+
+
+def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
+    if flag not in args:
+        args.extend([flag, value])
 
 
 if __name__ == "__main__":

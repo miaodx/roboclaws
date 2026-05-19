@@ -158,7 +158,7 @@ agent_input=raw_camera
 input_provenance=camera_artifact
 world_backend=molmospaces_sim
 report=robot_view_report
-verifier=image_input_contract + robot_view_honesty
+verifier=image_input_contract + cleanup_success + robot_view_honesty
 ```
 
 This is the profile to use when the test is meant to prove that the model path
@@ -168,6 +168,17 @@ candidate fixtures.
 
 This profile is the one that can exercise real image reasoning when paired with
 a model that supports image input and a launcher that passes images correctly.
+
+Implemented refinement: `camera-raw` lets the main cleanup agent create
+Model-Declared Observations from FPV image evidence. The agent still receives no
+structured labels before declaration, but it may call a narrow declaration or
+inline navigation tool when it is ready to act on a visual candidate.
+
+The first live-agent gate for this profile should use semantic acceptability
+rather than only exact hidden restoration. Exact private restoration remains
+visible in the report, but preferred/acceptable advisory placements are the
+better first-pass signal for raw-FPV cleanup because image-derived tidy choices
+can legitimately differ from a generated exact fixture.
 
 ### `camera-labels`
 
@@ -187,10 +198,45 @@ The agent receives structured object candidates, but those candidates are
 registered from a camera-observation step rather than directly from the world
 model.
 
-Current implementation note: the existing `camera_model_policy` path uses
-deterministic simulated camera-model evidence. It does not call a real VLM or
-detector. A future implementation can keep the same profile and change
-`input_provenance` to `vlm_detector` or `object_detector`.
+Current implementation note: the internal `camera_model_policy` path uses
+deterministic simulated camera-label producer evidence. It does not call a real
+VLM or detector. The Model-Declared Observation bridge keeps the public
+`camera-labels` profile on the same declaration schema used by `camera-raw`; a
+future implementation can change `input_provenance` to `vlm_detector` or
+`object_detector`.
+
+## Model-Declared Observation Bridge
+
+The durable bridge between camera evidence and cleanup handles is a
+Model-Declared Observation: a public `observed_*` handle created from a camera
+inference producer's interpretation of a public FPV observation.
+
+This keeps the MCP boundary narrow. The contract does not expose a whole
+`cleanup_room()` task tool, and it does not leak private scoring truth. It only
+lets the agent or another producer turn camera evidence into an auditable public
+handle, after which the normal semantic cleanup loop still applies:
+
+```text
+observe raw FPV
+  -> navigate_to_visual_candidate
+  -> pick
+  -> navigate_to_receptacle
+  -> open? -> place/place_inside -> close?
+```
+
+`camera-raw` uses one live-agent strategy: `inline_on_navigate`. The cleanup
+agent declares a candidate only when trying to act on it, through
+`navigate_to_visual_candidate`. Do not add a separate pre-registration knob to
+normal raw-FPV runs unless future harness evidence shows a clear win.
+
+Explicit registration still belongs to producer-style perception flows:
+`camera-labels` uses `declare_visual_candidates` after an observation, then the
+cleanup policy chooses among the resulting `observed_*` handles.
+
+Hidden grounding may use execution geometry or camera calibration to bind a
+declaration to an executable object, but model-facing feedback must stay public:
+resolved/ambiguous/unresolved status, confidence, basis, and recovery hint. An
+unresolved declaration can be shown in reports but must not be pickable.
 
 ## Metadata Kept Behind Profiles
 
@@ -258,8 +304,8 @@ The refactor should make these gaps visible and testable:
 | --- | --- |
 | `profile=smoke` | Cheap contract sanity still works. |
 | `profile=world-labels` | Current structured cleanup path still produces robot-view artifacts and does not imply image input. |
-| `profile=camera-raw` | Raw camera artifacts are actually used and structured labels are withheld. |
-| `profile=camera-labels` | Camera-derived label path is separate from world-label path and records provenance. |
+| `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
+| `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 
 The most important regression test is:
 

@@ -443,6 +443,57 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
 
 
+def test_checker_can_require_raw_fpv_model_declared_success_gate(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode="raw_fpv_only",
+    )
+    result["mess_restoration_rate"] = 0.5
+    result["cleanup_status"] = "partial_success"
+    result["score"]["restored_count"] = 3
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_model_declared_observations=True,
+        min_model_declared_observations=5,
+        min_model_declared_actions=5,
+        min_semantic_accepted_count=5,
+    )
+
+
+def test_checker_rejects_raw_fpv_model_declared_semantic_shortfall(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode="raw_fpv_only",
+    )
+    result["score"]["semantic_acceptability"]["accepted_count"] = 4
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_model_declared_observations=True,
+            min_model_declared_observations=5,
+            min_model_declared_actions=5,
+            min_semantic_accepted_count=5,
+        )
+
+
 def test_checker_can_require_attached_planner_proof(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -824,6 +875,7 @@ def test_checker_rejects_unlabelled_camera_model_candidates(tmp_path: Path) -> N
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
     result["agent_view"]["observed_objects"][0].pop("model_provenance")
+    result["agent_view"]["observed_objects"][0].pop("producer_type")
 
     with pytest.raises(AssertionError):
         checker._assert_result(

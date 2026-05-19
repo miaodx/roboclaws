@@ -34,8 +34,8 @@ for fast contract checks, but it has no robot camera timeline.
 | Backend | `api_semantic_synthetic` | Fast in-process semantic state mutation. | CI/smoke shape, not real visual proof. |
 | Backend | `molmospaces_subprocess` | Real upstream MolmoSpaces/MuJoCo scene. | Required for real visual evidence. |
 | Perception | `visible_object_detections` | Agent gets robot-local observed handles, categories, boxes, and support estimates. | Current best cleanup-success mode. |
-| Perception | `raw_fpv_only` | Agent gets FPV observation artifact, no structured detections. | Camera evidence only; not cleanup success yet. |
-| Perception | `camera_model_policy` | Raw FPV observation first, then simulated camera-model candidates become observed handles. | Supported by the deterministic demo/checker and MCP internals; not exposed by every CLI yet. |
+| Perception | `raw_fpv_only` | Agent gets FPV observation artifact, no structured detections before declaration. | Camera evidence contract plus Model-Declared Observation cleanup path for image-capable agents. |
+| Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal deterministic producer mode behind the `camera-labels` profile, using the shared Model-Declared Observation schema. |
 | Visuals | `--include-robot --record-robot-views` | Capture RBY1M robot-view timeline. | Required for FPV/chase/map/verification report. |
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
 | Fixture hints | `room_only` | Public room-level fixture hints. | Preferred ADR-0003 setting. |
@@ -57,17 +57,46 @@ sets, acceptable destinations, private manifests, hidden target lists,
 Demo recipes such as `just task::run molmo-cleanup ...` choose a run shape; they
 are not whole-task MCP tools.
 
+## Model-Declared Camera Bridge
+
+The Model-Declared Observation bridge lets a camera inference producer turn
+public FPV evidence into public `observed_*` handles without exposing private
+scoring truth. It applies to both camera profiles:
+
+| Profile | Producer | Declaration timing |
+|---------|----------|--------------------|
+| `camera-raw` | Main cleanup agent reasoning over FPV image blocks. | Inline only: call `navigate_to_visual_candidate` when acting on a candidate. |
+| `camera-labels` | Separate camera inference producer, detector, or deterministic harness producer. | Producer registration: call `declare_visual_candidates` after an observation. |
+
+`camera-raw` deliberately has no separate pre-registration strategy in normal
+agent runs. That keeps the live image-agent loop close to the operator's mental
+model: observe a raw camera frame, choose one plausible cleanup object, navigate
+to it, then pick and place it. Explicit registration remains useful for
+`camera-labels`, where perception and cleanup selection are separate roles.
+
+The declaration evidence should include source observation id, category, target
+fixture id, evidence note, image region, producer metadata, grounding status,
+and recovery hints. Unresolved declarations may appear in reports but should be
+blocked from `pick`.
+
+For the first live `camera-raw` agent gate, prefer semantic acceptability over
+the exact hidden restoration score: require enough preferred/acceptable
+placements, full sweep coverage, declaration-driven actions, and no structured
+label leakage. Keep the exact private scorer in the report as diagnostic
+evidence and use it for stricter regression/debug runs when exact target
+agreement is the point of the test.
+
 ## Entrypoint Support
 
 Not every entrypoint exposes every contract mode yet. Treat the matrix below as
 the current source of truth before claiming a run supports a setting.
 
-| Entrypoint | Visible Detections | Raw FPV Only | Camera Model Policy | Notes |
+| Entrypoint | Visible Detections | Raw FPV Only | Camera Labels | Notes |
 |------------|--------------------|--------------|---------------------|-------|
 | `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | yes | yes | yes | Deterministic cleanup demo and checker path. |
-| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | no | Dogfood/smoke wrapper used by several just recipes. |
-| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI. |
-| `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Underlying contract supports `infer_camera_model_candidates`. |
+| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | no | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools. |
+| `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Internals use `declare_visual_candidates` and `navigate_to_visual_candidate` for camera evidence to handle registration. |
 
 ## Command Taxonomy
 
@@ -165,8 +194,9 @@ sections.
 |-------|-------------------|-------------------|
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
 | Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, chase, map, verification. |
-| Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table. |
-| Camera-model policy | `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Camera Model Policy section. |
+| Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
+| Model-declared camera cleanup | `camera-raw` or `camera-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
+| Camera-label producer evidence | `profile=camera-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with simulated producer provenance. |
 | Planner proof attached | `--planner-proof-run-result ...` | Attached Planner Proof, Cleanup Primitive Gate, Planner Cleanup Bridge. |
 | Proof bundle runner | proof-bundle runner script | Separate runner report with selected commands, proof results, blockers, grasp/task-feasibility evidence. |
 
@@ -236,11 +266,16 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 
 - A clean semantic cleanup run does not prove physical manipulation.
 - `api_semantic` means the simulator state was updated through semantic tools.
-- `raw_fpv_only` proves camera artifact plumbing, not camera-only cleanup
-  success.
-- `camera_model_policy` uses deterministic simulated camera-model evidence
-  today; it is not real VLM pixel inference, and the direct external-agent
-  server CLI does not expose it yet.
+- `raw_fpv_only` proves camera artifact plumbing and, for image-capable agents,
+  the Model-Declared Observation cleanup path from FPV evidence to public
+  handles.
+- The `camera-raw` live success gate uses semantic acceptability because a tidy
+  camera-derived placement can be correct for review while missing the generated
+  exact target fixture.
+- `camera_model_policy` remains internal metadata for deterministic simulated
+  camera-label producer evidence under the shared Model-Declared Observation
+  schema; it is not real VLM pixel inference unless the producer is explicitly a
+  VLM/detector route.
 - The global planner cleanup bridge remains blocked until cleanup subphases are
   planner-backed for the required object/target bindings.
 - OpenClaw minimum viability and clean cleanup success are separate gates.
@@ -257,6 +292,10 @@ just harness::molmo-planner-proof-bundle-execute-rerun
   raw FPV-only perception mode.
 - [ADR-0020](../adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md):
   camera-model policy mode.
+- [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
+  model-declared observations bridge camera evidence to cleanup handles.
+- [Model-declared observations plan](../plans/molmospaces-model-declared-observations-raw-fpv-cleanup.md):
+  implementation and harness plan for raw-FPV cleanup.
 - [ADR-0028](../adr/0028-add-planner-cleanup-bridge-readiness-evidence.md):
   planner cleanup bridge readiness.
 - [`domain.md`](domain.md): domain vocabulary and shipped-history notes.
