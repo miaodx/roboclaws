@@ -258,6 +258,11 @@ class LiveCodexCleanupRunner:
         ]
         if self.args.profile in {"smoke", "world-labels", "camera-labels", "camera-raw"}:
             checker_args.append("--require-clean-agent-run")
+        if self.args.profile == "world-labels":
+            _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
+            _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
+            _append_missing_checker_value(checker_args, "--min-restored-count", "5")
+            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
