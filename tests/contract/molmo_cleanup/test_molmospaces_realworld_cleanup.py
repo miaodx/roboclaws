@@ -106,11 +106,14 @@ def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) ->
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
 
     assert result["perception_mode"] == RAW_FPV_ONLY_MODE
-    assert result["cleanup_status"] == "failed"
-    assert result["agent_view"]["observed_objects"] == []
+    assert result["cleanup_status"] == "success"
+    assert result["agent_view"]["observed_objects"]
     assert result["agent_view"]["raw_fpv_observations"]
+    assert result["model_declared_observations"]
+    assert result["model_declared_observation_evidence"]["resolved_count"] >= 7
     assert result["raw_fpv_observations"]
     assert "Raw FPV Observations" in report
+    assert "Model-Declared Observations" in report
 
 
 def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path) -> None:
@@ -130,7 +133,8 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
     assert result["raw_fpv_observations"]
     assert result["camera_model_policy_evidence"]["enabled"] is True
     assert result["camera_model_policy_evidence"]["candidate_count"] >= 1
-    assert result["tool_event_counts"]["infer_camera_model_candidates:request"] >= 1
+    assert result["tool_event_counts"]["declare_visual_candidates:request"] >= 1
     assert "Camera Model Policy" in report
+    assert "Model-Declared Observations" in report
     assert "Raw FPV Observations" in report
     assert "Semantic Substeps" in report

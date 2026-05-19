@@ -96,9 +96,16 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         perception_mode="raw_fpv_only"
-        profile_requires_clean_success="false"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
-        checker_visual_args=(--require-robot-views --require-raw-fpv-observations)
+        checker_visual_args=(
+          --require-robot-views
+          --require-raw-fpv-observations
+          --require-model-declared-observations
+          --min-model-declared-observations 7
+          --min-model-declared-actions 7
+          --min-semantic-accepted-count 7
+          --min-sweep-coverage 1.0
+        )
         ;;
       camera-labels)
         backend="molmospaces_subprocess"
@@ -174,10 +181,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         claude_bin="$(command -v claude || true)"
         case "$profile" in
           camera-raw)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, inspect the raw FPV artifacts returned by observe, do not expect observed_* detections or structured labels, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when camera evidence is recorded."
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call roboclaws__navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), target_fixture_id, evidence_note, and image_region before pick. Do not pre-register raw-FPV candidates with roboclaws__declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
             ;;
           camera-labels)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, call roboclaws__infer_camera_model_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."
             ;;
           *)
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, then call roboclaws__done when finished so the report is generated."

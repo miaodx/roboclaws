@@ -19,6 +19,18 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `roboclaws__navigate_to_waypoint(waypoint_id)`, then
    `roboclaws__observe()`. Build your own semantic map from returned
    `observed_*` object handles and support estimates.
+   In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
+   structured labels. Inspect the image, then call
+   `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
+   target_fixture_id, evidence_note, image_region, ...)` only when you intend to
+   act on a visual candidate. Do not pre-register raw-FPV candidates with
+   `roboclaws__declare_visual_candidates`; that producer-registration path is
+   for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
+   `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
+   over-specific guesses that are likely to miss the public grounding resolver.
+   In `camera-labels` runs, use
+   `roboclaws__declare_visual_candidates()` to register producer-labelled
+   candidates before cleanup selection.
 3. Prefer a local cleanup loop after each useful observation instead of a full
    up-front survey. Clean plausible misplaced objects with only observed
    object handles:

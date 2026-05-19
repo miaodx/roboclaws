@@ -144,6 +144,7 @@ def _cleanup_report_sections(
             _planner_proof_requests_section(run_result),
             _agent_view_section(run_result),
             _raw_fpv_observations_section(run_result),
+            _model_declared_observations_section(run_result),
             _camera_model_policy_section(run_result),
             _advisory_review_section(run_result),
             _private_evaluation_section(run_result),
@@ -4509,6 +4510,61 @@ def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
+    evidence = run_result.get("model_declared_observation_evidence") or (
+        (run_result.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+    )
+    observations = run_result.get("model_declared_observations") or evidence.get(
+        "observations",
+        [],
+    )
+    if not observations:
+        return ""
+    rows = []
+    for item in observations:
+        region = item.get("image_region") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_fixture_id', '')))}</td>"
+            f"<td>{html.escape(str(region.get('type', '')))}: "
+            f"{html.escape(str(region.get('value', '')))}</td>"
+            f"<td>{html.escape(str(item.get('grounding_status', '')))} "
+            f"({html.escape(str(item.get('grounding_confidence', '')))})</td>"
+            f"<td>{html.escape(str(item.get('target_plausibility', {}).get('status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('acted_on', False)))}</td>"
+            f"<td>{html.escape(str(item.get('evidence_note', '')))}</td>"
+            f"<td>{html.escape(str(item.get('recovery_hint', '')))}</td>"
+            "</tr>"
+        )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Declared', evidence.get('observation_count', len(observations)))}"
+        f"{_metric('Resolved', evidence.get('resolved_count', 0))}"
+        f"{_metric('Acted on', evidence.get('acted_count', 0))}"
+        f"{_metric('Private truth', evidence.get('private_truth_included', False))}"
+        "</div>"
+    )
+    table = (
+        '<div class="table-wrap"><table><thead><tr><th>Source observation</th>'
+        "<th>Producer</th><th>Handle</th><th>Category</th><th>Target fixture</th>"
+        "<th>Image region</th><th>Grounding</th><th>Target plausibility</th>"
+        "<th>Acted on</th><th>Evidence note</th><th>Recovery hint</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    return (
+        '<section class="panel model-declared-observations">'
+        "<h2>Model-Declared Observations</h2>"
+        '<p class="note">Public camera evidence converted into observed handles. '
+        "Grounding status shows whether the hidden resolver found an executable "
+        "object without exposing private scoring truth.</p>"
+        f"{metrics}{table}</section>"
+    )
+
+
 def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
     if run_result.get("contract") != "realworld_cleanup_v1":
         return ""
@@ -4521,12 +4577,15 @@ def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
     for item in observations:
         artifacts = item.get("image_artifacts") or {}
         fpv_path = artifacts.get("fpv") or item.get("fpv_image")
+        offset = item.get("camera_offset") or {}
         cards.append(
             '<article class="raw-fpv-card">'
             "<div>"
             f"<h3>{html.escape(str(item.get('observation_id', 'observation')))}</h3>"
             f'<p class="pose">room={html.escape(str(item.get("room_id", "")))} '
             f"waypoint={html.escape(str(item.get('waypoint_id', '')))}</p>"
+            f'<p class="pose">camera yaw={html.escape(str(offset.get("yaw_delta_deg", 0)))} '
+            f"pitch={html.escape(str(offset.get('pitch_delta_deg', 0)))}</p>"
             f'<p class="note">{html.escape(str(item.get("artifact_status", "")))}</p>'
             "</div>"
             f"{_view_figure(fpv_path, 'FPV')}"
