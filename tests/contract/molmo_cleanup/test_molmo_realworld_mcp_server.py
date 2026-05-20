@@ -409,6 +409,62 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     assert "Robot View Timeline" in report_text
 
 
+def test_realworld_mcp_promoted_cleanup_records_internal_robot_view_phases(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        cleanup_profile=CAMERA_RAW_PROFILE,
+        perception_mode=RAW_FPV_ONLY_MODE,
+        record_robot_views=True,
+        enable_promoted_cleanup_tools=True,
+    )
+    try:
+        waypoint = next(
+            item
+            for item in server.call_tool("metric_map")["inspection_waypoints"]
+            if item["room_id"] == "work_area"
+        )
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        observation = server.call_tool("observe")
+        raw_observation_id = observation["raw_fpv_observation"]["observation_id"]
+        grounded = server.call_tool(
+            "navigate_to_visual_candidate",
+            source_observation_id=raw_observation_id,
+            category="food",
+            target_fixture_id="fridge_01",
+            evidence_note="round food item on the desk",
+            image_region={"type": "verbal_region", "value": "front of desk"},
+        )
+        before_composite_count = len(server.robot_view_steps)
+        cleaned = server.call_tool(
+            CLEAN_OBSERVED_OBJECT_TOOL,
+            object_id=grounded["object_id"],
+            fixture_id=grounded["candidate_fixture_id"],
+            placement_tool=grounded["recommended_tool"] or "auto",
+        )
+        composite_phases = [
+            step.get("semantic_phase") for step in server.robot_view_steps[before_composite_count:]
+        ]
+    finally:
+        server.close()
+
+    assert grounded["ok"] is True
+    assert cleaned["ok"] is True
+    assert composite_phases[:3] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+    ]
+    assert {"place", "place_inside"}.intersection(composite_phases)
+
+
 def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) -> None:
     scenario = build_cleanup_scenario(seed=7)
     backend = _FakeVisualBackend(scenario)

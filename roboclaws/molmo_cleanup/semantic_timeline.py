@@ -270,7 +270,10 @@ def semantic_substeps(
                 phase = str(step.get("phase") or "")
                 if phase not in SEMANTIC_RESPONSE_PHASE_SET:
                     continue
-                item["steps"].append(semantic_step(phase, step))
+                normalized_step = semantic_step(phase, step)
+                if _is_duplicate_adjacent_object_navigation(item["steps"], normalized_step):
+                    continue
+                item["steps"].append(normalized_step)
             active_object_id = None
             continue
         phase = semantic_phase_for_tool(tool)
@@ -321,6 +324,21 @@ def semantic_phase_for_tool(tool: str) -> str:
     if tool == NAVIGATE_TO_VISUAL_CANDIDATE_TOOL:
         return NAVIGATE_TO_OBJECT_PHASE
     return tool
+
+
+def _is_duplicate_adjacent_object_navigation(
+    existing_steps: list[dict[str, Any]],
+    step: dict[str, Any],
+) -> bool:
+    if step.get("phase") != NAVIGATE_TO_OBJECT_PHASE or not existing_steps:
+        return False
+    previous = existing_steps[-1]
+    return (
+        previous.get("phase") == NAVIGATE_TO_OBJECT_PHASE
+        and previous.get("ok") is True
+        and step.get("ok") is True
+        and previous.get("object_id") == step.get("object_id")
+    )
 
 
 def semantic_step(phase: str, response: dict[str, Any]) -> dict[str, Any]:
@@ -489,10 +507,24 @@ def duplicate_post_place_navigations(trace_events: list[dict[str, Any]]) -> list
 
 
 def has_complete_semantic_sequence(phases: list[str]) -> bool:
+    phases = _dedupe_adjacent_object_navigation_phases(phases)
     if phases[: len(CANONICAL_BASE_CLEANUP_PHASES)] != list(CANONICAL_BASE_CLEANUP_PHASES):
         return False
     completed_phases = set(phases[len(CANONICAL_BASE_CLEANUP_PHASES) :])
     return bool(completed_phases.intersection(PLACE_CLEANUP_PHASES))
+
+
+def _dedupe_adjacent_object_navigation_phases(phases: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for phase in phases:
+        if (
+            phase == NAVIGATE_TO_OBJECT_PHASE
+            and normalized
+            and normalized[-1] == NAVIGATE_TO_OBJECT_PHASE
+        ):
+            continue
+        normalized.append(phase)
+    return normalized
 
 
 def successful_semantic_phases(steps: list[dict[str, Any]]) -> list[str]:

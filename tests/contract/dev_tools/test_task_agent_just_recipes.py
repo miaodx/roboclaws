@@ -472,6 +472,10 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "MCP-promoted RAW_FPV comparison lane" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
     assert "roboclaws__clean_observed_object" in prompt
+    assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
+    assert "do not send bare x/y/width/height fields" in prompt
+    assert "at least seven clean_observed_object calls have succeeded" in prompt
+    assert "at least seven grounded cleanup chains have succeeded" in prompt
     assert "--enable-promoted-cleanup-tools" in text
 
 

@@ -629,6 +629,43 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
     _assert_no_forbidden_keys(toy)
 
 
+def test_realworld_raw_fpv_grounding_uses_same_room_fallback() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(_same_room_fallback_scenario()),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["waypoint_id"] == "living_area_scan_1"
+    )
+    internal_waypoint = next(
+        item for item in contract._waypoints if item["waypoint_id"] == waypoint["waypoint_id"]
+    )
+    assert "desk_01" in internal_waypoint["fixture_ids"]
+    assert "shelf_01" not in internal_waypoint["fixture_ids"]
+
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="book",
+        target_fixture_id="shelf_01",
+        evidence_note="book visible on a neighboring shelf in the same room",
+        image_region={"type": "verbal_region", "value": "right side shelf"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is True
+    assert response["object_id"].startswith("observed_")
+    declaration = response["model_declared_observation"]
+    assert declaration["grounding_status"] == "resolved"
+    assert "same-room object matched category" in declaration["grounding_basis"]
+    _assert_no_forbidden_keys(response)
+
+
 def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -760,5 +797,40 @@ def _live_style_alias_scenario() -> CleanupScenario:
                 TargetRule("teddybear_01", ("toybin_01",)),
             ),
             success_threshold=2,
+        ),
+    )
+
+
+def _same_room_fallback_scenario() -> CleanupScenario:
+    return CleanupScenario(
+        scenario_id="same-room-fallback-test",
+        task="clean raw camera declaration from neighboring fixture",
+        seed=7,
+        objects=(
+            CleanupObject(
+                object_id="book_01",
+                name="Paperback Book",
+                category="Book",
+                location_id="shelf_01",
+            ),
+        ),
+        receptacles=(
+            CleanupReceptacle(
+                receptacle_id="desk_01",
+                name="Desk",
+                room_area="living_area",
+                category="Desk",
+            ),
+            CleanupReceptacle(
+                receptacle_id="shelf_01",
+                name="ShelvingUnit",
+                room_area="living_area",
+                category="ShelvingUnit",
+            ),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="same-room-fallback-test",
+            targets=(TargetRule("book_01", ("shelf_01",)),),
+            success_threshold=1,
         ),
     )
