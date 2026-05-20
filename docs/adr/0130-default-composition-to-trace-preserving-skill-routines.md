@@ -28,6 +28,12 @@ put task strategy or performance shortcuts. `clean_observed_object` remains a
 performance-lane promoted candidate for timing work unless and until it satisfies
 the promotion criteria for a canonical cleanup contract profile.
 
+For Molmo cleanup, the current trace-preserving routine lives in
+`skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py` and is
+documented in `skills/molmo-realworld-cleanup/SKILL.md`. The `world-labels-perf`
+lane defaults to that skill routine; the MCP candidate is used only for explicit
+comparison runs.
+
 ## Considered Options
 
 - Put reusable composition only in MCP. This reduces round trips but risks

@@ -49,7 +49,10 @@ Molmo cleanup profiles:
 
 - `smoke` is the cheap synthetic contract sanity profile.
 - `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
-- `world-labels-perf` keeps the world-label contract but skips per-tool robot-view capture for timing work.
+- `world-labels-perf` keeps the world-label contract but skips per-tool
+  robot-view capture for timing work. It defaults to the skill-side
+  trace-preserving cleanup routine; pass `cleanup_routine=mcp` only when
+  comparing the promoted-candidate MCP shortcut.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
 - `camera-labels` registers structured candidates from camera observations.
 

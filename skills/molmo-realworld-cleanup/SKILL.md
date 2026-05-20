@@ -52,16 +52,11 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    candidates before cleanup selection.
 3. Prefer a local cleanup loop after each useful observation instead of a full
    up-front survey. Clean plausible misplaced objects with only observed
-   object handles:
-   `roboclaws__navigate_to_object(object_id)`, `roboclaws__pick(object_id)`,
-   `roboclaws__navigate_to_receptacle(fixture_id)`, then place it.
-   In performance-lane runs, if `roboclaws__clean_observed_object` is available,
-   treat it as a promoted-candidate shortcut and use it for each observed handle
-   instead of the primitive cleanup calls:
-   pass the observed `object_id`, the public `candidate_fixture_id`, and
-   `placement_tool` as `recommended_tool` when present. The response returns the
-   same canonical semantic substeps for the report; still call `observe()` once
-   after each successful composite cleanup.
+   object handles using the Trace-Preserving Skill Routine below.
+   `roboclaws__clean_observed_object` is a promoted-candidate comparison path
+   only: use it only when the kickoff prompt explicitly says this run is the
+   MCP-promoted comparison lane. Otherwise keep composition in the skill routine
+   and call the public atomic MCP tools yourself.
    If a visible detection or done recovery response includes
    `cleanup_recommended: true` or a `candidate_fixture_id` that differs from
    its `support_estimate.fixture_id`, treat that public candidate as cleanup
@@ -100,3 +95,32 @@ waypoint navigation is checked against a static Nav2-shaped costmap and labelled
 `sim_costmap_planner`, while manipulation remains semantic unless explicitly
 planner-backed in the report. Chase or third-person views may appear in the
 report as `report_only_simulation_view`; they are not policy inputs.
+
+## Trace-Preserving Skill Routine
+
+For each observed cleanup handle, run this fixed public tool chain:
+
+```text
+navigate_to_object(object_id)
+pick(object_id)
+navigate_to_receptacle(candidate_fixture_id)
+open_receptacle(candidate_fixture_id)      # only for fridge/refrigerator targets
+place_inside(candidate_fixture_id)         # for fridge/refrigerator/shelf targets
+close_receptacle(candidate_fixture_id)     # only after opening fridge-like targets
+place(candidate_fixture_id)                # for normal surfaces instead of place_inside
+observe()
+```
+
+Choose `place_inside` when the observation or fixture hints recommend it, or
+when the target fixture affordances/category indicate fridge, refrigerator,
+shelf, bookcase, or shelving. Choose `place` for table, sofa, bed, desk, sink,
+counter, stand, hamper, and other surface-like fixtures. If any tool returns
+`error_reason: semantic_order`, call its `required_tool` with the same public
+object or fixture id, then retry the failed step once. If the retry still fails,
+continue the waypoint sweep and leave the blocker visible in the trace rather
+than inventing hidden destinations.
+
+The reference routine lives at
+`skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py`. Treat it
+as executable documentation for the public call order and recovery shape; it is
+not permission to bypass MCP or read private backend state.

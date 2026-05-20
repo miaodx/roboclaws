@@ -127,7 +127,9 @@ openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
 
 # Live Codex cleanup performance lane. This is the local Docker-backed Codex
 # route with the world-labels-perf profile, so it preserves the cleanup/MCP
-# contract while skipping per-tool robot-view timeline capture.
+# contract while skipping per-tool robot-view timeline capture. By default it
+# uses the skill-side trace-preserving routine; pass cleanup_routine=mcp to
+# compare the promoted-candidate MCP shortcut.
 molmo-cleanup-codex-perf *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -139,6 +141,7 @@ molmo-cleanup-codex-perf *overrides:
     host="127.0.0.1"
     port="18788"
     map_bundle="auto"
+    cleanup_routine="skill"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2
@@ -149,7 +152,7 @@ molmo-cleanup-codex-perf *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle)
+        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle|cleanup_routine)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -162,7 +165,7 @@ molmo-cleanup-codex-perf *overrides:
       printf -v "$key" '%s' "$value"
     done
     cmd=(just molmo::cleanup "codex-live" "world-labels-perf" "$seed" \
-      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle")
+      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle" "$cleanup_routine")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
       printf 'just'
       for arg in "${cmd[@]:1}"; do

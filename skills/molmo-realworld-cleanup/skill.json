@@ -31,7 +31,13 @@
     "privileged_tools": [],
     "boundary_notes": "ADR-0003 public/private-safe surface. No scene_objects, target list, hidden destination table, or private scoring truth."
   },
-  "scripts": [],
+  "scripts": [
+    {
+      "path": "scripts/trace_preserving_cleanup.py",
+      "kind": "routine",
+      "summary": "Reference implementation for the skill-side observed-object cleanup chain. It composes public atomic MCP tools through an injected call_tool function and preserves semantic substeps."
+    }
+  ],
   "evidence_outputs": ["trace.jsonl", "run_result.json", "report.html"],
   "lifecycle": {
     "refactor_signals": [
@@ -41,7 +47,8 @@
     "promote_to_mcp_when": [
       "a subproblem is stable across cleanup skills",
       "it uses only public contract data",
-      "trace and report artifacts preserve the semantic substeps"
+      "trace and report artifacts preserve the semantic substeps",
+      "live performance evidence shows skill-side composition is not good enough for cross-client use"
     ]
   }
 }
