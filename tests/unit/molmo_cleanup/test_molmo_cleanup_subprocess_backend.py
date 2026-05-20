@@ -353,6 +353,73 @@ def test_worker_direct_support_resolver_is_geometry_first_for_surface_categories
     assert resolution["position"][2] > surface["top_z"]
 
 
+def test_worker_direct_support_resolver_avoids_occupied_surface_slot() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="fixture">
+              <geom name="fixture_collision" type="box" pos="0 0 0.7" size="0.6 0.4 0.05"/>
+            </body>
+            <body name="object" pos="0 0 1.0">
+              <freejoint/>
+              <geom name="object_collision" type="box" size="0.08 0.04 0.02"/>
+            </body>
+            <body name="blocker" pos="0 0 0.82">
+              <freejoint/>
+              <geom name="blocker_collision" type="box" size="0.16 0.16 0.06"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+    surfaces = worker._receptacle_support_surfaces(model, data, "fixture")
+    state = {
+        "objects": {
+            "object_01": {
+                "object_id": "object_01",
+                "category": "RemoteControl",
+                "body_name": "object",
+                "position": [0.0, 0.0, 1.0],
+            },
+            "blocker_01": {
+                "object_id": "blocker_01",
+                "category": "Pillow",
+                "body_name": "blocker",
+                "position": [0.0, 0.0, 0.82],
+            },
+        },
+        "receptacles": {
+            "fixture_01": {
+                "receptacle_id": "fixture_01",
+                "category": "Bed",
+                "body_name": "fixture",
+                "position": [0.0, 0.0, 0.7],
+                "support_surfaces": surfaces,
+                "support_top_z": worker._support_top_z(surfaces),
+            }
+        },
+    }
+
+    resolution = worker._resolve_placement(
+        model,
+        data,
+        state=state,
+        object_id="object_01",
+        receptacle_id="fixture_01",
+        index=0,
+        relation="on",
+    )
+
+    assert resolution["support_status"] == "direct_support"
+    assert resolution["degraded"] is False
+    assert abs(resolution["position"][0]) > 0.05 or abs(resolution["position"][1]) > 0.05
+
+
 def test_worker_place_degrades_without_blocking_when_support_surface_missing() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

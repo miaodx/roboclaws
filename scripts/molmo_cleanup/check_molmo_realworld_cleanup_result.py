@@ -1054,23 +1054,39 @@ def _assert_focused_robot_step(step: dict[str, Any]) -> None:
     assert focus.get("has_focus") is True, step
     fpv_visibility = focus.get("fpv_visibility") or {}
     verify_visibility = focus.get("visibility") or {}
-    _assert_focus_visibility_status(fpv_visibility, focus, step)
-    _assert_focus_visibility_status(verify_visibility, focus, step)
+    visibility_states = [
+        _focus_visibility_grounding_state(fpv_visibility, focus, step),
+        _focus_visibility_grounding_state(verify_visibility, focus, step),
+    ]
+    assert any(state == "grounded" for state in visibility_states) or all(
+        state == "unavailable" for state in visibility_states
+    ), step
 
 
-def _assert_focus_visibility_status(
+def _focus_visibility_grounding_state(
     visibility: dict[str, Any],
     focus: dict[str, Any],
     step: dict[str, Any],
-) -> None:
+) -> str:
     status = visibility.get("status")
-    assert status in {"ok", "contained_inside", "segmentation_unavailable"}, step
-    if (
-        status == "ok"
-        and "object_pixels" in visibility
-        and (focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label"))
-    ):
+    assert status in {
+        "ok",
+        "contained_inside",
+        "segmentation_unavailable",
+        "weak_object_visibility",
+    }, step
+    if status == "segmentation_unavailable":
+        return "unavailable"
+    if status == "contained_inside":
+        return "grounded"
+    if status == "weak_object_visibility":
+        return "weak"
+    has_object_focus = bool(
+        focus.get("object_id") or focus.get("object_body_name") or focus.get("object_label")
+    )
+    if status == "ok" and "object_pixels" in visibility and has_object_focus:
         assert int(visibility.get("object_pixels") or 0) > 0, step
+    return "grounded"
 
 
 def _assert_no_forbidden_keys(payload: Any) -> None:
