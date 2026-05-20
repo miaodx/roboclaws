@@ -26,6 +26,7 @@ from roboclaws.molmo_cleanup.generated_mess import (
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
 HELD_LOCATION_ID = "held_by_agent"
+_MODEL_DATA_CACHE: dict[tuple[str, str], tuple[mujoco.MjModel, mujoco.MjData]] = {}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -78,7 +79,12 @@ def main(argv: list[str] | None = None) -> None:
     done = subparsers.add_parser("done")
     done.add_argument("--reason", default="")
 
+    subparsers.add_parser("serve")
+
     args = parser.parse_args(argv)
+    if args.command == "serve":
+        serve(args.state_path)
+        return
     if args.command == "init":
         result = init_state(
             state_path=args.state_path,
@@ -133,6 +139,95 @@ def main(argv: list[str] | None = None) -> None:
             raise AssertionError(args.command)
 
     print(json.dumps(result, sort_keys=True))
+
+
+def serve(state_path: Path) -> None:
+    """Serve JSON-line worker requests while keeping MuJoCo state warm."""
+    print(json.dumps({"ok": True, "event": "ready", "tool": "serve"}, sort_keys=True), flush=True)
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        request: Any = {}
+        try:
+            request = json.loads(line)
+            if not isinstance(request, dict):
+                raise ValueError("request must be a JSON object")
+            request_id = request.get("id")
+            command = str(request.get("command") or "")
+            kwargs = request.get("kwargs") or {}
+            if not isinstance(kwargs, dict):
+                raise ValueError("request kwargs must be a JSON object")
+            if command == "shutdown":
+                response = {
+                    "id": request_id,
+                    "ok": True,
+                    "result": _ok("shutdown"),
+                }
+                print(json.dumps(response, sort_keys=True), flush=True)
+                break
+            result = run_state_command(state_path, command, kwargs)
+            response = {"id": request_id, "ok": True, "result": result}
+        except Exception as exc:
+            response = {
+                "id": request.get("id") if isinstance(request, dict) else None,
+                "ok": False,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            }
+        print(json.dumps(response, sort_keys=True), flush=True)
+
+
+def run_state_command(
+    state_path: Path,
+    command: str,
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    state = _read_state(state_path)
+    if command == "observe":
+        result = observe(state)
+        _write_state(state_path, state)
+    elif command == "locations":
+        result = _ok("locations", final_locations=_read_locations(state))
+    elif command == "snapshot":
+        result = write_snapshot(
+            state,
+            Path(str(kwargs["output_path"])),
+            str(kwargs.get("title") or ""),
+        )
+    elif command == "robot_views":
+        result = write_robot_views(
+            state,
+            Path(str(kwargs["output_dir"])),
+            str(kwargs["label"]),
+            focus_object_id=_optional_str(kwargs.get("focus_object_id")),
+            focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
+        )
+    elif command == "navigate_to_object":
+        result = navigate_to_object(state, str(kwargs["object_id"]))
+        _write_state(state_path, state)
+    elif command == "navigate_to_receptacle":
+        result = navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "pick":
+        result = pick_object(state, str(kwargs["object_id"]))
+        _write_state(state_path, state)
+    elif command == "open_receptacle":
+        result = open_receptacle(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "close_receptacle":
+        result = close_receptacle(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "place":
+        result = place_object(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "place_inside":
+        result = place_inside_object(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "done":
+        result = done_cleanup(state, str(kwargs.get("reason") or ""))
+    else:
+        raise ValueError(f"unknown MolmoSpaces worker command: {command!r}")
+    return result
 
 
 def init_state(
@@ -1159,12 +1254,23 @@ def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:
 
 
 def _load_model_data_for_state(state: dict[str, Any]) -> tuple[mujoco.MjModel, mujoco.MjData]:
+    scene_xml = str(state["scene_xml"])
     if state.get("robot_included"):
         robot_xml = state.get("robot_xml")
         if not robot_xml:
             raise ValueError("robot_included state missing robot_xml")
-        return _load_robot_model_data(Path(state["scene_xml"]), Path(robot_xml))
-    return _load_model_data(Path(state["scene_xml"]))
+        cache_key = (scene_xml, str(robot_xml))
+        cached = _MODEL_DATA_CACHE.get(cache_key)
+        if cached is None:
+            cached = _load_robot_model_data(Path(scene_xml), Path(robot_xml))
+            _MODEL_DATA_CACHE[cache_key] = cached
+        return cached
+    cache_key = (scene_xml, "")
+    cached = _MODEL_DATA_CACHE.get(cache_key)
+    if cached is None:
+        cached = _load_model_data(Path(scene_xml))
+        _MODEL_DATA_CACHE[cache_key] = cached
+    return cached
 
 
 def _load_robot_model_data(
@@ -2228,6 +2334,13 @@ def _map_bounds(points: list[list[float]]) -> tuple[float, float, float, float]:
 
 def _apply_qpos(data: mujoco.MjData, qpos: list[float]) -> None:
     data.qpos[:] = qpos
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
 
 
 def _primary_body_name(info: dict[str, Any], *, fallback: str) -> str:

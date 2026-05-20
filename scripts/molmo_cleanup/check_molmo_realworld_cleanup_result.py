@@ -50,6 +50,7 @@ from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_vis
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
     CANONICAL_SURFACE_CLEANUP_PHASES,
+    CLEAN_OBSERVED_OBJECT_TOOL,
     CLOSE_RECEPTACLE_PHASE,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
     OPEN_RECEPTACLE_PHASE,
@@ -429,6 +430,8 @@ def _assert_clean_agent_run(
     assert data.get("agent_driven") is True, data
     assert data.get("mcp_server") == "molmo_cleanup_realworld", data
     counts = data.get("tool_event_counts") or {}
+    composite_request_count = int(counts.get(f"{CLEAN_OBSERVED_OBJECT_TOOL}:request") or 0)
+    composite_phases = _successful_semantic_phase_set(data)
     for tool in (
         "metric_map",
         "fixture_hints",
@@ -440,6 +443,8 @@ def _assert_clean_agent_run(
         request_count = int(counts.get(f"{tool}:request") or 0)
         if tool == "navigate_to_object":
             request_count += int(counts.get("navigate_to_visual_candidate:request") or 0)
+        if request_count == 0 and composite_request_count > 0 and tool in composite_phases:
+            request_count = composite_request_count
         assert request_count >= 1, (tool, counts, data)
     diagnostics = data.get("agent_diagnostics") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
@@ -468,6 +473,13 @@ def _complete_semantic_substep_count(data: dict[str, Any]) -> int:
         if has_complete_semantic_sequence(phases):
             complete += 1
     return complete
+
+
+def _successful_semantic_phase_set(data: dict[str, Any]) -> set[str]:
+    phases: set[str] = set()
+    for item in data.get("semantic_substeps") or []:
+        phases.update(successful_semantic_phases(item.get("steps", [])))
+    return phases
 
 
 def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:

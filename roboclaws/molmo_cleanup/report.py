@@ -499,7 +499,7 @@ def _runtime_timing_section(
 ) -> str:
     timing = run_result.get("runtime_timing")
     if not isinstance(timing, dict):
-        timing = _runtime_timing_from_trace(trace_events, robot_view_steps)
+        timing = runtime_timing_from_trace(trace_events, robot_view_steps)
     if not timing:
         return ""
     total_elapsed = timing.get("total_elapsed_s")
@@ -512,6 +512,7 @@ def _runtime_timing_section(
         f"{_metric('Tool/backend handling', _seconds_text(timing.get('tool_handler_s', 0)))}"
         f"{_metric('Robot-view capture', _seconds_text(timing.get('robot_view_capture_s', 0)))}"
         f"{_metric('Between-tool gap', _seconds_text(timing.get('between_tool_gap_s', 0)))}"
+        f"{_metric('Other MCP overhead', _seconds_text(timing.get('other_mcp_overhead_s', 0)))}"
         f"{_metric('Tool calls', timing.get('tool_call_count', 0))}"
         "</div>"
     )
@@ -552,18 +553,24 @@ def _runtime_timing_section(
         '<section class="panel runtime-timing">'
         "<h2>Runtime Timing</h2>"
         '<p class="note">MCP elapsed is measured inside the cleanup server. '
-        "Tool/backend handling is synchronous tool execution. Between-tool gaps are "
-        "time after one MCP response before the next request; for live Codex runs "
-        "that bucket is where model reasoning, CLI orchestration, transport, and "
-        "any post-response artifact work show up.</p>"
+        "Tool/backend handling is synchronous tool execution. Robot-view capture "
+        "is separated from optional report artifact work. Between-tool gaps are "
+        "the remaining time after one MCP response before the next request; for "
+        "live Codex runs that bucket is where model reasoning, CLI orchestration, "
+        "transport, and post-response overhead show up. Other MCP overhead keeps "
+        "startup/finalization seconds visible so the timing buckets account for "
+        "the full trace.</p>"
         f"{metrics}{tool_table}{gap_table}</section>"
     )
 
 
-def _runtime_timing_from_trace(
+def runtime_timing_from_trace(
     trace_events: list[dict[str, Any]],
-    robot_view_steps: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """Build a wall-clock attribution summary from cleanup MCP trace events."""
+
+    robot_view_steps = robot_view_steps or []
     timed_events = [
         event for event in trace_events if isinstance(event.get("wallclock_elapsed"), (int, float))
     ]
@@ -601,7 +608,7 @@ def _runtime_timing_from_trace(
         item["handler_s"] = float(item["handler_s"]) + duration
         handler_total += duration
 
-    gap_total = 0.0
+    raw_gap_total = 0.0
     gaps = []
     previous_response: dict[str, Any] | None = None
     for event in tool_events:
@@ -614,17 +621,30 @@ def _runtime_timing_from_trace(
                 float(event["wallclock_elapsed"]) - float(previous_response["wallclock_elapsed"]),
             )
             if gap > 0:
-                gap_total += gap
+                raw_gap_total += gap
                 gaps.append(
                     {
                         "after_tool": str(previous_response.get("tool", "")),
                         "before_tool": str(event.get("tool", "")),
+                        "start_s": float(previous_response["wallclock_elapsed"]),
+                        "end_s": float(event["wallclock_elapsed"]),
                         "gap_s": round(gap, 3),
                     }
                 )
             previous_response = None
 
     robot_view_capture = _robot_view_capture_seconds(timed_events, robot_view_steps)
+    robot_view_overlap = _robot_view_capture_overlap_seconds(timed_events, gaps)
+    for gap in gaps:
+        overlap = _robot_view_capture_overlap_seconds(timed_events, [gap])
+        raw_gap = float(gap["gap_s"])
+        gap["raw_gap_s"] = round(raw_gap, 3)
+        gap["robot_view_capture_s"] = round(overlap, 3)
+        gap["gap_s"] = round(max(0.0, raw_gap - overlap), 3)
+        gap.pop("start_s", None)
+        gap.pop("end_s", None)
+    gap_total = max(0.0, raw_gap_total - robot_view_overlap)
+    other_mcp_overhead = max(0.0, total_elapsed - handler_total - robot_view_capture - gap_total)
     breakdown = []
     for item in tool_breakdown.values():
         calls = int(item["calls"])
@@ -644,6 +664,8 @@ def _runtime_timing_from_trace(
         "tool_handler_s": round(handler_total, 3),
         "robot_view_capture_s": round(robot_view_capture, 3),
         "between_tool_gap_s": round(gap_total, 3),
+        "raw_between_tool_gap_s": round(raw_gap_total, 3),
+        "other_mcp_overhead_s": round(other_mcp_overhead, 3),
         "tool_call_count": sum(int(item["calls"]) for item in breakdown),
         "tool_breakdown": breakdown,
         "longest_between_tool_gaps": gaps[:8],
@@ -662,6 +684,31 @@ def _robot_view_capture_seconds(
     if trace_total > 0:
         return trace_total
     return sum(float(step.get("capture_elapsed_s") or 0.0) for step in robot_view_steps)
+
+
+def _robot_view_capture_overlap_seconds(
+    trace_events: list[dict[str, Any]],
+    gaps: list[dict[str, Any]],
+) -> float:
+    intervals = []
+    for event in trace_events:
+        if event.get("tool") != "<runtime>" or event.get("event") != "robot_view_capture":
+            continue
+        elapsed = float(event.get("elapsed_s") or 0.0)
+        end = float(event.get("wallclock_elapsed") or 0.0)
+        if elapsed > 0 and end > 0:
+            intervals.append((max(0.0, end - elapsed), end))
+    if not intervals or not gaps:
+        return 0.0
+    overlap_total = 0.0
+    for gap in gaps:
+        gap_start = float(gap.get("start_s") or 0.0)
+        gap_end = float(gap.get("end_s") or 0.0)
+        if gap_end <= gap_start:
+            continue
+        for capture_start, capture_end in intervals:
+            overlap_total += max(0.0, min(gap_end, capture_end) - max(gap_start, capture_start))
+    return overlap_total
 
 
 def _seconds_text(value: Any) -> str:

@@ -68,6 +68,7 @@ prepare_isolated_workspace() {
   local task_dir="${workspace_dir}/task"
 
   mkdir -p "${task_dir}" "${workspace_dir}/skills"
+  find "${workspace_dir}/skills" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
   rm -f \
     "${workspace_dir}/AGENTS.md" \
     "${workspace_dir}/CLAUDE.md" \
@@ -82,6 +83,14 @@ prepare_isolated_workspace() {
     local skill
     while IFS= read -r skill; do
       [[ -z "${skill}" ]] && continue
+      local skill_src="${repo_root}/skills/${skill}"
+      local skill_dst="${workspace_dir}/skills/${skill}"
+      if [[ ! -f "${skill_src}/SKILL.md" ]]; then
+        echo "error: requested skill not found: ${skill_src}/SKILL.md" >&2
+        exit 1
+      fi
+      rm -rf "${skill_dst}"
+      cp -a "${skill_src}" "${skill_dst}"
       printf -- '- `../skills/%s/SKILL.md`\n' "${skill}"
     done < <(normalized_skill_names "${skills_csv}")
   } >"${task_dir}/README.md"
@@ -159,9 +168,6 @@ run_cli() {
         echo "error: requested skill not found: ${repo_root}/skills/${skill}/SKILL.md" >&2
         exit 1
       fi
-      workspace_mount_args+=(
-        -v "${repo_root}/skills/${skill}:/workspace/skills/${skill}:ro"
-      )
     done < <(normalized_skill_names "${mounted_skills}")
   else
     workspace_mount_args=(-v "${repo_root}:${repo_root}")

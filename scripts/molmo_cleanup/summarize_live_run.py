@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
+
 DEFAULT_SEARCH_ROOT = Path("output/molmo/codex-report")
 
 
@@ -74,6 +76,7 @@ def _summarize(run_dir: Path) -> dict[str, Any]:
     session = _read_text(run_dir / "tmux_session.txt").strip()
     trace_events = _read_jsonl(run_dir / "trace.jsonl")
     runner_status = _read_json(run_dir / "live_status.json")
+    live_timing = _read_json(run_dir / "live_timing.json")
     run_result = _read_json(run_dir / "run_result.json")
 
     return {
@@ -83,6 +86,12 @@ def _summarize(run_dir: Path) -> dict[str, Any]:
         "runner": _runner_summary(runner_status),
         "artifacts": _artifact_summary(run_dir),
         "trace": _trace_summary(trace_events),
+        "timing": _timing_summary(
+            run_dir=run_dir,
+            live_timing=live_timing,
+            run_result=run_result,
+            trace_events=trace_events,
+        ),
         "result": _result_summary(run_result, run_dir),
         "last_codex_message": _tail_text(run_dir / "codex-last-message.md", max_chars=800),
         "driver_tail": _tail_text(run_dir / "driver.log", max_chars=1200),
@@ -112,6 +121,7 @@ def _artifact_summary(run_dir: Path) -> dict[str, str]:
         "codex-events.jsonl",
         "codex-last-message.md",
         "codex.stderr.log",
+        "live_timing.json",
         "trace.jsonl",
         "run_result.json",
         "report.html",
@@ -145,6 +155,7 @@ def _trace_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
             "places": tool_counts.get("place", 0),
             "place_inside": tool_counts.get("place_inside", 0),
             "closes": tool_counts.get("close_receptacle", 0),
+            "clean_observed_object": tool_counts.get("clean_observed_object", 0),
             "done": tool_counts.get("done", 0),
         },
     }
@@ -199,8 +210,10 @@ def _print_summary(summary: dict[str, Any]) -> None:
         f"observe={progress['observes']} nav_obj={progress['navigate_to_object']} "
         f"pick={progress['picks']} nav_rec={progress['navigate_to_receptacle']} "
         f"open={progress['opens']} place={progress['places']} "
-        f"inside={progress['place_inside']} close={progress['closes']} done={progress['done']}"
+        f"inside={progress['place_inside']} close={progress['closes']} "
+        f"clean_object={progress['clean_observed_object']} done={progress['done']}"
     )
+    _print_timing(summary["timing"])
 
     result = summary["result"]
     if result["state"] == "present":
@@ -224,6 +237,134 @@ def _print_summary(summary: dict[str, Any]) -> None:
     elif summary["driver_tail"]:
         print("driver log tail:")
         print(_indent(summary["driver_tail"]))
+
+
+def _timing_summary(
+    *,
+    run_dir: Path,
+    live_timing: dict[str, Any],
+    run_result: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    runtime_timing = run_result.get("runtime_timing")
+    if not isinstance(runtime_timing, dict):
+        runtime_timing = runtime_timing_from_trace(trace_events)
+    profile_metadata = run_result.get("cleanup_profile_metadata") or {}
+    if not profile_metadata and live_timing.get("profile"):
+        profile_metadata = {"profile": live_timing.get("profile")}
+    skipped_work = []
+    if profile_metadata.get("record_robot_views") is False:
+        skipped_work.append("per-tool robot-view timeline capture")
+    codex_events = live_timing.get("codex_events") or {}
+    return {
+        "live": live_timing,
+        "runner": live_timing.get("runner_timing") or {},
+        "mcp": runtime_timing,
+        "profile": profile_metadata,
+        "skipped_work": skipped_work,
+        "codex_events": codex_events,
+        "baseline": _baseline_comparison(runtime_timing, live_timing, run_dir),
+    }
+
+
+def _baseline_comparison(
+    runtime_timing: dict[str, Any],
+    live_timing: dict[str, Any],
+    run_dir: Path,
+) -> dict[str, Any]:
+    baseline_s = 18 * 60 + 30
+    candidate = _float_or_none(
+        (live_timing.get("runner_timing") or {}).get("total_elapsed_s")
+        or runtime_timing.get("total_elapsed_s")
+    )
+    if candidate is None:
+        return {"baseline_elapsed_s": baseline_s, "candidate_elapsed_s": None}
+    return {
+        "baseline_elapsed_s": baseline_s,
+        "candidate_elapsed_s": round(candidate, 3),
+        "delta_s": round(candidate - baseline_s, 3),
+        "speedup": round(baseline_s / candidate, 2) if candidate > 0 else None,
+        "candidate_run_dir": str(run_dir),
+    }
+
+
+def _print_timing(timing: dict[str, Any]) -> None:
+    runner = timing.get("runner") or {}
+    mcp = timing.get("mcp") or {}
+    profile = timing.get("profile") or {}
+    codex_events = timing.get("codex_events") or {}
+    baseline = timing.get("baseline") or {}
+
+    if not runner and not mcp:
+        print("timing: pending")
+        return
+
+    print("timing:")
+    if runner:
+        print(
+            "  runner wall: "
+            f"total={_format_duration(runner.get('total_elapsed_s'))} "
+            f"pre_codex={_format_duration(runner.get('pre_codex_setup_s'))} "
+            f"codex_exec={_format_duration(runner.get('codex_exec_elapsed_s'))} "
+            f"server_wait={_format_duration(runner.get('post_codex_server_wait_s'))} "
+            f"checker={_format_duration(runner.get('checker_elapsed_s'))} "
+            f"unaccounted={_format_duration(runner.get('unaccounted_elapsed_s'))}"
+        )
+        if runner.get("server_startup_s") is not None:
+            print(f"  server startup: {_format_duration(runner.get('server_startup_s'))}")
+    if mcp:
+        print(
+            "  MCP trace: "
+            f"elapsed={_format_duration(mcp.get('total_elapsed_s'))} "
+            f"tool/backend={_format_duration(mcp.get('tool_handler_s'))} "
+            f"robot_view={_format_duration(mcp.get('robot_view_capture_s'))} "
+            f"between_tool/model_gap={_format_duration(mcp.get('between_tool_gap_s'))} "
+            f"other={_format_duration(mcp.get('other_mcp_overhead_s'))} "
+            f"calls={mcp.get('tool_call_count', 0)}"
+        )
+        for item in (mcp.get("tool_breakdown") or [])[:5]:
+            print(
+                "  slow tool: "
+                f"{item.get('tool')} calls={item.get('calls')} "
+                f"handler={_format_duration(item.get('handler_s'))} "
+                f"avg={_format_duration(item.get('avg_handler_s'))}"
+            )
+        for item in (mcp.get("longest_between_tool_gaps") or [])[:5]:
+            print(
+                "  slow gap: "
+                f"{item.get('after_tool')} -> {item.get('before_tool')} "
+                f"{_format_duration(item.get('gap_s'))}"
+            )
+    usage = codex_events.get("usage") or {}
+    model_api_time = codex_events.get("model_api_time_s")
+    print(f"  model API time: {_format_duration(model_api_time)}")
+    note = codex_events.get("model_api_time_note")
+    if note:
+        print(f"  model API note: {note}")
+    if usage:
+        print(
+            "  model usage: "
+            f"input={usage.get('input_tokens', 'n/a')} "
+            f"cached={usage.get('cached_input_tokens', 'n/a')} "
+            f"output={usage.get('output_tokens', 'n/a')} "
+            f"reasoning={usage.get('reasoning_output_tokens', 'n/a')}"
+        )
+    if profile:
+        print(
+            "  profile: "
+            f"{profile.get('profile', 'unknown')} "
+            f"record_robot_views={profile.get('record_robot_views', 'unknown')}"
+        )
+    skipped = timing.get("skipped_work") or []
+    if skipped:
+        print(f"  skipped/sampled: {', '.join(str(item) for item in skipped)}")
+    if baseline.get("candidate_elapsed_s") is not None:
+        print(
+            "  baseline: "
+            f"18m30s candidate={_format_duration(baseline.get('candidate_elapsed_s'))} "
+            f"delta={_signed_duration(baseline.get('delta_s'))} "
+            f"speedup={baseline.get('speedup')}x"
+        )
 
 
 def _tmux_state(session: str) -> str:
@@ -321,16 +462,25 @@ def _format_epoch(value: float | None) -> str:
     return stamp.strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
-def _format_duration(value: float | None) -> str:
-    if value is None:
+def _format_duration(value: Any) -> str:
+    parsed = _float_or_none(value)
+    if parsed is None:
         return "unknown"
-    if value < 60:
-        return f"{value:.1f}s"
-    minutes, seconds = divmod(int(value), 60)
+    if parsed < 60:
+        return f"{parsed:.1f}s"
+    minutes, seconds = divmod(int(parsed), 60)
     hours, minutes = divmod(minutes, 60)
     if hours:
         return f"{hours}h{minutes:02d}m{seconds:02d}s"
     return f"{minutes}m{seconds:02d}s"
+
+
+def _signed_duration(value: Any) -> str:
+    parsed = _float_or_none(value)
+    if parsed is None:
+        return "unknown"
+    sign = "+" if parsed >= 0 else "-"
+    return f"{sign}{_format_duration(abs(parsed))}"
 
 
 def _indent(text: str) -> str:

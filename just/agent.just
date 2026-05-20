@@ -124,10 +124,10 @@ run task driver mode="" *overrides:
     if [[ "$task" == "molmo-cleanup" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
-        smoke|world-labels|camera-raw|camera-labels)
+        smoke|world-labels|world-labels-perf|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|world-labels-perf|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac
@@ -377,6 +377,7 @@ harness target *args:
 
     case "$target" in
       run|navigator|regression|sim|openclaw|molmo-realworld-cleanup|\
+      molmo-cleanup-codex-perf|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\

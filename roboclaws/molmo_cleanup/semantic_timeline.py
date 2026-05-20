@@ -13,6 +13,7 @@ PLACE_PHASE = "place"
 PLACE_INSIDE_PHASE = "place_inside"
 CLOSE_RECEPTACLE_PHASE = "close_receptacle"
 OBJECT_DONE_PHASE = "object_done"
+CLEAN_OBSERVED_OBJECT_TOOL = "clean_observed_object"
 
 CANONICAL_BASE_CLEANUP_PHASES = (
     NAVIGATE_TO_OBJECT_PHASE,
@@ -237,11 +238,43 @@ def semantic_substeps(
         if event.get("event") != "response":
             continue
         tool = str(event.get("tool", ""))
-        phase = semantic_phase_for_tool(tool)
-        if phase not in SEMANTIC_RESPONSE_PHASE_SET:
-            continue
         response = event.get("response")
         if not isinstance(response, dict):
+            continue
+        if tool == CLEAN_OBSERVED_OBJECT_TOOL and isinstance(response.get("semantic_steps"), list):
+            object_id = str(response.get("object_id") or "")
+            if not object_id:
+                continue
+            if object_id not in steps_by_object:
+                order.append(object_id)
+                steps_by_object[object_id] = {
+                    "object_id": object_id,
+                    "source_receptacle_id": "",
+                    "target_receptacle_id": "",
+                    "target_receptacle_category": "",
+                    "steps": [],
+                }
+            item = steps_by_object[object_id]
+            if response.get("source_receptacle_id"):
+                item["source_receptacle_id"] = str(response["source_receptacle_id"])
+            if response.get("receptacle_id"):
+                target_id = str(response["receptacle_id"])
+                item["target_receptacle_id"] = target_id
+                item["target_receptacle_category"] = receptacle_category(
+                    receptacles_by_id,
+                    target_id,
+                )
+            for step in response.get("semantic_steps") or []:
+                if not isinstance(step, dict):
+                    continue
+                phase = str(step.get("phase") or "")
+                if phase not in SEMANTIC_RESPONSE_PHASE_SET:
+                    continue
+                item["steps"].append(semantic_step(phase, step))
+            active_object_id = None
+            continue
+        phase = semantic_phase_for_tool(tool)
+        if phase not in SEMANTIC_RESPONSE_PHASE_SET:
             continue
         object_id = response.get("object_id") or active_object_id
         if phase == NAVIGATE_TO_OBJECT_PHASE and response.get("object_id"):
@@ -430,6 +463,15 @@ def duplicate_post_place_navigations(trace_events: list[dict[str, Any]]) -> list
         if not isinstance(response, dict) or response.get("ok") is not True:
             continue
         tool = str(event.get("tool") or response.get("tool") or "")
+        if tool == CLEAN_OBSERVED_OBJECT_TOOL:
+            for step in response.get("semantic_steps") or []:
+                if not isinstance(step, dict):
+                    continue
+                phase = str(step.get("phase") or "")
+                object_id = str(step.get("object_id") or response.get("object_id") or "")
+                if phase in PLACE_CLEANUP_PHASES and object_id:
+                    placed_handles.add(object_id)
+            continue
         phase = semantic_phase_for_tool(tool)
         object_id = str(response.get("object_id") or "")
         if phase == NAVIGATE_TO_OBJECT_PHASE and object_id in placed_handles:
@@ -518,6 +560,14 @@ def primitive_provenance_counts(trace_events: list[dict[str, Any]]) -> dict[str,
     for event in trace_events:
         response = event.get("response")
         if not isinstance(response, dict):
+            continue
+        if isinstance(response.get("semantic_steps"), list):
+            for step in response.get("semantic_steps") or []:
+                if not isinstance(step, dict):
+                    continue
+                provenance = step.get("primitive_provenance")
+                if provenance:
+                    counts[str(provenance)] = counts.get(str(provenance), 0) + 1
             continue
         provenance = response.get("primitive_provenance")
         if provenance:

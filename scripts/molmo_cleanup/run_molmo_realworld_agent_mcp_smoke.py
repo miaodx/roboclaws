@@ -14,7 +14,10 @@ if __package__ in {None, ""}:
 
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
-from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
+from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
+    WORLD_LABELS_PERF_PROFILE,
+    cleanup_profile_names,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -29,6 +32,7 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E40
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
     run_semantic_cleanup_loop,
 )
+from roboclaws.molmo_cleanup.semantic_timeline import CLEAN_OBSERVED_OBJECT_TOOL  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -132,7 +136,11 @@ def run_smoke(
         cleanup_profile=cleanup_profile,
     )
     try:
-        _drive_public_sweep(server, policy=policy)
+        _drive_public_sweep(
+            server,
+            policy=policy,
+            use_composite_cleanup=cleanup_profile == WORLD_LABELS_PERF_PROFILE,
+        )
         done = server.call_tool("done", reason=f"{policy} cleanup complete")
     finally:
         server.close()
@@ -140,7 +148,12 @@ def run_smoke(
     return json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
 
 
-def _drive_public_sweep(server: Any, *, policy: str) -> None:
+def _drive_public_sweep(
+    server: Any,
+    *,
+    policy: str,
+    use_composite_cleanup: bool = False,
+) -> None:
     metric_map = server.call_tool("metric_map")
     fixture_hints = server.call_tool("fixture_hints")
     handled_handles: set[str] = set()
@@ -160,7 +173,13 @@ def _drive_public_sweep(server: Any, *, policy: str) -> None:
             support = detection.get("support_estimate") or {}
             if support.get("fixture_id") == fixture_id:
                 continue
-            _clean_handle(server, handle=handle, fixture=target_fixture)
+            _clean_handle(
+                server,
+                handle=handle,
+                fixture=target_fixture,
+                detection=detection,
+                use_composite_cleanup=use_composite_cleanup,
+            )
             server.call_tool("observe")
             handled_handles.add(handle)
 
@@ -175,8 +194,25 @@ def _detections_for_observation(server: Any, observation: dict[str, Any]) -> lis
     return list(response.get("camera_model_candidates", []))
 
 
-def _clean_handle(server: Any, *, handle: str, fixture: dict[str, Any]) -> None:
+def _clean_handle(
+    server: Any,
+    *,
+    handle: str,
+    fixture: dict[str, Any],
+    detection: dict[str, Any] | None = None,
+    use_composite_cleanup: bool = False,
+) -> None:
     fixture_id = str(fixture["fixture_id"])
+    if use_composite_cleanup:
+        response = server.call_tool(
+            CLEAN_OBSERVED_OBJECT_TOOL,
+            object_id=handle,
+            fixture_id=fixture_id,
+            placement_tool=str((detection or {}).get("recommended_tool") or "auto"),
+        )
+        if not response.get("ok"):
+            raise RuntimeError(response)
+        return
     run_semantic_cleanup_loop(
         targets=[
             {
