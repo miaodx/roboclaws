@@ -128,8 +128,8 @@ openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
 # Live Codex cleanup performance lane. This is the local Docker-backed Codex
 # route with the world-labels-perf profile, so it preserves the cleanup/MCP
 # contract while skipping per-tool robot-view timeline capture. By default it
-# uses the skill-side trace-preserving routine; pass cleanup_routine=mcp to
-# compare the promoted-candidate MCP shortcut.
+# uses the promoted-candidate MCP shortcut while skill-routine live timing is
+# not alike; pass cleanup_routine=skill to compare the skill route.
 molmo-cleanup-codex-perf *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -141,7 +141,7 @@ molmo-cleanup-codex-perf *overrides:
     host="127.0.0.1"
     port="18788"
     map_bundle="auto"
-    cleanup_routine="skill"
+    cleanup_routine="mcp"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2

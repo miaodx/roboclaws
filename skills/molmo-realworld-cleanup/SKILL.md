@@ -55,8 +55,8 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    object handles using the Trace-Preserving Skill Routine below.
    `roboclaws__clean_observed_object` is a promoted-candidate comparison path
    only: use it only when the kickoff prompt explicitly says this run is the
-   MCP-promoted comparison lane. Otherwise keep composition in the skill routine
-   and call the public atomic MCP tools yourself.
+   MCP-promoted performance or comparison lane. Otherwise keep composition in
+   the skill routine and call the public atomic MCP tools yourself.
    If a visible detection or done recovery response includes
    `cleanup_recommended: true` or a `candidate_fixture_id` that differs from
    its `support_estimate.fixture_id`, treat that public candidate as cleanup

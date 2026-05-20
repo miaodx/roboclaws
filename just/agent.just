@@ -278,7 +278,11 @@ run task driver mode="" *overrides:
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
         map_bundle="$(get map_bundle auto)"
-        cleanup_routine="$(get cleanup_routine skill)"
+        default_cleanup_routine="skill"
+        if [[ "$profile" == "world-labels-perf" ]]; then
+          default_cleanup_routine="mcp"
+        fi
+        cleanup_routine="$(get cleanup_routine "$default_cleanup_routine")"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine"
