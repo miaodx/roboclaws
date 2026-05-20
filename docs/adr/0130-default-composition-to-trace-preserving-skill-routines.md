@@ -31,13 +31,34 @@ the promotion criteria for a canonical cleanup contract profile.
 For Molmo cleanup, the current trace-preserving routine lives in
 `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py` and is
 documented in `skills/molmo-realworld-cleanup/SKILL.md`. A 2026-05-20 live
-Codex comparison showed the skill routine is transparent but not
-performance-alike in the timing lane: `7m18s` and 85 MCP requests for
-`cleanup_routine=skill` versus the prior promoted-candidate run's `4m30s` and
-51 MCP requests. Therefore canonical cleanup composition remains skill-side,
-but `world-labels-perf` continues to default to the MCP candidate until a later
+Codex apples-to-apples comparison showed the skill routine is transparent but
+not performance-alike in the timing lane:
+
+- Skill routine:
+  `output/molmo/codex-skill-routine-perf/0520_1204/seed-7/report.html`,
+  `7m18s`, 85 MCP requests, `clean_observed_object=0`, full sweep.
+- Explicit promoted-candidate lane:
+  `output/molmo/codex-mcp-routine-perf/0520_1319/seed-7/report.html`,
+  `4m35s`, 51 MCP requests, `clean_observed_object=10`, full sweep.
+
+Therefore canonical cleanup composition remains skill-side, but
+`world-labels-perf` continues to default to the MCP candidate until a later
 skill-side execution path closes that gap. Use `cleanup_routine=skill` for
 comparison runs.
+
+The RAW_FPV path was also checked with local Codex on 2026-05-20:
+
+- Skill route:
+  `output/molmo/codex-camera-raw-skill-check/0520_1324/seed-7/report.html`,
+  `14m06s`, 80 MCP requests, seven grounded atomic cleanup chains, full sweep.
+- Explicit promoted-candidate route:
+  `output/molmo/codex-camera-raw-mcp-check-final3/0520_1508/seed-7/report.html`,
+  `14m35s`, 66 MCP requests, seven grounded `clean_observed_object` calls, full
+  sweep.
+
+Both routes are valid comparison paths for RAW_FPV after public visual
+grounding. The MCP composite remains an explicitly enabled comparison/perf
+candidate, not a canonical cleanup profile tool.
 
 ## Considered Options
 
