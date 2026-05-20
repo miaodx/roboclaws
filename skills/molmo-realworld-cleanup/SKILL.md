@@ -36,10 +36,20 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
    `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
    over-specific guesses that are likely to miss the public grounding resolver.
+   Use an `image_region` schema the tool accepts, such as
+   `{"type":"bbox","value":[x,y,width,height]}` or
+   `{"type":"verbal_region","value":"front of desk"}`; do not send a bare
+   `{x,y,width,height}` object.
    Omit `source_fixture_id` when you are not confident which public fixture the
    image object is resting on. When `navigate_to_visual_candidate` resolves, use
    its returned `candidate_fixture_id` and `recommended_tool` for placement if
    present.
+   Maintain a count of successful grounded cleanup actions. In `camera-raw`
+   acceptance runs, do not call `done` before at least seven grounded visual
+   candidates have been successfully cleaned. If grounding stays unresolved and
+   the success count is still below seven, continue sweeping or reobserve from
+   another public waypoint; retry at most once with a broader category or clearer
+   verbal region before moving on.
    After a successful pick/place for an observed handle, do not act on that same
    handle again. If a later raw-FPV declaration resolves to an already-handled
    object, continue the waypoint sweep and observe for other objects instead of

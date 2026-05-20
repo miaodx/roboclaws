@@ -41,10 +41,20 @@ def promoted_cleanup_handlers(
     server: Any,
     kwargs: dict[str, Any],
 ) -> dict[str, Callable[[], dict[str, Any]]]:
-    return {
-        CLEAN_OBSERVED_OBJECT_TOOL: lambda: server.contract.clean_observed_object(
+    def clean_observed_object() -> dict[str, Any]:
+        result = server.contract.clean_observed_object(
             str(kwargs.get("object_id", "")),
             str(kwargs.get("fixture_id", "")),
             placement_tool=str(kwargs.get("placement_tool") or "auto"),
-        ),
+            step_callback=server._record_composite_step_robot_view
+            if server.record_robot_views
+            else None,
+        )
+        if server.record_robot_views:
+            result = dict(result)
+            result["composite_robot_views_recorded_inline"] = True
+        return result
+
+    return {
+        CLEAN_OBSERVED_OBJECT_TOOL: clean_observed_object,
     }

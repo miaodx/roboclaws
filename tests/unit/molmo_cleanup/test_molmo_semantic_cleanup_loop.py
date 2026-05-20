@@ -282,6 +282,62 @@ def test_semantic_substeps_expands_composite_clean_observed_object() -> None:
     ]
 
 
+def test_semantic_substeps_dedupes_visual_grounding_before_composite_cleanup() -> None:
+    substeps = semantic_substeps(
+        [
+            _trace_response(
+                "navigate_to_visual_candidate",
+                _ok(
+                    "navigate_to_visual_candidate",
+                    object_id="observed_001",
+                    source_receptacle_id="counter_01",
+                ),
+            ),
+            _trace_response(
+                CLEAN_OBSERVED_OBJECT_TOOL,
+                {
+                    "ok": True,
+                    "tool": CLEAN_OBSERVED_OBJECT_TOOL,
+                    "object_id": "observed_001",
+                    "receptacle_id": "sink_01",
+                    "source_receptacle_id": "counter_01",
+                    "semantic_steps": [
+                        _ok(
+                            NAVIGATE_TO_OBJECT_PHASE,
+                            phase=NAVIGATE_TO_OBJECT_PHASE,
+                            object_id="observed_001",
+                            source_receptacle_id="counter_01",
+                        ),
+                        _ok(PICK_PHASE, phase=PICK_PHASE, object_id="observed_001"),
+                        _ok(
+                            NAVIGATE_TO_RECEPTACLE_PHASE,
+                            phase=NAVIGATE_TO_RECEPTACLE_PHASE,
+                            object_id="observed_001",
+                            receptacle_id="sink_01",
+                        ),
+                        _ok(
+                            PLACE_PHASE,
+                            phase=PLACE_PHASE,
+                            object_id="observed_001",
+                            receptacle_id="sink_01",
+                        ),
+                    ],
+                },
+            ),
+        ],
+        {"sink_01": {"category": "Sink"}},
+    )
+
+    phases = [step["phase"] for step in substeps[0]["steps"]]
+    assert phases == [
+        NAVIGATE_TO_OBJECT_PHASE,
+        PICK_PHASE,
+        NAVIGATE_TO_RECEPTACLE_PHASE,
+        PLACE_PHASE,
+    ]
+    assert has_complete_semantic_sequence(phases)
+
+
 def test_primitive_provenance_counts_expands_composite_semantic_steps() -> None:
     counts = primitive_provenance_counts(
         [
@@ -315,6 +371,15 @@ def test_primitive_provenance_counts_expands_composite_semantic_steps() -> None:
 
 
 def test_complete_semantic_sequence_tolerates_later_retries_after_place() -> None:
+    assert has_complete_semantic_sequence(
+        [
+            "navigate_to_object",
+            "navigate_to_object",
+            "pick",
+            "navigate_to_receptacle",
+            "place",
+        ]
+    )
     assert has_complete_semantic_sequence(
         [
             "navigate_to_object",

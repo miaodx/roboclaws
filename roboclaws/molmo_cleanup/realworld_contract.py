@@ -4,7 +4,7 @@ import copy
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
@@ -943,6 +943,7 @@ class RealWorldCleanupContract:
         fixture_id: str,
         *,
         placement_tool: str = "auto",
+        step_callback: Callable[[str, dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Run one perf-lane promoted-candidate cleanup sequence with public substeps."""
         if fixture_id not in self._fixtures:
@@ -970,6 +971,8 @@ class RealWorldCleanupContract:
             step.setdefault("tool", phase)
             step.setdefault("object_id", object_id)
             steps.append(step)
+            if step_callback is not None:
+                step_callback(phase, dict(step))
 
         navigate_object = self.navigate_to_object(object_id)
         append_step(NAVIGATE_TO_OBJECT_PHASE, navigate_object)
@@ -1770,17 +1773,45 @@ class RealWorldCleanupContract:
             waypoint,
             category_norm=category_norm,
             source_fixture_id=source_fixture_id,
+            restrict_to_waypoint_fixtures=True,
         )
         if match["status"] != "unresolved" or not source_fixture_id:
+            if match["status"] != "unresolved":
+                return match
+        if source_fixture_id:
+            fallback = self._visual_candidate_match_for_source(
+                waypoint,
+                category_norm=category_norm,
+                source_fixture_id="",
+                restrict_to_waypoint_fixtures=True,
+            )
+            if fallback["status"] != "unresolved":
+                fallback["source_fixture_fallback"] = True
+                fallback["requested_source_fixture_id"] = source_fixture_id
+                return fallback
+        room_match = self._visual_candidate_match_for_source(
+            waypoint,
+            category_norm=category_norm,
+            source_fixture_id=source_fixture_id,
+            restrict_to_waypoint_fixtures=False,
+        )
+        if room_match["status"] != "unresolved":
+            room_match["room_fallback"] = True
+            if source_fixture_id:
+                room_match["requested_source_fixture_id"] = source_fixture_id
+            return room_match
+        if not source_fixture_id:
             return match
         fallback = self._visual_candidate_match_for_source(
             waypoint,
             category_norm=category_norm,
             source_fixture_id="",
+            restrict_to_waypoint_fixtures=False,
         )
         if fallback["status"] != "unresolved":
             fallback["source_fixture_fallback"] = True
             fallback["requested_source_fixture_id"] = source_fixture_id
+            fallback["room_fallback"] = True
         return fallback
 
     def _visual_candidate_match_for_source(
@@ -1789,12 +1820,18 @@ class RealWorldCleanupContract:
         *,
         category_norm: str,
         source_fixture_id: str,
+        restrict_to_waypoint_fixtures: bool,
     ) -> dict[str, Any]:
         candidates = []
         location_ids = []
         handled_candidates = []
         handled_location_ids = []
-        for obj, location_id in self._objects_visible_from_waypoint(waypoint):
+        visible = (
+            self._objects_visible_from_waypoint(waypoint)
+            if restrict_to_waypoint_fixtures
+            else self._objects_visible_from_room(waypoint)
+        )
+        for obj, location_id in visible:
             if category_norm and not _declared_category_matches_object(category_norm, obj):
                 continue
             if source_fixture_id and location_id != source_fixture_id:
@@ -1827,7 +1864,17 @@ class RealWorldCleanupContract:
         objects = match.get("objects") or []
         if status == "resolved":
             handle = self._handle_for_object(objects[0].object_id)
-            if match.get("source_fixture_fallback"):
+            if match.get("room_fallback") and match.get("source_fixture_fallback"):
+                basis = (
+                    "single public same-room object matched category after source fixture "
+                    "and waypoint fixture hints did not match"
+                )
+            elif match.get("room_fallback"):
+                basis = (
+                    "single public same-room object matched category after waypoint "
+                    "fixture hint did not match"
+                )
+            elif match.get("source_fixture_fallback"):
                 basis = (
                     "single public camera-context object matched category after "
                     "source fixture hint did not match"
@@ -1978,6 +2025,22 @@ class RealWorldCleanupContract:
             if room_id != waypoint["room_id"]:
                 continue
             if fixture_ids and location_id not in fixture_ids:
+                continue
+            visible.append((obj, str(location_id)))
+        return visible
+
+    def _objects_visible_from_room(self, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:
+        locations = self.backend.object_locations()
+        visible = []
+        for obj in self.scenario.objects:
+            location_id = locations.get(obj.object_id)
+            if not location_id or location_id == "held_by_agent":
+                continue
+            fixture = self._fixtures.get(location_id)
+            if fixture is None:
+                continue
+            room_id = _room_id(str(fixture.get("room_area", "unknown")))
+            if room_id != waypoint["room_id"]:
                 continue
             visible.append((obj, str(location_id)))
         return visible

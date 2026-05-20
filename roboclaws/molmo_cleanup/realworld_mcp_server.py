@@ -589,6 +589,17 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> None:
         if not self.record_robot_views or not response.get("ok"):
             return
+        if tool == CLEAN_OBSERVED_OBJECT_TOOL:
+            if response.get("composite_robot_views_recorded_inline"):
+                return
+            for step in response.get("semantic_steps") or []:
+                if not isinstance(step, dict) or not step.get("ok"):
+                    continue
+                self._record_composite_step_robot_view(
+                    str(step.get("phase") or step.get("tool") or ""),
+                    step,
+                )
+            return
         capture = robot_view_capture_for_tool(
             tool,
             request,
@@ -598,6 +609,22 @@ class RealWorldMolmoCleanupMCPServer:
         if capture is None:
             return
         self._record_robot_view(**capture)
+
+    def _record_composite_step_robot_view(
+        self,
+        phase: str,
+        step: dict[str, Any],
+    ) -> None:
+        if not self.record_robot_views or not step.get("ok"):
+            return
+        capture = robot_view_capture_for_tool(
+            phase,
+            {},
+            step,
+            object_id_transform=self._internal_object_id,
+        )
+        if capture is not None:
+            self._record_robot_view(**capture)
 
     def _internal_object_id(self, handle: str | None) -> str | None:
         if handle is None:
