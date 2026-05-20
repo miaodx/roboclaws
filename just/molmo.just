@@ -14,7 +14,9 @@
 # Profiles:
 # - smoke           synthetic contract sanity with world labels and semantic report
 # - world-labels    MolmoSpaces/RBY1M report; agent receives structured world labels
-# - world-labels-perf MolmoSpaces performance lane; skips per-tool robot views
+# - world-labels-perf MolmoSpaces performance lane; skips per-tool robot views.
+#   Defaults to the skill-side trace-preserving cleanup routine; pass
+#   cleanup_routine=mcp for the promoted-candidate comparison lane.
 # - camera-raw      MolmoSpaces/RBY1M report; agent receives raw camera artifacts
 # - camera-labels   MolmoSpaces/RBY1M report; agent receives camera-derived labels
 #
@@ -38,7 +40,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="skill":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -51,6 +53,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     host="{{host}}"
     port="{{port}}"
     map_bundle="{{map_bundle}}"
+    cleanup_routine="{{cleanup_routine}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -64,6 +67,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     host="${host#host=}"
     port="${port#port=}"
     map_bundle="${map_bundle#map_bundle=}"
+    cleanup_routine="${cleanup_routine#cleanup_routine=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -72,6 +76,15 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         echo "error: unsupported driver '$driver'" >&2
         echo "       expected direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live" >&2
         echo "       use mcp-smoke/openclaw-smoke for deterministic substitutes; live agent names are explicit" >&2
+        exit 1
+        ;;
+    esac
+
+    case "$cleanup_routine" in
+      skill|mcp|mcp-promoted)
+        ;;
+      *)
+        echo "error: unsupported cleanup_routine '$cleanup_routine' (expected skill|mcp|mcp-promoted)" >&2
         exit 1
         ;;
     esac
@@ -135,6 +148,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         exit 1
         ;;
     esac
+    if [[ "$cleanup_routine" != "skill" && "$profile" != "world-labels-perf" ]]; then
+      echo "error: cleanup_routine=$cleanup_routine is only valid for profile=world-labels-perf" >&2
+      exit 1
+    fi
 
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
@@ -175,6 +192,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"
+    echo "    routine  : ${cleanup_routine}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
 
@@ -239,7 +257,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates, clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
             ;;
           world-labels-perf)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. This is the performance lane: per-tool robot-view timeline capture is intentionally disabled, so do not spend time searching for image artifacts. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, and when observe returns a plausible observed object with candidate_fixture_id call roboclaws__clean_observed_object(object_id, fixture_id=candidate_fixture_id, placement_tool=recommended_tool or auto) instead of separate navigate/pick/place tools. After each successful composite cleanup, call roboclaws__observe once at the current fixture area, then continue the waypoint checklist. Do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
+            if [[ "$cleanup_routine" == "mcp" || "$cleanup_routine" == "mcp-promoted" ]]; then
+              kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. This is the MCP-promoted comparison lane: per-tool robot-view timeline capture is intentionally disabled, so do not spend time searching for image artifacts. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, and when observe returns a plausible observed object with candidate_fixture_id call roboclaws__clean_observed_object(object_id, fixture_id=candidate_fixture_id, placement_tool=recommended_tool or auto) instead of separate navigate/pick/place tools. After each successful composite cleanup, call roboclaws__observe once at the current fixture area, then continue the waypoint checklist. Do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
+            else
+              kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. This is the skill-routine performance lane: per-tool robot-view timeline capture is intentionally disabled, so do not spend time searching for image artifacts, and do not call roboclaws__clean_observed_object even if the tool is visible. Then use the Trace-Preserving Skill Routine from the skill: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, and when observe returns a plausible observed object with candidate_fixture_id clean it with navigate_to_object->pick->navigate_to_receptacle->open?->place/place_inside->close? using recommended_tool or fixture hints. After each successful skill-routine cleanup, call roboclaws__observe once at the current fixture area, then continue the waypoint checklist. Do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
+            fi
             ;;
           *)
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."

@@ -73,6 +73,7 @@ run task driver mode="" *overrides:
       key="${key//-/_}"
       case "$key" in
         agent_souls|agents|baseline|candidate|cap|generated_mess_count|\
+        cleanup_routine|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
@@ -277,8 +278,10 @@ run task driver mode="" *overrides:
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
         map_bundle="$(get map_bundle auto)"
+        cleanup_routine="$(get cleanup_routine skill)"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
-          "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" "$map_bundle"
+          "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
+          "$map_bundle" "$cleanup_routine"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)
