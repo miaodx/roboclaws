@@ -10,7 +10,11 @@ import pytest
 from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PERF_PROFILE, WORLD_LABELS_PROFILE
+from roboclaws.molmo_cleanup.profiles import (
+    CAMERA_RAW_PROFILE,
+    WORLD_LABELS_PERF_PROFILE,
+    WORLD_LABELS_PROFILE,
+)
 from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.realworld_mcp_promoted_tools import PROMOTED_CLEANUP_TOOL_NAMES
@@ -123,7 +127,9 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert "close_receptacle" in server.contract.public_tool_names()
 
 
-def test_realworld_mcp_composite_cleanup_tool_is_perf_profile_only(tmp_path: Path) -> None:
+def test_realworld_mcp_composite_cleanup_tool_defaults_to_perf_profile_only(
+    tmp_path: Path,
+) -> None:
     regular_server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path / "regular",
         scenario=build_cleanup_scenario(seed=7),
@@ -184,6 +190,53 @@ def test_realworld_mcp_composite_cleanup_tool_is_perf_profile_only(tmp_path: Pat
         "navigate_to_receptacle",
     ]
     assert {"place", "place_inside"}.intersection(phases)
+
+
+def test_realworld_mcp_composite_tool_can_be_explicitly_enabled_for_raw_fpv(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=CAMERA_RAW_PROFILE,
+        perception_mode=RAW_FPV_ONLY_MODE,
+        enable_promoted_cleanup_tools=True,
+    )
+    try:
+        assert CLEAN_OBSERVED_OBJECT_TOOL in _fastmcp_tool_names(server)
+        assert CLEAN_OBSERVED_OBJECT_TOOL in server._agent_view_payload()["public_tool_names"]
+
+        waypoint = next(
+            item
+            for item in server.call_tool("metric_map")["inspection_waypoints"]
+            if item["room_id"] == "work_area"
+        )
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        observation = server.call_tool("observe")
+        raw_observation_id = observation["raw_fpv_observation"]["observation_id"]
+        grounded = server.call_tool(
+            "navigate_to_visual_candidate",
+            source_observation_id=raw_observation_id,
+            category="food",
+            target_fixture_id="fridge_01",
+            evidence_note="round food item on the desk",
+            image_region={"type": "verbal_region", "value": "front of desk"},
+        )
+        cleaned = server.call_tool(
+            CLEAN_OBSERVED_OBJECT_TOOL,
+            object_id=grounded["object_id"],
+            fixture_id=grounded["candidate_fixture_id"],
+            placement_tool=grounded["recommended_tool"] or "auto",
+        )
+    finally:
+        server.close()
+
+    assert grounded["ok"] is True
+    assert grounded["tool"] == "navigate_to_visual_candidate"
+    assert cleaned["ok"] is True
+    assert cleaned["tool"] == CLEAN_OBSERVED_OBJECT_TOOL
+    assert cleaned["composite_preserves_semantic_substeps"] is True
 
 
 def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(

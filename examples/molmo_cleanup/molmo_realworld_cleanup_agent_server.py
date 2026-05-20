@@ -76,6 +76,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=cleanup_profile_names(),
         help="Public Molmo cleanup profile selected by the command facade.",
     )
+    parser.add_argument(
+        "--enable-promoted-cleanup-tools",
+        action="store_true",
+        help="Expose promoted-candidate composite cleanup tools for explicit comparison runs.",
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -116,6 +121,7 @@ def print_setup(
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    enable_promoted_cleanup_tools: bool | None = None,
 ) -> None:
     commands = client_setup_commands(url)
     print("\nMolmo real-world cleanup MCP server is ready.")
@@ -128,6 +134,8 @@ def print_setup(
     print(f"Perception    : {perception_mode}")
     if cleanup_profile:
         print(f"Profile       : {cleanup_profile}")
+    if enable_promoted_cleanup_tools:
+        print("Promoted tools: enabled")
     print(f"Visual report : {'enabled' if record_robot_views else 'disabled'}")
     print("\nIn another terminal from this repo, run one of:")
     print(f"  {commands['Codex']}")
@@ -179,6 +187,7 @@ def run_molmo_realworld_cleanup_agent_server(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    enable_promoted_cleanup_tools: bool | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -228,6 +237,7 @@ def run_molmo_realworld_cleanup_agent_server(
             map_bundle_dir=selected_bundle_dir,
             record_robot_views=record_robot_views,
             cleanup_profile=cleanup_profile,
+            enable_promoted_cleanup_tools=enable_promoted_cleanup_tools,
         )
         server.run_in_thread()
         server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
@@ -240,6 +250,7 @@ def run_molmo_realworld_cleanup_agent_server(
                 perception_mode=perception_mode,
                 record_robot_views=record_robot_views,
                 cleanup_profile=cleanup_profile,
+                enable_promoted_cleanup_tools=server.enable_promoted_cleanup_tools,
             )
         while not server.done_event.wait(poll_interval_s):
             pass
@@ -292,6 +303,7 @@ def main(argv: list[str] | None = None) -> int:
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,
             cleanup_profile=args.cleanup_profile,
+            enable_promoted_cleanup_tools=args.enable_promoted_cleanup_tools or None,
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

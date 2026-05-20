@@ -71,6 +71,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=cleanup_profile_names(),
         help="Public Molmo cleanup profile selected by the command facade.",
     )
+    parser.add_argument(
+        "--enable-promoted-cleanup-tools",
+        action="store_true",
+        help="Expose promoted-candidate composite cleanup tools for explicit comparison runs.",
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -92,6 +97,7 @@ def run_smoke(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    enable_promoted_cleanup_tools: bool | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -134,12 +140,13 @@ def run_smoke(
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
+        enable_promoted_cleanup_tools=enable_promoted_cleanup_tools,
     )
     try:
         _drive_public_sweep(
             server,
             policy=policy,
-            use_composite_cleanup=cleanup_profile == WORLD_LABELS_PERF_PROFILE,
+            use_composite_cleanup=server.enable_promoted_cleanup_tools,
         )
         done = server.call_tool("done", reason=f"{policy} cleanup complete")
     finally:
@@ -279,6 +286,9 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         cleanup_profile=args.cleanup_profile,
+        enable_promoted_cleanup_tools=(
+            args.enable_promoted_cleanup_tools or args.cleanup_profile == WORLD_LABELS_PERF_PROFILE
+        ),
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
