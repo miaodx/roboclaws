@@ -641,12 +641,16 @@ def _place_object_at_receptacle(
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     obj = state["objects"][object_id]
-    target_position = _placement_position(
-        receptacle,
+    placement_resolution = _resolve_placement(
+        model,
+        data,
+        state=state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
         index=state["selected_object_ids"].index(object_id),
         relation=relation,
-        object_category=obj.get("category"),
     )
+    target_position = placement_resolution["position"]
     _set_free_body_position(model, data, obj["body_name"], target_position)
     mujoco.mj_forward(model, data)
     _refresh_object_positions(model, data, state)
@@ -657,6 +661,7 @@ def _place_object_at_receptacle(
         relation=relation,
         requested_position=target_position,
         source="cleanup_place",
+        placement_resolution=placement_resolution,
     )
     state.setdefault("placement_diagnostics", []).append(diagnostic)
 
@@ -675,6 +680,7 @@ def _place_object_at_receptacle(
         contained_in=receptacle_id if relation == "inside" else None,
         location_relation=relation,
         placement_diagnostic=diagnostic,
+        placement_support_status=diagnostic["support_status"],
         mujoco_body_name=obj["body_name"],
         qpos_changed=True,
         state_mutation="mujoco_freejoint_qpos",
@@ -871,6 +877,7 @@ def _collect_receptacles(
         body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
         if body_id < 0:
             continue
+        support_surfaces = _receptacle_support_surfaces(model, data, body_name)
         items.append(
             {
                 "receptacle_id": name,
@@ -881,7 +888,8 @@ def _collect_receptacles(
                 "body_name": body_name,
                 "upstream_object_id": info.get("object_id", name),
                 "position": _xyz(data.xpos[body_id]),
-                "support_top_z": _receptacle_support_top_z(model, data, body_name, category),
+                "support_surfaces": support_surfaces,
+                "support_top_z": _support_top_z(support_surfaces),
             }
         )
     return sorted(items, key=lambda item: (item["category"], item["receptacle_id"]))
@@ -921,12 +929,16 @@ def _seed_misplaced_objects(
             wrong["receptacle_id"] if relation == "inside" else None
         )
         state["objects"][target["object_id"]]["location_relation"] = relation
-        placement_position = _placement_position(
-            wrong,
+        placement_resolution = _resolve_placement(
+            model,
+            data,
+            state=state,
+            object_id=target["object_id"],
+            receptacle_id=wrong["receptacle_id"],
             index=index,
             relation=relation,
-            object_category=target.get("category"),
         )
+        placement_position = placement_resolution["position"]
         _set_free_body_position(
             model,
             data,
@@ -942,6 +954,7 @@ def _seed_misplaced_objects(
             relation=relation,
             requested_position=placement_position,
             source="mess_seed",
+            placement_resolution=placement_resolution,
         )
         state.setdefault("mess_placement_diagnostics", []).append(diagnostic)
     mujoco.mj_forward(model, data)
@@ -1102,6 +1115,186 @@ def _refresh_object_positions(
             obj["position"] = _xyz(data.xpos[body_id])
 
 
+def _resolve_placement(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    state: dict[str, Any],
+    object_id: str,
+    receptacle_id: str,
+    index: int,
+    relation: str,
+) -> dict[str, Any]:
+    """Return a nonblocking placement pose plus support-quality evidence."""
+    obj = state["objects"][object_id]
+    receptacle = state["receptacles"][receptacle_id]
+    object_category = obj.get("category")
+    if relation == "on":
+        direct = _direct_support_placement(
+            model,
+            data,
+            obj,
+            receptacle,
+            index=index,
+        )
+        if direct is not None:
+            return direct
+    position = _placement_position(
+        receptacle,
+        index=index,
+        relation=relation,
+        object_category=object_category,
+    )
+    support_status = (
+        "semantic_contained_in_receptacle" if relation == "inside" else "degraded_elevated"
+    )
+    contact_proof = (
+        "semantic_containment" if relation == "inside" else "degraded_no_direct_support_surface"
+    )
+    return {
+        "position": position,
+        "support_status": support_status,
+        "contact_proof": contact_proof,
+        "resolution_source": "category_fallback",
+        "candidate_count": 0,
+        "degraded": relation == "on",
+    }
+
+
+def _direct_support_placement(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obj: dict[str, Any],
+    receptacle: dict[str, Any],
+    *,
+    index: int,
+) -> dict[str, Any] | None:
+    surfaces = list(receptacle.get("support_surfaces") or [])
+    if not surfaces:
+        surfaces = _receptacle_support_surfaces(model, data, str(receptacle.get("body_name") or ""))
+    surfaces = [surface for surface in surfaces if float(surface.get("area_m2") or 0.0) > 0.0]
+    if not surfaces:
+        return None
+    footprint = _object_footprint_half_extents(model, data, obj)
+    bottom_offset = _object_bottom_offset(model, data, obj)
+    candidate_count = 0
+    for surface in sorted(
+        surfaces,
+        key=lambda item: (
+            float(item.get("area_m2") or 0.0),
+            float(item.get("top_z") or 0.0),
+        ),
+        reverse=True,
+    ):
+        for candidate in _surface_candidate_positions(
+            surface,
+            footprint=footprint,
+            bottom_offset=bottom_offset,
+            index=index,
+        ):
+            candidate_count += 1
+            if not _candidate_has_direct_support(candidate, surface, footprint):
+                continue
+            return {
+                "position": candidate,
+                "support_status": "direct_support",
+                "contact_proof": "geometry_direct_support",
+                "resolution_source": "receptacle_support_surface",
+                "candidate_count": candidate_count,
+                "degraded": False,
+                "support_surface": surface,
+                "object_bottom_offset_m": round(float(bottom_offset), 6),
+                "object_footprint_half_extents_m": [
+                    round(float(footprint[0]), 6),
+                    round(float(footprint[1]), 6),
+                ],
+            }
+    return {
+        "position": _elevated_position_over_surface(
+            surfaces[0],
+            bottom_offset=bottom_offset,
+        ),
+        "support_status": "degraded_elevated",
+        "contact_proof": "degraded_no_candidate_inside_support_surface",
+        "resolution_source": "support_surface_elevated_fallback",
+        "candidate_count": candidate_count,
+        "degraded": True,
+        "support_surface": surfaces[0],
+        "object_bottom_offset_m": round(float(bottom_offset), 6),
+        "object_footprint_half_extents_m": [
+            round(float(footprint[0]), 6),
+            round(float(footprint[1]), 6),
+        ],
+    }
+
+
+def _surface_candidate_positions(
+    surface: dict[str, Any],
+    *,
+    footprint: tuple[float, float],
+    bottom_offset: float,
+    index: int,
+) -> list[list[float]]:
+    center = surface["center"]
+    half_extents = surface["half_extents"]
+    margin_x = float(footprint[0]) + 0.04
+    margin_y = float(footprint[1]) + 0.04
+    available_x = max(float(half_extents[0]) - margin_x, 0.0)
+    available_y = max(float(half_extents[1]) - margin_y, 0.0)
+    slot_x = min(available_x * 0.55, 0.28)
+    slot_y = min(available_y * 0.55, 0.28)
+    offsets = [
+        (0.0, 0.0),
+        (-slot_x, 0.0),
+        (slot_x, 0.0),
+        (0.0, -slot_y),
+        (0.0, slot_y),
+        (-slot_x, -slot_y),
+        (slot_x, -slot_y),
+        (-slot_x, slot_y),
+        (slot_x, slot_y),
+    ]
+    if len(offsets) > 1:
+        shift = index % len(offsets)
+        offsets = offsets[shift:] + offsets[:shift]
+    z = float(surface["top_z"]) + float(bottom_offset) + 0.005
+    return [
+        [
+            round(float(center[0]) + float(dx), 6),
+            round(float(center[1]) + float(dy), 6),
+            round(z, 6),
+        ]
+        for dx, dy in offsets
+    ]
+
+
+def _candidate_has_direct_support(
+    position: list[float],
+    surface: dict[str, Any],
+    footprint: tuple[float, float],
+) -> bool:
+    center = surface["center"]
+    half_extents = surface["half_extents"]
+    margin_x = float(footprint[0]) + 0.015
+    margin_y = float(footprint[1]) + 0.015
+    return abs(float(position[0]) - float(center[0])) + margin_x <= float(half_extents[0]) and abs(
+        float(position[1]) - float(center[1])
+    ) + margin_y <= float(half_extents[1])
+
+
+def _elevated_position_over_surface(
+    surface: dict[str, Any],
+    *,
+    bottom_offset: float,
+) -> list[float]:
+    center = surface["center"]
+    return [
+        round(float(center[0]), 6),
+        round(float(center[1]), 6),
+        round(float(surface["top_z"]) + float(bottom_offset) + 0.08, 6),
+    ]
+
+
 def _placement_position(
     receptacle: dict[str, Any],
     *,
@@ -1109,6 +1302,7 @@ def _placement_position(
     relation: str = "on",
     object_category: str | None = None,
 ) -> list[float]:
+    """Legacy nonblocking fallback pose when direct support cannot be resolved."""
     base = receptacle["position"]
     if receptacle.get("category") == "Fridge" and relation == "inside":
         return [float(base[0]) + 0.08, float(base[1]) - 0.16, float(base[2]) + 0.35]
@@ -1155,38 +1349,166 @@ def _object_surface_lift(object_category: str | None) -> float:
     return 0.06
 
 
-def _receptacle_support_top_z(
+def _receptacle_support_surfaces(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     body_name: str,
-    category: str,
-) -> float | None:
-    if category != "DiningTable":
+) -> list[dict[str, Any]]:
+    geom_ids = _subtree_geom_ids(model, body_name)
+    collision_ids = [
+        geom_id
+        for geom_id in geom_ids
+        if "collision"
+        in (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or "").lower()
+    ]
+    candidate_ids = collision_ids or [
+        geom_id
+        for geom_id in geom_ids
+        if "visual"
+        not in (mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or "").lower()
+    ]
+    surfaces = []
+    for geom_id in candidate_ids:
+        surface = _support_surface_from_geom(model, data, geom_id)
+        if surface is not None:
+            surfaces.append(surface)
+    return sorted(
+        surfaces,
+        key=lambda item: (float(item["top_z"]), float(item["area_m2"])),
+        reverse=True,
+    )
+
+
+def _support_surface_from_geom(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> dict[str, Any] | None:
+    half_extents = _geom_world_half_extents(model, data, geom_id)
+    if half_extents is None:
         return None
-    top_values = []
-    for geom_id in _subtree_geom_ids(model, body_name):
-        geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or ""
-        if "collision" not in geom_name.lower():
+    half_x, half_y, half_z = half_extents
+    if half_x < 0.06 or half_y < 0.06:
+        return None
+    area = 4.0 * half_x * half_y
+    if area < 0.03:
+        return None
+    if not _geom_has_upward_support_normal(data, geom_id):
+        return None
+    center = _xyz(data.geom_xpos[geom_id])
+    geom_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, geom_id) or f"geom_{geom_id}"
+    return {
+        "surface_id": geom_name,
+        "geom_id": int(geom_id),
+        "center": [center[0], center[1]],
+        "top_z": round(float(center[2]) + float(half_z), 6),
+        "half_extents": [round(float(half_x), 6), round(float(half_y), 6)],
+        "area_m2": round(float(area), 6),
+        "source": "mujoco_collision_geom",
+    }
+
+
+def _geom_has_upward_support_normal(data: mujoco.MjData, geom_id: int) -> bool:
+    xmat = data.geom_xmat[geom_id]
+    local_axis_world_z = max(abs(float(xmat[6])), abs(float(xmat[7])), abs(float(xmat[8])))
+    return local_axis_world_z >= 0.75
+
+
+def _geom_world_half_extents(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> tuple[float, float, float] | None:
+    geom_type = int(model.geom_type[geom_id])
+    size = model.geom_size[geom_id]
+    if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
+        local = (float(size[0]), float(size[1]), float(size[2]))
+    elif geom_type in {
+        int(mujoco.mjtGeom.mjGEOM_CYLINDER),
+        int(mujoco.mjtGeom.mjGEOM_CAPSULE),
+    }:
+        local = (float(size[0]), float(size[0]), float(size[1]))
+    elif geom_type == int(mujoco.mjtGeom.mjGEOM_SPHERE):
+        local = (float(size[0]), float(size[0]), float(size[0]))
+    elif geom_type == int(mujoco.mjtGeom.mjGEOM_ELLIPSOID):
+        local = (float(size[0]), float(size[1]), float(size[2]))
+    else:
+        return None
+    return _oriented_half_extents(data.geom_xmat[geom_id], local)
+
+
+def _oriented_half_extents(
+    xmat: Any,
+    local: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (
+        abs(float(xmat[0])) * local[0]
+        + abs(float(xmat[1])) * local[1]
+        + abs(float(xmat[2])) * local[2],
+        abs(float(xmat[3])) * local[0]
+        + abs(float(xmat[4])) * local[1]
+        + abs(float(xmat[5])) * local[2],
+        abs(float(xmat[6])) * local[0]
+        + abs(float(xmat[7])) * local[1]
+        + abs(float(xmat[8])) * local[2],
+    )
+
+
+def _support_top_z(surfaces: list[dict[str, Any]]) -> float | None:
+    if not surfaces:
+        return None
+    return round(max(float(surface["top_z"]) for surface in surfaces), 6)
+
+
+def _object_bottom_offset(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obj: dict[str, Any],
+) -> float:
+    body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, str(obj.get("body_name") or ""))
+    if body_id < 0:
+        return _object_surface_lift(obj.get("category"))
+    bottoms = []
+    for geom_id in _subtree_geom_ids(model, str(obj.get("body_name") or "")):
+        half_extents = _geom_world_half_extents(model, data, geom_id)
+        if half_extents is None:
             continue
-        geom_type = int(model.geom_type[geom_id])
-        if geom_type == int(mujoco.mjtGeom.mjGEOM_BOX):
-            half_z = float(model.geom_size[geom_id][2])
-        elif geom_type in {
-            int(mujoco.mjtGeom.mjGEOM_SPHERE),
-            int(mujoco.mjtGeom.mjGEOM_ELLIPSOID),
-        }:
-            half_z = float(model.geom_size[geom_id][0])
-        elif geom_type in {
-            int(mujoco.mjtGeom.mjGEOM_CYLINDER),
-            int(mujoco.mjtGeom.mjGEOM_CAPSULE),
-        }:
-            half_z = float(model.geom_size[geom_id][1])
-        else:
-            half_z = float(model.geom_size[geom_id][2])
-        top_values.append(float(data.geom_xpos[geom_id][2]) + half_z)
-    if not top_values:
-        return None
-    return round(max(top_values), 6)
+        bottoms.append(float(data.geom_xpos[geom_id][2]) - float(half_extents[2]))
+    if not bottoms:
+        return _object_surface_lift(obj.get("category"))
+    offset = float(data.xpos[body_id][2]) - min(bottoms)
+    if offset <= 0.0 or offset > 1.0:
+        return _object_surface_lift(obj.get("category"))
+    return max(offset, 0.01)
+
+
+def _object_footprint_half_extents(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obj: dict[str, Any],
+) -> tuple[float, float]:
+    half_x = 0.0
+    half_y = 0.0
+    for geom_id in _subtree_geom_ids(model, str(obj.get("body_name") or "")):
+        half_extents = _geom_world_half_extents(model, data, geom_id)
+        if half_extents is None:
+            continue
+        half_x = max(half_x, float(half_extents[0]))
+        half_y = max(half_y, float(half_extents[1]))
+    if half_x > 0.0 and half_y > 0.0:
+        return (max(half_x, 0.025), max(half_y, 0.025))
+    category = obj.get("category")
+    if category == "RemoteControl":
+        return (0.09, 0.045)
+    if category == "Plate":
+        return (0.13, 0.13)
+    if category in {"Apple", "Potato"}:
+        return (0.065, 0.065)
+    if category == "Book":
+        return (0.12, 0.08)
+    if category == "Pillow":
+        return (0.22, 0.16)
+    return (0.08, 0.08)
 
 
 def _receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
@@ -1215,6 +1537,7 @@ def _placement_diagnostic(
     relation: str,
     requested_position: list[float],
     source: str,
+    placement_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     obj = state["objects"][object_id]
     receptacle = state["receptacles"][receptacle_id]
@@ -1222,10 +1545,12 @@ def _placement_diagnostic(
     receptacle_position = [float(value) for value in receptacle.get("position", [0.0, 0.0, 0.0])]
     xy_distance = math.dist(object_position[:2], receptacle_position[:2])
     z_delta = object_position[2] - receptacle_position[2]
-    support_status = (
+    placement_resolution = placement_resolution or {}
+    default_support_status = (
         "semantic_contained_in_receptacle" if relation == "inside" else "semantic_on_receptacle"
     )
-    return {
+    support_status = str(placement_resolution.get("support_status") or default_support_status)
+    diagnostic = {
         "schema": "molmospaces_semantic_placement_diagnostic_v1",
         "status": support_status,
         "object_id": object_id,
@@ -1241,9 +1566,28 @@ def _placement_diagnostic(
         "xy_distance_m": round(float(xy_distance), 6),
         "z_delta_m": round(float(z_delta), 6),
         "support_status": support_status,
-        "contact_proof": "not_measured_mujoco_freejoint_qpos",
+        "placement_support_status": support_status,
+        "contact_proof": str(
+            placement_resolution.get("contact_proof") or "not_measured_mujoco_freejoint_qpos"
+        ),
         "diagnostic_source": source,
+        "resolution_source": placement_resolution.get("resolution_source", "legacy_semantic"),
+        "candidate_count": int(placement_resolution.get("candidate_count") or 0),
+        "degraded": bool(placement_resolution.get("degraded", False)),
     }
+    support_surface = placement_resolution.get("support_surface")
+    if isinstance(support_surface, dict):
+        diagnostic["support_surface_id"] = support_surface.get("surface_id")
+        diagnostic["support_surface_center"] = support_surface.get("center")
+        diagnostic["support_surface_half_extents"] = support_surface.get("half_extents")
+        diagnostic["support_surface_top_z"] = support_surface.get("top_z")
+    if placement_resolution.get("object_bottom_offset_m") is not None:
+        diagnostic["object_bottom_offset_m"] = placement_resolution["object_bottom_offset_m"]
+    if placement_resolution.get("object_footprint_half_extents_m") is not None:
+        diagnostic["object_footprint_half_extents_m"] = placement_resolution[
+            "object_footprint_half_extents_m"
+        ]
+    return diagnostic
 
 
 def _load_model_data(scene_xml: Path) -> tuple[mujoco.MjModel, mujoco.MjData]:

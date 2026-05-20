@@ -184,6 +184,16 @@ A small composable Semantic Capability such as observe, move, turn, pick,
 place, open, or close.
 _Avoid_: Environment primitive, opaque composite action
 
+**Direct Support Placement**:
+A surface placement outcome where the moved object is directly supported by the
+named target fixture or surface.
+_Avoid_: Nearby placement, nearest-receptacle assignment, semantic-only on state
+
+**Nonblocking Placement Degradation**:
+A cleanup placement fallback that keeps the run moving when direct support cannot
+be proven, while preserving evidence that the placement is not directly supported.
+_Avoid_: Silent success, hard pipeline failure, pretending support was proven
+
 **Composed Semantic Capability**:
 A higher-level Semantic Capability or Semantic Service built from atomic
 capabilities, such as localization, navigation, search, inspect, or transport.
@@ -331,6 +341,16 @@ _Avoid_: Backend profile, task recipe
   remains backend-specific.
 - A **Semantic Capability** may be backed by different **Environment
   Primitives** in AI2-THOR, MuJoCo, or a real robot.
+- A `place` outcome should mean **Direct Support Placement**; assigning an
+  object to the nearest receptacle or marking it semantically `on` is not enough.
+- If **Direct Support Placement** cannot be proven in a demo run, the backend may
+  use **Nonblocking Placement Degradation** to continue the pipeline, but the
+  report must distinguish degraded placement from direct support.
+- **Tidy-Plausible Outcome** scoring may remain semantic while **Direct Support
+  Placement** is reported as a separate support-quality dimension.
+- The **Mess Generator** and cleanup `place` flow should use the same **Direct
+  Support Placement** semantics so initial observations and final placements are
+  judged against the same support model.
 - An **Environment Primitive** runs in one **Execution Backend**.
 - A **Navigation + Perception Pilot** may use the same **Task Prompt** and
   **Contract Profile** shape as cleanup while proving only navigation and
@@ -617,6 +637,13 @@ _Avoid_: Backend profile, task recipe
 
 ## Flagged Ambiguities
 
+- "`place/on`" was used ambiguously for semantic receptacle assignment and
+  actual object support. Resolved: use **Direct Support Placement** for surface
+  placements; semantic-only assignment may remain weak state evidence but should
+  not count as a supported surface placement.
+- "placement failure" was used ambiguously for direct-support evidence failure
+  and whole-run tool failure. Resolved: use **Nonblocking Placement Degradation**
+  when the run should continue without claiming direct support.
 - "task" was used for both runnable `just task::run` commands and open-ended
   robot work. Resolved: use **Demo Recipe** for runnable packaging and
   **Task Prompt** for robot work.
