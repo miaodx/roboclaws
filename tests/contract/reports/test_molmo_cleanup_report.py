@@ -320,7 +320,9 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
     assert "Robot-view capture" in html
     assert "0.4s" in html
     assert "Between-tool gap" in html
-    assert "2.3s" in html
+    assert "1.9s" in html
+    assert "Other MCP overhead" in html
+    assert "0.2s" in html
     assert "fixture_hints" in html
 
 

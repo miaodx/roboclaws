@@ -10,12 +10,14 @@ import pytest
 from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
+from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PERF_PROFILE, WORLD_LABELS_PROFILE
 from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.realworld_mcp_server import (
     MCP_SERVER_NAME,
     make_molmo_realworld_cleanup_mcp,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.molmo_cleanup.semantic_timeline import CLEAN_OBSERVED_OBJECT_TOOL
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
@@ -84,6 +86,69 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert observation["visible_object_detections"][0]["object_id"].startswith("observed_")
     assert "target_receptacle_id" not in json.dumps(observation)
     assert "close_receptacle" in server.contract.public_tool_names()
+
+
+def test_realworld_mcp_composite_cleanup_tool_is_perf_profile_only(tmp_path: Path) -> None:
+    regular_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "regular",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=WORLD_LABELS_PROFILE,
+    )
+    try:
+        assert CLEAN_OBSERVED_OBJECT_TOOL not in _fastmcp_tool_names(regular_server)
+        assert (
+            CLEAN_OBSERVED_OBJECT_TOOL
+            not in regular_server._agent_view_payload()["public_tool_names"]
+        )
+        with pytest.raises(ValueError, match=CLEAN_OBSERVED_OBJECT_TOOL):
+            regular_server.call_tool(
+                CLEAN_OBSERVED_OBJECT_TOOL,
+                object_id="observed_001",
+                fixture_id="sink_01",
+            )
+    finally:
+        regular_server.close()
+
+    perf_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "perf",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=WORLD_LABELS_PERF_PROFILE,
+    )
+    try:
+        assert CLEAN_OBSERVED_OBJECT_TOOL in _fastmcp_tool_names(perf_server)
+        assert CLEAN_OBSERVED_OBJECT_TOOL in perf_server._agent_view_payload()["public_tool_names"]
+        metric_map = perf_server.call_tool("metric_map")
+        detection = None
+        for waypoint in metric_map["inspection_waypoints"]:
+            perf_server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            observation = perf_server.call_tool("observe")
+            detections = observation.get("visible_object_detections", [])
+            if detections:
+                detection = detections[0]
+                break
+
+        assert detection is not None
+        cleaned = perf_server.call_tool(
+            CLEAN_OBSERVED_OBJECT_TOOL,
+            object_id=detection["object_id"],
+            fixture_id=detection["candidate_fixture_id"],
+        )
+    finally:
+        perf_server.close()
+
+    assert cleaned["ok"] is True
+    assert cleaned["tool"] == CLEAN_OBSERVED_OBJECT_TOOL
+    assert cleaned["composite_preserves_semantic_substeps"] is True
+    assert cleaned["semantic_step_count"] >= 4
+    phases = [step["phase"] for step in cleaned["semantic_steps"]]
+    assert phases[:3] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+    ]
+    assert {"place", "place_inside"}.intersection(phases)
 
 
 def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(

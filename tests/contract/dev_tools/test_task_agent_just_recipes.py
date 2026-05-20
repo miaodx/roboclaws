@@ -170,6 +170,15 @@ def test_agent_module_exposes_compact_dispatchers() -> None:
         assert not re.search(rf"^{alias}\b", text, re.MULTILINE)
 
 
+def test_agent_harness_allows_molmo_codex_perf_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
+
+    assert "molmo-cleanup-codex-perf" in agent_text
+    assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
+    assert 'just molmo::cleanup "codex-live" "world-labels-perf"' in harness_text
+
+
 def test_task_module_exposes_only_run_publicly() -> None:
     text = TASK_JUST.read_text(encoding="utf-8")
 
@@ -222,6 +231,19 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         "smoke",
         "7",
         "output/molmo/codex-smoke",
+    ]
+
+
+def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf() -> None:
+    route = trace_task_run("molmo-cleanup", "codex", "world-labels-perf")
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels-perf",
+        "7",
+        "output/molmo/codex-world-labels-perf",
     ]
 
 
@@ -329,6 +351,21 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert match is not None
     body = match.group("body")
 
+    assert "--require-waypoint-honesty" in body
+    assert "--require-real-robot-alignment" in body
+    assert "--min-semantic-accepted-count 5" in body
+    assert "--min-sweep-coverage 1.0" in body
+
+
+def test_molmo_world_labels_perf_skips_robot_view_gate_but_keeps_alignment_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"world-labels-perf\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "--include-robot --robot-name rby1m" in body
+    assert "--record-robot-views" not in body
+    assert "--require-robot-views" not in body
     assert "--require-waypoint-honesty" in body
     assert "--require-real-robot-alignment" in body
     assert "--min-semantic-accepted-count 5" in body

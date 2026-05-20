@@ -16,6 +16,7 @@ from roboclaws.molmo_cleanup.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
     _parse_last_json_object,
+    _worker_kwargs_from_args,
 )
 
 
@@ -105,6 +106,52 @@ def test_subprocess_backend_worker_times_out_hung_snapshot(
         backend._run_worker("snapshot", "--output-path", str(tmp_path / "before.png"))
 
     assert captured["timeout"] == 60.0
+
+
+def test_subprocess_backend_worker_payload_parses_cli_style_args() -> None:
+    payload = _worker_kwargs_from_args(
+        "robot_views",
+        (
+            "--output-dir",
+            "/tmp/views",
+            "--label",
+            "0001_pick",
+            "--focus-object-id",
+            "Apple_1",
+            "--focus-receptacle-id",
+            "Fridge_1",
+        ),
+    )
+
+    assert payload == {
+        "output_dir": "/tmp/views",
+        "label": "0001_pick",
+        "focus_object_id": "Apple_1",
+        "focus_receptacle_id": "Fridge_1",
+    }
+
+
+def test_worker_model_data_cache_reuses_loaded_scene(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    worker._MODEL_DATA_CACHE.clear()
+    scene_xml = tmp_path / "scene.xml"
+    calls = []
+    sentinel = (object(), SimpleNamespace(qpos=[0.0]))
+
+    def fake_load_model_data(path: Path):
+        calls.append(path)
+        return sentinel
+
+    monkeypatch.setattr(worker, "_load_model_data", fake_load_model_data)
+    state = {"scene_xml": str(scene_xml), "robot_included": False}
+
+    assert worker._load_model_data_for_state(state) is sentinel
+    assert worker._load_model_data_for_state(state) is sentinel
+    assert calls == [scene_xml]
 
 
 def test_worker_select_targets_honors_requested_generated_count() -> None:
