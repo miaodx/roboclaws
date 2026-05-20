@@ -19,11 +19,15 @@ checker alignment gates, and local Codex consumption through the repo-local
 
 ## Next Action
 
-Review the local proof-alignment and skill-first composition commits before
-pushing. The latest skill-routine timing artifact is
-`output/molmo/codex-skill-routine-perf/0520_1204/seed-7/report.html`; it passed
-the cleanup checker with full sweep coverage and records why the performance
-lane still defaults to the promoted MCP candidate.
+Review the ADR-0130 skill-first composition closeout commits before pushing.
+The latest apples-to-apples timing artifacts are
+`output/molmo/codex-skill-routine-perf/0520_1204/seed-7/report.html` and
+`output/molmo/codex-mcp-routine-perf/0520_1319/seed-7/report.html`; RAW_FPV
+comparison artifacts are
+`output/molmo/codex-camera-raw-skill-check/0520_1324/seed-7/report.html` and
+`output/molmo/codex-camera-raw-mcp-check-final3/0520_1508/seed-7/report.html`.
+They record why canonical cleanup composition remains skill-side while the
+performance lane still explicitly enables the promoted MCP candidate.
 
 ## Current Blocker
 

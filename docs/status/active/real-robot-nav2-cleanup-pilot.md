@@ -261,5 +261,5 @@ Current local Codex evidence:
 
 ## Next Action
 
-Review the two local proof-alignment commits and the local Codex proof artifact.
-Do not push unless the human explicitly asks.
+Review the ADR-0130 skill-first composition closeout commits and the local
+Codex comparison artifacts. Do not push unless the human explicitly asks.

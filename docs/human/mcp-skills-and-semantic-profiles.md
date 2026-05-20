@@ -133,7 +133,7 @@ Examples:
 | --- | --- | --- |
 | `capture_object_photo(object)` | Agent skill with a composite action inside | It combines locate, navigation, observation, and verification. |
 | `put_in_refrigerator(object)` | Skill or composite action, depending on packaging | It can be decomposed into navigate, open, place, close. |
-| `clean_observed_object(object, fixture)` | Explicit promoted-candidate comparison tool unless promotion criteria are met | It reduces MCP round trips in Codex comparison lanes. Canonical cleanup behavior still lives in the skill-side trace-preserving routine; the tool is exposed only when a run explicitly enables promoted cleanup tools. |
+| `clean_observed_object(object, fixture)` | Explicit promoted-candidate comparison tool unless promotion criteria are met | It reduces MCP round trips in Codex comparison lanes. Canonical cleanup behavior still lives in the skill-side trace-preserving routine; the tool is exposed only when a run explicitly enables promoted cleanup tools. RAW_FPV comparison runs must ground a visual candidate through public camera evidence before calling it. |
 | `scene_objects()` | Privileged tool | It exposes full AI2-THOR object inventory. |
 | `goto(object_id)` | Privileged tool unless decomposed | The current AI2-THOR version is target-relative teleport-style help. |
 | Hidden acceptable-destination lookup | Privileged/private evaluator data | It must never enter public profile metadata. |
