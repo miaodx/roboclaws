@@ -428,19 +428,51 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
         "output/molmo/direct-camera-labels",
         "帮我收拾这个房间",
     ]
+    assert raw_route[11] == "skill"
+
+
+def test_prompt_mapping_molmo_cleanup_camera_raw_mcp_comparison() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "codex",
+        "camera-raw",
+        "cleanup_routine=mcp",
+    )
+
+    assert route[:12] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "camera-raw",
+        "7",
+        "output/molmo/codex-camera-raw",
+        "帮我收拾这个房间",
+        "10",
+        "127.0.0.1",
+        "18788",
+        "auto",
+        "mcp",
+    ]
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r'camera-raw\)\n\s+kickoff_prompt="([^"]+)"', text)
-    assert match is not None
-    prompt = match.group(1)
+    matches = [
+        match.group("body")
+        for match in re.finditer(r"camera-raw\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    ]
+    prompt = next((body for body in matches if "kickoff_prompt" in body), "")
+    assert prompt
 
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "mark a waypoint complete only after" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
+    assert "MCP-promoted RAW_FPV comparison lane" in prompt
+    assert "trace-preserving RAW_FPV skill lane" in prompt
+    assert "roboclaws__clean_observed_object" in prompt
+    assert "--enable-promoted-cleanup-tools" in text
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:

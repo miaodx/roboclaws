@@ -24,7 +24,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
-from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
+from roboclaws.molmo_cleanup.profiles import (
+    WORLD_LABELS_PERF_PROFILE,
+    cleanup_profile_metadata_for_run,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -90,6 +93,7 @@ def make_molmo_realworld_cleanup_mcp(
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    enable_promoted_cleanup_tools: bool | None = None,
     planner_proof_run_result: Path | None = None,
     map_bundle_dir: str | Path | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
@@ -107,6 +111,7 @@ def make_molmo_realworld_cleanup_mcp(
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
+        enable_promoted_cleanup_tools=enable_promoted_cleanup_tools,
         planner_proof_run_result=planner_proof_run_result,
         map_bundle_dir=map_bundle_dir,
     )
@@ -131,6 +136,7 @@ class RealWorldMolmoCleanupMCPServer:
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
         cleanup_profile: str | None = None,
+        enable_promoted_cleanup_tools: bool | None = None,
         planner_proof_run_result: Path | None = None,
         map_bundle_dir: str | Path | None = None,
     ) -> None:
@@ -160,6 +166,11 @@ class RealWorldMolmoCleanupMCPServer:
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
         self.cleanup_profile = cleanup_profile
+        self.enable_promoted_cleanup_tools = (
+            cleanup_profile == WORLD_LABELS_PERF_PROFILE
+            if enable_promoted_cleanup_tools is None
+            else bool(enable_promoted_cleanup_tools)
+        )
         self.planner_proof_run_result = planner_proof_run_result
         if self.record_robot_views and not callable(
             getattr(self.base_contract.backend, "write_robot_views", None)
@@ -192,6 +203,7 @@ class RealWorldMolmoCleanupMCPServer:
             agent_driven=self.agent_driven,
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
+            promoted_cleanup_tools_enabled=self.enable_promoted_cleanup_tools,
         )
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:

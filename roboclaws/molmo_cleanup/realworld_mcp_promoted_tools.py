@@ -5,14 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PERF_PROFILE
 from roboclaws.molmo_cleanup.semantic_timeline import CLEAN_OBSERVED_OBJECT_TOOL
 
 PROMOTED_CLEANUP_TOOL_NAMES = (CLEAN_OBSERVED_OBJECT_TOOL,)
 
 
-def promoted_cleanup_tool_names_for_profile(cleanup_profile: str | None) -> tuple[str, ...]:
-    if cleanup_profile == WORLD_LABELS_PERF_PROFILE:
+def promoted_cleanup_tool_names(enabled: bool) -> tuple[str, ...]:
+    if enabled:
         return PROMOTED_CLEANUP_TOOL_NAMES
     return ()
 
@@ -20,7 +19,7 @@ def promoted_cleanup_tool_names_for_profile(cleanup_profile: str | None) -> tupl
 def register_promoted_cleanup_tools(server: Any) -> None:
     """Register promoted-candidate composite tools for explicit perf profiles."""
 
-    if server.cleanup_profile != WORLD_LABELS_PERF_PROFILE:
+    if not server.enable_promoted_cleanup_tools:
         return
 
     @server._mcp.tool()

@@ -54,6 +54,9 @@ Molmo cleanup profiles:
   promoted-candidate MCP shortcut because live skill-routine timing is not
   alike; pass `cleanup_routine=skill` to compare the skill-side routine.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
+  It defaults to the trace-preserving skill routine; pass
+  `cleanup_routine=mcp` only for an explicit promoted-candidate comparison
+  after `navigate_to_visual_candidate` grounds a raw-FPV object handle.
 - `camera-labels` registers structured candidates from camera observations.
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
