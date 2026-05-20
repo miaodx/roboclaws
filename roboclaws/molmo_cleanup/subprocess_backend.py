@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import selectors
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ WORKER_SCRIPT = (
     / "molmo_cleanup"
     / "molmospaces_subprocess_worker.py"
 )
+PERSISTENT_WORKER_DISABLED_VALUES = {"0", "false", "no", "off"}
 
 
 class MolmoSpacesSubprocessBackend:
@@ -55,6 +58,10 @@ class MolmoSpacesSubprocessBackend:
         self.python_executable = python_executable or Path(
             os.environ.get("ROBOCLAWS_MOLMOSPACES_PYTHON", str(DEFAULT_MOLMOSPACES_PYTHON))
         )
+        self._persistent_enabled = _persistent_worker_enabled()
+        self._persistent_process: subprocess.Popen[str] | None = None
+        self._persistent_lock = threading.Lock()
+        self._persistent_request_id = 0
         init_args = [
             "--seed",
             str(seed),
@@ -156,10 +163,24 @@ class MolmoSpacesSubprocessBackend:
     def done(self, reason: str = "") -> dict[str, Any]:
         return self._run_worker("done", "--reason", reason)
 
+    def close(self) -> None:
+        self._stop_persistent_worker()
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
+
     def _read_state(self) -> dict[str, Any]:
         return json.loads(self.state_path.read_text(encoding="utf-8"))
 
     def _run_worker(self, command: str, *args: str) -> dict[str, Any]:
+        if getattr(self, "_persistent_enabled", False) and command != "init":
+            return self._run_persistent_worker(command, *args)
+        return self._run_worker_once(command, *args)
+
+    def _run_worker_once(self, command: str, *args: str) -> dict[str, Any]:
         if not self.python_executable.is_file():
             raise RuntimeError(
                 "MolmoSpaces Python runtime is missing: "
@@ -195,6 +216,173 @@ class MolmoSpacesSubprocessBackend:
             )
         return _parse_last_json_object(completed.stdout)
 
+    def _run_persistent_worker(self, command: str, *args: str) -> dict[str, Any]:
+        if not self.python_executable.is_file():
+            raise RuntimeError(
+                "MolmoSpaces Python runtime is missing: "
+                f"{self.python_executable}. Set ROBOCLAWS_MOLMOSPACES_PYTHON."
+            )
+        timeout_s = _worker_timeout_s(command)
+        with self._persistent_lock:
+            process = self._ensure_persistent_worker()
+            self._persistent_request_id += 1
+            request_id = self._persistent_request_id
+            payload = {
+                "id": request_id,
+                "command": command,
+                "kwargs": _worker_kwargs_from_args(command, args),
+            }
+            assert process.stdin is not None
+            try:
+                process.stdin.write(json.dumps(payload, sort_keys=True) + "\n")
+                process.stdin.flush()
+            except BrokenPipeError as exc:
+                self._stop_persistent_worker_locked()
+                raise RuntimeError(
+                    f"MolmoSpaces persistent worker pipe broke before {command}"
+                ) from exc
+
+            line = self._read_persistent_line(process, timeout_s=timeout_s, command=command)
+            try:
+                response = json.loads(line)
+            except json.JSONDecodeError as exc:
+                self._stop_persistent_worker_locked()
+                raise RuntimeError(
+                    f"MolmoSpaces persistent worker returned invalid JSON for {command}: "
+                    f"{line.strip()!r}"
+                ) from exc
+            if response.get("id") != request_id:
+                self._stop_persistent_worker_locked()
+                raise RuntimeError(
+                    "MolmoSpaces persistent worker response id mismatch "
+                    f"for {command}: expected {request_id}, got {response.get('id')}"
+                )
+            if not response.get("ok"):
+                error = str(response.get("error") or "unknown error")
+                error_type = str(response.get("error_type") or "RuntimeError")
+                raise RuntimeError(
+                    f"MolmoSpaces persistent worker failed ({command}, {error_type}): {error}"
+                )
+            result = response.get("result")
+            if not isinstance(result, dict):
+                raise RuntimeError(
+                    f"MolmoSpaces persistent worker returned non-object result for {command}: "
+                    f"{result!r}"
+                )
+            return result
+
+    def _ensure_persistent_worker(self) -> subprocess.Popen[str]:
+        process = self._persistent_process
+        if process is not None and process.poll() is None:
+            return process
+        worker_env = _worker_env()
+        worker_command = [
+            str(self.python_executable),
+            str(WORKER_SCRIPT),
+            "--state-path",
+            str(self.state_path),
+            "serve",
+        ]
+        process = subprocess.Popen(
+            worker_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=worker_env,
+            bufsize=1,
+        )
+        self._persistent_process = process
+        line = self._read_persistent_line(
+            process,
+            timeout_s=_worker_timeout_s("serve"),
+            command="serve",
+        )
+        try:
+            ready = json.loads(line)
+        except json.JSONDecodeError as exc:
+            self._stop_persistent_worker_locked()
+            raise RuntimeError(
+                f"MolmoSpaces persistent worker did not emit a JSON ready event: {line.strip()!r}"
+            ) from exc
+        if not ready.get("ok") or ready.get("event") != "ready":
+            self._stop_persistent_worker_locked()
+            raise RuntimeError(
+                "MolmoSpaces persistent worker did not become ready: "
+                f"{json.dumps(ready, sort_keys=True)}"
+            )
+        return process
+
+    def _read_persistent_line(
+        self,
+        process: subprocess.Popen[str],
+        *,
+        timeout_s: float,
+        command: str,
+    ) -> str:
+        assert process.stdout is not None
+        selector = selectors.DefaultSelector()
+        try:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            events = selector.select(timeout_s)
+        finally:
+            selector.close()
+        if not events:
+            if process.poll() is not None:
+                stderr = _read_process_stderr(process)
+                self._stop_persistent_worker_locked()
+                raise RuntimeError(
+                    "MolmoSpaces persistent worker exited before responding "
+                    f"({command}): {stderr.strip()}"
+                )
+            self._stop_persistent_worker_locked(kill=True)
+            raise RuntimeError(
+                f"MolmoSpaces persistent worker timed out ({command}, {timeout_s:g}s)"
+            )
+        line = process.stdout.readline()
+        if not line:
+            stderr = _read_process_stderr(process) if process.poll() is not None else ""
+            self._stop_persistent_worker_locked()
+            raise RuntimeError(
+                "MolmoSpaces persistent worker closed stdout before responding "
+                f"({command}): {stderr.strip()}"
+            )
+        return line
+
+    def _stop_persistent_worker(self) -> None:
+        lock = getattr(self, "_persistent_lock", None)
+        if lock is None:
+            return
+        with lock:
+            self._stop_persistent_worker_locked()
+
+    def _stop_persistent_worker_locked(self, *, kill: bool = False) -> None:
+        process = getattr(self, "_persistent_process", None)
+        self._persistent_process = None
+        if process is None or process.poll() is not None:
+            return
+        if not kill and process.stdin is not None:
+            try:
+                process.stdin.write(
+                    json.dumps(
+                        {
+                            "id": -1,
+                            "command": "shutdown",
+                            "kwargs": {},
+                        },
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+                process.stdin.flush()
+            except Exception:
+                pass
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5.0)
+
 
 def _parse_last_json_object(stdout: str) -> dict[str, Any]:
     for line in reversed(stdout.splitlines()):
@@ -222,6 +410,35 @@ def _worker_timeout_s(command: str) -> float:
     if override:
         return float(override)
     return WORKER_TIMEOUTS_S.get(command, DEFAULT_WORKER_TIMEOUT_S)
+
+
+def _persistent_worker_enabled() -> bool:
+    value = os.environ.get("ROBOCLAWS_MOLMOSPACES_PERSISTENT_WORKER", "1")
+    return value.strip().lower() not in PERSISTENT_WORKER_DISABLED_VALUES
+
+
+def _worker_kwargs_from_args(command: str, args: tuple[str, ...]) -> dict[str, str]:
+    kwargs: dict[str, str] = {}
+    index = 0
+    while index < len(args):
+        flag = args[index]
+        if not flag.startswith("--"):
+            raise ValueError(f"unexpected worker argument for {command}: {flag!r}")
+        if index + 1 >= len(args):
+            raise ValueError(f"missing value for worker argument {flag!r} ({command})")
+        key = flag[2:].replace("-", "_")
+        kwargs[key] = args[index + 1]
+        index += 2
+    return kwargs
+
+
+def _read_process_stderr(process: subprocess.Popen[str]) -> str:
+    if process.stderr is None:
+        return ""
+    try:
+        return process.stderr.read()
+    except Exception:
+        return ""
 
 
 def _scenario_from_worker_payload(

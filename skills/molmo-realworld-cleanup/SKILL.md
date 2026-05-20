@@ -55,6 +55,12 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    object handles:
    `roboclaws__navigate_to_object(object_id)`, `roboclaws__pick(object_id)`,
    `roboclaws__navigate_to_receptacle(fixture_id)`, then place it.
+   In performance-lane runs, if `roboclaws__clean_observed_object` is available,
+   use it for each observed handle instead of the primitive cleanup calls:
+   pass the observed `object_id`, the public `candidate_fixture_id`, and
+   `placement_tool` as `recommended_tool` when present. The response returns the
+   same canonical semantic substeps for the report; still call `observe()` once
+   after each successful composite cleanup.
    If a visible detection or done recovery response includes
    `cleanup_recommended: true` or a `candidate_fixture_id` that differs from
    its `support_estimate.fixture_id`, treat that public candidate as cleanup

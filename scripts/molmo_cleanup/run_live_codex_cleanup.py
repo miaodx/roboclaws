@@ -15,7 +15,9 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
+
+from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
 
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
@@ -62,9 +64,17 @@ class LiveCodexCleanupRunner:
         self.args = args
         self.run_dir = args.run_dir
         self.status_path = args.status_path
+        self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.lock_file = None
+        self.live_timing: dict[str, Any] = {
+            "schema": "molmo_live_timing_v1",
+            "started_at_epoch": self.started_at_epoch,
+            "profile": getattr(args, "profile", ""),
+            "backend": getattr(args, "backend", ""),
+            "policy": getattr(args, "policy", ""),
+        }
 
     def run(self) -> int:
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -78,14 +88,17 @@ class LiveCodexCleanupRunner:
             self._check_result()
         except KeyboardInterrupt:
             self._write_status("failed", 130)
+            self._write_live_timing("failed", 130, reason="keyboard_interrupt")
             self._cleanup_server()
             return 130
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
+            self._write_live_timing("failed", 1, reason=str(exc))
             self._cleanup_server()
             return 1
 
+        self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
         return 0
 
@@ -125,6 +138,7 @@ class LiveCodexCleanupRunner:
         print(f"    repo    : {self.args.repo_root}")
         print(f"    run dir : {self.run_dir}")
         print(f"    MCP URL : {self.args.client_url}")
+        self._mark_timing("server_start")
 
         probe_host = _probe_host(self.args.host)
         if _port_accepting(probe_host, self.args.port):
@@ -148,6 +162,7 @@ class LiveCodexCleanupRunner:
             if self.server_proc.poll() is not None:
                 raise RuntimeError("cleanup MCP server exited before becoming ready")
             if _port_accepting(probe_host, self.args.port):
+                self._mark_timing("server_ready")
                 return
             time.sleep(0.5)
         raise RuntimeError(
@@ -157,12 +172,18 @@ class LiveCodexCleanupRunner:
 
     def _run_codex(self) -> None:
         self._write_status("running-codex")
+        self._mark_timing("codex_exec_start")
         env = os.environ.copy()
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
+        env.setdefault(
+            "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE",
+            str(self.run_dir / "agent-docker-workspace"),
+        )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
             task_name="molmo-cleanup",
             skill_name="molmo-realworld-cleanup",
+            workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "molmo-cleanup")
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
@@ -212,13 +233,18 @@ class LiveCodexCleanupRunner:
             " ".join(_shell_quote(item) for item in command) + "\n",
             encoding="utf-8",
         )
-        status = _run_and_tee(
-            command,
-            cwd=agent_task_dir,
-            stdout_path=self.run_dir / "codex-events.jsonl",
-            stderr_path=self.run_dir / "codex.stderr.log",
-            env=env,
-        )
+        codex_events_path = self.run_dir / "codex-events.jsonl"
+        try:
+            status = _run_and_tee(
+                command,
+                cwd=agent_task_dir,
+                stdout_path=codex_events_path,
+                stderr_path=self.run_dir / "codex.stderr.log",
+                env=env,
+            )
+        finally:
+            self._mark_timing("codex_exec_end")
+            self.live_timing["codex_events"] = _codex_event_summary(codex_events_path)
         if last_message_host_path.is_file():
             shutil.copyfile(last_message_host_path, self.run_dir / "codex-last-message.md")
         if status != 0:
@@ -228,13 +254,16 @@ class LiveCodexCleanupRunner:
         assert self.server_proc is not None
         self._write_status("waiting-for-server-finish")
         print("==> waiting for cleanup MCP server to finish after agent done")
+        self._mark_timing("server_wait_start")
         status = self.server_proc.wait()
+        self._mark_timing("server_finished")
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
+        self._mark_timing("checker_start")
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -258,9 +287,15 @@ class LiveCodexCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.profile in {"smoke", "world-labels", "camera-labels", "camera-raw"}:
+        if self.args.profile in {
+            "smoke",
+            "world-labels",
+            "world-labels-perf",
+            "camera-labels",
+            "camera-raw",
+        }:
             checker_args.append("--require-clean-agent-run")
-        if self.args.profile == "world-labels":
+        if self.args.profile in {"world-labels", "world-labels-perf"}:
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
             _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
@@ -273,16 +308,59 @@ class LiveCodexCleanupRunner:
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
-        status = _run_and_tee(
-            checker_args,
-            cwd=self.args.repo_root,
-            stdout_path=self.run_dir / "checker.log",
-            stderr_path=self.run_dir / "checker.log",
-            env=os.environ.copy(),
-        )
+        try:
+            status = _run_and_tee(
+                checker_args,
+                cwd=self.args.repo_root,
+                stdout_path=self.run_dir / "checker.log",
+                stderr_path=self.run_dir / "checker.log",
+                env=os.environ.copy(),
+            )
+        finally:
+            self._mark_timing("checker_end")
         if status != 0:
             raise RuntimeError(f"cleanup checker exited with status {status}")
         print(f"==> report: {self.run_dir / 'report.html'}")
+
+    def _mark_timing(self, name: str) -> None:
+        self.live_timing[f"{name}_epoch"] = time.time()
+
+    def _write_live_timing(
+        self,
+        phase: str,
+        exit_status: int,
+        *,
+        reason: str = "",
+    ) -> None:
+        finished_at = time.time()
+        payload = dict(self.live_timing)
+        payload.update(
+            {
+                "phase": phase,
+                "exit_status": exit_status,
+                "finished_at_epoch": finished_at,
+            }
+        )
+        if reason:
+            payload["reason"] = reason
+        payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
+        payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        first_request = _first_mcp_request_epoch(self.run_dir)
+        if first_request is not None:
+            payload["time_to_first_mcp_request_s"] = _round_duration(
+                first_request - self.started_at_epoch
+            )
+            server_ready = _float_or_none(payload.get("server_ready_epoch"))
+            if server_ready is not None:
+                payload["first_mcp_request_after_server_ready_s"] = _round_duration(
+                    first_request - server_ready
+                )
+        payload["model_api_time_s"] = payload.get("codex_events", {}).get("model_api_time_s")
+        payload["model_api_time_note"] = payload.get("codex_events", {}).get(
+            "model_api_time_note",
+            "Codex event timing was not available.",
+        )
+        self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
@@ -371,6 +449,167 @@ def _run_and_tee(
             return status
 
 
+def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict[str, Any]:
+    started = _float_or_none(timing.get("started_at_epoch"))
+    codex_start = _float_or_none(timing.get("codex_exec_start_epoch"))
+    codex_end = _float_or_none(timing.get("codex_exec_end_epoch"))
+    checker_start = _float_or_none(timing.get("checker_start_epoch"))
+    checker_end = _float_or_none(timing.get("checker_end_epoch"))
+    server_start = _float_or_none(timing.get("server_start_epoch"))
+    server_ready = _float_or_none(timing.get("server_ready_epoch"))
+    server_finished = _float_or_none(timing.get("server_finished_epoch"))
+    total = _round_duration(finished_at - started) if started is not None else None
+
+    segments: dict[str, float] = {}
+    if started is not None and codex_start is not None:
+        segments["pre_codex_setup_s"] = _round_duration(codex_start - started)
+    if codex_start is not None and codex_end is not None:
+        segments["codex_exec_elapsed_s"] = _round_duration(codex_end - codex_start)
+    if codex_end is not None and server_finished is not None:
+        segments["post_codex_server_wait_s"] = _round_duration(server_finished - codex_end)
+    if checker_start is not None and checker_end is not None:
+        segments["checker_elapsed_s"] = _round_duration(checker_end - checker_start)
+    if checker_end is not None:
+        segments["final_overhead_s"] = _round_duration(finished_at - checker_end)
+    if server_start is not None and server_ready is not None:
+        segments["server_startup_s"] = _round_duration(server_ready - server_start)
+
+    partition_keys = (
+        "pre_codex_setup_s",
+        "codex_exec_elapsed_s",
+        "post_codex_server_wait_s",
+        "checker_elapsed_s",
+        "final_overhead_s",
+    )
+    accounted = sum(segments.get(key, 0.0) for key in partition_keys)
+    breakdown: dict[str, Any] = {"total_elapsed_s": total, **segments}
+    if total is not None:
+        breakdown["accounted_elapsed_s"] = _round_duration(accounted)
+        breakdown["unaccounted_elapsed_s"] = _round_duration(max(0.0, total - accounted))
+        breakdown["accounting_note"] = (
+            "The partitioned runner buckets sum to total wall time. MCP trace timing "
+            "runs inside codex_exec_elapsed_s and is reported separately to avoid "
+            "double counting concurrent server work."
+        )
+    return breakdown
+
+
+def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
+    run_result_path = run_dir / "run_result.json"
+    if run_result_path.is_file():
+        try:
+            run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            run_result = {}
+        timing = run_result.get("runtime_timing")
+        if isinstance(timing, dict):
+            return timing
+    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    return runtime_timing_from_trace(trace_events)
+
+
+def _first_mcp_request_epoch(run_dir: Path) -> float | None:
+    for event in _read_jsonl_path(run_dir / "trace.jsonl"):
+        if event.get("event") == "request" and not str(event.get("tool", "")).startswith("<"):
+            return _float_or_none(event.get("ts"))
+    return None
+
+
+def _codex_event_summary(path: Path) -> dict[str, Any]:
+    events = _read_jsonl_path(path)
+    type_counts: dict[str, int] = {}
+    item_counts: dict[str, int] = {}
+    usage: dict[str, Any] = {}
+    api_durations: list[float] = []
+    for event in events:
+        event_type = str(event.get("type") or "")
+        if event_type:
+            type_counts[event_type] = type_counts.get(event_type, 0) + 1
+        item = event.get("item")
+        if isinstance(item, dict):
+            item_type = str(item.get("type") or "")
+            if item_type:
+                item_counts[item_type] = item_counts.get(item_type, 0) + 1
+        if isinstance(event.get("usage"), dict):
+            usage = dict(event["usage"])
+        api_durations.extend(_model_api_durations_from_event(event))
+
+    model_api_time_s: float | None = None
+    note = (
+        "Codex JSON events did not expose per-request model API duration. "
+        "Model/API latency is therefore included in MCP between-tool gaps and "
+        "the overall codex_exec_elapsed_s bucket."
+    )
+    if api_durations:
+        model_api_time_s = _round_duration(sum(api_durations))
+        note = "Summed model API duration fields emitted by Codex JSON events."
+
+    return {
+        "event_count": len(events),
+        "type_counts": type_counts,
+        "item_counts": item_counts,
+        "usage": usage,
+        "model_api_time_s": model_api_time_s,
+        "model_api_time_note": note,
+    }
+
+
+def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:
+    durations: list[float] = []
+    stack: list[Any] = [event]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            for key, value in item.items():
+                key_text = str(key).lower()
+                if isinstance(value, (int, float)) and key_text in {
+                    "model_api_time_s",
+                    "api_time_s",
+                    "api_elapsed_s",
+                    "model_latency_s",
+                }:
+                    durations.append(float(value))
+                elif isinstance(value, (int, float)) and key_text in {
+                    "model_api_time_ms",
+                    "api_time_ms",
+                    "api_elapsed_ms",
+                    "model_latency_ms",
+                }:
+                    durations.append(float(value) / 1000.0)
+                elif isinstance(value, (dict, list)):
+                    stack.append(value)
+        elif isinstance(item, list):
+            stack.extend(item)
+    return durations
+
+
+def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
+    if not path.is_file():
+        return []
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            events.append(item)
+    return events
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _round_duration(value: float) -> float:
+    return round(max(0.0, value), 3)
+
+
 def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO]) -> None:
     for chunk in iter(lambda: stream.readline(), b""):
         for output in outputs:
@@ -407,8 +646,9 @@ def _prepare_agent_workspace(
     repo_root: Path,
     task_name: str,
     skill_name: str,
+    workspace: Path | None = None,
 ) -> tuple[Path, Path]:
-    workspace = _agent_workspace_root(repo_root=repo_root, task_name=task_name)
+    workspace = _agent_workspace_root(repo_root=repo_root, task_name=task_name, workspace=workspace)
     task_dir = workspace / "task"
     skills_dir = workspace / "skills"
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -416,20 +656,23 @@ def _prepare_agent_workspace(
     for name in ("AGENTS.md", "CLAUDE.md"):
         (workspace / name).unlink(missing_ok=True)
         (task_dir / name).unlink(missing_ok=True)
-    skill_link = skills_dir / skill_name
-    if skill_link.exists() or skill_link.is_symlink():
-        if skill_link.is_dir() and not skill_link.is_symlink():
-            shutil.rmtree(skill_link)
+    source_skill_dir = repo_root / "skills" / skill_name
+    if not (source_skill_dir / "SKILL.md").is_file():
+        raise RuntimeError(f"requested skill not found: {source_skill_dir / 'SKILL.md'}")
+    workspace_skill_dir = skills_dir / skill_name
+    if workspace_skill_dir.exists() or workspace_skill_dir.is_symlink():
+        if workspace_skill_dir.is_dir() and not workspace_skill_dir.is_symlink():
+            shutil.rmtree(workspace_skill_dir)
         else:
-            skill_link.unlink()
-    skill_link.symlink_to(repo_root / "skills" / skill_name, target_is_directory=True)
-    task_skills_link = task_dir / "skills"
-    if task_skills_link.exists() or task_skills_link.is_symlink():
-        if task_skills_link.is_dir() and not task_skills_link.is_symlink():
-            shutil.rmtree(task_skills_link)
+            workspace_skill_dir.unlink()
+    shutil.copytree(source_skill_dir, workspace_skill_dir)
+    task_skills_dir = task_dir / "skills"
+    if task_skills_dir.exists() or task_skills_dir.is_symlink():
+        if task_skills_dir.is_dir() and not task_skills_dir.is_symlink():
+            shutil.rmtree(task_skills_dir)
         else:
-            task_skills_link.unlink()
-    task_skills_link.symlink_to(Path("..") / "skills", target_is_directory=True)
+            task_skills_dir.unlink()
+    shutil.copytree(skills_dir, task_skills_dir)
     (task_dir / "README.md").write_text(
         "# Roboclaws Molmo Cleanup Agent Workspace\n\n"
         f"Read `skills/{skill_name}/SKILL.md`, then use the roboclaws MCP tools.\n",
@@ -438,7 +681,17 @@ def _prepare_agent_workspace(
     return workspace, task_dir
 
 
-def _agent_workspace_root(*, repo_root: Path, task_name: str) -> Path:
+def _agent_workspace_root(
+    *,
+    repo_root: Path,
+    task_name: str,
+    workspace: Path | None = None,
+) -> Path:
+    if workspace is not None:
+        selected = workspace.expanduser()
+        if not selected.is_absolute():
+            selected = repo_root / selected
+        return selected
     workspace_env = os.environ.get("ROBOCLAWS_CODE_AGENT_WORKSPACE") or os.environ.get(
         "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"
     )

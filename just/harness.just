@@ -7,6 +7,7 @@
 # Preferred entrypoints:
 # - just harness::run <task>          run one iteration on a task
 # - just harness::navigator <task>    explicit navigator-harness alias
+# - just harness::molmo-cleanup-codex-perf  live Codex cleanup performance lane
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
@@ -21,6 +22,7 @@
 # - just harness::history             show the cross-run summary from PLAN.md
 
 set working-directory := '..'
+set positional-arguments
 timestamp_cmd := "TZ=Asia/Shanghai date +%m%d_%H%M"
 
 default:
@@ -122,6 +124,54 @@ sim scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
 # Local OpenClaw/Gateway regression harness. Requires local preflight and keys.
 openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
     just harness::regression local-openclaw "" "" "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
+
+# Live Codex cleanup performance lane. This is the local Docker-backed Codex
+# route with the world-labels-perf profile, so it preserves the cleanup/MCP
+# contract while skipping per-tool robot-view timeline capture.
+molmo-cleanup-codex-perf *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    seed="7"
+    output_dir="output/molmo/codex-perf-harness"
+    task="帮我收拾这个房间"
+    generated_mess_count="10"
+    host="127.0.0.1"
+    port="18788"
+    map_bundle="auto"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      if [[ "$key" == "prompt" ]]; then
+        key="task"
+      fi
+      printf -v "$key" '%s' "$value"
+    done
+    cmd=(just molmo::cleanup "codex-live" "world-labels-perf" "$seed" \
+      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle")
+    if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+      printf 'just'
+      for arg in "${cmd[@]:1}"; do
+        printf '\t%s' "$arg"
+      done
+      printf '\n'
+      exit 0
+    fi
+    exec "${cmd[@]}"
 
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited

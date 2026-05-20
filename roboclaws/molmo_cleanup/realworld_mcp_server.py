@@ -24,7 +24,10 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
-from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
+from roboclaws.molmo_cleanup.profiles import (
+    WORLD_LABELS_PERF_PROFILE,
+    cleanup_profile_metadata_for_run,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -38,9 +41,14 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     raw_fpv_inline_candidate_instruction,
     real_robot_readiness_from_events,
 )
-from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
+from roboclaws.molmo_cleanup.report import (
+    render_cleanup_report,
+    runtime_timing_from_trace,
+    write_state_snapshot,
+)
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.semantic_timeline import (
+    CLEAN_OBSERVED_OBJECT_TOOL,
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
     cleanup_plan_from_semantic_substeps,
@@ -300,6 +308,22 @@ class RealWorldMolmoCleanupMCPServer:
             """Close a public fixture after place_inside."""
             return server.call_tool("close_receptacle", fixture_id=fixture_id)
 
+        if self.cleanup_profile == WORLD_LABELS_PERF_PROFILE:
+
+            @self._mcp.tool()
+            def clean_observed_object(
+                object_id: str,
+                fixture_id: str,
+                placement_tool: str = "auto",
+            ) -> dict:
+                """Clean one observed handle with canonical substeps in one perf-lane call."""
+                return server.call_tool(
+                    CLEAN_OBSERVED_OBJECT_TOOL,
+                    object_id=object_id,
+                    fixture_id=fixture_id,
+                    placement_tool=placement_tool,
+                )
+
         @self._mcp.tool()
         def done(reason: str) -> dict:
             """Finish the run and write trace, run_result, and report."""
@@ -308,6 +332,11 @@ class RealWorldMolmoCleanupMCPServer:
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
         if name == "scene_objects":
             raise ValueError("scene_objects is not part of the ADR-0003 real-world MCP contract")
+        if name == CLEAN_OBSERVED_OBJECT_TOOL and self.cleanup_profile != WORLD_LABELS_PERF_PROFILE:
+            raise ValueError(
+                f"{CLEAN_OBSERVED_OBJECT_TOOL} is only available in the "
+                f"{WORLD_LABELS_PERF_PROFILE!r} cleanup profile"
+            )
         if self.done_event.is_set() and name != "done":
             return {"ok": False, "tool": name, "status": "error", "error_reason": "run_done"}
         handlers = {
@@ -371,6 +400,11 @@ class RealWorldMolmoCleanupMCPServer:
             "close_receptacle": lambda: self.contract.close_receptacle(
                 str(kwargs.get("fixture_id", ""))
             ),
+            CLEAN_OBSERVED_OBJECT_TOOL: lambda: self.contract.clean_observed_object(
+                str(kwargs.get("object_id", "")),
+                str(kwargs.get("fixture_id", "")),
+                placement_tool=str(kwargs.get("placement_tool") or "auto"),
+            ),
             "done": lambda: self.contract.done(str(kwargs.get("reason", ""))),
         }
         if name not in handlers:
@@ -395,6 +429,15 @@ class RealWorldMolmoCleanupMCPServer:
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
         return response
+
+    def _agent_view_payload(self) -> dict[str, Any]:
+        agent_view = self.contract.agent_view_payload()
+        if self.cleanup_profile == WORLD_LABELS_PERF_PROFILE:
+            tools = list(agent_view.get("public_tool_names") or [])
+            if CLEAN_OBSERVED_OBJECT_TOOL not in tools:
+                tools.append(CLEAN_OBSERVED_OBJECT_TOOL)
+            agent_view["public_tool_names"] = tools
+        return agent_view
 
     def _augment_response(
         self,
@@ -426,7 +469,12 @@ class RealWorldMolmoCleanupMCPServer:
                 "Runtime movable objects come only from observe; acceptable destination "
                 "sets and generated mess truth are private."
             )
-        if tool in {"place", "place_inside", "close_receptacle"} and augmented.get("ok"):
+        if tool in {
+            "place",
+            "place_inside",
+            "close_receptacle",
+            CLEAN_OBSERVED_OBJECT_TOOL,
+        } and augmented.get("ok"):
             augmented["instruction"] = (
                 "After placing and closing if needed, call observe once in the current "
                 "room/fixture area before choosing the next object or waypoint."
@@ -440,6 +488,7 @@ class RealWorldMolmoCleanupMCPServer:
         after_snapshot = self._write_snapshot("after.png", title="After real-world cleanup")
         self._record_robot_view("after", label_suffix="after")
         trace_events = self._read_trace_events()
+        runtime_timing = runtime_timing_from_trace(trace_events, self.robot_view_steps)
         substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
         cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
         cleanup_plan = cleanup_plan_from_semantic_substeps(substeps)
@@ -453,7 +502,7 @@ class RealWorldMolmoCleanupMCPServer:
         diagnostics["premature_done"] = done_response["score"].get("sweep_coverage_rate", 0) < 0.90
         diagnostics["premature_done_source"] = "sweep_coverage_rate"
         primitive_counts = primitive_provenance_counts(trace_events)
-        agent_view = self.contract.agent_view_payload()
+        agent_view = self._agent_view_payload()
         cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
         real_robot_readiness = real_robot_readiness_from_events(
             agent_view=agent_view,
@@ -534,6 +583,7 @@ class RealWorldMolmoCleanupMCPServer:
             "final_containment": done_response.get("final_containment", {}),
             "tool_event_counts": dict(self._tool_event_counts),
             "backend_tool_event_counts": done_response["tool_event_counts"],
+            "runtime_timing": runtime_timing,
             "agent_diagnostics": diagnostics,
             "artifacts": {
                 "agent_view": str(agent_view_path),
@@ -699,6 +749,12 @@ class RealWorldMolmoCleanupMCPServer:
                 shutdown()
         except Exception:
             pass
+        backend_close = getattr(self.base_contract.backend, "close", None)
+        if callable(backend_close):
+            try:
+                backend_close()
+            except Exception:
+                pass
         with self._trace_lock:
             self._closed = True
             try:

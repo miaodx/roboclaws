@@ -340,7 +340,8 @@ def test_live_codex_normalizes_relative_docker_workspace(tmp_path: Path, monkeyp
     assert prepared_workspace == (repo_root / "output/molmo/live/seed-7/agent-docker-workspace")
     assert prepared_workspace.is_absolute()
     assert (task_dir / "skills" / "molmo-realworld-cleanup" / "SKILL.md").is_file()
-    assert (task_dir / "skills").readlink() == Path("..") / "skills"
+    assert (task_dir / "skills").is_dir()
+    assert not (task_dir / "skills").is_symlink()
 
 
 def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: Path) -> None:

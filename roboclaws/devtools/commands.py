@@ -55,7 +55,13 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
 }
 
 NON_MOLMO_REPORTS = {"visual", "minimal"}
-MOLMO_CLEANUP_PROFILES = {"smoke", "world-labels", "camera-raw", "camera-labels"}
+MOLMO_CLEANUP_PROFILES = {
+    "smoke",
+    "world-labels",
+    "world-labels-perf",
+    "camera-raw",
+    "camera-labels",
+}
 
 
 class CommandError(ValueError):
@@ -128,7 +134,7 @@ def _resolve_dispatch_mode(task: str, raw_mode: str) -> str:
         if profile not in MOLMO_CLEANUP_PROFILES:
             raise CommandError(
                 f"unsupported molmo-cleanup profile '{raw_mode}'",
-                "expected smoke|world-labels|camera-raw|camera-labels",
+                "expected smoke|world-labels|world-labels-perf|camera-raw|camera-labels",
             )
         return profile
 

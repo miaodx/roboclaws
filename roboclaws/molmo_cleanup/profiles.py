@@ -16,6 +16,7 @@ SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
 SMOKE_PROFILE = "smoke"
 WORLD_LABELS_PROFILE = "world-labels"
+WORLD_LABELS_PERF_PROFILE = "world-labels-perf"
 CAMERA_RAW_PROFILE = "camera-raw"
 CAMERA_LABELS_PROFILE = "camera-labels"
 
@@ -33,12 +34,14 @@ MOLMOSPACES_SIM_BACKEND = "molmospaces_sim"
 
 SEMANTIC_REPORT = "semantic_report"
 ROBOT_VIEW_REPORT = "robot_view_report"
+SEMANTIC_PERFORMANCE_REPORT = "semantic_performance_report"
 
 CONTRACT_ONLY_VERIFIER = "contract_only"
 CLEANUP_SUCCESS_VERIFIER = "cleanup_success"
 ROBOT_VIEW_HONESTY_VERIFIER = "robot_view_honesty"
 IMAGE_INPUT_CONTRACT_VERIFIER = "image_input_contract"
 REAL_ROBOT_ALIGNMENT_VERIFIER = "real_robot_alignment"
+WAYPOINT_HONESTY_VERIFIER = "waypoint_honesty"
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,32 @@ _PROFILES: dict[str, CleanupProfile] = {
             "The agent receives observed object handles and structured labels. "
             "FPV, chase, map, and verification images are report evidence, not "
             "model input for this profile."
+        ),
+    ),
+    WORLD_LABELS_PERF_PROFILE: CleanupProfile(
+        profile=WORLD_LABELS_PERF_PROFILE,
+        agent_input=WORLD_LABELS_INPUT,
+        input_provenance=SIMULATOR_STATE_PROVENANCE,
+        world_backend=MOLMOSPACES_SIM_BACKEND,
+        report=SEMANTIC_PERFORMANCE_REPORT,
+        verifiers=(
+            CLEANUP_SUCCESS_VERIFIER,
+            WAYPOINT_HONESTY_VERIFIER,
+            REAL_ROBOT_ALIGNMENT_VERIFIER,
+        ),
+        backend=MOLMOSPACES_SUBPROCESS_BACKEND,
+        perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        include_robot=True,
+        record_robot_views=False,
+        requires_clean_success=True,
+        summary=(
+            "Structured world-label cleanup performance lane with RBY1M metadata "
+            "and per-tool robot-view capture disabled."
+        ),
+        model_input_note=(
+            "The agent receives the same structured world labels as world-labels. "
+            "Robot-view timeline capture is intentionally skipped so timing reports "
+            "can isolate model/agent gaps from optional visual proof overhead."
         ),
     ),
     CAMERA_RAW_PROFILE: CleanupProfile(
@@ -205,6 +234,8 @@ def infer_cleanup_profile_name(
         return CAMERA_LABELS_PROFILE
     if record_robot_views:
         return WORLD_LABELS_PROFILE
+    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+        return WORLD_LABELS_PERF_PROFILE
     return SMOKE_PROFILE
 
 
