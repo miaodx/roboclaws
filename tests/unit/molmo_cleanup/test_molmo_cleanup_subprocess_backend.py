@@ -289,6 +289,147 @@ def test_worker_remote_control_tv_stand_placement_stays_visible_from_front() -> 
     assert second_position == pytest.approx([1.06, 9.93, 0.84])
 
 
+@pytest.mark.parametrize("category", ["CounterTop", "DiningTable", "Desk", "TVStand"])
+def test_worker_direct_support_resolver_is_geometry_first_for_surface_categories(
+    category: str,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="fixture">
+              <geom name="fixture_collision" type="box" pos="0 0 0.7" size="0.6 0.4 0.05"/>
+            </body>
+            <body name="object" pos="0 0 1.0">
+              <freejoint/>
+              <geom name="object_collision" type="box" size="0.08 0.04 0.02"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+    surfaces = worker._receptacle_support_surfaces(model, data, "fixture")
+    state = {
+        "objects": {
+            "object_01": {
+                "object_id": "object_01",
+                "category": "RemoteControl",
+                "body_name": "object",
+                "position": [0.0, 0.0, 1.0],
+            }
+        },
+        "receptacles": {
+            "fixture_01": {
+                "receptacle_id": "fixture_01",
+                "category": category,
+                "body_name": "fixture",
+                "position": [0.0, 0.0, 0.7],
+                "support_surfaces": surfaces,
+                "support_top_z": worker._support_top_z(surfaces),
+            }
+        },
+    }
+
+    resolution = worker._resolve_placement(
+        model,
+        data,
+        state=state,
+        object_id="object_01",
+        receptacle_id="fixture_01",
+        index=0,
+        relation="on",
+    )
+
+    assert resolution["support_status"] == "direct_support"
+    assert resolution["contact_proof"] == "geometry_direct_support"
+    assert resolution["degraded"] is False
+    surface = resolution["support_surface"]
+    assert abs(resolution["position"][0] - surface["center"][0]) <= surface["half_extents"][0]
+    assert abs(resolution["position"][1] - surface["center"][1]) <= surface["half_extents"][1]
+    assert resolution["position"][2] > surface["top_z"]
+
+
+def test_worker_place_degrades_without_blocking_when_support_surface_missing() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <worldbody>
+            <body name="object" pos="0 0 1.0">
+              <freejoint/>
+              <geom name="object_collision" type="box" size="0.08 0.04 0.02"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+    state = {
+        "objects": {
+            "object_01": {
+                "object_id": "object_01",
+                "category": "RemoteControl",
+                "body_name": "object",
+                "position": [0.0, 0.0, 1.0],
+            }
+        },
+        "receptacles": {
+            "fixture_01": {
+                "receptacle_id": "fixture_01",
+                "category": "Desk",
+                "body_name": "missing_fixture",
+                "position": [1.0, 2.0, 0.4],
+            }
+        },
+    }
+
+    resolution = worker._resolve_placement(
+        model,
+        data,
+        state=state,
+        object_id="object_01",
+        receptacle_id="fixture_01",
+        index=0,
+        relation="on",
+    )
+
+    assert resolution["support_status"] == "degraded_elevated"
+    assert resolution["degraded"] is True
+    assert resolution["position"] == pytest.approx([1.0, 2.34, 0.85])
+
+
+def test_worker_support_surface_accepts_rotated_collision_slab() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <compiler angle="radian"/>
+          <worldbody>
+            <body name="fixture">
+              <geom name="fixture_collision" type="box" euler="1.57079632679 0 0"
+                    pos="0 0 0.7" size="0.6 0.05 0.4"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+
+    surfaces = worker._receptacle_support_surfaces(model, data, "fixture")
+
+    assert surfaces
+    assert surfaces[0]["top_z"] == pytest.approx(0.75)
+    assert surfaces[0]["half_extents"] == pytest.approx([0.6, 0.4])
+
+
 def test_worker_allows_open_shelf_place_inside_without_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
