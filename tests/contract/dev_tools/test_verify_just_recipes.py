@@ -66,6 +66,7 @@ def test_harness_exposes_named_execution_rigs() -> None:
         r"^regression mode=\"mock\"",
         r"^sim scenes=\"FloorPlan201\"",
         r"^openclaw scenes=\"FloorPlan201\"",
+        r"^molmo-cleanup-codex-perf \*overrides:",
         r"^molmo-realworld-cleanup seeds=\"1 2 3\"",
         r"^molmo-realworld-agent-mcp seeds=\"1\"",
         r"^molmo-realworld-agent-dogfood-kit seed=\"7\"",

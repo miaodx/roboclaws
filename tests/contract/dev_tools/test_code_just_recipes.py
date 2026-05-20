@@ -180,7 +180,8 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert '-e "CODEX_HOME=/home/agent/.codex"' not in docker_script_text
     assert "ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE" in docker_script_text
     assert '-v "${isolated_workspace}:/workspace"' in docker_script_text
-    assert '-v "${repo_root}/skills/${skill}:/workspace/skills/${skill}:ro"' in docker_script_text
+    assert 'cp -a "${skill_src}" "${skill_dst}"' in docker_script_text
+    assert ":/workspace/skills/${skill}:ro" not in docker_script_text
     expected_workdir = (
         'container_workdir="${ROBOCLAWS_CODE_AGENT_DOCKER_CONTAINER_WORKDIR:-/workspace/task}"'
     )
@@ -269,6 +270,21 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
     assert '"--cd"' in runner_text
     assert 'kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md.' in text
+
+
+def test_molmo_codex_live_copies_task_skill_into_docker_workspace() -> None:
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+    docker_text = (REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'env.setdefault(\n            "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE",' in runner_text
+    assert 'workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"])' in runner_text
+    assert "shutil.copytree(source_skill_dir, workspace_skill_dir)" in runner_text
+    assert "shutil.copytree(skills_dir, task_skills_dir)" in runner_text
+    assert '.symlink_to(repo_root / "skills"' not in runner_text
+    assert 'cp -a "${skill_src}" "${skill_dst}"' in docker_text
+    assert ":/workspace/skills/${skill}:ro" not in docker_text
 
 
 def test_other_just_files_do_not_launch_bare_coding_agents() -> None:
