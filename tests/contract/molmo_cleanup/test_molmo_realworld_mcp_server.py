@@ -12,6 +12,9 @@ from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PERF_PROFILE, WORLD_LABELS_PROFILE
 from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
+from roboclaws.molmo_cleanup.realworld_mcp_promoted_tools import PROMOTED_CLEANUP_TOOL_NAMES
+from roboclaws.molmo_cleanup.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.realworld_mcp_server import (
     MCP_SERVER_NAME,
     make_molmo_realworld_cleanup_mcp,
@@ -50,6 +53,38 @@ def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: P
         assert not profile.privileged_tool_names()
     finally:
         server.close()
+
+
+def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> None:
+    semantic = set(SEMANTIC_CLEANUP_TOOL_NAMES)
+    atomic = set(ATOMIC_CLEANUP_TOOL_NAMES)
+    promoted = set(PROMOTED_CLEANUP_TOOL_NAMES)
+
+    assert semantic
+    assert atomic
+    assert promoted == {CLEAN_OBSERVED_OBJECT_TOOL}
+    assert semantic.isdisjoint(atomic)
+    assert semantic.isdisjoint(promoted)
+    assert atomic.isdisjoint(promoted)
+
+    regular_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "regular",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=WORLD_LABELS_PROFILE,
+    )
+    perf_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "perf",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=WORLD_LABELS_PERF_PROFILE,
+    )
+    try:
+        assert _fastmcp_tool_names(regular_server) == semantic | atomic | {"done"}
+        assert _fastmcp_tool_names(perf_server) == semantic | atomic | promoted | {"done"}
+    finally:
+        regular_server.close()
+        perf_server.close()
 
 
 def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Path) -> None:
