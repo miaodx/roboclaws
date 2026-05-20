@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-19
+Last updated: 2026-05-20
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -19,11 +19,11 @@ checker alignment gates, and local Codex consumption through the repo-local
 
 ## Next Action
 
-Review the two local proof-alignment commits and the local Codex proof artifact;
-do not push unless the human explicitly asks. The current local Codex proof is
-`output/molmo/codex-local-env-nav2-report/0519_2041/seed-7/report.html`, with
-its run-local `map_bundle/` validated by the map bundle checker and its
-`run_result.json` validated by the real-robot-alignment cleanup checker.
+Review the local proof-alignment and skill-first composition commits before
+pushing. The latest skill-routine timing artifact is
+`output/molmo/codex-skill-routine-perf/0520_1204/seed-7/report.html`; it passed
+the cleanup checker with full sweep coverage and records why the performance
+lane still defaults to the promoted MCP candidate.
 
 ## Current Blocker
 
