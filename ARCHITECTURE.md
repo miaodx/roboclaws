@@ -216,7 +216,7 @@ Operator-facing settings and recommended recipes live in
 | `examples/mcp/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
 | `examples/openclaw/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
 | `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry point for ADR-0003 public/private real-world cleanup. |
-| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_*_tools.py`, `roboclaws/molmo_cleanup/realworld_mcp_backend.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. Tool registration and dispatch are split into semantic/context, atomic cleanup, promoted-candidate, and backend/lifecycle layers. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
 | `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
 | `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
