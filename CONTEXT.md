@@ -19,6 +19,12 @@ A reusable package of model operating knowledge, scripts, heuristics, examples,
 and checks that attempts goals by calling available tools.
 _Avoid_: Robot capability claim, MCP contract, backend primitive
 
+**Trace-Preserving Skill Routine**:
+A reusable Agent Skill routine, usually backed by scripts, that composes
+lower-level Capability Tools while preserving public substep trace, evidence,
+status, and recovery context.
+_Avoid_: Prompt-only trick, hidden task automation, promoted MCP capability
+
 **Capability Tool**:
 A composable robot ability exposed to an agent for perception, navigation, or manipulation.
 _Avoid_: Task, demo, scenario
@@ -182,6 +188,12 @@ _Avoid_: Environment primitive, opaque composite action
 A higher-level Semantic Capability or Semantic Service built from atomic
 capabilities, such as localization, navigation, search, inspect, or transport.
 _Avoid_: Whole user task, opaque composite action
+
+**Trace-Preserving Composite Capability**:
+A promoted cross-profile Semantic Capability that reduces agent round trips by
+composing lower-level capabilities while preserving its public substep
+decomposition and provenance.
+_Avoid_: Perf-only shortcut, opaque task tool, hidden backend repair
 
 **Semantic Service**:
 A reusable algorithmic layer that supports capabilities, such as localization,
@@ -492,6 +504,48 @@ _Avoid_: Backend profile, task recipe
   Capabilities**, Semantic Services, or both.
 - A **Semantic Service** may compose **Environment Primitives** and support
   multiple **Semantic Capabilities**.
+- A **Trace-Preserving Skill Routine** is the default home for reusable
+  composition before promotion into MCP; it may use scripts and evals, but it
+  remains an **Agent Skill** behavior rather than a robot capability claim.
+- A **Trace-Preserving Skill Routine** composes public **Capability Tools** and
+  records public substeps, evidence, status, and recovery context without
+  becoming the public robot contract itself.
+- A **Trace-Preserving Skill Routine** may be promoted only when repeated use,
+  stable inputs and outputs, public/private boundary clarity, and backend
+  enforcement needs justify a **Trace-Preserving Composite Capability**.
+- When a **Trace-Preserving Skill Routine** is promoted, the **Agent Skill**
+  should stop duplicating the same lower-level call chain and delegate to the
+  promoted **Trace-Preserving Composite Capability** instead.
+- A **Trace-Preserving Composite Capability** is a reusable **Semantic
+  Capability** whose substeps remain visible enough to preserve public evidence
+  across simulator and physical backend variants.
+- A **Trace-Preserving Composite Capability** may be visible across multiple
+  **Contract Profiles**; the selected profile and backend determine whether each
+  public substep is executable, blocked, failed, or waiting on required evidence.
+- A **Trace-Preserving Composite Capability** consumes public handles and public
+  goals that already exist in the **Contract Profile**; it does not discover
+  objects from pixels, natural language, or private evaluator truth.
+- A **Trace-Preserving Composite Capability** reports a stable public substep
+  sequence with each substep carrying status, provenance, evidence or blocker,
+  and public recovery context where applicable.
+- A **Trace-Preserving Composite Capability** separates call validity from task
+  completion: a valid call may still report completion as success, partial,
+  blocked, failed, or requiring more evidence.
+- A **Trace-Preserving Composite Capability** can be declared by a contract
+  family, advertised by a selected MCP surface, and executed only to the extent
+  the selected backend and safety gates allow.
+- Different **Trace-Preserving Composite Capabilities** should keep
+  domain-specific tool names while sharing substep, status, provenance,
+  evidence, and blocker semantics; avoid a generic composite workflow tool.
+- For a **Trace-Preserving Composite Capability**, the agent selects public
+  intent and bounded policy knobs, while the contract or backend owns the safe
+  substep decomposition and exposes that decomposition afterward.
+- A **Trace-Preserving Composite Capability** may perform only bounded,
+  profile-declared internal recovery; autonomous exploration, hidden
+  retargeting, and unreported retries remain outside the capability boundary.
+- A **Trace-Preserving Composite Capability** executes a public goal selected by
+  the agent; it must not secretly choose cleanup destinations from private
+  evaluator truth or hidden task policy.
 - A **Composite Action** must be explainable as a composition of
   **Semantic Services** and **Semantic Capabilities**.
 - A **Composite Action** may be exposed to agents only when it records or preserves
@@ -535,6 +589,9 @@ _Avoid_: Backend profile, task recipe
   profile should expose lower-level stable public capabilities unless the
   behavior has become a clear, broadly reusable capability with preserved
   substeps and evidence.
+- In a **Skill-First, MCP-Bounded Architecture**, promoted MCP tools should be
+  empty by default; a non-empty promoted surface should signal a deliberate
+  promotion event, not a convenient place to put task strategy.
 - Roboclaws should resist adding MCP tools by default. Promote behavior from an
   **Agent Skill** or script into an MCP tool only when multiple skills need it,
   the inputs and outputs are stable for one contract profile, it has traceable
@@ -547,6 +604,11 @@ _Avoid_: Backend profile, task recipe
 > **Domain expert:** "No. `clean the room` is a **Task Prompt**; the agent
 > should solve it with **Capability Tools** such as observe, navigate, pick,
 > and place."
+
+> **Dev:** "Where should a repeated cleanup chain live first?"
+> **Domain expert:** "As a **Trace-Preserving Skill Routine**. Promote it to a
+> **Trace-Preserving Composite Capability** only after the contract is stable
+> and the backend must enforce the substep boundary."
 
 > **Dev:** "Should `goto` be a core robot primitive?"
 > **Domain expert:** "No. `goto` is a **Composite Action** unless its

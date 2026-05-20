@@ -40,6 +40,7 @@ Build from the bottom up, but let the agent enter from the top:
 | --- | --- | --- | --- |
 | Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
 | Agent skill | Reusable behavior package | `capture-object-photo`, `cleanup-generated-mess` | Skills can evolve, merge, split, and be pruned. |
+| Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `locate -> navigate -> observe_archived` | Default home for reusable composition before MCP promotion. |
 | Composite action | Describes a skill's internal behavior shape | `locate -> navigate -> observe_archived` | Descriptive by default, not a separate artifact. |
 | Composed semantic capability | Bounded capability or service | localization, navigation, search, transport | Promote only when the boundary is stable. |
 | Atomic semantic capability | Small public robot action | observe, move, turn, pick, place, open, close | Prefer these for MCP capability contracts. |
@@ -74,6 +75,12 @@ MCP is different: it is the public robot capability boundary. A skill can call
 many MCP tools, but the skill itself is not automatically a robot capability
 claim.
 
+A **trace-preserving skill routine** is the preferred first shape for repeated
+composition. It can use scripts, evals, structured output, and explicit recovery
+while still leaving MCP bounded to public capabilities. If a routine is later
+promoted into MCP, the skill should stop duplicating the lower-level call chain
+and call the promoted capability instead.
+
 ## Skill Manifests
 
 Maintained skills include a small `skill.json` manifest next to `SKILL.md`.
@@ -104,6 +111,11 @@ For example, `observe_archived(label)` belongs in MCP because it is a stable
 observation capability with clear artifact output. A photo-capture routine
 usually belongs in a skill because it is task strategy.
 
+Promoted composite tools should be rare enough that an empty promoted-tools
+surface is the normal state. A non-empty promoted surface should mean the
+composition has become a backend-enforced, cross-client capability contract, not
+merely a faster way to call several tools.
+
 ## Composite Actions and Privileged Tools
 
 A **composite action** is an honest behavior shape built from lower-level
@@ -121,6 +133,7 @@ Examples:
 | --- | --- | --- |
 | `capture_object_photo(object)` | Agent skill with a composite action inside | It combines locate, navigation, observation, and verification. |
 | `put_in_refrigerator(object)` | Skill or composite action, depending on packaging | It can be decomposed into navigate, open, place, close. |
+| `clean_observed_object(object, fixture)` | Performance-lane promoted candidate unless promotion criteria are met | It can reduce MCP round trips, but canonical cleanup should first prove the same routine through skills and traces. |
 | `scene_objects()` | Privileged tool | It exposes full AI2-THOR object inventory. |
 | `goto(object_id)` | Privileged tool unless decomposed | The current AI2-THOR version is target-relative teleport-style help. |
 | Hidden acceptable-destination lookup | Privileged/private evaluator data | It must never enter public profile metadata. |
@@ -201,6 +214,11 @@ whole-goal tools like `cleanup_room()`.
 
 This keeps behavior inspectable: the report can show the steps the agent or
 skill chose instead of hiding the work behind one tool call.
+
+When a cleanup or photo routine becomes repetitive, first make it a
+trace-preserving skill routine with tests and report evidence. Promote it into
+MCP only when the composition itself must be discoverable, schema-validated,
+and enforced across clients or backend variants.
 
 ### Prefer Forward-Only Cleanup
 

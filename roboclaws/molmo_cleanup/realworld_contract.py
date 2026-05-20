@@ -944,7 +944,7 @@ class RealWorldCleanupContract:
         *,
         placement_tool: str = "auto",
     ) -> dict[str, Any]:
-        """Run one canonical observed-handle cleanup sequence as a public composite."""
+        """Run one perf-lane promoted-candidate cleanup sequence with public substeps."""
         if fixture_id not in self._fixtures:
             return self._error(
                 CLEAN_OBSERVED_OBJECT_TOOL,

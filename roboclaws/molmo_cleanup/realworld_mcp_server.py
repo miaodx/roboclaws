@@ -316,7 +316,7 @@ class RealWorldMolmoCleanupMCPServer:
                 fixture_id: str,
                 placement_tool: str = "auto",
             ) -> dict:
-                """Clean one observed handle with canonical substeps in one perf-lane call."""
+                """Clean one observed handle with public substeps in one perf-lane call."""
                 return server.call_tool(
                     CLEAN_OBSERVED_OBJECT_TOOL,
                     object_id=object_id,
