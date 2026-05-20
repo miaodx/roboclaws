@@ -1066,6 +1066,54 @@ def test_checker_rejects_zero_pixel_focused_surface_action(tmp_path: Path) -> No
         )
 
 
+def test_checker_allows_weak_fpv_when_verify_view_is_grounded(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7, policy="openclaw_agent")
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+        (robot_views / name).write_bytes(b"placeholder")
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
+    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["artifacts"]["robot_views"] = str(robot_views)
+    result["robot_view_steps"] = [
+        {
+            **_robot_step("navigate_to_object observed_001"),
+            "focus": {
+                "has_focus": True,
+                "object_id": "observed_001",
+                "receptacle_id": "table_01",
+                "fpv_visibility": {
+                    "status": "ok",
+                    "object_pixels": 0,
+                    "receptacle_pixels": 100,
+                },
+                "visibility": {
+                    "status": "ok",
+                    "object_pixels": 42,
+                    "receptacle_pixels": 100,
+                },
+            },
+        },
+        _robot_step("pick observed_001"),
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="openclaw_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_openclaw_minimum=True,
+        require_robot_views=True,
+    )
+
+
 def test_checker_allows_segmentation_unavailable_focused_surface_action(tmp_path: Path) -> None:
     smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

@@ -1133,6 +1133,7 @@ def _resolve_placement(
         direct = _direct_support_placement(
             model,
             data,
+            state,
             obj,
             receptacle,
             index=index,
@@ -1164,6 +1165,7 @@ def _resolve_placement(
 def _direct_support_placement(
     model: mujoco.MjModel,
     data: mujoco.MjData,
+    state: dict[str, Any],
     obj: dict[str, Any],
     receptacle: dict[str, Any],
     *,
@@ -1177,6 +1179,7 @@ def _direct_support_placement(
         return None
     footprint = _object_footprint_half_extents(model, data, obj)
     bottom_offset = _object_bottom_offset(model, data, obj)
+    clearance = _direct_support_clearance(obj, receptacle)
     candidate_count = 0
     for surface in sorted(
         surfaces,
@@ -1190,10 +1193,21 @@ def _direct_support_placement(
             surface,
             footprint=footprint,
             bottom_offset=bottom_offset,
+            clearance=clearance,
             index=index,
         ):
             candidate_count += 1
             if not _candidate_has_direct_support(candidate, surface, footprint):
+                continue
+            if not _candidate_is_clear_of_dynamic_objects(
+                model,
+                data,
+                state,
+                obj,
+                candidate,
+                footprint=footprint,
+                bottom_offset=bottom_offset,
+            ):
                 continue
             return {
                 "position": candidate,
@@ -1204,6 +1218,7 @@ def _direct_support_placement(
                 "degraded": False,
                 "support_surface": surface,
                 "object_bottom_offset_m": round(float(bottom_offset), 6),
+                "support_clearance_m": round(float(clearance), 6),
                 "object_footprint_half_extents_m": [
                     round(float(footprint[0]), 6),
                     round(float(footprint[1]), 6),
@@ -1221,6 +1236,7 @@ def _direct_support_placement(
         "degraded": True,
         "support_surface": surfaces[0],
         "object_bottom_offset_m": round(float(bottom_offset), 6),
+        "support_clearance_m": round(float(clearance), 6),
         "object_footprint_half_extents_m": [
             round(float(footprint[0]), 6),
             round(float(footprint[1]), 6),
@@ -1233,6 +1249,7 @@ def _surface_candidate_positions(
     *,
     footprint: tuple[float, float],
     bottom_offset: float,
+    clearance: float,
     index: int,
 ) -> list[list[float]]:
     center = surface["center"]
@@ -1257,7 +1274,7 @@ def _surface_candidate_positions(
     if len(offsets) > 1:
         shift = index % len(offsets)
         offsets = offsets[shift:] + offsets[:shift]
-    z = float(surface["top_z"]) + float(bottom_offset) + 0.005
+    z = float(surface["top_z"]) + float(bottom_offset) + float(clearance)
     return [
         [
             round(float(center[0]) + float(dx), 6),
@@ -1280,6 +1297,46 @@ def _candidate_has_direct_support(
     return abs(float(position[0]) - float(center[0])) + margin_x <= float(half_extents[0]) and abs(
         float(position[1]) - float(center[1])
     ) + margin_y <= float(half_extents[1])
+
+
+def _candidate_is_clear_of_dynamic_objects(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    state: dict[str, Any],
+    obj: dict[str, Any],
+    position: list[float],
+    *,
+    footprint: tuple[float, float],
+    bottom_offset: float,
+) -> bool:
+    object_id = str(obj.get("object_id") or "")
+    candidate_bottom = float(position[2]) - float(bottom_offset)
+    candidate_height = max(_object_height(model, data, obj), 0.04)
+    candidate_top = candidate_bottom + candidate_height
+    candidate_min_x = float(position[0]) - float(footprint[0])
+    candidate_max_x = float(position[0]) + float(footprint[0])
+    candidate_min_y = float(position[1]) - float(footprint[1])
+    candidate_max_y = float(position[1]) + float(footprint[1])
+    for other in state.get("objects", {}).values():
+        if str(other.get("object_id") or "") == object_id:
+            continue
+        if other.get("location_relation") == "held":
+            continue
+        other_aabb = _object_world_aabb(model, data, other)
+        if other_aabb is None:
+            continue
+        if not _aabb_xy_overlaps(
+            (candidate_min_x, candidate_max_x, candidate_min_y, candidate_max_y),
+            other_aabb,
+            margin=0.02,
+        ):
+            continue
+        if other_aabb["max_z"] < candidate_bottom - 0.03:
+            continue
+        if other_aabb["min_z"] > candidate_top + 0.12:
+            continue
+        return False
+    return True
 
 
 def _elevated_position_over_surface(
@@ -1347,6 +1404,16 @@ def _object_surface_lift(object_category: str | None) -> float:
     if object_category == "Pillow":
         return 0.12
     return 0.06
+
+
+def _direct_support_clearance(obj: dict[str, Any], receptacle: dict[str, Any]) -> float:
+    object_category = obj.get("category")
+    receptacle_category = receptacle.get("category")
+    if receptacle_category in {"Bed", "Sofa"}:
+        return 0.035
+    if object_category in {"Book", "Plate", "RemoteControl"}:
+        return 0.02
+    return 0.015
 
 
 def _receptacle_support_surfaces(
@@ -1482,6 +1549,65 @@ def _object_bottom_offset(
     return max(offset, 0.01)
 
 
+def _object_height(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obj: dict[str, Any],
+) -> float:
+    aabb = _object_world_aabb(model, data, obj)
+    if aabb is None:
+        return _object_surface_lift(obj.get("category"))
+    return max(float(aabb["max_z"]) - float(aabb["min_z"]), 0.01)
+
+
+def _object_world_aabb(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    obj: dict[str, Any],
+) -> dict[str, float] | None:
+    geom_ids = _subtree_geom_ids(model, str(obj.get("body_name") or ""))
+    if not geom_ids:
+        return None
+    min_x = min_y = min_z = math.inf
+    max_x = max_y = max_z = -math.inf
+    for geom_id in geom_ids:
+        half_extents = _geom_world_half_extents(model, data, geom_id)
+        if half_extents is None:
+            continue
+        center = data.geom_xpos[geom_id]
+        min_x = min(min_x, float(center[0]) - float(half_extents[0]))
+        max_x = max(max_x, float(center[0]) + float(half_extents[0]))
+        min_y = min(min_y, float(center[1]) - float(half_extents[1]))
+        max_y = max(max_y, float(center[1]) + float(half_extents[1]))
+        min_z = min(min_z, float(center[2]) - float(half_extents[2]))
+        max_z = max(max_z, float(center[2]) + float(half_extents[2]))
+    if not math.isfinite(min_x):
+        return None
+    return {
+        "min_x": min_x,
+        "max_x": max_x,
+        "min_y": min_y,
+        "max_y": max_y,
+        "min_z": min_z,
+        "max_z": max_z,
+    }
+
+
+def _aabb_xy_overlaps(
+    first: tuple[float, float, float, float],
+    second: dict[str, float],
+    *,
+    margin: float,
+) -> bool:
+    min_x, max_x, min_y, max_y = first
+    return (
+        min_x - margin <= float(second["max_x"])
+        and max_x + margin >= float(second["min_x"])
+        and min_y - margin <= float(second["max_y"])
+        and max_y + margin >= float(second["min_y"])
+    )
+
+
 def _object_footprint_half_extents(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -1583,6 +1709,8 @@ def _placement_diagnostic(
         diagnostic["support_surface_top_z"] = support_surface.get("top_z")
     if placement_resolution.get("object_bottom_offset_m") is not None:
         diagnostic["object_bottom_offset_m"] = placement_resolution["object_bottom_offset_m"]
+    if placement_resolution.get("support_clearance_m") is not None:
+        diagnostic["support_clearance_m"] = placement_resolution["support_clearance_m"]
     if placement_resolution.get("object_footprint_half_extents_m") is not None:
         diagnostic["object_footprint_half_extents_m"] = placement_resolution[
             "object_footprint_half_extents_m"
