@@ -30,8 +30,13 @@ the promotion criteria for a canonical cleanup contract profile.
 
 For Molmo cleanup, the current trace-preserving routine lives in
 `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py` and is
-documented in `skills/molmo-realworld-cleanup/SKILL.md`. The `world-labels-perf`
-lane defaults to that skill routine; the MCP candidate is used only for explicit
+documented in `skills/molmo-realworld-cleanup/SKILL.md`. A 2026-05-20 live
+Codex comparison showed the skill routine is transparent but not
+performance-alike in the timing lane: `7m18s` and 85 MCP requests for
+`cleanup_routine=skill` versus the prior promoted-candidate run's `4m30s` and
+51 MCP requests. Therefore canonical cleanup composition remains skill-side,
+but `world-labels-perf` continues to default to the MCP candidate until a later
+skill-side execution path closes that gap. Use `cleanup_routine=skill` for
 comparison runs.
 
 ## Considered Options

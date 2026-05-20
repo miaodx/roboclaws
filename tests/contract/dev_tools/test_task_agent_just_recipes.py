@@ -177,7 +177,7 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
     assert "molmo-cleanup-codex-perf" in agent_text
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
     assert 'just molmo::cleanup "codex-live" "world-labels-perf"' in harness_text
-    assert "cleanup_routine=mcp" in harness_text
+    assert "cleanup_routine=skill" in harness_text
 
 
 def test_task_module_exposes_only_run_publicly() -> None:
@@ -251,15 +251,15 @@ def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf() -> None:
         "18788",
         "auto",
     ]
-    assert route[11] == "skill"
+    assert route[11] == "mcp"
 
 
-def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf_mcp_comparison() -> None:
+def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf_skill_comparison() -> None:
     route = trace_task_run(
         "molmo-cleanup",
         "codex",
         "world-labels-perf",
-        "cleanup_routine=mcp",
+        "cleanup_routine=skill",
     )
 
     assert route[:12] == [
@@ -274,7 +274,7 @@ def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf_mcp_comparison() -
         "127.0.0.1",
         "18788",
         "auto",
-        "mcp",
+        "skill",
     ]
 
 
@@ -396,7 +396,7 @@ def test_molmo_world_labels_perf_skips_robot_view_gate_but_keeps_alignment_gate(
 
     assert "skill-routine performance lane" in text
     assert "do not call roboclaws__clean_observed_object" in text
-    assert "MCP-promoted comparison lane" in text
+    assert "MCP-promoted performance lane" in text
     assert "--include-robot --robot-name rby1m" in body
     assert "--record-robot-views" not in body
     assert "--require-robot-views" not in body
