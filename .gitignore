@@ -21,6 +21,7 @@ htmlcov/
 # Editor
 .vscode/
 .idea/
+.serena/
 
 # Demo / replay outputs
 output/
