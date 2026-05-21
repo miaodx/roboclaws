@@ -258,6 +258,41 @@ The concrete execution path behind a shared Contract Profile, such as Nav2
 actions or Agibot GDK PNC.
 _Avoid_: New public profile, agent-facing tool namespace, hidden provenance
 
+**Agibot-Shaped Sim Backend**:
+A simulator-backed Backend Variant that uses Agibot-compatible task-runner
+inputs and artifacts without claiming Agibot GDK execution.
+_Avoid_: real Agibot proof, physical robot backend, fake GDK driver
+
+**Agibot Map Visual Dry Run**:
+A visual simulator over real fetched Agibot map artifacts that validates target,
+waypoint, and local route plausibility without executing GDK navigation.
+_Avoid_: physical navigation proof, cleanup-scene simulator, semantic-only mock
+
+**MolmoSpaces Agibot Contract Rehearsal**:
+A MolmoSpaces-backed simulator that exercises Agibot-shaped runner semantics and
+agent flow without using a real Agibot map or GDK PNC.
+_Avoid_: real Agibot map replay, physical robot proof, digital twin claim
+
+**Agibot-Shaped Preflight Export**:
+A simulated or converted map-and-waypoint artifact set prepared before a
+rehearsal run.
+_Avoid_: execution evidence, physical map fetch, post-run report
+
+**Agibot-Shaped Runtime Export**:
+A simulated runner artifact set emitted after a rehearsal run as execution
+evidence.
+_Avoid_: task input, real GDK result, map authoring file
+
+**SDK Runtime Command Boundary**:
+A subprocess-and-artifact boundary where Roboclaws invokes a robot-specific SDK
+runtime instead of importing its live driver modules in-process.
+_Avoid_: Python package import contract, shared interpreter dependency, hidden driver import
+
+**Standalone SDK Task Runner**:
+A robot-specific SDK command that owns one complete live task session and returns
+task-level artifacts to Roboclaws.
+_Avoid_: per-action subprocess bridge, shared in-process driver, Roboclaws-owned GDK loop
+
 **Backend Variant Set**:
 The declared set of Backend Variants allowed under one Contract Profile.
 _Avoid_: Tool list, robot profile, runtime auto-detection
@@ -323,6 +358,45 @@ _Avoid_: Backend profile, task recipe
 - Real robot execution differences should be represented as **Backend
   Variants** with explicit **Navigation Backend Labels** and
   **Navigation Primitive Provenance**.
+- An **Agibot-Shaped Sim Backend** may validate runner contracts and artifacts,
+  but it must not count as physical Agibot GDK execution evidence.
+- An **Agibot Map Visual Dry Run** and a **MolmoSpaces Agibot Contract
+  Rehearsal** are separate confidence layers with different evidence claims.
+- A **MolmoSpaces Agibot Contract Rehearsal** belongs to Roboclaws runtime flow
+  while conforming to Agibot-shaped runner artifacts defined by the Agibot SDK.
+- A **MolmoSpaces Agibot Contract Rehearsal** should reuse the
+  `real_robot_cleanup_v1` **Contract Profile** while declaring simulated
+  backend and provenance labels.
+- A **MolmoSpaces Agibot Contract Rehearsal** should keep agent-facing tools
+  backend-neutral; Agibot-specific evidence belongs in provenance and reports.
+- A **MolmoSpaces Agibot Contract Rehearsal** should use an
+  **Agibot-Shaped Preflight Export** as input and emit an
+  **Agibot-Shaped Runtime Export** as evidence.
+- A **MolmoSpaces Agibot Contract Rehearsal** should validate contract shape,
+  not claim that MolmoSpaces is a digital twin of the real Agibot environment.
+- Roboclaws Agibot integration should consume SDK runner artifacts before
+  adding normal-demo commands that launch real GDK navigation.
+- The main Agibot integration form should be a Roboclaws-hosted MCP backend for
+  `real_robot_cleanup_v1`; the Agibot SDK runner remains the backend execution
+  and evidence boundary, not a separate public MCP surface.
+- A Roboclaws-hosted Agibot MCP backend should call Agibot SDK commands at
+  coarse semantic-tool granularity, not once per low-level GDK operation.
+- In an Agibot MCP backend, `observe` should actively capture a current robot
+  observation; navigation may also capture arrival observations for evidence.
+- In an Agibot MCP backend, `metric_map` and `fixture_hints` should come from
+  the SDK **Agent View Export**; full cleanup semantics are optional for
+  navigation and observation.
+- In an Agibot MCP backend, `navigate_to_receptacle` may execute only by
+  resolving a fixture preferred waypoint; object and visual-candidate navigation
+  remain blocked unless already waypoint-resolved.
+- A Roboclaws-hosted Agibot MCP backend should require a session-level
+  real-movement enablement flag before agent tool calls may move the robot.
+- Roboclaws owns Agibot MCP session state, while Agibot SDK runner artifacts
+  own backend action evidence.
+- Roboclaws should call Agibot SDK runner commands through a coarse CLI boundary
+  rather than importing live GDK modules into the Roboclaws Python runtime.
+- Report-only import of Agibot SDK run directories is an evidence review path,
+  not the main live Agibot MCP backend.
 - Canonical `navigation_backend` values should name the coarse execution or
   validation stack, such as `nav2_static_costmap`, `nav2_ros2`, or
   `agibot_gdk`.
@@ -358,6 +432,9 @@ _Avoid_: Backend profile, task recipe
 - **Simulator/Hardware Contract Parity** lets a simulator run exercise the same
   **Capability Tools** as hardware while reports still distinguish
   **Execution Backends** and blocked capabilities.
+- First-version Agibot real-robot execution should use operator-selected named
+  waypoints first, agent-selected **PNC-Verified Waypoints** later, and no
+  arbitrary agent-proposed map coordinates.
 - A **Navigation Map Artifact** may be generated from MolmoSpaces scene geometry
   or provided by a physical robot map workflow, but it must preserve the same
   public contract shape.
