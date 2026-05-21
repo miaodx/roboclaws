@@ -69,6 +69,9 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert "movement_enabled=false" in report_text
     assert persisted["semantic_substeps"] == []
     assert persisted["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
+    assert persisted["agibot_sdk_runner"]["next_confidence_layer"] == (
+        "Agibot Robot Map 9 Semantic Actions Rehearsal"
+    )
     assert is_cleanup_run_result_artifact(run_dir)
     assert rerender_cleanup_report_from_artifact_path(run_dir) == run_dir / "report.html"
 
@@ -120,6 +123,9 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert "metric_map, fixture_hints" in report_text
     assert "navigate_to_waypoint" in report_text
     assert "Dry-run blocked" in report_text
+    assert "Next confidence layer" in report_text
+    assert "Agibot Robot Map 9 Semantic Actions Rehearsal" in report_text
+    assert "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution" in report_text
     assert "Fetched AgiBot occupancy map artifact" in subphase_report
     assert "map_artifacts/map_preview.png" in subphase_report
 

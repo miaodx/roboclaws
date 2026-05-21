@@ -268,6 +268,12 @@ A visual simulator over real fetched Agibot map artifacts that validates target,
 waypoint, and local route plausibility without executing GDK navigation.
 _Avoid_: physical navigation proof, cleanup-scene simulator, semantic-only mock
 
+**Agibot Map Semantic Actions Rehearsal**:
+A semantic/mock cleanup run that uses a real Agibot map artifact as a public
+Navigation Map Artifact while cleanup actions execute as Roboclaws
+`api_semantic` state transitions.
+_Avoid_: SDK runner execution, MolmoSpaces contract rehearsal, physical robot proof
+
 **MolmoSpaces Agibot Contract Rehearsal**:
 A MolmoSpaces-backed simulator that exercises Agibot-shaped runner semantics and
 agent flow without using a real Agibot map or GDK PNC.
@@ -360,8 +366,13 @@ _Avoid_: Backend profile, task recipe
   **Navigation Primitive Provenance**.
 - An **Agibot-Shaped Sim Backend** may validate runner contracts and artifacts,
   but it must not count as physical Agibot GDK execution evidence.
-- An **Agibot Map Visual Dry Run** and a **MolmoSpaces Agibot Contract
-  Rehearsal** are separate confidence layers with different evidence claims.
+- An **Agibot Map Visual Dry Run**, an **Agibot Map Semantic Actions
+  Rehearsal**, and a **MolmoSpaces Agibot Contract Rehearsal** are separate
+  confidence layers with different evidence claims.
+- An **Agibot Map Semantic Actions Rehearsal** may produce cleanup
+  `nav/pick/place` substeps over `robot_map_9`, but those substeps remain
+  semantic/mock evidence and must not be treated as SDK runner, MolmoSpaces
+  simulation, or GDK execution.
 - A **MolmoSpaces Agibot Contract Rehearsal** belongs to Roboclaws runtime flow
   while conforming to Agibot-shaped runner artifacts defined by the Agibot SDK.
 - A **MolmoSpaces Agibot Contract Rehearsal** should reuse the

@@ -44,9 +44,10 @@ This plan covers the first two confidence layers:
    `--execute`, producing SDK-owned agent-view, observe, and navigation-stage
    artifacts. No real robot motion occurs.
 
-It may also include Roboclaws semantic cleanup evidence over Agibot-shaped map
-data, but that evidence must stay labeled as semantic/mock and must not be
-treated as the Agibot SDK runner contract rehearsal.
+It intentionally stops before Roboclaws semantic cleanup evidence over
+Agibot-shaped map data. That evidence now lives in
+`docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md` and must stay
+labeled as semantic/mock rather than Agibot SDK runner or GDK execution.
 
 ## Current Evidence
 
@@ -93,10 +94,12 @@ treated as the Agibot SDK runner contract rehearsal.
 - The report distinguishes SDK-owned subphase evidence from normal cleanup
   semantic substeps.
 - The plan and report both make clear that the missing next layer is
-  `MolmoSpaces Agibot Contract Rehearsal`, not more map dry-run polish.
+  `Agibot Robot Map 9 Semantic Actions Rehearsal`, not more map dry-run polish.
 
 ## Follow-Up
 
-After this layer stays stable, implement the separate
-`docs/plans/molmospaces-agibot-contract-rehearsal.md` plan as the extra
+After this layer stays stable, run the separate
+`docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md` layer. After that
+semantic/mock layer is stable, implement
+`docs/plans/molmospaces-agibot-contract-rehearsal.md` as the extra
 pre-real-robot simulation step.
