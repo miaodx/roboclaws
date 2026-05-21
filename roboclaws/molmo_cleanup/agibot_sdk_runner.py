@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, contract_profile_metadata
+from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.molmo_cleanup.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.molmo_cleanup.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
@@ -44,6 +45,7 @@ class AgibotSDKRunnerAdapter:
         runner_script: Path | None = None,
         runner_python: str | Path | None = None,
         real_movement_enabled: bool = False,
+        agibot_map_artifact_dir: Path | None = None,
     ) -> None:
         self.context_json = Path(context_json).resolve()
         self.run_dir = Path(run_dir).resolve()
@@ -55,6 +57,9 @@ class AgibotSDKRunnerAdapter:
         ).resolve()
         self.runner_python = str(runner_python or sys.executable)
         self.real_movement_enabled = bool(real_movement_enabled)
+        self.agibot_map_artifact_dir = (
+            Path(agibot_map_artifact_dir).resolve() if agibot_map_artifact_dir else None
+        )
         self.subphase_results: list[dict[str, Any]] = []
         self._agent_view_result: dict[str, Any] | None = None
 
@@ -72,7 +77,12 @@ class AgibotSDKRunnerAdapter:
                     str(self.context_json),
                     "--output-dir",
                     str(self.run_dir / "subphases" / "01-agent-view"),
-                ],
+                ]
+                + (
+                    ["--agibot-map-artifact-dir", str(self.agibot_map_artifact_dir)]
+                    if self.agibot_map_artifact_dir
+                    else []
+                ),
             )
         return self._agent_view_result
 
@@ -208,6 +218,7 @@ def run_physical_agibot_cleanup_pilot(
     runner_script: Path | None = None,
     runner_python: str | Path | None = None,
     real_movement_enabled: bool = False,
+    agibot_map_artifact_dir: Path | None = None,
     waypoint_id: str | None = None,
     scenario: CleanupScenario | None = None,
 ) -> dict[str, Any]:
@@ -222,6 +233,7 @@ def run_physical_agibot_cleanup_pilot(
         runner_script=runner_script,
         runner_python=runner_python,
         real_movement_enabled=real_movement_enabled,
+        agibot_map_artifact_dir=agibot_map_artifact_dir,
     )
     started_at = time.time()
     trace_events: list[dict[str, Any]] = []
@@ -282,6 +294,20 @@ def run_physical_agibot_cleanup_pilot(
         real_movement_enabled=real_movement_enabled,
     )
     subphase_reports = _subphase_reports(adapter.subphase_results, run_dir)
+    nav2_map_bundle = (
+        write_agibot_nav2_map_bundle(
+            source_map_dir=Path(agibot_map_artifact_dir),
+            context_json=context_json,
+            bundle_dir=run_dir / "map_bundle",
+        )
+        if agibot_map_artifact_dir is not None
+        else {}
+    )
+    if nav2_map_bundle:
+        readiness["map_bundle_snapshot_present"] = bool(nav2_map_bundle.get("snapshot_complete"))
+        readiness["map_bundle_artifact_count"] = len(nav2_map_bundle.get("artifact_hashes") or {})
+        readiness["map_bundle_parameter_hash"] = nav2_map_bundle.get("parameter_hash", "")
+        readiness["map_bundle_snapshot_root"] = nav2_map_bundle.get("snapshot_root", "")
     run_result = {
         "schema": PHYSICAL_AGIBOT_PILOT_SCHEMA,
         "contract": REALWORLD_CONTRACT,
@@ -342,10 +368,12 @@ def run_physical_agibot_cleanup_pilot(
         },
         "semantic_substeps": [],
         "real_robot_readiness": readiness,
+        "nav2_map_bundle": nav2_map_bundle,
         "agibot_sdk_runner": {
             "schema": "agibot_sdk_runner_boundary_v1",
             "backend_variant": AGIBOT_GDK_BACKEND_VARIANT,
             "runner_script": str(adapter.runner_script),
+            "agibot_map_artifact_dir": str(agibot_map_artifact_dir or ""),
             "real_movement_enabled": real_movement_enabled,
             "subphase_reports": subphase_reports,
             "gdk_imported_by_roboclaws": False,
@@ -395,6 +423,11 @@ def run_physical_agibot_cleanup_pilot(
             "tool_call_count": len(trace_events) // 2,
         },
     }
+    if nav2_map_bundle:
+        run_result["artifacts"]["map_bundle"] = "map_bundle"
+        run_result["artifacts"]["nav2_map_yaml"] = "map_bundle/map.yaml"
+        run_result["artifacts"]["nav2_occupancy_image"] = "map_bundle/map.pgm"
+        run_result["artifacts"]["nav2_map_preview"] = "map_bundle/preview.png"
     (run_dir / "run_result.json").write_text(
         json.dumps(run_result, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

@@ -37,6 +37,14 @@ def main() -> int:
         help="Override path to vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py.",
     )
     parser.add_argument(
+        "--agibot-map-artifact-dir",
+        type=Path,
+        help=(
+            "Optional fetched AgiBot map artifact root, for example "
+            "vendors/agibot_sdk/artifacts/maps/robot_map_9."
+        ),
+    )
+    parser.add_argument(
         "--real-movement-enabled",
         action="store_true",
         help=(
@@ -53,6 +61,7 @@ def main() -> int:
         runner_script=args.runner_script,
         runner_python=args.runner_python,
         real_movement_enabled=args.real_movement_enabled,
+        agibot_map_artifact_dir=args.agibot_map_artifact_dir,
         waypoint_id=args.waypoint_id,
     )
     print(
