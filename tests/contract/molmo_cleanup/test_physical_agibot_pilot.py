@@ -15,6 +15,10 @@ from roboclaws.molmo_cleanup.artifact_report import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
+ROBOT_MAP_9_CONTEXT_FIXTURE = (
+    REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
+)
+ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
 
 
 def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
@@ -68,5 +72,48 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert rerender_cleanup_report_from_artifact_path(run_dir) == run_dir / "report.html"
 
 
+def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_robot_map_9_context.completed.json"
+    context_path.write_text(json.dumps(_robot_map_9_context()), encoding="utf-8")
+
+    run_result = run_physical_agibot_cleanup_pilot(
+        run_dir=tmp_path / "run",
+        context_json=context_path,
+        agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
+        waypoint_id="east_lab_scan",
+    )
+
+    run_dir = tmp_path / "run"
+    agent_view = run_result["agent_view"]
+    metric_map = agent_view["metric_map"]
+    bundle = run_result["nav2_map_bundle"]
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    subphase_result = json.loads(
+        (run_dir / "subphases" / "01-agent-view" / "run_result.json").read_text(encoding="utf-8")
+    )
+    subphase_report = (run_dir / "subphases" / "01-agent-view" / "report.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert metric_map["map_id"] == "agibot-robot-map-9"
+    assert metric_map["occupancy_grid_artifact"] == "map_artifacts/occupancy.pgm"
+    assert metric_map["map_preview_artifact"] == "map_artifacts/map_preview.png"
+    assert len(metric_map["rooms"]) >= 4
+    assert bundle["environment_id"] == "agibot-robot-map-9"
+    assert bundle["source_bundle_root"] == str(ROBOT_MAP_9_ARTIFACT)
+    assert bundle["source_provenance"] == "agibot_gdk_map_artifact"
+    assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
+    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert subphase_result["privacy_check"]["ok"] is True
+    assert "Nav2 Map Bundle" in report_text
+    assert "agibot-robot-map-9" in report_text
+    assert "Fetched AgiBot occupancy map artifact" in subphase_report
+    assert "map_artifacts/map_preview.png" in subphase_report
+
+
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
+
+
+def _robot_map_9_context() -> dict:
+    return json.loads(ROBOT_MAP_9_CONTEXT_FIXTURE.read_text(encoding="utf-8"))

@@ -4,6 +4,7 @@ import importlib.util
 import json
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -20,6 +21,8 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
+ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
+ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 
 
 def _load_demo_module():
@@ -99,6 +102,45 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
     assert any('"tool": "metric_map"' in line for line in trace_lines)
     assert any('"tool": "observe"' in line for line in trace_lines)
     assert not any('"tool": "scene_objects"' in line for line in trace_lines)
+
+
+def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
+    tmp_path: Path,
+) -> None:
+    demo = _load_demo_module()
+    bundle_dir = tmp_path / "agibot-robot-map-9-bundle"
+    write_agibot_nav2_map_bundle(
+        source_map_dir=ROBOT_MAP_9_ARTIFACT,
+        context_json=ROBOT_MAP_9_CONTEXT,
+        bundle_dir=bundle_dir,
+    )
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "run",
+        seed=7,
+        map_bundle_dir=bundle_dir,
+        require_map_bundle=True,
+        generated_mess_count=5,
+    )
+
+    run_dir = tmp_path / "run"
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    trace_lines = (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+
+    assert result["cleanup_status"] == "success"
+    assert run_result["agent_view"]["metric_map"]["map_bundle"]["environment_id"] == (
+        "agibot-robot-map-9"
+    )
+    assert run_result["nav2_map_bundle"]["source_bundle_root"] == str(bundle_dir)
+    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
+    assert run_result["real_robot_readiness"]["map_bundle_snapshot_present"] is True
+    assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
+    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert "agibot-robot-map-9" in report_text
+    assert "Nav2 Map Bundle" in report_text
+    assert any('"tool": "navigate_to_waypoint"' in line for line in trace_lines)
+    assert any('"route_validation"' in line and '"ok": true' in line for line in trace_lines)
 
 
 def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: Path) -> None:

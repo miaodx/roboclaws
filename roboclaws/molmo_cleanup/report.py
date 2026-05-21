@@ -5196,6 +5196,19 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
         return ""
     output_dir = run_dir / "map_bundle"
     output_dir.mkdir(parents=True, exist_ok=True)
+    bundle = run_result.get("nav2_map_bundle") or {}
+    artifacts = bundle.get("artifact_paths") or {}
+    map_pgm = run_dir / str(artifacts.get("occupancy_image") or "map_bundle/map.pgm")
+    map_yaml = run_dir / str(artifacts.get("map_yaml") or "map_bundle/map.yaml")
+    if map_pgm.is_file() and map_yaml.is_file():
+        return _write_nav2_occupancy_navigation_preview(
+            run_dir,
+            output_dir=output_dir,
+            map_pgm=map_pgm,
+            map_yaml=map_yaml,
+            metric_map=metric_map,
+            fixture_hints=fixture_hints,
+        )
     output_path = output_dir / "report_static_navigation_map.png"
     image = Image.new("RGB", (1100, 360), (248, 250, 252))
     draw = ImageDraw.Draw(image)
@@ -5262,6 +5275,90 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
 
     image.save(output_path, format="PNG")
     return _report_asset_src(output_path, run_dir)
+
+
+def _write_nav2_occupancy_navigation_preview(
+    run_dir: Path,
+    *,
+    output_dir: Path,
+    map_pgm: Path,
+    map_yaml: Path,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> str:
+    output_path = output_dir / "report_static_navigation_map.png"
+    image = Image.open(map_pgm).convert("L")
+    image = Image.eval(image, lambda value: 255 if value >= 250 else 28 if value <= 5 else 205)
+    image = image.convert("RGB")
+    draw = ImageDraw.Draw(image, "RGBA")
+    parsed_yaml = _simple_map_yaml(map_yaml.read_text(encoding="utf-8"))
+    resolution = float(parsed_yaml.get("resolution") or metric_map.get("resolution_m") or 0.05)
+    origin = parsed_yaml.get("origin") if isinstance(parsed_yaml.get("origin"), list) else []
+    origin = (origin + [0.0, 0.0, 0.0])[:3]
+
+    def transform(x: float, y: float) -> tuple[int, int]:
+        col = int(round((x - float(origin[0])) / resolution))
+        row = image.height - 1 - int(round((y - float(origin[1])) / resolution))
+        return col, row
+
+    for room in metric_map.get("rooms") or []:
+        points = [
+            transform(float(point.get("x", 0.0)), float(point.get("y", 0.0)))
+            for point in room.get("polygon") or []
+        ]
+        if len(points) < 3:
+            continue
+        draw.polygon(points, fill=(72, 121, 210, 44), outline=(31, 79, 168, 210))
+        cx = sum(point[0] for point in points) / len(points)
+        cy = sum(point[1] for point in points) / len(points)
+        draw.text(
+            (cx - 28, cy - 7),
+            str(room.get("room_label") or room.get("room_id") or "")[:18],
+            fill=(15, 39, 82, 255),
+        )
+
+    for room in fixture_hints.get("rooms") or []:
+        for fixture in room.get("fixtures") or []:
+            pose = fixture.get("pose") or {}
+            x, y = transform(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
+            draw.rectangle((x - 7, y - 5, x + 7, y + 5), fill=(130, 82, 32, 230))
+
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        x, y = transform(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)))
+        draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=(34, 158, 91, 245))
+        draw.text((x + 7, y - 6), str(waypoint.get("waypoint_id") or ""), fill=(12, 74, 38, 255))
+
+    robot_pose = metric_map.get("robot_pose") or {}
+    if robot_pose:
+        x, y = transform(float(robot_pose.get("x", 0.0)), float(robot_pose.get("y", 0.0)))
+        draw.ellipse((x - 10, y - 10, x + 10, y + 10), fill=(46, 88, 178, 240))
+        draw.text((x + 12, y - 7), "robot", fill=(22, 50, 112, 255))
+
+    max_width = 1200
+    if image.width > max_width:
+        ratio = max_width / image.width
+        image = image.resize((max_width, max(1, int(image.height * ratio))))
+    image.save(output_path, format="PNG")
+    return _report_asset_src(output_path, run_dir)
+
+
+def _simple_map_yaml(text: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        value = value.strip()
+        if value.startswith("[") and value.endswith("]"):
+            payload[key.strip()] = [
+                float(item.strip()) for item in value.removeprefix("[").removesuffix("]").split(",")
+            ]
+        elif value.replace(".", "", 1).replace("-", "", 1).isdigit():
+            payload[key.strip()] = float(value) if "." in value else int(value)
+        else:
+            payload[key.strip()] = value.strip('"')
+    return payload
 
 
 def _nav2_preview_transform(
