@@ -99,6 +99,7 @@ def render_cleanup_report(
     report_path = run_dir / "report.html"
     body = "\n".join(
         _cleanup_report_sections(
+            run_dir=run_dir,
             scenario=scenario,
             run_result=run_result,
             trace_events=trace_events,
@@ -114,6 +115,7 @@ def render_cleanup_report(
 
 def _cleanup_report_sections(
     *,
+    run_dir: Path,
     scenario: CleanupScenario,
     run_result: dict[str, Any],
     trace_events: list[dict[str, Any]],
@@ -126,29 +128,69 @@ def _cleanup_report_sections(
     score = run_result["score"]
     return _present_sections(
         [
+            _cleanup_report_tabs(),
             _cleanup_summary_section(scenario=scenario, run_result=run_result, score=score),
-            _realworld_contract_note(run_result),
-            _cleanup_profile_note(run_result),
-            _before_after_section(before_snapshot=before_snapshot, after_snapshot=after_snapshot),
-            _runtime_timing_section(run_result, trace_events, robot_view_steps),
-            _object_moves_section(moves),
-            _semantic_steps_table(run_result.get("semantic_substeps") or []),
-            _robot_timeline(_visual_core_robot_view_steps(run_result, robot_view_steps)),
-            _cleanup_policy_trace_section(run_result),
-            _real_robot_readiness_section(run_result),
-            _nav2_map_bundle_section(run_result),
-            _score_section(score),
-            _manipulation_provenance_section(run_result),
-            _attached_planner_proof_section(run_result),
-            _cleanup_primitive_gate_section(run_result),
-            _planner_cleanup_bridge_section(run_result),
-            _planner_proof_requests_section(run_result),
-            _agent_view_section(run_result),
-            _raw_fpv_observations_section(run_result),
-            _model_declared_observations_section(run_result),
-            _camera_model_policy_section(run_result),
-            _advisory_review_section(run_result),
-            _private_evaluation_section(run_result),
+            _report_tab_panel(
+                "overview",
+                [
+                    _realworld_contract_note(run_result),
+                    _cleanup_profile_note(run_result),
+                    _before_after_section(
+                        before_snapshot=before_snapshot,
+                        after_snapshot=after_snapshot,
+                        run_result=run_result,
+                        robot_view_steps=robot_view_steps,
+                    ),
+                    _object_moves_section(moves),
+                ],
+            ),
+            _report_tab_panel(
+                "timeline",
+                [
+                    _robot_timeline(
+                        run_dir,
+                        _visual_core_robot_view_steps(run_result, robot_view_steps),
+                    )
+                ],
+            ),
+            _report_tab_panel(
+                "timing",
+                [_runtime_timing_section(run_dir, run_result, trace_events, robot_view_steps)],
+            ),
+            _report_tab_panel(
+                "actions",
+                [_semantic_steps_table(run_result.get("semantic_substeps") or [])],
+            ),
+            _report_tab_panel(
+                "robot",
+                [
+                    _nav2_map_bundle_section(run_dir, run_result),
+                    _real_robot_readiness_section(run_result),
+                    _cleanup_policy_trace_section(run_result),
+                ],
+            ),
+            _report_tab_panel(
+                "proof",
+                [
+                    _score_section(score),
+                    _manipulation_provenance_section(run_result),
+                    _attached_planner_proof_section(run_result),
+                    _cleanup_primitive_gate_section(run_result),
+                    _planner_cleanup_bridge_section(run_result),
+                    _planner_proof_requests_section(run_result),
+                ],
+            ),
+            _report_tab_panel(
+                "agent",
+                [
+                    _agent_view_section(run_result),
+                    _raw_fpv_observations_section(run_result),
+                    _model_declared_observations_section(run_result),
+                    _camera_model_policy_section(run_result),
+                    _advisory_review_section(run_result),
+                    _private_evaluation_section(run_result),
+                ],
+            ),
         ]
     )
 
@@ -420,6 +462,38 @@ def _present_sections(sections: list[str]) -> list[str]:
     return [section for section in sections if section]
 
 
+def _cleanup_report_tabs() -> str:
+    tabs = [
+        ("overview", "Overview"),
+        ("timeline", "Robot Timeline"),
+        ("timing", "Timing"),
+        ("actions", "Actions"),
+        ("robot", "Robot & Map"),
+        ("proof", "Score & Proof"),
+        ("agent", "Agent & Eval"),
+    ]
+    buttons = "".join(
+        '<button type="button" class="report-tab" '
+        f'id="report-tab-button-{tab_id}" data-report-tab-button="{tab_id}" '
+        f'aria-controls="report-tab-{tab_id}" aria-selected="{str(index == 0).lower()}">'
+        f"{html.escape(label)}</button>"
+        for index, (tab_id, label) in enumerate(tabs)
+    )
+    return f'<nav class="report-tabs" aria-label="Report sections">{buttons}</nav>'
+
+
+def _report_tab_panel(tab_id: str, sections: list[str]) -> str:
+    body = "\n".join(_present_sections(sections))
+    if not body:
+        return ""
+    escaped_id = html.escape(tab_id)
+    return (
+        f'<div id="report-tab-{escaped_id}" class="report-tab-panel" '
+        f'data-report-tab="{escaped_id}" role="tabpanel" '
+        f'aria-labelledby="report-tab-button-{escaped_id}">{body}</div>'
+    )
+
+
 def _cleanup_summary_section(
     *,
     scenario: CleanupScenario,
@@ -434,44 +508,181 @@ def _cleanup_summary_section(
         <h1>MolmoSpaces Cleanup Pilot</h1>
       </div>
       {_summary_metrics(run_result, score)}
-      <div class="badges">
-        {_badge("Scenario", scenario.scenario_id)}
-        {_badge("Backend", run_result.get("backend", "unknown"))}
-        {_badge("Contract", run_result.get("contract", "legacy"))}
-        {_badge("Status", run_result["cleanup_status"])}
-        {_badge("Restored", restored_summary)}
-        {_badge("Generated mess", _generated_mess_summary(run_result))}
-        {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
-        {_cleanup_profile_badges(run_result)}
-        {_badge("Agent driven", run_result.get("agent_driven", False))}
-        {_badge("Provenance", run_result["primitive_provenance"])}
-        {_badge("MCP server", run_result.get("mcp_server", "none"))}
-        {_robot_badge(run_result)}
-      </div>
+      <details class="summary-metadata">
+        <summary>Run metadata</summary>
+        <div class="badges">
+          {_badge("Scenario", scenario.scenario_id)}
+          {_badge("Backend", run_result.get("backend", "unknown"))}
+          {_badge("Contract", run_result.get("contract", "legacy"))}
+          {_badge("Status", run_result["cleanup_status"])}
+          {_badge("Restored", restored_summary)}
+          {_badge("Generated mess", _generated_mess_summary(run_result))}
+          {_badge("Policy", run_result.get("policy", run_result.get("planner", "unknown")))}
+          {_cleanup_profile_badges(run_result)}
+          {_badge("Agent driven", run_result.get("agent_driven", False))}
+          {_badge("Provenance", run_result["primitive_provenance"])}
+          {_badge("MCP server", run_result.get("mcp_server", "none"))}
+          {_robot_badge(run_result)}
+        </div>
+      </details>
     </section>
     """
 
 
-def _before_after_section(*, before_snapshot: Path, after_snapshot: Path) -> str:
-    before_name = html.escape(before_snapshot.name)
-    after_name = html.escape(after_snapshot.name)
+def _before_after_section(
+    *,
+    before_snapshot: Path,
+    after_snapshot: Path,
+    run_result: dict[str, Any],
+    robot_view_steps: list[dict[str, Any]],
+) -> str:
+    before_name = before_snapshot.name
+    after_name = after_snapshot.name
+    pick_place = _pick_place_comparison_grid(
+        run_result.get("semantic_substeps") or [],
+        robot_view_steps,
+    )
     return f"""
-    <section class="panel">
+    <section class="panel before-after-section">
       <div class="section-heading">
         <h2>Before And After</h2>
       </div>
       <div class="snapshots">
         <figure>
-          <img src="{before_name}" alt="Before cleanup">
-          <figcaption>Before</figcaption>
+          {_review_image(before_name, "Before cleanup")}
+          <figcaption>
+            <strong>Initial room state</strong>
+            <span>Object locations before the cleanup loop.</span>
+          </figcaption>
         </figure>
         <figure>
-          <img src="{after_name}" alt="After cleanup">
-          <figcaption>After</figcaption>
+          {_review_image(after_name, "After cleanup")}
+          <figcaption>
+            <strong>Final room state</strong>
+            <span>Object locations after all reported place actions.</span>
+          </figcaption>
         </figure>
       </div>
+      {pick_place}
     </section>
     """
+
+
+def _pick_place_comparison_grid(
+    semantic_substeps: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]],
+) -> str:
+    comparisons = _pick_place_comparisons(semantic_substeps, robot_view_steps)
+    if not comparisons:
+        return ""
+    cards = []
+    for item in comparisons:
+        cards.append(
+            '<details class="comparison-item" open>'
+            "<summary>"
+            '<span class="comparison-item-head">'
+            f"<strong>{html.escape(item['object_id'])}</strong>"
+            f"<span>{html.escape(item['route'])}</span>"
+            "</span>"
+            "</summary>"
+            '<div class="comparison-views">'
+            f"{_comparison_figure(item.get('pick_view'), 'Pick view', item.get('pick_label'))}"
+            f"{_comparison_figure(item.get('place_view'), 'Place view', item.get('place_label'))}"
+            "</div>"
+            "</details>"
+        )
+    return (
+        '<details class="comparison-details" open>'
+        "<summary>"
+        f"Pick/place visual checks <span>{len(comparisons)} completed moves</span>"
+        "</summary>"
+        '<div class="comparison-grid">' + "".join(cards) + "</div></details>"
+    )
+
+
+def _pick_place_comparisons(
+    semantic_substeps: list[dict[str, Any]],
+    robot_view_steps: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    picks: dict[str, dict[str, Any]] = {}
+    places: dict[str, dict[str, Any]] = {}
+    for step in robot_view_steps:
+        action = str(step.get("action") or "")
+        handle = _action_object_id(action)
+        if not handle:
+            continue
+        phase = str(step.get("semantic_phase") or "")
+        if phase == "pick" and handle not in picks:
+            picks[handle] = step
+        elif phase in PLACE_CLEANUP_PHASES and handle not in places:
+            places[handle] = step
+
+    comparisons: list[dict[str, str]] = []
+    for item in semantic_substeps:
+        object_id = str(item.get("object_id") or "")
+        if not object_id:
+            continue
+        pick = picks.get(object_id)
+        place = places.get(object_id)
+        if not pick and not place:
+            continue
+        route = (
+            f"{item.get('source_receptacle_id') or 'unknown source'}"
+            " -> "
+            f"{item.get('target_receptacle_id') or 'unknown target'}"
+        )
+        comparisons.append(
+            {
+                "object_id": object_id,
+                "route": route,
+                "pick_view": _best_comparison_view(pick),
+                "pick_label": str((pick or {}).get("action") or "pick"),
+                "place_view": _best_comparison_view(place),
+                "place_label": str((place or {}).get("action") or "place"),
+            }
+        )
+    return comparisons
+
+
+def _action_object_id(action: str) -> str:
+    parts = action.split()
+    if len(parts) >= 2:
+        return parts[1]
+    return ""
+
+
+def _best_comparison_view(step: dict[str, Any] | None) -> str:
+    if not step:
+        return ""
+    views = step.get("views") or {}
+    return str(views.get("fpv") or views.get("verify") or views.get("chase") or "")
+
+
+def _comparison_figure(path: Any, label: str, caption: Any) -> str:
+    if not path:
+        return '<figure class="comparison-missing"><figcaption>Missing view</figcaption></figure>'
+    escaped_label = html.escape(label)
+    escaped_caption = html.escape(str(caption or label))
+    return (
+        "<figure>"
+        f"{_review_image(path, label)}"
+        f"<figcaption><strong>{escaped_label}</strong><span>{escaped_caption}</span></figcaption>"
+        "</figure>"
+    )
+
+
+def _review_image(path: Any, alt: str, *, caption: str | None = None) -> str:
+    src = html.escape(str(path), quote=True)
+    alt_text = html.escape(str(alt), quote=True)
+    caption_text = str(caption or alt).strip() or "report image"
+    escaped_caption = html.escape(caption_text, quote=True)
+    aria_label = html.escape(f"Open {caption_text} image for review", quote=True)
+    return (
+        f'<a class="image-link" href="{src}" data-lightbox-image '
+        f'data-lightbox-caption="{escaped_caption}" aria-label="{aria_label}">'
+        f'<img src="{src}" alt="{alt_text}" loading="lazy" decoding="async">'
+        "</a>"
+    )
 
 
 def _object_moves_section(moves: list[dict[str, Any]]) -> str:
@@ -493,6 +704,7 @@ def _score_section(score: dict[str, Any]) -> str:
 
 
 def _runtime_timing_section(
+    run_dir: Path,
     run_result: dict[str, Any],
     trace_events: list[dict[str, Any]],
     robot_view_steps: list[dict[str, Any]],
@@ -506,6 +718,14 @@ def _runtime_timing_section(
     if not isinstance(total_elapsed, (int, float)) or total_elapsed <= 0:
         return ""
 
+    live_timing = _load_live_timing(run_dir)
+    runner_timing = live_timing.get("runner_timing") if isinstance(live_timing, dict) else {}
+    runner_timeline = (
+        _runner_timing_timeline(runner_timing)
+        if isinstance(runner_timing, dict) and runner_timing
+        else ""
+    )
+    mcp_timeline = _mcp_timing_timeline(timing)
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('MCP elapsed', _seconds_text(total_elapsed))}"
@@ -549,18 +769,156 @@ def _runtime_timing_section(
         if gap_rows
         else ""
     )
+    object_cycles = _object_cycle_timing_section(timing, trace_events)
     return (
         '<section class="panel runtime-timing">'
         "<h2>Runtime Timing</h2>"
-        '<p class="note">MCP elapsed is measured inside the cleanup server. '
-        "Tool/backend handling is synchronous tool execution. Robot-view capture "
-        "is separated from optional report artifact work. Between-tool gaps are "
-        "the remaining time after one MCP response before the next request; for "
-        "live Codex runs that bucket is where model reasoning, CLI orchestration, "
-        "transport, and post-response overhead show up. Other MCP overhead keeps "
-        "startup/finalization seconds visible so the timing buckets account for "
-        "the full trace.</p>"
-        f"{metrics}{tool_table}{gap_table}</section>"
+        '<p class="note">Wall-clock timing is split into scan-friendly lanes. '
+        "Runner timing shows the live shell orchestration. MCP timing is the cleanup "
+        "server trace inside the agent run; between-tool gaps include model reasoning, "
+        "CLI orchestration, transport, and post-response overhead.</p>"
+        f"{runner_timeline}{mcp_timeline}{metrics}{object_cycles}"
+        '<details class="timing-details"><summary>Tool and gap tables</summary>'
+        f"{tool_table}{gap_table}</details></section>"
+    )
+
+
+def _object_cycle_timing_section(
+    timing: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+) -> str:
+    cycles = _object_timing_cycles(trace_events)
+    if not cycles:
+        return ""
+    cycle_total = sum(float(item["total_s"]) for item in cycles)
+    total_elapsed = _float_or_none(timing.get("total_elapsed_s")) or 0.0
+    search_overhead = max(0.0, total_elapsed - cycle_total)
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Cleaned-object cycles', len(cycles))}"
+        f"{_metric('Cycle time', _seconds_text(cycle_total))}"
+        f"{_metric('Sweep/search overhead', _seconds_text(search_overhead))}"
+        f"{_metric('Measured only', 'no projections')}"
+        "</div>"
+    )
+    cards = []
+    for index, cycle in enumerate(cycles, start=1):
+        cards.append(
+            '<article class="object-cycle">'
+            f"<h3>{index}. {html.escape(str(cycle['object_id']))}</h3>"
+            f"{_timing_lane('', cycle['total_s'], _object_cycle_segments(cycle))}"
+            f"<p>{html.escape(_object_cycle_phase_text(cycle))}</p>"
+            "</article>"
+        )
+    return (
+        '<div class="object-cycle-timing">'
+        "<h3>Per-object cleanup cycles</h3>"
+        '<p class="note">Each cycle starts at the first successful object-directed '
+        "action and ends at the post-place observe when present. The orange bucket "
+        "is measured response-to-next-request time: agent thinking, CLI orchestration, "
+        "transport, and other agent-side delay. It is not projected or estimated "
+        "hardware time.</p>"
+        f"{metrics}"
+        '<div class="object-cycle-grid">' + "".join(cards) + "</div></div>"
+    )
+
+
+def _object_cycle_segments(cycle: dict[str, Any]) -> list[tuple[str, Any, str, str]]:
+    return [
+        (
+            "Agent thinking / orchestration",
+            cycle.get("agent_gap_s"),
+            "response-to-next-request gap",
+            "#b7683f",
+        ),
+        ("Robot views", cycle.get("robot_view_capture_s"), "measured report capture", "#4f6691"),
+        ("Tool handlers", cycle.get("tool_handler_s"), "cleanup server work", "#2f766f"),
+        ("Other measured", cycle.get("other_s"), "remaining wall time", "#7a8491"),
+    ]
+
+
+def _object_cycle_phase_text(cycle: dict[str, Any]) -> str:
+    tools = " -> ".join(str(item) for item in cycle.get("tools") or [])
+    return (
+        f"{_seconds_text(cycle.get('total_s'))}; "
+        f"window {_seconds_text(cycle.get('start_s'))} to {_seconds_text(cycle.get('end_s'))}; "
+        f"{tools}"
+    )
+
+
+def _load_live_timing(run_dir: Path) -> dict[str, Any]:
+    try:
+        payload = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _runner_timing_timeline(runner_timing: dict[str, Any]) -> str:
+    total = runner_timing.get("total_elapsed_s")
+    segments = [
+        ("Setup", runner_timing.get("pre_codex_setup_s"), "launcher and server prep", "#536d7a"),
+        ("Codex run", runner_timing.get("codex_exec_elapsed_s"), "agent execution", "#2f766f"),
+        (
+            "Server wait",
+            runner_timing.get("post_codex_server_wait_s"),
+            "cleanup server finalization",
+            "#8a6f39",
+        ),
+        ("Checker", runner_timing.get("checker_elapsed_s"), "artifact checker", "#4f6691"),
+        ("Final", runner_timing.get("final_overhead_s"), "report wrap-up", "#6f7785"),
+    ]
+    return _timing_lane("Run wall clock", total, segments)
+
+
+def _mcp_timing_timeline(timing: dict[str, Any]) -> str:
+    segments = [
+        (
+            "Between tools",
+            timing.get("between_tool_gap_s"),
+            "agent reasoning and orchestration",
+            "#b7683f",
+        ),
+        ("Robot views", timing.get("robot_view_capture_s"), "FPV/chase/map artifacts", "#4f6691"),
+        ("Tool handlers", timing.get("tool_handler_s"), "cleanup server work", "#2f766f"),
+        ("Other", timing.get("other_mcp_overhead_s"), "startup/finalization remainder", "#7a8491"),
+    ]
+    return _timing_lane("MCP trace attribution", timing.get("total_elapsed_s"), segments)
+
+
+def _timing_lane(
+    title: str,
+    total: Any,
+    segments: list[tuple[str, Any, str, str]],
+) -> str:
+    total_s = _float_or_none(total)
+    if total_s is None or total_s <= 0:
+        return ""
+    segment_html = []
+    for label, value, detail, color in segments:
+        seconds = _float_or_none(value)
+        if seconds is None or seconds <= 0:
+            continue
+        pct = max(0.2, min(100.0, seconds / total_s * 100.0))
+        segment_html.append(
+            '<div class="timing-segment" '
+            f'style="--basis: {pct:.3f}%; --segment-color: {html.escape(color)};" '
+            f'title="{html.escape(label)}: {html.escape(_seconds_text(seconds))}">'
+            f"<strong>{html.escape(label)}</strong>"
+            f"<span>{html.escape(_seconds_text(seconds))}</span>"
+            f"<small>{html.escape(detail)}</small>"
+            "</div>"
+        )
+    if not segment_html:
+        return ""
+    heading = f"<h3>{html.escape(title)}</h3>" if title else "<h3>Measured distribution</h3>"
+    return (
+        '<div class="timing-lane-block">'
+        '<div class="timing-lane-head">'
+        f"{heading}"
+        f"<span>{html.escape(_seconds_text(total_s))}</span>"
+        "</div>"
+        '<div class="timing-lane">' + "".join(segment_html) + "</div></div>"
     )
 
 
@@ -718,6 +1076,147 @@ def _seconds_text(value: Any) -> str:
         return f"{float(value):.1f}s"
     except (TypeError, ValueError):
         return "n/a"
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _object_timing_cycles(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    calls = _paired_tool_calls(trace_events)
+    cycles = []
+    index = 0
+    while index < len(calls):
+        call = calls[index]
+        if not _is_object_cycle_start(call):
+            index += 1
+            continue
+        object_id = str(call.get("object_id") or "")
+        end_index = None
+        place_index = None
+        for cursor in range(index, len(calls)):
+            candidate = calls[cursor]
+            candidate_object = str(candidate.get("object_id") or "")
+            if (
+                cursor > index
+                and _is_object_cycle_start(candidate)
+                and candidate_object
+                and candidate_object != object_id
+            ):
+                break
+            if (
+                candidate.get("tool") in PLACE_CLEANUP_PHASES
+                and candidate.get("ok") is True
+                and candidate_object == object_id
+            ):
+                place_index = cursor
+                end_index = cursor
+                if cursor + 1 < len(calls) and calls[cursor + 1].get("tool") == "observe":
+                    end_index = cursor + 1
+                break
+        if place_index is None or end_index is None:
+            index += 1
+            continue
+        cycle_calls = calls[index : end_index + 1]
+        cycles.append(_summarize_object_timing_cycle(object_id, cycle_calls, trace_events))
+        index = end_index + 1
+    return cycles
+
+
+def _is_object_cycle_start(call: dict[str, Any]) -> bool:
+    return (
+        call.get("tool") in {"navigate_to_visual_candidate", "navigate_to_object"}
+        and call.get("ok") is True
+        and bool(call.get("object_id"))
+    )
+
+
+def _paired_tool_calls(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    timed = [
+        event
+        for event in trace_events
+        if isinstance(event.get("wallclock_elapsed"), (int, float))
+        and event.get("event") in {"request", "response"}
+        and event.get("tool") != "<runtime>"
+    ]
+    timed.sort(key=lambda event: float(event["wallclock_elapsed"]))
+    pending: dict[str, list[dict[str, Any]]] = {}
+    pairs = []
+    for event in timed:
+        tool = str(event.get("tool") or "")
+        if event.get("event") == "request":
+            pending.setdefault(tool, []).append(event)
+            continue
+        requests = pending.get(tool) or []
+        request = requests.pop(0) if requests else None
+        start_s = float((request or event)["wallclock_elapsed"])
+        end_s = float(event["wallclock_elapsed"])
+        request_payload = (request or {}).get("request") or {}
+        response_payload = event.get("response") or {}
+        pairs.append(
+            {
+                "tool": tool,
+                "start_s": start_s,
+                "end_s": end_s,
+                "handler_s": max(0.0, end_s - start_s),
+                "object_id": _call_object_id(tool, request_payload, response_payload),
+                "ok": response_payload.get("ok"),
+            }
+        )
+    pairs.sort(key=lambda item: float(item["start_s"]))
+    return pairs
+
+
+def _call_object_id(tool: str, request: dict[str, Any], response: dict[str, Any]) -> str:
+    if isinstance(response.get("object_id"), str):
+        return str(response["object_id"])
+    if isinstance(request.get("object_id"), str):
+        return str(request["object_id"])
+    if tool in {"place", "place_inside"} and isinstance(response.get("placed_object_id"), str):
+        return str(response["placed_object_id"])
+    return ""
+
+
+def _summarize_object_timing_cycle(
+    object_id: str,
+    calls: list[dict[str, Any]],
+    trace_events: list[dict[str, Any]],
+) -> dict[str, Any]:
+    start_s = float(calls[0]["start_s"])
+    end_s = float(calls[-1]["end_s"])
+    total_s = max(0.0, end_s - start_s)
+    handler_s = sum(float(call.get("handler_s") or 0.0) for call in calls)
+    gap_intervals = []
+    raw_gap_s = 0.0
+    for previous, current in zip(calls, calls[1:]):
+        gap_start = float(previous["end_s"])
+        gap_end = float(current["start_s"])
+        if gap_end <= gap_start:
+            continue
+        gap = gap_end - gap_start
+        raw_gap_s += gap
+        gap_intervals.append({"start_s": gap_start, "end_s": gap_end, "gap_s": gap})
+    robot_gap_overlap = _robot_view_capture_overlap_seconds(trace_events, gap_intervals)
+    robot_capture_s = _robot_view_capture_overlap_seconds(
+        trace_events,
+        [{"start_s": start_s, "end_s": end_s}],
+    )
+    agent_gap_s = max(0.0, raw_gap_s - robot_gap_overlap)
+    other_s = max(0.0, total_s - handler_s - agent_gap_s - robot_capture_s)
+    return {
+        "object_id": object_id,
+        "start_s": round(start_s, 3),
+        "end_s": round(end_s, 3),
+        "total_s": round(total_s, 3),
+        "tool_handler_s": round(handler_s, 3),
+        "agent_gap_s": round(agent_gap_s, 3),
+        "robot_view_capture_s": round(robot_capture_s, 3),
+        "other_s": round(other_s, 3),
+        "tools": [str(call.get("tool") or "") for call in calls],
+    }
 
 
 def _badge(label: str, value: Any) -> str:
@@ -4538,17 +5037,21 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
     )
 
 
-def _nav2_map_bundle_section(run_result: dict[str, Any]) -> str:
+def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     bundle = run_result.get("nav2_map_bundle") or {}
     if not bundle:
         return ""
     artifacts = bundle.get("artifact_paths") or {}
     hashes = bundle.get("artifact_hashes") or {}
-    preview = artifacts.get("preview_png")
+    preview = _write_nav2_static_navigation_preview(run_dir, run_result) or artifacts.get(
+        "preview_png"
+    )
     preview_figure = (
-        "<figure>"
-        f'<img src="{html.escape(str(preview))}" alt="Nav2 map bundle preview">'
-        "<figcaption>Nav2 static map preview</figcaption>"
+        '<figure class="nav2-preview">'
+        f"{_review_image(preview, 'Nav2 map bundle preview')}"
+        "<figcaption><strong>Static navigation map preview</strong>"
+        "<span>Schematic public map: rooms, fixtures, inspection waypoints, and robot pose.</span>"
+        "</figcaption>"
         "</figure>"
         if preview
         else ""
@@ -4585,14 +5088,179 @@ def _nav2_map_bundle_section(run_result: dict[str, Any]) -> str:
         '<div class="table-wrap"><table><thead><tr><th>Artifact</th><th>Path</th>'
         "<th>SHA-256</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
+    gap_list = (
+        f'<ul class="requirements">{gaps}</ul>'
+        if gaps
+        else '<p class="note">No runtime costmap gaps were recorded.</p>'
+    )
     return (
         '<section class="panel nav2-map-bundle">'
-        "<h2>Nav2 Map Bundle</h2>"
-        '<p class="note">This run snapshots the public static map contract as '
-        "Nav2-shaped artifacts for simulator/hardware parity. Runtime local costmap "
-        "effects remain explicit gaps, not simulated proof.</p>"
-        f"{metrics}{preview_figure}{table}"
-        f'<ul class="requirements">{gaps}</ul></section>'
+        "<h2>Nav2 Map Bundle <span>Static map contract</span></h2>"
+        '<p class="note">These files are the map package a Nav2-style robot would '
+        "consume: occupancy grid, semantic fixture map, robot footprint, costmap "
+        "parameters, and a preview. This is not live ROS/Nav2 execution; it proves "
+        "the report can package the same static map contract that a hardware pilot "
+        "would receive.</p>"
+        f"{metrics}"
+        '<div class="nav2-explainer">'
+        "<div><strong>What it proves</strong><span>Static map, fixtures, robot profile, "
+        "and costmap parameters are versioned together.</span></div>"
+        "<div><strong>What it does not prove</strong><span>Dynamic obstacle layers, "
+        "TF timing, and rolling local costmaps remain explicit gaps.</span></div>"
+        "</div>"
+        '<div class="nav2-preview-layout">'
+        f"{preview_figure}"
+        f"{_nav2_preview_legend()}"
+        "</div>"
+        '<details class="artifact-details"><summary>Map files, hashes, and known gaps</summary>'
+        f"{table}{gap_list}</details></section>"
+    )
+
+
+def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, Any]) -> str:
+    agent_view = run_result.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    rooms = metric_map.get("rooms") or []
+    waypoints = metric_map.get("inspection_waypoints") or []
+    fixture_rooms = fixture_hints.get("rooms") or []
+    if not rooms and not waypoints and not fixture_rooms:
+        return ""
+    output_dir = run_dir / "map_bundle"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / "report_static_navigation_map.png"
+    image = Image.new("RGB", (1100, 360), (248, 250, 252))
+    draw = ImageDraw.Draw(image)
+    draw.text((28, 22), "Static navigation map preview", fill=(30, 34, 42))
+    transform = _nav2_preview_transform(rooms, waypoints, fixture_rooms)
+
+    for room in rooms:
+        points = room.get("polygon") or []
+        if len(points) < 2:
+            continue
+        xs = [float(point.get("x", 0.0)) for point in points]
+        ys = [float(point.get("y", 0.0)) for point in points]
+        left, top = transform(min(xs), max(ys))
+        right, bottom = transform(max(xs), min(ys))
+        draw.rectangle(
+            (left, top, right, bottom),
+            fill=(232, 238, 246),
+            outline=(148, 163, 184),
+            width=2,
+        )
+        draw.text(
+            (left + 8, top + 8),
+            str(room.get("room_label") or room.get("room_id") or ""),
+            fill=(51, 65, 85),
+        )
+
+    for room in fixture_rooms:
+        for fixture in room.get("fixtures") or []:
+            pose = fixture.get("pose") or {}
+            footprint = fixture.get("footprint") or {}
+            x, y = transform(float(pose.get("x", 0.0)), float(pose.get("y", 0.0)))
+            half_w = max(
+                14,
+                int(float(footprint.get("width_m") or 0.5) * getattr(transform, "x_scale") * 0.5),
+            )
+            half_h = max(
+                8,
+                int(float(footprint.get("depth_m") or 0.35) * getattr(transform, "y_scale") * 0.5),
+            )
+            draw.rounded_rectangle(
+                (x - half_w, y - half_h, x + half_w, y + half_h),
+                radius=3,
+                fill=(113, 124, 141),
+                outline=(71, 85, 105),
+            )
+            label = _fixture_preview_label(fixture)
+            draw.text((x - half_w, y + half_h + 4), label, fill=(51, 65, 85))
+
+    for waypoint in waypoints:
+        x, y = transform(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)))
+        draw.ellipse((x - 7, y - 7, x + 7, y + 7), fill=(35, 134, 90))
+        draw.text((x + 9, y - 6), str(waypoint.get("waypoint_id") or ""), fill=(51, 65, 85))
+
+    robot_pose = metric_map.get("robot_pose") or {}
+    if robot_pose:
+        x, y = transform(float(robot_pose.get("x", 0.0)), float(robot_pose.get("y", 0.0)))
+        draw.ellipse(
+            (x - 13, y - 13, x + 13, y + 13),
+            fill=(46, 88, 178),
+            outline=(30, 64, 130),
+            width=2,
+        )
+        draw.text((x + 16, y - 7), "robot", fill=(30, 64, 130))
+
+    image.save(output_path, format="PNG")
+    return _report_asset_src(output_path, run_dir)
+
+
+def _nav2_preview_transform(
+    rooms: list[dict[str, Any]],
+    waypoints: list[dict[str, Any]],
+    fixture_rooms: list[dict[str, Any]],
+) -> Any:
+    xs: list[float] = []
+    ys: list[float] = []
+    for room in rooms:
+        for point in room.get("polygon") or []:
+            xs.append(float(point.get("x", 0.0)))
+            ys.append(float(point.get("y", 0.0)))
+    for waypoint in waypoints:
+        xs.append(float(waypoint.get("x", 0.0)))
+        ys.append(float(waypoint.get("y", 0.0)))
+    for room in fixture_rooms:
+        for fixture in room.get("fixtures") or []:
+            pose = fixture.get("pose") or {}
+            xs.append(float(pose.get("x", 0.0)))
+            ys.append(float(pose.get("y", 0.0)))
+    min_x, max_x = (min(xs), max(xs)) if xs else (0.0, 1.0)
+    min_y, max_y = (min(ys), max(ys)) if ys else (0.0, 1.0)
+    x_span = max(max_x - min_x, 1.0)
+    y_span = max(max_y - min_y, 1.0)
+    margin_x = 58
+    margin_y = 72
+    x_scale = (1100 - margin_x * 2) / x_span
+    y_scale = (360 - margin_y * 2) / y_span
+
+    def transform(x: float, y: float) -> tuple[int, int]:
+        return (
+            int(margin_x + (x - min_x) * x_scale),
+            int(360 - margin_y - (y - min_y) * y_scale),
+        )
+
+    setattr(transform, "x_scale", x_scale)
+    setattr(transform, "y_scale", y_scale)
+    return transform
+
+
+def _fixture_preview_label(fixture: dict[str, Any]) -> str:
+    category = str(fixture.get("category") or "fixture")
+    name = str(fixture.get("name") or "")
+    if name and "(" in name:
+        name = name.split("(", 1)[0].strip()
+    return (name or category)[:16]
+
+
+def _nav2_preview_legend() -> str:
+    items = [
+        ("room", "Pale rectangles", "static room / traversable region"),
+        ("fixture", "Gray blocks", "static fixture or obstacle footprint"),
+        ("waypoint", "Green dots", "inspection waypoints the agent may visit"),
+        ("robot", "Blue dot", "current robot pose on the public map"),
+    ]
+    rows = []
+    for kind, label, detail in items:
+        rows.append(
+            f'<li><span class="legend-swatch {kind}"></span>'
+            f"<strong>{html.escape(label)}</strong><small>{html.escape(detail)}</small></li>"
+        )
+    return (
+        '<aside class="nav2-legend"><h3>Legend</h3><ul>'
+        + "".join(rows)
+        + "</ul><p>This is the robot's static navigation map, not a camera image and "
+        "not private mess truth.</p></aside>"
     )
 
 
@@ -4804,7 +5472,7 @@ def _requested_generated_text(private: dict[str, Any]) -> str:
     return f" (requested {requested})"
 
 
-def _robot_timeline(steps: list[dict[str, Any]]) -> str:
+def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
     if not steps:
         return ""
     cards = []
@@ -4814,9 +5482,35 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
         pose = step.get("robot_pose") or {}
         focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
         semantic_phase = step.get("semantic_phase")
+        fpv_bbox = _write_fpv_bbox_verification(run_dir, step, index)
         pose_text = (
             f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
             f"theta={pose.get('theta', '?')} head_pitch={pose.get('head_pitch', '?')}"
+        )
+        fpv_bbox_figure = _view_figure(fpv_bbox, "FPV + bbox verification") if fpv_bbox else ""
+        top_view_verify = (
+            _view_figure(views.get("verify"), "Top-view bbox verification sim-only")
+            if focus.get("has_focus")
+            else ""
+        )
+        sim_only_figures = [
+            figure
+            for figure in (
+                _view_figure(views.get("chase"), "Chase sim-only"),
+                top_view_verify,
+            )
+            if figure
+        ]
+        sim_grid_class = "views sim-only-grid"
+        if len(sim_only_figures) == 1:
+            sim_grid_class += " sim-only-grid-single"
+        sim_only_views = (
+            '<details class="sim-only-views"><summary>Simulation/report-only views</summary>'
+            f'<div class="{sim_grid_class}">'
+            f"{''.join(sim_only_figures)}"
+            "</div></details>"
+            if sim_only_figures
+            else ""
         )
         cards.append(
             '<article class="robot-step">'
@@ -4826,27 +5520,98 @@ def _robot_timeline(steps: list[dict[str, Any]]) -> str:
             f"{_observation_role_summary(step, previous_action)}"
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
-            '<div class="views">'
+            '<div class="views robot-primary-views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
-            f"{_view_figure(views.get('chase'), 'Chase')}"
             f"{_view_figure(views.get('map'), 'Map')}"
-            f"{_view_figure(views.get('verify'), 'Verification') if focus.get('has_focus') else ''}"
+            f"{fpv_bbox_figure}"
             "</div>"
+            f"{sim_only_views}"
             "</article>"
         )
         previous_action = str(step.get("action", step.get("label", "")))
+    step_label = "step" if len(cards) == 1 else "steps"
     return (
         '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
-        '<p class="note">FPV and chase are rendered from the RBY1M MuJoCo scene. '
-        "Chase is a report_only_simulation_view, not policy input. "
-        "The map and verification panels are report artifacts from public MuJoCo state, "
-        "not private scoring manifest data. Observe role badges distinguish "
+        '<p class="note">FPV and map are the default review surfaces. FPV+bbox '
+        "verification is generated from public visual-grounding boxes when present. "
+        "Chase and top-view bbox verification are simulation/report-only evidence, "
+        "not policy input and not private scoring truth. Observe role badges distinguish "
         "post-place verification from the next waypoint scan. Focus badges are "
         "public-state object/receptacle bindings; visibility badges say whether "
         "that bound object is actually visible in the current frame.</p>"
-        + "".join(cards)
-        + "</section>"
+        f'<details class="robot-timeline-details" open><summary>Show {len(cards)} captured '
+        f"robot-view {step_label}</summary>" + "".join(cards) + "</details></section>"
     )
+
+
+def _write_fpv_bbox_verification(
+    run_dir: Path,
+    step: dict[str, Any],
+    index: int,
+) -> str:
+    focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
+    visibility = focus.get("fpv_visibility") or {}
+    boxes = visibility.get("boxes") or []
+    if not boxes:
+        return ""
+    views = step.get("views") or {}
+    fpv_path = _resolve_report_asset_path(run_dir, views.get("fpv"))
+    if fpv_path is None:
+        return ""
+    label = str(step.get("label") or f"{index:04d}_fpv")
+    output_path = fpv_path.with_name(f"{fpv_path.stem}.bbox.png")
+    try:
+        with Image.open(fpv_path) as source:
+            image = source.convert("RGB")
+        draw = ImageDraw.Draw(image)
+        for box in boxes:
+            _draw_bbox(draw, box)
+        image.save(output_path, format="PNG")
+    except OSError:
+        return ""
+    return _report_asset_src(output_path, run_dir) or f"robot_views/{html.escape(label)}.bbox.png"
+
+
+def _resolve_report_asset_path(run_dir: Path, path: Any) -> Path | None:
+    if not path:
+        return None
+    candidate = Path(str(path))
+    if candidate.is_absolute():
+        return candidate if candidate.exists() else None
+    rooted = run_dir / candidate
+    if rooted.exists():
+        return rooted
+    if candidate.exists():
+        return candidate.resolve()
+    return None
+
+
+def _draw_bbox(draw: ImageDraw.ImageDraw, box: dict[str, Any]) -> None:
+    bbox = box.get("bbox") or []
+    if len(bbox) != 4:
+        return
+    try:
+        x0, y0, x1, y1 = [int(value) for value in bbox]
+    except (TypeError, ValueError):
+        return
+    try:
+        color = tuple(int(value) for value in (box.get("color") or [239, 68, 68])[:3])
+    except (TypeError, ValueError):
+        color = (239, 68, 68)
+    label = str(box.get("label") or "")
+    draw.rectangle((x0, y0, x1, y1), outline=color, width=3)
+    if not label:
+        return
+    try:
+        text_box = draw.textbbox((x0, y0), label)
+        text_width = text_box[2] - text_box[0]
+        text_height = text_box[3] - text_box[1]
+    except AttributeError:
+        text_width = max(40, len(label) * 7)
+        text_height = 12
+    label_y = max(0, y0 - text_height - 6)
+    draw.rectangle((x0, label_y, x0 + text_width + 6, label_y + text_height + 6), fill=color)
+    draw.text((x0 + 3, label_y + 3), label, fill=(255, 255, 255))
 
 
 def _visual_core_robot_view_steps(
@@ -4981,11 +5746,10 @@ def _observed_handle_from_action(action: str) -> str:
 def _view_figure(path: Any, label: str) -> str:
     if not path:
         return ""
-    escaped_path = html.escape(str(path))
     escaped_label = html.escape(label)
     return (
         "<figure>"
-        f'<img src="{escaped_path}" alt="{escaped_label} view">'
+        f"{_review_image(path, f'{label} view')}"
         f"<figcaption>{escaped_label}</figcaption>"
         "</figure>"
     )
@@ -5040,6 +5804,7 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
     for item in semantic_substeps:
         steps = item.get("steps", [])
         displayed = display_semantic_subphases(steps)
+        status = _semantic_substep_status(steps)
         phase_rail = "".join(
             "<li>"
             f"<span>{html.escape(step['label'])}</span>"
@@ -5050,23 +5815,35 @@ def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
         readback = _semantic_readback(steps)
         placement = _semantic_placement_readback(steps)
         cards.append(
-            '<article class="semantic-card">'
-            '<div class="semantic-card-head">'
+            '<details class="semantic-card">'
+            "<summary>"
+            '<span class="semantic-card-head">'
             f"<strong>{html.escape(str(item.get('object_id', '')))}</strong>"
-            f"<span>{html.escape(str(item.get('source_receptacle_id', '')))}"
+            f"<span>{html.escape(str(item.get('source_receptacle_id', '') or 'unknown source'))}"
             " -> "
-            f"{html.escape(str(item.get('target_receptacle_id', '')))}</span>"
-            "</div>"
+            f"{html.escape(str(item.get('target_receptacle_id', '') or 'unknown target'))}</span>"
+            "</span>"
+            f'<span class="semantic-card-status">{html.escape(status)}'
+            f" · {len(displayed)} phases</span>"
+            "</summary>"
             f'<ol class="phase-rail">{phase_rail}</ol>'
             f'<p class="readback">Readback: {html.escape(readback or "pending")}</p>'
             f"{placement}"
-            "</article>"
+            "</details>"
         )
     return (
         '<section class="panel semantic-section"><h2>Semantic Substeps</h2>'
         f'<p class="note">{html.escape(SEMANTIC_LOOP_DISPLAY_NOTE)}</p>'
         '<div class="semantic-cards">' + "".join(cards) + "</div></section>"
     )
+
+
+def _semantic_substep_status(steps: list[dict[str, Any]]) -> str:
+    if any(step.get("phase") in {OBJECT_DONE_PHASE, *PLACE_CLEANUP_PHASES} for step in steps):
+        return "placed"
+    if any(step.get("ok") is False for step in steps):
+        return "blocked"
+    return "pending"
 
 
 def _semantic_readback(steps: list[dict[str, Any]]) -> str:
@@ -5176,6 +5953,19 @@ def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
     )
 
 
+def _image_lightbox_markup() -> str:
+    return (
+        '<div class="image-lightbox" data-image-lightbox hidden aria-hidden="true">'
+        '<button type="button" class="lightbox-close" data-lightbox-close '
+        'aria-label="Close image review">Close</button>'
+        '<div class="lightbox-dialog" role="dialog" aria-modal="true" '
+        'aria-label="Image review">'
+        '<img alt="">'
+        '<p class="lightbox-caption" data-lightbox-caption></p>'
+        "</div></div>"
+    )
+
+
 def _wrap_html(
     body: str,
     *,
@@ -5184,6 +5974,7 @@ def _wrap_html(
 ) -> str:
     extra_css_block = f"{extra_css.rstrip()}\n" if extra_css else ""
     rerun_panel = render_rerun_panel(rerun_command)
+    image_lightbox = _image_lightbox_markup()
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -5199,6 +5990,7 @@ def _wrap_html(
     main {{ max-width: 1180px; margin: 0 auto; padding: 28px 20px 48px; }}
     h1 {{ font-size: 30px; margin: 0; letter-spacing: 0; }}
     h2 {{ font-size: 19px; margin: 0 0 12px; letter-spacing: 0; }}
+    h2 span {{ color: #647083; font-size: 13px; font-weight: 650; }}
     .summary {{
       background: #20242c;
       color: #f8fafc;
@@ -5207,6 +5999,20 @@ def _wrap_html(
       box-shadow: 0 14px 34px rgba(25, 32, 44, 0.16);
     }}
     .summary-head {{ display: flex; justify-content: space-between; gap: 16px; align-items: end; }}
+    .summary-metadata {{
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 8px;
+      margin-top: 12px;
+      background: rgba(255, 255, 255, 0.05);
+    }}
+    .summary-metadata > summary {{
+      min-height: 42px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #dbe5ef;
+      font-weight: 750;
+    }}
+    .summary-metadata .badges {{ padding: 0 12px 12px; }}
     .eyebrow {{
       margin: 0 0 6px;
       color: #a7d8cf;
@@ -5229,6 +6035,12 @@ def _wrap_html(
     }}
     .metric span {{ display: block; color: #b7c1ce; font-size: 12px; margin-bottom: 4px; }}
     .metric strong {{ display: block; color: #ffffff; font-size: 19px; }}
+    .panel .metric {{
+      background: #f8fafc;
+      border-color: #d9dde6;
+    }}
+    .panel .metric span {{ color: #647083; }}
+    .panel .metric strong {{ color: #20242c; }}
     .panel {{
       background: #ffffff;
       border: 1px solid #d8dee8;
@@ -5237,6 +6049,43 @@ def _wrap_html(
       margin-top: 18px;
       box-shadow: 0 5px 16px rgba(25, 32, 44, 0.06);
     }}
+    .report-tabs {{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding: 10px;
+      background: rgba(238, 242, 246, 0.96);
+      border: 1px solid #d8dee8;
+      border-radius: 8px;
+      backdrop-filter: blur(8px);
+    }}
+    .report-tab {{
+      min-height: 40px;
+      border: 1px solid #cfd6e2;
+      border-radius: 6px;
+      padding: 0 12px;
+      background: #ffffff;
+      color: #334155;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }}
+    .report-tab[aria-selected="true"] {{
+      background: #20242c;
+      border-color: #20242c;
+      color: #ffffff;
+    }}
+    .report-tab:focus-visible {{
+      outline: 3px solid #7cc7bb;
+      outline-offset: 2px;
+    }}
+    .report-tab-panel {{ scroll-margin-top: 80px; }}
     .note-panel {{ background: #fbfcfd; }}
     .badges {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .badge {{
@@ -5256,6 +6105,94 @@ def _wrap_html(
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 16px;
     }}
+    .before-after-section .snapshots figcaption,
+    .comparison-item figcaption,
+    .nav2-preview figcaption {{
+      display: grid;
+      gap: 3px;
+    }}
+    figcaption strong {{ color: #20242c; }}
+    figcaption span {{ color: #647083; font-size: 12px; }}
+    .comparison-details,
+    .timing-details,
+    .artifact-details,
+    .robot-timeline-details {{
+      margin-top: 14px;
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      background: #fbfcfd;
+    }}
+    .comparison-details > summary,
+    .timing-details > summary,
+    .artifact-details > summary,
+    .robot-timeline-details > summary {{
+      min-height: 44px;
+      padding: 12px 14px;
+      cursor: pointer;
+      font-weight: 750;
+    }}
+    .comparison-details > summary span {{
+      color: #647083;
+      font-size: 13px;
+      font-weight: 650;
+      margin-left: 8px;
+    }}
+    .comparison-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 12px;
+      padding: 0 12px 12px;
+    }}
+    .comparison-item {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+    }}
+    .comparison-item summary {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 24px;
+      gap: 10px;
+      align-items: center;
+      list-style: none;
+      cursor: pointer;
+    }}
+    .comparison-item summary::-webkit-details-marker {{ display: none; }}
+    .comparison-item summary::after {{
+      content: "-";
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #e6eef5;
+      color: #334155;
+      font-weight: 800;
+    }}
+    .comparison-item:not([open]) summary::after {{ content: "+"; }}
+    .comparison-item[open] summary {{ margin-bottom: 10px; }}
+    .comparison-item-head {{
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }}
+    .comparison-item-head strong {{ font-size: 15px; overflow-wrap: anywhere; }}
+    .comparison-item-head span {{
+      color: #647083;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }}
+    .comparison-views {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 8px;
+    }}
+    .comparison-missing {{
+      display: grid;
+      min-height: 120px;
+      place-items: center;
+      background: #f1f5f9;
+    }}
     figure {{
       margin: 0;
       background: #fff;
@@ -5264,9 +6201,163 @@ def _wrap_html(
       padding: 10px;
     }}
     img {{ width: 100%; height: auto; display: block; }}
+    .image-link {{
+      position: relative;
+      display: block;
+      border-radius: 4px;
+      overflow: hidden;
+      cursor: zoom-in;
+    }}
+    .image-link::after {{
+      content: "+";
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(32, 36, 44, 0.82);
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 800;
+      opacity: 0;
+      transform: scale(0.94);
+      transition: opacity 0.16s ease, transform 0.16s ease;
+    }}
+    .image-link:hover::after,
+    .image-link:focus-visible::after {{
+      opacity: 1;
+      transform: scale(1);
+    }}
+    .image-link:focus-visible {{
+      outline: 3px solid #7cc7bb;
+      outline-offset: 3px;
+    }}
+    .image-lightbox[hidden] {{ display: none; }}
+    .image-lightbox {{
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(12, 16, 24, 0.86);
+    }}
+    .lightbox-dialog {{
+      display: grid;
+      gap: 10px;
+      max-width: min(96vw, 1440px);
+      max-height: 92vh;
+      color: #f8fafc;
+    }}
+    .lightbox-dialog img {{
+      max-width: min(96vw, 1440px);
+      max-height: 82vh;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 6px;
+      background: #0f172a;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.42);
+    }}
+    .lightbox-caption {{
+      margin: 0;
+      color: #e2e8f0;
+      font-size: 14px;
+      overflow-wrap: anywhere;
+    }}
+    .lightbox-close {{
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      min-height: 38px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 6px;
+      padding: 0 12px;
+      background: rgba(15, 23, 42, 0.88);
+      color: #ffffff;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }}
+    .lightbox-close:focus-visible {{
+      outline: 3px solid #7cc7bb;
+      outline-offset: 2px;
+    }}
     figcaption {{ margin-top: 8px; color: #565f70; font-size: 14px; }}
     .note {{ color: #565f70; margin: 0 0 12px; }}
     .table-wrap {{ overflow-x: auto; border: 1px solid #d9dde6; border-radius: 8px; }}
+    .timing-lane-block {{
+      margin: 14px 0;
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .timing-lane-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }}
+    .timing-lane-head h3 {{ margin: 0; font-size: 15px; }}
+    .timing-lane-head span {{ color: #475569; font-weight: 750; }}
+    .timing-lane {{
+      display: flex;
+      gap: 3px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }}
+    .timing-segment {{
+      flex: 0 0 max(var(--basis), 104px);
+      min-height: 74px;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+      padding: 10px;
+      color: #ffffff;
+      background: var(--segment-color);
+      border-radius: 6px;
+    }}
+    .timing-segment strong,
+    .timing-segment span,
+    .timing-segment small {{
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }}
+    .timing-segment span {{ font-size: 16px; font-weight: 800; }}
+    .timing-segment small {{ color: rgba(255, 255, 255, 0.82); }}
+    .timing-details .table-wrap,
+    .artifact-details .table-wrap {{ margin: 0 12px 12px; }}
+    .object-cycle-timing {{
+      margin-top: 16px;
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .object-cycle-timing > h3 {{ margin: 0 0 8px; font-size: 16px; }}
+    .object-cycle-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }}
+    .object-cycle {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+    }}
+    .object-cycle h3 {{ margin: 0 0 8px; font-size: 15px; overflow-wrap: anywhere; }}
+    .object-cycle .timing-lane-block {{ margin: 0; padding: 10px; }}
+    .object-cycle p {{ margin: 8px 0 0; color: #565f70; font-size: 12px; overflow-wrap: anywhere; }}
+    .robot-timeline-details .robot-step {{
+      margin: 0 12px 12px;
+    }}
     .robot-step {{
       background: #fff;
       border: 1px solid #d9dde6;
@@ -5286,6 +6377,27 @@ def _wrap_html(
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
       gap: 10px;
+    }}
+    .robot-primary-views {{
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }}
+    .sim-only-views {{
+      margin-top: 10px;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      background: #f8fafc;
+    }}
+    .sim-only-views > summary {{
+      min-height: 40px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #475569;
+      font-weight: 750;
+    }}
+    .sim-only-views .views {{ padding: 0 12px 12px; }}
+    .sim-only-grid-single {{
+      grid-template-columns: minmax(0, min(100%, 560px));
+      justify-content: start;
     }}
 {extra_css_block}    .raw-fpv-grid {{
       display: grid;
@@ -5311,10 +6423,33 @@ def _wrap_html(
       padding: 12px;
       background: #fbfcfd;
     }}
+    .semantic-card summary {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto 24px;
+      gap: 10px;
+      align-items: center;
+      list-style: none;
+      cursor: pointer;
+    }}
+    .semantic-card summary::-webkit-details-marker {{ display: none; }}
+    .semantic-card summary::after {{
+      content: "+";
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #e6eef5;
+      color: #334155;
+      font-weight: 800;
+    }}
+    .semantic-card[open] summary {{ margin-bottom: 10px; }}
+    .semantic-card[open] summary::after {{ content: "-"; }}
     .semantic-card-head {{
       display: grid;
       gap: 4px;
-      margin-bottom: 10px;
+      margin: 0;
+      min-width: 0;
     }}
     .semantic-card-head strong {{
       overflow-wrap: anywhere;
@@ -5324,6 +6459,12 @@ def _wrap_html(
       color: #647083;
       font-size: 12px;
       overflow-wrap: anywhere;
+    }}
+    .semantic-card-status {{
+      color: #475569;
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
     }}
     .phase-rail {{
       display: grid;
@@ -5344,6 +6485,56 @@ def _wrap_html(
     .phase-rail small {{ display: block; margin-top: 2px; color: #687789; }}
     .command-phase-rail {{ min-width: 280px; }}
     .readback {{ margin: 10px 0 0; color: #565f70; font-size: 13px; overflow-wrap: anywhere; }}
+    .nav2-explainer {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 10px;
+      margin: 12px 0;
+    }}
+    .nav2-explainer div {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .nav2-explainer strong {{ display: block; margin-bottom: 4px; }}
+    .nav2-explainer span {{ color: #565f70; }}
+    .nav2-preview-layout {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+      gap: 12px;
+      align-items: start;
+    }}
+    .nav2-legend {{
+      border: 1px solid #d9dde6;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfd;
+    }}
+    .nav2-legend h3 {{ margin: 0 0 10px; font-size: 15px; }}
+    .nav2-legend ul {{ display: grid; gap: 10px; list-style: none; padding: 0; margin: 0; }}
+    .nav2-legend li {{
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }}
+    .nav2-legend small {{
+      grid-column: 2;
+      color: #647083;
+    }}
+    .legend-swatch {{
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1px solid #94a3b8;
+      background: #e8eef6;
+    }}
+    .legend-swatch.fixture {{ background: #717c8d; border-color: #475569; }}
+    .legend-swatch.waypoint {{ border-radius: 999px; background: #23865a; border-color: #23865a; }}
+    .legend-swatch.robot {{ border-radius: 999px; background: #2e58b2; border-color: #1e4082; }}
+    .nav2-legend p {{ margin: 12px 0 0; color: #565f70; }}
+    .requirements {{ color: #565f70; }}
     table {{ width: 100%; border-collapse: collapse; background: #fff; }}
     th, td {{
       padding: 9px 10px;
@@ -5353,10 +6544,105 @@ def _wrap_html(
       overflow-wrap: anywhere;
     }}
     th {{ background: #eef1f5; font-weight: 650; }}
+    @media (max-width: 640px) {{
+      main {{ padding: 18px 12px 36px; }}
+      .summary-head,
+      .timing-lane-head {{
+        display: grid;
+        align-items: start;
+      }}
+      .semantic-card summary {{
+        grid-template-columns: minmax(0, 1fr) 24px;
+      }}
+      .semantic-card-status {{
+        grid-column: 1 / -1;
+      }}
+      .nav2-preview-layout {{
+        grid-template-columns: 1fr;
+      }}
+    }}
 {rerun_panel_css()}
   </style>
 </head>
-<body><main>{rerun_panel}{body}</main></body>
+<body><main>{rerun_panel}{body}</main>{image_lightbox}<script>
+(() => {{
+  const buttons = Array.from(document.querySelectorAll("[data-report-tab-button]"));
+  const panels = Array.from(document.querySelectorAll("[data-report-tab]"));
+  if (!buttons.length || !panels.length) return;
+  document.documentElement.classList.add("tabs-ready");
+  const validTabs = new Set(panels.map((panel) => panel.dataset.reportTab));
+  function activate(tab, options = {{}}) {{
+    if (!validTabs.has(tab)) tab = panels[0].dataset.reportTab;
+    for (const button of buttons) {{
+      const selected = button.dataset.reportTabButton === tab;
+      button.setAttribute("aria-selected", String(selected));
+    }}
+    let selectedPanel = panels[0];
+    for (const panel of panels) {{
+      const selected = panel.dataset.reportTab === tab;
+      panel.hidden = !selected;
+      if (selected) selectedPanel = panel;
+    }}
+    if (options.scroll === true && selectedPanel) {{
+      requestAnimationFrame(() => {{
+        selectedPanel.scrollIntoView({{ block: "start", inline: "nearest" }});
+      }});
+    }}
+  }}
+  for (const button of buttons) {{
+    button.addEventListener("click", () => {{
+      const tab = button.dataset.reportTabButton;
+      activate(tab, {{ scroll: true }});
+      history.replaceState(null, "", `#${{tab}}`);
+    }});
+  }}
+  const hash = location.hash.replace("#", "");
+  activate(validTabs.has(hash) ? hash : panels[0].dataset.reportTab);
+}})();
+(() => {{
+  const lightbox = document.querySelector("[data-image-lightbox]");
+  if (!lightbox) return;
+  const lightboxImage = lightbox.querySelector("img");
+  const caption = lightbox.querySelector("[data-lightbox-caption]");
+  const closeButton = lightbox.querySelector("[data-lightbox-close]");
+  let returnFocus = null;
+
+  function openLightbox(link) {{
+    returnFocus = link;
+    lightboxImage.src = link.href;
+    lightboxImage.alt = link.querySelector("img")?.alt || "";
+    caption.textContent = link.dataset.lightboxCaption || lightboxImage.alt || "";
+    lightbox.hidden = false;
+    lightbox.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    closeButton?.focus();
+  }}
+
+  function closeLightbox() {{
+    lightbox.hidden = true;
+    lightbox.setAttribute("aria-hidden", "true");
+    lightboxImage.removeAttribute("src");
+    document.body.style.overflow = "";
+    if (returnFocus && document.contains(returnFocus)) returnFocus.focus();
+    returnFocus = null;
+  }}
+
+  document.addEventListener("click", (event) => {{
+    const link = event.target.closest?.("[data-lightbox-image]");
+    if (link) {{
+      event.preventDefault();
+      openLightbox(link);
+      return;
+    }}
+    if (!lightbox.hidden && event.target === lightbox) closeLightbox();
+    if (!lightbox.hidden && event.target.closest?.("[data-lightbox-close]")) closeLightbox();
+  }});
+
+  document.addEventListener("keydown", (event) => {{
+    if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+  }});
+}})();
+</script></body>
 </html>
 """
 

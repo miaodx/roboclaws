@@ -10,13 +10,13 @@ def test_visual_core_contract_accepts_canonical_cleanup_order() -> None:
     report = """
     <h2>Before And After</h2>
     <h2>Object Moves</h2>
+    <section><h2>Robot View Timeline</h2></section>
     <section><h2>Semantic Substeps</h2><ol class="phase-rail">
       <li><span>nav</span><small>object</small></li>
       <li><span>pick</span><small>object</small></li>
       <li><span>nav</span><small>target</small></li>
       <li><span>place</span><small>surface</small></li>
     </ol></section>
-    <section><h2>Robot View Timeline</h2></section>
     <h2>Score</h2>
     <h2>Agent View</h2>
     <h2>Private Evaluation</h2>
@@ -28,6 +28,27 @@ def test_visual_core_contract_accepts_canonical_cleanup_order() -> None:
         require_robot_timeline=True,
         require_agent_view=True,
         require_private_evaluation=True,
+    )
+
+
+def test_visual_core_contract_accepts_legacy_semantic_before_robot_order() -> None:
+    report = """
+    <h2>Before And After</h2>
+    <h2>Object Moves</h2>
+    <section><h2>Semantic Substeps</h2><ol class="phase-rail">
+      <li><span>nav</span><small>object</small></li>
+      <li><span>pick</span><small>object</small></li>
+      <li><span>nav</span><small>target</small></li>
+      <li><span>place</span><small>surface</small></li>
+    </ol></section>
+    <section><h2>Robot View Timeline</h2></section>
+    <h2>Score</h2>
+    """
+
+    assert_cleanup_report_visual_core(
+        report,
+        require_semantic_subphases=True,
+        require_robot_timeline=True,
     )
 
 

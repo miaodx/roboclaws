@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
@@ -235,12 +236,52 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
                     },
                 },
             },
+            {
+                "action": "pick mug_01",
+                "semantic_phase": "pick",
+                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+                "views": {
+                    "fpv": "robot_views/step.fpv.png",
+                    "verify": "robot_views/step.verify.png",
+                },
+                "focus": {"has_focus": True},
+            },
+            {
+                "action": "place mug_01",
+                "semantic_phase": "place",
+                "robot_pose": {"x": 1.0, "y": 2.0, "theta": 0.5},
+                "views": {
+                    "fpv": "robot_views/step.fpv.png",
+                    "verify": "robot_views/step.verify.png",
+                },
+                "focus": {"has_focus": True},
+            },
         ],
     )
 
     html = report_path.read_text(encoding="utf-8")
     assert "Robot View Timeline" in html
+    assert 'data-report-tab-button="timeline"' in html
+    assert html.index('data-report-tab-button="timeline"') < html.index(
+        'data-report-tab-button="timing"'
+    )
+    assert '<details class="robot-timeline-details" open>' in html
+    assert "captured robot-view" in html
     assert "Semantic Substeps" in html
+    assert "Pick/place visual checks" in html
+    assert '<details class="comparison-item" open>' in html
+    assert '<a class="image-link" href="robot_views/step.fpv.png" data-lightbox-image' in html
+    assert (
+        '<img src="robot_views/step.fpv.png" alt="Pick view" loading="lazy" decoding="async">'
+        in html
+    )
+    assert '<img src="robot_views/step.verify.png" alt="Pick view">' not in html
+    assert 'data-lightbox-caption="Pick view"' in html
+    assert 'class="image-lightbox"' in html
+    assert "Close image review" in html
+    assert "sim-only-grid-single" in html
+    assert '<details class="semantic-card">' in html
+    assert "semantic-card-status" in html
     assert SEMANTIC_LOOP_DISPLAY_NOTE in html
     assert "<span>nav</span><small>object</small>" in html
     assert "<span>pick</span><small>object</small>" in html
@@ -252,7 +293,8 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "rby1m" in html
     assert "robot_views/step.fpv.png" in html
     assert "robot_views/bootstrap.verify.png" not in html
-    assert "Verification" in html
+    assert "Chase sim-only" in html
+    assert "Top-view bbox verification sim-only" in html
     assert "object 0 px" not in html
     assert "navigate_to_receptacle" in html
     assert "Mug mug" in html
@@ -301,6 +343,20 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
         {"tool": "done", "event": "request", "wallclock_elapsed": 3.0},
         {"tool": "done", "event": "response", "wallclock_elapsed": 3.2},
     ]
+    (tmp_path / "live_timing.json").write_text(
+        json.dumps(
+            {
+                "runner_timing": {
+                    "total_elapsed_s": 5.0,
+                    "pre_codex_setup_s": 0.5,
+                    "codex_exec_elapsed_s": 3.5,
+                    "checker_elapsed_s": 0.4,
+                    "final_overhead_s": 0.1,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
 
     report_path = render_cleanup_report(
         run_dir=tmp_path,
@@ -312,7 +368,13 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
     )
 
     html = report_path.read_text(encoding="utf-8")
+    assert 'class="report-tabs"' in html
+    assert "scrollIntoView" in html
+    assert 'block: "start"' in html
     assert "Runtime Timing" in html
+    assert "Run wall clock" in html
+    assert "MCP trace attribution" in html
+    assert "Tool and gap tables" in html
     assert "MCP elapsed" in html
     assert "3.2s" in html
     assert "Tool/backend handling" in html
@@ -324,6 +386,202 @@ def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None
     assert "Other MCP overhead" in html
     assert "0.2s" in html
     assert "fixture_hints" in html
+
+
+def test_cleanup_report_renders_per_object_timing_cycles(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+    }
+    trace_events = [
+        {
+            "tool": "navigate_to_visual_candidate",
+            "event": "request",
+            "request": {},
+            "wallclock_elapsed": 1.0,
+        },
+        {
+            "tool": "navigate_to_visual_candidate",
+            "event": "response",
+            "response": {"ok": True, "object_id": "mug_01"},
+            "wallclock_elapsed": 1.1,
+        },
+        {
+            "tool": "<runtime>",
+            "event": "robot_view_capture",
+            "wallclock_elapsed": 2.0,
+            "elapsed_s": 0.4,
+        },
+        {
+            "tool": "pick",
+            "event": "request",
+            "request": {"object_id": "mug_01"},
+            "wallclock_elapsed": 2.2,
+        },
+        {
+            "tool": "pick",
+            "event": "response",
+            "response": {"ok": True, "object_id": "mug_01"},
+            "wallclock_elapsed": 2.3,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "request",
+            "request": {"fixture_id": "sink_01"},
+            "wallclock_elapsed": 3.0,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "response",
+            "response": {"ok": True, "object_id": "mug_01", "fixture_id": "sink_01"},
+            "wallclock_elapsed": 3.1,
+        },
+        {
+            "tool": "place",
+            "event": "request",
+            "request": {"fixture_id": "sink_01"},
+            "wallclock_elapsed": 4.0,
+        },
+        {
+            "tool": "place",
+            "event": "response",
+            "response": {"ok": True, "object_id": "mug_01", "fixture_id": "sink_01"},
+            "wallclock_elapsed": 4.1,
+        },
+        {"tool": "observe", "event": "request", "request": {}, "wallclock_elapsed": 5.0},
+        {
+            "tool": "observe",
+            "event": "response",
+            "response": {"ok": True},
+            "wallclock_elapsed": 5.5,
+        },
+    ]
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=trace_events,
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Per-object cleanup cycles" in html
+    assert "mug_01" in html
+    assert "Agent thinking / orchestration" in html
+    assert "response-to-next-request time" in html
+    assert "Sweep/search overhead" in html
+    assert "no projections" in html
+    assert "navigate_to_visual_candidate -&gt; pick" in html
+
+
+def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "nav2_map_bundle": {
+            "environment_id": "molmospaces-procthor-val-0-7",
+            "robot_profile_id": "rby1m",
+            "costmap_profile_id": "rby1m_static_global",
+            "parameter_hash": "abcdef0123456789",
+            "artifact_paths": {
+                "map_yaml": "map_bundle/map.yaml",
+                "occupancy_image": "map_bundle/map.pgm",
+                "semantics_json": "map_bundle/semantics.json",
+                "robot_profile": "map_bundle/profiles/rby1m.yaml",
+                "costmap_params": "map_bundle/costmaps/rby1m.costmap_params.yaml",
+                "preview_png": "map_bundle/preview.png",
+            },
+            "artifact_hashes": {"map_yaml": "abcdef0123456789"},
+            "runtime_costmap_gaps": ["tf_timing_not_simulated"],
+        },
+        "agent_view": {
+            "metric_map": {
+                "rooms": [
+                    {
+                        "room_id": "room_1",
+                        "room_label": "room 1",
+                        "polygon": [
+                            {"x": 0.0, "y": 0.0},
+                            {"x": 2.0, "y": 0.0},
+                            {"x": 2.0, "y": 2.0},
+                            {"x": 0.0, "y": 2.0},
+                        ],
+                    }
+                ],
+                "inspection_waypoints": [{"waypoint_id": "room_1_scan_1", "x": 1.0, "y": 1.0}],
+                "robot_pose": {"x": 1.0, "y": 1.0},
+            },
+            "fixture_hints": {
+                "rooms": [
+                    {
+                        "room_id": "room_1",
+                        "fixtures": [
+                            {
+                                "category": "Sink",
+                                "name": "Sink (Sink|1|0)",
+                                "pose": {"x": 0.4, "y": 0.3},
+                                "footprint": {"width_m": 0.5, "depth_m": 0.4},
+                            }
+                        ],
+                    }
+                ]
+            },
+        },
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert "Nav2 Map Bundle <span>Static map contract</span>" in html
+    assert "What it proves" in html
+    assert "What it does not prove" in html
+    assert "Static navigation map preview" in html
+    assert "report_static_navigation_map.png" in html
+    assert "Green dots" in html
+    assert "Blue dot" in html
+    assert "not a camera image" in html
+    assert "Map files, hashes, and known gaps" in html
+    assert "tf_timing_not_simulated" in html
+    assert (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
 
 
 def test_cleanup_report_labels_observe_roles_and_zero_pixel_focus(tmp_path: Path) -> None:
@@ -900,8 +1158,8 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
     ordered_headings = [
         "<h2>Before And After</h2>",
         "<h2>Object Moves</h2>",
-        "<h2>Semantic Substeps</h2>",
         "<h2>Robot View Timeline</h2>",
+        "<h2>Semantic Substeps</h2>",
         "<h2>Score</h2>",
         "<h2>Cleanup Primitive Gate</h2>",
         "<h2>Agent View</h2>",
