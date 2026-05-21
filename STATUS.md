@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-20
+Last updated: 2026-05-21
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -8,26 +8,20 @@ and pointers only, not a changelog or execution ledger.
 ## Current Focus
 
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
-artifacts visible, honest, and aligned with future real-robot Nav2 pilots.
+artifacts visible, honest, and aligned with future real-robot backends.
 
-The active follow-up is the real-robot Nav2 cleanup pilot on draft PR #112. The
-branch implements the reusable Nav2 map bundle package/checker, static
-sim-costmap route validation, the direct Nav2 adapter scaffold,
-`real_robot_cleanup_v1` profile, Nav2 map bundle snapshots, report rendering,
-checker alignment gates, and local Codex consumption through the repo-local
-`.env` coding-agent route.
+The active follow-up is the Agibot SDK runner backend boundary for
+`real_robot_cleanup_v1`. Roboclaws keeps the cleanup-shaped public contract and
+calls the SDK runner through a subprocess CLI; the SDK runner owns Agibot GDK
+map, observation, navigation, and per-stage evidence.
 
 ## Next Action
 
-Review the ADR-0130 skill-first composition closeout commits before pushing.
-The latest apples-to-apples timing artifacts are
-`output/molmo/codex-skill-routine-perf/0520_1204/seed-7/report.html` and
-`output/molmo/codex-mcp-routine-perf/0520_1319/seed-7/report.html`; RAW_FPV
-comparison artifacts are
-`output/molmo/codex-camera-raw-skill-check/0520_1324/seed-7/report.html` and
-`output/molmo/codex-camera-raw-mcp-check-final3/0520_1508/seed-7/report.html`.
-They record why canonical cleanup composition remains skill-side while the
-performance lane still explicitly enables the promoted MCP candidate.
+Commit the ADR-0131 / SDK ADR-0002 dry-run slice in dependency order: first the
+`vendors/agibot_sdk` runner changes, then the parent Roboclaws submodule pointer
+and integration changes. Optional next validation is a real Agibot G2 run with
+the explicit movement gate enabled; the current proof level remains
+dry-run/rehearsal only.
 
 ## Current Blocker
 
@@ -43,6 +37,7 @@ local non-work-network runs also support OpenClaw.
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
 - Active Nav2 cleanup status:
   `docs/status/active/real-robot-nav2-cleanup-pilot.md`
+- Active Agibot plan/evidence: `docs/plans/agibot-g2-cleanup-support-pilot.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 

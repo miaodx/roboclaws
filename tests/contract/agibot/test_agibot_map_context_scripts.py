@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
 GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_context.py"
 VERIFY_PATH = REPO_ROOT / "scripts" / "agibot" / "verify_waypoints_with_pnc.py"
+SDK_RUNNER_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
+COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
 
 
 def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> None:
@@ -36,6 +40,21 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     assert fixture_hints["contains_runtime_observations"] is False
     assert "agibot_gdk" not in json.dumps(agent_view)
     assert (output_dir / "semantic_preview.png").is_file()
+
+
+def test_reachability_unverified_does_not_pass_as_verified(tmp_path: Path) -> None:
+    generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_context_unverified")
+    context = _completed_context()
+    context["inspection_waypoints"][0]["reachability_status"] = "unverified"
+    context["inspection_waypoints"][0].pop("verification")
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    output_dir = tmp_path / "generated"
+    context_path.write_text(json.dumps(context), encoding="utf-8")
+
+    generator.main([str(context_path), "--output-dir", str(output_dir)])
+
+    metric_map = json.loads((output_dir / "metric_map.json").read_text(encoding="utf-8"))
+    assert metric_map["inspection_waypoints"][0]["reachability_status"] == "unverified"
 
 
 def test_generate_metric_map_rejects_todo_context(tmp_path: Path) -> None:
@@ -137,73 +156,93 @@ def test_verify_helpers_select_map_check_and_record_status() -> None:
     assert selected[0]["verification"]["primitive_provenance"] == "agibot_gdk_normal_navi"
 
 
+def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    root = tmp_path / "sdk-runner"
+    agent_view_dir = root / "01-agent-view"
+    observe_dir = root / "02-observe"
+    navigate_dir = root / "03-navigate"
+
+    _run_sdk(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(agent_view_dir),
+    )
+    _run_sdk(
+        "observe",
+        "--agent-view-json",
+        str(agent_view_dir / "agent_view.json"),
+        "--output-dir",
+        str(observe_dir),
+    )
+    _run_sdk(
+        "navigate-waypoint",
+        "--agent-view-json",
+        str(agent_view_dir / "agent_view.json"),
+        "--output-dir",
+        str(navigate_dir),
+        "--waypoint-id",
+        "wp_sofa_front",
+    )
+
+    agent_view = json.loads((agent_view_dir / "agent_view.json").read_text(encoding="utf-8"))
+    navigate_result = json.loads((navigate_dir / "run_result.json").read_text(encoding="utf-8"))
+
+    for report in (
+        agent_view_dir / "report.html",
+        observe_dir / "report.html",
+        navigate_dir / "report.html",
+    ):
+        text = report.read_text(encoding="utf-8")
+        assert "AgiBot SDK Runner Report" in text
+        assert len(text) > 1000
+
+    assert "agibot" not in json.dumps(agent_view).lower()
+    assert "map_source" not in json.dumps(agent_view)
+    assert "verification" not in json.dumps(agent_view)
+    assert navigate_result["tool_response"]["navigation_status"] == "dry_run_not_executed"
+    assert navigate_result["tool_response"]["primitive_provenance"] == "blocked_capability"
+
+
+def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_path: Path) -> None:
+    context = _completed_context()
+    context["inspection_waypoints"][0]["reachability_status"] = "unverified"
+    context["inspection_waypoints"][0].pop("verification")
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(context), encoding="utf-8")
+    root = tmp_path / "sdk-runner"
+    agent_view_dir = root / "01-agent-view"
+    navigate_dir = root / "03-navigate"
+
+    _run_sdk(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(agent_view_dir),
+    )
+    proc = _run_sdk_allowing_failure(
+        "navigate-waypoint",
+        "--agent-view-json",
+        str(agent_view_dir / "agent_view.json"),
+        "--output-dir",
+        str(navigate_dir),
+        "--waypoint-id",
+        "wp_sofa_front",
+    )
+    navigate_result = json.loads((navigate_dir / "run_result.json").read_text(encoding="utf-8"))
+
+    assert proc.returncode == 2
+    assert navigate_result["status"] == "blocked_capability"
+    assert navigate_result["tool_response"]["failure_type"] == "waypoint_not_pnc_verified"
+    assert navigate_result["tool_response"]["navigation_status"] == "blocked"
+
+
 def _completed_context() -> dict:
-    return {
-        "schema": "agibot_gdk_map_context_authoring_v1",
-        "map_source": {
-            "type": "agibot_gdk_map_context",
-            "map_id": 3,
-            "map_name": "office_floor_1",
-            "is_curr_map": True,
-        },
-        "capture": {
-            "captured_at": "2026-05-19T00:00:00Z",
-            "manifest_path": "capture_manifest.json",
-            "camera_images": [],
-        },
-        "frame_id": "map",
-        "map_version": "operator-authored-v1",
-        "robot_pose": {
-            "x": 1.0,
-            "y": 1.5,
-            "yaw": 0.2,
-            "pose_source": "agibot_gdk_slam_get_curr_pose",
-        },
-        "rooms": [
-            {
-                "room_id": "living_room",
-                "room_label": "Living room",
-                "polygon": [
-                    {"x": 0.0, "y": 0.0},
-                    {"x": 4.0, "y": 0.0},
-                    {"x": 4.0, "y": 3.0},
-                    {"x": 0.0, "y": 3.0},
-                ],
-            }
-        ],
-        "fixtures": [
-            {
-                "fixture_id": "sofa",
-                "room_id": "living_room",
-                "label": "Sofa",
-                "category": "sofa",
-                "pose": {"x": 2.0, "y": 2.4, "yaw": 0.0},
-                "footprint": [],
-            }
-        ],
-        "inspection_waypoints": [
-            {
-                "waypoint_id": "wp_sofa_front",
-                "room_id": "living_room",
-                "fixture_id": "sofa",
-                "label": "Sofa front",
-                "purpose": "inspect_fixture",
-                "waypoint_source": "operator_recorded_pose",
-                "x": 1.8,
-                "y": 1.8,
-                "yaw": 1.57,
-                "visited": False,
-                "reachability_status": "verified",
-                "verification": {
-                    "schema": "agibot_gdk_pnc_waypoint_verification_v1",
-                    "navigation_backend": "agibot_gdk",
-                    "primitive_provenance": "agibot_gdk_normal_navi",
-                    "reachability_status": "verified",
-                },
-            }
-        ],
-        "driveable_ways": [],
-    }
+    return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
 
 
 def _capture_manifest(waypoint_id: str, *, x: float, y: float) -> dict:
@@ -241,3 +280,27 @@ def _load_module(path: Path, name: str):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _run_sdk(*args: str) -> subprocess.CompletedProcess[str]:
+    proc = subprocess.run(
+        [sys.executable, str(SDK_RUNNER_PATH), *args],
+        cwd=SDK_RUNNER_PATH.parent.parent,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    return proc
+
+
+def _run_sdk_allowing_failure(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SDK_RUNNER_PATH), *args],
+        cwd=SDK_RUNNER_PATH.parent.parent,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )

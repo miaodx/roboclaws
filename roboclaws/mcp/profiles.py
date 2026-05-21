@@ -52,6 +52,8 @@ PROVENANCE_CAMERA_ARTIFACT = "camera_artifact"
 PROVENANCE_SIMULATED_CAMERA_MODEL = "simulated_camera_model"
 PROVENANCE_PLANNER_BACKED = "planner_backed"
 PROVENANCE_NAV2_ACTION = "nav2_action"
+PROVENANCE_AGIBOT_GDK_NORMAL_NAVI = "agibot_gdk_normal_navi"
+PROVENANCE_AGIBOT_GDK_MAP_CONTEXT = "agibot_gdk_map_context"
 PROVENANCE_BLOCKED_CAPABILITY = "blocked_capability"
 
 
@@ -84,6 +86,7 @@ class ContractProfile:
     capability_families: tuple[str, ...]
     public_tools: tuple[ToolDescriptor, ...]
     privileged_tools: tuple[ToolDescriptor, ...]
+    backend_variants: tuple[str, ...] = ()
     privacy_exclusions: tuple[str, ...] = ()
     summary: str = ""
 
@@ -100,6 +103,7 @@ class ContractProfile:
             "version": self.version,
             "backend": self.backend,
             "domain": self.domain,
+            "backend_variants": list(self.backend_variants),
             "capability_families": list(self.capability_families),
             "public_tools": [tool.metadata() for tool in self.public_tools],
             "privileged_tools": [tool.metadata() for tool in self.privileged_tools],
@@ -477,7 +481,8 @@ _MOLMO_PROFILE = ContractProfile(
 _REAL_ROBOT_PROFILE = ContractProfile(
     profile_id=REAL_ROBOT_CLEANUP_PROFILE,
     version=1,
-    backend="ros2_nav2",
+    backend="physical_robot",
+    backend_variants=("nav2_ros2", "agibot_gdk"),
     domain="cleanup",
     capability_families=(
         FAMILY_PERCEPTION,
@@ -493,15 +498,15 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             "mapping.metric_map",
             FAMILY_MAPPING,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION,),
-            "Return a prebuilt Nav2 map bundle plus public fixture semantics.",
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_AGIBOT_GDK_MAP_CONTEXT),
+            "Return a backend-neutral real-robot map plus public fixture semantics.",
         ),
         _tool(
             "fixture_hints",
             "mapping.fixture_hints",
             FAMILY_MAPPING,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION,),
+            (PROVENANCE_NAV2_ACTION, PROVENANCE_AGIBOT_GDK_MAP_CONTEXT),
             "Return public fixture identities, affordances, and preferred waypoints.",
         ),
         _tool(
@@ -509,16 +514,24 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             "navigation.navigate_to_room",
             FAMILY_NAVIGATION,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
-            "Resolve a room-level cleanup goal to a bounded Nav2 waypoint action.",
+            (
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
+            "Resolve a room-level cleanup goal to a bounded physical waypoint action.",
         ),
         _tool(
             "navigate_to_waypoint",
             "navigation.navigate_to_waypoint",
             FAMILY_NAVIGATION,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
-            "Send a bounded waypoint goal through a direct Nav2 backend adapter.",
+            (
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
+            "Send a bounded waypoint goal through a physical navigation backend.",
         ),
         _tool(
             "observe",
@@ -549,8 +562,13 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             "navigation.navigate_to_visual_candidate",
             FAMILY_NAVIGATION,
             CLASSIFICATION_COMPOSED,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
-            "Ground one visual cleanup candidate and navigate toward it with Nav2 when possible.",
+            (
+                PROVENANCE_CAMERA_ARTIFACT,
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
+            "Ground one visual cleanup candidate and navigate toward it when possible.",
         ),
         _tool(
             "inspect_visible_object",
@@ -565,15 +583,24 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             "navigation.navigate_to_object",
             FAMILY_NAVIGATION,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
-            "Navigate toward a public observed object handle using the Nav2 pilot boundary.",
+            (
+                PROVENANCE_CAMERA_ARTIFACT,
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
+            "Navigate toward a public observed object handle using the physical pilot boundary.",
         ),
         _tool(
             "navigate_to_receptacle",
             "navigation.navigate_to_receptacle",
             FAMILY_NAVIGATION,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            (
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
             "Resolve a fixture to its preferred public waypoint and navigate there.",
         ),
         _tool(
@@ -621,15 +648,19 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             "episode.done",
             FAMILY_EPISODE,
             CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_BLOCKED_CAPABILITY),
+            (
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
             "Terminate the navigation and perception pilot episode.",
         ),
     ),
     privileged_tools=(),
     privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
     summary=(
-        "Real robot cleanup-shaped profile for the first Nav2 navigation and "
-        "perception pilot; manipulation remains blocked."
+        "Real robot cleanup-shaped profile for physical navigation and "
+        "perception pilots; manipulation remains blocked."
     ),
 )
 

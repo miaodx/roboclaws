@@ -110,9 +110,14 @@ def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
         "navigate_to_receptacle",
         "done",
     } <= set(tools)
+    assert metadata["backend"] == "physical_robot"
+    assert metadata["backend_variants"] == ["nav2_ros2", "agibot_gdk"]
     assert "scene_objects" not in json.dumps(metadata)
     assert "goto" not in tools
     assert "nav2_action" in tools["navigate_to_waypoint"]["provenance"]
+    assert "agibot_gdk_normal_navi" in tools["navigate_to_waypoint"]["provenance"]
+    assert "agibot_gdk_normal_navi" in tools["navigate_to_receptacle"]["provenance"]
+    assert "agibot_gdk_map_context" in tools["metric_map"]["provenance"]
     assert "nav2_action" in tools["navigate_to_visual_candidate"]["provenance"]
     assert "camera_artifact" in tools["declare_visual_candidates"]["provenance"]
     for tool_name in {"pick", "place", "place_inside", "open_receptacle", "close_receptacle"}:

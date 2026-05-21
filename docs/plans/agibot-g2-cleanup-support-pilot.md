@@ -1,6 +1,7 @@
 # Agibot G2 Cleanup Support Pilot
 
-**Status:** Proposed source plan
+**Status:** First SDK-runner backend slice implemented 2026-05-21; real hardware
+execution still unrun
 **Created:** 2026-05-19
 **Source:** grill-with-docs session on Agibot G2 GDK docs, local
 `vendors/agibot/app` examples, and `docs/plans/real-robot-nav2-cleanup-pilot.md`
@@ -210,6 +211,34 @@ Tool behavior:
     agent map projection, run the navigation + perception pilot, and review the
     report. Include real-hardware warnings and note that scripts are unvalidated
     until exercised on a G2.
+
+## Implementation Evidence
+
+2026-05-21 ADR-0131 / SDK ADR-0002 first slice:
+
+- Added `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`, a standalone
+  SDK runner for three semantic stages: `agent-view`, `observe`, and
+  `navigate-waypoint`.
+- Added `roboclaws/molmo_cleanup/agibot_sdk_runner.py`, a subprocess adapter and
+  physical Agibot pilot runner that keeps Roboclaws on `real_robot_cleanup_v1`
+  while the SDK runner owns Agibot-specific evidence.
+- Added `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py` for a
+  deterministic dry-run review artifact.
+- Updated `real_robot_cleanup_v1` profile metadata from a Nav2-only backend to
+  `physical_robot` with backend variants `nav2_ros2` and `agibot_gdk`.
+- Generated the current human-review artifact at
+  `output/agibot/adr0131-sdk-runner-dry-run/report.html`.
+
+Subphase HTML reports:
+
+- `output/agibot/adr0131-sdk-runner-dry-run/subphases/01-agent-view/report.html`
+- `output/agibot/adr0131-sdk-runner-dry-run/subphases/02-observe/report.html`
+- `output/agibot/adr0131-sdk-runner-dry-run/subphases/03-navigate-waypoint/report.html`
+
+Current proof level: dry-run/rehearsal only. The observation and navigation
+subphases intentionally render `blocked_capability` without `--execute`, so
+these artifacts prove the CLI boundary, report shape, privacy boundary, and
+movement gate, not physical PNC execution.
 
 ## Non-Goals
 
