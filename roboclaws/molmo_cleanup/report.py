@@ -5639,7 +5639,16 @@ def _requested_generated_text(private: dict[str, Any]) -> str:
 
 def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
     if not steps:
-        return ""
+        return (
+            '<section class="panel robot-timeline robot-timeline-empty">'
+            "<h2>Robot View Timeline</h2>"
+            '<div class="empty-state">'
+            "<h3>No robot-view timeline captured</h3>"
+            "<p>This run did not record FPV/map/chase timeline frames. Review the "
+            "Robot & Map tab for static map artifacts, SDK subphase reports, and "
+            "navigation rehearsal evidence.</p>"
+            "</div></section>"
+        )
     cards = []
     previous_action = ""
     for index, step in enumerate(steps, start=1):
@@ -6252,6 +6261,14 @@ def _wrap_html(
     }}
     .report-tab-panel {{ scroll-margin-top: 80px; }}
     .note-panel {{ background: #fbfcfd; }}
+    .empty-state {{
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      background: #f8fafc;
+      padding: 18px;
+    }}
+    .empty-state h3 {{ margin: 0 0 6px; color: #20242c; }}
+    .empty-state p {{ margin: 0; color: #647083; max-width: 720px; }}
     .badges {{ display: flex; flex-wrap: wrap; gap: 8px; }}
     .badge {{
       background: #fff;
