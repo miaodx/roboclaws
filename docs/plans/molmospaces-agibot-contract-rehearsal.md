@@ -5,15 +5,16 @@
 **Source:** Agibot integration review, `CONTEXT.md`,
 `vendors/agibot_sdk/CONTEXT.md`, and
 `docs/plans/agibot-robot-map-9-dry-run-rehearsal.md`
+and `docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md`
 **Workflow:** Pre-GSD plan. Run review/autoplan before implementation or ingest
 into `.planning/` when ready.
 
 ## Problem
 
-The current Agibot `robot_map_9` report is useful and accepted, but it does not
-exercise a robot-like runtime loop in simulation through Agibot-shaped runner
-semantics. Before real G2 testing, Roboclaws still needs a richer and more
-realistic sim step:
+The current Agibot `robot_map_9` dry-run and semantic-actions reports are useful
+and accepted confidence layers, but they do not exercise a robot-like runtime
+loop in simulation through Agibot-shaped runner semantics. Before real G2
+testing, Roboclaws still needs a richer and more realistic sim step:
 
 - consume Agibot-shaped task and runner artifacts;
 - expose the same public cleanup tool semantics that a real Agibot backend will
@@ -42,7 +43,8 @@ contract before real robot testing:
 
 This rehearsal is not:
 
-- `robot_map_9` replay;
+- `robot_map_9` map/SDK dry-run replay;
+- `robot_map_9` semantic cleanup mock evidence;
 - a digital twin of the Agibot lab floor;
 - a GDK wrapper;
 - physical navigation proof;

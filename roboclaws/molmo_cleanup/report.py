@@ -51,9 +51,9 @@ def write_state_snapshot(
 ) -> Path:
     """Render a compact deterministic room-state PNG."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    image = Image.new("RGB", (900, 520), (249, 250, 252))
+    image = Image.new("RGB", (900, 580), (249, 250, 252))
     draw = ImageDraw.Draw(image)
-    draw.rectangle((12, 12, 888, 508), outline=(190, 194, 202), width=2)
+    draw.rectangle((12, 12, 888, 568), outline=(190, 194, 202), width=2)
     draw.text((28, 26), title, fill=(30, 34, 42))
 
     positions = _receptacle_positions()
@@ -133,6 +133,7 @@ def _cleanup_report_sections(
             _report_tab_panel(
                 "overview",
                 [
+                    _confidence_layer_note(run_result),
                     _realworld_contract_note(run_result),
                     _cleanup_profile_note(run_result),
                     _before_after_section(
@@ -511,11 +512,13 @@ def _cleanup_summary_section(
     score: dict[str, Any],
 ) -> str:
     restored_summary = f"{score['restored_count']}/{score['total_targets']}"
+    eyebrow = str(run_result.get("report_eyebrow") or "Cleanup artifact")
+    title = str(run_result.get("report_title") or "MolmoSpaces Cleanup Pilot")
     return f"""
     <section class="summary">
       <div class="summary-head">
-        <p class="eyebrow">Cleanup artifact</p>
-        <h1>MolmoSpaces Cleanup Pilot</h1>
+        <p class="eyebrow">{html.escape(eyebrow)}</p>
+        <h1>{html.escape(title)}</h1>
       </div>
       {_summary_metrics(run_result, score)}
       <details class="summary-metadata">
@@ -532,6 +535,7 @@ def _cleanup_summary_section(
           {_badge("Agent driven", run_result.get("agent_driven", False))}
           {_badge("Provenance", run_result["primitive_provenance"])}
           {_badge("MCP server", run_result.get("mcp_server", "none"))}
+          {_confidence_layer_badges(run_result)}
           {_robot_badge(run_result)}
         </div>
       </details>
@@ -813,10 +817,16 @@ def _object_cycle_timing_section(
     )
     cards = []
     for index, cycle in enumerate(cycles, start=1):
+        timing_lane = _timing_lane(
+            "",
+            cycle["total_s"],
+            _object_cycle_segments(cycle),
+            render_empty=True,
+        )
         cards.append(
             '<article class="object-cycle">'
             f"<h3>{index}. {html.escape(str(cycle['object_id']))}</h3>"
-            f"{_timing_lane('', cycle['total_s'], _object_cycle_segments(cycle))}"
+            f"{timing_lane}"
             f"<p>{html.escape(_object_cycle_phase_text(cycle))}</p>"
             "</article>"
         )
@@ -900,27 +910,47 @@ def _timing_lane(
     title: str,
     total: Any,
     segments: list[tuple[str, Any, str, str]],
+    *,
+    render_empty: bool = False,
 ) -> str:
     total_s = _float_or_none(total)
-    if total_s is None or total_s <= 0:
+    if total_s is None:
+        if not render_empty:
+            return ""
+        total_s = 0.0
+    if total_s < 0:
+        total_s = 0.0
+    if total_s <= 0 and not render_empty:
         return ""
     segment_html = []
-    for label, value, detail, color in segments:
-        seconds = _float_or_none(value)
-        if seconds is None or seconds <= 0:
-            continue
-        pct = max(0.2, min(100.0, seconds / total_s * 100.0))
+    visibly_zero_total = render_empty and total_s < 0.05
+    if total_s > 0 and not visibly_zero_total:
+        for label, value, detail, color in segments:
+            seconds = _float_or_none(value)
+            if seconds is None or seconds <= 0:
+                continue
+            pct = max(0.2, min(100.0, seconds / total_s * 100.0))
+            segment_html.append(
+                '<div class="timing-segment" '
+                f'style="--basis: {pct:.3f}%; --segment-color: {html.escape(color)};" '
+                f'title="{html.escape(label)}: {html.escape(_seconds_text(seconds))}">'
+                f"<strong>{html.escape(label)}</strong>"
+                f"<span>{html.escape(_seconds_text(seconds))}</span>"
+                f"<small>{html.escape(detail)}</small>"
+                "</div>"
+            )
+    if not segment_html:
+        if not render_empty:
+            return ""
         segment_html.append(
             '<div class="timing-segment" '
-            f'style="--basis: {pct:.3f}%; --segment-color: {html.escape(color)};" '
-            f'title="{html.escape(label)}: {html.escape(_seconds_text(seconds))}">'
-            f"<strong>{html.escape(label)}</strong>"
-            f"<span>{html.escape(_seconds_text(seconds))}</span>"
-            f"<small>{html.escape(detail)}</small>"
+            'style="--basis: 100.000%; --segment-color: #8d96a3;" '
+            'title="No measurable split: timestamps were identical">'
+            "<strong>No measurable split</strong>"
+            f"<span>{html.escape(_seconds_text(total_s))}</span>"
+            "<small>timestamps were identical</small>"
             "</div>"
         )
-    if not segment_html:
-        return ""
     heading = f"<h3>{html.escape(title)}</h3>" if title else "<h3>Measured distribution</h3>"
     return (
         '<div class="timing-lane-block">'
@@ -1302,6 +1332,18 @@ def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
     )
 
 
+def _confidence_layer_badges(run_result: dict[str, Any]) -> str:
+    layer = run_result.get("confidence_layer")
+    if not layer:
+        return ""
+    return "".join(
+        (
+            _badge("Confidence layer", layer),
+            _badge("Next layer", run_result.get("next_confidence_layer", "unknown")),
+        )
+    )
+
+
 def _generated_mess_summary(run_result: dict[str, Any]) -> str:
     actual = run_result.get("generated_mess_count")
     requested = run_result.get("requested_generated_mess_count")
@@ -1320,6 +1362,20 @@ def _realworld_contract_note(run_result: dict[str, Any]) -> str:
         "metric map, room-level fixture hints, and robot-local observed object "
         "handles. Private Evaluation is shown only after the run."
     )
+    return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
+
+
+def _confidence_layer_note(run_result: dict[str, Any]) -> str:
+    layer = str(run_result.get("confidence_layer") or "")
+    if not layer:
+        return ""
+    summary = str(run_result.get("confidence_layer_summary") or "")
+    next_layer = str(run_result.get("next_confidence_layer") or "")
+    note = layer
+    if summary:
+        note = f"{note}: {summary}"
+    if next_layer:
+        note = f"{note} Next confidence layer: {next_layer}."
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
@@ -5097,6 +5153,7 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
     )
     tools = ", ".join(str(item) for item in runner.get("public_tool_boundary") or [])
     gdk_imported = runner.get("gdk_imported_by_roboclaws", "unknown")
+    next_layer = str(runner.get("next_confidence_layer") or "")
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Backend variant', runner.get('backend_variant', 'unknown'))}"
@@ -5104,6 +5161,14 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
         f"{_metric('GDK imported by Roboclaws', gdk_imported)}"
         f"{_metric('Sub-phase reports', len(runner.get('subphase_reports') or []))}"
         "</div>"
+    )
+    next_layer_note = (
+        '<p class="note">Next confidence layer: '
+        f"{html.escape(next_layer)}. This report is the map/SDK dry-run layer; "
+        "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution "
+        "remain separate layers.</p>"
+        if next_layer
+        else ""
     )
     return (
         '<section class="panel agibot-sdk-runner">'
@@ -5115,6 +5180,7 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
         "are reviewable rehearsal evidence, not physical PNC execution proof.</p>"
         f"{metrics}"
         f'<p class="note">Public Roboclaws tools preserved: {html.escape(tools)}</p>'
+        f"{next_layer_note}"
         f"{table}</section>"
     )
 

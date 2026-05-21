@@ -913,6 +913,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
             "static_map_coverage",
             "fixture_coverage",
             "static_map_fixture_coverage",
+            "agibot_robot_map_9_static_rehearsal",
         }, waypoint
         assert waypoint.get("purpose"), waypoint
         label_text = f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()

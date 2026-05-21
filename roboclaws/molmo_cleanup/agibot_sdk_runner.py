@@ -375,6 +375,7 @@ def run_physical_agibot_cleanup_pilot(
             "runner_script": str(adapter.runner_script),
             "agibot_map_artifact_dir": str(agibot_map_artifact_dir or ""),
             "real_movement_enabled": real_movement_enabled,
+            "next_confidence_layer": "Agibot Robot Map 9 Semantic Actions Rehearsal",
             "subphase_reports": subphase_reports,
             "gdk_imported_by_roboclaws": False,
             "public_tool_boundary": [

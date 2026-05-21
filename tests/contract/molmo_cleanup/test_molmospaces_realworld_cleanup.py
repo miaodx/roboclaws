@@ -20,6 +20,9 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
+AGIBOT_SEMANTIC_ACTIONS_PATH = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_agibot_robot_map_9_semantic_actions.py"
+)
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
 ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
@@ -27,6 +30,18 @@ ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_con
 
 def _load_demo_module():
     spec = importlib.util.spec_from_file_location("molmospaces_realworld_cleanup", DEMO_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_agibot_semantic_actions_module():
+    spec = importlib.util.spec_from_file_location(
+        "run_agibot_robot_map_9_semantic_actions",
+        AGIBOT_SEMANTIC_ACTIONS_PATH,
+    )
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -141,6 +156,41 @@ def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
     assert "Nav2 Map Bundle" in report_text
     assert any('"tool": "navigate_to_waypoint"' in line for line in trace_lines)
     assert any('"route_validation"' in line and '"ok": true' in line for line in trace_lines)
+
+
+def test_agibot_robot_map_9_semantic_actions_rehearsal(tmp_path: Path) -> None:
+    rehearsal = _load_agibot_semantic_actions_module()
+
+    result = rehearsal.run_agibot_robot_map_9_semantic_actions(
+        run_dir=tmp_path / "run",
+        context_json=ROBOT_MAP_9_CONTEXT,
+        agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
+    )
+
+    run_dir = tmp_path / "run"
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    layer = run_result["agibot_robot_map_9_semantic_actions"]
+
+    assert result["confidence_layer"] == "Agibot Robot Map 9 Semantic Actions Rehearsal"
+    assert run_result["report_title"] == "Agibot Robot Map 9 Semantic Actions Rehearsal"
+    assert run_result["backend"] == "api_semantic_synthetic"
+    assert run_result["primitive_provenance"] == "api_semantic"
+    assert run_result["semantic_substeps"]
+    assert layer["semantic_substep_count"] == len(run_result["semantic_substeps"])
+    assert layer["agibot_map_artifact_dir"] == str(ROBOT_MAP_9_ARTIFACT)
+    assert layer["map_source_provenance"] == "agibot_gdk_map_artifact"
+    assert layer["physical_robot"] is False
+    assert layer["sdk_runner_execution"] is False
+    assert layer["gdk_navigation_executed"] is False
+    assert layer["molmospaces_contract_rehearsal"] is False
+    assert run_result["next_confidence_layer"] == "MolmoSpaces Agibot Contract Rehearsal"
+    assert "agibot_gdk_normal_navi" not in json.dumps(run_result)
+    assert "Agibot Robot Map 9 Semantic Actions Rehearsal" in report_text
+    assert "Next confidence layer: MolmoSpaces Agibot Contract Rehearsal" in report_text
+    assert "Semantic Substeps" in report_text
+    assert "No semantic cleanup actions recorded" not in report_text
+    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
 
 
 def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: Path) -> None:

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from PIL import Image
+
 from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
@@ -123,6 +125,34 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()
+
+
+def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    locations = {
+        obj.object_id: ("bookshelf_01", "laundry_hamper_01", "fridge_01")[index % 3]
+        for index, obj in enumerate(scenario.objects)
+    }
+
+    snapshot = write_state_snapshot(
+        scenario,
+        locations,
+        tmp_path / "bottom-row.png",
+        title="Bottom row",
+    )
+
+    image = Image.open(snapshot).convert("RGB")
+    background = (249, 250, 252)
+    marker_colors = {(117, 86, 160), (78, 154, 96), (206, 108, 65)}
+    bottom_marker_pixels = [
+        image.getpixel((x, y))
+        for y in range(509, 530)
+        for x in range(image.width)
+        if image.getpixel((x, y)) in marker_colors
+    ]
+    assert image.size == (900, 580)
+    assert all(image.getpixel((x, image.height - 1)) == background for x in range(image.width))
+    assert bottom_marker_pixels
 
 
 def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
@@ -470,6 +500,120 @@ def test_cleanup_report_renders_per_object_timing_cycles(tmp_path: Path) -> None
             "response": {"ok": True},
             "wallclock_elapsed": 5.5,
         },
+        {
+            "tool": "navigate_to_object",
+            "event": "request",
+            "request": {"object_id": "towel_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "navigate_to_object",
+            "event": "response",
+            "response": {"ok": True, "object_id": "towel_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "pick",
+            "event": "request",
+            "request": {"object_id": "towel_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "pick",
+            "event": "response",
+            "response": {"ok": True, "object_id": "towel_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "request",
+            "request": {"fixture_id": "hamper_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "response",
+            "response": {"ok": True, "object_id": "towel_01", "fixture_id": "hamper_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "place",
+            "event": "request",
+            "request": {"fixture_id": "hamper_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "place",
+            "event": "response",
+            "response": {"ok": True, "object_id": "towel_01", "fixture_id": "hamper_01"},
+            "wallclock_elapsed": 6.0,
+        },
+        {"tool": "observe", "event": "request", "request": {}, "wallclock_elapsed": 6.0},
+        {
+            "tool": "observe",
+            "event": "response",
+            "response": {"ok": True},
+            "wallclock_elapsed": 6.0,
+        },
+        {
+            "tool": "navigate_to_object",
+            "event": "request",
+            "request": {"object_id": "book_01"},
+            "wallclock_elapsed": 7.0,
+        },
+        {
+            "tool": "navigate_to_object",
+            "event": "response",
+            "response": {"ok": True, "object_id": "book_01"},
+            "wallclock_elapsed": 7.001,
+        },
+        {
+            "tool": "pick",
+            "event": "request",
+            "request": {"object_id": "book_01"},
+            "wallclock_elapsed": 7.001,
+        },
+        {
+            "tool": "pick",
+            "event": "response",
+            "response": {"ok": True, "object_id": "book_01"},
+            "wallclock_elapsed": 7.002,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "request",
+            "request": {"fixture_id": "bookshelf_01"},
+            "wallclock_elapsed": 7.002,
+        },
+        {
+            "tool": "navigate_to_receptacle",
+            "event": "response",
+            "response": {
+                "ok": True,
+                "object_id": "book_01",
+                "fixture_id": "bookshelf_01",
+            },
+            "wallclock_elapsed": 7.003,
+        },
+        {
+            "tool": "place",
+            "event": "request",
+            "request": {"fixture_id": "bookshelf_01"},
+            "wallclock_elapsed": 7.003,
+        },
+        {
+            "tool": "place",
+            "event": "response",
+            "response": {"ok": True, "object_id": "book_01", "fixture_id": "bookshelf_01"},
+            "wallclock_elapsed": 7.004,
+        },
+        {"tool": "observe", "event": "request", "request": {}, "wallclock_elapsed": 7.004},
+        {
+            "tool": "observe",
+            "event": "response",
+            "response": {"ok": True},
+            "wallclock_elapsed": 7.004,
+        },
     ]
 
     report_path = render_cleanup_report(
@@ -484,11 +628,17 @@ def test_cleanup_report_renders_per_object_timing_cycles(tmp_path: Path) -> None
     html = report_path.read_text(encoding="utf-8")
     assert "Per-object cleanup cycles" in html
     assert "mug_01" in html
+    assert "towel_01" in html
+    assert "book_01" in html
     assert "Agent thinking / orchestration" in html
     assert "response-to-next-request time" in html
     assert "Sweep/search overhead" in html
     assert "no projections" in html
     assert "navigate_to_visual_candidate -&gt; pick" in html
+    assert html.count("<h3>Measured distribution</h3>") == 3
+    assert html.count("<strong>No measurable split</strong>") == 2
+    assert "timestamps were identical" in html
+    assert "<strong>Tool handlers</strong><span>0.0s</span>" not in html
 
 
 def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> None:

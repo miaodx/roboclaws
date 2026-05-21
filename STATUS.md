@@ -22,11 +22,13 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Review the two Agibot confidence-layer plans under `docs/plans/`, then run the
-normal plan review/GSD path before implementing the MolmoSpaces Agibot contract
-rehearsal. Optional real Agibot G2 validation remains after the separate
-simulated contract rehearsal; the current proof level remains dry-run/rehearsal
-only.
+The `robot_map_9` dry-run rehearsal now regenerates the Agibot report from the
+SDK-runner boundary without enabling movement, and the middle semantic-actions
+layer uses the same map artifact to produce `api_semantic` cleanup substeps.
+Next, run the normal review/GSD path for
+`docs/plans/molmospaces-agibot-contract-rehearsal.md`. Optional real Agibot G2
+validation remains after that separate simulated contract rehearsal; the
+current proof level remains dry-run/rehearsal only.
 
 ## Current Blocker
 
@@ -45,6 +47,8 @@ local non-work-network runs also support OpenClaw.
 - Active Agibot plan/evidence: `docs/plans/agibot-g2-cleanup-support-pilot.md`
 - Agibot robot_map_9 dry-run boundary:
   `docs/plans/agibot-robot-map-9-dry-run-rehearsal.md`
+- Agibot robot_map_9 semantic actions:
+  `docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md`
 - MolmoSpaces Agibot contract rehearsal:
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`
 - Current status: `STATUS.md`
