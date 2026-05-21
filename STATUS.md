@@ -22,11 +22,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Commit the ADR-0131 / SDK ADR-0002 dry-run slice in dependency order: first the
-`vendors/agibot_sdk` runner changes, then the parent Roboclaws submodule pointer
-and integration changes. Optional next validation is a real Agibot G2 run with
-the explicit movement gate enabled; the current proof level remains
-dry-run/rehearsal only.
+Review the two Agibot confidence-layer plans under `docs/plans/`, then run the
+normal plan review/GSD path before implementing the MolmoSpaces Agibot contract
+rehearsal. Optional real Agibot G2 validation remains after the separate
+simulated contract rehearsal; the current proof level remains dry-run/rehearsal
+only.
 
 ## Current Blocker
 
@@ -43,6 +43,10 @@ local non-work-network runs also support OpenClaw.
 - Active Nav2 cleanup status:
   `docs/status/active/real-robot-nav2-cleanup-pilot.md`
 - Active Agibot plan/evidence: `docs/plans/agibot-g2-cleanup-support-pilot.md`
+- Agibot robot_map_9 dry-run boundary:
+  `docs/plans/agibot-robot-map-9-dry-run-rehearsal.md`
+- MolmoSpaces Agibot contract rehearsal:
+  `docs/plans/molmospaces-agibot-contract-rehearsal.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 
