@@ -15,6 +15,11 @@ The active follow-up is the Agibot SDK runner backend boundary for
 calls the SDK runner through a subprocess CLI; the SDK runner owns Agibot GDK
 map, observation, navigation, and per-stage evidence.
 
+For Agibot/MolmoSpaces confidence-layer distinctions, read root `CONTEXT.md`
+before planning or implementation. Keep Agibot map visual dry runs, SDK dry
+runs, MolmoSpaces semantic cleanup on Agibot-shaped map data, and MolmoSpaces
+Agibot contract rehearsal separate.
+
 ## Next Action
 
 Commit the ADR-0131 / SDK ADR-0002 dry-run slice in dependency order: first the

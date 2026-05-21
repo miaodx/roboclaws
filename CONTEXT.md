@@ -793,6 +793,13 @@ _Avoid_: Backend profile, task recipe
 - "`agibot_g2_cleanup_v1`" was considered as a robot-specific profile.
   Resolved: keep Agibot G2 as a **Backend Variant** under
   `real_robot_cleanup_v1` while the public tool shape and safety policy match.
+- "Agibot robot_map_9 semantic cleanup rehearsal" was used ambiguously for an
+  **Agibot Map Visual Dry Run**, an Agibot SDK runner dry run, MolmoSpaces
+  semantic cleanup over Agibot-shaped map data, and a **MolmoSpaces Agibot
+  Contract Rehearsal**. Resolved: keep these as separate confidence layers and
+  reserve **MolmoSpaces Agibot Contract Rehearsal** for a MolmoSpaces-backed
+  non-GDK backend that consumes Agibot-shaped runner artifacts, reports simulated
+  execution, and never claims real **Agibot GDK PNC** evidence.
 - Navigation backend/provenance labels were used as backend-only tokens such as
   `sim_costmap_planner`, `nav2_action`, or `agibot_gdk_pnc`. Resolved: split
   coarse **Navigation Backend Labels** from fine-grained **Navigation Primitive
