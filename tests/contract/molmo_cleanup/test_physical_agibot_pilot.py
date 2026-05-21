@@ -63,8 +63,9 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
         assert (run_dir / item["report"]).is_file()
         assert (run_dir / item["run_result"]).is_file()
 
-    assert "AgiBot SDK Runner" in report_text
-    assert "CLI backend boundary" in report_text
+    assert "AgiBot Backend Evidence" in report_text
+    assert "CLI boundary" in report_text
+    assert "One Roboclaws pilot run" in report_text
     assert "movement_enabled=false" in report_text
     assert persisted["semantic_substeps"] == []
     assert persisted["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
@@ -107,9 +108,18 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert subphase_result["privacy_check"]["ok"] is True
     assert "Nav2 Map Bundle" in report_text
     assert "agibot-robot-map-9" in report_text
+    assert "<span>Status</span><strong>Rehearsal</strong>" in report_text
+    assert "physical_agibot_navigation_pilot_rehearsal" in report_text
     assert 'id="report-tab-timeline"' in report_text
     assert "No robot-view timeline captured" in report_text
     assert '<details class="robot-timeline-details"' not in report_text
+    assert 'id="report-tab-actions"' in report_text
+    assert "No semantic cleanup actions recorded" in report_text
+    assert "AgiBot Backend Evidence" in report_text
+    assert "One Roboclaws pilot run" in report_text
+    assert "metric_map, fixture_hints" in report_text
+    assert "navigate_to_waypoint" in report_text
+    assert "Dry-run blocked" in report_text
     assert "Fetched AgiBot occupancy map artifact" in subphase_report
     assert "map_artifacts/map_preview.png" in subphase_report
 

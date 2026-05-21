@@ -486,12 +486,21 @@ def _cleanup_report_tabs() -> str:
 def _report_tab_panel(tab_id: str, sections: list[str]) -> str:
     body = "\n".join(_present_sections(sections))
     if not body:
-        return ""
+        body = _empty_state_block(
+            "No report data recorded",
+            "This run did not produce artifacts for this report section.",
+        )
     escaped_id = html.escape(tab_id)
     return (
         f'<div id="report-tab-{escaped_id}" class="report-tab-panel" '
         f'data-report-tab="{escaped_id}" role="tabpanel" '
         f'aria-labelledby="report-tab-button-{escaped_id}">{body}</div>'
+    )
+
+
+def _empty_state_block(title: str, message: str) -> str:
+    return (
+        f'<div class="empty-state"><h3>{html.escape(title)}</h3><p>{html.escape(message)}</p></div>'
     )
 
 
@@ -1235,7 +1244,7 @@ def _summary_metrics(run_result: dict[str, Any], score: dict[str, Any]) -> str:
     restored_count = f"{score.get('restored_count', 0)}/{score.get('total_targets', 0)}"
     return (
         '<div class="metric-grid">'
-        f"{_metric('Status', run_result.get('cleanup_status', 'unknown'))}"
+        f"{_metric('Status', _summary_status_label(run_result.get('cleanup_status', 'unknown')))}"
         f"{_metric('Restored', restored_count)}"
         f"{_metric('Generated', _generated_mess_summary(run_result))}"
         f"{_metric('Sweep', _rate_text(run_result.get('sweep_coverage_rate')))}"
@@ -1252,6 +1261,18 @@ def _metric(label: str, value: Any) -> str:
         f"<strong>{html.escape(str(value))}</strong>"
         "</div>"
     )
+
+
+def _summary_status_label(status: Any) -> str:
+    value = str(status or "unknown")
+    labels = {
+        "physical_agibot_navigation_pilot_rehearsal": "Rehearsal",
+        "physical_agibot_navigation_pilot_complete": "Pilot complete",
+        "success": "Success",
+        "partial_success": "Partial success",
+        "failed": "Failed",
+    }
+    return labels.get(value, value.replace("_", " ").title())
 
 
 def _rate_text(value: Any) -> str:
@@ -5056,20 +5077,22 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
         return ""
     rows = []
     for item in runner.get("subphase_reports") or []:
+        stage = str(item.get("stage", ""))
         report = str(item.get("report") or "")
         run_result_path = str(item.get("run_result") or "")
         rows.append(
             "<tr>"
-            f"<td>{html.escape(str(item.get('stage', '')))}</td>"
-            f"<td>{html.escape(str(item.get('status', '')))}</td>"
-            f"<td>{html.escape(str(item.get('ok', False)))}</td>"
+            f"<td>{html.escape(stage)}</td>"
+            f"<td>{html.escape(_agibot_public_tool_mapping(stage))}</td>"
+            f"<td>{html.escape(_agibot_subphase_status_label(item))}</td>"
             f"<td>{_artifact_link(report, run_dir)}</td>"
             f"<td>{_artifact_link(run_result_path, run_dir)}</td>"
             "</tr>"
         )
     table = (
         '<div class="table-wrap"><table><thead><tr>'
-        "<th>Sub-phase</th><th>Status</th><th>OK</th><th>Report</th><th>Run result</th>"
+        "<th>Backend stage</th><th>Maps to public tool</th><th>Evidence status</th>"
+        "<th>Report</th><th>Run result</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     tools = ", ".join(str(item) for item in runner.get("public_tool_boundary") or [])
@@ -5084,15 +5107,36 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
     )
     return (
         '<section class="panel agibot-sdk-runner">'
-        "<h2>AgiBot SDK Runner <span>CLI backend boundary</span></h2>"
-        '<p class="note">These artifacts are the three SDK-owned review sub-phases '
-        "behind the Roboclaws real_robot_cleanup_v1 contract: agent-view export, "
-        "policy observation, and waypoint navigation. Dry-run rows are reviewable "
-        "rehearsal evidence, not physical PNC execution proof.</p>"
+        "<h2>AgiBot Backend Evidence <span>CLI boundary</span></h2>"
+        '<p class="note">One Roboclaws pilot run is replayed through three SDK-owned '
+        "backend stages. The table maps each backend artifact back to the public "
+        "real_robot_cleanup_v1 tool it supports, so these rows read as evidence "
+        "for the same cleanup-shaped run rather than separate tasks. Dry-run rows "
+        "are reviewable rehearsal evidence, not physical PNC execution proof.</p>"
         f"{metrics}"
         f'<p class="note">Public Roboclaws tools preserved: {html.escape(tools)}</p>'
         f"{table}</section>"
     )
+
+
+def _agibot_public_tool_mapping(stage: str) -> str:
+    mappings = {
+        "agent_view_export": "metric_map, fixture_hints",
+        "observe": "observe",
+        "navigate_waypoint": "navigate_to_waypoint",
+    }
+    return mappings.get(stage, "backend evidence")
+
+
+def _agibot_subphase_status_label(item: dict[str, Any]) -> str:
+    status = str(item.get("status") or "")
+    if status == "ok":
+        return "OK"
+    if status == "dry_run_blocked_capability":
+        return "Dry-run blocked"
+    if item.get("ok") is True:
+        return "OK"
+    return status.replace("_", " ").title() if status else "Unknown"
 
 
 def _artifact_link(path: str, run_dir: Path) -> str:
@@ -5642,12 +5686,13 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
         return (
             '<section class="panel robot-timeline robot-timeline-empty">'
             "<h2>Robot View Timeline</h2>"
-            '<div class="empty-state">'
-            "<h3>No robot-view timeline captured</h3>"
-            "<p>This run did not record FPV/map/chase timeline frames. Review the "
-            "Robot & Map tab for static map artifacts, SDK subphase reports, and "
-            "navigation rehearsal evidence.</p>"
-            "</div></section>"
+            + _empty_state_block(
+                "No robot-view timeline captured",
+                "This run did not record FPV/map/chase timeline frames. Review the "
+                "Robot & Map tab for static map artifacts, SDK subphase reports, and "
+                "navigation rehearsal evidence.",
+            )
+            + "</section>"
         )
     cards = []
     previous_action = ""
@@ -5973,7 +6018,17 @@ def _moves_table(moves: list[dict[str, Any]]) -> str:
 
 def _semantic_steps_table(semantic_substeps: list[dict[str, Any]]) -> str:
     if not semantic_substeps:
-        return ""
+        return (
+            '<section class="panel semantic-section semantic-section-empty">'
+            "<h2>Semantic Substeps</h2>"
+            + _empty_state_block(
+                "No semantic cleanup actions recorded",
+                "This AgiBot rehearsal exported map context, rehearsed the policy "
+                "camera boundary, and rehearsed waypoint navigation. Physical "
+                "manipulation and object cleanup were intentionally not executed.",
+            )
+            + "</section>"
+        )
     cards = []
     for item in semantic_substeps:
         steps = item.get("steps", [])
@@ -6208,7 +6263,13 @@ def _wrap_html(
       padding: 12px;
     }}
     .metric span {{ display: block; color: #b7c1ce; font-size: 12px; margin-bottom: 4px; }}
-    .metric strong {{ display: block; color: #ffffff; font-size: 19px; }}
+    .metric strong {{
+      display: block;
+      color: #ffffff;
+      font-size: 19px;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }}
     .panel .metric {{
       background: #f8fafc;
       border-color: #d9dde6;
