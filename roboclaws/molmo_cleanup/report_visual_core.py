@@ -32,16 +32,23 @@ def assert_cleanup_report_visual_core(
     for marker in PLANNER_DIAGNOSTIC_STYLE_MARKERS:
         assert marker not in report_text, (marker, report_text[:500])
 
-    ordered = [
-        VISUAL_CORE_BASE_SECTIONS[0],
-        VISUAL_CORE_BASE_SECTIONS[1],
-    ]
-    if require_semantic_subphases:
-        ordered.append(VISUAL_CORE_SEMANTIC_SECTION)
-    if require_robot_timeline:
-        ordered.append(VISUAL_CORE_ROBOT_SECTION)
-    ordered.append(VISUAL_CORE_BASE_SECTIONS[2])
+    ordered = [VISUAL_CORE_BASE_SECTIONS[0], VISUAL_CORE_BASE_SECTIONS[1]]
     _assert_sections_in_order(report_text, ordered)
+    _assert_after(report_text, VISUAL_CORE_BASE_SECTIONS[2], VISUAL_CORE_BASE_SECTIONS[1])
+    if require_robot_timeline:
+        _assert_between(
+            report_text,
+            VISUAL_CORE_ROBOT_SECTION,
+            VISUAL_CORE_BASE_SECTIONS[1],
+            VISUAL_CORE_BASE_SECTIONS[2],
+        )
+    if require_semantic_subphases:
+        _assert_between(
+            report_text,
+            VISUAL_CORE_SEMANTIC_SECTION,
+            VISUAL_CORE_BASE_SECTIONS[1],
+            VISUAL_CORE_BASE_SECTIONS[2],
+        )
 
     if require_semantic_subphases:
         _assert_semantic_subphases(report_text)
@@ -95,6 +102,26 @@ def _assert_after(report_text: str, later: str, earlier: str) -> None:
     earlier_index = _section_index(report_text, earlier)
     assert later_index >= 0 and earlier_index >= 0, (later, earlier, report_text[:500])
     assert later_index > earlier_index, (later, earlier, later_index, earlier_index)
+
+
+def _assert_between(report_text: str, section: str, earlier: str, later: str) -> None:
+    section_index = _section_index(report_text, section)
+    earlier_index = _section_index(report_text, earlier)
+    later_index = _section_index(report_text, later)
+    assert section_index >= 0 and earlier_index >= 0 and later_index >= 0, (
+        section,
+        earlier,
+        later,
+        report_text[:500],
+    )
+    assert earlier_index < section_index < later_index, (
+        section,
+        earlier,
+        later,
+        section_index,
+        earlier_index,
+        later_index,
+    )
 
 
 def _section_index(report_text: str, section: str) -> int:
