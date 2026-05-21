@@ -48,11 +48,18 @@ The cleanup/proof stack has four core abstractions:
    `roboclaws/maps/`,
    `roboclaws/molmo_cleanup/nav2_map_bundle.py`,
    `roboclaws/molmo_cleanup/report.py`).
-3. **Planner-proof request and bundle flow** — turns completed cleanup substeps
+3. **AgiBot SDK runner backend boundary** — routes the same
+   `real_robot_cleanup_v1` public tools through a subprocess CLI boundary when
+   the backend variant is Agibot G2. Roboclaws owns the cleanup-shaped session
+   and reports; the SDK runner owns GDK-specific map context, observation,
+   navigation, and per-stage evidence
+   (`roboclaws/molmo_cleanup/agibot_sdk_runner.py`,
+   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`).
+4. **Planner-proof request and bundle flow** — turns completed cleanup substeps
    into private bound proof requests, dry-run manifests, local execution reports,
    and optional cleanup reruns (`roboclaws/molmo_cleanup/planner_proof_requests.py`,
    `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`).
-4. **Planner-backed primitive gate** — adapters and checkers that decide whether
+5. **Planner-backed primitive gate** — adapters and checkers that decide whether
    a cleanup subphase is still `api_semantic` or has exact-scene RBY1M/CuRobo
    proof for the requested object/target binding.
 
@@ -202,6 +209,7 @@ Operator-facing settings and recommended recipes live in
 | `roboclaws/maps/` | Reusable Nav2-shaped map artifact package: bundle writing/validation, metric-map projection, occupancy rasterization, and pure-Python static costmap route validation. |
 | `roboclaws/molmo_cleanup/nav2_map_bundle.py` | Molmo cleanup compatibility wrapper that resolves/validates selected prebuilt bundles and attaches run-local map bundle snapshots to cleanup artifacts. |
 | `roboclaws/molmo_cleanup/nav2_adapter.py`, `physical_nav2_pilot.py` | Mockable direct Nav2 backend adapter plus the first physical navigation/perception pilot runner: load a prebuilt map bundle, attempt inspection and fixture preferred waypoints, observe reached waypoints, and keep manipulation blocked. |
+| `roboclaws/molmo_cleanup/agibot_sdk_runner.py` | Agibot SDK runner subprocess adapter and physical Agibot pilot runner. Roboclaws keeps the `real_robot_cleanup_v1` public contract while the SDK CLI writes agent-view, observation, and navigation subphase reports. |
 | `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
 | `roboclaws/molmo_cleanup/report.py`, `report_visual_core.py` | Shared Cleanup Artifact Report renderer: Agent View, Private Evaluation, semantic substeps, robot timeline, planner proof, and bridge readiness sections. |
 | `roboclaws/molmo_cleanup/planner_proof_requests.py` | Converts cleanup substeps into private bound planner-proof requests, proof-bundle manifests, selection memory, fallback filtering, and cleanup rerun commands. |
@@ -218,7 +226,9 @@ Operator-facing settings and recommended recipes live in
 | `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry point for ADR-0003 public/private real-world cleanup. |
 | `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_*_tools.py`, `roboclaws/molmo_cleanup/realworld_mcp_backend.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. Tool registration and dispatch are split into semantic/context, atomic cleanup, promoted-candidate, and backend/lifecycle layers. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
+| `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py` | Deterministic Agibot SDK-runner backend rehearsal that writes a top-level cleanup report plus three SDK-owned subphase HTML reports. |
 | `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
+| `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` | Standalone Agibot SDK task runner invoked through a CLI boundary for agent-view export, policy observation, and waypoint navigation. Dry-run mode writes reviewable reports without importing GDK; `--execute` is the real robot gate. |
 | `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
 | `skills/ai2thor-navigator/SKILL.md` | Base operating instructions for any agent driving the AI2-THOR robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
 | `skills/capture-object-photo/SKILL.md` | Skill-level photo behavior (`locate -> navigate -> observe`) plus route-planning helper. Keeps object-photo strategy out of the MCP capability surface. |

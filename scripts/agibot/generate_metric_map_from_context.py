@@ -421,7 +421,7 @@ def _slug(value: str) -> str:
 
 def _public_reachability_status(status: str) -> str:
     normalized = status.strip().lower()
-    if "verified" in normalized:
+    if normalized == "verified":
         return "verified"
     if "blocked" in normalized or "failed" in normalized or "timeout" in normalized:
         return "blocked"

@@ -176,14 +176,20 @@ sets, acceptable destinations, private manifests, hidden target lists,
 ### `real_robot_cleanup_v1`
 
 The first physical cleanup-facing profile keeps the cleanup-shaped public tool
-list but narrows executable capability to navigation and perception:
+list but narrows executable capability to navigation and perception. The
+backend is `physical_robot` with backend variants currently represented by
+`nav2_ros2` and `agibot_gdk`; both variants preserve the same public tool names.
 
-- `metric_map` returns the prebuilt Nav2-shaped map bundle contract.
+- `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
+  derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
+  an SDK-exported agent view generated from operator-authored map context.
 - `fixture_hints` returns authored static fixture semantics and preferred
-  waypoints.
+  waypoints without exposing backend map ids or private cleanup truth.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
-  bounded Nav2 navigation actions when enough public grounding is available.
+  bounded physical navigation actions when enough public grounding is available.
+  Current provenance may be `nav2_action`, `agibot_gdk_normal_navi`, or
+  `blocked_capability`.
 - `observe`, `adjust_camera`, `declare_visual_candidates`, and
   `inspect_visible_object` stay grounded in robot-camera artifacts.
 - `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`
@@ -191,7 +197,10 @@ list but narrows executable capability to navigation and perception:
   manipulation is proven.
 
 This profile exists so reports can distinguish
-`physical_navigation_pilot=true` from `physical_cleanup_ready=false`.
+`physical_navigation_pilot=true` from `physical_cleanup_ready=false`. Agibot
+runs additionally render SDK-owned subphase reports for agent-view export,
+policy observation, and waypoint navigation, keeping GDK-specific execution
+evidence outside the Roboclaws Python runtime.
 
 ## Design Considerations
 

@@ -164,6 +164,7 @@ def _cleanup_report_sections(
             _report_tab_panel(
                 "robot",
                 [
+                    _agibot_sdk_runner_section(run_dir, run_result),
                     _nav2_map_bundle_section(run_dir, run_result),
                     _real_robot_readiness_section(run_result),
                     _cleanup_policy_trace_section(run_result),
@@ -4988,6 +4989,8 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Map bundle', readiness.get('map_bundle_schema', 'unknown'))}"
         f"{_metric('Navigation backends', nav_summary or 'none')}"
         f"{_metric('Pose sources', pose_summary or 'none')}"
+        f"{_metric('Backend variant', readiness.get('backend_variant', 'n/a'))}"
+        f"{_metric('Movement enabled', readiness.get('movement_enabled', 'n/a'))}"
         f"{_metric('Report-only sim views', readiness.get('report_only_simulation_view_count', 0))}"
         f"{_metric('physical_navigation_pilot', readiness.get('physical_navigation_pilot', False))}"
         f"{_metric('physical_cleanup_ready', readiness.get('physical_cleanup_ready', False))}"
@@ -5011,7 +5014,17 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
             _badge("Manipulation blocked", readiness.get("manipulation_blocked", False)),
         )
     )
-    if readiness.get("physical_navigation_pilot"):
+    if readiness.get("backend_variant") == "agibot_gdk":
+        movement_flag = str(readiness.get("movement_enabled", False)).lower()
+        note = (
+            "This section is an AgiBot Navigation + Perception Pilot. Roboclaws keeps "
+            "the real_robot_cleanup_v1 public tool boundary while the AgiBot SDK runner "
+            "owns GDK execution evidence and per-stage reports. Navigation is physical "
+            "only when the session-level movement gate is enabled; "
+            f"movement_enabled={movement_flag}, "
+            "physical_cleanup_ready=false."
+        )
+    elif readiness.get("physical_navigation_pilot"):
         physical_flags = (
             f"physical_navigation_pilot={str(readiness.get('physical_navigation_pilot')).lower()}, "
             f"physical_cleanup_ready={str(readiness.get('physical_cleanup_ready')).lower()}."
@@ -5035,6 +5048,61 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
         f'{metrics}<div class="badges">{badges}</div>'
         f'<ul class="requirements">{blockers}</ul></section>'
     )
+
+
+def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str:
+    runner = run_result.get("agibot_sdk_runner") or {}
+    if not runner:
+        return ""
+    rows = []
+    for item in runner.get("subphase_reports") or []:
+        report = str(item.get("report") or "")
+        run_result_path = str(item.get("run_result") or "")
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('stage', '')))}</td>"
+            f"<td>{html.escape(str(item.get('status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('ok', False)))}</td>"
+            f"<td>{_artifact_link(report, run_dir)}</td>"
+            f"<td>{_artifact_link(run_result_path, run_dir)}</td>"
+            "</tr>"
+        )
+    table = (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Sub-phase</th><th>Status</th><th>OK</th><th>Report</th><th>Run result</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+    tools = ", ".join(str(item) for item in runner.get("public_tool_boundary") or [])
+    gdk_imported = runner.get("gdk_imported_by_roboclaws", "unknown")
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Backend variant', runner.get('backend_variant', 'unknown'))}"
+        f"{_metric('Movement enabled', runner.get('real_movement_enabled', False))}"
+        f"{_metric('GDK imported by Roboclaws', gdk_imported)}"
+        f"{_metric('Sub-phase reports', len(runner.get('subphase_reports') or []))}"
+        "</div>"
+    )
+    return (
+        '<section class="panel agibot-sdk-runner">'
+        "<h2>AgiBot SDK Runner <span>CLI backend boundary</span></h2>"
+        '<p class="note">These artifacts are the three SDK-owned review sub-phases '
+        "behind the Roboclaws real_robot_cleanup_v1 contract: agent-view export, "
+        "policy observation, and waypoint navigation. Dry-run rows are reviewable "
+        "rehearsal evidence, not physical PNC execution proof.</p>"
+        f"{metrics}"
+        f'<p class="note">Public Roboclaws tools preserved: {html.escape(tools)}</p>'
+        f"{table}</section>"
+    )
+
+
+def _artifact_link(path: str, run_dir: Path) -> str:
+    if not path:
+        return ""
+    href = html.escape(path)
+    label = html.escape(path)
+    if (run_dir / path).exists():
+        return f'<a href="{href}">{label}</a>'
+    return label
 
 
 def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
