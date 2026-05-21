@@ -107,6 +107,9 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert subphase_result["privacy_check"]["ok"] is True
     assert "Nav2 Map Bundle" in report_text
     assert "agibot-robot-map-9" in report_text
+    assert 'id="report-tab-timeline"' in report_text
+    assert "No robot-view timeline captured" in report_text
+    assert '<details class="robot-timeline-details"' not in report_text
     assert "Fetched AgiBot occupancy map artifact" in subphase_report
     assert "map_artifacts/map_preview.png" in subphase_report
 
