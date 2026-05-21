@@ -31,3 +31,4 @@ output/
 .env
 .openclaw-token
 vis
+.gstack/
