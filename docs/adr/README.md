@@ -138,7 +138,9 @@ one decision per file, sequential numbering, explicit status.
 | [0127](0127-use-direct-nav2-adapter-before-rosclaw.md) | Use Direct Nav2 Adapter Before ROSClaw | Accepted |
 | [0128](0128-add-real-robot-cleanup-profile.md) | Add Real Robot Cleanup Profile | Accepted |
 | [0129](0129-use-nav2-map-artifacts-for-simulator-hardware-parity.md) | Use Nav2 Map Artifacts For Simulator Hardware Parity | Accepted |
-| [0130](0130-default-composition-to-trace-preserving-skill-routines.md) | Default Composition To Trace-Preserving Skill Routines | Accepted |
+| [0130](0130-default-composition-to-trace-preserving-skill-routines.md) | Default Composition To Trace-Preserving Skill Routines | Accepted; Updated by ADR-0132 |
+| [0131](0131-use-agibot-sdk-runner-as-real-robot-cleanup-backend.md) | Use Agibot SDK Runner As Real Robot Cleanup Backend | Accepted |
+| [0132](0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md) | Keep Cleanup Memory Skill-First And Remove Promoted Composite | Accepted |
 
 ## Adding a new ADR
 

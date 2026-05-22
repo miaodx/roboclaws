@@ -4,7 +4,7 @@ Date: 2026-05-20
 
 ## Status
 
-Accepted
+Accepted; updated by ADR-0132
 
 ## Decision
 

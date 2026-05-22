@@ -33,6 +33,17 @@ _Avoid_: Task, demo, scenario
 A public observed handle created from an agent's own interpretation of camera evidence.
 _Avoid_: Simulator detection, private target, local note
 
+**Cleanup Worklist**:
+A public cleanup-progress view of observed handles, waypoint coverage, held-object
+state, and pending cleanup candidates derived only from agent-visible contract
+events.
+_Avoid_: Agent scratchpad, private target list, generated mess truth, local todo file
+
+**Skill Scratchpad**:
+A run-local memory maintained by an Agent Skill to preserve strategy, hypotheses,
+retry history, and next-action intent across model turns.
+_Avoid_: Cleanup Worklist, scorer state, MCP capability, private target truth
+
 **Camera Inference Producer**:
 The agent, model, detector, or perception service that interprets camera evidence into Model-Declared Observations.
 _Avoid_: Scorer, simulator oracle, execution backend
