@@ -6338,6 +6338,37 @@ def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
+    if run_result.get("schema") == "molmospaces_agibot_contract_rehearsal_v1":
+        command = [
+            ".venv/bin/python",
+            "scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py",
+            "--runtime",
+            str(run_result.get("runtime") or "fixture"),
+            "--rehearsal-mode",
+            str(run_result.get("rehearsal_mode") or "contract"),
+            "--seed",
+            str(run_result.get("seed", 7)),
+            "--generated-mess-count",
+            str(
+                run_result.get(
+                    "requested_generated_mess_count",
+                    run_result.get("generated_mess_count", 5),
+                )
+            ),
+        ]
+        action_result = run_result.get("molmospaces_agibot_contract_rehearsal") or {}
+        cleanup_object_count = action_result.get("attempted_object_count")
+        if cleanup_object_count:
+            command.extend(["--cleanup-object-count", str(cleanup_object_count)])
+        if run_result.get("include_robot"):
+            command.append("--include-robot")
+        if run_result.get("record_robot_views"):
+            command.append("--record-robot-views")
+        robot_name = run_result.get("robot_name")
+        if robot_name:
+            command.extend(["--robot-name", str(robot_name)])
+        return shell_join(command)
+
     seed = run_result.get("seed", 7)
     generated_mess_count = run_result.get(
         "requested_generated_mess_count",

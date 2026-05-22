@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -22,11 +22,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-The MolmoSpaces Agibot contract rehearsal now has a Roboclaws-owned command and
-fixture-backed report path for CI-safe contract evidence. Optional next steps
-are a local `--runtime molmospaces-subprocess` run with MolmoSpaces/MuJoCo
-installed, then separate real Agibot G2 validation; the current proof level
-remains simulated rehearsal only.
+The MolmoSpaces Agibot contract rehearsal now has a Roboclaws-owned command,
+fixture-backed contract evidence, an opt-in simulated `cleanup-actions` mode,
+and local MolmoSpaces/Codex reports with FPV, map, chase, and verification
+imagery. Review those reports, then keep real Agibot G2 validation as a separate
+next confidence layer. The current proof level remains simulated rehearsal only.
 
 ## Current Blocker
 
