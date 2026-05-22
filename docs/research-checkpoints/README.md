@@ -1,6 +1,13 @@
 # Research Checkpoints
 
-本目录是 `roboclaws` 生态调研的**月度快照**。每月一次，对 OpenClaw 生态、agent 框架格局、具身 AI 栈做一次结构化盘点，作为项目决策的背景档案。
+本目录是 `roboclaws` 生态调研的**月度快照存档**。每个 `YYYY-MM.md` 都是
+一个 checkpoint 实例，永不覆盖，作为项目决策的历史档案。
+
+**调研方向、信源白名单、隐藏假设、节奏与触发器**统一由
+[`mithaq/vectors/roboclaws.md`](https://github.com/MiaoDX/mithaq/blob/main/vectors/roboclaws.md)
+定义；本目录只放执行结果。新写一份 checkpoint 时按
+[`mithaq` skill 的 Mode A](https://github.com/MiaoDX/mithaq/blob/main/skills/mithaq/SKILL.md#mode-a--run-a-checkpoint)
+流程操作。
 
 ## 这与 `docs/research/` 的区别
 
@@ -13,7 +20,8 @@
 | 文件命名 | `NN-topic-slug.md` | `YYYY-MM.md` |
 | 更新方式 | 一次写完，状态字段标 ongoing | 永不覆盖，每月新文件 |
 
-两者互补：单点 research 文档处理"我们要不要做 X"这种具体问题，checkpoint 处理"现在生态长什么样、我们的判断是否需要更新"这种全景问题。
+两者互补：单点 research 文档处理"我们要不要做 X"这种具体问题，checkpoint
+处理"现在生态长什么样、我们的判断是否需要更新"这种全景问题。
 
 ## 索引
 
@@ -21,28 +29,21 @@
 |----|------|--------------------|
 | 2026-04 | [2026-04.md](2026-04.md) | 初次发布。建立 4 视角并列分类法，整理 44 个 OpenClaw 严格变体 + 30 个相邻项目，给出 Phase-1/2/3 取舍建议 |
 
-## 每月更新流程
-
-详见 `2026-04.md` 的 §0.2，简要：
-
-1. **增量调研**（约 1–2 小时）—— 跑 5 方向 deep research：OpenClaw 严格家族增量、Agent SDK 层动态、VLA/机器人栈动态、协议层、学术前沿。
-2. **增量整理**（约 1 小时）—— 对照上期 checkpoint，标注新增/状态变化/判断修正。
-3. **写新 checkpoint**（约 1–2 小时）—— 复制上期作为模板，更新 §1 摘要、§3–§6 内容、§7 公开问题、§8 变更日志。
-4. **Review 与 commit**（约 30 分钟）—— 人工 review 是否过度采信单一信源、是否偷懒照抄上月、§6 建议是否与 §3–§5 证据脱节。
-
-**触发临时调研的条件**（不等月底）：模型代际跃迁（如 Claude Opus 5、GR00T N2 发布）、roboclaws 自身重大架构决策需要支撑、已采纳项目发生重大变更、学术上出现 paradigm-shifting 新工作。
-
-## 信源质量约定
-
-每个 checkpoint 内引用的信源按 4 档分级（详见每期文档 §0.3）：
-
-- **A 档**：项目官方 repo / blog、arXiv 论文、Linux Foundation 公告、维护者本人技术博客 — 可直接引用。
-- **B 档**：技术媒体、独立工程师对比博文、HN/Reddit 高赞回答 — 方向可信，具体数字需交叉验证。
-- **C 档**：聚合站（clawclones.com、shelldex.com、awesome-claws）— 用于发现项目，定量声明按 ±20% 看待。
-- **D 档**：SEO 内容站（vellum.ai、qubittool.com、composio.dev 等）"2026 年最佳 X 替代品"导购文 — 多数情况下忽略。
-
 ## 下次更新
 
-**预定时间：2026-05-31**
+**预定时间：2026-05-31**（按 mithaq vectors 卡片的月度节奏；触发临时调研的条件见
+vectors 卡片 §Triggers for off-schedule research）。
 
-下次应优先回答的 13 个公开问题见 `2026-04.md` §7。
+下次应优先回答的 13 个公开问题见 [`2026-04.md` §7](2026-04.md#7-公开问题与下次-checkpoint-该回答什么)。
+
+## 关于信源分级
+
+mithaq vectors 卡片用 3 档（whitelist / grey / blacklist，blacklist 仅可作 discovery 不可引用）。
+**`2026-04.md` 用的是 4 档 A/B/C/D**（C 档是聚合站的 discovery 用途）——这是历史方案，保留以
+便回读，无需追溯改写。**从 2026-05 起按 mithaq 3 档来**。两套的语义对照：
+
+- A 档 ≈ mithaq whitelist
+- B 档 ≈ mithaq grey
+- C 档 + D 档 ≈ mithaq blacklist（C 是"可 discovery、不可引用数据"，D 是"完全忽略"——mithaq
+  把这两者并入一个 blacklist 类别，靠 "use only as discovery surfaces, never as citation sources"
+  的注释来区分）
