@@ -80,6 +80,55 @@ First implementation should cover only:
 Manipulation remains blocked in the MVP: `pick`, `place`, `place_inside`,
 `open_receptacle`, and `close_receptacle` should report `blocked_capability`.
 
+## Follow-up Slice: Cleanup Action Rehearsal
+
+After the contract-only MVP is stable, add an explicit cleanup-action rehearsal
+mode that exercises simulated pick/place semantics while keeping the confidence
+claim separate from both real Agibot GDK execution and planner-backed
+manipulation proof.
+
+Default behavior remains contract-only:
+
+- `--rehearsal-mode contract` is the default.
+- The run exports Agibot-shaped preflight artifacts, observes through the
+  simulated policy-camera boundary, navigates one or more public waypoints, and
+  reports manipulation tools as `blocked_capability`.
+- Existing reports may continue to say "MolmoSpaces Agibot Contract Rehearsal".
+
+The new action layer is opt-in:
+
+- `--rehearsal-mode cleanup-actions` enables simulated semantic cleanup actions.
+- The run should select a small deterministic public target set from observed
+  visible detections and public fixture hints.
+- The action sequence should preserve public substeps:
+  `navigate_to_object -> pick -> navigate_to_receptacle -> open_receptacle? ->
+  place/place_inside -> close_receptacle?`.
+- The report title or prominent section label should say
+  "MolmoSpaces Agibot Cleanup Action Rehearsal" or an equivalent explicit
+  cleanup-action label.
+- Before/after images and `semantic_substeps` should show the simulated object
+  movement.
+- Runtime export should record the selected `rehearsal_mode`, attempted object
+  count, completed object count, and final object locations.
+
+The action layer is still not:
+
+- real Agibot GDK execution;
+- physical robot navigation or manipulation proof;
+- planner-backed RBY1M/CuRobo cleanup proof;
+- evidence that Agibot physical manipulation is ready.
+
+All cleanup-action evidence must keep the simulation labels:
+
+- `simulated=true`
+- `physical_robot=false`
+- `execution_backend=molmospaces_sim`
+- no `agibot_gdk_normal_navi` provenance
+
+Use a clear manipulation provenance such as `api_semantic` or
+`agibot_shaped_molmospaces_sim_cleanup_action`; either is acceptable if the
+report makes the simulated state-edit boundary obvious.
+
 ## Provenance And Labels
 
 All report and JSON evidence must distinguish simulation from real GDK:
@@ -120,7 +169,9 @@ execution or real-robot readiness by itself.
 - Do not run `--execute`.
 - Do not use real Agibot map artifacts as the MolmoSpaces scene source.
 - Do not claim physical robot motion, arrival, or observation.
-- Do not implement manipulation.
+- Do not implement manipulation in the default contract-only mode.
+- Do not present cleanup-action rehearsal pick/place as physical manipulation
+  proof.
 - Do not expose Agibot-specific public tool names to the cleanup agent.
 - Do not replace the real Agibot G2 pilot. This is a preflight layer only.
 
@@ -133,13 +184,43 @@ execution or real-robot readiness by itself.
   runtime artifacts.
 - Simulated `observe` and `navigate_waypoint` produce successful simulated
   evidence with explicit simulated backend labels.
-- Manipulation tools remain blocked and visible in the report.
+- In default `contract` mode, manipulation tools remain blocked and visible in
+  the report.
 - The report distinguishes this layer from:
   Agibot Map Visual Dry Run, Agibot SDK Dry Run, semantic cleanup mock evidence,
   and real Agibot GDK execution.
 - Focused tests prove that no real GDK import or real movement gate is required.
 - Focused tests prove that no simulated result uses
   `agibot_gdk_normal_navi` provenance.
+- A separate `cleanup-actions` mode can generate a report with non-empty
+  `semantic_substeps`, visible before/after object movement, and explicit
+  simulated cleanup-action labels.
+- Focused tests prove that `cleanup-actions` mode includes `pick` and `place`
+  or `place_inside` substeps while still reporting `physical_robot=false` and
+  not claiming planner-backed or Agibot GDK manipulation proof.
+
+## Intuitive-Flow Review Reconciliation
+
+Full external `autoplan` reviewer voices were not run in this continuation
+because the active agent rules do not allow spawning reviewer subagents here.
+The scope-preserving review decisions accepted into this plan are:
+
+- Use a dedicated Roboclaws command under `scripts/molmo_cleanup/` rather than
+  changing the Agibot SDK runner. This keeps MolmoSpaces dependencies in
+  Roboclaws and keeps `vendors/agibot_sdk/` free of simulator coupling.
+- Generate Agibot-shaped preflight artifacts from the selected MolmoSpaces
+  scenario by default. Do not use `robot_map_9` or fetched Agibot map artifacts
+  as the MolmoSpaces scene source for this layer.
+- Provide two runtime modes: a deterministic fixture runtime for CI/report
+  checks without MuJoCo, and an opt-in MolmoSpaces subprocess runtime for local
+  simulator rehearsal when dependencies are installed.
+- Keep the public tool names backend-neutral:
+  `metric_map`, `fixture_hints`, `observe`, `navigate_to_waypoint`, and blocked
+  manipulation tools. Agibot-specific details belong only in preflight/runtime
+  artifact provenance and report labels.
+- Add focused tests for the artifact contract, simulated provenance labels,
+  blocked manipulation visibility, report contents, and absence of
+  `agibot_gdk_normal_navi` from simulated results.
 
 ## Open Implementation Choices
 

@@ -109,7 +109,11 @@ def render_cleanup_report(
         )
     )
     rerun_command = report_rerun_command_from_env() or _cleanup_local_rerun_command(run_result)
-    report_path.write_text(_wrap_html(body, rerun_command=rerun_command), encoding="utf-8")
+    report_title = str(run_result.get("report_title") or "MolmoSpaces Cleanup Pilot")
+    report_path.write_text(
+        _wrap_html(body, rerun_command=rerun_command, title=report_title),
+        encoding="utf-8",
+    )
     return report_path
 
 
@@ -165,6 +169,7 @@ def _cleanup_report_sections(
             _report_tab_panel(
                 "robot",
                 [
+                    _molmospaces_agibot_rehearsal_section(run_dir, run_result),
                     _agibot_sdk_runner_section(run_dir, run_result),
                     _nav2_map_bundle_section(run_dir, run_result),
                     _real_robot_readiness_section(run_result),
@@ -5091,7 +5096,14 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
             _badge("Manipulation blocked", readiness.get("manipulation_blocked", False)),
         )
     )
-    if readiness.get("backend_variant") == "agibot_gdk":
+    if readiness.get("backend_variant") == "molmospaces_sim":
+        note = (
+            "This section is a MolmoSpaces Agibot Contract Rehearsal. It validates "
+            "real_robot_cleanup_v1 contract shape, Agibot-shaped stage sequencing, "
+            "and simulated observe/navigation evidence. It is not physical Agibot "
+            "GDK execution, not a real movement gate, and not manipulation proof."
+        )
+    elif readiness.get("backend_variant") == "agibot_gdk":
         movement_flag = str(readiness.get("movement_enabled", False)).lower()
         note = (
             "This section is an AgiBot Navigation + Perception Pilot. Roboclaws keeps "
@@ -5127,10 +5139,80 @@ def _real_robot_readiness_section(run_result: dict[str, Any]) -> str:
     )
 
 
+def _molmospaces_agibot_rehearsal_section(run_dir: Path, run_result: dict[str, Any]) -> str:
+    rehearsal = run_result.get("molmospaces_agibot_contract_rehearsal") or {}
+    if not rehearsal:
+        return ""
+    scene = run_result.get("molmospaces_scene") or {}
+    agent_view = run_result.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    rooms = metric_map.get("rooms") or []
+    waypoints = metric_map.get("inspection_waypoints") or []
+    fixtures = []
+    for room in fixture_hints.get("rooms") or []:
+        fixtures.extend(room.get("fixtures") or [])
+    runtime = str(scene.get("runtime") or rehearsal.get("runtime") or "unknown")
+    if runtime == "fixture":
+        note = (
+            "This report used the CI-safe fixture runtime: a deterministic "
+            "MolmoSpaces cleanup-contract projection with public rooms, fixtures, "
+            "and inspection waypoints. It is intentionally not a live MuJoCo "
+            "MolmoSpaces scene_xml run. Use --runtime molmospaces-subprocess for "
+            "heavier local simulator evidence."
+        )
+    else:
+        note = (
+            "This report used the MolmoSpaces subprocess runtime and carries live "
+            "simulator scene metadata when the optional MolmoSpaces/MuJoCo stack is "
+            "installed."
+        )
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Runtime', runtime)}"
+        f"{_metric('Scenario', scene.get('scenario_id', run_result.get('scenario_id', 'unknown')))}"
+        f"{_metric('Scene source', scene.get('scene_source', 'unknown'))}"
+        f"{_metric('Map id', metric_map.get('map_id', 'unknown'))}"
+        f"{_metric('Rooms', len(rooms))}"
+        f"{_metric('Fixtures', len(fixtures))}"
+        f"{_metric('Waypoints', len(waypoints))}"
+        f"{_metric('Simulated', rehearsal.get('simulated', 'n/a'))}"
+        "</div>"
+    )
+    preview = str(rehearsal.get("map_preview") or "")
+    figure = (
+        '<figure class="map-preview-figure">'
+        f"{_review_image(preview, 'MolmoSpaces metric map preview')}"
+        "<figcaption>Agent-facing metric map projection: rooms, fixtures, and "
+        "inspection waypoints used by the Agibot-shaped rehearsal.</figcaption>"
+        "</figure>"
+        if preview
+        else ""
+    )
+    paths = _path_table(
+        [
+            ("Scene identity", rehearsal.get("scene_identity", "")),
+            ("Agent view preflight", rehearsal.get("agent_view_preflight", "")),
+            ("Waypoint sequence", rehearsal.get("waypoint_sequence", "")),
+            ("Runner task input", rehearsal.get("runner_task_input", "")),
+            ("Runtime export", rehearsal.get("runtime_export", "")),
+        ]
+    )
+    return (
+        '<section class="panel molmospaces-agibot-rehearsal">'
+        "<h2>MolmoSpaces Scene &amp; Map <span>Agibot-shaped rehearsal</span></h2>"
+        f'<p class="note">{html.escape(note)}</p>'
+        f"{metrics}{figure}{paths}</section>"
+    )
+
+
 def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     runner = run_result.get("agibot_sdk_runner") or {}
     if not runner:
         return ""
+    is_molmospaces_rehearsal = (
+        runner.get("rehearsal_kind") == "molmospaces_agibot_contract_rehearsal"
+    )
     rows = []
     for item in runner.get("subphase_reports") or []:
         stage = str(item.get("stage", ""))
@@ -5157,27 +5239,53 @@ def _agibot_sdk_runner_section(run_dir: Path, run_result: dict[str, Any]) -> str
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Backend variant', runner.get('backend_variant', 'unknown'))}"
+        f"{_metric('Runtime', runner.get('runtime', 'n/a'))}"
+        f"{_metric('Simulated', runner.get('simulated', 'n/a'))}"
+        f"{_metric('Physical robot', runner.get('physical_robot', 'n/a'))}"
         f"{_metric('Movement enabled', runner.get('real_movement_enabled', False))}"
         f"{_metric('GDK imported by Roboclaws', gdk_imported)}"
         f"{_metric('Sub-phase reports', len(runner.get('subphase_reports') or []))}"
         "</div>"
     )
-    next_layer_note = (
-        '<p class="note">Next confidence layer: '
-        f"{html.escape(next_layer)}. This report is the map/SDK dry-run layer; "
-        "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution "
-        "remain separate layers.</p>"
-        if next_layer
-        else ""
-    )
+    if is_molmospaces_rehearsal:
+        heading = "AgiBot-Shaped Sim Evidence <span>MolmoSpaces contract rehearsal</span>"
+        intro = (
+            "One simulated Roboclaws run is written in Agibot-shaped backend stages. "
+            "The rows map preflight, observe, waypoint navigation, and blocked "
+            "manipulation artifacts back to the same real_robot_cleanup_v1 public "
+            "tool contract. This validates contract shape and evidence plumbing; "
+            "it is not Agibot Map Visual Dry Run, not Agibot SDK Dry Run, not "
+            "semantic cleanup mock evidence, and not real Agibot GDK execution."
+        )
+        next_layer_note = (
+            '<p class="note">Next confidence layer: '
+            f"{html.escape(next_layer)}. Real GDK navigation, physical robot "
+            "readiness, and manipulation proof remain separate validation layers.</p>"
+            if next_layer
+            else ""
+        )
+    else:
+        heading = "AgiBot Backend Evidence <span>CLI boundary</span>"
+        intro = (
+            "One Roboclaws pilot run is replayed through three SDK-owned backend "
+            "stages. The table maps each backend artifact back to the public "
+            "real_robot_cleanup_v1 tool it supports, so these rows read as "
+            "evidence for the same cleanup-shaped run rather than separate tasks. "
+            "Dry-run rows are reviewable rehearsal evidence, not physical PNC "
+            "execution proof."
+        )
+        next_layer_note = (
+            '<p class="note">Next confidence layer: '
+            f"{html.escape(next_layer)}. This report is the map/SDK dry-run layer; "
+            "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution "
+            "remain separate layers.</p>"
+            if next_layer
+            else ""
+        )
     return (
         '<section class="panel agibot-sdk-runner">'
-        "<h2>AgiBot Backend Evidence <span>CLI boundary</span></h2>"
-        '<p class="note">One Roboclaws pilot run is replayed through three SDK-owned '
-        "backend stages. The table maps each backend artifact back to the public "
-        "real_robot_cleanup_v1 tool it supports, so these rows read as evidence "
-        "for the same cleanup-shaped run rather than separate tasks. Dry-run rows "
-        "are reviewable rehearsal evidence, not physical PNC execution proof.</p>"
+        f"<h2>{heading}</h2>"
+        f'<p class="note">{html.escape(intro)}</p>'
         f"{metrics}"
         f'<p class="note">Public Roboclaws tools preserved: {html.escape(tools)}</p>'
         f"{next_layer_note}"
@@ -5190,6 +5298,7 @@ def _agibot_public_tool_mapping(stage: str) -> str:
         "agent_view_export": "metric_map, fixture_hints",
         "observe": "observe",
         "navigate_waypoint": "navigate_to_waypoint",
+        "blocked_manipulation": "pick, place, place_inside, open_receptacle, close_receptacle",
     }
     return mappings.get(stage, "backend evidence")
 
@@ -6266,6 +6375,7 @@ def _wrap_html(
     *,
     extra_css: str = "",
     rerun_command: str | None = None,
+    title: str = "MolmoSpaces Cleanup Pilot",
 ) -> str:
     extra_css_block = f"{extra_css.rstrip()}\n" if extra_css else ""
     rerun_panel = render_rerun_panel(rerun_command)
@@ -6274,7 +6384,7 @@ def _wrap_html(
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>MolmoSpaces Cleanup Pilot</title>
+  <title>{html.escape(title)}</title>
   <style>
     body {{
       margin: 0;

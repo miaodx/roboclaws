@@ -22,13 +22,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-The `robot_map_9` dry-run rehearsal now regenerates the Agibot report from the
-SDK-runner boundary without enabling movement, and the middle semantic-actions
-layer uses the same map artifact to produce `api_semantic` cleanup substeps.
-Next, run the normal review/GSD path for
-`docs/plans/molmospaces-agibot-contract-rehearsal.md`. Optional real Agibot G2
-validation remains after that separate simulated contract rehearsal; the
-current proof level remains dry-run/rehearsal only.
+The MolmoSpaces Agibot contract rehearsal now has a Roboclaws-owned command and
+fixture-backed report path for CI-safe contract evidence. Optional next steps
+are a local `--runtime molmospaces-subprocess` run with MolmoSpaces/MuJoCo
+installed, then separate real Agibot G2 validation; the current proof level
+remains simulated rehearsal only.
 
 ## Current Blocker
 
