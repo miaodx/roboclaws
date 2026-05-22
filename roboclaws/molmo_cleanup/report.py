@@ -596,12 +596,14 @@ def _pick_place_comparison_grid(
         return ""
     cards = []
     for item in comparisons:
+        escaped_route = html.escape(item["route"])
+        escaped_route_attr = html.escape(item["route"], quote=True)
         cards.append(
             '<details class="comparison-item" open>'
             "<summary>"
             '<span class="comparison-item-head">'
             f"<strong>{html.escape(item['object_id'])}</strong>"
-            f"<span>{html.escape(item['route'])}</span>"
+            f'<span title="{escaped_route_attr}">{escaped_route}</span>'
             "</span>"
             "</summary>"
             '<div class="comparison-views">'
@@ -5330,14 +5332,16 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         return ""
     artifacts = bundle.get("artifact_paths") or {}
     hashes = bundle.get("artifact_hashes") or {}
+    map_contract_label = _map_contract_label(bundle)
+    map_contract_note = _map_contract_note(bundle)
     preview = _write_nav2_static_navigation_preview(run_dir, run_result) or artifacts.get(
         "preview_png"
     )
     preview_figure = (
         '<figure class="nav2-preview">'
-        f"{_review_image(preview, 'Nav2 map bundle preview')}"
-        "<figcaption><strong>Static navigation map preview</strong>"
-        "<span>Schematic public map: rooms, fixtures, inspection waypoints, and robot pose.</span>"
+        f"{_review_image(preview, map_contract_label)}"
+        f"<figcaption><strong>{html.escape(map_contract_label)}</strong>"
+        "<span>Readable public map: rooms, fixtures, inspection waypoints, and robot pose.</span>"
         "</figcaption>"
         "</figure>"
         if preview
@@ -5366,6 +5370,7 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Environment', bundle.get('environment_id', 'unknown'))}"
+        f"{_metric('Map source', bundle.get('source_provenance', 'unknown'))}"
         f"{_metric('Robot profile', bundle.get('robot_profile_id', 'unknown'))}"
         f"{_metric('Costmap profile', bundle.get('costmap_profile_id', 'unknown'))}"
         f"{_metric('Parameter hash', str(bundle.get('parameter_hash', ''))[:16])}"
@@ -5382,12 +5387,13 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     )
     return (
         '<section class="panel nav2-map-bundle">'
-        "<h2>Nav2 Map Bundle <span>Static map contract</span></h2>"
+        f"<h2>Nav2 Map Bundle <span>{html.escape(_map_contract_subtitle(bundle))}</span></h2>"
         '<p class="note">These files are the map package a Nav2-style robot would '
         "consume: occupancy grid, semantic fixture map, robot footprint, costmap "
-        "parameters, and a preview. This is not live ROS/Nav2 execution; it proves "
-        "the report can package the same static map contract that a hardware pilot "
-        "would receive.</p>"
+        "parameters, and report views. The readable view is rendered from the public "
+        "semantic map contract; the raw occupancy artifact remains linked below. This "
+        "is not live ROS/Nav2 execution.</p>"
+        f'<p class="note">{html.escape(map_contract_note)}</p>'
         f"{metrics}"
         '<div class="nav2-explainer">'
         "<div><strong>What it proves</strong><span>Static map, fixtures, robot profile, "
@@ -5402,6 +5408,47 @@ def _nav2_map_bundle_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         '<details class="artifact-details"><summary>Map files, hashes, and known gaps</summary>'
         f"{table}{gap_list}</details></section>"
     )
+
+
+def _map_contract_label(bundle: dict[str, Any]) -> str:
+    source = str(bundle.get("source_provenance") or "")
+    if "agibot" in source.lower():
+        return "Agibot GDK map view"
+    if "molmospaces" in source.lower():
+        return "Agibot-shaped semantic map view"
+    return "Static navigation map preview"
+
+
+def _map_contract_subtitle(bundle: dict[str, Any]) -> str:
+    source = str(bundle.get("source_provenance") or "")
+    if "agibot" in source.lower():
+        return "Agibot GDK map artifact"
+    if "molmospaces" in source.lower():
+        return "Agibot-shaped static map contract"
+    return "Static map contract"
+
+
+def _map_contract_note(bundle: dict[str, Any]) -> str:
+    source = str(bundle.get("source_provenance") or "unknown")
+    source_root = str(bundle.get("source_bundle_root") or "")
+    map_id = str(bundle.get("map_id") or "unknown")
+    source_schema = str(bundle.get("source_schema") or "")
+    if "agibot" in source.lower():
+        prefix = "This map bundle came from an Agibot GDK map artifact."
+    elif "molmospaces" in source.lower():
+        prefix = (
+            "This map bundle is not a real Agibot GDK map; it is a MolmoSpaces public "
+            "semantic map rendered through the Agibot-shaped real_robot_cleanup_v1 "
+            "map contract."
+        )
+    else:
+        prefix = "This map bundle is a static public map-contract artifact."
+    details = f" Source provenance: {source}; map id: {map_id}."
+    if source_schema:
+        details += f" Source schema: {source_schema}."
+    if source_root:
+        details += f" Source root: {source_root}."
+    return prefix + details
 
 
 def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, Any]) -> str:
@@ -5419,7 +5466,16 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
     artifacts = bundle.get("artifact_paths") or {}
     map_pgm = run_dir / str(artifacts.get("occupancy_image") or "map_bundle/map.pgm")
     map_yaml = run_dir / str(artifacts.get("map_yaml") or "map_bundle/map.yaml")
-    if map_pgm.is_file() and map_yaml.is_file():
+    if (
+        map_pgm.is_file()
+        and map_yaml.is_file()
+        and _nav2_occupancy_preview_has_usable_framing(
+            map_pgm=map_pgm,
+            map_yaml=map_yaml,
+            metric_map=metric_map,
+            fixture_hints=fixture_hints,
+        )
+    ):
         return _write_nav2_occupancy_navigation_preview(
             run_dir,
             output_dir=output_dir,
@@ -5431,8 +5487,9 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
     output_path = output_dir / "report_static_navigation_map.png"
     image = Image.new("RGB", (1100, 360), (248, 250, 252))
     draw = ImageDraw.Draw(image)
-    draw.text((28, 22), "Static navigation map preview", fill=(30, 34, 42))
+    draw.text((28, 22), _map_contract_label(bundle), fill=(30, 34, 42))
     transform = _nav2_preview_transform(rooms, waypoints, fixture_rooms)
+    room_labels: list[tuple[int, int, str]] = []
 
     for room in rooms:
         points = room.get("polygon") or []
@@ -5448,11 +5505,7 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
             outline=(148, 163, 184),
             width=2,
         )
-        draw.text(
-            (left + 8, top + 8),
-            str(room.get("room_label") or room.get("room_id") or ""),
-            fill=(51, 65, 85),
-        )
+        room_labels.append((left, top, str(room.get("room_label") or room.get("room_id") or "")))
 
     for room in fixture_rooms:
         for fixture in room.get("fixtures") or []:
@@ -5473,13 +5526,10 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
                 fill=(113, 124, 141),
                 outline=(71, 85, 105),
             )
-            label = _fixture_preview_label(fixture)
-            draw.text((x - half_w, y + half_h + 4), label, fill=(51, 65, 85))
 
     for waypoint in waypoints:
         x, y = transform(float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)))
         draw.ellipse((x - 7, y - 7, x + 7, y + 7), fill=(35, 134, 90))
-        draw.text((x + 9, y - 6), str(waypoint.get("waypoint_id") or ""), fill=(51, 65, 85))
 
     robot_pose = metric_map.get("robot_pose") or {}
     if robot_pose:
@@ -5492,8 +5542,78 @@ def _write_nav2_static_navigation_preview(run_dir: Path, run_result: dict[str, A
         )
         draw.text((x + 16, y - 7), "robot", fill=(30, 64, 130))
 
+    for left, top, label in room_labels:
+        label_y = max(48, top - 18)
+        text_box = draw.textbbox((left, label_y), label)
+        draw.rounded_rectangle(
+            (text_box[0] - 4, text_box[1] - 2, text_box[2] + 4, text_box[3] + 2),
+            radius=3,
+            fill=(248, 250, 252),
+            outline=(213, 220, 230),
+        )
+        draw.text((left, label_y), label, fill=(51, 65, 85))
+
     image.save(output_path, format="PNG")
     return _report_asset_src(output_path, run_dir)
+
+
+def _nav2_occupancy_preview_has_usable_framing(
+    *,
+    map_pgm: Path,
+    map_yaml: Path,
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> bool:
+    """Return whether the occupancy map gives the semantic overlay a readable frame."""
+
+    try:
+        image = Image.open(map_pgm)
+    except OSError:
+        return False
+    if image.width < 1 or image.height < 1:
+        return False
+    parsed_yaml = _simple_map_yaml(map_yaml.read_text(encoding="utf-8"))
+    resolution = float(parsed_yaml.get("resolution") or metric_map.get("resolution_m") or 0.05)
+    if resolution <= 0:
+        return False
+    origin = parsed_yaml.get("origin") if isinstance(parsed_yaml.get("origin"), list) else []
+    origin = (origin + [0.0, 0.0, 0.0])[:3]
+    points = _nav2_semantic_preview_points(metric_map, fixture_hints)
+    if len(points) < 2:
+        return False
+
+    cols: list[int] = []
+    rows: list[int] = []
+    for x, y in points:
+        cols.append(int(round((x - float(origin[0])) / resolution)))
+        rows.append(image.height - 1 - int(round((y - float(origin[1])) / resolution)))
+    min_col, max_col = max(0, min(cols)), min(image.width - 1, max(cols))
+    min_row, max_row = max(0, min(rows)), min(image.height - 1, max(rows))
+    if min_col >= max_col or min_row >= max_row:
+        return False
+    x_coverage = (max_col - min_col + 1) / image.width
+    y_coverage = (max_row - min_row + 1) / image.height
+    return x_coverage >= 0.35 and y_coverage >= 0.35
+
+
+def _nav2_semantic_preview_points(
+    metric_map: dict[str, Any],
+    fixture_hints: dict[str, Any],
+) -> list[tuple[float, float]]:
+    points: list[tuple[float, float]] = []
+    for room in metric_map.get("rooms") or []:
+        for point in room.get("polygon") or []:
+            points.append((float(point.get("x", 0.0)), float(point.get("y", 0.0))))
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        points.append((float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))))
+    robot_pose = metric_map.get("robot_pose") or {}
+    if robot_pose:
+        points.append((float(robot_pose.get("x", 0.0)), float(robot_pose.get("y", 0.0))))
+    for room in fixture_hints.get("rooms") or []:
+        for fixture in room.get("fixtures") or []:
+            pose = fixture.get("pose") or {}
+            points.append((float(pose.get("x", 0.0)), float(pose.get("y", 0.0))))
+    return points
 
 
 def _write_nav2_occupancy_navigation_preview(
@@ -5617,14 +5737,6 @@ def _nav2_preview_transform(
     setattr(transform, "x_scale", x_scale)
     setattr(transform, "y_scale", y_scale)
     return transform
-
-
-def _fixture_preview_label(fixture: dict[str, Any]) -> str:
-    category = str(fixture.get("category") or "fixture")
-    name = str(fixture.get("name") or "")
-    if name and "(" in name:
-        name = name.split("(", 1)[0].strip()
-    return (name or category)[:16]
 
 
 def _nav2_preview_legend() -> str:
@@ -6603,7 +6715,8 @@ def _wrap_html(
       display: grid;
       grid-template-columns: minmax(0, 1fr) 24px;
       gap: 10px;
-      align-items: center;
+      align-items: start;
+      min-height: 58px;
       list-style: none;
       cursor: pointer;
     }}
@@ -6631,6 +6744,10 @@ def _wrap_html(
       color: #647083;
       font-size: 12px;
       overflow-wrap: anywhere;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
     }}
     .comparison-views {{
       display: grid;
