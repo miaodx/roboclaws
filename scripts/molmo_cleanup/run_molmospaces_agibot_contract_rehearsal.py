@@ -13,6 +13,8 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (  # noqa: E402
+    REHEARSAL_MODE_CLEANUP_ACTIONS,
+    REHEARSAL_MODE_CONTRACT,
     RUNTIME_FIXTURE,
     RUNTIME_MOLMOSPACES_SUBPROCESS,
     run_molmospaces_agibot_contract_rehearsal,
@@ -31,6 +33,9 @@ def main(argv: list[str] | None = None) -> int:
         molmospaces_python=args.molmospaces_python,
         include_robot=args.include_robot,
         robot_name=args.robot_name,
+        rehearsal_mode=args.rehearsal_mode,
+        cleanup_object_count=args.cleanup_object_count,
+        record_robot_views=args.record_robot_views,
     )
     print(
         json.dumps(
@@ -38,9 +43,11 @@ def main(argv: list[str] | None = None) -> int:
                 "run_dir": str(run_dir),
                 "status": result["cleanup_status"],
                 "confidence_layer": result["confidence_layer"],
+                "rehearsal_mode": result["rehearsal_mode"],
                 "runtime": result["runtime"],
                 "simulated": result["simulated"],
                 "physical_robot": result["physical_robot"],
+                "robot_view_steps": len(result.get("robot_view_steps") or []),
                 "report": str(run_dir / "report.html"),
                 "runtime_export": str(run_dir / "runtime" / "runtime_export.json"),
             },
@@ -70,6 +77,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--generated-mess-count", type=int, default=5)
     parser.add_argument("--waypoint-id", help="Waypoint id to use for simulated navigation.")
     parser.add_argument(
+        "--rehearsal-mode",
+        choices=(REHEARSAL_MODE_CONTRACT, REHEARSAL_MODE_CLEANUP_ACTIONS),
+        default=REHEARSAL_MODE_CONTRACT,
+        help=(
+            "contract blocks manipulation; cleanup-actions performs opt-in "
+            "simulated pick/place cleanup actions with explicit simulated labels."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup-object-count",
+        type=int,
+        default=2,
+        help="Maximum public observed cleanup candidates to act on in cleanup-actions mode.",
+    )
+    parser.add_argument(
         "--runtime",
         choices=(RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS),
         default=RUNTIME_FIXTURE,
@@ -89,6 +111,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="When using molmospaces-subprocess, include the configured robot in the scene.",
     )
     parser.add_argument("--robot-name", default="rby1m")
+    parser.add_argument(
+        "--record-robot-views",
+        action="store_true",
+        help=(
+            "Capture FPV/chase/map robot-view timeline frames. Requires "
+            "--runtime molmospaces-subprocess --include-robot."
+        ),
+    )
     return parser.parse_args(argv)
 
 

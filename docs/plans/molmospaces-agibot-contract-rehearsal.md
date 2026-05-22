@@ -1,13 +1,14 @@
 # MolmoSpaces Agibot Contract Rehearsal
 
-**Status:** Proposed next Agibot integration slice
+**Status:** Implemented local evidence captured, simulated rehearsal only
 **Created:** 2026-05-21
 **Source:** Agibot integration review, `CONTEXT.md`,
 `vendors/agibot_sdk/CONTEXT.md`, and
 `docs/plans/agibot-robot-map-9-dry-run-rehearsal.md`
 and `docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md`
-**Workflow:** Pre-GSD plan. Run review/autoplan before implementation or ingest
-into `.planning/` when ready.
+**Workflow:** Pre-GSD plan implemented directly through `intuitive-flow`; use
+this file as the evidence/handoff source unless the work is later ingested into
+GSD.
 
 ## Problem
 
@@ -199,6 +200,34 @@ execution or real-robot readiness by itself.
   or `place_inside` substeps while still reporting `physical_robot=false` and
   not claiming planner-backed or Agibot GDK manipulation proof.
 
+## Implementation Evidence
+
+Captured on 2026-05-22:
+
+- Source implementation adds default `contract` mode plus opt-in
+  `cleanup-actions` mode in
+  `scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py` and
+  `roboclaws/molmo_cleanup/agibot_contract_rehearsal.py`.
+- Local MolmoSpaces subprocess cleanup-action rehearsal report:
+  `output/agibot/molmospaces-contract-rehearsal/codex-progress-molmospaces-cleanup-actions-3/report.html`.
+  Evidence summary: `runtime=molmospaces-subprocess`,
+  `scene_source=molmospaces_subprocess`, `simulated=true`,
+  `physical_robot=false`, `execution_backend=molmospaces_sim`,
+  11 robot-view steps, and one completed simulated cleanup object with
+  `api_semantic` manipulation provenance.
+- Live Docker-backed Codex cleanup report:
+  `output/molmo/codex-agibot-contract-progress/0522_1502/seed-7/report.html`.
+  Evidence summary: `policy=codex_agent`, `agent_driven=true`,
+  `backend=molmospaces_subprocess`, `cleanup_status=success`, 43 robot-view
+  steps, 5 semantic cleanup substeps, exact restoration 4/5, and semantic
+  acceptability 5/5.
+- Focused contract tests cover blocked default manipulation, cleanup-action
+  substeps, simulated provenance labels, and absence of
+  `agibot_gdk_normal_navi`.
+
+This evidence does not claim real Agibot GDK execution, physical robot
+navigation, planner-backed manipulation, or physical cleanup readiness.
+
 ## Intuitive-Flow Review Reconciliation
 
 Full external `autoplan` reviewer voices were not run in this continuation
@@ -222,12 +251,15 @@ The scope-preserving review decisions accepted into this plan are:
   blocked manipulation visibility, report contents, and absence of
   `agibot_gdk_normal_navi` from simulated results.
 
-## Open Implementation Choices
+## Resolved Implementation Choices
 
-- Exact CLI spelling: `--execution-backend molmospaces-sim`,
-  `--runtime molmospaces-sim`, or a separate Roboclaws script.
-- Whether the first runner should reuse `scripts/molmo_cleanup/` entrypoints or
-  introduce a dedicated Agibot contract rehearsal script.
-- Exact schema location for Agibot-shaped preflight and runtime exports.
-- Whether the first MolmoSpaces scene should be a committed lightweight fixture
-  or generated from an existing MolmoSpaces cleanup scenario.
+- CLI spelling is
+  `scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py
+  --runtime fixture|molmospaces-subprocess --rehearsal-mode contract|cleanup-actions`.
+- The first runner is a dedicated Roboclaws script under
+  `scripts/molmo_cleanup/`; it does not modify the Agibot SDK runner.
+- Agibot-shaped preflight artifacts live under `preflight/`; runtime exports
+  live under `runtime/`.
+- CI-safe evidence uses a deterministic fixture projection. Local evidence can
+  opt into `--runtime molmospaces-subprocess` to use a real MolmoSpaces scene
+  generated from the cleanup scenario.

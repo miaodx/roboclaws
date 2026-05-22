@@ -7,9 +7,11 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (
     BLOCKED_MANIPULATION_TOOLS,
+    CLEANUP_ACTION_CONFIDENCE_LAYER,
     CONFIDENCE_LAYER,
     EXECUTION_BACKEND,
     NAVIGATION_PROVENANCE,
+    REHEARSAL_MODE_CLEANUP_ACTIONS,
     RUNTIME_FIXTURE,
     run_molmospaces_agibot_contract_rehearsal,
 )
@@ -137,3 +139,61 @@ def test_molmospaces_agibot_contract_rehearsal_cli_runs_without_gdk(
     assert run_result["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
     assert run_result["execution_backend"] == EXECUTION_BACKEND
     assert "agibot_gdk_normal_navi" not in json.dumps(run_result, sort_keys=True)
+
+
+def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "cleanup-actions"
+
+    result = run_molmospaces_agibot_contract_rehearsal(
+        run_dir=run_dir,
+        rehearsal_mode=REHEARSAL_MODE_CLEANUP_ACTIONS,
+        cleanup_object_count=2,
+    )
+
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    runtime_export = json.loads(
+        (run_dir / "runtime" / "runtime_export.json").read_text(encoding="utf-8")
+    )
+    cleanup_actions = json.loads(
+        (run_dir / "runtime" / "cleanup_actions.json").read_text(encoding="utf-8")
+    )
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    serialized = json.dumps(run_result, sort_keys=True)
+
+    assert result["report_title"] == CLEANUP_ACTION_CONFIDENCE_LAYER
+    assert run_result["rehearsal_mode"] == REHEARSAL_MODE_CLEANUP_ACTIONS
+    assert run_result["simulated"] is True
+    assert run_result["physical_robot"] is False
+    assert run_result["execution_backend"] == EXECUTION_BACKEND
+    assert run_result["primitive_provenance"] == "api_semantic"
+    assert run_result["manipulation_evidence"]["planner_backed"] is False
+    assert run_result["manipulation_evidence"]["physical_robot"] is False
+    assert run_result["cleanup_primitive_evidence"]["planner_backed"] is False
+    assert cleanup_actions["attempted_object_count"] == 2
+    assert cleanup_actions["completed_object_count"] == 2
+    assert runtime_export["rehearsal_mode"] == REHEARSAL_MODE_CLEANUP_ACTIONS
+    assert runtime_export["attempted_object_count"] == 2
+    assert runtime_export["completed_object_count"] == 2
+    assert runtime_export["semantic_substeps"]
+
+    phases = [
+        step["phase"]
+        for item in runtime_export["semantic_substeps"]
+        for step in item.get("steps", [])
+    ]
+    assert "pick" in phases
+    assert {"place", "place_inside"} & set(phases)
+    assert run_result["final_locations"]
+    for target in cleanup_actions["selected_targets"]:
+        object_id = target["internal_object_id"]
+        assert run_result["final_locations"][object_id] == target["target_receptacle_id"]
+
+    assert (run_dir / "runtime" / "cleanup_actions.json").is_file()
+    assert (run_dir / "subphases" / "04-cleanup-actions" / "report.html").is_file()
+    assert CLEANUP_ACTION_CONFIDENCE_LAYER in report_text
+    assert "api_semantic" in report_text
+    assert "No semantic cleanup actions recorded" not in report_text
+    assert "agibot_gdk_normal_navi" not in serialized
+    assert "agibot_gdk_normal_navi" not in report_text
