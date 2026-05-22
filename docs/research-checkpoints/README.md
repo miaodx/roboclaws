@@ -28,13 +28,15 @@
 | 期 | 文件 | 核心结论 / 主要变化 |
 |----|------|--------------------|
 | 2026-04 | [2026-04.md](2026-04.md) | 初次发布。建立 4 视角并列分类法，整理 44 个 OpenClaw 严格变体 + 30 个相邻项目，给出 Phase-1/2/3 取舍建议 |
+| 2026-05 | [2026-05.md](2026-05.md) | 首次按 mithaq vectors 卡片做的增量 checkpoint。Opus 4.7 / Kimi K2.6 落地强化 H1+H7；MolmoSpaces multi-agent 仍未到位 H2 维持；多 coding-agent 多 robot precedent 仍空缺但邻接工作（CooperBench / InteractGen / AAMAS 2026）增多，H8 升级为重点观察 |
 
 ## 下次更新
 
-**预定时间：2026-05-31**（按 mithaq vectors 卡片的月度节奏；触发临时调研的条件见
+**预定时间：2026-06-30**（按 mithaq vectors 卡片的月度节奏；触发临时调研的条件见
 vectors 卡片 §Triggers for off-schedule research）。
 
-下次应优先回答的 13 个公开问题见 [`2026-04.md` §7](2026-04.md#7-公开问题与下次-checkpoint-该回答什么)。
+下次应优先回答的 7 个公开问题见 [`2026-05.md` §6](2026-05.md#6-公开问题)
+（包括 AAMAS 2026 扫盲、PR #112 状态、MCP next spec 6 月预定是否如期）。
 
 ## 关于信源分级
 
