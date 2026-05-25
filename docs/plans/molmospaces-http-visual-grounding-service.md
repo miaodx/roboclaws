@@ -272,6 +272,14 @@ can still return `ok=true` so the agent can continue the waypoint sweep. Schema
 errors, malformed candidate responses, missing raw observations, or bad request
 construction remain contract errors and should return `ok=false`.
 
+Empty-candidate producer registration applies only to `camera-labels`. In
+`camera-raw`, an empty `declare_visual_candidates(observation_id)` call should
+not trigger the simulator baseline or external producer; return a clear no-op or
+contract error so raw-FPV runs cannot accidentally receive structured labels.
+HTTP pipeline failures should stay observation-level evidence and should not add
+synthetic cleanup-worklist objects. The Cleanup Worklist remains object-centric;
+pipeline failures belong in tool/report evidence with zero candidates.
+
 `bbox` should be the default first-slice `image_region` because it maps directly
 to detector output and report overlays. `point` remains a valid existing
 `image_region` shape for pointing-style producers or Molmo-family comparisons.
@@ -290,6 +298,12 @@ pipeline evidence only. The public Destination Hint Resolver owns the final
 `candidate_fixture_id`, `cleanup_recommended`, and `recommended_tool` fields
 exposed through the existing candidate shape.
 
+When a refiner changes category, region, confidence, or evidence text, keep the
+full pipeline/stage status at the observation level and store the final accepted
+producer lineage on each normalized candidate. Raw proposals, rejected
+proposals, and refiner rejection reasons are Visual Grounding Diagnostic
+Evidence and should stay in report artifacts, not Agent View candidate payloads.
+
 ## Implementation Phases
 
 ### Phase A: Contract, Fake HTTP Pipeline, And Codex Path
@@ -303,8 +317,8 @@ Grounding DINO, YOLOE, Qwen3-VL, or MiMo quality comparisons.
   `RealWorldCleanupContract` or its construction path. Direct runs, MCP smoke,
   and live MCP server routes should share this client rather than duplicating
   HTTP logic.
-- Add a fake HTTP service or test fixture that returns deterministic candidates
-  from public request metadata only.
+- Add a fake HTTP service or test fixture that returns deterministic success and
+  failure responses from public request metadata only.
 - Put first-slice code near the Molmo cleanup contract, such as
   `roboclaws/molmo_cleanup/visual_grounding.py`, with helper entry points under
   `scripts/visual_grounding/`. Promote to a broader `roboclaws/perception/`
@@ -315,11 +329,17 @@ Grounding DINO, YOLOE, Qwen3-VL, or MiMo quality comparisons.
   `candidates=[...]`, register those declarations directly. When
   `candidates` is empty in `camera-labels` mode, treat it as producer
   registration and route to `sim` or the configured HTTP pipeline.
+- Do not treat empty candidate lists in `camera-raw` as producer registration;
+  make that path an explicit no-op or contract error to preserve the raw-FPV
+  input contract.
 - Preserve the current `visual_grounding=sim` baseline unchanged except for
   explicit pipeline provenance metadata.
 - Record `visual_grounding_pipeline.pipeline_id=sim` and a
   `simulated_camera_model` stage for the simulator baseline so reports and
   benchmark comparison do not need special-case metadata.
+- Keep Phase A free of duplicate suppression, tracking, or identity stitching.
+  Record duplicate-rate metadata where available, but defer real dedupe/tracker
+  behavior to the proposer benchmark or continuous producer phases.
 - Update reports/checkers to show pipeline id, stage id, model id, status, latency,
   candidate count, unresolved count, duplicate rate, and failure reason.
 - Add contract tests proving HTTP failure is visible and does not fall back to
@@ -354,16 +374,25 @@ is server-side and should not require agent changes beyond the existing
   the default `uv sync --extra dev` path.
 - Add a perception-isolated benchmark corpus from stored RAW_FPV observations,
   public waypoint metadata, public fixture hints, and private evaluation labels.
-- Benchmark proposer-only pipelines before running expensive cleanup probes.
+- Start with simulator-only MolmoSpaces frames so RAW_FPV observations, public
+  context, and private labels stay synchronized. Real Agibot G2 head-camera
+  frames should be added later as a documented sibling artifact, not as a
+  blocker for the first benchmark harness.
+- Label category/object presence first. Add bbox or segmentation labels only for
+  a small reviewed subset until annotation cost and usefulness are proven.
+- Benchmark proposer-only pipelines before running expensive cleanup probes or
+  adding refiners.
 - Validate direct and MCP smoke reports for the best proposer, then collect at
   least one local Codex `camera-labels visual_grounding=<best-proposer>`
   artifact.
 
 Hard gate: benchmark output ranks Grounding DINO vs YOLOE on the same images
-with candidate recall, false-positive rate, duplicate rate, bbox quality,
-latency, and failure rate. Reports show real stage provenance and image-region
-overlays, and the checker distinguishes Visual Grounding Quality from
-Destination Hint Quality.
+with candidate recall, false-positive rate, duplicate rate, available bbox or
+overlay quality, latency, and failure rate. Reports show real stage provenance
+and image-region overlays, and the checker distinguishes Visual Grounding
+Quality from Destination Hint Quality. Numeric promotion thresholds such as
+`recall >= 0.80` are advisory rollout triggers until the corpus is stable enough
+for hard pass/fail gates.
 
 When moving from MolmoSpaces fixtures to real robot deployment, add a Stage-0
 real-frame measurement pass before choosing a deployed proposer: capture a
@@ -455,8 +484,11 @@ Benchmark corpus requirements:
 - fixed RAW_FPV frames from MolmoSpaces cleanup observations;
 - public waypoint id, room id, camera dimensions, category hints, and fixture
   hints;
-- private evaluation labels for scoring only, never returned to the producer or
-  agent;
+- private category/object-presence labels for scoring only, never returned to
+  the producer or agent;
+- bbox or segmentation labels for only a small reviewed subset in the first
+  corpus, with broader region annotation added after overlay review proves it
+  worth the cost;
 - enough hard negatives and cluttered scenes to measure false positives;
 - stable seeds so new producers can be replayed without rerunning the simulator.
 - store the canonical benchmark working set under `harness/visual_grounding/`;
@@ -472,8 +504,8 @@ Benchmark result requirements:
 - per-pipeline summary and per-stage summary;
 - proposal recall and precision against private labels;
 - category-family accuracy;
-- bbox quality where private boxes/segments are available, plus overlay review
-  when exact IoU is unavailable;
+- bbox quality where private boxes/segments are available, plus required overlay
+  review when exact IoU is unavailable;
 - duplicate rate and near-duplicate grouping;
 - short-term identity stability across adjacent frames when frame sequences are
   available;
@@ -524,6 +556,11 @@ The first benchmark corpus should be generated from fixed MolmoSpaces sim runs
 so RAW_FPV observations, public context, and private labels stay synchronized.
 Manual annotations and harder real-camera frames can be added later, but they
 should not block the first harness.
+
+The first Phase B comparison should stay proposer-only: `grounding-dino` versus
+`yoloe` on identical frames and hints. Add MiMo v2 Omni, Qwen3-VL, or direct VLM
+routes only after the proposer table shows a measured false-positive,
+normalization, or actionability problem that a refiner is expected to solve.
 
 Useful rollout/change triggers from the real-robot reference plan:
 
