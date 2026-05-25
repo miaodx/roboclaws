@@ -24,10 +24,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
 from roboclaws.molmo_cleanup.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof
 from roboclaws.molmo_cleanup.planner_proof_requests import write_planner_proof_requests
-from roboclaws.molmo_cleanup.profiles import (
-    WORLD_LABELS_PERF_PROFILE,
-    cleanup_profile_metadata_for_run,
-)
+from roboclaws.molmo_cleanup.profiles import cleanup_profile_metadata_for_run
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -52,7 +49,6 @@ from roboclaws.molmo_cleanup.report import (
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.semantic_timeline import (
-    CLEAN_OBSERVED_OBJECT_TOOL,
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
     cleanup_plan_from_semantic_substeps,
@@ -62,6 +58,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     semantic_diagnostics,
     semantic_substeps,
 )
+from roboclaws.molmo_cleanup.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.molmo_cleanup.types import CleanupScenario
 
 __all__ = ["MCP_SERVER_NAME", "RealWorldMolmoCleanupMCPServer", "make_molmo_realworld_cleanup_mcp"]
@@ -93,7 +90,6 @@ def make_molmo_realworld_cleanup_mcp(
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
-    enable_promoted_cleanup_tools: bool | None = None,
     planner_proof_run_result: Path | None = None,
     map_bundle_dir: str | Path | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
@@ -111,7 +107,6 @@ def make_molmo_realworld_cleanup_mcp(
         perception_mode=perception_mode,
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
-        enable_promoted_cleanup_tools=enable_promoted_cleanup_tools,
         planner_proof_run_result=planner_proof_run_result,
         map_bundle_dir=map_bundle_dir,
     )
@@ -136,7 +131,6 @@ class RealWorldMolmoCleanupMCPServer:
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         record_robot_views: bool = False,
         cleanup_profile: str | None = None,
-        enable_promoted_cleanup_tools: bool | None = None,
         planner_proof_run_result: Path | None = None,
         map_bundle_dir: str | Path | None = None,
     ) -> None:
@@ -166,11 +160,6 @@ class RealWorldMolmoCleanupMCPServer:
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
         self.cleanup_profile = cleanup_profile
-        self.enable_promoted_cleanup_tools = (
-            cleanup_profile == WORLD_LABELS_PERF_PROFILE
-            if enable_promoted_cleanup_tools is None
-            else bool(enable_promoted_cleanup_tools)
-        )
         self.planner_proof_run_result = planner_proof_run_result
         if self.record_robot_views and not callable(
             getattr(self.base_contract.backend, "write_robot_views", None)
@@ -203,7 +192,6 @@ class RealWorldMolmoCleanupMCPServer:
             agent_driven=self.agent_driven,
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
-            promoted_cleanup_tools_enabled=self.enable_promoted_cleanup_tools,
         )
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
@@ -266,12 +254,7 @@ class RealWorldMolmoCleanupMCPServer:
                 "Runtime movable objects come only from observe; acceptable destination "
                 "sets and generated mess truth are private."
             )
-        if tool in {
-            "place",
-            "place_inside",
-            "close_receptacle",
-            CLEAN_OBSERVED_OBJECT_TOOL,
-        } and augmented.get("ok"):
+        if tool in {"place", "place_inside", "close_receptacle"} and augmented.get("ok"):
             augmented["instruction"] = (
                 "After placing and closing if needed, call observe once in the current "
                 "room/fixture area before choosing the next object or waypoint."
@@ -327,6 +310,13 @@ class RealWorldMolmoCleanupMCPServer:
         advisory_evaluation_path.write_text(
             json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
         )
+        agent_scratchpad, agent_scratchpad_path = read_or_create_skill_scratchpad(
+            run_dir=self.run_dir,
+            note=(
+                "No live cleanup_scratch.json was present when the MCP server finalized; "
+                "cleanup_worklist remains authoritative."
+            ),
+        )
 
         run_result = {
             "backend": _backend_name(self.base_contract.backend),
@@ -373,6 +363,7 @@ class RealWorldMolmoCleanupMCPServer:
                 "model_declared_observation_evidence",
                 {},
             ),
+            "agent_scratchpad": agent_scratchpad,
             "private_evaluation": private_evaluation,
             "advisory_evaluation": advisory_evaluation,
             "score": done_response["score"],
@@ -386,6 +377,7 @@ class RealWorldMolmoCleanupMCPServer:
                 "agent_view": str(agent_view_path),
                 "private_evaluation": str(private_evaluation_path),
                 "advisory_evaluation": str(advisory_evaluation_path),
+                "agent_scratchpad": str(agent_scratchpad_path),
                 "planner_proof_requests": str(planner_proof_requests_path),
                 "trace": str(self.trace_path),
                 "before_snapshot": str(self._before_snapshot),
@@ -589,17 +581,6 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> None:
         if not self.record_robot_views or not response.get("ok"):
             return
-        if tool == CLEAN_OBSERVED_OBJECT_TOOL:
-            if response.get("composite_robot_views_recorded_inline"):
-                return
-            for step in response.get("semantic_steps") or []:
-                if not isinstance(step, dict) or not step.get("ok"):
-                    continue
-                self._record_composite_step_robot_view(
-                    str(step.get("phase") or step.get("tool") or ""),
-                    step,
-                )
-            return
         capture = robot_view_capture_for_tool(
             tool,
             request,
@@ -609,22 +590,6 @@ class RealWorldMolmoCleanupMCPServer:
         if capture is None:
             return
         self._record_robot_view(**capture)
-
-    def _record_composite_step_robot_view(
-        self,
-        phase: str,
-        step: dict[str, Any],
-    ) -> None:
-        if not self.record_robot_views or not step.get("ok"):
-            return
-        capture = robot_view_capture_for_tool(
-            phase,
-            {},
-            step,
-            object_id_transform=self._internal_object_id,
-        )
-        if capture is not None:
-            self._record_robot_view(**capture)
 
     def _internal_object_id(self, handle: str | None) -> str | None:
         if handle is None:

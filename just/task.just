@@ -15,7 +15,7 @@
 #   minimal - cheaper semantic evidence for non-Molmo agent iteration
 #
 # Molmo cleanup profiles:
-#   smoke | world-labels | world-labels-perf | camera-raw | camera-labels
+#   smoke | world-labels | camera-raw | camera-labels
 
 set working-directory := '..'
 set positional-arguments

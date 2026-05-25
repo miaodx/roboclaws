@@ -176,8 +176,8 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
 
     assert "molmo-cleanup-codex-perf" in agent_text
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
-    assert 'just molmo::cleanup "codex-live" "world-labels-perf"' in harness_text
-    assert "cleanup_routine=skill" in harness_text
+    assert 'just molmo::cleanup "codex-live" "world-labels"' in harness_text
+    assert '"skill" "$robot_views"' in harness_text
 
 
 def test_task_module_exposes_only_run_publicly() -> None:
@@ -235,49 +235,6 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
     ]
 
 
-def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "world-labels-perf")
-
-    assert route[:11] == [
-        "just",
-        "molmo::cleanup",
-        "codex-live",
-        "world-labels-perf",
-        "7",
-        "output/molmo/codex-world-labels-perf",
-        "帮我收拾这个房间",
-        "10",
-        "127.0.0.1",
-        "18788",
-        "auto",
-    ]
-    assert route[11] == "mcp"
-
-
-def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf_skill_comparison() -> None:
-    route = trace_task_run(
-        "molmo-cleanup",
-        "codex",
-        "world-labels-perf",
-        "cleanup_routine=skill",
-    )
-
-    assert route[:12] == [
-        "just",
-        "molmo::cleanup",
-        "codex-live",
-        "world-labels-perf",
-        "7",
-        "output/molmo/codex-world-labels-perf",
-        "帮我收拾这个房间",
-        "10",
-        "127.0.0.1",
-        "18788",
-        "auto",
-        "skill",
-    ]
-
-
 @pytest.mark.parametrize(
     ("args", "expected"),
     (
@@ -286,8 +243,13 @@ def test_prompt_mapping_molmo_cleanup_codex_world_labels_perf_skill_comparison()
         (("cleanup-report", "direct"), "unsupported task 'cleanup-report'"),
         (("molmo-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
         (("molmo-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
+        (("molmo-cleanup", "codex", "world-labels-perf"), "unsupported molmo-cleanup profile"),
         (("molmo-cleanup", "codex", "minimal"), "unsupported molmo-cleanup profile"),
         (("molmo-cleanup", "codex", "visual"), "unsupported molmo-cleanup profile"),
+        (
+            ("molmo-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
+            "unsupported cleanup_routine",
+        ),
     ),
 )
 def test_task_router_rejects_removed_compatibility_aliases(
@@ -388,22 +350,29 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert "--min-sweep-coverage 1.0" in body
 
 
-def test_molmo_world_labels_perf_skips_robot_view_gate_but_keeps_alignment_gate() -> None:
-    text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r"world-labels-perf\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
-    assert match is not None
-    body = match.group("body")
+def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "codex",
+        "world-labels",
+        "robot_views=off",
+    )
 
-    assert "skill-routine performance lane" in text
-    assert "do not call roboclaws__clean_observed_object" in text
-    assert "MCP-promoted performance lane" in text
-    assert "--include-robot --robot-name rby1m" in body
-    assert "--record-robot-views" not in body
-    assert "--require-robot-views" not in body
-    assert "--require-waypoint-honesty" in body
-    assert "--require-real-robot-alignment" in body
-    assert "--min-semantic-accepted-count 5" in body
-    assert "--min-sweep-coverage 1.0" in body
+    assert route[:12] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/molmo/codex-report",
+        "帮我收拾这个房间",
+        "10",
+        "127.0.0.1",
+        "18788",
+        "auto",
+        "skill",
+    ]
+    assert route[12] == "off"
 
 
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
@@ -431,30 +400,6 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
     assert raw_route[11] == "skill"
 
 
-def test_prompt_mapping_molmo_cleanup_camera_raw_mcp_comparison() -> None:
-    route = trace_task_run(
-        "molmo-cleanup",
-        "codex",
-        "camera-raw",
-        "cleanup_routine=mcp",
-    )
-
-    assert route[:12] == [
-        "just",
-        "molmo::cleanup",
-        "codex-live",
-        "camera-raw",
-        "7",
-        "output/molmo/codex-camera-raw",
-        "帮我收拾这个房间",
-        "10",
-        "127.0.0.1",
-        "18788",
-        "auto",
-        "mcp",
-    ]
-
-
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     matches = [
@@ -469,14 +414,10 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "mark a waypoint complete only after" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
-    assert "MCP-promoted RAW_FPV comparison lane" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
-    assert "roboclaws__clean_observed_object" in prompt
     assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
     assert "do not send bare x/y/width/height fields" in prompt
-    assert "at least seven clean_observed_object calls have succeeded" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
-    assert "--enable-promoted-cleanup-tools" in text
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:

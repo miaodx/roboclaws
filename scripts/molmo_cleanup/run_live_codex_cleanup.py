@@ -290,12 +290,11 @@ class LiveCodexCleanupRunner:
         if self.args.profile in {
             "smoke",
             "world-labels",
-            "world-labels-perf",
             "camera-labels",
             "camera-raw",
         }:
             checker_args.append("--require-clean-agent-run")
-        if self.args.profile in {"world-labels", "world-labels-perf"}:
+        if self.args.profile == "world-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
             _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")

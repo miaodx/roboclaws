@@ -125,11 +125,9 @@ sim scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
 openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
     just harness::regression local-openclaw "" "" "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
 
-# Live Codex cleanup performance lane. This is the local Docker-backed Codex
-# route with the world-labels-perf profile, so it preserves the cleanup/MCP
-# contract while skipping per-tool robot-view timeline capture. By default it
-# uses the promoted-candidate MCP shortcut while skill-routine live timing is
-# not alike; pass cleanup_routine=skill to compare the skill route.
+# Live Codex cleanup timing lane. This is the local Docker-backed Codex route
+# with the normal world-labels profile and per-tool robot-view timeline capture
+# disabled explicitly.
 molmo-cleanup-codex-perf *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -141,7 +139,7 @@ molmo-cleanup-codex-perf *overrides:
     host="127.0.0.1"
     port="18788"
     map_bundle="auto"
-    cleanup_routine="mcp"
+    robot_views="off"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2
@@ -152,7 +150,7 @@ molmo-cleanup-codex-perf *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle|cleanup_routine)
+        seed|output_dir|task|prompt|generated_mess_count|host|port|map_bundle|robot_views)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -164,8 +162,8 @@ molmo-cleanup-codex-perf *overrides:
       fi
       printf -v "$key" '%s' "$value"
     done
-    cmd=(just molmo::cleanup "codex-live" "world-labels-perf" "$seed" \
-      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle" "$cleanup_routine")
+    cmd=(just molmo::cleanup "codex-live" "world-labels" "$seed" \
+      "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle" "skill" "$robot_views")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
       printf 'just'
       for arg in "${cmd[@]:1}"; do

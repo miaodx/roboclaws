@@ -79,6 +79,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
     robot_view_capture_for_tool,
     semantic_substeps,
 )
+from roboclaws.molmo_cleanup.skill_scratchpad import empty_skill_scratchpad  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -256,12 +257,10 @@ def run_realworld_cleanup(
         if perception_mode == CAMERA_MODEL_POLICY_MODE
         else DETERMINISTIC_SWEEP_POLICY
     )
-    agent_memory: dict[str, Any] = {
-        "policy": policy_name,
-        "observed_handles": [],
-        "decisions": [],
-        "skipped_handles": [],
-    }
+    agent_scratchpad = empty_skill_scratchpad(
+        note="Deterministic direct demo scratchpad; cleanup_worklist is authoritative."
+    )
+    agent_scratchpad["policy"] = policy_name
     handled_handles: set[str] = set()
 
     for waypoint in metric_map["inspection_waypoints"]:
@@ -301,18 +300,17 @@ def run_realworld_cleanup(
             handle = str(detection["object_id"])
             if handle in handled_handles:
                 continue
-            if handle not in agent_memory["observed_handles"]:
-                agent_memory["observed_handles"].append(handle)
+            agent_scratchpad["observed_handles"].setdefault(handle, {"object_id": handle})
             target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
             if target_fixture is None:
-                agent_memory["skipped_handles"].append(
+                agent_scratchpad["failed_attempts"].append(
                     {"object_id": handle, "reason": "no_public_fixture_match"}
                 )
                 continue
             target_fixture_id = str(target_fixture["fixture_id"])
             support = detection.get("support_estimate") or {}
             if support.get("fixture_id") == target_fixture_id:
-                agent_memory["skipped_handles"].append(
+                agent_scratchpad["notes"].append(
                     {"object_id": handle, "reason": "already_on_inferred_fixture"}
                 )
                 continue
@@ -332,7 +330,7 @@ def run_realworld_cleanup(
                 ),
             )
             handled_handles.add(handle)
-            agent_memory["decisions"].append(
+            agent_scratchpad["observed_handles"][handle].update(
                 {
                     "object_id": handle,
                     "category": detection.get("category"),
@@ -342,6 +340,7 @@ def run_realworld_cleanup(
                     "perception_source": detection.get("perception_source", "visible_detection"),
                     "model_provenance": detection.get("model_provenance"),
                     "source_observation_id": detection.get("source_observation_id"),
+                    "handled": True,
                 }
             )
 
@@ -395,6 +394,8 @@ def run_realworld_cleanup(
     advisory_evaluation_path.write_text(
         json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
     )
+    agent_scratchpad_path = output_dir / "agent_scratchpad.json"
+    agent_scratchpad_path.write_text(json.dumps(agent_scratchpad, indent=2, sort_keys=True) + "\n")
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
     cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
     planner_proof_requests_path = output_dir / "planner_proof_requests.json"
@@ -472,7 +473,7 @@ def run_realworld_cleanup(
             "model_declared_observation_evidence",
             {},
         ),
-        "agent_memory": agent_memory,
+        "agent_scratchpad": agent_scratchpad,
         "private_evaluation": private_evaluation,
         "advisory_evaluation": advisory_evaluation,
         "score": done["score"],
@@ -484,6 +485,7 @@ def run_realworld_cleanup(
             "agent_view": str(agent_view_path),
             "private_evaluation": str(private_evaluation_path),
             "advisory_evaluation": str(advisory_evaluation_path),
+            "agent_scratchpad": str(agent_scratchpad_path),
             "planner_proof_requests": str(planner_proof_requests_path),
             "trace": str(trace_path),
             "before_snapshot": str(before_snapshot),

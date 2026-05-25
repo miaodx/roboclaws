@@ -4,7 +4,7 @@ import copy
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
@@ -18,12 +18,7 @@ from roboclaws.molmo_cleanup.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
 from roboclaws.molmo_cleanup.semantic_timeline import (
-    CLEAN_OBSERVED_OBJECT_TOOL,
     CLOSE_RECEPTACLE_PHASE,
-    NAVIGATE_TO_OBJECT_PHASE,
-    NAVIGATE_TO_RECEPTACLE_PHASE,
-    OPEN_RECEPTACLE_PHASE,
-    PICK_PHASE,
     PLACE_INSIDE_PHASE,
     PLACE_PHASE,
     SEMANTIC_LOOP_VARIANT,
@@ -935,133 +930,6 @@ class RealWorldCleanupContract:
             fixture_id,
             closed,
             object_id=handle,
-        )
-
-    def clean_observed_object(
-        self,
-        object_id: str,
-        fixture_id: str,
-        *,
-        placement_tool: str = "auto",
-        step_callback: Callable[[str, dict[str, Any]], None] | None = None,
-    ) -> dict[str, Any]:
-        """Run one perf-lane promoted-candidate cleanup sequence with public substeps."""
-        if fixture_id not in self._fixtures:
-            return self._error(
-                CLEAN_OBSERVED_OBJECT_TOOL,
-                "stale_reference",
-                object_id=object_id,
-                fixture_id=fixture_id,
-            )
-        if placement_tool not in {"", "auto", PLACE_PHASE, PLACE_INSIDE_PHASE}:
-            return self._error(
-                CLEAN_OBSERVED_OBJECT_TOOL,
-                "unsupported_placement_tool",
-                object_id=object_id,
-                fixture_id=fixture_id,
-                placement_tool=placement_tool,
-                recovery_hint="Use placement_tool=auto, place, or place_inside.",
-            )
-
-        steps: list[dict[str, Any]] = []
-
-        def append_step(phase: str, response: dict[str, Any]) -> None:
-            step = dict(response)
-            step["phase"] = phase
-            step.setdefault("tool", phase)
-            step.setdefault("object_id", object_id)
-            steps.append(step)
-            if step_callback is not None:
-                step_callback(phase, dict(step))
-
-        navigate_object = self.navigate_to_object(object_id)
-        append_step(NAVIGATE_TO_OBJECT_PHASE, navigate_object)
-        if not navigate_object.get("ok"):
-            return self._composite_cleanup_response(
-                object_id=object_id,
-                fixture_id=fixture_id,
-                steps=steps,
-                error_reason=str(navigate_object.get("error_reason") or "navigate_failed"),
-                recovery_hint=str(navigate_object.get("recovery_hint") or ""),
-            )
-
-        picked = self.pick(object_id)
-        append_step(PICK_PHASE, picked)
-        if not picked.get("ok"):
-            return self._composite_cleanup_response(
-                object_id=object_id,
-                fixture_id=fixture_id,
-                steps=steps,
-                error_reason=str(picked.get("error_reason") or "pick_failed"),
-                recovery_hint=str(picked.get("recovery_hint") or ""),
-            )
-
-        navigate_receptacle = self.navigate_to_receptacle(fixture_id)
-        append_step(NAVIGATE_TO_RECEPTACLE_PHASE, navigate_receptacle)
-        if not navigate_receptacle.get("ok"):
-            return self._composite_cleanup_response(
-                object_id=object_id,
-                fixture_id=fixture_id,
-                steps=steps,
-                error_reason=str(
-                    navigate_receptacle.get("error_reason") or "navigate_receptacle_failed"
-                ),
-                recovery_hint=str(navigate_receptacle.get("recovery_hint") or ""),
-            )
-
-        fixture = self._fixtures[fixture_id]
-        selected_tool = (
-            _recommended_place_tool(fixture_id, self._fixtures)
-            if placement_tool in {"", "auto"}
-            else placement_tool
-        )
-        if selected_tool == PLACE_PHASE and _fixture_prefers_inside(fixture):
-            selected_tool = PLACE_INSIDE_PHASE
-
-        if selected_tool == PLACE_INSIDE_PHASE and _fixture_requires_open(fixture):
-            opened = self.open_receptacle(fixture_id)
-            append_step(OPEN_RECEPTACLE_PHASE, opened)
-            if not opened.get("ok"):
-                return self._composite_cleanup_response(
-                    object_id=object_id,
-                    fixture_id=fixture_id,
-                    steps=steps,
-                    error_reason=str(opened.get("error_reason") or "open_receptacle_failed"),
-                    recovery_hint=str(opened.get("recovery_hint") or ""),
-                )
-
-        placed = (
-            self.place_inside(fixture_id)
-            if selected_tool == PLACE_INSIDE_PHASE
-            else self.place(fixture_id)
-        )
-        append_step(selected_tool, placed)
-        if not placed.get("ok"):
-            return self._composite_cleanup_response(
-                object_id=object_id,
-                fixture_id=fixture_id,
-                steps=steps,
-                error_reason=str(placed.get("error_reason") or "place_failed"),
-                recovery_hint=str(placed.get("recovery_hint") or ""),
-            )
-
-        if selected_tool == PLACE_INSIDE_PHASE and _fixture_requires_open(fixture):
-            closed = self.close_receptacle(fixture_id)
-            append_step(CLOSE_RECEPTACLE_PHASE, closed)
-            if not closed.get("ok"):
-                return self._composite_cleanup_response(
-                    object_id=object_id,
-                    fixture_id=fixture_id,
-                    steps=steps,
-                    error_reason=str(closed.get("error_reason") or "close_receptacle_failed"),
-                    recovery_hint=str(closed.get("recovery_hint") or ""),
-                )
-
-        return self._composite_cleanup_response(
-            object_id=object_id,
-            fixture_id=fixture_id,
-            steps=steps,
-            placement_tool=selected_tool,
         )
 
     def done(self, reason: str = "") -> dict[str, Any]:
@@ -2167,64 +2035,6 @@ class RealWorldCleanupContract:
             )
         )
 
-    def _composite_cleanup_response(
-        self,
-        *,
-        object_id: str,
-        fixture_id: str,
-        steps: list[dict[str, Any]],
-        placement_tool: str = "",
-        error_reason: str = "",
-        recovery_hint: str = "",
-    ) -> dict[str, Any]:
-        source_receptacle_id = ""
-        location_id = ""
-        contained_in = None
-        location_relation = None
-        placement_diagnostic = None
-        for step in steps:
-            if not source_receptacle_id and step.get("source_receptacle_id"):
-                source_receptacle_id = str(step["source_receptacle_id"])
-            if step.get("location_id"):
-                location_id = str(step["location_id"])
-            if step.get("contained_in") is not None:
-                contained_in = step.get("contained_in")
-            if step.get("location_relation") is not None:
-                location_relation = step.get("location_relation")
-            if step.get("placement_diagnostic") is not None:
-                placement_diagnostic = step.get("placement_diagnostic")
-        payload = {
-            "object_id": object_id,
-            "fixture_id": fixture_id,
-            "receptacle_id": fixture_id,
-            "source_receptacle_id": source_receptacle_id,
-            "semantic_steps": steps,
-            "semantic_step_count": len(steps),
-            "composite_action": CLEAN_OBSERVED_OBJECT_TOOL,
-            "composite_preserves_semantic_substeps": True,
-            "primitive_provenance": API_SEMANTIC_PROVENANCE,
-            "navigation_backend": API_SEMANTIC_PROVENANCE,
-            "instruction": (
-                "Composite cleanup completed the canonical semantic substeps. "
-                "Call observe once in the current room/fixture area before choosing "
-                "the next object or waypoint."
-            ),
-        }
-        if placement_tool:
-            payload["placement_tool"] = placement_tool
-        if location_id:
-            payload["location_id"] = location_id
-        if contained_in is not None:
-            payload["contained_in"] = contained_in
-        if location_relation is not None:
-            payload["location_relation"] = location_relation
-        if placement_diagnostic is not None:
-            payload["placement_diagnostic"] = placement_diagnostic
-        if not error_reason:
-            return self._ok(CLEAN_OBSERVED_OBJECT_TOOL, **payload)
-        payload["recovery_hint"] = recovery_hint
-        return self._error(CLEAN_OBSERVED_OBJECT_TOOL, error_reason, **payload)
-
     def _public_fixture_response(
         self,
         tool: str,
@@ -2511,22 +2321,9 @@ def cleanup_policy_trace_from_events(
         if role == "post_place_observe":
             post_place_observe_count += 1
         if role == "cleanup_action":
-            if tool == CLEAN_OBSERVED_OBJECT_TOOL:
-                semantic_steps = [
-                    step
-                    for step in response.get("semantic_steps") or []
-                    if isinstance(step, dict) and step.get("ok")
-                ]
-                cleanup_action_count += max(1, len(semantic_steps))
-                if any(
-                    str(step.get("phase") or "") in {PLACE_PHASE, PLACE_INSIDE_PHASE}
-                    for step in semantic_steps
-                ):
-                    placed_object_count += 1
-            else:
-                cleanup_action_count += 1
-                if tool in {PLACE_PHASE, PLACE_INSIDE_PHASE}:
-                    placed_object_count += 1
+            cleanup_action_count += 1
+            if tool in {PLACE_PHASE, PLACE_INSIDE_PHASE}:
+                placed_object_count += 1
             if first_cleanup_index is None:
                 first_cleanup_index = len(events)
                 observed_waypoints_at_first_cleanup = len(visited_waypoints)
@@ -2644,8 +2441,7 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
     if tool == "observe":
         return (
             "post_place_observe"
-            if previous_success_tool
-            in {PLACE_PHASE, PLACE_INSIDE_PHASE, CLOSE_RECEPTACLE_PHASE, CLEAN_OBSERVED_OBJECT_TOOL}
+            if previous_success_tool in {PLACE_PHASE, PLACE_INSIDE_PHASE, CLOSE_RECEPTACLE_PHASE}
             else ("coverage_scan_observe")
         )
     if tool in {
@@ -2657,23 +2453,13 @@ def _policy_event_role(tool: str, previous_success_tool: str) -> str:
         "place",
         "place_inside",
         "close_receptacle",
-        CLEAN_OBSERVED_OBJECT_TOOL,
     }:
         return "cleanup_action"
     return "setup_or_completion"
 
 
 def _terminal_policy_tool(tool: str, response: dict[str, Any]) -> str:
-    if tool != CLEAN_OBSERVED_OBJECT_TOOL:
-        return tool
-    terminal = CLEAN_OBSERVED_OBJECT_TOOL
-    for step in response.get("semantic_steps") or []:
-        if not isinstance(step, dict) or not step.get("ok"):
-            continue
-        phase = str(step.get("phase") or "")
-        if phase:
-            terminal = phase
-    return terminal
+    return tool
 
 
 def _map_bundle_fields_present(metric_map: dict[str, Any]) -> bool:
