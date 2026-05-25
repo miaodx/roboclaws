@@ -35,7 +35,12 @@
     {
       "path": "scripts/trace_preserving_cleanup.py",
       "kind": "routine",
-      "summary": "Reference implementation for the skill-side observed-object cleanup chain. It composes public atomic MCP tools through an injected call_tool function and preserves semantic substeps."
+      "summary": "Reference wrapper for the canonical observed-object cleanup routine. It composes public atomic MCP tools through an injected call_tool function and preserves semantic substeps."
+    },
+    {
+      "path": "scripts/scratchpad.py",
+      "kind": "scratchpad",
+      "summary": "Non-authoritative run-local strategy scratchpad helpers for intent, retries, and routine summaries."
     }
   ],
   "evidence_outputs": ["trace.jsonl", "run_result.json", "report.html"],

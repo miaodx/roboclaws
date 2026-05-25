@@ -155,7 +155,6 @@ def _trace_summary(events: list[dict[str, Any]]) -> dict[str, Any]:
             "places": tool_counts.get("place", 0),
             "place_inside": tool_counts.get("place_inside", 0),
             "closes": tool_counts.get("close_receptacle", 0),
-            "clean_observed_object": tool_counts.get("clean_observed_object", 0),
             "done": tool_counts.get("done", 0),
         },
     }
@@ -211,7 +210,7 @@ def _print_summary(summary: dict[str, Any]) -> None:
         f"pick={progress['picks']} nav_rec={progress['navigate_to_receptacle']} "
         f"open={progress['opens']} place={progress['places']} "
         f"inside={progress['place_inside']} close={progress['closes']} "
-        f"clean_object={progress['clean_observed_object']} done={progress['done']}"
+        f"done={progress['done']}"
     )
     _print_timing(summary["timing"])
 

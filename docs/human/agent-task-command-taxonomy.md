@@ -78,10 +78,8 @@ Reports for non-Molmo tasks:
 Molmo cleanup profiles:
 
 - `world-labels` by default.
-- `world-labels-perf` for local Codex timing work without per-tool robot-view
-  capture. It currently defaults to the promoted-candidate MCP shortcut because
-  live skill-routine timing is not alike; use `cleanup_routine=skill` for
-  skill-route comparison runs.
+- `robot_views=off` for local timing work that keeps the `world-labels` input
+  contract while disabling per-tool robot-view capture.
 - `smoke` for cheap synthetic contract iteration.
 - `camera-raw` for raw camera input evidence.
 - `camera-labels` for camera-derived structured candidates.

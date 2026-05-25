@@ -15,7 +15,6 @@ if __package__ in {None, ""}:
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
-    WORLD_LABELS_PERF_PROFILE,
     cleanup_profile_names,
 )
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
@@ -32,7 +31,6 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E40
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
     run_semantic_cleanup_loop,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import CLEAN_OBSERVED_OBJECT_TOOL  # noqa: E402
 from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -71,11 +69,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=cleanup_profile_names(),
         help="Public Molmo cleanup profile selected by the command facade.",
     )
-    parser.add_argument(
-        "--enable-promoted-cleanup-tools",
-        action="store_true",
-        help="Expose promoted-candidate composite cleanup tools for explicit comparison runs.",
-    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -97,7 +90,6 @@ def run_smoke(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
-    enable_promoted_cleanup_tools: bool | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -140,14 +132,9 @@ def run_smoke(
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
-        enable_promoted_cleanup_tools=enable_promoted_cleanup_tools,
     )
     try:
-        _drive_public_sweep(
-            server,
-            policy=policy,
-            use_composite_cleanup=server.enable_promoted_cleanup_tools,
-        )
+        _drive_public_sweep(server)
         done = server.call_tool("done", reason=f"{policy} cleanup complete")
     finally:
         server.close()
@@ -157,9 +144,6 @@ def run_smoke(
 
 def _drive_public_sweep(
     server: Any,
-    *,
-    policy: str,
-    use_composite_cleanup: bool = False,
 ) -> None:
     metric_map = server.call_tool("metric_map")
     fixture_hints = server.call_tool("fixture_hints")
@@ -184,8 +168,6 @@ def _drive_public_sweep(
                 server,
                 handle=handle,
                 fixture=target_fixture,
-                detection=detection,
-                use_composite_cleanup=use_composite_cleanup,
             )
             server.call_tool("observe")
             handled_handles.add(handle)
@@ -206,20 +188,8 @@ def _clean_handle(
     *,
     handle: str,
     fixture: dict[str, Any],
-    detection: dict[str, Any] | None = None,
-    use_composite_cleanup: bool = False,
 ) -> None:
     fixture_id = str(fixture["fixture_id"])
-    if use_composite_cleanup:
-        response = server.call_tool(
-            CLEAN_OBSERVED_OBJECT_TOOL,
-            object_id=handle,
-            fixture_id=fixture_id,
-            placement_tool=str((detection or {}).get("recommended_tool") or "auto"),
-        )
-        if not response.get("ok"):
-            raise RuntimeError(response)
-        return
     run_semantic_cleanup_loop(
         targets=[
             {
@@ -286,9 +256,6 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         cleanup_profile=args.cleanup_profile,
-        enable_promoted_cleanup_tools=(
-            args.enable_promoted_cleanup_tools or args.cleanup_profile == WORLD_LABELS_PERF_PROFILE
-        ),
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

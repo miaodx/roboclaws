@@ -73,7 +73,7 @@ run task driver mode="" *overrides:
       key="${key//-/_}"
       case "$key" in
         agent_souls|agents|baseline|candidate|cap|generated_mess_count|\
-        cleanup_routine|\
+        cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
@@ -125,10 +125,10 @@ run task driver mode="" *overrides:
     if [[ "$task" == "molmo-cleanup" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
-        smoke|world-labels|world-labels-perf|camera-raw|camera-labels)
+        smoke|world-labels|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|world-labels-perf|camera-raw|camera-labels)" >&2
+          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac
@@ -278,14 +278,19 @@ run task driver mode="" *overrides:
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
         map_bundle="$(get map_bundle auto)"
-        default_cleanup_routine="skill"
-        if [[ "$profile" == "world-labels-perf" ]]; then
-          default_cleanup_routine="mcp"
-        fi
-        cleanup_routine="$(get cleanup_routine "$default_cleanup_routine")"
+        cleanup_routine="$(get cleanup_routine skill)"
+        case "$cleanup_routine" in
+          auto|skill)
+            ;;
+          *)
+            echo "error: unsupported cleanup_routine '$cleanup_routine' (expected auto|skill)" >&2
+            exit 1
+            ;;
+        esac
+        robot_views="$(get robot_views "$(get record_robot_views auto)")"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
-          "$map_bundle" "$cleanup_routine"
+          "$map_bundle" "$cleanup_routine" "$robot_views"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

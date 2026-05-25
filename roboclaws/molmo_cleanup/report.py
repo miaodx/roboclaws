@@ -4911,6 +4911,7 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
     observed = agent_view.get("observed_objects") or []
     raw_observations = agent_view.get("raw_fpv_observations") or []
     worklist = agent_view.get("cleanup_worklist") or {}
+    scratchpad = run_result.get("agent_scratchpad") or {}
     waypoints = metric_map.get("inspection_waypoints") or []
     rooms = fixture_hints.get("rooms") or []
     mode = agent_view.get("perception_mode", "visible_object_detections")
@@ -4974,7 +4975,8 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
-        f"{_worklist_summary_table(worklist)}{observed_table}</section>"
+        f"{_worklist_summary_table(worklist)}"
+        f"{_skill_scratchpad_table(scratchpad)}{observed_table}</section>"
     )
 
 
@@ -4999,6 +5001,24 @@ def _worklist_summary_table(worklist: dict[str, Any]) -> str:
         '<div class="table-wrap"><table><thead><tr><th>Handle</th><th>State</th>'
         "<th>Category</th><th>Seen at fixture</th><th>Public candidate fixture</th>"
         "<th>Last waypoint</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+
+
+def _skill_scratchpad_table(scratchpad: dict[str, Any]) -> str:
+    if not scratchpad:
+        return ""
+    handles = scratchpad.get("observed_handles") or {}
+    notes = scratchpad.get("notes") or []
+    return (
+        "<h3>Skill Scratchpad</h3>"
+        '<p class="note">Non-authoritative agent notes. Cleanup Worklist facts '
+        "remain authoritative for done gates, reports, and checkers.</p>"
+        '<div class="metric-grid">'
+        f"{_metric('Schema', scratchpad.get('schema', ''))}"
+        f"{_metric('Authoritative', _yes_no(bool(scratchpad.get('authoritative'))))}"
+        f"{_metric('Scratch handles', len(handles))}"
+        f"{_metric('Notes', len(notes))}"
+        "</div>"
     )
 
 

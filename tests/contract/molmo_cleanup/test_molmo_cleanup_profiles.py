@@ -6,12 +6,12 @@ from roboclaws.molmo_cleanup.profiles import (
     CAMERA_LABELS_PROFILE,
     CAMERA_RAW_PROFILE,
     ROBOT_VIEW_REPORT,
-    SEMANTIC_PERFORMANCE_REPORT,
+    SEMANTIC_REPORT,
     SMOKE_PROFILE,
-    WORLD_LABELS_PERF_PROFILE,
     WORLD_LABELS_PROFILE,
     cleanup_profile,
     cleanup_profile_metadata,
+    cleanup_profile_metadata_for_run,
     cleanup_profile_names,
     validate_cleanup_profile_metadata,
 )
@@ -27,7 +27,6 @@ def test_cleanup_profile_registry_contains_public_profiles_only() -> None:
     assert cleanup_profile_names() == (
         SMOKE_PROFILE,
         WORLD_LABELS_PROFILE,
-        WORLD_LABELS_PERF_PROFILE,
         CAMERA_RAW_PROFILE,
         CAMERA_LABELS_PROFILE,
     )
@@ -42,12 +41,6 @@ def test_cleanup_profile_registry_contains_public_profiles_only() -> None:
     [
         (SMOKE_PROFILE, "world_labels", VISIBLE_OBJECT_DETECTIONS_MODE, "semantic_report"),
         (WORLD_LABELS_PROFILE, "world_labels", VISIBLE_OBJECT_DETECTIONS_MODE, ROBOT_VIEW_REPORT),
-        (
-            WORLD_LABELS_PERF_PROFILE,
-            "world_labels",
-            VISIBLE_OBJECT_DETECTIONS_MODE,
-            SEMANTIC_PERFORMANCE_REPORT,
-        ),
         (CAMERA_RAW_PROFILE, "raw_camera", RAW_FPV_ONLY_MODE, ROBOT_VIEW_REPORT),
         (CAMERA_LABELS_PROFILE, "camera_labels", CAMERA_MODEL_POLICY_MODE, ROBOT_VIEW_REPORT),
     ],
@@ -76,18 +69,19 @@ def test_world_labels_profile_is_not_image_reasoning() -> None:
     assert "image reasoning" not in metadata["summary"].lower()
 
 
-def test_world_labels_perf_profile_skips_robot_view_capture() -> None:
-    metadata = cleanup_profile_metadata(WORLD_LABELS_PERF_PROFILE)
+def test_world_labels_run_metadata_can_disable_robot_view_capture() -> None:
+    metadata = cleanup_profile_metadata_for_run(
+        profile_name=WORLD_LABELS_PROFILE,
+        backend=MOLMOSPACES_SUBPROCESS_BACKEND,
+        perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        record_robot_views=False,
+    )
 
     assert metadata["backend"] == MOLMOSPACES_SUBPROCESS_BACKEND
     assert metadata["include_robot"] is True
     assert metadata["record_robot_views"] is False
-    assert metadata["report"] == SEMANTIC_PERFORMANCE_REPORT
-    assert "waypoint_honesty" in metadata["verifiers"]
-    assert (
-        "robot-view timeline capture is intentionally skipped"
-        in metadata["model_input_note"].lower()
-    )
+    assert metadata["report"] == SEMANTIC_REPORT
+    assert "robot-view timeline capture was disabled" in metadata["model_input_note"].lower()
 
 
 def test_camera_raw_profile_withholds_structured_labels() -> None:

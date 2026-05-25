@@ -49,15 +49,12 @@ Molmo cleanup profiles:
 
 - `smoke` is the cheap synthetic contract sanity profile.
 - `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
-- `world-labels-perf` keeps the world-label contract but skips per-tool
-  robot-view capture for timing work. It currently defaults to the
-  promoted-candidate MCP shortcut because live skill-routine timing is not
-  alike; pass `cleanup_routine=skill` to compare the skill-side routine.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
-  It defaults to the trace-preserving skill routine; pass
-  `cleanup_routine=mcp` only for an explicit promoted-candidate comparison
-  after `navigate_to_visual_candidate` grounds a raw-FPV object handle.
 - `camera-labels` registers structured candidates from camera observations.
+
+For timing work that should skip per-tool robot-view capture, keep the normal
+`world-labels` profile and pass an explicit capture option such as
+`robot_views=off`.
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
 omitted and keeps the task default (`visual` for non-Molmo tasks,

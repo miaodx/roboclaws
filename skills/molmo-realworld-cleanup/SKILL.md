@@ -63,10 +63,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 3. Prefer a local cleanup loop after each useful observation instead of a full
    up-front survey. Clean plausible misplaced objects with only observed
    object handles using the Trace-Preserving Skill Routine below.
-   `roboclaws__clean_observed_object` is a promoted-candidate comparison path
-   only: use it only when the kickoff prompt explicitly says this run is the
-   MCP-promoted performance or comparison lane. Otherwise keep composition in
-   the skill routine and call the public atomic MCP tools yourself.
+   Keep run-local strategy notes in `cleanup_scratch.json` if useful, but treat
+   that scratchpad as non-authoritative. The contract-derived
+   `cleanup_worklist` in Agent View and `done` recovery payloads are the facts
+   that decide pending work.
    If a visible detection or done recovery response includes
    `cleanup_recommended: true` or a `candidate_fixture_id` that differs from
    its `support_estimate.fixture_id`, treat that public candidate as cleanup
@@ -132,5 +132,14 @@ than inventing hidden destinations.
 
 The reference routine lives at
 `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py`. Treat it
-as executable documentation for the public call order and recovery shape; it is
-not permission to bypass MCP or read private backend state.
+as executable documentation for the public call order and recovery shape. It
+delegates to the repo canonical routine engine and is not permission to bypass
+MCP or read private backend state.
+
+## Skill Scratchpad
+
+Use `skills/molmo-realworld-cleanup/scripts/scratchpad.py` when you need a
+local memory file for strategy, retries, or current intent. The scratchpad is
+only an agent aid; do not use it as scorer, checker, report, or `done` input.
+When scratchpad notes disagree with `cleanup_worklist`, trust
+`cleanup_worklist`.

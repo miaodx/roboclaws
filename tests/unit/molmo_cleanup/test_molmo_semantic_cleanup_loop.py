@@ -5,7 +5,6 @@ from typing import Any
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_loop
 from roboclaws.molmo_cleanup.semantic_timeline import (
-    CLEAN_OBSERVED_OBJECT_TOOL,
     NAVIGATE_TO_OBJECT_PHASE,
     NAVIGATE_TO_RECEPTACLE_PHASE,
     PICK_PHASE,
@@ -230,131 +229,13 @@ def test_visual_candidate_navigation_counts_as_object_navigation() -> None:
     assert substeps[0]["steps"][0]["tool"] == "navigate_to_visual_candidate"
 
 
-def test_semantic_substeps_expands_composite_clean_observed_object() -> None:
-    substeps = semantic_substeps(
-        [
-            _trace_response(
-                CLEAN_OBSERVED_OBJECT_TOOL,
-                {
-                    "ok": True,
-                    "tool": CLEAN_OBSERVED_OBJECT_TOOL,
-                    "object_id": "observed_001",
-                    "receptacle_id": "sink_01",
-                    "source_receptacle_id": "counter_01",
-                    "semantic_steps": [
-                        _ok(
-                            NAVIGATE_TO_OBJECT_PHASE,
-                            phase=NAVIGATE_TO_OBJECT_PHASE,
-                            object_id="observed_001",
-                            source_receptacle_id="counter_01",
-                        ),
-                        _ok(PICK_PHASE, phase=PICK_PHASE, object_id="observed_001"),
-                        _ok(
-                            NAVIGATE_TO_RECEPTACLE_PHASE,
-                            phase=NAVIGATE_TO_RECEPTACLE_PHASE,
-                            object_id="observed_001",
-                            receptacle_id="sink_01",
-                        ),
-                        _ok(
-                            PLACE_PHASE,
-                            phase=PLACE_PHASE,
-                            object_id="observed_001",
-                            receptacle_id="sink_01",
-                        ),
-                    ],
-                    "composite_preserves_semantic_substeps": True,
-                },
-            )
-        ],
-        {"sink_01": {"category": "Sink"}},
-    )
-
-    assert len(substeps) == 1
-    assert substeps[0]["object_id"] == "observed_001"
-    assert substeps[0]["source_receptacle_id"] == "counter_01"
-    assert substeps[0]["target_receptacle_id"] == "sink_01"
-    assert substeps[0]["target_receptacle_category"] == "Sink"
-    assert [step["phase"] for step in substeps[0]["steps"]] == [
-        NAVIGATE_TO_OBJECT_PHASE,
-        PICK_PHASE,
-        NAVIGATE_TO_RECEPTACLE_PHASE,
-        PLACE_PHASE,
-    ]
-
-
-def test_semantic_substeps_dedupes_visual_grounding_before_composite_cleanup() -> None:
-    substeps = semantic_substeps(
-        [
-            _trace_response(
-                "navigate_to_visual_candidate",
-                _ok(
-                    "navigate_to_visual_candidate",
-                    object_id="observed_001",
-                    source_receptacle_id="counter_01",
-                ),
-            ),
-            _trace_response(
-                CLEAN_OBSERVED_OBJECT_TOOL,
-                {
-                    "ok": True,
-                    "tool": CLEAN_OBSERVED_OBJECT_TOOL,
-                    "object_id": "observed_001",
-                    "receptacle_id": "sink_01",
-                    "source_receptacle_id": "counter_01",
-                    "semantic_steps": [
-                        _ok(
-                            NAVIGATE_TO_OBJECT_PHASE,
-                            phase=NAVIGATE_TO_OBJECT_PHASE,
-                            object_id="observed_001",
-                            source_receptacle_id="counter_01",
-                        ),
-                        _ok(PICK_PHASE, phase=PICK_PHASE, object_id="observed_001"),
-                        _ok(
-                            NAVIGATE_TO_RECEPTACLE_PHASE,
-                            phase=NAVIGATE_TO_RECEPTACLE_PHASE,
-                            object_id="observed_001",
-                            receptacle_id="sink_01",
-                        ),
-                        _ok(
-                            PLACE_PHASE,
-                            phase=PLACE_PHASE,
-                            object_id="observed_001",
-                            receptacle_id="sink_01",
-                        ),
-                    ],
-                },
-            ),
-        ],
-        {"sink_01": {"category": "Sink"}},
-    )
-
-    phases = [step["phase"] for step in substeps[0]["steps"]]
-    assert phases == [
-        NAVIGATE_TO_OBJECT_PHASE,
-        PICK_PHASE,
-        NAVIGATE_TO_RECEPTACLE_PHASE,
-        PLACE_PHASE,
-    ]
-    assert has_complete_semantic_sequence(phases)
-
-
-def test_primitive_provenance_counts_expands_composite_semantic_steps() -> None:
+def test_primitive_provenance_counts_summarizes_atomic_semantic_steps() -> None:
     counts = primitive_provenance_counts(
         [
-            _trace_response(
-                CLEAN_OBSERVED_OBJECT_TOOL,
-                {
-                    "ok": True,
-                    "tool": CLEAN_OBSERVED_OBJECT_TOOL,
-                    "primitive_provenance": API_SEMANTIC_PROVENANCE,
-                    "semantic_steps": [
-                        _ok(NAVIGATE_TO_OBJECT_PHASE),
-                        _ok(PICK_PHASE),
-                        _ok(NAVIGATE_TO_RECEPTACLE_PHASE),
-                        _ok(PLACE_PHASE),
-                    ],
-                },
-            ),
+            _trace_response(NAVIGATE_TO_OBJECT_PHASE, _ok(NAVIGATE_TO_OBJECT_PHASE)),
+            _trace_response(PICK_PHASE, _ok(PICK_PHASE)),
+            _trace_response(NAVIGATE_TO_RECEPTACLE_PHASE, _ok(NAVIGATE_TO_RECEPTACLE_PHASE)),
+            _trace_response(PLACE_PHASE, _ok(PLACE_PHASE)),
             _trace_response(
                 "observe",
                 {
