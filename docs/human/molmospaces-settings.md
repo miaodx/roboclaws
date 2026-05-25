@@ -137,6 +137,12 @@ explicit local/dev setup steps. Do not implicitly download model weights in
 normal cleanup, benchmark, or CI recipes. Treat YOLOE/YOLO-family adapters as
 optional probes until licensing and redistribution boundaries are reviewed.
 
+The first implementation slice should stop at fake HTTP plumbing, shared client
+injection, report/checker metadata, and direct/MCP-smoke evidence. Full
+proposer benchmarking and real model adapters are later phases. Live Codex is a
+useful best-effort confidence check for that slice, but direct and MCP-smoke
+fake HTTP runs are the hard gates.
+
 Qwen3-VL and MiMo v2 Omni should first be treated as refiners over detector
 proposals. They can also be tested as direct producer replacements, but that is
 a comparison mode rather than the first recommended path. Qwen3-VL should not
@@ -163,6 +169,12 @@ fixtures can be git-tracked after size and privacy review; larger image corpora
 and generated outputs should remain local or published artifacts. Private labels
 in that harness are scoring data only and must not be returned to the agent or
 grounding service.
+
+For real-robot deployment, extend the same benchmark with a fixed head-camera
+seed set and edge latency measurements before selecting a proposer. Route
+perception is a later extension: candidates discovered during navigation should
+carry `discovered_during=navigation`, use short-term tracking before becoming
+stable handles, and never block navigation primitives.
 
 Intermediate proposals, rejected proposals, and overlays are diagnostic
 evidence. Benchmark reports may show them in detail; normal cleanup reports

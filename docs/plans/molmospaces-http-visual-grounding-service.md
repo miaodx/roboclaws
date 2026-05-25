@@ -24,6 +24,11 @@ We need a pluggable visual-grounding pipeline that can compare bbox proposers
 such as Grounding DINO, YOLOE, and fixed/custom YOLO, plus refiners such as
 Qwen3-VL and MiMo v2 Omni, without changing the public cleanup MCP contract.
 
+This plan owns the HTTP pipeline and benchmark integration for MolmoSpaces and
+live coding-agent cleanup. The more robot-specific
+`docs/research/06-visual-grounding-perception-producer.md` is a useful reference for
+edge deployment, async route perception, and real Agibot G2 producer rollout.
+
 ## Goals
 
 - Keep `world-labels`, `camera-raw`, and `camera-labels` as the user-facing
@@ -45,6 +50,9 @@ Qwen3-VL and MiMo v2 Omni, without changing the public cleanup MCP contract.
 - Design for Qwen3-VL and MiMo v2 Omni first as refiner adapters. Also allow
   them as direct-producer comparisons, but do not make direct Qwen3-VL execution
   a first-phase requirement.
+- Keep the design compatible with a future continuous Perception Producer that
+  runs during navigation, emits `discovered_during` provenance, and uses
+  short-term tracking for stable handles.
 
 ## Non-Goals
 
@@ -162,6 +170,9 @@ Request fields:
   "observation_id": "raw_fpv_001",
   "waypoint_id": "wp_kitchen_01",
   "room_id": "kitchen",
+  "capture_context": {
+    "discovered_during": "waypoint_observe"
+  },
   "image": {
     "mime_type": "image/jpeg",
     "bytes_base64": "...",
@@ -218,7 +229,11 @@ Response fields:
       "confidence": 0.74,
       "evidence_note": "white bowl-like object on counter",
       "source_fixture_id": "counter_01",
-      "destination_hint": {"candidate_fixture_id": "sink_01", "confidence": 0.52}
+      "destination_hint": {"candidate_fixture_id": "sink_01", "confidence": 0.52},
+      "tracking": {
+        "track_id": "optional_short_term_track_id",
+        "tracker": "optional_bytetrack_or_ocsort"
+      }
     }
   ]
 }
@@ -257,6 +272,9 @@ can still return `ok=true` so the agent can continue the waypoint sweep. Schema
 errors, malformed candidate responses, missing raw observations, or bad request
 construction remain contract errors and should return `ok=false`.
 
+`bbox` should be the default first-slice `image_region` because it maps directly
+to detector output and report overlays. `point` remains a valid existing
+`image_region` shape for pointing-style producers or Molmo-family comparisons.
 Bounding boxes should be normalized `[x, y, width, height]` in `[0, 1]` at the
 HTTP boundary. Provider adapters may consume or emit pixel boxes internally, but
 Roboclaws should store normalized boxes plus source image dimensions so report
@@ -276,6 +294,9 @@ exposed through the existing candidate shape.
 
 ### Phase A: Contract, Fake HTTP Pipeline, And Codex Path
 
+Phase A is a plumbing and contract slice. It should not implement real
+Grounding DINO, YOLOE, Qwen3-VL, or MiMo quality comparisons.
+
 - Add request/response schema validation and a small HTTP client inside the
   cleanup runtime.
 - Add a `VisualGroundingClient`-style dependency object and inject it into
@@ -284,6 +305,10 @@ exposed through the existing candidate shape.
   HTTP logic.
 - Add a fake HTTP service or test fixture that returns deterministic candidates
   from public request metadata only.
+- Put first-slice code near the Molmo cleanup contract, such as
+  `roboclaws/molmo_cleanup/visual_grounding.py`, with helper entry points under
+  `scripts/visual_grounding/`. Promote to a broader `roboclaws/perception/`
+  package only after reuse beyond Molmo cleanup is proven.
 - Wire `camera-labels visual_grounding=fake-http` behind
   `declare_visual_candidates` for direct, MCP smoke, and live Codex routes.
 - Preserve current explicit manual declarations: when a caller passes
@@ -305,12 +330,16 @@ exposed through the existing candidate shape.
   agent should call `declare_visual_candidates` after each raw FPV observation
   and that candidates may come from the configured visual-grounding pipeline.
   Do not mention service URLs, credentials, image paths, or model hosts.
+- Add only benchmark skeletons or fake fixtures if useful for validating
+  artifact shape. Full proposer ranking and benchmark corpus work belongs to
+  Phase B.
 
 Hard gate: unit/contract tests cover a mock client, and at least one direct run
 plus one MCP smoke run exercise a real fake HTTP service over the transport.
-Local live Codex should be included in this phase if the local provider route is
-healthy because the integration point is server-side and should not require
-agent changes beyond the existing `declare_visual_candidates` call.
+Local live Codex is a best-effort Phase A confidence check, not a hard gate:
+include it if the local provider route is healthy because the integration point
+is server-side and should not require agent changes beyond the existing
+`declare_visual_candidates` call.
 
 ### Phase B: Proposer Adapters And Perception Benchmark
 
@@ -336,6 +365,13 @@ latency, and failure rate. Reports show real stage provenance and image-region
 overlays, and the checker distinguishes Visual Grounding Quality from
 Destination Hint Quality.
 
+When moving from MolmoSpaces fixtures to real robot deployment, add a Stage-0
+real-frame measurement pass before choosing a deployed proposer: capture a
+fixed Agibot G2 head-camera seed set, run the same proposer candidates on the
+same frames, and record per-category recall, bbox stability across adjacent
+frames, and edge latency on the intended hardware. Use this evidence before
+fine-tuning or locking in a detector.
+
 ### Phase C: Refiner Adapters And Pipeline Comparison
 
 - Add MiMo v2 Omni as a refiner under the same HTTP contract. It receives full
@@ -356,6 +392,12 @@ Hard gate: the comparison table can answer which pipeline found candidates,
 which candidates became actionable handles, which destination hints were useful,
 and how much latency/cost each stage added.
 
+Refiner deployment should stay conditional. If proposer-only false-positive
+rate is acceptable, keep the first deployed path single-layer and let the
+cleanup agent handle remaining semantic judgment. Add a VLM refiner only when
+benchmark evidence shows it improves actionability enough to justify latency,
+cost, and reliability risk.
+
 ### Phase D: Direct VLM Producer And End-To-End Promotion
 
 - Add direct MiMo v2 Omni and optional direct Qwen3-VL producer comparison
@@ -368,6 +410,26 @@ and how much latency/cost each stage added.
 Hard gate: an end-to-end comparison includes the sim baseline, the best
 proposer-only pipeline, the best proposer-plus-refiner pipeline, and at most one
 direct VLM pipeline.
+
+### Phase E: Continuous Perception Producer For Real Robot Routes
+
+This is a later real-robot extension, not a blocker for Phase A-D.
+
+- Run the visual-grounding service continuously beside the cleanup MCP server
+  and register candidates without blocking `navigate_to_waypoint`.
+- Mark candidate provenance with `discovered_during=waypoint_observe` or
+  `discovered_during=navigation` so reports distinguish deliberate waypoint
+  observations from route perception.
+- Add short-term identity with ByteTrack, OC-SORT, or an equivalent tracker
+  before promoting continuous output into stable observed handles.
+- Keep the producer stateless across runs; persistent visual memory is a later
+  capability.
+- For real Agibot G2 targets, measure sustained edge throughput and thermals on
+  the intended hardware before calling the route producer production-ready.
+
+Hard gate: route perception improves either time-to-first-actionable-handle or
+successful cleanup count over a `camera-raw`-only baseline without adding
+agent-facing tools or leaking private labels.
 
 ## Benchmark Harness
 
@@ -402,6 +464,8 @@ Benchmark corpus requirements:
   once size and privacy boundaries are acceptable;
 - keep larger image corpora and generated comparison outputs as local or
   published artifacts, not normal source files.
+- allow a later real-camera seed set, for example Agibot G2 head-color frames,
+  to live as a documented sibling artifact when too large for git.
 
 Benchmark result requirements:
 
@@ -411,6 +475,9 @@ Benchmark result requirements:
 - bbox quality where private boxes/segments are available, plus overlay review
   when exact IoU is unavailable;
 - duplicate rate and near-duplicate grouping;
+- short-term identity stability across adjacent frames when frame sequences are
+  available;
+- identity collision rate for tracker-backed continuous producers;
 - cleanup relevance reject/accept quality for refiners;
 - rejected proposal records for refiner diagnostics, kept in benchmark artifacts
   rather than agent-facing candidate outputs;
@@ -450,11 +517,24 @@ Checker requirements:
 - prove private benchmark labels are absent from Agent View and MCP trace;
 - require visible failure evidence when the service returns a valid failure
   response or times out.
+- require `discovered_during` provenance for any async or continuous route
+  perception candidate.
 
 The first benchmark corpus should be generated from fixed MolmoSpaces sim runs
 so RAW_FPV observations, public context, and private labels stay synchronized.
 Manual annotations and harder real-camera frames can be added later, but they
 should not block the first harness.
+
+Useful rollout/change triggers from the real-robot reference plan:
+
+- proposer per-category recall below 0.80 on the seed set means try the next
+  proposer before fine-tuning;
+- refiner end-to-end latency above 1.5 seconds means keep the proposer-only
+  path and let the cleanup agent absorb semantic judgment;
+- sustained edge thermals or power beyond the target budget means lower
+  proposer FPS and make the refiner on-demand-only;
+- identity collisions above 1 per minute mean tune tracking before replacing
+  the tracker.
 
 ## Comparison Matrix
 

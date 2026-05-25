@@ -51,7 +51,7 @@ One entry = one self-contained missing item. Shipped phases are tracked under
   observations from deliberate waypoint/fixture observations. Reference design
   for a dedicated edge-side Perception Producer feeding ADR-0126 model-declared
   observations lives in
-  `docs/plans/visual-grounding-perception-producer.md`.
+  `docs/research/06-visual-grounding-perception-producer.md`.
 
 - **Memory-depth ablation for territory control**
   Measure whether SOUL / MEMORY / FTS / vector memory helps short-horizon
