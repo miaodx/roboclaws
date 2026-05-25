@@ -81,6 +81,97 @@ fixture id, evidence note, image region, producer metadata, grounding status,
 and recovery hints. Unresolved declarations may appear in reports but should be
 blocked from `pick`.
 
+## Visual Grounding Pipeline Axis
+
+`camera-labels` describes the input contract. It should not encode which model
+or detector produced the labels. Use pipeline provenance for that second axis:
+
+| Pipeline | Meaning | Implementation Status |
+|----------|---------|-----------------------|
+| `sim` | Deterministic simulator-state visible-detection baseline. | Current control lane. |
+| `fake-http` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
+| `grounding-dino` | Bbox-first open-vocabulary proposer over RAW_FPV images. | Conservative first proposer target. |
+| `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
+| `yolo-custom` | Fixed/custom YOLO proposer for a closed cleanup ontology. | Optional only when trained weights or a fixed ontology exist. |
+| `grounding-dino+mimo-v2-omni` | Grounding DINO proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
+| `yoloe+mimo-v2-omni` | YOLOE proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
+| `grounding-dino+qwen3-vl` | Grounding DINO proposals refined by Qwen3-VL. | Design target; optional until local access is proven. |
+| `mimo-v2-omni-direct` | Hosted VLM proposes candidates without a detector proposer. | Experimental direct-producer comparison. |
+| `qwen3-vl-direct` | Qwen3-VL proposes candidates without a detector proposer. | Experimental and optional. |
+
+Recommended command shape for the future pipeline comparison:
+
+```bash
+just task::run molmo-cleanup direct camera-labels visual_grounding=sim
+just task::run molmo-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just task::run molmo-cleanup direct camera-labels visual_grounding=grounding-dino
+just task::run molmo-cleanup direct camera-labels visual_grounding=yoloe
+just task::run molmo-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
+just task::run molmo-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
+```
+
+For non-sim pipelines, Roboclaws should call an External Visual Grounding
+Service behind `declare_visual_candidates`. The agent should not receive service
+URLs, credentials, image filesystem paths, or model-host details. HTTP failures
+must be recorded as pipeline failures; they must not silently fall back to
+simulator labels unless `visual_grounding=sim` was selected.
+
+`visual_grounding` is selected when launching the runner/server, not passed as a
+cleanup MCP tool argument. Agents should continue to call
+`declare_visual_candidates(observation_id)` after `observe`; the server decides
+whether empty candidate registration uses `sim` or the configured HTTP pipeline.
+Explicit candidate declarations remain manual Model-Declared Observations and
+should not trigger the external producer.
+
+The first service request format should send JSON with base64 image bytes.
+Shared filesystem image paths are allowed inside benchmark harness internals,
+but not as the formal service contract. Use `VISUAL_GROUNDING_TIMEOUT_S`
+defaulting to 20 seconds; inference timeouts should record pipeline failure
+evidence rather than retrying. If `VISUAL_GROUNDING_API_KEY` is set, send it as
+a bearer token and redact it from reports.
+
+Keep model-heavy grounding code in sidecar service dependencies, not in the core
+cleanup runtime. The repo may host the sidecar service code and fake pipeline,
+but real Grounding DINO, YOLOE, Qwen3-VL, and hosted MiMo probes should be
+explicit local/dev setup steps. Do not implicitly download model weights in
+normal cleanup, benchmark, or CI recipes. Treat YOLOE/YOLO-family adapters as
+optional probes until licensing and redistribution boundaries are reviewed.
+
+Qwen3-VL and MiMo v2 Omni should first be treated as refiners over detector
+proposals. They can also be tested as direct producer replacements, but that is
+a comparison mode rather than the first recommended path. Qwen3-VL should not
+be a core cleanup dependency. A local Transformers/vLLM/SGLang probe is
+acceptable when model access and memory are available, but Qwen3-VL should not
+block the fake HTTP, proposer, or benchmark phases.
+
+Before promoting a real pipeline to the end-to-end cleanup matrix, run a
+perception-isolated visual-grounding benchmark over fixed RAW_FPV observations.
+Planned benchmark command shape:
+
+```bash
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
+just agent::harness molmo-visual-grounding-benchmark pipeline=yoloe
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2-omni
+```
+
+That benchmark should compare candidate recall, false positives, duplicate
+rate, category-family accuracy, bbox/overlay quality, structured-output parse
+failures, latency, and cost without running the full cleanup loop.
+
+Keep the benchmark working set under `harness/visual_grounding/`. Small stable
+fixtures can be git-tracked after size and privacy review; larger image corpora
+and generated outputs should remain local or published artifacts. Private labels
+in that harness are scoring data only and must not be returned to the agent or
+grounding service.
+
+Intermediate proposals, rejected proposals, and overlays are diagnostic
+evidence. Benchmark reports may show them in detail; normal cleanup reports
+should show accepted candidates, pipeline summary, failure evidence, and overlay
+links. They must not become MCP response fields or Agent View cleanup
+candidates. For live `camera-labels` agents, prompts should only instruct the
+agent to call `declare_visual_candidates` after `observe`; they should not
+mention service URLs, credentials, image paths, or model-host details.
+
 For the first live `camera-raw` agent gate, prefer semantic acceptability over
 the exact hidden restoration score: require enough preferred/acceptable
 placements, full sweep coverage, declaration-driven actions, and no structured
@@ -96,8 +187,8 @@ the current source of truth before claiming a run supports a setting.
 | Entrypoint | Visible Detections | Raw FPV Only | Camera Labels | Notes |
 |------------|--------------------|--------------|---------------------|-------|
 | `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | yes | yes | yes | Deterministic cleanup demo and checker path. |
-| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | no | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
-| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | no | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools. |
+| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | yes | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | yes | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Internals use `declare_visual_candidates` and `navigate_to_visual_candidate` for camera evidence to handle registration. |
 
 ## Command Taxonomy

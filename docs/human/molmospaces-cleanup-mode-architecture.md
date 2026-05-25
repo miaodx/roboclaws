@@ -205,6 +205,20 @@ VLM or detector. The Model-Declared Observation bridge keeps the public
 future implementation can change `input_provenance` to `vlm_detector` or
 `object_detector`.
 
+The profile should remain stable when that happens. Model choice belongs to
+pipeline provenance, not to the profile name. Planned pipeline values include
+`sim`, `fake-http`, proposer-only routes such as `grounding-dino` and `yoloe`,
+proposer-plus-refiner routes such as `grounding-dino+mimo-v2-omni`, and optional
+direct VLM routes such as `qwen3-vl-direct`. They should all feed the same
+`declare_visual_candidates` contract and produce the same normalized candidate
+shape.
+
+Grounding DINO and YOLOE should be treated as competing visual-region proposers.
+MiMo v2 Omni and Qwen3-VL should first be treated as refiners over those
+proposals, with direct-producer modes kept as comparison experiments. A
+perception-isolated benchmark over fixed RAW_FPV observations should select
+which pipelines deserve full end-to-end cleanup probes.
+
 ## Model-Declared Observation Bridge
 
 The durable bridge between camera evidence and cleanup handles is a
