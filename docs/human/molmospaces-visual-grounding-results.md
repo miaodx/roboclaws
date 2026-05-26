@@ -23,12 +23,14 @@ VISUAL_GROUNDING_YOLO_IMAGE_SIZE=960
 VISUAL_GROUNDING_YOLO_MAX_DET=8
 ```
 
-For proposer-plus-refiner experiments, the current best next candidate is
-`grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`: it had the best
-full-corpus precision and lowest total token count in the Gemini/Qwen refiner
-set. Keep `grounding-dino+mimo-v2-omni` as the slow end-to-end-proven quality
-reference. Do not auto-enable any refiner by default until it has same-matrix
-end-to-end cleanup evidence.
+For proposer-plus-refiner experiments, the current quality candidate is
+`grounding-dino+vertex_ai/gemini-3-flash-preview`: it produced the best
+same-matrix end-to-end cleanup check among the Gemini/Qwen refiners, with 10
+cleaned handles and 8/10 exact private matches. It is still not the default
+because latency and token usage are much higher than proposer-only Grounding
+DINO. `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` is the cheaper
+Gemini comparison lane. Do not promote the Qwen 8B refiner despite its
+perception-benchmark precision; it over-rejected in the cleanup loop.
 
 ## Selection Summary
 
@@ -37,9 +39,9 @@ end-to-end cleanup evidence.
 | `sim` | Control baseline | Best controlled cleanup score, no real perception claim. |
 | `grounding-dino` | Default real pipeline | Best proposer-only recall and best DINO-vs-YOLOE score on the current corpus. |
 | `yoloe` | Ultra-fast speed lane | Prompt expansion improved recall materially, but it still trails Grounding DINO. |
-| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Refiner candidate | Best Gemini/Qwen refiner precision with reasonable latency; needs cleanup E2E proof. |
-| `grounding-dino+vertex_ai/gemini-3-flash-preview` | Recall-biased refiner comparison | Higher recall than the other Gemini/Qwen refiners, but very slow and verbose. |
-| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Fast Gemini refiner comparison | Healthy route, but over-rejected and did not beat Qwen 8B as a refiner. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | Quality refiner candidate | Best same-matrix Gemini/Qwen cleanup result, but high latency and token use. |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Cheaper Gemini refiner comparison | Partial cleanup success; much better E2E behavior than Qwen 8B, but below Gemini 3-flash. |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Conservative refiner comparison | Best perception-benchmark precision, but over-rejected in cleanup E2E and failed. |
 | `grounding-dino+mimo-v2-omni` | Slow quality opt-in | Only refiner route with same-matrix cleanup E2E evidence, but default 20s timeout fails. |
 | `mimo-v2-omni-direct` | Experimental direct VLM | Token-plan route has the best direct-VLM benchmark score, but no same-matrix end-to-end cleanup report yet. |
 | `xiaomi/mimo-v2-omni-direct` | Aggregation-route experiment | Works through the internal aggregation route, but was slower and less stable than the token-plan MiMo route. |
@@ -183,11 +185,12 @@ Full RAW_FPV corpus, 28 observations:
 | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 39 | 0.121951 | 0.128205 | 7482.25ms | 64089 | Similar latency to Qwen 8B, worse precision/actionability. |
 | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 67 | 0.170732 | 0.104478 | 23914.571ms | 156378 | Higher recall, but too slow and verbose for default refine. |
 
-Interpretation: Qwen 8B is the best current refiner candidate when we want a
-cleaner, smaller candidate list. Gemini 3-flash is the recall-biased comparison
-lane. Gemini 3.1 flash-lite is route-healthy but not the winner on this corpus.
-Tongyi Qwen flash/plus should remain blocked until the incomplete JSON route is
-fixed.
+Interpretation: the perception-only refiner benchmark favored Qwen 8B because
+it emitted the cleanest candidate list. The end-to-end cleanup checks below
+changed the operational recommendation: Qwen 8B over-rejected useful candidates
+in the cleanup loop, while Gemini kept enough candidates to drive actual
+cleanup. Tongyi Qwen flash/plus should remain blocked until the incomplete JSON
+route is fixed.
 
 ## End-To-End Cleanup Results
 
@@ -204,6 +207,17 @@ noted.
 | Live Codex proposer-only | `grounding-dino` | 24 | 16 | 4 | 3/10 | 1.0 | Partial success |
 | Direct proposer+refiner, default timeout | `grounding-dino+mimo-v2-omni` | 0 | 14 | 0 | n/a | n/a | Failed usefully |
 | Direct proposer+refiner, 240s timeout | `grounding-dino+mimo-v2-omni` | 17 | 14 | 7 | 5/10 | 1.0 | Passed |
+| Direct proposer+refiner | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 3 | 14 | 1 | 0/10 | 1.0 | Failed |
+| Direct proposer+refiner | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 19 | 14 | 8 | 6/10 | 1.0 | Partial success |
+| Direct proposer+refiner | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 30 | 14 | 10 | 8/10 | 1.0 | Passed |
+
+Gemini/Qwen refiner check telemetry:
+
+| Pipeline | Refiner calls | Avg refiner latency | Total refiner tokens | Avg proposer latency |
+| --- | ---: | ---: | ---: | ---: |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 14 | 8311ms | 32601 | 4518ms |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 14 | 9104ms | 46713 | 4277ms |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | 14 | 19815ms | 78282 | 4284ms |
 
 Cleanup artifacts:
 
@@ -215,6 +229,9 @@ Cleanup artifacts:
 - `output/molmo/codex-camera-labels-grounding-dino/0525_2216/seed-7/report.html`
 - `output/molmo/direct-camera-labels-grounding-dino-mimo-refiner/0525_2145/seed-7/report.html`
 - `output/molmo/direct-camera-labels-grounding-dino-mimo-refiner-240s/0525_2153/seed-7/report.html`
+- `output/molmo/direct-camera-labels-grounding-dino-qwen8b-refiner-check/0526_1243/seed-7/report.html`
+- `output/molmo/direct-camera-labels-grounding-dino-gemini-lite-refiner-check/0526_1246/seed-7/report.html`
+- `output/molmo/direct-camera-labels-grounding-dino-gemini-flash-refiner-check/0526_1251/seed-7/report.html`
 
 ## Interpretation
 
@@ -230,12 +247,17 @@ default. It is useful for low-latency sweeps, for future navigation-time
 perception, and as a proposer to revisit after we add better object hints or
 visual-prompt reference boxes.
 
-For hosted VLM refine, `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`
-is the best current candidate: it produced the cleanest candidate set in the
-Gemini/Qwen refiner batch with 0.25 precision and 7.9s average latency.
-However, it reduced recall relative to Grounding DINO alone and has not yet been
-validated in the same end-to-end cleanup matrix. It should be the first new
-refiner to test in cleanup E2E, not the automatic default yet.
+For hosted VLM refine, the end-to-end check overrides the perception-only
+ranking. `grounding-dino+vertex_ai/gemini-3-flash-preview` is the best quality
+refiner in the Gemini/Qwen set: it cleaned 10 observed handles and reached 8/10
+exact private matches. The tradeoff is cost and latency: 14 refiner calls
+averaged 19.8s and reported 78k total refiner tokens. Use it only when quality
+matters more than runtime. `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview`
+is the cheaper Gemini lane: 8 cleaned handles, 6/10 exact private matches, and
+9.1s average refiner latency. Qwen 8B should not be the default refiner for this
+cleanup loop; it looked precise in the isolated benchmark but over-rejected in
+E2E, producing only 3 candidates, 1 cleaned handle, and 0/10 exact private
+matches.
 
 `grounding-dino+mimo-v2-omni` remains the useful quality reference because it
 has same-matrix cleanup proof. It improved the end-to-end cleanup run from 4
@@ -251,12 +273,10 @@ cleanup run before it can be promoted. The internal aggregation route model id
 benchmark: it had lower recall, similar precision, higher latency, and 4 read
 timeouts.
 
-Gemini routes are useful comparison lanes. Gemini 3-flash is the recall-biased
-refiner option but is too slow for default refine. Gemini 3.1 flash-lite is
-healthy and relatively fast, but did not beat Qwen 8B as a refiner and did not
-beat the existing direct Gemini-lite caveat as a direct producer. Tongyi Qwen
-flash/plus failed the smoke route with incomplete JSON output, so they should
-stay blocked until the request or provider route is repaired.
+Gemini routes are useful comparison lanes. Gemini 3-flash is now the quality
+refiner candidate; Gemini 3.1 flash-lite is the cheaper partial-success lane.
+Tongyi Qwen flash/plus failed the smoke route with incomplete JSON output, so
+they should stay blocked until the request or provider route is repaired.
 
 ## How To Add Future Results
 
@@ -289,8 +309,8 @@ When a result changes the recommendation, update "Current Recommendation" and
 These are intentionally not blockers for the current recommendation:
 
 - run a same-matrix end-to-end cleanup report for `mimo-v2-omni-direct`;
-- run a same-matrix end-to-end cleanup report for
-  `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`;
+- repeat the Gemini/Qwen refiner cleanup checks across more seeds before making
+  a default policy change;
 - investigate the `tongyi/qwen3-vl-*` incomplete-JSON route failure;
 - evaluate YOLOE visual-prompt/reference-box mode for scene-specific objects
   once we have a safe way to provide public reference crops;
