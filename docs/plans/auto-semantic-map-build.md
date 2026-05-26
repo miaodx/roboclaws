@@ -9,6 +9,11 @@ visual grounding, coarse navigation maps, and Agibot map parity.
 **Workflow:** Pre-GSD plan. Use this as the source for a later bounded
 implementation phase.
 
+**Deployment target:** the same public task/profile/tool layers should support
+eventual physical-robot runs. Early real-robot acceptance may prove only
+navigation, observation, and runtime-map evidence while manipulation remains a
+declared blocked capability.
+
 ## Problem
 
 Roboclaws cleanup already has a public coarse map path: `metric_map()` projects
@@ -18,8 +23,10 @@ context. Movable cleanup objects are deliberately excluded from that static map;
 they become `observed_*` handles only after public camera evidence or
 model-declared observation.
 
-The next useful step is to let cleanup runs build and update a semantic view of
-the world while the robot is operating. The design should support both:
+The next useful step is to let household robot tasks build and update a
+semantic view of the world while the robot is operating. Cleanup is the first
+consumer, but it should not own the map-building abstraction. The design should
+support both:
 
 - online cleanup, where the robot updates the current map while cleaning; and
 - offline sweep, where the same map-update loop runs with cleanup actions
@@ -33,6 +40,19 @@ that a separate query surface is necessary.
 
 - Make semantic map build **online-first**: the current cleanup run owns a
   Runtime Metric Map that can grow as observations arrive.
+- Treat semantic map build as a task-neutral world-understanding capability:
+  the clean public task name should be `semantic-map-build`, and cleanup should
+  consume its snapshots rather than own the abstraction.
+- Keep the public task layer separate from the skill layer: `semantic-map-build`
+  and `household-cleanup` are Runnable Tasks; each task selects or defaults an
+  Agent Skill that owns prompt strategy, scripts, recovery, and examples.
+- Prefer a clean task-neutral contract/profile name such as
+  `household_world_v1` for the shared surface instead of making the long-term
+  profile cleanup-owned.
+- Keep `household_world_v1` broad but not vague: it should cover household
+  world understanding and evidence capture, while each Runnable Task keeps its
+  own success criteria/report gates and each selected Agent Skill declares its
+  capability requirements.
 - Keep one agent-facing map surface: extend the meaning of `metric_map()` /
   Agent View rather than adding a new MCP tool.
 - Preserve the static/dynamic boundary:
@@ -49,10 +69,23 @@ that a separate query surface is necessary.
   map shape.
 - Keep private generated mess sets, acceptable destinations, and evaluator
   labels out of Agent View and normal runtime map updates.
+- Preserve simulator/hardware parity: physical backends should reuse the same
+  Runnable Task, capability profile, and MCP tool shape, while reporting
+  backend provenance, blocked capabilities, safety gates, and operator-selected
+  physical map context.
 
 ## Non-Goals
 
 - Do not add a public `semantic_map` MCP tool in the first implementation.
+- Do not make semantic map build a cleanup profile. It should be a first-class
+  task intent with cleanup/manipulation disabled.
+- Do not make `household_world_v1` a monolithic profile for every possible
+  household task. It should stay world-understanding only; Runnable Tasks and
+  their selected Agent Skills compose it through capability requirements when
+  they need cleanup, search, inspection, photo capture, navigation rehearsal, or
+  later household behaviors.
+- Do not require backward-compatible command names when the public task/profile
+  surface is cleaned up.
 - Do not silently write runtime observations back into `map_bundle/semantics.json`
   or an Agibot source map context.
 - Do not promote small movable cleanup targets into static map semantics.
@@ -69,6 +102,21 @@ This plan uses the terms added to `CONTEXT.md`:
 
 - **Runtime Metric Map**: the current-run `metric_map()` view after public
   runtime observation evidence is added.
+- **Semantic Map Build Task**: a first-class Runnable Task that navigates and
+  observes to produce a Runtime Metric Map snapshot for later household tasks.
+- **Household World Capability Profile**: the clean task-neutral capability
+  profile for shared mapping/perception/world-state tools that can support map
+  build, cleanup, inspection, search, and other household tasks. It excludes
+  task-specific manipulation tools and success criteria, but may include
+  bounded navigation to public rooms or inspection waypoints for evidence
+  capture.
+- **Skill Capability Requirements**: the profiles, capability modules, required
+  tools, optional tools, blocked capabilities, and evidence gates an Agent Skill
+  declares. A cleanup skill can require `household_world_v1` plus manipulation
+  capabilities without redefining the world contract.
+- **Real-Robot Deployment Target**: a physical acceptance target that reuses
+  the same public task/profile/tool layers as simulation, while backend variants
+  declare physical provenance, blocked capabilities, and safety gates.
 - **Observed Object Prior**: a movable cleanup-object observation loaded from an
   earlier sweep or snapshot into a later run.
 - **Map Update Candidate**: a proposed static-semantics update for a large
@@ -303,6 +351,50 @@ Rejected/deferred review decisions:
   `map_bundle/semantics.json`.
 - Do not require real detector/refiner models for the first implementation gate;
   deterministic, model-declared, and fake HTTP producer evidence are sufficient.
+
+## Clean-Slate Layering Decision
+
+Discussion on 2026-05-26 accepted a cleaner task/skill/capability/profile split
+with no backward-compatibility requirement for old public names:
+
+- `semantic-map-build` should become the first-class public Runnable Task for
+  building a Runtime Metric Map snapshot. It is not a cleanup profile, Agent
+  Skill, or new MCP tool.
+- `household-cleanup` should remain a first-class public Runnable Task for
+  cleanup runs, not the name of the reusable world capability profile.
+- Cleanup should be a consumer of household world evidence, not the owner of the
+  semantic-map abstraction.
+- The long-term shared capability-profile name should be task-neutral. Prefer
+  `household_world_v1` over `molmospaces_cleanup_v1` or another cleanup-owned
+  name for the reusable world-understanding surface.
+- `household_world_v1` is world-understanding only. It may include
+  `metric_map()`, `fixture_hints()`, `navigate_to_room()`,
+  `navigate_to_waypoint()`, `observe()`, `adjust_camera()`,
+  `declare_visual_candidates()`, runtime-map snapshots, observed-object
+  priors, and map update candidates.
+- `household_world_v1` should exclude manipulation and task-completion tools
+  such as `pick`, `place`, `open_receptacle`, and `close_receptacle`.
+- Task-specific household Runnable Tasks compose reusable capability profiles
+  through their selected Agent Skills and skill capability requirements. Future
+  tasks can cover object search, inspection, photo capture, navigation
+  rehearsal, or later household work without changing the world capability
+  profile.
+- `household-cleanup` can accept
+  `runtime_map_prior=<runtime_metric_map.json>` from an earlier
+  `semantic-map-build` run; its selected cleanup skill consumes that prior as
+  part of its strategy.
+- Backend variants should be expressed as variant/config metadata, not profile
+  names: examples include `molmospaces_subprocess`, `api_semantic_synthetic`,
+  `agibot_g2`, and `ros2_nav2`.
+- Real-robot deployment should reuse these same layers. A physical
+  `semantic-map-build` or `household-cleanup` run should differ by backend
+  variant, provenance, safety gates, and blocked-capability status, not by
+  inventing a separate robot-only task/profile taxonomy.
+- `Semantic Sweep Mode` remains the internal no-cleanup-action execution mode
+  behind the public `semantic-map-build` task.
+- The clean naming does not change the map contract boundaries: no new
+  `semantic_map()` MCP tool, no source-map mutation, and no private evaluator
+  truth in the Runtime Metric Map.
 
 ### Slice 1: Runtime map schema and report evidence
 

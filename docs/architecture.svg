@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="980" viewBox="0 0 1280 980" role="img" aria-labelledby="title desc">
   <title id="title">Roboclaws current architecture</title>
-  <desc id="desc">Layered architecture diagram showing operator entry points, robot drivers, shared MCP and vision layer, simulation core, and artifacts.</desc>
+  <desc id="desc">Layered architecture diagram showing public runnable tasks, agent skills, reusable capability profiles, stable MCP tools, backend variants including real robots, and visible artifacts.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#f7fbff"/>
@@ -21,155 +21,120 @@
       .title { font: 700 34px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
       .subtitle { font: 500 15px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
       .level { font: 700 14px system-ui, -apple-system, Segoe UI, sans-serif; fill: #334155; letter-spacing: .08em; }
-      .card-title { font: 700 18px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
-      .card-text { font: 500 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
+      .card-title { font: 700 17px system-ui, -apple-system, Segoe UI, sans-serif; fill: #0f172a; }
+      .card-text { font: 500 12.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #475569; }
       .small { font: 600 12px system-ui, -apple-system, Segoe UI, sans-serif; fill: #64748b; }
-      .band { fill: rgba(255,255,255,.58); stroke: #dbe6ef; stroke-width: 1; }
+      .band { fill: rgba(255,255,255,.58); stroke: #dbe6ef; stroke-width: 1; rx: 24; }
       .card { fill: #ffffff; stroke: #d7e2ea; stroke-width: 1.2; rx: 16; filter: url(#shadow); }
       .chip { fill: #eef6ff; stroke: #bfd7f2; stroke-width: 1; rx: 12; }
+      .ok-chip { fill: #ecfdf5; stroke: #a7f3d0; stroke-width: 1; rx: 12; }
+      .warn-chip { fill: #fff7ed; stroke: #fed7aa; stroke-width: 1; rx: 12; }
       .line { stroke: #64748b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
       .soft-line { stroke: #94a3b8; stroke-width: 1.8; fill: none; marker-end: url(#arrow); stroke-dasharray: 6 6; }
       .core-card { fill: url(#core); stroke: #0f766e; stroke-width: 1.2; rx: 18; filter: url(#shadow); }
-      .core-title { font: 800 20px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
-      .core-text { font: 600 13px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
+      .core-title { font: 800 19px system-ui, -apple-system, Segoe UI, sans-serif; fill: #ffffff; }
+      .core-text { font: 600 12.5px system-ui, -apple-system, Segoe UI, sans-serif; fill: #dff7ff; }
     </style>
   </defs>
 
   <rect width="1280" height="980" fill="url(#bg)"/>
-  <text x="64" y="66" class="title">Roboclaws Architecture</text>
-  <text x="64" y="94" class="subtitle">One AI2-THOR simulation core, multiple agent entry points, one small MCP robot API, visible artifacts for every run.</text>
+  <text x="58" y="64" class="title">Roboclaws Architecture</text>
+  <text x="58" y="92" class="subtitle">Runnable tasks select skills. Skills require reusable capability profiles and call stable MCP tools. Backends include simulation and real robots.</text>
 
-  <rect x="48" y="125" width="1184" height="140" class="band" rx="24"/>
-  <rect x="48" y="295" width="1184" height="170" class="band" rx="24"/>
-  <rect x="48" y="495" width="1184" height="180" class="band" rx="24"/>
-  <rect x="48" y="705" width="1184" height="145" class="band" rx="24"/>
-  <rect x="48" y="875" width="1184" height="70" class="band" rx="24"/>
+  <rect x="46" y="122" width="1188" height="120" class="band"/>
+  <rect x="46" y="274" width="1188" height="128" class="band"/>
+  <rect x="46" y="434" width="1188" height="162" class="band"/>
+  <rect x="46" y="628" width="1188" height="130" class="band"/>
+  <rect x="46" y="790" width="1188" height="92" class="band"/>
+  <rect x="46" y="914" width="1188" height="42" class="band"/>
 
-  <text x="72" y="153" class="level">LEVEL 1 - OPERATORS AND AUTOMATION</text>
-  <text x="72" y="323" class="level">LEVEL 2 - RUNNERS AND CONTROL SURFACES</text>
-  <text x="72" y="523" class="level">LEVEL 3 - SHARED ROBOT API AND AGENT CONTEXT</text>
-  <text x="72" y="733" class="level">LEVEL 4 - SIMULATION, VIEWS, AND GAME LOGIC</text>
-  <text x="72" y="903" class="level">LEVEL 5 - ARTIFACTS AND DEPLOYMENT OUTPUTS</text>
+  <text x="70" y="151" class="level">LEVEL 1 - PUBLIC RUNNABLE TASKS</text>
+  <text x="70" y="303" class="level">LEVEL 2 - AGENT SKILLS AND STRATEGY</text>
+  <text x="70" y="463" class="level">LEVEL 3 - CAPABILITY PROFILES AND MCP TOOLS</text>
+  <text x="70" y="657" class="level">LEVEL 4 - BACKEND VARIANTS</text>
+  <text x="70" y="819" class="level">LEVEL 5 - MAPS, REPORTS, AND EVIDENCE</text>
+  <text x="70" y="940" class="level">REAL-ROBOT DEPLOYMENT RULE</text>
 
-  <rect x="90" y="175" width="190" height="62" class="card"/>
-  <text x="112" y="202" class="card-title">Local terminal</text>
-  <text x="112" y="224" class="card-text">Make targets and examples</text>
+  <rect x="86" y="174" width="206" height="44" class="card"/>
+  <text x="108" y="202" class="card-title">ai2thor-nav</text>
+  <rect x="330" y="174" width="206" height="44" class="card"/>
+  <text x="352" y="202" class="card-title">photo-chairs</text>
+  <rect x="574" y="164" width="230" height="64" class="core-card"/>
+  <text x="598" y="190" class="core-title">semantic-map-build</text>
+  <text x="598" y="211" class="core-text">runtime metric map snapshot</text>
+  <rect x="842" y="164" width="230" height="64" class="core-card"/>
+  <text x="866" y="190" class="core-title">household-cleanup</text>
+  <text x="866" y="211" class="core-text">cleanup report and gates</text>
 
-  <rect x="315" y="175" width="190" height="62" class="card"/>
-  <text x="337" y="202" class="card-title">Codex / Claude</text>
-  <text x="337" y="224" class="card-text">Direct MCP coding agent</text>
+  <rect x="92" y="326" width="238" height="54" class="card"/>
+  <text x="114" y="352" class="card-title">navigator skill</text>
+  <text x="114" y="371" class="card-text">move, observe, done loop</text>
+  <rect x="372" y="326" width="238" height="54" class="card"/>
+  <text x="394" y="352" class="card-title">photo capture skill</text>
+  <text x="394" y="371" class="card-text">locate, navigate, archive</text>
+  <rect x="652" y="326" width="238" height="54" class="card"/>
+  <text x="674" y="352" class="card-title">map builder skill</text>
+  <text x="674" y="371" class="card-text">observe, sweep, snapshot</text>
+  <rect x="932" y="326" width="238" height="54" class="card"/>
+  <text x="954" y="352" class="card-title">cleanup skill</text>
+  <text x="954" y="371" class="card-text">navigate -> pick -> place</text>
 
-  <rect x="540" y="175" width="190" height="62" class="card"/>
-  <text x="562" y="202" class="card-title">OpenClaw UI</text>
-  <text x="562" y="224" class="card-text">Browser chat and tools</text>
+  <rect x="82" y="492" width="244" height="70" class="core-card"/>
+  <text x="106" y="520" class="core-title">Capability profiles</text>
+  <text x="106" y="544" class="core-text">required by skills, not copied</text>
+  <rect x="366" y="486" width="210" height="82" class="card"/>
+  <text x="388" y="514" class="card-title">household_world_v1</text>
+  <text x="388" y="538" class="card-text">map, fixture hints, observe,</text>
+  <text x="388" y="557" class="card-text">bounded waypoint navigation</text>
+  <rect x="616" y="486" width="220" height="82" class="card"/>
+  <text x="638" y="514" class="card-title">manipulation profile</text>
+  <text x="638" y="538" class="card-text">pick, place, open, close</text>
+  <text x="638" y="557" class="card-text">or blocked capability</text>
+  <rect x="876" y="486" width="264" height="82" class="card"/>
+  <text x="898" y="514" class="card-title">Stable MCP tools</text>
+  <text x="898" y="538" class="card-text">metric_map, observe, navigate,</text>
+  <text x="898" y="557" class="card-text">declare candidates, pick/place</text>
 
-  <rect x="765" y="175" width="190" height="62" class="card"/>
-  <text x="787" y="202" class="card-title">CI on main</text>
-  <text x="787" y="224" class="card-text">Mock plus real smoke</text>
+  <rect x="88" y="684" width="168" height="36" class="chip"/>
+  <text x="110" y="707" class="small">mock / fake HTTP</text>
+  <rect x="298" y="684" width="168" height="36" class="chip"/>
+  <text x="320" y="707" class="small">AI2-THOR</text>
+  <rect x="508" y="684" width="168" height="36" class="chip"/>
+  <text x="530" y="707" class="small">MolmoSpaces</text>
+  <rect x="718" y="684" width="168" height="36" class="chip"/>
+  <text x="740" y="707" class="small">Agibot G2</text>
+  <rect x="928" y="684" width="168" height="36" class="chip"/>
+  <text x="950" y="707" class="small">ROS2 / Nav2</text>
 
-  <rect x="990" y="175" width="190" height="62" class="card"/>
-  <text x="1012" y="202" class="card-title">Railway demo</text>
-  <text x="1012" y="224" class="card-text">Hosted appliance path</text>
+  <rect x="88" y="840" width="212" height="24" class="chip"/>
+  <text x="110" y="857" class="small">runtime_metric_map.json</text>
+  <rect x="338" y="840" width="190" height="24" class="chip"/>
+  <text x="360" y="857" class="small">agent_view.json</text>
+  <rect x="566" y="840" width="170" height="24" class="chip"/>
+  <text x="588" y="857" class="small">trace.jsonl</text>
+  <rect x="774" y="840" width="180" height="24" class="chip"/>
+  <text x="796" y="857" class="small">report.html</text>
+  <rect x="992" y="840" width="174" height="24" class="chip"/>
+  <text x="1014" y="857" class="small">proof bundles</text>
 
-  <rect x="80" y="350" width="205" height="84" class="card"/>
-  <text x="102" y="378" class="card-title">Direct VLM games</text>
-  <text x="102" y="402" class="card-text">territory_game.py</text>
-  <text x="102" y="422" class="card-text">coverage_game.py</text>
+  <text x="306" y="934" class="card-text">Physical runs reuse the same task, skill, profile, and MCP tool shape.</text>
+  <text x="306" y="952" class="card-text">They differ by backend variant, provenance, safety gates, and blocked-capability status.</text>
 
-  <rect x="315" y="340" width="230" height="104" class="card"/>
-  <text x="337" y="368" class="card-title">Coding-agent server</text>
-  <text x="337" y="392" class="card-text">coding_agent_nav_server.py</text>
-  <text x="337" y="412" class="card-text">Streamable HTTP MCP</text>
-  <text x="337" y="432" class="card-text">No Gateway required</text>
+  <path class="line" d="M690 228 L770 326"/>
+  <path class="line" d="M958 228 L1052 326"/>
+  <path class="soft-line" d="M189 218 L211 326"/>
+  <path class="soft-line" d="M433 218 L491 326"/>
 
-  <rect x="575" y="340" width="245" height="104" class="card"/>
-  <text x="597" y="368" class="card-title">OpenClaw runners</text>
-  <text x="597" y="392" class="card-text">openclaw_interactive.py</text>
-  <text x="597" y="412" class="card-text">openclaw_nav_autonomous.py</text>
-  <text x="597" y="432" class="card-text">openclaw_photo_task.py</text>
+  <path class="line" d="M770 380 L488 486"/>
+  <path class="line" d="M1052 380 L488 486"/>
+  <path class="line" d="M1052 380 L726 486"/>
+  <path class="line" d="M204 562 L172 684"/>
+  <path class="line" d="M488 568 L592 684"/>
+  <path class="line" d="M726 568 L802 684"/>
+  <path class="line" d="M1008 568 L1012 684"/>
 
-  <rect x="850" y="350" width="150" height="84" class="card"/>
-  <text x="872" y="378" class="card-title">Makefile</text>
-  <text x="872" y="402" class="card-text">smoke, chat,</text>
-  <text x="872" y="422" class="card-text">photo task</text>
-
-  <rect x="1030" y="350" width="155" height="84" class="card"/>
-  <text x="1052" y="378" class="card-title">Appliance</text>
-  <text x="1052" y="402" class="card-text">nginx, Xvfb,</text>
-  <text x="1052" y="422" class="card-text">Gateway, viewer</text>
-
-  <rect x="92" y="553" width="210" height="82" class="card"/>
-  <text x="114" y="581" class="card-title">VLM providers</text>
-  <text x="114" y="605" class="card-text">Kimi, NVIDIA, MiMo,</text>
-  <text x="114" y="625" class="card-text">Claude, OpenAI</text>
-
-  <rect x="342" y="545" width="248" height="98" class="core-card"/>
-  <text x="366" y="574" class="core-title">Roboclaws MCP</text>
-  <text x="366" y="600" class="core-text">observe(label=&quot;&quot;)</text>
-  <text x="366" y="620" class="core-text">move(direction, reason, steps)</text>
-  <text x="366" y="640" class="core-text">done(reason)</text>
-
-  <rect x="630" y="553" width="220" height="82" class="card"/>
-  <text x="652" y="581" class="card-title">Agent context</text>
-  <text x="652" y="605" class="card-text">SKILL.md, SOULs,</text>
-  <text x="652" y="625" class="card-text">human messages</text>
-
-  <rect x="890" y="553" width="245" height="82" class="card"/>
-  <text x="912" y="581" class="card-title">Vision bridge</text>
-  <text x="912" y="605" class="card-text">Images or text summaries</text>
-  <text x="912" y="625" class="card-text">for split-model agents</text>
-
-  <rect x="105" y="760" width="205" height="62" class="card"/>
-  <text x="127" y="787" class="card-title">MultiAgentEngine</text>
-  <text x="127" y="809" class="card-text">AI2-THOR wrapper</text>
-
-  <rect x="350" y="760" width="205" height="62" class="card"/>
-  <text x="372" y="787" class="card-title">AI2-THOR</text>
-  <text x="372" y="809" class="card-text">iTHOR scenes, agents</text>
-
-  <rect x="595" y="760" width="205" height="62" class="card"/>
-  <text x="617" y="787" class="card-title">View system</text>
-  <text x="617" y="809" class="card-text">FPV, map-v2, chase</text>
-
-  <rect x="840" y="760" width="205" height="62" class="card"/>
-  <text x="862" y="787" class="card-title">Game logic</text>
-  <text x="862" y="809" class="card-text">territory, coverage, nav</text>
-
-  <rect x="120" y="912" width="170" height="24" class="chip"/>
-  <text x="140" y="929" class="small">report.html + GIF</text>
-  <rect x="340" y="912" width="190" height="24" class="chip"/>
-  <text x="360" y="929" class="small">trace.jsonl + snapshots</text>
-  <rect x="580" y="912" width="170" height="24" class="chip"/>
-  <text x="600" y="929" class="small">live snapshot viewer</text>
-  <rect x="800" y="912" width="160" height="24" class="chip"/>
-  <text x="820" y="929" class="small">GitHub Pages</text>
-  <rect x="1010" y="912" width="160" height="24" class="chip"/>
-  <text x="1030" y="929" class="small">Railway service</text>
-
-  <path class="line" d="M185 237 L185 350"/>
-  <path class="line" d="M410 237 L430 340"/>
-  <path class="line" d="M635 237 L700 340"/>
-  <path class="soft-line" d="M860 237 L930 350"/>
-  <path class="soft-line" d="M1085 237 L1108 350"/>
-
-  <path class="line" d="M430 444 L460 545"/>
-  <path class="line" d="M700 444 L510 545"/>
-  <path class="line" d="M925 434 L590 560"/>
-  <path class="soft-line" d="M1108 434 L1012 553"/>
-  <path class="soft-line" d="M182 434 L197 553"/>
-
-  <path class="line" d="M466 643 L208 760"/>
-  <path class="line" d="M466 643 L698 760"/>
-  <path class="soft-line" d="M740 635 L698 760"/>
-  <path class="soft-line" d="M1012 635 L698 760"/>
-
-  <path class="line" d="M310 791 L350 791"/>
-  <path class="line" d="M555 791 L595 791"/>
-  <path class="line" d="M800 791 L840 791"/>
-
-  <path class="line" d="M208 822 L205 912"/>
-  <path class="line" d="M698 822 L665 912"/>
-  <path class="line" d="M942 822 L435 912"/>
-  <path class="soft-line" d="M925 434 L880 912"/>
-  <path class="soft-line" d="M1108 434 L1090 912"/>
+  <path class="soft-line" d="M172 720 L194 840"/>
+  <path class="soft-line" d="M592 720 L431 840"/>
+  <path class="soft-line" d="M802 720 L864 840"/>
+  <path class="soft-line" d="M1012 720 L1079 840"/>
 </svg>

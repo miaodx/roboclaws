@@ -1,293 +1,168 @@
 # Architecture
 
-How the roboclaws codebase is organized. For *why* decisions were made
-(scenario design, technology choices, phase rationale), see
-[`docs/human/technical-design.md`](docs/human/technical-design.md). For *what you can
-run*, see [`README.md`](README.md).
+Roboclaws is a thin robotics demo repo. Its architecture goal is not to hide
+robot work behind one opaque tool; it is to make every run reviewable through
+public task inputs, MCP tool traces, maps, reports, and private-evaluation
+boundaries.
 
-## Bird's-eye view
-
-Roboclaws has two embodied-demo stacks that share one review philosophy:
-make agent behavior visible, separate public agent inputs from private
-evaluation, and keep proof claims tied to artifacts.
-
-1. **AI2-THOR navigation stack** — multi-agent navigation, territory, coverage,
-   OpenClaw Gateway demos, coding-agent MCP control, and the Railway appliance.
-   The shared center is `MultiAgentEngine` (one process, one Unity controller,
-   N agents). Modes differ in what *drives* that engine: a Python game loop,
-   a remote OpenClaw Gateway, a coding agent over MCP, or the hosted appliance.
-2. **MolmoSpaces cleanup/proof stack** — household cleanup scenarios,
-   public/private Agent View contracts, shared cleanup reports, RBY1M robot-view
-   timelines, and local RBY1M/CuRobo proof-bundle generation. The shared center
-   is `RealWorldCleanupContract`: it defines what the Cleanup Agent may see,
-   what stays private for scoring, and which cleanup substeps can later be
-   bound to planner-backed manipulation proof.
-
-The navigation stack has three core abstractions:
-
-1. **`MultiAgentEngine`** — wraps `ai2thor.controller.Controller`, owns
-   the scene + cameras + per-agent state (`roboclaws/core/engine.py`).
-2. **`VLMProvider`** — pluggable inference protocol. Each provider
-   (Anthropic, OpenAI, Kimi, MiMo, NVIDIA, Mock) implements `get_action`.
-   The protocol and factory live in `roboclaws/core/vlm.py`; provider
-   implementations live in `roboclaws/core/providers/`.
-3. **`RoboclawsMCPServer`** — the MCP tool surface
-   that any external agent (OpenClaw skill, Codex, Claude Code) consumes
-   to drive a robot (`roboclaws/mcp/server.py`).
-
-The cleanup/proof stack has four core abstractions:
-
-1. **`RealWorldCleanupContract`** — public cleanup-agent surface: metric map,
-   fixture hints, waypoint observations, observed object handles, object/receptacle
-   actions, and private scoring separation (`roboclaws/molmo_cleanup/realworld_contract.py`).
-2. **Semantic cleanup loop + report underlay** — deterministic cleanup policy,
-   semantic substep timeline, Agent View, Private Evaluation, advisory scoring,
-   selected Nav2-shaped map bundle snapshots, static costmap route checks, and visual
-   report rendering
-   (`roboclaws/molmo_cleanup/semantic_cleanup_loop.py`,
-   `roboclaws/maps/`,
-   `roboclaws/molmo_cleanup/nav2_map_bundle.py`,
-   `roboclaws/molmo_cleanup/report.py`).
-3. **AgiBot SDK runner backend boundary** — routes the same
-   `real_robot_cleanup_v1` public tools through a subprocess CLI boundary when
-   the backend variant is Agibot G2. Roboclaws owns the cleanup-shaped session
-   and reports; the SDK runner owns GDK-specific map context, observation,
-   navigation, and per-stage evidence
-   (`roboclaws/molmo_cleanup/agibot_sdk_runner.py`,
-   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`).
-4. **Planner-proof request and bundle flow** — turns completed cleanup substeps
-   into private bound proof requests, dry-run manifests, local execution reports,
-   and optional cleanup reruns (`roboclaws/molmo_cleanup/planner_proof_requests.py`,
-   `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py`).
-5. **Planner-backed primitive gate** — adapters and checkers that decide whether
-   a cleanup subphase is still `api_semantic` or has exact-scene RBY1M/CuRobo
-   proof for the requested object/target binding.
-
-Across both stacks, `roboclaws/mcp/profiles.py` now defines semantic MCP
-contract profiles. Profiles describe the canonical public capability tools,
-capability families, provenance expectations, privileged-tool metadata, and
-private-data exclusions for a selected backend/domain. The current built-ins are
-`ai2thor_navigation_v1`, `molmospaces_cleanup_v1`, and
-`real_robot_cleanup_v1`. For the human design
-principles behind profiles, MCP tools, and agent skills, start with
-[`README.md`](README.md). For the detailed profile reference, see
+For commands, start with [`README.md`](README.md). For the task/skill/profile
+model, read
 [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ![Architecture diagram](docs/architecture.svg)
 
-## Navigation MCP contract
+## Core Model
 
-`roboclaws/mcp/server.py` defines the concrete AI2-THOR navigation tool
-surface that external agents use over structured-HTTP transport:
+The current human-facing layers are:
 
-- **`observe(label="")`** — returns a structured agent state plus images
-  (FPV, `map-v2` overhead, chase cam) or a text-bridge description for
-  vision-light models. Labeled observes archive snapshots to disk and emit
-  `MEDIA:` hints the OpenClaw Control UI inlines.
-- **`observe_archived(label)`** — captures the same snapshot bundle to
-  disk without returning inline images. This keeps long multi-target runs
-  out of image-token debt when the agent only needs artifact paths.
-- **`move(direction, reason="", steps=1)`** — one navigation step (or up
-  to 5). Returns `pose_delta`, `visited_count_here`, `collisions`, and a
-  synthetic `human_message` if the agent has moved blind too many times.
-- **`done(reason)`** — terminates the run cleanly. Idempotent.
+```text
+Open-ended goal
+  -> Runnable Task
+  -> Agent Skill
+  -> Capability Profile requirements
+  -> MCP Capability Tools
+  -> Backend Variant
+  -> Artifacts and reports
+```
 
-By default, the server registers only that canonical `ai2thor_navigation_v1`
-surface. Demo launchers can explicitly opt into privileged simulator helpers:
+- **Runnable Tasks** are public run surfaces such as `ai2thor-nav`,
+  `semantic-map-build`, and `household-cleanup`. They own command names,
+  parameters, report shape, and acceptance gates.
+- **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
+  and trace-preserving routines such as `navigate -> pick -> place`.
+- **Capability Profiles** define reusable capability environments. Skills
+  require profiles; profiles should not be copied into task-specific supersets.
+- **MCP Tools** are the stable public robot interface: observe, navigate, map,
+  pick, place, done, and related bounded capabilities.
+- **Backend Variants** implement the same public shape in mock, simulator, API,
+  or physical-robot environments.
 
-- **`scene_objects(filter_types="")`** — returns the full AI2-THOR object
-  inventory, optionally filtered by object type, so agents can plan
-  target-relative routes before moving.
-- **`goto(object_id, distance=1.0, face=True)`** — teleports to a reachable
-  cell near an object and optionally faces it. This is a high-leverage
-  adapter for object-photo tasks where grid-step navigation is incidental.
+The real-robot rule is: physical runs should reuse the same task, skill,
+profile, and MCP tool layers. They differ by backend variant, provenance, safety
+gates, operator map context, and blocked-capability status.
 
-The semantic profile `ai2thor_navigation_v1` treats `observe`,
-`observe_archived`, `move`, and `done` as canonical navigation capability
-tools. `scene_objects` and `goto` are privileged opt-in helpers for photo/demo
-runs, not default real-robot capability claims.
+## Major Stacks
 
-Every tool call writes a line to `<run_dir>/trace.jsonl`. The schema is a
-**frozen superset** of `tests/fixtures/trace_schema_reference.json` —
-adding keys is fine; removing or renaming is a breaking change because
-`scripts/reports/render_autonomous_replay.py` consumes it.
+Roboclaws currently has two embodied-demo stacks.
 
-The server binds to `127.0.0.1:18788` by default. Loopback-only is part
-of the threat model (see `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/`
-threat T-02.6-01); changing the bind address requires a deliberate
-decision, not a one-liner.
+### AI2-THOR Navigation
 
-## AI2-THOR Operating Modes
+This stack proves multi-agent navigation and coding-agent MCP control over
+AI2-THOR scenes.
 
-All four reuse the same `MultiAgentEngine` core. They differ in what
-boots first and what mediates between the engine and the model.
+Key pieces:
 
-### 1. Direct VLM games
+- `roboclaws/core/engine.py` owns the `MultiAgentEngine` wrapper around
+  AI2-THOR.
+- `roboclaws/core/vlm.py` and `roboclaws/core/providers/` own provider routing.
+- `roboclaws/mcp/server.py` exposes the AI2-THOR navigation MCP surface.
+- `examples/games/` and `examples/mcp/` contain runnable entrypoints.
 
-`examples/games/territory_game.py`, `examples/games/coverage_game.py`. Boots
-`MultiAgentEngine` + a `VLMProvider` directly. No MCP, no Gateway. Game
-logic lives in `roboclaws/games/territory.py` (`TerritoryGame`) and
-`roboclaws/games/coverage.py` (`CoverageGame`). Each `step()` passes
-prompt images to the provider, parses the action, and applies it. Replay
-to `output/<game>/<timestamp>/` via `ReplayRecorder`.
+The canonical navigation tools are `observe`, `observe_archived`, `move`, and
+`done`. Simulator helpers such as `scene_objects` and `goto` are privileged
+opt-ins for demos; they are not real-robot capability claims.
 
-### 2. OpenClaw Gateway
+### Household World And Cleanup
 
-`just chat::run`, `just openclaw::run nav`. Routes through a Gateway docker
-container (default `:18789`) that handles auth, sessions, and model
-routing. The roboclaws side:
+This stack proves household world understanding, semantic cleanup, runtime maps,
+and future physical robot parity.
 
-- `roboclaws/openclaw/transport.py` — `OpenClawBridge`: HTTP client to
-  the Gateway, retry on read timeout, fail-fast on connect / 4xx / 5xx.
-- `roboclaws/openclaw/bridge.py` — `OpenClawProvider`: a
-  `VLMProvider`-compatible wrapper that uses `OpenClawBridge`. Tracked
-  via `ProviderStatus`.
-- `roboclaws/openclaw/skill.py` — `AI2THORNavigatorSkill`: wraps a
-  provider with a SOUL preset for use as an OpenClaw skill.
-- `roboclaws/mcp/text_bridge.py` — `VisionBridge`: image-to-text
-  bridge for vision-light models (e.g., MiMo text variants).
+Key pieces:
 
-### 3. Direct coding-agent driver
+- `roboclaws/molmo_cleanup/realworld_contract.py` owns the public/private
+  household contract.
+- `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` owns the direct semantic
+  cleanup flow.
+- `roboclaws/maps/` owns reusable navigation map artifacts and projections.
+- `roboclaws/molmo_cleanup/realworld_mcp_server.py` exposes the cleanup MCP
+  surface for coding agents and OpenClaw-style clients.
+- `roboclaws/molmo_cleanup/report.py` renders the shared report.
+- `roboclaws/molmo_cleanup/agibot_sdk_runner.py` and
+  `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
+  boundary behind a subprocess runner.
 
-`examples/mcp/coding_agent_nav_server.py`. Boots `MultiAgentEngine` +
-`RoboclawsMCPServer` over HTTP. No Gateway, no VLM key needed
-server-side — the coding agent (Codex / Claude Code) is the model. Public
-launchers run that agent in the pinned `Dockerfile.coding-agents` runtime while
-the MCP server and AI2-THOR stay host-side. Output:
-`output/runs/<timestamp>/` unless `--output-dir` is passed. Operating instructions
-for the agent itself live in
-[`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md).
+The clean-slate direction is:
 
-### 4. Railway appliance
+- `semantic-map-build` is a Runnable Task for producing Runtime Metric Map
+  snapshots.
+- `household-cleanup` is a Runnable Task for cleanup runs.
+- `household_world_v1` is the reusable world-understanding capability profile.
+- Manipulation capability should be composed as a separate requirement when a
+  skill needs `pick`, `place`, `open_receptacle`, or `close_receptacle`.
 
-`Dockerfile.railway` + `deploy/railway/`. Single container bundling
-AI2-THOR + xvfb + nginx + supervisord + the OpenClaw Gateway + the MCP
-server + `reset_server.py` (HTTP `/reset`). Public surface is nginx on
-`:8080` with auth via `OPENCLAW_TOKEN` / `DEMO_PASSWORD`. Env-driven
-config seeded by `scripts/appliance/appliance_seed_openclaw.py`. Full deploy
-runbook: [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md).
+## Public Command Surface
 
-## MolmoSpaces Cleanup Flow
+The public command grammar is intentionally small:
 
-The MolmoSpaces side is a separate embodied-cleanup flow rather than a fifth
-AI2-THOR mode. It exists to answer a different question: when a household
-cleanup artifact says "the robot cleaned this up," which parts were semantic
-simulator state edits, and which parts have planner-backed RBY1M/CuRobo proof?
+```bash
+just task::run <task> <driver> [report|profile] [key=value ...]
+```
 
-The normal path is:
+Examples:
 
-1. A generated mess scenario creates a hidden set of moved objects.
-2. The Cleanup Agent receives the public contract: metric map, room-level
-   fixture hints, waypoint observations, and observed object handles.
-3. The semantic cleanup loop records `nav -> pick -> nav -> open? -> place`
-   substeps and writes one shared Cleanup Artifact Report.
-4. Private scoring evaluates the final scene with hidden acceptable-destination
-   truth that the agent never saw.
-5. Planner-proof request generation turns completed semantic substeps into
-   bound local proof commands. Proof-bundle runner reports then show whether
-   RBY1M/CuRobo execution actually produced planner-backed cleanup binding.
+```bash
+just task::run ai2thor-nav codex visual
+just task::run molmo-cleanup direct world-labels seed=7
+```
 
-Operator-facing settings and recommended recipes live in
-[`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md).
+As the clean-slate household naming lands, `molmo-cleanup` should migrate toward
+`household-cleanup`, and `semantic-map-build` should become a first-class task.
+Old task/profile names are migration targets in this repo; there is no broad
+backward-compatibility requirement for obsolete demo surfaces.
 
-## Code map
+## Capability Profiles
 
-| Path | Role |
-|------|------|
-| `roboclaws/core/engine.py` | `MultiAgentEngine`: AI2-THOR controller wrapper, owns scene + cameras (overhead orthographic + per-agent chase), reachable-positions cache. Public API: `step`, `reset`, `get_agent_state`, `get_overhead_frame`, `add_chase_cam`. |
-| `roboclaws/core/views.py` | View composition: `NavigationViewContext` (per-scene stable state) + `NavigationPromptBundle` (per-turn render). Outputs the `map-v2+chase` view variant — FPV + structured overhead + chase cam. |
-| `roboclaws/core/visualizer.py` | `GameVisualizer`: lower-level overhead/structured map rendering. Called by `views.py`. |
-| `roboclaws/core/vlm.py`, `roboclaws/core/providers/` | `VLMProvider` protocol + `create_provider()` factory, with concrete provider implementations split by backend. Tracks per-provider health via `ProviderStatus`. Owns SOUL loading (`load_agent_souls`). |
-| `roboclaws/core/replay.py` | `ReplayRecorder`: per-step capture (frames, overhead, prompt state, response). Persists to `replay.json` + per-step PNG dirs (`frames/`, `agent_frames/`, `overhead/`, `scene_views/`). Optional GIF. |
-| `roboclaws/games/territory.py` | `TerritoryGame`: adversarial cell-claiming. Tracks `cells_claimed`, `connectivity_ratio`, `blocking_events`. |
-| `roboclaws/games/coverage.py` | `CoverageGame`: cooperative coverage. Tracks `coverage_pct`, per-agent `contribution`, `work_balance`. |
-| `roboclaws/games/common.py` | Shared action set + `SAFE_FALLBACK_ACTION = "RotateRight"`. |
-| `roboclaws/mcp/server.py` | `RoboclawsMCPServer`: FastMCP server exposing canonical `observe`, `observe_archived`, `move`, and `done` tools by default, with privileged `scene_objects` and `goto` helpers only when a launcher opts in. Owns trace.jsonl, snapshot archiving, human-message queue, blind-move warnings, and reset coordination. |
-| `roboclaws/mcp/profiles.py`, `roboclaws/mcp/entrypoint.py` | Semantic MCP contract profile declarations and a small router helper for registering one selected profile's public tools. Current profiles represent AI2-THOR navigation, MolmoSpaces cleanup, and the first real-robot Nav2 cleanup pilot while excluding privileged simulator tools/private evaluator truth from canonical public metadata. |
-| `roboclaws/mcp/text_bridge.py` | `VisionBridge`: image-to-text bridge for vision-light models. |
-| `roboclaws/molmo_cleanup/realworld_contract.py` | `RealWorldCleanupContract`: ADR-0003 public/private cleanup surface, perception modes, observed handles, and cleanup tools. |
-| `roboclaws/maps/` | Reusable Nav2-shaped map artifact package: bundle writing/validation, metric-map projection, occupancy rasterization, and pure-Python static costmap route validation. |
-| `roboclaws/molmo_cleanup/nav2_map_bundle.py` | Molmo cleanup compatibility wrapper that resolves/validates selected prebuilt bundles and attaches run-local map bundle snapshots to cleanup artifacts. |
-| `roboclaws/molmo_cleanup/nav2_adapter.py`, `physical_nav2_pilot.py` | Mockable direct Nav2 backend adapter plus the first physical navigation/perception pilot runner: load a prebuilt map bundle, attempt inspection and fixture preferred waypoints, observe reached waypoints, and keep manipulation blocked. |
-| `roboclaws/molmo_cleanup/agibot_sdk_runner.py` | Agibot SDK runner subprocess adapter and physical Agibot pilot runner. Roboclaws keeps the `real_robot_cleanup_v1` public contract while the SDK CLI writes agent-view, observation, and navigation subphase reports. |
-| `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` | Shared semantic cleanup driver used by direct demos and MCP smoke paths. |
-| `roboclaws/molmo_cleanup/report.py`, `report_visual_core.py` | Shared Cleanup Artifact Report renderer: Agent View, Private Evaluation, semantic substeps, robot timeline, planner proof, and bridge readiness sections. |
-| `roboclaws/molmo_cleanup/planner_proof_requests.py` | Converts cleanup substeps into private bound planner-proof requests, proof-bundle manifests, selection memory, fallback filtering, and cleanup rerun commands. |
-| `roboclaws/molmo_cleanup/planner_probe_primitive_executor.py`, `planner_primitive_executor.py` | Executor adapters for promoting exact matching planner probe evidence into planner-backed cleanup primitive provenance. |
-| `roboclaws/molmo_cleanup/grasp_*`, `rby1m_curobo_gate.py` | Local proof diagnostics for RBY1M/CuRobo runtime readiness, grasp-cache validity/generation, and task feasibility blockers. |
-| `roboclaws/openclaw/bridge.py` | `OpenClawProvider`: VLMProvider that talks to a Gateway. |
-| `roboclaws/openclaw/transport.py` | `OpenClawBridge`: HTTP transport for the Gateway, retry policy. |
-| `roboclaws/openclaw/skill.py` | `AI2THORNavigatorSkill`: wraps a provider as an OpenClaw skill with SOUL injection. |
-| `roboclaws/openclaw/reset_server.py` | HTTP `/reset` for appliance scene resets (loopback-only). |
-| `roboclaws/openclaw/diagnostics.py` | Replay-loading utilities (`load_replay_turn`). |
-| `examples/games/territory_game.py`, `coverage_game.py` | Mode 1 entry points. |
-| `examples/mcp/coding_agent_nav_server.py` | Mode 3 entry point (no Gateway). |
-| `examples/openclaw/openclaw_demo.py`, `openclaw_nav_autonomous.py`, `openclaw_photo_task.py`, `openclaw_interactive.py` | Mode 2 entry points (Gateway). |
-| `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | MolmoSpaces cleanup entry point for ADR-0003 public/private real-world cleanup. |
-| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_server.py`, `roboclaws/molmo_cleanup/realworld_mcp_*_tools.py`, `roboclaws/molmo_cleanup/realworld_mcp_backend.py` | Direct Codex/Claude/OpenClaw-style cleanup-agent MCP surface for the ADR-0003 contract. Tool registration and dispatch are split into semantic/context, atomic cleanup, promoted-candidate, and backend/lifecycle layers. |
-| `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | Deterministic smoke wrapper for the cleanup MCP contract and report/checker path. |
-| `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py` | Deterministic Agibot SDK-runner backend rehearsal that writes a top-level cleanup report plus three SDK-owned subphase HTML reports. |
-| `scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py` | Proof-bundle dry-run/execution/rerun harness for local RBY1M/CuRobo proof attempts. |
-| `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` | Standalone Agibot SDK task runner invoked through a CLI boundary for agent-view export, policy observation, and waypoint navigation. Dry-run mode writes reviewable reports without importing GDK; `--execute` is the real robot gate. |
-| `Dockerfile.railway`, `deploy/railway/` | Mode 4 entry point + supervisord/nginx config. |
-| `skills/ai2thor-navigator/SKILL.md` | Base operating instructions for any agent driving the AI2-THOR robot via MCP — shared by OpenClaw skills, Codex, and Claude Code. |
-| `skills/capture-object-photo/SKILL.md` | Skill-level photo behavior (`locate -> navigate -> observe`) plus route-planning helper. Keeps object-photo strategy out of the MCP capability surface. |
-| `scripts/` | Supporting tooling: bootstrap, scoring (`check_photo_task.py`), replay rendering (`render_autonomous_replay.py`), appliance config (`appliance_seed_openclaw.py`), regression harnesses. |
-| `tests/` | Mock-heavy unit tests + integration guards (refactor regression, photo-task smoke, MCP server contracts). |
+`roboclaws/mcp/profiles.py` defines current MCP capability metadata. Existing
+ids still include older backend/domain names such as `ai2thor_navigation_v1`,
+`molmospaces_cleanup_v1`, and `real_robot_cleanup_v1`.
 
-## View system
+Going forward:
 
-The view system exists because VLMs reason about navigation better when
-given multiple complementary views. `roboclaws/core/views.py` composes
-three:
+- Profiles describe reusable capability environments, not whole tasks.
+- Skills compose profiles by requirement; profiles should not copy other
+  profiles' tool lists.
+- Backend variants belong in metadata/config, not in public task names.
+- Private generated mess sets, acceptable destinations, hidden target lists,
+  private manifests, and private scorer truth must not appear in public profile
+  metadata or agent-facing inputs.
 
-- **FPV** — the agent's first-person camera (`engine.frame`).
-- **map-v2** — a structured overhead map that overlays reachable cells,
-  visited cells, agent positions, and game state on the orthographic
-  top-down projection. Rendered by
-  `GameVisualizer.render_projected_structured_map()`.
-- **chase** — third-person behind-agent camera (`engine.add_chase_cam()`
-  once per agent, `engine.update_chase_cam()` per step).
+## Runtime Artifacts
 
-Only one variant is in use today —
-`ViewVariant = Literal["map-v2+chase"]` (`views.py:18`). The variant
-string + `image_labels` pair is part of the trace schema, so adding a
-new variant is an additive change.
+Every serious run should produce reviewable evidence:
 
-## Replay & artifacts
+- `trace.jsonl` for tool calls and state transitions.
+- `agent_view.json` / `run_result.json` for public agent-facing state.
+- `runtime_metric_map.json` when a run builds or updates household world
+  evidence.
+- `report.html` for human review.
+- Optional planner-proof bundles when cleanup substeps are checked against
+  local RBY1M/CuRobo proof.
 
-Two artifact pipelines coexist, one per drive style:
+The artifact boundary matters: public agent evidence and private scoring truth
+must remain separate. Reports may display both, but agent inputs and MCP
+profiles must not leak private evaluator data.
 
-- **Game runs** (`ReplayRecorder` in `core/replay.py`) — used by Mode 1.
-  Produces `replay.json` + per-step PNG directories + optional GIF.
-  Default output: `output/<game>/<timestamp>/`.
-- **MCP runs** (`roboclaws/mcp/server.py`) — used by Modes 2 / 3 / 4. Produces
-  `trace.jsonl` (one line per tool call), `run_result.json` on done, and
-  labeled snapshots in `<run_dir>/snapshots/agent-<id>/`. Default output:
-  `output/runs/<timestamp>/` (Mode 3) or
-  `output/openclaw-*/<timestamp>/` (Mode 2).
+## Real-Robot Boundary
 
-The `latest.fpv.png` / `latest.map.png` / `latest.chase.png` symlinks
-under `snapshots/agent-<id>/` are written on every observe (labeled or
-not) and power the `just chat::view` live viewer.
+Real-robot work is incremental:
 
-## Pointers
+1. Prove public map context and observation.
+2. Prove bounded navigation to operator-approved waypoints or backend-verified
+   goals.
+3. Keep manipulation as `blocked_capability` until physical proof exists.
+4. Promote physical manipulation only when reports can show provenance, safety
+   gates, and failure modes.
 
-| What you want | Where it lives |
-|---------------|----------------|
-| Scenario design rationale, VLM strategy, references | [`docs/human/technical-design.md`](docs/human/technical-design.md) |
-| Big-picture MCP and skill principles | [`README.md`](README.md) |
-| Semantic profiles and privileged-tool boundaries | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
-| MolmoSpaces cleanup settings and proof boundaries | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
-| Domain vocabulary for cleanup/proof language | [`docs/human/domain.md`](docs/human/domain.md) |
-| Atomic architectural decisions (platform choice, deferred integrations) | [`docs/adr/`](docs/adr/) |
-| Direct coding-agent driver setup (Mode 3) | [`docs/human/coding-agent-nav-server.md`](docs/human/coding-agent-nav-server.md) |
-| OpenClaw local setup (Mode 2) | [`docs/human/openclaw/local.md`](docs/human/openclaw/local.md) |
-| OpenClaw Gateway internals | [`docs/human/openclaw/gateway-internals.md`](docs/human/openclaw/gateway-internals.md) |
-| Railway appliance deploy (Mode 4) | [`docs/human/railway/deploy.md`](docs/human/railway/deploy.md) |
-| Verified models per provider | [`docs/human/model-matrix.md`](docs/human/model-matrix.md) |
-| Operating rules for any agent driving the robot | [`skills/ai2thor-navigator/SKILL.md`](skills/ai2thor-navigator/SKILL.md) |
-| Current status and active source links | [`STATUS.md`](STATUS.md) |
-| Active GSD execution state | [`.planning/STATE.md`](.planning/STATE.md) |
-| Pre-GSD plans | [`docs/plans/`](docs/plans/) |
-| Shipped-phase history | `docs/retrospectives/` |
+Agibot G2 and ROS2/Nav2 should be backend variants under the same public
+task/profile shape, not separate robot-only task taxonomies.
+
+## Where To Look
+
+| Need | Start here |
+| --- | --- |
+| What to run | [`README.md`](README.md), [`just/README.md`](just/README.md) |
+| Task/skill/profile design | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
+| MolmoSpaces settings | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
+| Local runtime and keys | [`docs/human/local-runtime.md`](docs/human/local-runtime.md) |
+| Current project focus | [`STATUS.md`](STATUS.md) |
+| Detailed plans and evidence | `docs/plans/`, `docs/status/active/`, `docs/retrospectives/` |

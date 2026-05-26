@@ -14,7 +14,7 @@ Roboclaws is a thin demo repo for making AI-driven robotics behavior reviewable:
 frames, maps, tool traces, scores, and public/private evaluation boundaries are
 published as HTML reports instead of buried in terminal logs.
 
-![Skill-first robotics](docs/human/skill-first-robotics.svg)
+![Task, skill, and capability profile architecture](docs/human/mcp-skills-and-semantic-profiles.svg)
 
 It answers three practical questions:
 
@@ -30,9 +30,10 @@ bounded public robot capability surface.
 | Principle | Practice |
 | --- | --- |
 | Start from open-ended goals | A user asks for work such as "clean the room" or "take useful photos"; an agent selects or creates a skill to do it. |
+| Keep tasks as run surfaces | Public commands such as `semantic-map-build` and `household-cleanup` own parameters, reports, and acceptance gates. |
 | Keep strategy in skills | Skills own prompt strategy, scripts, examples, checks, and task-specific loops such as photo capture or cleanup. |
 | Keep MCP bounded | MCP tools expose semantic robot capabilities like observe, move, pick, place, and done; they should not hide a whole task behind one opaque call. |
-| Profile public capabilities | Semantic profiles describe the public tool contract for a backend/domain, currently `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`. |
+| Profile public capabilities | Semantic profiles describe reusable capability environments that skills can require; profiles compose by requirement, not by copying another profile's tools. |
 | Label privileged help | Simulator or demo helpers such as full object inventory and target-relative teleport are useful, but they stay labeled as privileged tools, not canonical robot abilities. |
 | Protect private evaluation truth | Hidden mess sets, acceptable destinations, private manifests, and scoring truth stay out of public profile metadata and agent-facing skill inputs. |
 | Let reports improve skills | Traces, artifacts, and evals feed the skill lifecycle: improve, split, merge, prune, or promote behavior only when the boundary is stable. |
@@ -41,17 +42,19 @@ The working abstraction ladder is:
 
 ```text
 open-ended goal
+  -> runnable task
   -> agent skill
-  -> composite action
-  -> semantic capability
-  -> environment primitive
-  -> execution backend
+  -> capability profile requirements
+  -> MCP capability tools
+  -> backend variant
 ```
 
-Default decision: improve or add a skill. Promote behavior into MCP only when
-multiple skills need it, the input/output shape is stable, public/private
-boundaries are clear, and traces can preserve the important substeps. The
-detailed profile and skill reference is
+Default decision: improve or add a skill when behavior changes; add or rename a
+runnable task only when the public command, parameters, report shape, or
+acceptance gates change. Promote behavior into MCP only when multiple skills
+need it, the input/output shape is stable, public/private boundaries are clear,
+and traces can preserve the important substeps. The detailed profile and skill
+reference is
 [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ## Run Demos With Just
