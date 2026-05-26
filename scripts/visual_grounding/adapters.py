@@ -634,7 +634,7 @@ def _yolo_real_response(
     model_id = _request_model_id(payload, producer_id) or os.environ.get(env_name, spec.model_id)
     try:
         image = _decode_request_image(payload)
-        labels = _category_hints(payload)
+        labels = _yolo_prompt_labels(_category_hints(payload))
         if not labels:
             return _real_adapter_ok_response(
                 pipeline_id=pipeline_id,
@@ -1502,10 +1502,29 @@ def _yolo_candidates_from_model(
     category_hints: list[str],
 ) -> list[dict[str, Any]]:
     threshold = _float_env("VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD", 0.25)
+    predict_kwargs: dict[str, Any] = {
+        "conf": threshold,
+        "verbose": False,
+    }
+    imgsz = _int_env_optional("VISUAL_GROUNDING_YOLO_IMAGE_SIZE")
+    if imgsz is not None:
+        predict_kwargs["imgsz"] = imgsz
+    iou = _float_env_optional("VISUAL_GROUNDING_YOLO_IOU_THRESHOLD")
+    if iou is not None:
+        predict_kwargs["iou"] = iou
+    max_det = _int_env_optional("VISUAL_GROUNDING_YOLO_MAX_DET")
+    if max_det is not None:
+        predict_kwargs["max_det"] = max_det
+    if _env_is_set("VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS"):
+        predict_kwargs["agnostic_nms"] = _bool_env("VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS")
+    if _env_is_set("VISUAL_GROUNDING_YOLO_AUGMENT"):
+        predict_kwargs["augment"] = _bool_env("VISUAL_GROUNDING_YOLO_AUGMENT")
+    if _env_is_set("VISUAL_GROUNDING_YOLO_RETINA_MASKS"):
+        predict_kwargs["retina_masks"] = _bool_env("VISUAL_GROUNDING_YOLO_RETINA_MASKS")
     with tempfile.NamedTemporaryFile(suffix=".jpg") as temp_image:
         image.save(temp_image.name, format="JPEG", quality=90)
         if hasattr(model, "predict"):
-            results = model.predict(source=temp_image.name, conf=threshold, verbose=False)
+            results = model.predict(source=temp_image.name, **predict_kwargs)
         else:
             results = model(temp_image.name)
     candidates: list[dict[str, Any]] = []
@@ -1554,6 +1573,30 @@ def _yolo_candidates_from_result(
         if candidate is not None:
             candidates.append(candidate)
     return candidates
+
+
+def _yolo_prompt_labels(category_hints: list[str]) -> list[str]:
+    if not _bool_env_default("VISUAL_GROUNDING_YOLO_EXPAND_CLEANUP_HINTS", True):
+        return category_hints
+    expansions = {
+        "dish": ("dish", "plate", "bowl", "cup", "mug", "utensil"),
+        "food": ("food", "apple", "potato", "bread", "fruit", "vegetable"),
+        "book": ("book", "paper", "magazine", "newspaper"),
+        "linen": ("linen", "towel", "cloth", "blanket"),
+        "toy": ("toy", "ball", "plush toy", "teddy bear"),
+        "electronics": ("electronics", "remote control", "remote", "phone"),
+        "pillow": ("pillow", "cushion"),
+    }
+    labels: list[str] = []
+    seen: set[str] = set()
+    for hint in category_hints:
+        for label in expansions.get(_norm(hint), (hint,)):
+            key = _norm(label)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            labels.append(label)
+    return labels
 
 
 def _candidate_from_xyxy(
@@ -1961,8 +2004,28 @@ def _float_env_optional(name: str) -> float | None:
         return None
 
 
+def _int_env_optional(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw in {None, ""}:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _bool_env(name: str) -> bool:
     return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _bool_env_default(name: str, default: bool) -> bool:
+    if not _env_is_set(name):
+        return default
+    return _bool_env(name)
+
+
+def _env_is_set(name: str) -> bool:
+    return os.environ.get(name) not in {None, ""}
 
 
 def _clamp_float(value: float, minimum: float, maximum: float) -> float:

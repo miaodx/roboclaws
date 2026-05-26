@@ -13,6 +13,7 @@ from scripts.visual_grounding.adapters import (
     CONTRACT_FAKE_PIPELINE_ID,
     FAKE_HTTP_PIPELINE_ID,
     REAL_ROUTER_PIPELINE_ID,
+    _yolo_prompt_labels,
     effective_pipeline_id,
     pipeline_request_is_allowed,
     should_use_contract_fake,
@@ -27,6 +28,16 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPO_ROOT / "harness" / "visual_grounding" / "smoke_corpus.json"
 RUNNER = REPO_ROOT / "scripts" / "visual_grounding" / "run_visual_grounding_benchmark.py"
 CHECKER = REPO_ROOT / "scripts" / "visual_grounding" / "check_visual_grounding_benchmark_result.py"
+
+
+def test_visual_grounding_yolo_expands_cleanup_family_hints_for_open_vocab() -> None:
+    labels = _yolo_prompt_labels(["food", "dish", "electronics", "pillow"])
+
+    assert labels[:4] == ["food", "apple", "potato", "bread"]
+    assert "plate" in labels
+    assert "remote control" in labels
+    assert "cushion" in labels
+    assert len(labels) == len(set(labels))
 
 
 def test_visual_grounding_real_router_allows_requested_real_pipeline() -> None:

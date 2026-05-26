@@ -11,12 +11,24 @@ choosing a default pipeline and for appending future benchmark or cleanup runs.
 Use `visual_grounding=grounding-dino` as the default real visual-grounding
 pipeline for `camera-labels` runs.
 
-Keep `visual_grounding=sim` as the deterministic control baseline. Use
-`grounding-dino+mimo-v2-omni` only as an opt-in quality comparison because it is
-much slower and needs an explicit longer timeout. Keep `yoloe` as a latency
-challenger, not the default, because current recall is too low. Keep
-direct hosted VLM producers experimental until one has same-matrix end-to-end
-cleanup evidence and materially better precision/recall than Grounding DINO.
+Keep `visual_grounding=sim` as the deterministic control baseline. Keep
+`yoloe` as the ultra-fast speed lane, now with cleanup-family prompt expansion
+enabled by default, but do not make it the default until recall improves. The
+best tested YOLOE speed config is:
+
+```bash
+VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt
+VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD=0.20
+VISUAL_GROUNDING_YOLO_IMAGE_SIZE=960
+VISUAL_GROUNDING_YOLO_MAX_DET=8
+```
+
+For proposer-plus-refiner experiments, the current best next candidate is
+`grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`: it had the best
+full-corpus precision and lowest total token count in the Gemini/Qwen refiner
+set. Keep `grounding-dino+mimo-v2-omni` as the slow end-to-end-proven quality
+reference. Do not auto-enable any refiner by default until it has same-matrix
+end-to-end cleanup evidence.
 
 ## Selection Summary
 
@@ -24,14 +36,62 @@ cleanup evidence and materially better precision/recall than Grounding DINO.
 | --- | --- | --- |
 | `sim` | Control baseline | Best controlled cleanup score, no real perception claim. |
 | `grounding-dino` | Default real pipeline | Best proposer-only recall and best DINO-vs-YOLOE score on the current corpus. |
-| `yoloe` | Speed experiment | Very low latency, but current recall is too low for cleanup default. |
-| `grounding-dino+mimo-v2-omni` | Slow quality opt-in | Better precision and better cleanup actionability than DINO alone, but default 20s timeout fails. |
+| `yoloe` | Ultra-fast speed lane | Prompt expansion improved recall materially, but it still trails Grounding DINO. |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Refiner candidate | Best Gemini/Qwen refiner precision with reasonable latency; needs cleanup E2E proof. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | Recall-biased refiner comparison | Higher recall than the other Gemini/Qwen refiners, but very slow and verbose. |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Fast Gemini refiner comparison | Healthy route, but over-rejected and did not beat Qwen 8B as a refiner. |
+| `grounding-dino+mimo-v2-omni` | Slow quality opt-in | Only refiner route with same-matrix cleanup E2E evidence, but default 20s timeout fails. |
 | `mimo-v2-omni-direct` | Experimental direct VLM | Token-plan route has the best direct-VLM benchmark score, but no same-matrix end-to-end cleanup report yet. |
 | `xiaomi/mimo-v2-omni-direct` | Aggregation-route experiment | Works through the internal aggregation route, but was slower and less stable than the token-plan MiMo route. |
 | `vertex_ai/gemini-3.1-flash-lite-preview-direct` | Fast hosted-VLM experiment | Fastest healthy provider-prefixed route, but current recall/precision are too low for default. |
 | `vertex_ai/gemini-3-flash-preview-direct` | Hosted-VLM quality experiment | Slightly higher score than Gemini lite in one direct run, but much slower and noisy. |
 | `siliconflow/Qwen/Qwen3-VL-8B-Instruct-direct` | Qwen fallback experiment | Healthy JSON/vision route, but current false-positive rate is too high. |
 | `tongyi/qwen3-vl-*` variants | Blocked route experiment | Smoke calls returned incomplete JSON content, so they were not promoted to full corpus. |
+
+## YOLOE Research And Tuning Notes
+
+Sources checked:
+
+- [Ultralytics YOLOE docs](https://docs.ultralytics.com/models/yoloe/): YOLOE
+  supports text, visual, and prompt-free modes. The current Roboclaws adapter
+  uses text prompts via `model.set_classes(...)`.
+- [Ultralytics predict settings](https://docs.ultralytics.com/modes/predict/):
+  the relevant runtime knobs are `conf`, `iou`, `imgsz`, `max_det`,
+  `agnostic_nms`, `augment`, and `retina_masks`.
+- [YOLOE paper](https://arxiv.org/abs/2503.07465): visual prompts can help when
+  text prompts are weak for a rare or scene-specific object, but that requires a
+  reference box/image workflow that we do not yet expose in the cleanup agent.
+
+The main local issue was ontology mismatch. The benchmark public hints are broad
+families such as `food`, `dish`, `electronics`, and `linen`, while private
+labels include concrete object names such as apple, potato, cup, bowl, mug,
+plate, and remote control. YOLOE text prompts worked better after expanding
+those families into concrete cleanup-scene labels before calling
+`set_classes(...)`.
+
+Current YOLOE adapter knobs:
+
+- `VISUAL_GROUNDING_YOLOE_MODEL_ID` / `VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID`
+- `VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD`
+- `VISUAL_GROUNDING_YOLO_IMAGE_SIZE`
+- `VISUAL_GROUNDING_YOLO_IOU_THRESHOLD`
+- `VISUAL_GROUNDING_YOLO_MAX_DET`
+- `VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS`
+- `VISUAL_GROUNDING_YOLO_AUGMENT`
+- `VISUAL_GROUNDING_YOLO_RETINA_MASKS`
+- `VISUAL_GROUNDING_YOLO_EXPAND_CLEANUP_HINTS`
+
+Best tested YOLOE balance on the 28-observation RAW_FPV corpus:
+
+| YOLOE config | Candidates | Recall | Precision | Score | Avg latency | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Old coarse hints, 11s default | 16 | 0.04878 | 0.125 | 0.170579 | 95.679ms | Historical baseline before hint expansion. |
+| Expanded hints, 11s default | 48 | 0.121951 | 0.104167 | 0.203532 | 229.0ms | New default adapter behavior. |
+| Expanded hints, 11s, `conf=0.20`, `imgsz=960`, `max_det=8` | 51 | 0.146341 | 0.117647 | 0.221664 | 368.821ms | Best tested YOLOE config. |
+| Expanded hints, 11s, `conf=0.15`, `imgsz=960`, `max_det=12` | 75 | 0.146341 | 0.08 | 0.208488 | 392.179ms | More recall-oriented, too many false positives. |
+| Expanded hints, 11s, `conf=0.20`, `max_det=8` | 55 | 0.121951 | 0.090909 | 0.198891 | 221.857ms | Faster, but lost the 960-image recall gain. |
+| Expanded hints, 11s, `conf=0.25`, `imgsz=960`, `max_det=8` | 44 | 0.097561 | 0.090909 | 0.185477 | 356.821ms | Higher threshold over-pruned. |
+| Expanded hints, 26s default | 44 | 0.073171 | 0.068182 | 0.164108 | 289.893ms | Larger 26s weight did not help this corpus. |
 
 ## Perception Benchmark Results
 
@@ -43,7 +103,11 @@ cleanup agent.
 | Pipeline | Candidates | Recall | Precision | Avg latency | Failure rate | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | `grounding-dino` | 58 | 0.219512 | 0.155172 | 4685.857ms | 0.0 | Best proposer-only quality. |
-| `yoloe` | 16 | 0.04878 | 0.125 | 95.679ms | 0.0 | Fast, but misses too many candidates. |
+| `yoloe` expanded hints | 48 | 0.121951 | 0.104167 | 229.0ms | 0.0 | New default YOLOE adapter behavior. |
+| `yoloe` expanded hints, tuned | 51 | 0.146341 | 0.117647 | 368.821ms | 0.0 | Best tested YOLOE speed config: 11s, `conf=0.20`, `imgsz=960`, `max_det=8`. |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 20 | 0.121951 | 0.25 | 7917.821ms | 0.0 | Best Gemini/Qwen refiner score; aggressive but clean. |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 39 | 0.121951 | 0.128205 | 7482.25ms | 0.0 | Fast Gemini refiner, but low actionability and lower precision than Qwen 8B. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | 67 | 0.170732 | 0.104478 | 23914.571ms | 0.0 | Higher recall, too slow and verbose for default refine. |
 | `grounding-dino+mimo-v2-omni` | 37 | 0.195122 | 0.216216 | 31253.429ms | 0.0 | Precision improves, latency is high. |
 | `mimo-v2-omni-direct` | 71 | 0.268293 | 0.15493 | 29189.321ms | 0.0 | Token-plan route; best direct-VLM score so far, still no E2E cleanup comparison. |
 | `xiaomi/mimo-v2-omni-direct` | 61 | 0.219512 | 0.147541 | 41412.679ms | 0.142857 | Internal aggregation route; 4 read timeouts on 28 observations. |
@@ -56,14 +120,24 @@ Combined proposer comparison:
 | Pipeline | Score | Interpretation |
 | --- | ---: | --- |
 | `grounding-dino` | 0.275042 | Current proposer winner. |
-| `yoloe` | 0.170579 | Current proposer runner-up. |
+| `yoloe` expanded hints, tuned | 0.221664 | Best tested YOLOE speed config. |
+| `yoloe` expanded hints | 0.203532 | New default YOLOE adapter behavior. |
+| `yoloe` old coarse hints | 0.170579 | Historical pre-tuning baseline. |
 
 Benchmark artifacts:
 
 - `output/visual-grounding-benchmark/path-backed-grounding-dino-real-0525/`
 - `output/visual-grounding-benchmark/path-backed-yoloe-real-0525/`
 - `output/visual-grounding-benchmark/path-backed-proposer-real-comparison-0525/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-11s-expanded-real-0526/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-26s-expanded-real-0526/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-11s-expanded-img960-conf015-0526/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-11s-expanded-img960-conf020-maxdet8-0526/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-11s-expanded-conf020-maxdet8-0526/`
+- `output/visual-grounding-benchmark/path-backed-yoloe-11s-expanded-img960-conf025-maxdet8-0526/`
 - `output/visual-grounding-benchmark/path-backed-grounding-dino-mimo-refiner-real-0525/`
+- `output/visual-grounding-benchmark/refiner-vlm-smoke-0526/`
+- `output/visual-grounding-benchmark/path-backed-grounding-dino-gemini-qwen-refiner-0526/`
 - `output/visual-grounding-benchmark/path-backed-mimo-v2-omni-direct-0525_202437/`
 - `output/visual-grounding-benchmark/provider-prefixed-vlm-smoke-0526/`
 - `output/visual-grounding-benchmark/siliconflow-qwen3-vl-smoke-0526/`
@@ -84,6 +158,36 @@ gate before spending time on the 28-observation RAW_FPV corpus.
 | `tongyi/qwen3-vl-flash-direct` | Fail | 1455.333ms | Returned incomplete JSON content with no parseable object. |
 | `tongyi/qwen3-vl-plus-direct` | Fail | 3080.333ms | Same incomplete JSON failure mode as the flash route. |
 | `siliconflow/Qwen/Qwen3-VL-8B-Instruct-direct` | Pass | 1988.333ms | Healthy Qwen fallback route; advanced to full corpus. |
+
+## Refiner Benchmark Results
+
+The refiner route keeps Grounding DINO as the proposer and asks the hosted VLM
+only to review/filter candidate boxes. This is a different task from direct VLM
+grounding, and the results are materially different.
+
+Smoke corpus, 3 observations:
+
+| Pipeline | Smoke result | Recall | Precision | Avg latency | Notes |
+| --- | --- | ---: | ---: | ---: | --- |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Pass | 1.0 | 1.0 | 8809.667ms | Healthy route. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | Pass | 1.0 | 1.0 | 11261.0ms | Healthy route, slower. |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Pass | 0.5 | 1.0 | 5971.333ms | Conservative route. |
+| `grounding-dino+tongyi/qwen3-vl-flash` | Fail | n/a | n/a | n/a | Incomplete JSON content. |
+| `grounding-dino+tongyi/qwen3-vl-plus` | Fail | n/a | n/a | n/a | Incomplete JSON content. |
+
+Full RAW_FPV corpus, 28 observations:
+
+| Pipeline | Candidates | Recall | Precision | Avg latency | Total tokens | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 20 | 0.121951 | 0.25 | 7917.821ms | 36072 | Best precision and best score in this refiner batch. |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 39 | 0.121951 | 0.128205 | 7482.25ms | 64089 | Similar latency to Qwen 8B, worse precision/actionability. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | 67 | 0.170732 | 0.104478 | 23914.571ms | 156378 | Higher recall, but too slow and verbose for default refine. |
+
+Interpretation: Qwen 8B is the best current refiner candidate when we want a
+cleaner, smaller candidate list. Gemini 3-flash is the recall-biased comparison
+lane. Gemini 3.1 flash-lite is route-healthy but not the winner on this corpus.
+Tongyi Qwen flash/plus should remain blocked until the incomplete JSON route is
+fixed.
 
 ## End-To-End Cleanup Results
 
@@ -118,16 +222,28 @@ Cleanup artifacts:
 proposer-only option on recall and overall score, and it already has direct,
 MCP smoke, and live Codex cleanup evidence.
 
-`grounding-dino+mimo-v2-omni` is a useful quality reference. It improved the
-end-to-end cleanup run from 4 cleaned handles / 3 exact private matches to 7
-cleaned handles / 5 exact private matches, but only after increasing
-`VISUAL_GROUNDING_TIMEOUT_S` to 240 seconds. With the default 20 second timeout,
-it produced visible timeout failures and zero fabricated simulator labels, which
-is the correct failure mode but not a usable default.
+`yoloe` is now a credible ultra-fast lane, not just a placeholder. Expanding
+cleanup-family hints improved recall from 0.04878 to 0.121951, and the best
+tested speed config reached 0.146341 recall at 368.821ms average latency. That
+is still below Grounding DINO's recall and score, so YOLOE should not be the
+default. It is useful for low-latency sweeps, for future navigation-time
+perception, and as a proposer to revisit after we add better object hints or
+visual-prompt reference boxes.
 
-`yoloe` should stay in the matrix because it is much faster. It should not be
-the default until recall improves on the same corpus or a new corpus shows a
-different result.
+For hosted VLM refine, `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`
+is the best current candidate: it produced the cleanest candidate set in the
+Gemini/Qwen refiner batch with 0.25 precision and 7.9s average latency.
+However, it reduced recall relative to Grounding DINO alone and has not yet been
+validated in the same end-to-end cleanup matrix. It should be the first new
+refiner to test in cleanup E2E, not the automatic default yet.
+
+`grounding-dino+mimo-v2-omni` remains the useful quality reference because it
+has same-matrix cleanup proof. It improved the end-to-end cleanup run from 4
+cleaned handles / 3 exact private matches to 7 cleaned handles / 5 exact private
+matches, but only after increasing `VISUAL_GROUNDING_TIMEOUT_S` to 240 seconds.
+With the default 20 second timeout, it produced visible timeout failures and
+zero fabricated simulator labels, which is the correct failure mode but not a
+usable default.
 
 `mimo-v2-omni-direct` has promising benchmark evidence but needs an end-to-end
 cleanup run before it can be promoted. The internal aggregation route model id
@@ -135,13 +251,12 @@ cleanup run before it can be promoted. The internal aggregation route model id
 benchmark: it had lower recall, similar precision, higher latency, and 4 read
 timeouts.
 
-Gemini and SiliconFlow Qwen routes are useful as hosted-VLM comparison lanes,
-not defaults. Gemini lite is the best latency challenger among the healthy
-provider-prefixed routes, but its full-corpus precision/recall are too low.
-SiliconFlow Qwen is route-healthy and fast enough to keep in the matrix, but it
-produced too many false positives on the current corpus. Tongyi Qwen flash/plus
-failed the smoke route with incomplete JSON output, so they should stay blocked
-until the request or provider route is repaired.
+Gemini routes are useful comparison lanes. Gemini 3-flash is the recall-biased
+refiner option but is too slow for default refine. Gemini 3.1 flash-lite is
+healthy and relatively fast, but did not beat Qwen 8B as a refiner and did not
+beat the existing direct Gemini-lite caveat as a direct producer. Tongyi Qwen
+flash/plus failed the smoke route with incomplete JSON output, so they should
+stay blocked until the request or provider route is repaired.
 
 ## How To Add Future Results
 
@@ -174,7 +289,11 @@ When a result changes the recommendation, update "Current Recommendation" and
 These are intentionally not blockers for the current recommendation:
 
 - run a same-matrix end-to-end cleanup report for `mimo-v2-omni-direct`;
+- run a same-matrix end-to-end cleanup report for
+  `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct`;
 - investigate the `tongyi/qwen3-vl-*` incomplete-JSON route failure;
+- evaluate YOLOE visual-prompt/reference-box mode for scene-specific objects
+  once we have a safe way to provide public reference crops;
 - add fixed/custom YOLO only after weights, ontology, and licensing boundaries
   are reviewed;
 - add a real Agibot G2 head-camera seed set before choosing a real deployed
