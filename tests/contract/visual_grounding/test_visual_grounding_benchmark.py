@@ -13,6 +13,7 @@ from scripts.visual_grounding.adapters import (
     CONTRACT_FAKE_PIPELINE_ID,
     FAKE_HTTP_PIPELINE_ID,
     REAL_ROUTER_PIPELINE_ID,
+    _set_yolo_classes_if_needed,
     _yolo_prompt_labels,
     effective_pipeline_id,
     pipeline_request_is_allowed,
@@ -38,6 +39,31 @@ def test_visual_grounding_yolo_expands_cleanup_family_hints_for_open_vocab() -> 
     assert "remote control" in labels
     assert "cushion" in labels
     assert len(labels) == len(set(labels))
+
+
+def test_visual_grounding_yolo_world_reuses_class_prompts_without_rebuilding() -> None:
+    class WorldModel:
+        def __init__(self) -> None:
+            self.clip_model = object()
+
+    class FakeYoloWorld:
+        def __init__(self) -> None:
+            self.model = WorldModel()
+            self.calls: list[list[str]] = []
+
+        def set_classes(self, labels: list[str]) -> None:
+            self.calls.append(list(labels))
+            self.model.clip_model = object()
+
+    model = FakeYoloWorld()
+
+    _set_yolo_classes_if_needed(model, ["food", "dish"], producer_id="yolo-world")
+    first_clip_model = model.model.clip_model
+    _set_yolo_classes_if_needed(model, ["food", "dish"], producer_id="yolo-world")
+    _set_yolo_classes_if_needed(model, ["food", "toy"], producer_id="yolo-world")
+
+    assert model.calls == [["food", "dish"], ["food", "toy"]]
+    assert model.model.clip_model is not first_clip_model
 
 
 def test_visual_grounding_real_router_allows_requested_real_pipeline() -> None:
@@ -521,6 +547,19 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
         cwd=REPO_ROOT,
         check=True,
     )
+    subprocess.run(
+        [
+            sys.executable,
+            str(CHECKER),
+            str(tmp_path / "benchmark"),
+            "--expect-pipeline",
+            "dino-tiny-default",
+            "--require-success",
+            "--require-candidates",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
 
     result = json.loads(
         (tmp_path / "benchmark" / "visual_grounding_benchmark_result.json").read_text()
@@ -540,6 +579,8 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
     assert family["yolo-world"]["under_sampled_reason"] == (
         "unit test matrix intentionally has one row"
     )
+    promotion = result["promotion_recommendation"]
+    assert promotion["selected"][1]["benchmark_row_id"] == result["ranking"][0]["benchmark_row_id"]
     predictions = [
         json.loads(line)
         for line in (tmp_path / "benchmark" / "visual_grounding_predictions.jsonl")

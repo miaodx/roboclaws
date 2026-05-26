@@ -704,15 +704,28 @@ def _promotion_recommendation(
     pipeline_results: list[dict[str, Any]],
     ranking: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    by_id = {str(item.get("pipeline_id") or ""): item for item in pipeline_results}
+    by_row_id = {str(item.get("benchmark_row_id") or ""): item for item in pipeline_results}
 
-    def best_for(kind: str) -> str:
+    def result_for_rank(row: dict[str, Any]) -> dict[str, Any]:
+        row_id = str(row.get("benchmark_row_id") or "")
+        if row_id in by_row_id:
+            return by_row_id[row_id]
+        pipeline_id = str(row.get("pipeline_id") or "")
+        return next(
+            (
+                result
+                for result in pipeline_results
+                if str(result.get("pipeline_id") or "") == pipeline_id
+            ),
+            {},
+        )
+
+    def best_for(kind: str) -> dict[str, Any]:
         for row in ranking:
-            pipeline_id = str(row.get("pipeline_id") or "")
-            result = by_id.get(pipeline_id, {})
+            result = result_for_rank(row)
             if _pipeline_kind(result) == kind:
-                return pipeline_id
-        return ""
+                return row
+        return {}
 
     best_proposer = best_for("proposer_only")
     best_refiner = best_for("proposer_plus_refiner")
@@ -725,7 +738,7 @@ def _promotion_recommendation(
             "reason": "Pipeline-control baseline for end-to-end cleanup comparison.",
         }
     ]
-    for slot, pipeline_id, reason in (
+    for slot, row, reason in (
         (
             "best_proposer_only",
             best_proposer,
@@ -742,23 +755,22 @@ def _promotion_recommendation(
             "Highest-ranked direct VLM benchmark pipeline; capped to at most one.",
         ),
     ):
+        pipeline_id = str(row.get("pipeline_id") or "")
         if pipeline_id and pipeline_id not in {item["pipeline_id"] for item in selected}:
             selected.append(
                 {
                     "slot": slot,
                     "pipeline_id": pipeline_id,
-                    "benchmark_row_id": str(
-                        (by_id.get(pipeline_id) or {}).get("benchmark_row_id") or pipeline_id
-                    ),
+                    "benchmark_row_id": str(row.get("benchmark_row_id") or pipeline_id),
                     "reason": reason,
                 }
             )
 
     selected_pipeline_ids = [item["pipeline_id"] for item in selected]
     evidence_levels = {
-        pipeline_id: str((by_id.get(pipeline_id) or {}).get("evidence_level") or "")
-        for pipeline_id in selected_pipeline_ids
-        if pipeline_id != "sim"
+        str(row.get("pipeline_id") or ""): str(result_for_rank(row).get("evidence_level") or "")
+        for row in (best_proposer, best_refiner, best_direct)
+        if str(row.get("pipeline_id") or "") in selected_pipeline_ids
     }
     non_sim_evidence_levels = list(evidence_levels.values())
     real_stage_provenance_present = any(
@@ -778,9 +790,9 @@ def _promotion_recommendation(
         },
         "selected_end_to_end_pipelines": selected_pipeline_ids,
         "selected": selected,
-        "best_proposer_only_pipeline_id": best_proposer,
-        "best_proposer_plus_refiner_pipeline_id": best_refiner,
-        "best_direct_vlm_pipeline_id": best_direct,
+        "best_proposer_only_pipeline_id": str(best_proposer.get("pipeline_id") or ""),
+        "best_proposer_plus_refiner_pipeline_id": str(best_refiner.get("pipeline_id") or ""),
+        "best_direct_vlm_pipeline_id": str(best_direct.get("pipeline_id") or ""),
         "evidence_levels": evidence_levels,
         "real_stage_provenance_present": real_stage_provenance_present,
         "selected_real_stage_provenance_complete": selected_real_stage_provenance_complete,

@@ -770,7 +770,7 @@ def _yolo_real_response(
             )
         model = _load_yolo_model(model_id, producer_id=producer_id)
         if hasattr(model, "set_classes"):
-            model.set_classes(labels)
+            _set_yolo_classes_if_needed(model, labels, producer_id=producer_id)
         candidates = _yolo_candidates_from_model(
             payload=payload,
             image=image,
@@ -1252,6 +1252,18 @@ def _load_yolo_model(model_id: str, *, producer_id: str) -> Any:
         raise ImportError(
             f"{producer_id} real mode requires the sidecar dependency: ultralytics"
         ) from exc
+
+
+def _set_yolo_classes_if_needed(model: Any, labels: list[str], *, producer_id: str) -> None:
+    label_key = tuple(labels)
+    if getattr(model, "_roboclaws_class_labels", None) == label_key:
+        return
+    if producer_id == "yolo-world":
+        world_model = getattr(model, "model", None)
+        if world_model is not None and hasattr(world_model, "clip_model"):
+            world_model.clip_model = None
+    model.set_classes(labels)
+    setattr(model, "_roboclaws_class_labels", label_key)
 
 
 def _hosted_vlm_config(

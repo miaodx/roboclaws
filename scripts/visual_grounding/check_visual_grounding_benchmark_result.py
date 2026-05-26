@@ -54,7 +54,11 @@ def main(argv: list[str] | None = None) -> int:
     _assert(pipelines, "result has no pipelines")
     if args.expect_pipeline:
         pipeline_ids = {str(item.get("pipeline_id") or "") for item in pipelines}
-        _assert(args.expect_pipeline in pipeline_ids, f"missing pipeline {args.expect_pipeline}")
+        benchmark_row_ids = {str(item.get("benchmark_row_id") or "") for item in pipelines}
+        _assert(
+            args.expect_pipeline in pipeline_ids or args.expect_pipeline in benchmark_row_ids,
+            f"missing pipeline or benchmark row {args.expect_pipeline}",
+        )
     _assert_private_label_detail_policy(result, allow=args.allow_private_label_details)
     _assert_family_sweep(result)
 
