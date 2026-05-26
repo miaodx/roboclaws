@@ -15,7 +15,10 @@ MolmoSpaces cleanup. The current implementation keeps the existing HTTP
 visual-grounding service boundary, adds first-wave benchmark-matrix support,
 records sidecar runtime diagnostics, and keeps CUDA/model dependencies in a
 dedicated `.venv-visual-grounding/` sidecar environment instead of the core
-cleanup `.venv/`.
+cleanup `.venv/`. The local GPU pass on 2026-05-26 promoted a stored
+RAW_FPV corpus, benchmarked the implemented first-wave rows against a real CUDA
+sidecar, and validated the selected Grounding DINO row against a direct cleanup
+control run.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -29,11 +32,12 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Run the first-wave visual-grounding matrix from
-`docs/plans/visual-grounding-gpu-sidecar-benchmark.md` against a real local GPU
-sidecar, then use the benchmark ranking to choose apple-to-apple cleanup
-validation runs. The current proof level remains contract-fake HTTP plus
-synthetic RAW_FPV smoke unless a local real-service run is explicitly performed.
+Ship the visual-grounding GPU sidecar benchmark evidence from
+`docs/plans/visual-grounding-gpu-sidecar-benchmark.md`, then run Codex-runtime
+cleanup validation only on a non-work network or through an allowed repo-local
+key route. Current proof level is real local CUDA sidecar benchmark plus direct
+MolmoSpaces cleanup validation; Codex/OpenClaw validation remains guarded by
+the work-network policy.
 
 ## Current Blocker
 

@@ -1,6 +1,6 @@
 # Visual Grounding GPU Sidecar Benchmark
 
-**Status:** Proposed source plan
+**Status:** Local GPU benchmark and direct cleanup validation complete
 **Created:** 2026-05-26
 **Source:** Visual grounding performance/debug discussion: current Grounding DINO
 HTTP sidecar is fast at transport level, but the real adapter is running CPU
@@ -284,15 +284,79 @@ without contract regressions.
   separation.
 - E2E cleanup checker on the selected apple-to-apple run directories.
 
+## Local Validation Evidence
+
+**Run date:** 2026-05-26
+
+The local GPU sidecar ran the existing HTTP service boundary in
+`real-router` / `real` mode from the dedicated `.venv-visual-grounding/`
+environment. The sidecar diagnostics recorded CUDA runtime evidence for
+Grounding DINO on `NVIDIA RTX 3500 Ada Generation Laptop GPU` with
+`torch_version=2.12.0+cu130`.
+
+Benchmark corpus:
+
+- `harness/visual_grounding/local_raw_fpv_corpus.json`
+- `harness/visual_grounding/raw_fpv/`
+- 28 stored MolmoSpaces RAW_FPV observations from
+  `output/visual-grounding-corpora/codex-camera-raw-mcp-check-final/`
+
+Primary implemented-row benchmark:
+
+- Artifact:
+  `output/visual-grounding-benchmark/gpu-implemented-subset-final/0526_1914/`
+- Scope: implemented first-wave rows for `grounding-dino`, `yoloe`, and
+  `yolo-world`
+- Checker:
+  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-implemented-subset-final/0526_1914 --require-success --expect-pipeline grounding-dino-tiny-recall`
+- Result: 9 rows, zero failures
+- Winner: `grounding-dino-tiny-recall`
+- Winner metrics: score `0.543014`, recall `0.707317`, precision `0.154255`,
+  mean latency `233.893ms`
+- Runtime: CUDA, `IDEA-Research/grounding-dino-tiny`,
+  `box_threshold=0.25`, `text_threshold=0.20`
+
+Full matrix availability benchmark:
+
+- Artifact:
+  `output/visual-grounding-benchmark/gpu-full-matrix-with-unavailable/0526_1915/`
+- Checker:
+  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-full-matrix-with-unavailable/0526_1915 --expect-pipeline yolo-world-medium-recall`
+- Result: implemented `grounding-dino`, `yoloe`, and `yolo-world` rows
+  completed; `omdet-turbo` rows reported `missing_dependency`; `yolo-custom`
+  placeholder rows reported `adapter_error` because trained cleanup ontology
+  weights were not supplied.
+
+Apple-to-apple direct cleanup validation:
+
+- `sim` control:
+  `output/molmo/visual-grounding-e2e/sim/0526_1918/seed-7/report.html`
+- Selected `grounding-dino-tiny-recall` row:
+  `output/molmo/visual-grounding-e2e/grounding-dino-tiny-recall/0526_1921/seed-7/report.html`
+- Checker for sim:
+  `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-task 帮我收拾这个房间 --expect-backend molmospaces_subprocess --expect-seeds 7 --expect-profile camera-labels --min-generated-mess-count 10 --require-advisory-scoring --require-robot-views --require-camera-model-policy --min-sweep-coverage 1.0 output/molmo/visual-grounding-e2e/sim/0526_1918`
+- Checker for Grounding DINO:
+  `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-task 帮我收拾这个房间 --expect-backend molmospaces_subprocess --expect-seeds 7 --expect-profile camera-labels --min-generated-mess-count 10 --require-advisory-scoring --require-robot-views --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --allow-partial-cleanup --min-sweep-coverage 1.0 output/molmo/visual-grounding-e2e/grounding-dino-tiny-recall/0526_1921`
+- Result: both checker runs passed.
+- Sim control: 8/10 exact private matches, 10/10 semantic accepted,
+  sweep coverage `1.0`.
+- Grounding DINO: 8/10 exact private matches, 9/10 semantic accepted,
+  sweep coverage `1.0`, external visual-grounding provenance, CUDA runtime
+  diagnostics, and `grounding-dino` stage evidence.
+- Note: the Grounding DINO direct run had one advisory semantic disagreement
+  from a pillow placed on a TV stand, while the deterministic cleanup checker
+  still passed the accepted validation gate.
+
+Codex-runtime cleanup validation was not run in this pass because the local
+network was `work`, where system-provider Codex and OpenClaw workflows are
+guarded unless an allowed repo-local key route is used.
+
 ## Open Follow-Ups
 
-- Decide whether the sidecar environment should be represented by a checked-in
-  dependency manifest, a `uv sync --project` helper, or a `just` setup recipe.
+- Add a `just` setup recipe or README snippet for syncing
+  `sidecars/visual-grounding/` into `.venv-visual-grounding/`.
 - Decide whether `yolo-custom` needs a small generated cleanup ontology dataset
   before it can be fairly compared.
-- Decide whether to add a compact benchmark matrix manifest so model id, size
-  tier, thresholds, image size, and prompt expansion are versioned instead of
-  embedded only in shell commands.
 - Add a real Agibot G2 head-camera seed set before choosing a physical-robot
   default; the MolmoSpaces RAW_FPV corpus is sufficient for this simulator-side
   promotion gate.
