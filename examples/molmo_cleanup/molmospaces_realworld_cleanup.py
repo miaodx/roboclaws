@@ -84,6 +84,10 @@ from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_client_from_env,
+)
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
@@ -109,6 +113,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--perception-mode",
         choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
+    )
+    parser.add_argument(
+        "--visual-grounding",
+        default=SIM_VISUAL_GROUNDING_PIPELINE_ID,
+        help="camera-labels producer pipeline id: sim, fake-http, or a sidecar pipeline id.",
+    )
+    parser.add_argument(
+        "--visual-grounding-base-url",
+        help="External Visual Grounding Service base URL for non-sim pipelines.",
+    )
+    parser.add_argument(
+        "--visual-grounding-timeout-s",
+        type=float,
+        help="External Visual Grounding Service timeout in seconds.",
     )
     parser.add_argument(
         "--cleanup-profile",
@@ -170,6 +188,9 @@ def run_realworld_cleanup(
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
     use_planner_proof_for_cleanup_primitives: bool = False,
+    visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_base_url: str | None = None,
+    visual_grounding_timeout_s: float | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -213,6 +234,14 @@ def run_realworld_cleanup(
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
         map_bundle_dir=selected_bundle_dir,
+        visual_grounding_client=visual_grounding_client_from_env(
+            visual_grounding,
+            base_url=visual_grounding_base_url,
+            timeout_s=visual_grounding_timeout_s,
+        ),
+        visual_grounding_pipeline_id=visual_grounding,
+        visual_grounding_artifact_base_dir=output_dir,
+        visual_grounding_run_id=f"seed-{seed}",
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -454,6 +483,7 @@ def run_realworld_cleanup(
         "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
+        "visual_grounding_pipeline_id": contract.visual_grounding_pipeline_id,
         "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": private_evaluation["generated_mess_count"],
         "mess_restoration_rate": done["score"]["mess_restoration_rate"],
@@ -551,6 +581,17 @@ def _detections_for_policy(
     if perception_mode not in {CAMERA_MODEL_POLICY_MODE, RAW_FPV_ONLY_MODE}:
         return list(observation.get("visible_object_detections", []))
     raw = observation.get("raw_fpv_observation") or {}
+    candidate_inputs = None
+    if perception_mode == RAW_FPV_ONLY_MODE:
+        waypoint = contract._waypoint_by_id(str(raw.get("waypoint_id") or ""))
+        candidate_inputs = (
+            contract._simulated_declaration_inputs_for_waypoint(
+                waypoint,
+                observation_id=str(raw.get("observation_id", "")),
+            )
+            if waypoint is not None
+            else []
+        )
     producer_type = (
         SIMULATED_CAMERA_MODEL_PROVENANCE
         if perception_mode == CAMERA_MODEL_POLICY_MODE
@@ -569,9 +610,11 @@ def _detections_for_policy(
             "observation_id": raw.get("observation_id", ""),
             "producer_type": producer_type,
             "producer_id": producer_id,
+            "candidate_count": len(candidate_inputs or []),
         },
         lambda: contract.declare_visual_candidates(
             str(raw.get("observation_id", "")),
+            candidates=candidate_inputs,
             producer_type=producer_type,
             producer_id=producer_id,
         ),
@@ -856,6 +899,9 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_profile=args.cleanup_profile,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,
+        visual_grounding=args.visual_grounding,
+        visual_grounding_base_url=args.visual_grounding_base_url,
+        visual_grounding_timeout_s=args.visual_grounding_timeout_s,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

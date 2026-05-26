@@ -77,7 +77,8 @@ run task driver mode="" *overrides:
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
-        profile|scene|scenes|seed|seeds|souls|steps|task|timeout_s|wall_budget)
+        profile|scene|scenes|seed|seeds|souls|steps|task|timeout_s|\
+        visual_grounding|wall_budget)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -288,9 +289,10 @@ run task driver mode="" *overrides:
             ;;
         esac
         robot_views="$(get robot_views "$(get record_robot_views auto)")"
+        visual_grounding="$(get visual_grounding sim)"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
-          "$map_bundle" "$cleanup_routine" "$robot_views"
+          "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)
@@ -394,7 +396,8 @@ harness target *args:
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
       molmo-planner-proof-bundle-runner|molmo-planner-proof-bundle-execute-rerun|\
-      molmo-planner-manipulation-probe|list-tasks|history)
+      molmo-planner-manipulation-probe|molmo-visual-grounding-benchmark|\
+      list-tasks|history)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;
       *)

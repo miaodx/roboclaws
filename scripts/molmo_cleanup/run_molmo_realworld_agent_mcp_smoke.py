@@ -35,6 +35,9 @@ from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+)
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 
@@ -64,6 +67,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=(VISIBLE_OBJECT_DETECTIONS_MODE, RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE),
         default=VISIBLE_OBJECT_DETECTIONS_MODE,
     )
+    parser.add_argument("--visual-grounding", default=SIM_VISUAL_GROUNDING_PIPELINE_ID)
+    parser.add_argument("--visual-grounding-base-url")
+    parser.add_argument("--visual-grounding-timeout-s", type=float)
     parser.add_argument(
         "--cleanup-profile",
         choices=cleanup_profile_names(),
@@ -90,6 +96,9 @@ def run_smoke(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_base_url: str | None = None,
+    visual_grounding_timeout_s: float | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -132,6 +141,9 @@ def run_smoke(
         map_bundle_dir=selected_bundle_dir,
         record_robot_views=record_robot_views,
         cleanup_profile=cleanup_profile,
+        visual_grounding=visual_grounding,
+        visual_grounding_base_url=visual_grounding_base_url,
+        visual_grounding_timeout_s=visual_grounding_timeout_s,
     )
     try:
         _drive_public_sweep(server)
@@ -256,6 +268,9 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         cleanup_profile=args.cleanup_profile,
+        visual_grounding=args.visual_grounding,
+        visual_grounding_base_url=args.visual_grounding_base_url,
+        visual_grounding_timeout_s=args.visual_grounding_timeout_s,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

@@ -38,6 +38,9 @@ from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+)
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
@@ -79,6 +82,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
+    parser.add_argument("--visual-grounding", default=SIM_VISUAL_GROUNDING_PIPELINE_ID)
+    parser.add_argument("--visual-grounding-base-url")
+    parser.add_argument("--visual-grounding-timeout-s", type=float)
     return parser.parse_args(argv)
 
 
@@ -148,6 +154,7 @@ def print_setup(
         print("  Inspect image blocks and call navigate_to_visual_candidate before pick.")
     elif perception_mode == CAMERA_MODEL_POLICY_MODE:
         print("  Observe returns raw FPV evidence first; call declare_visual_candidates.")
+        print("  Candidates come from the configured server-side visual-grounding pipeline.")
         print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
         print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")
@@ -179,6 +186,9 @@ def run_molmo_realworld_cleanup_agent_server(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_base_url: str | None = None,
+    visual_grounding_timeout_s: float | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -228,6 +238,9 @@ def run_molmo_realworld_cleanup_agent_server(
             map_bundle_dir=selected_bundle_dir,
             record_robot_views=record_robot_views,
             cleanup_profile=cleanup_profile,
+            visual_grounding=visual_grounding,
+            visual_grounding_base_url=visual_grounding_base_url,
+            visual_grounding_timeout_s=visual_grounding_timeout_s,
         )
         server.run_in_thread()
         server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
@@ -292,6 +305,9 @@ def main(argv: list[str] | None = None) -> int:
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,
             cleanup_profile=args.cleanup_profile,
+            visual_grounding=args.visual_grounding,
+            visual_grounding_base_url=args.visual_grounding_base_url,
+            visual_grounding_timeout_s=args.visual_grounding_timeout_s,
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

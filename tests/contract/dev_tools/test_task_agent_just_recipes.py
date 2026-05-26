@@ -72,6 +72,22 @@ def trace_task_run(*args: str) -> list[str]:
     return result.stdout.strip().split("\t")
 
 
+def trace_agent_harness(*args: str) -> list[str]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::harness", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t")
+
+
 def assert_task_run_fails(*args: str) -> str:
     binary = just_bin()
     env = os.environ.copy()
@@ -178,6 +194,28 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
     assert 'just molmo::cleanup "codex-live" "world-labels"' in harness_text
     assert '"skill" "$robot_views"' in harness_text
+
+
+def test_agent_harness_allows_molmo_visual_grounding_benchmark_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
+
+    assert "molmo-visual-grounding-benchmark" in agent_text
+    assert re.search(r"^molmo-visual-grounding-benchmark \*overrides:", harness_text, re.MULTILINE)
+    assert "run_visual_grounding_benchmark.py" in harness_text
+    assert "check_visual_grounding_benchmark_result.py" in harness_text
+
+    route = trace_agent_harness(
+        "molmo-visual-grounding-benchmark",
+        "pipeline=fake-http",
+        "output_dir=/tmp/roboclaws-vg",
+    )
+    assert route == [
+        "just",
+        "harness::molmo-visual-grounding-benchmark",
+        "pipeline=fake-http",
+        "output_dir=/tmp/roboclaws-vg",
+    ]
 
 
 def test_task_module_exposes_only_run_publicly() -> None:
@@ -327,6 +365,36 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "18788",
     ]
     assert route[10] == "molmo-cleanup-default-7"
+
+
+def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
+    route = trace_task_run(
+        "molmo-cleanup",
+        "mcp-smoke",
+        "camera-labels",
+        "visual_grounding=fake-http",
+    )
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "mcp-smoke",
+        "camera-labels",
+        "7",
+        "output/molmo/mcp-smoke-camera-labels",
+    ]
+    assert route[13] == "fake-http"
+
+
+def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"camera-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "--expect-visual-grounding-pipeline" in body
+    assert "--allow-partial-cleanup" in body
+    assert "--min-sweep-coverage 1.0" in body
 
 
 def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
