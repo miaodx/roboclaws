@@ -506,12 +506,40 @@ def _assert_clean_agent_run(
         assert request_count >= 1, (tool, counts, data)
     diagnostics = data.get("agent_diagnostics") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
-    assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
+    assert _unrecovered_semantic_order_error_count(data) == 0, data
     assert int(diagnostics.get("duplicate_post_place_navigation_count") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
     required_complete = min_complete_count or int(data.get("generated_mess_count") or 0)
     assert _complete_semantic_substep_count(data) >= required_complete, data
+
+
+def _unrecovered_semantic_order_error_count(data: dict[str, Any]) -> int:
+    diagnostics = data.get("agent_diagnostics") or {}
+    if "semantic_order_unrecovered_errors" in diagnostics:
+        return int(diagnostics.get("semantic_order_unrecovered_errors") or 0)
+
+    total_errors = int(diagnostics.get("semantic_order_errors") or 0)
+    if total_errors == 0:
+        return 0
+
+    covered = 0
+    unrecovered = 0
+    for item in data.get("semantic_substeps") or []:
+        steps = item.get("steps", [])
+        item_errors = sum(
+            1
+            for step in steps
+            if isinstance(step, dict) and step.get("error_reason") == "semantic_order"
+        )
+        if item_errors == 0:
+            continue
+        covered += item_errors
+        phases = successful_semantic_phases(steps)
+        if not has_complete_semantic_sequence(phases):
+            unrecovered += item_errors
+    untracked_errors = max(0, total_errors - covered)
+    return unrecovered + untracked_errors
 
 
 def _assert_semantic_acceptability(data: dict[str, Any], min_accepted_count: int) -> None:
@@ -1180,13 +1208,38 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
     assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
     assert trace.get("first_cleanup_before_full_survey") is True, trace
-    assert trace.get("post_place_observe_complete") is True, trace
-    assert int(trace.get("post_place_observe_count") or 0) >= int(
-        trace.get("placed_object_count") or 0
-    ), trace
+    placed_object_count = int(trace.get("placed_object_count") or 0)
+    post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
+    if trace.get("post_place_observe_complete") is not True:
+        post_place_observe_count = max(
+            post_place_observe_count,
+            _post_place_observe_count_allowing_public_state_queries(trace),
+        )
+    assert post_place_observe_count >= placed_object_count, trace
     assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
     assert "static_map_fixture_coverage" in report_text, report_text[:500]
     assert "post_place_observe" in report_text, report_text[:500]
+
+
+def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any]) -> int:
+    pending = 0
+    count = 0
+    for event in trace.get("events") or []:
+        if not isinstance(event, dict):
+            continue
+        tool = str(event.get("tool") or "")
+        role = str(event.get("role") or "")
+        if tool in {"place", "place_inside"} and role == "cleanup_action":
+            pending += 1
+            continue
+        if tool == "observe" and pending > 0:
+            count += 1
+            pending -= 1
+            continue
+        if pending > 0 and role in {"coverage_scan_navigation", "cleanup_action"}:
+            if tool != "close_receptacle":
+                pending = 0
+    return count
 
 
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:

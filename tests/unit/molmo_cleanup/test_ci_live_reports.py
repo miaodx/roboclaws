@@ -499,6 +499,85 @@ def test_live_codex_failure_status_includes_reason(tmp_path: Path, monkeypatch) 
     assert payload["reason"] == "startup failed"
 
 
+def test_live_codex_prompts_block_plan_tool() -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    initial = run_codex._codex_live_prompt("clean")
+    continuation = run_codex._codex_continuation_prompt(turn_index=1)
+
+    for prompt in (initial, continuation):
+        assert "do not call update_plan" in prompt
+        assert "do not create todo/checklist" in prompt
+        assert "call only declared roboclaws MCP tools" in prompt
+        assert "use place_inside for" in prompt
+        assert "required_tool next" in prompt
+
+
+def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_max_continuations=1,
+        kickoff_prompt="clean",
+        codex_model_arg=[],
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="world-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls: list[list[str]] = []
+
+    def fake_prepare_agent_workspace(**_kwargs):
+        return agent_dir, agent_dir
+
+    def fake_subprocess_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0)
+
+    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
+        calls.append(command)
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        if len(calls) == 1:
+            stdout_path.write_text(
+                '{"type":"error","message":"function_call name '
+                "'_iv9s__mcp__roboclaws____update_plan' is not declared in tools\"}\n",
+                encoding="utf-8",
+            )
+            stderr_path.write_text(
+                "unsupported call: _iv9s__mcp__roboclaws____update_plan\n",
+                encoding="utf-8",
+            )
+            return 1
+        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
+    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    runner._run_codex()
+
+    assert len(calls) == 2
+    assert runner.live_timing["codex_recoverable_errors"] == [
+        {"turn": 1, "type": "misrouted_update_plan_tool"}
+    ]
+    assert "do not call update_plan" in calls[0][-1]
+    assert "do not call update_plan" in calls[1][-1]
+
+
 def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(
     tmp_path: Path, monkeypatch
 ) -> None:

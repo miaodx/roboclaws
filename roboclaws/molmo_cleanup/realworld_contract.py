@@ -2981,6 +2981,7 @@ def cleanup_policy_trace_from_events(
     observed_waypoints_at_first_cleanup = 0
     scan_observe_count = 0
     post_place_observe_count = 0
+    pending_post_place_observes = 0
     cleanup_action_count = 0
     placed_object_count = 0
     for raw in trace_events:
@@ -2990,7 +2991,11 @@ def cleanup_policy_trace_from_events(
         response = raw.get("response") if isinstance(raw.get("response"), dict) else {}
         if not response.get("ok"):
             continue
-        role = _policy_event_role(tool, previous_success_tool)
+        role = _policy_event_role(
+            tool,
+            previous_success_tool,
+            pending_post_place_observe=pending_post_place_observes > 0,
+        )
         waypoint_id = str(response.get("waypoint_id") or "")
         if waypoint_id:
             visited_waypoints.add(waypoint_id)
@@ -2998,10 +3003,12 @@ def cleanup_policy_trace_from_events(
             scan_observe_count += 1
         if role == "post_place_observe":
             post_place_observe_count += 1
+            pending_post_place_observes = max(0, pending_post_place_observes - 1)
         if role == "cleanup_action":
             cleanup_action_count += 1
             if tool in {PLACE_PHASE, PLACE_INSIDE_PHASE}:
                 placed_object_count += 1
+                pending_post_place_observes += 1
             if first_cleanup_index is None:
                 first_cleanup_index = len(events)
                 observed_waypoints_at_first_cleanup = len(visited_waypoints)
@@ -3113,13 +3120,19 @@ def real_robot_readiness_from_events(
     return evidence
 
 
-def _policy_event_role(tool: str, previous_success_tool: str) -> str:
+def _policy_event_role(
+    tool: str,
+    previous_success_tool: str,
+    *,
+    pending_post_place_observe: bool = False,
+) -> str:
     if tool == "navigate_to_waypoint":
         return "coverage_scan_navigation"
     if tool == "observe":
         return (
             "post_place_observe"
-            if previous_success_tool in {PLACE_PHASE, PLACE_INSIDE_PHASE, CLOSE_RECEPTACLE_PHASE}
+            if pending_post_place_observe
+            or previous_success_tool in {PLACE_PHASE, PLACE_INSIDE_PHASE, CLOSE_RECEPTACLE_PHASE}
             else ("coverage_scan_observe")
         )
     if tool in {

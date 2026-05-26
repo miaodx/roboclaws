@@ -22,6 +22,21 @@ from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
+CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
+    "Live MCP route constraint: do not call update_plan, do not create todo/checklist "
+    "tool items, and do not use any planning tool. In this Docker Codex + mify live "
+    "MCP route, the Codex checklist tool can be misrouted as a roboclaws MCP tool by "
+    "some Responses providers. Track progress in normal text only. When you call a "
+    "tool, call only declared roboclaws MCP tools."
+)
+CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
+    "Cleanup tool-order rule: after navigate_to_receptacle, use place_inside for "
+    "fridge, refrigerator, shelf, bookshelf, bookcase, or shelving targets. Open a "
+    "receptacle first only for fridge/refrigerator targets. Use place only for "
+    "surface targets such as table, sofa, bed, desk, sink, counter, or stand. If a "
+    "tool returns error_reason=semantic_order with required_tool, call that exact "
+    "required_tool next instead of substituting another cleanup tool."
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -223,7 +238,7 @@ class LiveCodexCleanupRunner:
         for turn_index in range(max_turns):
             is_initial_turn = turn_index == 0
             prompt = (
-                self.args.kickoff_prompt
+                _codex_live_prompt(self.args.kickoff_prompt)
                 if is_initial_turn
                 else _codex_continuation_prompt(turn_index=turn_index)
             )
@@ -284,6 +299,26 @@ class LiveCodexCleanupRunner:
             if turn_last_message_host_path.is_file():
                 shutil.copyfile(turn_last_message_host_path, self.run_dir / "codex-last-message.md")
             if status != 0:
+                if self.server_proc is not None and self.server_proc.poll() is not None:
+                    break
+                if (self.run_dir / "run_result.json").is_file():
+                    break
+                if turn_index + 1 < max_turns and _is_update_plan_tool_error(
+                    codex_events_path, stderr_path
+                ):
+                    print(
+                        "==> Codex attempted unsupported update_plan/todo tool; "
+                        "continuing with plan-tool recovery prompt"
+                    )
+                    recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
+                    if isinstance(recoveries, list):
+                        recoveries.append(
+                            {
+                                "turn": turn_index + 1,
+                                "type": "misrouted_update_plan_tool",
+                            }
+                        )
+                    continue
                 self._mark_timing("codex_exec_end")
                 self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
                 raise RuntimeError(f"Codex exec exited with status {status}")
@@ -645,7 +680,7 @@ def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
 
 
 def _codex_continuation_prompt(*, turn_index: int) -> str:
-    return (
+    return _codex_live_prompt(
         "Continue the same active roboclaws MCP cleanup server. This is automatic "
         f"continuation turn {turn_index}; do not restart the scenario and do not read "
         "private scoring artifacts. Use roboclaws MCP tools only. First call "
@@ -662,6 +697,26 @@ def _codex_continuation_prompt(*, turn_index: int) -> str:
         "inspection waypoint has an observe response and pending public cleanup "
         "candidates are handled."
     )
+
+
+def _codex_live_prompt(prompt: str) -> str:
+    return (
+        f"{CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION}\n"
+        f"{CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION}\n\n"
+        f"{prompt}"
+    )
+
+
+def _is_update_plan_tool_error(*paths: Path) -> bool:
+    for path in paths:
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace").lower()
+        if "update_plan" in text and (
+            "not declared in tools" in text or "unsupported call" in text
+        ):
+            return True
+    return False
 
 
 def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:

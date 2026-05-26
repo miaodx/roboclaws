@@ -17,6 +17,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
     RealWorldCleanupContract,
+    cleanup_policy_trace_from_events,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
 )
@@ -114,6 +115,41 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert agent_view["cleanup_worklist"]["schema"] == CLEANUP_WORKLIST_SCHEMA
     assert agent_view["cleanup_worklist"]["objects"][0]["state"] == "held"
     _assert_no_forbidden_keys(agent_view)
+
+
+def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe() -> None:
+    trace = cleanup_policy_trace_from_events(
+        [
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response("navigate_to_object", {"ok": True, "object_id": "observed_001"}),
+            _trace_response("pick", {"ok": True, "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_receptacle",
+                {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "fixture_id": "sink_01",
+                },
+            ),
+            _trace_response(
+                "place",
+                {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "fixture_id": "sink_01",
+                },
+            ),
+            _trace_response("metric_map", {"ok": True}),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+        ],
+        {"metric_map": {"inspection_waypoints": [{"waypoint_id": "room_1_scan_1"}]}},
+    )
+
+    assert trace["placed_object_count"] == 1
+    assert trace["post_place_observe_count"] == 1
+    assert trace["post_place_observe_complete"] is True
+    assert trace["events"][-1]["role"] == "post_place_observe"
 
 
 def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> None:
@@ -1209,3 +1245,7 @@ def _same_room_fallback_scenario() -> CleanupScenario:
             success_threshold=1,
         ),
     )
+
+
+def _trace_response(tool: str, response: dict[str, object]) -> dict[str, object]:
+    return {"event": "response", "tool": tool, "response": response}

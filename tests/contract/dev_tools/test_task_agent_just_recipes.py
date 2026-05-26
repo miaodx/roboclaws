@@ -523,6 +523,8 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
     assert "do not send bare x/y/width/height fields" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
+    assert "place/place_inside" in prompt
+    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
@@ -536,6 +538,8 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "selected Nav2 map bundle" in prompt
     assert "not raw occupancy images" in prompt
     assert "mark a waypoint complete only after" in prompt
+    assert "place/place_inside" in prompt
+    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
 

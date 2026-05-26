@@ -204,6 +204,22 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
     )
 
 
+def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    count = checker._post_place_observe_count_allowing_public_state_queries(
+        {
+            "events": [
+                {"tool": "place", "role": "cleanup_action"},
+                {"tool": "metric_map", "role": "setup_or_completion"},
+                {"tool": "observe", "role": "coverage_scan_observe"},
+            ]
+        }
+    )
+
+    assert count == 1
+
+
 def test_checker_rejects_waypoint_honesty_when_loop_is_survey_first(
     tmp_path: Path,
 ) -> None:
@@ -401,6 +417,7 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
 
     result = smoke.run_smoke(output_dir=tmp_path, seed=7)
     result["agent_diagnostics"]["semantic_order_errors"] = 1
+    result["agent_diagnostics"]["semantic_order_unrecovered_errors"] = 1
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -414,6 +431,50 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
             require_agent_driven=True,
             require_clean_agent_run=True,
         )
+
+
+def test_checker_accepts_clean_run_with_recovered_semantic_order_error(
+    tmp_path: Path,
+) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+    retried_item = result["semantic_substeps"][0]
+    placement_index = next(
+        index
+        for index, step in enumerate(retried_item["steps"])
+        if step.get("phase") in {"place", "place_inside"} and step.get("ok") is True
+    )
+    recovered_tool = retried_item["steps"][placement_index]["phase"]
+    failed_placement = dict(retried_item["steps"][placement_index])
+    failed_placement.update(
+        {
+            "ok": False,
+            "status": "error",
+            "error_reason": "semantic_order",
+            "required_tool": recovered_tool,
+            "primitive_provenance": None,
+            "location_id": None,
+            "contained_in": None,
+        }
+    )
+    retried_item["steps"].insert(placement_index, failed_placement)
+    result["agent_diagnostics"]["semantic_order_errors"] = 1
+    result["agent_diagnostics"].pop("semantic_order_recovered_errors", None)
+    result["agent_diagnostics"].pop("semantic_order_unrecovered_errors", None)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="realworld_contract_smoke_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_clean_agent_run=True,
+    )
 
 
 def test_checker_accepts_clean_run_with_successful_retry_after_failed_attempt(
