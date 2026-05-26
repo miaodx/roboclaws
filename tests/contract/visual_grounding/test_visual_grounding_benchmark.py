@@ -20,6 +20,7 @@ from scripts.visual_grounding.adapters import (
     should_use_contract_fake,
     visual_grounding_adapter_catalog,
 )
+from scripts.visual_grounding.run_visual_grounding_benchmark import _family_sweep_summary
 from scripts.visual_grounding.serve_fake_visual_grounding import make_handler
 from scripts.visual_grounding.serve_visual_grounding_service import (
     make_handler as make_configurable_handler,
@@ -592,6 +593,51 @@ def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -
         "dino-base-recall",
         "yolo-world-small",
     }
+
+
+def test_visual_grounding_family_sweep_marks_failed_family_under_sampled() -> None:
+    summary = _family_sweep_summary(
+        [
+            {
+                "benchmark_row_id": "omdet-tiny",
+                "pipeline_id": "omdet-turbo",
+                "model_family": "omdet-turbo",
+                "model_id": "omdet-tiny",
+                "size_tier": "tiny",
+                "failure_count": 3,
+                "parse_failure_count": 0,
+                "timeout_count": 0,
+                "stage_summary": [{"status_counts": {"missing_dependency": 3}}],
+            },
+            {
+                "benchmark_row_id": "omdet-base",
+                "pipeline_id": "omdet-turbo",
+                "model_family": "omdet-turbo",
+                "model_id": "omdet-base",
+                "size_tier": "base",
+                "failure_count": 3,
+                "parse_failure_count": 0,
+                "timeout_count": 0,
+                "stage_summary": [{"status_counts": {"missing_dependency": 3}}],
+            },
+        ]
+    )
+
+    assert summary == [
+        {
+            "model_family": "omdet-turbo",
+            "tested_config_count": 2,
+            "successful_config_count": 0,
+            "row_ids": ["omdet-tiny", "omdet-base"],
+            "successful_row_ids": [],
+            "size_tiers": ["base", "tiny"],
+            "model_ids": ["omdet-base", "omdet-tiny"],
+            "under_sampled": True,
+            "under_sampled_reason": (
+                "fewer than two successful configs (0); failure statuses: missing_dependency"
+            ),
+        }
+    ]
 
 
 def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(

@@ -677,7 +677,12 @@ def _family_sweep_summary(pipeline_results: list[dict[str, Any]]) -> list[dict[s
         size_tiers = sorted({str(row.get("size_tier") or "unspecified") for row in rows})
         model_ids = sorted({str(row.get("model_id") or "") for row in rows if row.get("model_id")})
         row_ids = [str(row.get("benchmark_row_id") or row.get("pipeline_id") or "") for row in rows]
-        under_sampled = len(rows) < 2
+        successful_rows = [row for row in rows if _benchmark_row_succeeded(row)]
+        successful_row_ids = [
+            str(row.get("benchmark_row_id") or row.get("pipeline_id") or "")
+            for row in successful_rows
+        ]
+        under_sampled = len(successful_rows) < 2
         explicit_reasons = [
             str(row.get("under_sampled_reason") or "")
             for row in rows
@@ -685,12 +690,18 @@ def _family_sweep_summary(pipeline_results: list[dict[str, Any]]) -> list[dict[s
         ]
         reason = ""
         if under_sampled:
-            reason = explicit_reasons[0] if explicit_reasons else "fewer than two rows tested"
+            reason = (
+                explicit_reasons[0]
+                if explicit_reasons
+                else _family_under_sampled_reason(rows, len(successful_rows))
+            )
         summaries.append(
             {
                 "model_family": family,
                 "tested_config_count": len(rows),
+                "successful_config_count": len(successful_rows),
                 "row_ids": row_ids,
+                "successful_row_ids": successful_row_ids,
                 "size_tiers": size_tiers,
                 "model_ids": model_ids,
                 "under_sampled": under_sampled,
@@ -698,6 +709,32 @@ def _family_sweep_summary(pipeline_results: list[dict[str, Any]]) -> list[dict[s
             }
         )
     return summaries
+
+
+def _benchmark_row_succeeded(row: dict[str, Any]) -> bool:
+    return (
+        int(row.get("failure_count") or 0) == 0
+        and int(row.get("parse_failure_count") or 0) == 0
+        and int(row.get("timeout_count") or 0) == 0
+    )
+
+
+def _family_under_sampled_reason(rows: list[dict[str, Any]], successful_count: int) -> str:
+    failure_reasons: set[str] = set()
+    for row in rows:
+        if _benchmark_row_succeeded(row):
+            continue
+        for stage in row.get("stage_summary") or []:
+            status_counts = stage.get("status_counts") or {}
+            for status, count in status_counts.items():
+                if str(status) != "ok" and int(count or 0) > 0:
+                    failure_reasons.add(str(status))
+    if failure_reasons:
+        return (
+            f"fewer than two successful configs ({successful_count}); "
+            f"failure statuses: {', '.join(sorted(failure_reasons))}"
+        )
+    return f"fewer than two successful configs ({successful_count})"
 
 
 def _promotion_recommendation(

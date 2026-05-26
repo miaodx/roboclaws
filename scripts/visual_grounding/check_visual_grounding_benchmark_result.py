@@ -223,11 +223,21 @@ def _assert_family_sweep(result: dict[str, Any]) -> None:
         _assert(family, f"family sweep row missing family: {row}")
         tested = int(row.get("tested_config_count") or 0)
         _assert(tested >= 1, f"family has no tested configs: {family}")
+        successful = int(row.get("successful_config_count") or 0)
+        _assert(
+            0 <= successful <= tested,
+            f"bad successful config count for family {family}: {row}",
+        )
         _assert(isinstance(row.get("row_ids"), list), f"family row ids missing: {family}")
+        _assert(
+            isinstance(row.get("successful_row_ids"), list),
+            f"family successful row ids missing: {family}",
+        )
         _assert(isinstance(row.get("size_tiers"), list), f"family size tiers missing: {family}")
         _assert(isinstance(row.get("under_sampled"), bool), f"under-sampled flag bad: {family}")
-        if tested < 2:
+        if successful < 2:
             _assert(row.get("under_sampled") is True, f"family not marked under-sampled: {family}")
+        if row.get("under_sampled"):
             _assert(row.get("under_sampled_reason"), f"under-sampled reason missing: {family}")
 
 

@@ -32,12 +32,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Ship the visual-grounding GPU sidecar benchmark evidence from
-`docs/plans/visual-grounding-gpu-sidecar-benchmark.md`, then run Codex-runtime
-cleanup validation only on a non-work network or through an allowed repo-local
-key route. Current proof level is real local CUDA sidecar benchmark plus direct
-MolmoSpaces cleanup validation; Codex/OpenClaw validation remains guarded by
-the work-network policy.
+Run Codex-runtime cleanup validation for the selected Grounding DINO pipeline
+only on a non-work network or through an allowed repo-local key route. Current
+proof level is real local CUDA sidecar benchmark plus direct MolmoSpaces
+cleanup validation; Codex/OpenClaw validation remains guarded by the
+work-network policy.
 
 ## Current Blocker
 
