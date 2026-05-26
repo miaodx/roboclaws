@@ -303,26 +303,27 @@ Benchmark corpus:
 Primary implemented-row benchmark:
 
 - Artifact:
-  `output/visual-grounding-benchmark/gpu-implemented-subset-under-sampled-fixed/0526_1940/`
+  `output/visual-grounding-benchmark/gpu-implemented-subset-expanded-matrix/0526_1947/`
 - Scope: implemented first-wave rows for `grounding-dino`, `yoloe`, and
   `yolo-world`
 - Checker:
-  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-implemented-subset-under-sampled-fixed/0526_1940 --require-success`
-- Result: 9 rows, zero failures
+  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-implemented-subset-expanded-matrix/0526_1947 --require-success`
+- Result: 12 rows, zero failures
 - Winner: `grounding-dino-tiny-recall`
 - Winner metrics: score `0.543014`, recall `0.707317`, precision `0.154255`,
-  mean latency `236.536ms`
+  mean latency `235.179ms`
 - Runtime: CUDA, `IDEA-Research/grounding-dino-tiny`,
   `box_threshold=0.25`, `text_threshold=0.20`
 - Family sweep: `grounding-dino`, `yoloe`, and `yolo-world` each have at least
-  two successful tested configurations.
+  three successful tested configurations; DINO includes tiny/base default,
+  recall, and conservative rows.
 
 Full matrix availability benchmark:
 
 - Artifact:
-  `output/visual-grounding-benchmark/gpu-full-matrix-under-sampled-fixed/0526_1941/`
+  `output/visual-grounding-benchmark/gpu-full-matrix-expanded/0526_1948/`
 - Checker:
-  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-full-matrix-under-sampled-fixed/0526_1941`
+  `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-full-matrix-expanded/0526_1948`
 - Result: implemented `grounding-dino`, `yoloe`, and `yolo-world` rows
   completed; `omdet-turbo` rows reported `missing_dependency`; `yolo-custom`
   placeholder rows reported `adapter_error` because trained cleanup ontology

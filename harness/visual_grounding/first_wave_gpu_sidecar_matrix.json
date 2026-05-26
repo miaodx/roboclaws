@@ -58,6 +58,34 @@
       }
     },
     {
+      "row_id": "grounding-dino-base-recall",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-base",
+      "size_tier": "base",
+      "runtime_parameters": {
+        "box_threshold": 0.25,
+        "text_threshold": 0.2,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-base-conservative",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-base",
+      "size_tier": "base",
+      "runtime_parameters": {
+        "box_threshold": 0.4,
+        "text_threshold": 0.3,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
       "row_id": "yoloe-11s-tuned",
       "pipeline_id": "yoloe",
       "model_family": "yoloe",
@@ -110,6 +138,20 @@
         "confidence_threshold": 0.2,
         "image_size": 960,
         "max_detections": 8,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yolo-world-small-precision",
+      "pipeline_id": "yolo-world",
+      "model_family": "yolo-world",
+      "producer_id": "yolo-world",
+      "model_id": "yolov8s-world.pt",
+      "size_tier": "small",
+      "runtime_parameters": {
+        "confidence_threshold": 0.35,
+        "image_size": 960,
+        "max_detections": 6,
         "prompt_expansion": true
       }
     },

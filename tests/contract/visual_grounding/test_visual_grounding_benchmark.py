@@ -28,6 +28,9 @@ from scripts.visual_grounding.serve_visual_grounding_service import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPO_ROOT / "harness" / "visual_grounding" / "smoke_corpus.json"
+FIRST_WAVE_MATRIX = (
+    REPO_ROOT / "harness" / "visual_grounding" / "first_wave_gpu_sidecar_matrix.json"
+)
 RUNNER = REPO_ROOT / "scripts" / "visual_grounding" / "run_visual_grounding_benchmark.py"
 CHECKER = REPO_ROOT / "scripts" / "visual_grounding" / "check_visual_grounding_benchmark_result.py"
 
@@ -638,6 +641,35 @@ def test_visual_grounding_family_sweep_marks_failed_family_under_sampled() -> No
             ),
         }
     ]
+
+
+def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:
+    matrix = json.loads(FIRST_WAVE_MATRIX.read_text(encoding="utf-8"))
+    rows = matrix["rows"]
+    by_row = {row["row_id"]: row for row in rows}
+
+    assert len(rows) == 16
+    for size in ("tiny", "base"):
+        for mode, box_threshold, text_threshold in (
+            ("default", 0.35, 0.25),
+            ("recall", 0.25, 0.2),
+            ("conservative", 0.4, 0.3),
+        ):
+            row = by_row[f"grounding-dino-{size}-{mode}"]
+            assert row["model_family"] == "grounding-dino"
+            assert row["runtime_parameters"]["box_threshold"] == box_threshold
+            assert row["runtime_parameters"]["text_threshold"] == text_threshold
+
+    for row_id in (
+        "yoloe-11s-precision",
+        "yoloe-11m-recall",
+        "yolo-world-small-precision",
+        "yolo-world-medium-recall",
+    ):
+        assert by_row[row_id]["runtime_parameters"]["prompt_expansion"] is True
+
+    assert by_row["yolo-custom-fast-placeholder"]["under_sampled_reason"]
+    assert by_row["yolo-custom-large-placeholder"]["under_sampled_reason"]
 
 
 def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(
