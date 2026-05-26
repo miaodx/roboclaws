@@ -137,11 +137,13 @@ explicit local/dev setup steps. Do not implicitly download model weights in
 normal cleanup, benchmark, or CI recipes. Treat YOLOE/YOLO-family adapters as
 optional probes until licensing and redistribution boundaries are reviewed.
 
-The first implementation slice should stop at fake HTTP plumbing, shared client
-injection, report/checker metadata, and direct/MCP-smoke evidence. Full
-proposer benchmarking and real model adapters are later phases. Live Codex is a
-useful best-effort confidence check for that slice, but direct and MCP-smoke
-fake HTTP runs are the hard gates.
+The first implementation slice covers fake HTTP plumbing, shared client
+injection, report/checker metadata, and direct/MCP-smoke evidence. Full real
+proposer benchmarking remains a later hard gate. The configurable sidecar has
+an explicit `--adapter-mode real` path for proposer probes, but operators must
+install model dependencies and weights deliberately in the sidecar environment
+before using it. Live Codex is a useful best-effort confidence check for that
+slice, but direct and MCP-smoke fake HTTP runs are the hard gates.
 
 Qwen3-VL and MiMo v2 Omni should first be treated as refiners over detector
 proposals. They can also be tested as direct producer replacements, but that is
@@ -152,23 +154,134 @@ block the fake HTTP, proposer, or benchmark phases.
 
 Before promoting a real pipeline to the end-to-end cleanup matrix, run a
 perception-isolated visual-grounding benchmark over fixed RAW_FPV observations.
-Planned benchmark command shape:
+Benchmark command shape:
 
 ```bash
+just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=yoloe
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2-omni
 ```
 
 That benchmark should compare candidate recall, false positives, duplicate
-rate, category-family accuracy, bbox/overlay quality, structured-output parse
-failures, latency, and cost without running the full cleanup loop.
+rate, category-family accuracy, bbox/overlay quality, destination-hint quality,
+actionability proxy rate, structured-output parse failures, latency, and cost
+without running the full cleanup loop.
+Cost and memory fields are explicit telemetry slots: they show reported totals
+when a sidecar stage provides token/cost or memory metadata, and otherwise say
+that the service did not report that data.
+The benchmark result also emits a capped end-to-end probe recommendation:
+always include the `sim` control, then at most one proposer-only pipeline, one
+proposer-plus-refiner pipeline, and one direct VLM pipeline. Treat fake-contract
+recommendations as artifact-shape evidence only until real stage provenance is
+present for every selected non-sim pipeline; a mixed fake/real recommendation
+still requires real reruns before promotion.
+The benchmark checker treats zero candidates as a valid poor-recall result when
+`--require-success` is used; add `--require-candidates` only for deterministic
+fake smoke tests that are expected to emit at least one candidate.
 
-Keep the benchmark working set under `harness/visual_grounding/`. Small stable
-fixtures can be git-tracked after size and privacy review; larger image corpora
-and generated outputs should remain local or published artifacts. Private labels
-in that harness are scoring data only and must not be returned to the agent or
-grounding service.
+Keep the benchmark working set under `harness/visual_grounding/`. The initial
+git-tracked smoke corpus is synthetic and validates artifact shape only; larger
+image corpora and generated outputs should remain local or published artifacts.
+Private labels in that harness are scoring data only and must not be returned
+to the agent or grounding service.
+
+To build a path-backed corpus from a stored cleanup run with RAW_FPV artifacts:
+
+```bash
+.venv/bin/python scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py \
+  output/molmo/<run>/seed-7 \
+  --output harness/visual_grounding/local_raw_fpv_corpus.json
+```
+
+That builder copies the referenced RAW_FPV images next to the generated corpus
+and derives room-level private category-presence labels from the run's private
+evaluation. When MolmoSpaces mess-placement diagnostics are available, the
+builder assigns each private label to the public room containing the initial
+mess receptacle fixture, then falls back to the legacy object-id room suffix
+only when that fixture provenance is unavailable. Those labels are benchmark
+scoring data only; they are not included in service requests, predictions JSONL,
+MCP responses, or Agent View payloads.
+
+Start the configurable sidecar service for CI-safe fake HTTP runs:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
+```
+
+For named contract pipelines without real model weights, run the fake
+dispatcher:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline contract-fake
+```
+
+For real proposer probes, install optional sidecar dependencies and weights
+explicitly, then run:
+
+```bash
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline grounding-dino --adapter-mode real
+
+VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline yoloe --adapter-mode real
+```
+
+Hosted VLM refiner and direct-producer probes use an OpenAI-compatible
+chat-completions endpoint from the sidecar. MiMo uses the existing hosted route
+when `MIMO_TP_KEY` is present. Qwen3-VL should be configured explicitly through
+a local or remote serving endpoint:
+
+```bash
+MIMO_TP_KEY=... \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline grounding-dino+mimo-v2-omni --adapter-mode real
+
+VISUAL_GROUNDING_QWEN_BASE_URL=http://127.0.0.1:8000/v1 \
+VISUAL_GROUNDING_QWEN_API_KEY=... \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline qwen3-vl-direct --adapter-mode real
+```
+
+For unauthenticated local test servers only, set
+`VISUAL_GROUNDING_VLM_ALLOW_NO_API_KEY=true`. Do not use that setting for a
+hosted provider.
+Hosted VLM success artifacts should report `auth_mode=bearer_configured`,
+provider/model/stage provenance, latency, and token or cost telemetry when the
+provider returns it, while never writing bearer tokens or raw API keys to
+benchmark results, predictions, traces, or reports.
+
+List the sidecar adapter slots without starting the server:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --list-adapters
+```
+
+The adapter catalog includes a redacted `runtime` readiness block for each
+adapter. For local proposer adapters it reports importable dependencies such as
+`torch`, `transformers`, and `ultralytics`; model weights remain unverified
+until a real adapter run loads them. For hosted MiMo/Qwen routes it reports only
+whether the endpoint/auth configuration is present and the resulting auth mode,
+not raw keys or bearer tokens.
+
+Real proposer pipeline ids such as `grounding-dino` and `yoloe` report visible
+`adapter_unavailable`, `missing_dependency`, or adapter-error failures unless
+the service is started with `--adapter-mode contract-fake` for contract tests or
+`--adapter-mode real` with installed sidecar dependencies and model weights.
+Hosted refiner and direct-producer ids such as `grounding-dino+mimo-v2-omni`,
+`mimo-v2-omni-direct`, and `qwen3-vl-direct` report visible `missing_config`
+failures until their endpoint and key/no-key local policy are configured. The
+adapter catalog names the optional sidecar extra or provider configuration slot
+for each target producer/refiner. The older `serve_fake_visual_grounding.py`
+script remains a compatibility entry point for deterministic fake-only tests.
+Fake outputs are pipeline-aware for contract tests only: they can emit proposer,
+refiner, direct-producer, rejected-proposal, and overlay evidence for named
+pipeline ids without claiming that real Grounding DINO, YOLOE, MiMo, or Qwen
+weights were loaded.
 
 For real-robot deployment, extend the same benchmark with a fixed head-camera
 seed set and edge latency measurements before selecting a proposer. Route
@@ -317,7 +430,7 @@ sections.
 | Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, chase, map, verification. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
 | Model-declared camera cleanup | `camera-raw` or `camera-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
-| Camera-label producer evidence | `profile=camera-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with simulated producer provenance. |
+| Camera-label producer evidence | `profile=camera-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with visual-grounding pipeline provenance. |
 | Planner proof attached | `--planner-proof-run-result ...` | Attached Planner Proof, Cleanup Primitive Gate, Planner Cleanup Bridge. |
 | Proof bundle runner | proof-bundle runner script | Separate runner report with selected commands, proof results, blockers, grasp/task-feasibility evidence. |
 
