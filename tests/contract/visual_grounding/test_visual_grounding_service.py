@@ -161,7 +161,11 @@ def test_real_mode_reports_refiner_pipeline_missing_config_without_fake_success(
 
 
 def test_real_mode_reports_grounding_dino_missing_dependency(monkeypatch) -> None:
-    def missing_grounding_dino(_model_id: str) -> tuple[Any, Any, Any]:
+    def missing_grounding_dino(
+        _model_id: str,
+        _requested_device: str,
+        _requested_dtype: str,
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
         raise ImportError("missing sidecar deps")
 
     monkeypatch.setattr(adapters, "_load_grounding_dino", missing_grounding_dino)
@@ -179,6 +183,42 @@ def test_real_mode_reports_grounding_dino_missing_dependency(monkeypatch) -> Non
     assert response["pipeline"]["stages"][0]["status"] == "missing_dependency"
     assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "grounding-dino"
     assert response["diagnostics"]["private_truth_included"] is False
+
+
+def test_real_mode_reports_grounding_dino_device_unavailable(monkeypatch) -> None:
+    def cuda_unavailable(
+        model_id: str,
+        requested_device: str,
+        requested_dtype: str,
+    ) -> tuple[Any, Any, Any, dict[str, Any]]:
+        assert model_id == "IDEA-Research/grounding-dino-tiny"
+        assert requested_device == "cuda"
+        assert requested_dtype == "float16"
+        raise adapters.VisualGroundingDeviceError("cuda unavailable")
+
+    monkeypatch.setattr(adapters, "_load_grounding_dino", cuda_unavailable)
+    request = _request("grounding-dino", image=_jpeg_image_payload())
+    request["pipeline_request"]["proposer"]["runtime_parameters"] = {
+        "device": "cuda",
+        "torch_dtype": "float16",
+        "box_threshold": 0.25,
+        "text_threshold": 0.2,
+    }
+
+    response = adapters.visual_grounding_service_response(
+        payload=request,
+        configured_pipeline_id="grounding-dino",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "failed"
+    assert response["error"]["reason"] == "device_unavailable"
+    stage = response["pipeline"]["stages"][0]
+    assert stage["runtime"]["requested_device"] == "cuda"
+    assert stage["runtime"]["requested_dtype"] == "float16"
+    assert stage["runtime_parameters"]["box_threshold"] == 0.25
+    assert response["diagnostics"]["runtime"]["requested_device"] == "cuda"
 
 
 def test_real_mode_dispatches_yolo_custom_through_standard_yolo_loader(monkeypatch) -> None:
@@ -459,6 +499,13 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
     }
     assert by_id["yoloe"]["optional_extra"] == "visual-grounding-yoloe"
     assert {item["name"] for item in by_id["yoloe"]["runtime"]["checks"]} == {"ultralytics"}
+    assert by_id["yolo-world"]["optional_extra"] == "visual-grounding-yolo-world"
+    assert {item["name"] for item in by_id["yolo-world"]["runtime"]["checks"]} == {"ultralytics"}
+    assert by_id["omdet-turbo"]["optional_extra"] == "visual-grounding-omdet"
+    assert {item["name"] for item in by_id["omdet-turbo"]["runtime"]["checks"]} == {
+        "torch",
+        "transformers",
+    }
     assert by_id["mimo-v2-omni"]["role"] == "refiner_or_direct_producer"
     assert by_id["mimo-v2-omni"]["runtime"]["status"] in {"configured", "missing_config"}
     assert by_id["mimo-v2-omni"]["runtime"]["auth_mode"] in {
@@ -486,6 +533,8 @@ def test_configurable_service_lists_adapter_catalog_cli() -> None:
         "fake-http",
         "grounding-dino",
         "yoloe",
+        "yolo-world",
+        "omdet-turbo",
         "mimo-v2-omni",
         "qwen3-vl",
     }

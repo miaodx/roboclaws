@@ -100,6 +100,28 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
             "Ultralytics, the CLIP tokenizer package, and approved YOLOE weights."
         ),
     ),
+    "yolo-world": AdapterSpec(
+        producer_id="yolo-world",
+        role="proposer",
+        status="adapter_unavailable",
+        model_id="yolov8s-world.pt",
+        optional_extra="visual-grounding-yolo-world",
+        setup_hint=(
+            "Run the sidecar adapter with --adapter-mode real after explicitly installing "
+            "Ultralytics and approved YOLO-World weights."
+        ),
+    ),
+    "omdet-turbo": AdapterSpec(
+        producer_id="omdet-turbo",
+        role="proposer",
+        status="adapter_unavailable",
+        model_id="omlab/omdet-turbo-swin-tiny-hf",
+        optional_extra="visual-grounding-omdet",
+        setup_hint=(
+            "Run the sidecar adapter with --adapter-mode real after explicitly installing "
+            "Torch, Transformers, and approved OmDet-Turbo weights."
+        ),
+    ),
     "yolo-custom": AdapterSpec(
         producer_id="yolo-custom",
         role="proposer",
@@ -285,7 +307,7 @@ def adapter_runtime_status(producer_id: str) -> dict[str, Any]:
                 "in the sidecar environment."
             ),
         )
-    if producer_id in {"yoloe", "yolo-custom"}:
+    if producer_id in {"yoloe", "yolo-world", "yolo-custom"}:
         checks = _module_checks("ultralytics")
         return _dependency_runtime_status(
             checks=checks,
@@ -296,6 +318,19 @@ def adapter_runtime_status(producer_id: str) -> dict[str, Any]:
             missing_message=(
                 f"{producer_id} real mode requires importable ultralytics in the "
                 "sidecar environment."
+            ),
+        )
+    if producer_id == "omdet-turbo":
+        checks = _module_checks("torch", "transformers")
+        return _dependency_runtime_status(
+            checks=checks,
+            ready_message=(
+                "Torch and Transformers are importable; OmDet-Turbo weights are "
+                "verified only by a real adapter run."
+            ),
+            missing_message=(
+                "omdet-turbo real mode requires importable torch and transformers "
+                "in the sidecar environment."
             ),
         )
     if _is_hosted_vlm_producer(producer_id):
@@ -510,14 +545,24 @@ def _real_proposer_response(
             pipeline_id=pipeline_id,
             latency_ms=latency_ms,
         )
-    if producer_id in {"yoloe", "yolo-custom"}:
+    if producer_id in {"yoloe", "yolo-world", "yolo-custom"}:
         return _yolo_real_response(
             payload=payload,
             pipeline_id=pipeline_id,
             producer_id=producer_id,
             latency_ms=latency_ms,
         )
+    if producer_id == "omdet-turbo":
+        return _omdet_turbo_real_response(
+            payload=payload,
+            pipeline_id=pipeline_id,
+            latency_ms=latency_ms,
+        )
     return None
+
+
+class VisualGroundingDeviceError(RuntimeError):
+    """Requested sidecar model device is unavailable or invalid."""
 
 
 def _grounding_dino_real_response(
@@ -533,6 +578,20 @@ def _grounding_dino_real_response(
         "VISUAL_GROUNDING_DINO_MODEL_ID",
         spec.model_id,
     )
+    runtime_parameters = _request_runtime_parameters(payload, producer_id)
+    device_request = str(
+        runtime_parameters.get("device") or os.environ.get("VISUAL_GROUNDING_DEVICE", "auto")
+    )
+    dtype_request = str(
+        runtime_parameters.get("torch_dtype")
+        or runtime_parameters.get("dtype")
+        or os.environ.get("VISUAL_GROUNDING_TORCH_DTYPE", "auto")
+    )
+    runtime_diagnostics: dict[str, Any] = {
+        "requested_device": device_request,
+        "requested_dtype": dtype_request,
+        "runtime_parameters": runtime_parameters,
+    }
     try:
         image = _decode_request_image(payload)
         labels = _category_hints(payload)
@@ -546,17 +605,44 @@ def _grounding_dino_real_response(
                 candidates=[],
                 raw_proposals=[],
                 diagnostic_mode="real_grounding_dino",
+                stage_metadata={
+                    "runtime": runtime_diagnostics,
+                    "runtime_parameters": runtime_parameters,
+                },
+                diagnostics_extra={"runtime": runtime_diagnostics},
             )
-        processor, model, torch_module = _load_grounding_dino(model_id)
+        processor, model, torch_module, runtime_diagnostics = _load_grounding_dino(
+            model_id,
+            device_request,
+            dtype_request,
+        )
         text_labels = [[_label_prompt(label) for label in labels]]
         inputs = processor(images=image, text=text_labels, return_tensors="pt")
-        device = getattr(model, "device", None)
-        if device is not None and hasattr(inputs, "to"):
-            inputs = inputs.to(device)
+        device = runtime_diagnostics.get("device")
+        if device and hasattr(inputs, "to"):
+            inputs = inputs.to(str(device))
         with torch_module.no_grad():
             outputs = model(**inputs)
-        threshold = _float_env("VISUAL_GROUNDING_DINO_BOX_THRESHOLD", 0.35)
-        text_threshold = _float_env("VISUAL_GROUNDING_DINO_TEXT_THRESHOLD", 0.25)
+        threshold = _runtime_float_param(
+            runtime_parameters,
+            "box_threshold",
+            env_name="VISUAL_GROUNDING_DINO_BOX_THRESHOLD",
+            default=0.35,
+        )
+        text_threshold = _runtime_float_param(
+            runtime_parameters,
+            "text_threshold",
+            env_name="VISUAL_GROUNDING_DINO_TEXT_THRESHOLD",
+            default=0.25,
+        )
+        runtime_diagnostics = {
+            **runtime_diagnostics,
+            "runtime_parameters": {
+                **runtime_parameters,
+                "box_threshold": threshold,
+                "text_threshold": text_threshold,
+            },
+        }
         try:
             results = processor.post_process_grounded_object_detection(
                 outputs,
@@ -588,6 +674,11 @@ def _grounding_dino_real_response(
             candidates=candidates,
             raw_proposals=candidates,
             diagnostic_mode="real_grounding_dino",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_diagnostics["runtime_parameters"],
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
         )
     except ImportError as exc:
         return _real_adapter_failure_response(
@@ -603,6 +694,27 @@ def _grounding_dino_real_response(
                 {"stage": "proposer", "producer_id": producer_id},
                 spec,
             ),
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
+        )
+    except VisualGroundingDeviceError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="device_unavailable",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_grounding_dino",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
         )
     except Exception as exc:
         return _real_adapter_failure_response(
@@ -614,6 +726,11 @@ def _grounding_dino_real_response(
             message=str(exc),
             latency_ms=_elapsed_ms(started, minimum=latency_ms),
             diagnostic_mode="real_grounding_dino",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
         )
 
 
@@ -626,15 +743,18 @@ def _yolo_real_response(
 ) -> dict[str, Any]:
     started = time.monotonic()
     spec = ADAPTER_SPECS[producer_id]
-    env_name = (
-        "VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID"
-        if producer_id == "yolo-custom"
-        else "VISUAL_GROUNDING_YOLOE_MODEL_ID"
-    )
+    env_name = {
+        "yolo-custom": "VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID",
+        "yolo-world": "VISUAL_GROUNDING_YOLO_WORLD_MODEL_ID",
+    }.get(producer_id, "VISUAL_GROUNDING_YOLOE_MODEL_ID")
     model_id = _request_model_id(payload, producer_id) or os.environ.get(env_name, spec.model_id)
+    runtime_parameters = _request_runtime_parameters(payload, producer_id)
     try:
         image = _decode_request_image(payload)
-        labels = _yolo_prompt_labels(_category_hints(payload))
+        labels = _yolo_prompt_labels(
+            _category_hints(payload),
+            runtime_parameters=runtime_parameters,
+        )
         if not labels:
             return _real_adapter_ok_response(
                 pipeline_id=pipeline_id,
@@ -645,6 +765,8 @@ def _yolo_real_response(
                 candidates=[],
                 raw_proposals=[],
                 diagnostic_mode=f"real_{producer_id}",
+                stage_metadata={"runtime_parameters": runtime_parameters},
+                diagnostics_extra={"runtime_parameters": runtime_parameters},
             )
         model = _load_yolo_model(model_id, producer_id=producer_id)
         if hasattr(model, "set_classes"):
@@ -654,6 +776,7 @@ def _yolo_real_response(
             image=image,
             model=model,
             category_hints=labels,
+            runtime_parameters=runtime_parameters,
         )
         return _real_adapter_ok_response(
             pipeline_id=pipeline_id,
@@ -664,6 +787,8 @@ def _yolo_real_response(
             candidates=candidates,
             raw_proposals=candidates,
             diagnostic_mode=f"real_{producer_id}",
+            stage_metadata={"runtime_parameters": runtime_parameters},
+            diagnostics_extra={"runtime_parameters": runtime_parameters},
         )
     except ImportError as exc:
         return _real_adapter_failure_response(
@@ -679,6 +804,8 @@ def _yolo_real_response(
                 {"stage": "proposer", "producer_id": producer_id},
                 spec,
             ),
+            stage_metadata={"runtime_parameters": runtime_parameters},
+            diagnostics_extra={"runtime_parameters": runtime_parameters},
         )
     except Exception as exc:
         return _real_adapter_failure_response(
@@ -690,6 +817,46 @@ def _yolo_real_response(
             message=str(exc),
             latency_ms=_elapsed_ms(started, minimum=latency_ms),
             diagnostic_mode=f"real_{producer_id}",
+            stage_metadata={"runtime_parameters": runtime_parameters},
+            diagnostics_extra={"runtime_parameters": runtime_parameters},
+        )
+
+
+def _omdet_turbo_real_response(
+    *,
+    payload: dict[str, Any],
+    pipeline_id: str,
+    latency_ms: int,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    producer_id = "omdet-turbo"
+    spec = ADAPTER_SPECS[producer_id]
+    model_id = _request_model_id(payload, producer_id) or os.environ.get(
+        "VISUAL_GROUNDING_OMDET_MODEL_ID",
+        spec.model_id,
+    )
+    runtime_parameters = _request_runtime_parameters(payload, producer_id)
+    try:
+        raise ImportError(
+            "omdet-turbo real mode requires an approved sidecar adapter implementation "
+            "for the selected OmDet checkpoint"
+        )
+    except ImportError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="missing_dependency",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_omdet-turbo",
+            required_adapter=_required_adapter_record(
+                {"stage": "proposer", "producer_id": producer_id},
+                spec,
+            ),
+            stage_metadata={"runtime_parameters": runtime_parameters},
+            diagnostics_extra={"runtime_parameters": runtime_parameters},
         )
 
 
@@ -962,8 +1129,12 @@ def _required_adapter_record(
     }
 
 
-@lru_cache(maxsize=4)
-def _load_grounding_dino(model_id: str) -> tuple[Any, Any, Any]:
+@lru_cache(maxsize=8)
+def _load_grounding_dino(
+    model_id: str,
+    requested_device: str,
+    requested_dtype: str,
+) -> tuple[Any, Any, Any, dict[str, Any]]:
     try:
         import torch
         from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
@@ -972,10 +1143,95 @@ def _load_grounding_dino(model_id: str) -> tuple[Any, Any, Any]:
             "Grounding DINO real mode requires sidecar dependencies: transformers and torch"
         ) from exc
 
+    device = _resolve_torch_device(torch, requested_device)
+    dtype, dtype_name = _resolve_torch_dtype(torch, requested_dtype)
     processor = AutoProcessor.from_pretrained(model_id)
     model = AutoModelForZeroShotObjectDetection.from_pretrained(model_id)
+    try:
+        model = model.to(device)
+        if dtype is not None:
+            model = model.to(dtype=dtype)
+    except Exception as exc:
+        raise VisualGroundingDeviceError(
+            f"failed to place Grounding DINO on device={device} dtype={dtype_name}: {exc}"
+        ) from exc
     model.eval()
-    return processor, model, torch
+    runtime = _torch_runtime_diagnostics(
+        torch,
+        requested_device=requested_device,
+        requested_dtype=requested_dtype,
+        device=device,
+        dtype_name=dtype_name,
+        model_id=model_id,
+    )
+    return processor, model, torch, runtime
+
+
+def _resolve_torch_device(torch_module: Any, requested_device: str) -> str:
+    requested = str(requested_device or "auto").strip().lower()
+    if requested in {"", "auto"}:
+        return "cuda" if bool(torch_module.cuda.is_available()) else "cpu"
+    if requested.startswith("cuda") and not bool(torch_module.cuda.is_available()):
+        raise VisualGroundingDeviceError(
+            f"VISUAL_GROUNDING_DEVICE={requested} requested CUDA, but torch.cuda.is_available() "
+            "is false in the sidecar environment"
+        )
+    try:
+        torch_module.device(requested)
+    except Exception as exc:
+        raise VisualGroundingDeviceError(f"invalid VISUAL_GROUNDING_DEVICE={requested}") from exc
+    return requested
+
+
+def _resolve_torch_dtype(torch_module: Any, requested_dtype: str) -> tuple[Any | None, str]:
+    requested = str(requested_dtype or "auto").strip().lower()
+    if requested in {"", "auto", "none"}:
+        return None, "auto"
+    aliases = {
+        "fp16": "float16",
+        "float16": "float16",
+        "half": "float16",
+        "bf16": "bfloat16",
+        "bfloat16": "bfloat16",
+        "fp32": "float32",
+        "float32": "float32",
+    }
+    dtype_name = aliases.get(requested)
+    if dtype_name is None or not hasattr(torch_module, dtype_name):
+        raise VisualGroundingDeviceError(
+            "VISUAL_GROUNDING_TORCH_DTYPE must be one of auto, float16, bfloat16, or float32"
+        )
+    return getattr(torch_module, dtype_name), dtype_name
+
+
+def _torch_runtime_diagnostics(
+    torch_module: Any,
+    *,
+    requested_device: str,
+    requested_dtype: str,
+    device: str,
+    dtype_name: str,
+    model_id: str,
+) -> dict[str, Any]:
+    cuda_available = bool(torch_module.cuda.is_available())
+    diagnostics: dict[str, Any] = {
+        "model_id": model_id,
+        "requested_device": str(requested_device or "auto"),
+        "device": device,
+        "requested_dtype": str(requested_dtype or "auto"),
+        "dtype": dtype_name,
+        "torch_version": str(getattr(torch_module, "__version__", "")),
+        "cuda_available": cuda_available,
+    }
+    if cuda_available:
+        try:
+            diagnostics["cuda_device_count"] = int(torch_module.cuda.device_count())
+            current = int(torch_module.cuda.current_device())
+            diagnostics["cuda_current_device"] = current
+            diagnostics["cuda_device_name"] = str(torch_module.cuda.get_device_name(current))
+        except Exception:
+            diagnostics["cuda_device_count"] = int(torch_module.cuda.device_count())
+    return diagnostics
 
 
 @lru_cache(maxsize=4)
@@ -985,6 +1241,10 @@ def _load_yolo_model(model_id: str, *, producer_id: str) -> Any:
             from ultralytics import YOLO
 
             return YOLO(model_id)
+        if producer_id == "yolo-world":
+            from ultralytics import YOLOWorld
+
+            return YOLOWorld(model_id)
         from ultralytics import YOLOE
 
         return YOLOE(model_id)
@@ -1457,6 +1717,91 @@ def _request_model_id(payload: dict[str, Any], producer_id: str) -> str:
     return ""
 
 
+def _request_runtime_parameters(payload: dict[str, Any], producer_id: str) -> dict[str, Any]:
+    pipeline_request = payload.get("pipeline_request") or {}
+    for key in ("proposer", "refiner"):
+        item = pipeline_request.get(key) or {}
+        if str(item.get("producer_id") or "") != producer_id:
+            continue
+        params = item.get("runtime_parameters") or item.get("knobs") or {}
+        return _safe_runtime_parameters(params)
+    return {}
+
+
+def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    for key, item in value.items():
+        key_text = str(key)
+        if not key_text:
+            continue
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            safe[key_text] = item
+        elif isinstance(item, list):
+            safe[key_text] = [
+                child
+                for child in item
+                if isinstance(child, (str, int, float, bool)) or child is None
+            ]
+    return safe
+
+
+def _runtime_float_param(
+    runtime_parameters: dict[str, Any],
+    key: str,
+    *,
+    env_name: str,
+    default: float,
+) -> float:
+    value = runtime_parameters.get(key)
+    if value is None:
+        return _float_env(env_name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return _float_env(env_name, default)
+
+
+def _runtime_int_param(
+    runtime_parameters: dict[str, Any],
+    key: str,
+    *,
+    env_name: str,
+) -> int | None:
+    value = runtime_parameters.get(key)
+    if value is None:
+        return _int_env_optional(env_name)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return _int_env_optional(env_name)
+
+
+def _runtime_bool_param(
+    runtime_parameters: dict[str, Any],
+    key: str,
+    *,
+    env_name: str,
+    default: bool | None = None,
+) -> bool | None:
+    value = runtime_parameters.get(key)
+    if value is None:
+        if _env_is_set(env_name):
+            return _bool_env(env_name)
+        return default
+    if isinstance(value, bool):
+        return value
+    normalized = str(value).strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    if _env_is_set(env_name):
+        return _bool_env(env_name)
+    return default
+
+
 def _label_prompt(label: str) -> str:
     cleaned = str(label or "").strip()
     if not cleaned:
@@ -1500,27 +1845,62 @@ def _yolo_candidates_from_model(
     image: Image.Image,
     model: Any,
     category_hints: list[str],
+    runtime_parameters: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    threshold = _float_env("VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD", 0.25)
+    threshold = _runtime_float_param(
+        runtime_parameters,
+        "confidence_threshold",
+        env_name="VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD",
+        default=0.25,
+    )
     predict_kwargs: dict[str, Any] = {
         "conf": threshold,
         "verbose": False,
     }
-    imgsz = _int_env_optional("VISUAL_GROUNDING_YOLO_IMAGE_SIZE")
+    imgsz = _runtime_int_param(
+        runtime_parameters,
+        "image_size",
+        env_name="VISUAL_GROUNDING_YOLO_IMAGE_SIZE",
+    )
     if imgsz is not None:
         predict_kwargs["imgsz"] = imgsz
+    iou_value = runtime_parameters.get("iou_threshold")
     iou = _float_env_optional("VISUAL_GROUNDING_YOLO_IOU_THRESHOLD")
+    if iou_value is not None:
+        try:
+            iou = float(iou_value)
+        except (TypeError, ValueError):
+            pass
     if iou is not None:
         predict_kwargs["iou"] = iou
-    max_det = _int_env_optional("VISUAL_GROUNDING_YOLO_MAX_DET")
+    max_det = _runtime_int_param(
+        runtime_parameters,
+        "max_detections",
+        env_name="VISUAL_GROUNDING_YOLO_MAX_DET",
+    )
     if max_det is not None:
         predict_kwargs["max_det"] = max_det
-    if _env_is_set("VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS"):
-        predict_kwargs["agnostic_nms"] = _bool_env("VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS")
-    if _env_is_set("VISUAL_GROUNDING_YOLO_AUGMENT"):
-        predict_kwargs["augment"] = _bool_env("VISUAL_GROUNDING_YOLO_AUGMENT")
-    if _env_is_set("VISUAL_GROUNDING_YOLO_RETINA_MASKS"):
-        predict_kwargs["retina_masks"] = _bool_env("VISUAL_GROUNDING_YOLO_RETINA_MASKS")
+    agnostic_nms = _runtime_bool_param(
+        runtime_parameters,
+        "agnostic_nms",
+        env_name="VISUAL_GROUNDING_YOLO_AGNOSTIC_NMS",
+    )
+    if agnostic_nms is not None:
+        predict_kwargs["agnostic_nms"] = agnostic_nms
+    augment = _runtime_bool_param(
+        runtime_parameters,
+        "augment",
+        env_name="VISUAL_GROUNDING_YOLO_AUGMENT",
+    )
+    if augment is not None:
+        predict_kwargs["augment"] = augment
+    retina_masks = _runtime_bool_param(
+        runtime_parameters,
+        "retina_masks",
+        env_name="VISUAL_GROUNDING_YOLO_RETINA_MASKS",
+    )
+    if retina_masks is not None:
+        predict_kwargs["retina_masks"] = retina_masks
     with tempfile.NamedTemporaryFile(suffix=".jpg") as temp_image:
         image.save(temp_image.name, format="JPEG", quality=90)
         if hasattr(model, "predict"):
@@ -1575,8 +1955,19 @@ def _yolo_candidates_from_result(
     return candidates
 
 
-def _yolo_prompt_labels(category_hints: list[str]) -> list[str]:
-    if not _bool_env_default("VISUAL_GROUNDING_YOLO_EXPAND_CLEANUP_HINTS", True):
+def _yolo_prompt_labels(
+    category_hints: list[str],
+    *,
+    runtime_parameters: dict[str, Any] | None = None,
+) -> list[str]:
+    runtime_parameters = runtime_parameters or {}
+    expand = _runtime_bool_param(
+        runtime_parameters,
+        "prompt_expansion",
+        env_name="VISUAL_GROUNDING_YOLO_EXPAND_CLEANUP_HINTS",
+        default=True,
+    )
+    if not expand:
         return category_hints
     expansions = {
         "dish": ("dish", "plate", "bowl", "cup", "mug", "utensil"),
@@ -1631,31 +2022,37 @@ def _real_adapter_ok_response(
     candidates: list[dict[str, Any]],
     raw_proposals: list[dict[str, Any]],
     diagnostic_mode: str,
+    stage_metadata: dict[str, Any] | None = None,
+    diagnostics_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    stage_row = {
+        "stage": stage,
+        "producer_id": producer_id,
+        "model_id": model_id,
+        "version": "real-sidecar-adapter-v1",
+        "status": "ok",
+        "latency_ms": latency_ms,
+    }
+    if stage_metadata:
+        stage_row.update(stage_metadata)
+    diagnostics = {
+        "schema": "visual_grounding_diagnostics_v1",
+        "diagnostic_mode": diagnostic_mode,
+        "raw_proposals": raw_proposals,
+        "rejected_proposals": [],
+        "private_truth_included": False,
+    }
+    if diagnostics_extra:
+        diagnostics.update(diagnostics_extra)
     response = {
         "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
         "status": "ok",
         "pipeline": {
             "pipeline_id": pipeline_id,
-            "stages": [
-                {
-                    "stage": stage,
-                    "producer_id": producer_id,
-                    "model_id": model_id,
-                    "version": "real-sidecar-adapter-v1",
-                    "status": "ok",
-                    "latency_ms": latency_ms,
-                }
-            ],
+            "stages": [stage_row],
         },
         "candidates": candidates,
-        "diagnostics": {
-            "schema": "visual_grounding_diagnostics_v1",
-            "diagnostic_mode": diagnostic_mode,
-            "raw_proposals": raw_proposals,
-            "rejected_proposals": [],
-            "private_truth_included": False,
-        },
+        "diagnostics": diagnostics,
     }
     return validate_visual_grounding_response(response)
 
@@ -1789,6 +2186,8 @@ def _real_adapter_failure_response(
     latency_ms: int,
     diagnostic_mode: str,
     required_adapter: dict[str, Any] | None = None,
+    stage_metadata: dict[str, Any] | None = None,
+    diagnostics_extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     diagnostics = {
         "schema": "visual_grounding_diagnostics_v1",
@@ -1798,21 +2197,24 @@ def _real_adapter_failure_response(
         "rejected_proposals": [],
         "private_truth_included": False,
     }
+    if diagnostics_extra:
+        diagnostics.update(diagnostics_extra)
+    stage_row = {
+        "stage": stage,
+        "producer_id": producer_id,
+        "model_id": model_id,
+        "version": "real-sidecar-adapter-v1",
+        "status": reason,
+        "latency_ms": latency_ms,
+    }
+    if stage_metadata:
+        stage_row.update(stage_metadata)
     response = {
         "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
         "status": "failed",
         "pipeline": {
             "pipeline_id": pipeline_id,
-            "stages": [
-                {
-                    "stage": stage,
-                    "producer_id": producer_id,
-                    "model_id": model_id,
-                    "version": "real-sidecar-adapter-v1",
-                    "status": reason,
-                    "latency_ms": latency_ms,
-                }
-            ],
+            "stages": [stage_row],
         },
         "candidates": [],
         "error": {

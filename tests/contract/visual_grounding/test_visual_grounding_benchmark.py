@@ -435,6 +435,124 @@ def test_visual_grounding_benchmark_runs_against_configurable_contract_fake_serv
     assert all(item["failure_count"] == 0 for item in result["pipelines"])
 
 
+def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -> None:
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "visual_grounding_benchmark_matrix_v1",
+                "rows": [
+                    {
+                        "row_id": "dino-tiny-default",
+                        "pipeline_id": "grounding-dino",
+                        "model_family": "grounding-dino",
+                        "producer_id": "grounding-dino",
+                        "model_id": "IDEA-Research/grounding-dino-tiny",
+                        "size_tier": "tiny",
+                        "runtime_parameters": {
+                            "box_threshold": 0.35,
+                            "text_threshold": 0.25,
+                        },
+                    },
+                    {
+                        "row_id": "dino-base-recall",
+                        "pipeline_id": "grounding-dino",
+                        "model_family": "grounding-dino",
+                        "producer_id": "grounding-dino",
+                        "model_id": "IDEA-Research/grounding-dino-base",
+                        "size_tier": "base",
+                        "runtime_parameters": {
+                            "box_threshold": 0.25,
+                            "text_threshold": 0.2,
+                        },
+                    },
+                    {
+                        "row_id": "yolo-world-small",
+                        "pipeline_id": "yolo-world",
+                        "model_family": "yolo-world",
+                        "producer_id": "yolo-world",
+                        "model_id": "yolov8s-world.pt",
+                        "size_tier": "small",
+                        "runtime_parameters": {
+                            "confidence_threshold": 0.2,
+                            "image_size": 960,
+                            "prompt_expansion": True,
+                        },
+                        "under_sampled_reason": "unit test matrix intentionally has one row",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    server = _start_configurable_service(pipeline_id="contract-fake", adapter_mode="auto")
+    try:
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--corpus",
+                str(CORPUS),
+                "--output-dir",
+                str(tmp_path / "benchmark"),
+                "--matrix",
+                str(matrix),
+                "--base-url",
+                base_url,
+                "--timeout-s",
+                "2",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(CHECKER),
+            str(tmp_path / "benchmark"),
+            "--require-success",
+            "--require-candidates",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+
+    result = json.loads(
+        (tmp_path / "benchmark" / "visual_grounding_benchmark_result.json").read_text()
+    )
+    assert [item["benchmark_row_id"] for item in result["pipelines"]] == [
+        "dino-tiny-default",
+        "dino-base-recall",
+        "yolo-world-small",
+    ]
+    by_row = {item["benchmark_row_id"]: item for item in result["pipelines"]}
+    assert by_row["dino-base-recall"]["model_id"] == "IDEA-Research/grounding-dino-base"
+    assert by_row["dino-base-recall"]["runtime_parameters"]["box_threshold"] == 0.25
+    family = {item["model_family"]: item for item in result["family_sweep"]}
+    assert family["grounding-dino"]["under_sampled"] is False
+    assert family["grounding-dino"]["size_tiers"] == ["base", "tiny"]
+    assert family["yolo-world"]["under_sampled"] is True
+    assert family["yolo-world"]["under_sampled_reason"] == (
+        "unit test matrix intentionally has one row"
+    )
+    predictions = [
+        json.loads(line)
+        for line in (tmp_path / "benchmark" / "visual_grounding_predictions.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert {item["benchmark_row_id"] for item in predictions} == {
+        "dino-tiny-default",
+        "dino-base-recall",
+        "yolo-world-small",
+    }
+
+
 def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(
     tmp_path: Path,
     monkeypatch,

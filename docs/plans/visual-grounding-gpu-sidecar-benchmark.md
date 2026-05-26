@@ -296,3 +296,34 @@ without contract regressions.
 - Add a real Agibot G2 head-camera seed set before choosing a physical-robot
   default; the MolmoSpaces RAW_FPV corpus is sufficient for this simulator-side
   promotion gate.
+
+## Review Decision Reconciliation
+
+**Review date:** 2026-05-26
+**Review route:** `intuitive-flow` inline review. External `autoplan` was not
+run because this local work-network session must not launch system-provider
+Codex or Claude Code workflows.
+
+Accepted decisions:
+
+- Keep the public cleanup MCP tools and `POST /v1/visual-grounding/candidates`
+  HTTP contract unchanged.
+- Use a checked-in sidecar dependency project plus docs/recipes for
+  `.venv-visual-grounding/`, rather than moving CUDA Torch into the core
+  Roboclaws `.venv/`.
+- Add a compact benchmark matrix manifest so first-wave model ids, size tiers,
+  thresholds, image size, max detections, prompt expansion, and NMS knobs are
+  versioned as benchmark inputs.
+- Treat real CUDA benchmark and Codex/runtime cleanup reports as local hardware
+  gates. CI-safe tests should prove contract behavior, matrix expansion,
+  provenance, failure visibility, and private-label separation without claiming
+  real GPU model results.
+- Mark unavailable or one-size-only model families as under-sampled in the
+  benchmark output instead of using them for broad family rejection claims.
+
+Deferred decisions:
+
+- `yolo-custom` can be cataloged and benchmarked when weights are supplied, but
+  a generated cleanup ontology dataset remains a separate follow-up.
+- Real Agibot G2 head-camera seeds remain a physical-robot promotion input, not
+  a prerequisite for the MolmoSpaces RAW_FPV simulator-side benchmark gate.

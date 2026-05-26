@@ -156,6 +156,7 @@ just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-h
 just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
+just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
 just task::run ai2thor-nav openclaw
 just task::run photo-chairs codex
 just task::run territory vlm steps=20 agents=2
@@ -179,17 +180,22 @@ dispatcher:
 ```
 
 For real proposer sidecar probes, install the optional model dependencies and
-weights explicitly in the sidecar environment, then start the same service in
-real mode:
+weights explicitly in the dedicated sidecar environment, then start the same
+service in real-router mode:
 
 ```bash
+UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
+  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe
+
+VISUAL_GROUNDING_DEVICE=auto \
+VISUAL_GROUNDING_TORCH_DTYPE=auto \
 VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline grounding-dino --adapter-mode real
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
 
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline yoloe --adapter-mode real
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
 ```
 
 Hosted VLM refiner/direct-producer routes use the same sidecar binary and an

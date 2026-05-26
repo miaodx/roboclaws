@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         pipeline_ids = {str(item.get("pipeline_id") or "") for item in pipelines}
         _assert(args.expect_pipeline in pipeline_ids, f"missing pipeline {args.expect_pipeline}")
     _assert_private_label_detail_policy(result, allow=args.allow_private_label_details)
+    _assert_family_sweep(result)
 
     predictions = _load_jsonl(predictions_path)
     _assert(predictions, "predictions JSONL is empty")
@@ -77,6 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     _assert("Visual Grounding Quality" in report_text, "report missing grounding section")
     _assert("Destination Hint Quality" in report_text, "report missing destination section")
     _assert("Cost And Resource Telemetry" in report_text, "report missing telemetry section")
+    _assert("Family Sweep Coverage" in report_text, "report missing family sweep section")
     _assert(
         "End-To-End Probe Recommendation" in report_text,
         "report missing end-to-end probe recommendation",
@@ -94,8 +96,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _assert_pipeline(base_dir: Path, pipeline: dict[str, Any], *, args: argparse.Namespace) -> None:
+    _assert(pipeline.get("benchmark_row_id"), f"benchmark row id missing: {pipeline}")
     pipeline_id = str(pipeline.get("pipeline_id") or "")
     _assert(pipeline_id, f"pipeline id missing: {pipeline}")
+    _assert(pipeline.get("model_family"), f"model family missing: {pipeline_id}")
+    _assert("size_tier" in pipeline, f"size tier missing: {pipeline_id}")
+    _assert(
+        isinstance(pipeline.get("runtime_parameters"), dict),
+        f"runtime knobs missing: {pipeline_id}",
+    )
     _assert(pipeline.get("status") == "completed", f"pipeline not completed: {pipeline_id}")
     _assert(int(pipeline.get("observation_count") or 0) >= 1, f"no observations: {pipeline_id}")
     candidate_count = int(pipeline.get("candidate_count") or 0)
@@ -151,6 +160,7 @@ def _assert_prediction(
     _assert(prediction.get("schema") == PREDICTION_SCHEMA, f"bad prediction schema: {prediction}")
     pipeline_id = str(prediction.get("pipeline_id") or "")
     _assert(pipeline_id, f"prediction pipeline missing: {prediction}")
+    _assert(prediction.get("benchmark_row_id"), f"prediction row id missing: {prediction}")
     _assert(prediction.get("observation_id"), f"prediction observation missing: {prediction}")
     capture_context = prediction.get("capture_context") or {}
     _assert(
@@ -199,6 +209,22 @@ def _assert_candidate(candidate: dict[str, Any]) -> None:
             number = float(value)
             _assert(0.0 <= number <= 1.0, f"bbox value out of range: {candidate}")
     _assert("destination_hint" in candidate, f"destination hint evidence missing: {candidate}")
+
+
+def _assert_family_sweep(result: dict[str, Any]) -> None:
+    rows = list(result.get("family_sweep") or [])
+    _assert(rows, "family sweep summary missing")
+    for row in rows:
+        family = str(row.get("model_family") or "")
+        _assert(family, f"family sweep row missing family: {row}")
+        tested = int(row.get("tested_config_count") or 0)
+        _assert(tested >= 1, f"family has no tested configs: {family}")
+        _assert(isinstance(row.get("row_ids"), list), f"family row ids missing: {family}")
+        _assert(isinstance(row.get("size_tiers"), list), f"family size tiers missing: {family}")
+        _assert(isinstance(row.get("under_sampled"), bool), f"under-sampled flag bad: {family}")
+        if tested < 2:
+            _assert(row.get("under_sampled") is True, f"family not marked under-sampled: {family}")
+            _assert(row.get("under_sampled_reason"), f"under-sampled reason missing: {family}")
 
 
 def _assert_diagnostic_evidence(prediction: dict[str, Any]) -> None:

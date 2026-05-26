@@ -61,6 +61,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Pipeline id to run. May be repeated or comma-separated.",
     )
     parser.add_argument(
+        "--matrix",
+        type=Path,
+        default=None,
+        help=(
+            "Optional benchmark matrix JSON. Rows version model ids, size tiers, "
+            "and runtime knobs; --pipeline then acts as a row/pipeline filter."
+        ),
+    )
+    parser.add_argument(
         "--base-url",
         default=os.environ.get("VISUAL_GROUNDING_BASE_URL", DEFAULT_VISUAL_GROUNDING_BASE_URL),
         help="External visual-grounding service base URL.",
@@ -86,29 +95,43 @@ def main(argv: list[str] | None = None) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     corpus = _load_corpus(args.corpus)
-    pipeline_ids = _pipeline_ids(args.pipeline)
+    benchmark_rows = _benchmark_rows(args)
     predictions_path = output_dir / "visual_grounding_predictions.jsonl"
     all_predictions: list[dict[str, Any]] = []
     pipeline_results: list[dict[str, Any]] = []
 
     with predictions_path.open("w", encoding="utf-8") as predictions_file:
-        for pipeline_id in pipeline_ids:
+        for row in benchmark_rows:
+            pipeline_id = str(row["pipeline_id"])
             config = VisualGroundingClientConfig(
                 pipeline_id=pipeline_id,
                 base_url=args.base_url,
                 timeout_s=args.timeout_s,
                 api_key=os.environ.get("VISUAL_GROUNDING_API_KEY", ""),
-                proposer_id=os.environ.get("VISUAL_GROUNDING_PROPOSER_ID", ""),
-                proposer_model_id=os.environ.get("VISUAL_GROUNDING_PROPOSER_MODEL_ID", ""),
-                refiner_id=os.environ.get("VISUAL_GROUNDING_REFINER_ID", ""),
-                refiner_model_id=os.environ.get("VISUAL_GROUNDING_REFINER_MODEL_ID", ""),
+                proposer_id=str(
+                    row.get("producer_id")
+                    or row.get("proposer_id")
+                    or os.environ.get("VISUAL_GROUNDING_PROPOSER_ID", "")
+                ),
+                proposer_model_id=str(
+                    row.get("model_id")
+                    or row.get("proposer_model_id")
+                    or os.environ.get("VISUAL_GROUNDING_PROPOSER_MODEL_ID", "")
+                ),
+                refiner_id=str(
+                    row.get("refiner_id") or os.environ.get("VISUAL_GROUNDING_REFINER_ID", "")
+                ),
+                refiner_model_id=str(
+                    row.get("refiner_model_id")
+                    or os.environ.get("VISUAL_GROUNDING_REFINER_MODEL_ID", "")
+                ),
             )
             client = HttpVisualGroundingClient(config)
             predictions = _run_pipeline(
                 corpus=corpus,
                 corpus_path=args.corpus,
                 output_dir=output_dir,
-                pipeline_id=pipeline_id,
+                benchmark_row=row,
                 client=client,
             )
             for prediction in predictions:
@@ -117,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
             pipeline_results.append(
                 _summarize_pipeline(
                     pipeline_id=pipeline_id,
+                    benchmark_row=row,
                     predictions=predictions,
                     corpus=corpus,
                     auth_mode=config.auth_mode,
@@ -140,6 +164,7 @@ def main(argv: list[str] | None = None) -> int:
             "private_label_details_included": bool(args.include_private_label_details),
         },
         "pipelines": pipeline_results,
+        "family_sweep": _family_sweep_summary(pipeline_results),
         "ranking": ranking,
         "recommendation": {
             "pipeline_id": recommendation.get("pipeline_id", ""),
@@ -175,6 +200,97 @@ def _load_corpus(path: Path) -> dict[str, Any]:
     return corpus
 
 
+def _benchmark_rows(args: argparse.Namespace) -> list[dict[str, Any]]:
+    filters = set(_pipeline_ids(args.pipeline)) if args.pipeline else set()
+    if args.matrix is None:
+        pipeline_ids = _pipeline_ids(args.pipeline)
+        return [_default_benchmark_row(pipeline_id) for pipeline_id in pipeline_ids]
+
+    matrix = json.loads(args.matrix.read_text(encoding="utf-8"))
+    if matrix.get("schema") != "visual_grounding_benchmark_matrix_v1":
+        raise SystemExit(f"unsupported benchmark matrix schema in {args.matrix}")
+    rows = [_normalize_benchmark_row(row) for row in matrix.get("rows") or []]
+    if not rows:
+        raise SystemExit(f"benchmark matrix has no rows: {args.matrix}")
+    if filters:
+        rows = [
+            row
+            for row in rows
+            if str(row.get("row_id") or "") in filters
+            or str(row.get("pipeline_id") or "") in filters
+            or str(row.get("model_family") or "") in filters
+        ]
+    if not rows:
+        raise SystemExit(f"benchmark matrix filters selected no rows: {sorted(filters)}")
+    return rows
+
+
+def _default_benchmark_row(pipeline_id: str) -> dict[str, Any]:
+    family = _pipeline_family(pipeline_id)
+    return {
+        "row_id": pipeline_id,
+        "pipeline_id": pipeline_id,
+        "model_family": family,
+        "model_id": "",
+        "size_tier": "unspecified",
+        "runtime_parameters": {},
+        "under_sampled_reason": "ad-hoc pipeline run without a matrix row",
+    }
+
+
+def _normalize_benchmark_row(row: dict[str, Any]) -> dict[str, Any]:
+    pipeline_id = str(row.get("pipeline_id") or "").strip()
+    if not pipeline_id:
+        raise SystemExit(f"benchmark matrix row missing pipeline_id: {row}")
+    runtime_parameters = _safe_runtime_parameters(
+        row.get("runtime_parameters") or row.get("knobs") or {}
+    )
+    model_family = str(
+        row.get("model_family") or row.get("family") or _pipeline_family(pipeline_id)
+    )
+    model_id = str(row.get("model_id") or row.get("proposer_model_id") or "")
+    size_tier = str(row.get("size_tier") or row.get("size") or "unspecified")
+    row_id = str(row.get("row_id") or "").strip()
+    if not row_id:
+        row_id = _safe_id("-".join(part for part in (pipeline_id, model_family, size_tier) if part))
+    normalized = {
+        "row_id": row_id,
+        "pipeline_id": pipeline_id,
+        "model_family": model_family,
+        "model_id": model_id,
+        "size_tier": size_tier,
+        "producer_id": str(row.get("producer_id") or row.get("proposer_id") or ""),
+        "proposer_model_id": model_id,
+        "refiner_id": str(row.get("refiner_id") or ""),
+        "refiner_model_id": str(row.get("refiner_model_id") or ""),
+        "runtime_parameters": runtime_parameters,
+        "under_sampled_reason": str(row.get("under_sampled_reason") or ""),
+        "notes": str(row.get("notes") or ""),
+    }
+    return normalized
+
+
+def _pipeline_family(pipeline_id: str) -> str:
+    first = pipeline_id.split("+", maxsplit=1)[0]
+    return first.removesuffix("-direct")
+
+
+def _safe_runtime_parameters(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    for key, item in value.items():
+        if isinstance(item, (str, int, float, bool)) or item is None:
+            safe[str(key)] = item
+        elif isinstance(item, list):
+            safe[str(key)] = [
+                child
+                for child in item
+                if isinstance(child, (str, int, float, bool)) or child is None
+            ]
+    return safe
+
+
 def _pipeline_ids(raw_values: list[str]) -> list[str]:
     values = raw_values or [os.environ.get("VISUAL_GROUNDING_PIPELINE_ID", "fake-http")]
     pipeline_ids: list[str] = []
@@ -190,10 +306,11 @@ def _run_pipeline(
     corpus: dict[str, Any],
     corpus_path: Path,
     output_dir: Path,
-    pipeline_id: str,
+    benchmark_row: dict[str, Any],
     client: HttpVisualGroundingClient,
 ) -> list[dict[str, Any]]:
     predictions: list[dict[str, Any]] = []
+    pipeline_id = str(benchmark_row["pipeline_id"])
     category_family_map = {
         str(key): str(value) for key, value in (corpus.get("category_family_map") or {}).items()
     }
@@ -219,8 +336,8 @@ def _run_pipeline(
                 "width": int(image.width),
                 "height": int(image.height),
             },
-            proposer=_proposer_request(pipeline_id, client.config),
-            refiner=_refiner_request(pipeline_id, client.config),
+            proposer=_proposer_request(benchmark_row, client.config),
+            refiner=_refiner_request(benchmark_row, client.config),
         )
 
         started = time.monotonic()
@@ -249,6 +366,7 @@ def _run_pipeline(
         _write_overlay(output_dir / overlay_rel, image, candidates)
         prediction = {
             "schema": PREDICTION_SCHEMA,
+            "benchmark_row_id": str(benchmark_row.get("row_id") or pipeline_id),
             "pipeline_id": pipeline_id,
             "observation_id": str(observation.get("observation_id") or ""),
             "waypoint_id": str(observation.get("waypoint_id") or ""),
@@ -261,6 +379,7 @@ def _run_pipeline(
             "raw_fpv_path": str(raw_rel),
             "overlay_path": str(overlay_rel),
             "pipeline": pipeline_summary,
+            "benchmark_row": _public_benchmark_row(benchmark_row),
             "candidate_count": len(candidates),
             "candidates": _public_candidates(candidates, category_family_map),
             "diagnostic_evidence": diagnostics,
@@ -274,6 +393,7 @@ def _run_pipeline(
 def _summarize_pipeline(
     *,
     pipeline_id: str,
+    benchmark_row: dict[str, Any],
     predictions: list[dict[str, Any]],
     corpus: dict[str, Any],
     auth_mode: str,
@@ -295,7 +415,13 @@ def _summarize_pipeline(
     latencies = [int(item["pipeline"].get("request_latency_ms") or 0) for item in predictions]
     overlays = [str(item["overlay_path"]) for item in predictions]
     result = {
+        "benchmark_row_id": str(benchmark_row.get("row_id") or pipeline_id),
         "pipeline_id": pipeline_id,
+        "model_family": str(benchmark_row.get("model_family") or _pipeline_family(pipeline_id)),
+        "model_id": str(benchmark_row.get("model_id") or ""),
+        "size_tier": str(benchmark_row.get("size_tier") or "unspecified"),
+        "runtime_parameters": dict(benchmark_row.get("runtime_parameters") or {}),
+        "under_sampled_reason": str(benchmark_row.get("under_sampled_reason") or ""),
         "status": "completed",
         "auth_mode": _pipeline_auth_mode(predictions, fallback=auth_mode),
         "service_config": service_config,
@@ -351,11 +477,17 @@ def _stage_summary(predictions: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "status_counts": defaultdict(int),
                     "latencies": [],
                     "observation_count": 0,
+                    "runtime": {},
+                    "runtime_parameters": {},
                 },
             )
             row["observation_count"] += 1
             row["status_counts"][str(stage.get("status") or "ok")] += 1
             row["latencies"].append(int(stage.get("latency_ms") or 0))
+            if isinstance(stage.get("runtime"), dict) and not row["runtime"]:
+                row["runtime"] = dict(stage["runtime"])
+            if isinstance(stage.get("runtime_parameters"), dict):
+                row["runtime_parameters"].update(stage["runtime_parameters"])
 
     output: list[dict[str, Any]] = []
     for row in summaries.values():
@@ -503,7 +635,12 @@ def _rank_pipelines(pipeline_results: list[dict[str, Any]]) -> list[dict[str, An
         )
         ranking.append(
             {
+                "benchmark_row_id": result.get("benchmark_row_id", result.get("pipeline_id", "")),
                 "pipeline_id": result.get("pipeline_id", ""),
+                "model_family": result.get("model_family", ""),
+                "model_id": result.get("model_id", ""),
+                "size_tier": result.get("size_tier", ""),
+                "runtime_parameters": result.get("runtime_parameters", {}),
                 "score": round(score, 6),
                 "recall": metrics.get("recall", 0.0),
                 "precision": metrics.get("precision", 0.0),
@@ -527,6 +664,42 @@ def _rank_pipelines(pipeline_results: list[dict[str, Any]]) -> list[dict[str, An
     )
 
 
+def _family_sweep_summary(pipeline_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    families: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for result in pipeline_results:
+        family = str(
+            result.get("model_family") or _pipeline_family(str(result.get("pipeline_id") or ""))
+        )
+        families[family].append(result)
+
+    summaries: list[dict[str, Any]] = []
+    for family, rows in sorted(families.items()):
+        size_tiers = sorted({str(row.get("size_tier") or "unspecified") for row in rows})
+        model_ids = sorted({str(row.get("model_id") or "") for row in rows if row.get("model_id")})
+        row_ids = [str(row.get("benchmark_row_id") or row.get("pipeline_id") or "") for row in rows]
+        under_sampled = len(rows) < 2
+        explicit_reasons = [
+            str(row.get("under_sampled_reason") or "")
+            for row in rows
+            if str(row.get("under_sampled_reason") or "")
+        ]
+        reason = ""
+        if under_sampled:
+            reason = explicit_reasons[0] if explicit_reasons else "fewer than two rows tested"
+        summaries.append(
+            {
+                "model_family": family,
+                "tested_config_count": len(rows),
+                "row_ids": row_ids,
+                "size_tiers": size_tiers,
+                "model_ids": model_ids,
+                "under_sampled": under_sampled,
+                "under_sampled_reason": reason,
+            }
+        )
+    return summaries
+
+
 def _promotion_recommendation(
     pipeline_results: list[dict[str, Any]],
     ranking: list[dict[str, Any]],
@@ -548,6 +721,7 @@ def _promotion_recommendation(
         {
             "slot": "control",
             "pipeline_id": "sim",
+            "benchmark_row_id": "sim",
             "reason": "Pipeline-control baseline for end-to-end cleanup comparison.",
         }
     ]
@@ -569,7 +743,16 @@ def _promotion_recommendation(
         ),
     ):
         if pipeline_id and pipeline_id not in {item["pipeline_id"] for item in selected}:
-            selected.append({"slot": slot, "pipeline_id": pipeline_id, "reason": reason})
+            selected.append(
+                {
+                    "slot": slot,
+                    "pipeline_id": pipeline_id,
+                    "benchmark_row_id": str(
+                        (by_id.get(pipeline_id) or {}).get("benchmark_row_id") or pipeline_id
+                    ),
+                    "reason": reason,
+                }
+            )
 
     selected_pipeline_ids = [item["pipeline_id"] for item in selected]
     evidence_levels = {
@@ -627,7 +810,10 @@ def _pipeline_kind(pipeline: dict[str, Any]) -> str:
 def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]]) -> str:
     pipeline_rows = "\n".join(
         "<tr>"
+        f"<td>{escape(str(row.get('benchmark_row_id', '')))}</td>"
         f"<td>{escape(str(row.get('pipeline_id', '')))}</td>"
+        f"<td>{escape(str(row.get('model_family', '')))}</td>"
+        f"<td>{escape(str(row.get('size_tier', '')))}</td>"
         f"<td>{escape(str(row.get('score', 0)))}</td>"
         f"<td>{escape(str(row.get('recall', 0)))}</td>"
         f"<td>{escape(str(row.get('precision', 0)))}</td>"
@@ -658,6 +844,9 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
         _telemetry_report_rows(pipeline) for pipeline in result.get("pipelines") or []
     )
     promotion_rows = "\n".join(_promotion_report_rows(result.get("promotion_recommendation") or {}))
+    family_rows = "\n".join(
+        _family_sweep_report_rows(row) for row in result.get("family_sweep") or []
+    )
     promotion = result.get("promotion_recommendation") or {}
     promotion_gate_text = (
         f"Real stage provenance present: {promotion.get('real_stage_provenance_present', False)}. "
@@ -690,11 +879,20 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
   <h2>Pipeline Ranking</h2>
   <table>
     <tr>
-      <th>Pipeline</th><th>Score</th><th>Recall</th><th>Precision</th>
+      <th>Row</th><th>Pipeline</th><th>Family</th><th>Size</th>
+      <th>Score</th><th>Recall</th><th>Precision</th>
       <th>Failure rate</th><th>Timeout rate</th><th>Mean latency ms</th>
       <th>Evidence level</th>
     </tr>
     {pipeline_rows}
+  </table>
+  <h2>Family Sweep Coverage</h2>
+  <table>
+    <tr>
+      <th>Family</th><th>Rows tested</th><th>Size tiers</th>
+      <th>Under-sampled</th><th>Reason</th>
+    </tr>
+    {family_rows}
   </table>
   <h2>End-To-End Probe Recommendation</h2>
   <p>
@@ -733,7 +931,7 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
   <table>
     <tr>
       <th>Pipeline</th><th>Stage</th><th>Producer</th><th>Model</th>
-      <th>Status</th><th>Latency avg ms</th>
+      <th>Status</th><th>Latency avg ms</th><th>Device</th><th>Dtype</th><th>CUDA</th>
     </tr>
     {stage_rows}
   </table>
@@ -751,6 +949,7 @@ def _stage_report_rows(pipeline: dict[str, Any]) -> str:
     rows = []
     pipeline_id = str(pipeline.get("pipeline_id") or "")
     for stage in pipeline.get("stage_summary") or []:
+        runtime = stage.get("runtime") or {}
         rows.append(
             "<tr>"
             f"<td>{escape(pipeline_id)}</td>"
@@ -759,6 +958,9 @@ def _stage_report_rows(pipeline: dict[str, Any]) -> str:
             f"<td>{escape(str(stage.get('model_id', '')))}</td>"
             f"<td>{escape(str(stage.get('status', '')))}</td>"
             f"<td>{escape(str(stage.get('latency_ms_avg', 0)))}</td>"
+            f"<td>{escape(str(runtime.get('device', '')))}</td>"
+            f"<td>{escape(str(runtime.get('dtype', '')))}</td>"
+            f"<td>{escape(str(runtime.get('cuda_available', '')))}</td>"
             "</tr>"
         )
     return "\n".join(rows)
@@ -809,6 +1011,18 @@ def _promotion_report_rows(promotion: dict[str, Any]) -> str:
             "</tr>"
         )
     return "\n".join(rows)
+
+
+def _family_sweep_report_rows(row: dict[str, Any]) -> str:
+    return (
+        "<tr>"
+        f"<td>{escape(str(row.get('model_family') or ''))}</td>"
+        f"<td>{escape(str(row.get('tested_config_count') or 0))}</td>"
+        f"<td>{escape(', '.join(str(item) for item in row.get('size_tiers') or []))}</td>"
+        f"<td>{escape(str(row.get('under_sampled', False)))}</td>"
+        f"<td>{escape(str(row.get('under_sampled_reason') or ''))}</td>"
+        "</tr>"
+    )
 
 
 def _load_observation_image(
@@ -1031,15 +1245,38 @@ def _pipeline_evidence_level(predictions: list[dict[str, Any]]) -> str:
     return "service_reported"
 
 
-def _proposer_request(pipeline_id: str, config: VisualGroundingClientConfig) -> dict[str, str]:
-    first = pipeline_id.split("+", maxsplit=1)[0]
+def _public_benchmark_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        "producer_id": config.proposer_id or first,
-        "model_id": config.proposer_model_id or "",
+        "row_id": str(row.get("row_id") or ""),
+        "pipeline_id": str(row.get("pipeline_id") or ""),
+        "model_family": str(row.get("model_family") or ""),
+        "model_id": str(row.get("model_id") or ""),
+        "size_tier": str(row.get("size_tier") or ""),
+        "runtime_parameters": dict(row.get("runtime_parameters") or {}),
     }
 
 
-def _refiner_request(pipeline_id: str, config: VisualGroundingClientConfig) -> dict[str, str]:
+def _proposer_request(
+    benchmark_row: dict[str, Any],
+    config: VisualGroundingClientConfig,
+) -> dict[str, Any]:
+    pipeline_id = str(benchmark_row["pipeline_id"])
+    first = pipeline_id.split("+", maxsplit=1)[0]
+    request = {
+        "producer_id": config.proposer_id or first,
+        "model_id": config.proposer_model_id or str(benchmark_row.get("model_id") or ""),
+    }
+    runtime_parameters = dict(benchmark_row.get("runtime_parameters") or {})
+    if runtime_parameters:
+        request["runtime_parameters"] = runtime_parameters
+    return request
+
+
+def _refiner_request(
+    benchmark_row: dict[str, Any],
+    config: VisualGroundingClientConfig,
+) -> dict[str, Any]:
+    pipeline_id = str(benchmark_row["pipeline_id"])
     parts = pipeline_id.split("+", maxsplit=1)
     if config.refiner_id or len(parts) > 1:
         return {
