@@ -91,8 +91,9 @@ behavior.
 
 ```bash
 cp .env.example .env
-# Fill CODEX_BASE_URL / CODEX_API_KEY for Codex.
+# Fill XM_LLM_API_KEY for the default Codex mify route.
 # Fill MIMO_TP_KEY or KIMI_API_KEY for Claude Code and OpenClaw routes.
+# Optional: fill CODEX_BASE_URL / CODEX_API_KEY only for non-mify Codex debugging.
 ```
 
 Detached live Codex sessions inherit selected API keys and proxy variables
@@ -101,7 +102,10 @@ exported in the invoking shell at launch time. They also source repo-local
 
 Run `just code::codex-provider-smoke` locally before long Codex visual runs to
 verify the `.env`-configured Responses-compatible endpoint works with the pinned
-Docker-backed Codex CLI. Hosted CI does not run Codex or Codex provider smoke.
+Docker-backed Codex CLI. When `XM_LLM_API_KEY` is present, Codex defaults to the
+internal multi-model aggregator (`mify`, `xiaomi/mimo-v2-omni`, Responses API)
+and disables web search because that gateway phase does not support Codex's web
+search tool. Hosted CI does not run Codex or Codex provider smoke.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 

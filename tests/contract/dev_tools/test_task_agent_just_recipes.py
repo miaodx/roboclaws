@@ -18,6 +18,7 @@ AGENT_JUST = JUST_DIR / "agent.just"
 CODE_JUST = JUST_DIR / "code.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
+CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
@@ -32,6 +33,8 @@ CODE_AGENT_ENV_VARS = (
     "OPENAI_API_KEY",
     "CODEX_BASE_URL",
     "CODEX_API_KEY",
+    "XM_LLM_BASE_URL",
+    "XM_LLM_API_KEY",
 )
 
 
@@ -579,6 +582,125 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
     ]
 
 
+def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_API_KEY=fake-xm-key
+            args=()
+            roboclaws_codex_provider_args args
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        (
+            "mify model=xiaomi/mimo-v2-omni "
+            "base_url=https://api.llm.mioffice.cn/v1 key_env=XM_LLM_API_KEY "
+            "protocol=responses"
+        ),
+        "-c",
+        'model="xiaomi/mimo-v2-omni"',
+        "-c",
+        'model_provider="mify"',
+        "-c",
+        'model_providers.mify.name="mify"',
+        "-c",
+        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
+        "-c",
+        'model_providers.mify.env_key="XM_LLM_API_KEY"',
+        "-c",
+        'model_providers.mify.wire_api="responses"',
+        "-c",
+        'web_search="disabled"',
+    ]
+
+
+def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_router() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_API_KEY=fake-xm-key
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            CODEX_BASE_URL=https://api-router.evad.mioffice.cn/v1
+            CODEX_API_KEY=fake-codex-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "mify",
+        "-c",
+        'model="xiaomi/mimo-v2-omni"',
+        "-c",
+        'model_provider="mify"',
+        "-c",
+        'model_providers.mify.name="mify"',
+        "-c",
+        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
+        "-c",
+        'model_providers.mify.env_key="XM_LLM_API_KEY"',
+        "-c",
+        'model_providers.mify.wire_api="responses"',
+        "-c",
+        'web_search="disabled"',
+    ]
+
+
+def test_coding_agent_codex_mify_base_url_alone_does_not_shadow_codex_env() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "codex-env"
+
+
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
@@ -824,6 +946,7 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     helper_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
+    docker_text = CODING_AGENT_DOCKER.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "source scripts/dev/coding_agent_env.sh" in code_text
@@ -849,6 +972,10 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in molmo_text
     assert '"--codex-model-arg=$arg"' in molmo_text
     assert "--codex-provider-summary" in molmo_text
+    assert "XM_LLM_API_KEY" in molmo_text
+    assert "XM_LLM_BASE_URL" in molmo_text
+    assert "XM_LLM_API_KEY" in docker_text
+    assert "XM_LLM_BASE_URL" in docker_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text

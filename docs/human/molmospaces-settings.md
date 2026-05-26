@@ -364,17 +364,19 @@ way as the direct navigation demos. Normal users configure keys only; command
 shape controls behavior.
 
 ```bash
-CODEX_BASE_URL=https://example.internal/v1
-CODEX_API_KEY=...
+XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+XM_LLM_API_KEY=...
 MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```
 
-Codex repo workflows infer the endpoint from `CODEX_BASE_URL` and
-`CODEX_API_KEY`. Claude Code prefers MiMo when `MIMO_TP_KEY` is present, then
-Kimi when `KIMI_API_KEY` is present. Bare system CLIs are outside the supported
-path unless a human explicitly asks for a debugging run. Before a long Codex
-visual cleanup run, use:
+Codex repo workflows default to the internal multi-model aggregator when
+`XM_LLM_API_KEY` is present (`mify`, `xiaomi/mimo-v2-omni`, Responses API, web
+search disabled). `CODEX_BASE_URL` and `CODEX_API_KEY` remain available only
+for explicit non-mify Codex debugging. Claude Code prefers MiMo when
+`MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present. Bare system
+CLIs are outside the supported path unless a human explicitly asks for a
+debugging run. Before a long Codex visual cleanup run, use:
 
 ```bash
 just code::codex-provider-smoke

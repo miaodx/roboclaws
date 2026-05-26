@@ -46,8 +46,9 @@ Last updated: 2026-05-19
 - Detached Codex Molmo runs pass selected exported API/proxy environment
   variables into tmux, and the Docker-backed coding-agent wrapper forwards
   proxy variables into Codex.
-- Local Codex runs are configured from the repo-local `.env` via
-  `CODEX_BASE_URL`, `CODEX_API_KEY`, and supported provider/model settings.
+- Local Codex runs are configured from the repo-local `.env`. The default route
+  is the internal multi-model aggregator via `XM_LLM_API_KEY`; explicit
+  `CODEX_BASE_URL` / `CODEX_API_KEY` remains available for non-mify debugging.
   Hosted CI does not support Codex, Codex provider smoke, or Codex acceptance
   artifacts.
 - The local Codex Nav2 cleanup command explicitly selects

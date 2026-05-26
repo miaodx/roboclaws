@@ -91,10 +91,11 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 verification gates. Do not run system-provider Claude Code or Codex workflows
 on the work network. Claude Code recipes may run there only when the repo-local
 `.env` contains a supported MiMo or Kimi key. Codex recipes may run there only
-when `CODEX_BASE_URL` and `CODEX_API_KEY` configure the repo-local Codex route.
-Model-only overrides do not bypass the guard. Guarded recipes should fail
-before launching when the work-network probe is reachable and no allowed
-repo-local key route is available.
+when `XM_LLM_API_KEY` configures the default repo-local mify route, or when
+`CODEX_BASE_URL` and `CODEX_API_KEY` configure an explicit non-mify Codex route.
+Model-only overrides do not bypass the guard. Guarded recipes should fail before
+launching when the work-network probe is reachable and no allowed repo-local key
+route is available.
 
 ### 1.1.2 Coding-agent permissions
 
@@ -128,13 +129,15 @@ set -a && source .env && set +a
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
-#   CODEX_BASE_URL / CODEX_API_KEY — Codex-compatible endpoint for live agents
+#   XM_LLM_API_KEY       — internal multi-model aggregator, default Codex route
+#   XM_LLM_BASE_URL      — optional override; defaults to https://api.llm.mioffice.cn/v1
+#   CODEX_BASE_URL / CODEX_API_KEY — optional non-mify Codex endpoint for live agents
 ```
 
 Sanity check:
 
 ```bash
-python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('XM_LLM_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
 ```
 
 `.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.

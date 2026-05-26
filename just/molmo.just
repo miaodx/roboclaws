@@ -382,6 +382,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           tmux_env_args=()
           for env_name in \
             OPENAI_API_KEY CODEX_API_KEY CODEX_BASE_URL KIMI_API_KEY MIMO_TP_KEY \
+            XM_LLM_API_KEY XM_LLM_BASE_URL \
             HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
             http_proxy https_proxy all_proxy no_proxy \
             DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \

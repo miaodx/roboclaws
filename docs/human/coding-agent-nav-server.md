@@ -41,14 +41,16 @@ that run as outside the supported demo path.
 
 To run these demos without editing user-level Codex or Claude Code config, copy
 `.env.example` to `.env` and fill the keys you have. Normal users configure
-keys only; command shape controls behavior. Codex uses `CODEX_BASE_URL` and
-`CODEX_API_KEY`; Claude Code prefers `MIMO_TP_KEY` when present, then
-`KIMI_API_KEY`, and otherwise falls back to the host system provider only off
-the work network.
+keys only; command shape controls behavior. Codex defaults to the internal
+multi-model aggregator when `XM_LLM_API_KEY` is present (`mify`,
+`xiaomi/mimo-v2-omni`, Responses API, web search disabled). `CODEX_BASE_URL`
+and `CODEX_API_KEY` remain available only for explicit non-mify Codex
+debugging. Claude Code prefers `MIMO_TP_KEY` when present, then `KIMI_API_KEY`,
+and otherwise falls back to the host system provider only off the work network.
 
 ```bash
-CODEX_BASE_URL=https://example.internal/v1
-CODEX_API_KEY=...
+XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+XM_LLM_API_KEY=...
 MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```

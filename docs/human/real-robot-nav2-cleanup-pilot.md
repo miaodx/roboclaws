@@ -103,8 +103,8 @@ just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
-`CODEX_BASE_URL`, `CODEX_API_KEY`, and the desired repo-supported Codex model in
-the repo-local `.env`, then run:
+`XM_LLM_API_KEY` in the repo-local `.env` to use the default internal mify route
+(`xiaomi/mimo-v2-omni`, Responses API), then run:
 
 ```bash
 just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
