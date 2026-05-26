@@ -90,6 +90,12 @@ from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
 )
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
+SEMANTIC_SWEEP_POLICY = "semantic_sweep_baseline"
+SEMANTIC_SWEEP_CAMERA_SCHEDULE: tuple[dict[str, float], ...] = (
+    {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
+    {"yaw_delta_deg": -30.0, "pitch_delta_deg": 0.0},
+    {"yaw_delta_deg": 60.0, "pitch_delta_deg": 0.0},
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -132,6 +138,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--cleanup-profile",
         choices=cleanup_profile_names(),
         help="Public Molmo cleanup profile selected by the command facade.",
+    )
+    parser.add_argument(
+        "--semantic-sweep",
+        action="store_true",
+        help=(
+            "Visit inspection waypoints and update the runtime metric map without "
+            "attempting cleanup actions."
+        ),
+    )
+    parser.add_argument(
+        "--runtime-map-prior",
+        type=Path,
+        help="Prior runtime_metric_map.json snapshot to seed this run as non-actionable priors.",
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
@@ -185,6 +204,8 @@ def run_realworld_cleanup(
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
+    semantic_sweep: bool = False,
+    runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
     use_planner_proof_for_cleanup_primitives: bool = False,
@@ -213,6 +234,7 @@ def run_realworld_cleanup(
         raise ValueError(
             "use_planner_proof_for_cleanup_primitives requires planner_proof_run_result"
         )
+    runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
 
     backend_instance: Any | None = None
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -242,6 +264,7 @@ def run_realworld_cleanup(
         visual_grounding_pipeline_id=visual_grounding,
         visual_grounding_artifact_base_dir=output_dir,
         visual_grounding_run_id=f"seed-{seed}",
+        runtime_map_prior=runtime_map_prior,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -281,11 +304,12 @@ def run_realworld_cleanup(
         trace_events, started_at, "fixture_hints", {}, contract.fixture_hints
     )
 
-    policy_name = (
-        CAMERA_MODEL_POLICY_NAME
-        if perception_mode == CAMERA_MODEL_POLICY_MODE
-        else DETERMINISTIC_SWEEP_POLICY
-    )
+    if semantic_sweep:
+        policy_name = SEMANTIC_SWEEP_POLICY
+    elif perception_mode == CAMERA_MODEL_POLICY_MODE:
+        policy_name = CAMERA_MODEL_POLICY_NAME
+    else:
+        policy_name = DETERMINISTIC_SWEEP_POLICY
     agent_scratchpad = empty_skill_scratchpad(
         note="Deterministic direct demo scratchpad; cleanup_worklist is authoritative."
     )
@@ -301,30 +325,49 @@ def run_realworld_cleanup(
             {"waypoint_id": waypoint_id},
             lambda selected=waypoint_id: contract.navigate_to_waypoint(selected),
         )
-        observation = _call_tool(
-            trace_events,
-            started_at,
-            "observe",
-            {},
-            contract.observe,
-            postprocess=lambda response: _attach_raw_fpv_robot_view(
-                response=response,
-                contract=contract,
-                base_contract=base_contract,
-                robot_view_steps=robot_view_steps,
-                output_dir=output_dir,
-                view_index_ref=[view_index],
-                record_robot_views=record_robot_views,
-            ),
+        camera_schedule = (
+            SEMANTIC_SWEEP_CAMERA_SCHEDULE
+            if semantic_sweep
+            else ({"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},)
         )
-        view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
-        detections = _detections_for_policy(
-            trace_events=trace_events,
-            started_at=started_at,
-            contract=contract,
-            observation=observation,
-            perception_mode=perception_mode,
-        )
+        detections = []
+        for camera_index, camera_step in enumerate(camera_schedule):
+            if semantic_sweep and camera_index > 0:
+                _call_tool(
+                    trace_events,
+                    started_at,
+                    "adjust_camera",
+                    dict(camera_step),
+                    lambda step=camera_step: contract.adjust_camera(**step),
+                )
+            observation = _call_tool(
+                trace_events,
+                started_at,
+                "observe",
+                {},
+                contract.observe,
+                postprocess=lambda response: _attach_raw_fpv_robot_view(
+                    response=response,
+                    contract=contract,
+                    base_contract=base_contract,
+                    robot_view_steps=robot_view_steps,
+                    output_dir=output_dir,
+                    view_index_ref=[view_index],
+                    record_robot_views=record_robot_views,
+                ),
+            )
+            view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
+            detections.extend(
+                _detections_for_policy(
+                    trace_events=trace_events,
+                    started_at=started_at,
+                    contract=contract,
+                    observation=observation,
+                    perception_mode=perception_mode,
+                )
+            )
+        if semantic_sweep:
+            continue
         for detection in detections:
             handle = str(detection["object_id"])
             if handle in handled_handles:
@@ -378,7 +421,11 @@ def run_realworld_cleanup(
         started_at,
         "done",
         {"reason": f"{policy_name} complete"},
-        lambda: contract.done(f"{policy_name} complete"),
+        lambda: (
+            _semantic_sweep_done(contract, base_contract, f"{policy_name} complete")
+            if semantic_sweep
+            else contract.done(f"{policy_name} complete")
+        ),
     )
 
     after_snapshot = _write_snapshot(
@@ -401,8 +448,10 @@ def run_realworld_cleanup(
     write_trace_jsonl(trace_path, trace_events)
 
     agent_view_path = output_dir / "agent_view.json"
+    runtime_metric_map_path = output_dir / "runtime_metric_map.json"
     private_evaluation_path = output_dir / "private_evaluation.json"
     agent_view = contract.agent_view_payload()
+    runtime_metric_map = agent_view.get("runtime_metric_map", {})
     cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
     real_robot_readiness = real_robot_readiness_from_events(
         agent_view=agent_view,
@@ -416,6 +465,9 @@ def run_realworld_cleanup(
         scenario_id=scenario.scenario_id,
     )
     agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
+    runtime_metric_map_path.write_text(
+        json.dumps(runtime_metric_map, indent=2, sort_keys=True) + "\n"
+    )
     private_evaluation_path.write_text(
         json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
     )
@@ -483,6 +535,13 @@ def run_realworld_cleanup(
         "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
+        "semantic_sweep_mode": semantic_sweep,
+        "cleanup_actions_disabled": semantic_sweep,
+        "runtime_metric_map_prior": {
+            "loaded": bool(runtime_map_prior),
+            "source": str(runtime_map_prior_path or ""),
+            "observed_object_count": len((runtime_map_prior or {}).get("observed_objects") or []),
+        },
         "visual_grounding_pipeline_id": contract.visual_grounding_pipeline_id,
         "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": private_evaluation["generated_mess_count"],
@@ -496,6 +555,7 @@ def run_realworld_cleanup(
         "cleanup_policy_trace": cleanup_policy_trace,
         "real_robot_readiness": real_robot_readiness,
         "agent_view": agent_view,
+        "runtime_metric_map": runtime_metric_map,
         "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
         "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
         "model_declared_observations": agent_view.get("model_declared_observations", []),
@@ -503,6 +563,12 @@ def run_realworld_cleanup(
             "model_declared_observation_evidence",
             {},
         ),
+        "semantic_sweep": {
+            "enabled": semantic_sweep,
+            "camera_schedule": list(SEMANTIC_SWEEP_CAMERA_SCHEDULE) if semantic_sweep else [],
+            "snapshot_artifact": str(runtime_metric_map_path) if semantic_sweep else "",
+            "cleanup_actions_disabled": semantic_sweep,
+        },
         "agent_scratchpad": agent_scratchpad,
         "private_evaluation": private_evaluation,
         "advisory_evaluation": advisory_evaluation,
@@ -513,6 +579,7 @@ def run_realworld_cleanup(
         "backend_tool_event_counts": done["tool_event_counts"],
         "artifacts": {
             "agent_view": str(agent_view_path),
+            "runtime_metric_map": str(runtime_metric_map_path),
             "private_evaluation": str(private_evaluation_path),
             "advisory_evaluation": str(advisory_evaluation_path),
             "agent_scratchpad": str(agent_scratchpad_path),
@@ -568,6 +635,40 @@ def run_realworld_cleanup(
     run_result_path = output_dir / "run_result.json"
     run_result_path.write_text(json.dumps(run_result, indent=2, sort_keys=True) + "\n")
     return run_result
+
+
+def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    prior_path = Path(path)
+    return json.loads(prior_path.read_text(encoding="utf-8"))
+
+
+def _semantic_sweep_done(
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    reason: str,
+) -> dict[str, Any]:
+    done = base_contract.done(reason=reason)
+    score = dict(done["score"])
+    final_locations = dict(done["final_locations"])
+    metrics = contract._realworld_metrics(score, final_locations)  # noqa: SLF001
+    score.update(metrics)
+    return {
+        "ok": True,
+        "tool": "done",
+        "status": "ok",
+        "reason": reason,
+        "cleanup_status": "semantic_sweep_complete",
+        "score": score,
+        "final_locations": final_locations,
+        "final_containment": done.get("final_containment", {}),
+        "tool_event_counts": done.get("tool_event_counts", {}),
+        "contract": REALWORLD_CONTRACT,
+        "policy_uses_private_truth": False,
+        "semantic_sweep_mode": True,
+        "cleanup_actions_disabled": True,
+    }
 
 
 def _detections_for_policy(
@@ -897,6 +998,8 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,
+        semantic_sweep=args.semantic_sweep,
+        runtime_map_prior_path=args.runtime_map_prior,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,
         visual_grounding=args.visual_grounding,

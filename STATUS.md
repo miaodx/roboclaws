@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-22
+Last updated: 2026-05-26
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -10,8 +10,14 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible, honest, and aligned with future real-robot backends.
 
-The active follow-up is the Agibot SDK runner backend boundary for
-`real_robot_cleanup_v1`. Roboclaws keeps the cleanup-shaped public contract and
+The active follow-up is the online-first Runtime Metric Map for MolmoSpaces
+cleanup. The current implementation keeps one map surface, adds
+`runtime_metric_map_v1` to `metric_map()`, Agent View, run artifacts, reports,
+and checkers, and supports semantic sweep snapshots plus non-actionable prior
+seeding for later cleanup runs.
+
+The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
+separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
 calls the SDK runner through a subprocess CLI; the SDK runner owns Agibot GDK
 map, observation, navigation, and per-stage evidence.
 
@@ -22,11 +28,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-The MolmoSpaces Agibot contract rehearsal now has a Roboclaws-owned command,
-fixture-backed contract evidence, an opt-in simulated `cleanup-actions` mode,
-and local MolmoSpaces/Codex reports with FPV, map, chase, and verification
-imagery. Review those reports, then keep real Agibot G2 validation as a separate
-next confidence layer. The current proof level remains simulated rehearsal only.
+Review the runtime-map, semantic-sweep, and prior-seeded cleanup reports from
+`docs/plans/auto-semantic-map-build.md`, then keep real visual-grounding model
+promotion and real Agibot G2 validation as separate confidence layers. The
+current proof level remains synthetic/fake-HTTP plus simulated rehearsal unless
+a local real-service run is explicitly performed.
 
 ## Current Blocker
 
@@ -49,6 +55,8 @@ local non-work-network runs also support OpenClaw.
   `docs/plans/agibot-robot-map-9-semantic-actions-rehearsal.md`
 - MolmoSpaces Agibot contract rehearsal:
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`
+- Auto semantic map build:
+  `docs/plans/auto-semantic-map-build.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 

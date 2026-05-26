@@ -325,9 +325,14 @@ class RealWorldMolmoCleanupMCPServer:
             scenario_id=self.scenario.scenario_id,
         )
         agent_view_path = self.run_dir / "agent_view.json"
+        runtime_metric_map_path = self.run_dir / "runtime_metric_map.json"
         private_evaluation_path = self.run_dir / "private_evaluation.json"
         advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
+        runtime_metric_map = agent_view.get("runtime_metric_map", {})
         agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
+        runtime_metric_map_path.write_text(
+            json.dumps(runtime_metric_map, indent=2, sort_keys=True) + "\n"
+        )
         private_evaluation_path.write_text(
             json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
         )
@@ -381,6 +386,7 @@ class RealWorldMolmoCleanupMCPServer:
             "cleanup_policy_trace": cleanup_policy_trace,
             "real_robot_readiness": real_robot_readiness,
             "agent_view": agent_view,
+            "runtime_metric_map": runtime_metric_map,
             "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
             "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
             "model_declared_observations": agent_view.get("model_declared_observations", []),
@@ -400,6 +406,7 @@ class RealWorldMolmoCleanupMCPServer:
             "agent_diagnostics": diagnostics,
             "artifacts": {
                 "agent_view": str(agent_view_path),
+                "runtime_metric_map": str(runtime_metric_map_path),
                 "private_evaluation": str(private_evaluation_path),
                 "advisory_evaluation": str(advisory_evaluation_path),
                 "agent_scratchpad": str(agent_scratchpad_path),

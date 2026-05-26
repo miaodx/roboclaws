@@ -44,6 +44,128 @@ def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
     )
 
 
+def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+    )
+    runtime_map = json.loads((tmp_path / "runtime_metric_map.json").read_text())
+    assert runtime_map["schema"] == checker.RUNTIME_METRIC_MAP_SCHEMA
+    assert "Runtime Metric Map" in (tmp_path / "report.html").read_text()
+
+
+def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        allow_partial_cleanup=True,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_camera_model_policy=True,
+    )
+    counts = result["tool_event_counts"]
+    assert counts["adjust_camera:request"] >= 1
+    assert counts.get("pick:request") is None
+    assert result["runtime_metric_map"]["observed_objects"]
+
+
+def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result["runtime_metric_map"]["observed_objects"][0]["target_receptacle_id"] = "sink_01"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
+def test_checker_rejects_actionable_runtime_map_prior(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    sweep = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "sweep",
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "cleanup",
+        seed=7,
+        runtime_map_prior_path=sweep["artifacts"]["runtime_metric_map"],
+    )
+    prior = next(
+        item
+        for item in result["runtime_metric_map"]["observed_objects"]
+        if item["freshness"] == "prior"
+    )
+    prior["actionability"] = "actionable"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path / "cleanup",
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
+def test_checker_allows_actionable_current_run_confirmation_of_prior(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    current = result["runtime_metric_map"]["observed_objects"][0]
+    current["freshness"] = "current_run"
+    current["prior_object_id"] = "observed_prior_001"
+    current["snapshot_object_id"] = "observed_prior_001"
+    current["actionability"] = "actionable"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+    )
+
+
 def test_checker_accepts_smoke_profile_metadata_and_report_note(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

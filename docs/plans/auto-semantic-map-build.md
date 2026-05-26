@@ -1,3 +1,5 @@
+<!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260526-132517.md -->
+
 # Auto Semantic Map Build
 
 **Status:** Proposed source plan
@@ -268,6 +270,39 @@ after the HTTP service is available.
 - The checker can prove semantic sweep mode did not call cleanup actions.
 
 ## Implementation Slices
+
+## Intuitive-Flow Review Reconciliation
+
+**Review status:** Reconciled inline on 2026-05-26 because the gstack
+`autoplan` executable tree was not available in this checkout; only the skill
+document was present. The restore point above preserves the original plan state.
+
+Accepted review decisions:
+
+- Keep the first implementation to Slices 1 and 2: runtime-map schema/report
+  evidence plus online cleanup updates.
+- Reuse existing public cleanup contract surfaces: `metric_map()`, Agent View,
+  `observed_objects`, `cleanup_worklist`, model-declared observations, and the
+  existing fake/HTTP visual-grounding lanes.
+- Add `runtime_metric_map_v1` as a payload inside Agent View and run artifacts,
+  not as a new MCP tool.
+- Treat `static_map`, `observed_objects`, and `map_update_candidates` as
+  separate report/checker sections. `map_update_candidates` may be empty in the
+  first implementation, but the schema field must exist.
+- Require checker coverage for private-truth exclusion, no movable objects in
+  static map fixtures, prior actionability rules when priors are present, and
+  sweep-mode cleanup-action prohibition once sweep mode exists.
+- Defer Slice 3 and later work until Slices 1 and 2 are artifact-backed:
+  semantic sweep mode, snapshot priors/merge, and real visual-grounding promotion
+  remain follow-up slices.
+
+Rejected/deferred review decisions:
+
+- Do not add `semantic_map()` or any separate public MCP tool in this phase.
+- Do not introduce a new persistent source-map writer or mutate
+  `map_bundle/semantics.json`.
+- Do not require real detector/refiner models for the first implementation gate;
+  deterministic, model-declared, and fake HTTP producer evidence are sufficient.
 
 ### Slice 1: Runtime map schema and report evidence
 
