@@ -30,7 +30,10 @@ cleaned handles and 8/10 exact private matches. It is still not the default
 because latency and token usage are much higher than proposer-only Grounding
 DINO. `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` is the cheaper
 Gemini comparison lane. Do not promote the Qwen 8B refiner despite its
-perception-benchmark precision; it over-rejected in the cleanup loop.
+perception-benchmark precision; it over-rejected in the cleanup loop. Keep
+`grounding-dino+mimo-v2-omni` as the MiMo comparison baseline rather than the
+preferred refiner: it works with a 240s timeout, but its same-matrix cleanup
+result is below both Gemini refiners.
 
 ## Selection Summary
 
@@ -42,7 +45,7 @@ perception-benchmark precision; it over-rejected in the cleanup loop.
 | `grounding-dino+vertex_ai/gemini-3-flash-preview` | Quality refiner candidate | Best same-matrix Gemini/Qwen cleanup result, but high latency and token use. |
 | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Cheaper Gemini refiner comparison | Partial cleanup success; much better E2E behavior than Qwen 8B, but below Gemini 3-flash. |
 | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Conservative refiner comparison | Best perception-benchmark precision, but over-rejected in cleanup E2E and failed. |
-| `grounding-dino+mimo-v2-omni` | Slow quality opt-in | Only refiner route with same-matrix cleanup E2E evidence, but default 20s timeout fails. |
+| `grounding-dino+mimo-v2-omni` | Slow MiMo comparison baseline | Needs 240s timeout and landed below both Gemini refiners in same-matrix cleanup. |
 | `mimo-v2-omni-direct` | Experimental direct VLM | Token-plan route has the best direct-VLM benchmark score, but no same-matrix end-to-end cleanup report yet. |
 | `xiaomi/mimo-v2-omni-direct` | Aggregation-route experiment | Works through the internal aggregation route, but was slower and less stable than the token-plan MiMo route. |
 | `vertex_ai/gemini-3.1-flash-lite-preview-direct` | Fast hosted-VLM experiment | Fastest healthy provider-prefixed route, but current recall/precision are too low for default. |
@@ -205,19 +208,31 @@ noted.
 | Direct proposer-only | `grounding-dino` | 20 | n/a | 4 | 3/10 | 1.0 | Passed |
 | MCP smoke proposer-only | `grounding-dino` | 20 | 14 | 4 | 3/10 | 1.0 | Passed |
 | Live Codex proposer-only | `grounding-dino` | 24 | 16 | 4 | 3/10 | 1.0 | Partial success |
-| Direct proposer+refiner, default timeout | `grounding-dino+mimo-v2-omni` | 0 | 14 | 0 | n/a | n/a | Failed usefully |
-| Direct proposer+refiner, 240s timeout | `grounding-dino+mimo-v2-omni` | 17 | 14 | 7 | 5/10 | 1.0 | Passed |
+| Direct proposer+refiner, default timeout | `grounding-dino+mimo-v2-omni` | 0 | 14 | 0 | 0/10 | 1.0 | Failed usefully |
+| Direct proposer+refiner, 240s timeout | `grounding-dino+mimo-v2-omni` | 17 | 14 | 7 | 5/10 | 1.0 | Partial success |
 | Direct proposer+refiner | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 3 | 14 | 1 | 0/10 | 1.0 | Failed |
 | Direct proposer+refiner | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 19 | 14 | 8 | 6/10 | 1.0 | Partial success |
 | Direct proposer+refiner | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 30 | 14 | 10 | 8/10 | 1.0 | Passed |
 
-Gemini/Qwen refiner check telemetry:
+Refiner cleanup telemetry:
 
 | Pipeline | Refiner calls | Avg refiner latency | Total refiner tokens | Avg proposer latency |
 | --- | ---: | ---: | ---: | ---: |
+| `grounding-dino+mimo-v2-omni`, default timeout | 0 | n/a | n/a | n/a |
+| `grounding-dino+mimo-v2-omni`, 240s timeout | 14 | 30934ms | 68080 | 4334ms |
 | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 14 | 8311ms | 32601 | 4518ms |
 | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 14 | 9104ms | 46713 | 4277ms |
 | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 14 | 19815ms | 78282 | 4284ms |
+
+Refiner decision summary:
+
+| Default candidate | Use when | Avoid when |
+| --- | --- | --- |
+| `grounding-dino` | Need the current stable default with known direct/MCP/Codex cleanup evidence. | Need maximum cleanup quality and can pay VLM-refiner latency. |
+| `grounding-dino+vertex_ai/gemini-3-flash-preview` | Need best tested cleanup quality: 10 cleaned handles and 8/10 exact matches. | Need predictable runtime or low token use. |
+| `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Need a cheaper Gemini refiner with partial-success E2E behavior. | Need the best exact-match rate. |
+| `grounding-dino+mimo-v2-omni` | Need a MiMo baseline or provider diversity comparison. | Running with default timeout, or choosing the strongest current refiner. |
+| `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Need a conservative Qwen comparison route. | Running cleanup E2E; it over-rejected and failed this seed. |
 
 Cleanup artifacts:
 
@@ -259,13 +274,15 @@ cleanup loop; it looked precise in the isolated benchmark but over-rejected in
 E2E, producing only 3 candidates, 1 cleaned handle, and 0/10 exact private
 matches.
 
-`grounding-dino+mimo-v2-omni` remains the useful quality reference because it
-has same-matrix cleanup proof. It improved the end-to-end cleanup run from 4
-cleaned handles / 3 exact private matches to 7 cleaned handles / 5 exact private
-matches, but only after increasing `VISUAL_GROUNDING_TIMEOUT_S` to 240 seconds.
-With the default 20 second timeout, it produced visible timeout failures and
-zero fabricated simulator labels, which is the correct failure mode but not a
-usable default.
+`grounding-dino+mimo-v2-omni` remains a useful MiMo comparison baseline. It
+improved the end-to-end cleanup run from 4 cleaned handles / 3 exact private
+matches to 7 cleaned handles / 5 exact private matches, but only after
+increasing `VISUAL_GROUNDING_TIMEOUT_S` to 240 seconds. With the default 20
+second timeout, it produced visible timeout failures and zero fabricated
+simulator labels, which is the correct failure mode but not a usable default.
+After the Gemini/Qwen refiner checks, MiMo is no longer the strongest hosted
+refiner candidate on this seed: Gemini 3.1 flash-lite and Gemini 3-flash both
+cleaned more handles and hit more exact private matches.
 
 `mimo-v2-omni-direct` has promising benchmark evidence but needs an end-to-end
 cleanup run before it can be promoted. The internal aggregation route model id
