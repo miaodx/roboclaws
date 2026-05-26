@@ -11,7 +11,11 @@ from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PROFILE
-from roboclaws.molmo_cleanup.realworld_contract import RAW_FPV_ONLY_MODE, REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    RAW_FPV_ONLY_MODE,
+    REALWORLD_CONTRACT,
+)
 from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.realworld_mcp_server import (
@@ -340,3 +344,38 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert hasattr(image_block, "data")
     assert isinstance(image_block.data, bytes)
     assert len(image_block.data) > 0
+
+
+def test_realworld_mcp_camera_labels_declare_response_is_agent_compact(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        declaration = {}
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            observation = server.call_tool("observe")
+            declaration = server.call_tool(
+                "declare_visual_candidates",
+                observation_id=observation["raw_fpv_observation"]["observation_id"],
+            )
+            if declaration["model_declared_observations"]:
+                break
+        agent_view = server._agent_view_payload()
+    finally:
+        server.close()
+
+    assert declaration["ok"] is True
+    assert declaration["visual_grounding_pipeline"]["pipeline_id"] == "sim"
+    assert declaration["model_declared_observations"]
+    assert declaration["camera_model_candidates"]
+    assert "model_declared_observation_evidence" not in declaration
+    assert "visual_grounding_pipeline" not in declaration["model_declared_observations"][0]
+    assert "model_declared_observation" not in declaration["camera_model_candidates"][0]
+    assert agent_view["camera_model_policy_evidence"]["visual_grounding_pipeline_id"] == "sim"

@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -53,6 +53,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     cleanup_routine="{{cleanup_routine}}"
     robot_views="{{robot_views}}"
     visual_grounding="{{visual_grounding}}"
+    visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -70,6 +71,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     robot_views="${robot_views#robot_views=}"
     robot_views="${robot_views#record_robot_views=}"
     visual_grounding="${visual_grounding#visual_grounding=}"
+    visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout_s=}"
+    visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -107,6 +110,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     visual_grounding_args=()
     if [[ "$visual_grounding" != "sim" ]]; then
       visual_grounding_args=(--visual-grounding "$visual_grounding")
+      if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
+        visual_grounding_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
+      fi
     fi
     case "$profile" in
       smoke)
@@ -268,7 +274,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. This is the trace-preserving RAW_FPV skill lane. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, sweep every inspection waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, and mark a waypoint complete only after that waypoint_id has a roboclaws__observe response. Inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call roboclaws__navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), target_fixture_id, evidence_note, and image_region before pick. Use image_region={type:bbox,value:[x,y,width,height]} or {type:verbal_region,value:front of desk}; do not send bare x/y/width/height fields. Omit source_fixture_id unless you are confident. If visual candidate grounding is unresolved, continue the waypoint sweep instead of calling done; if your successful cleanup count is still below seven, reobserve from another public waypoint or retry the candidate at most once with a broader category or clearer verbal_region. When grounding succeeds, pick the returned object and place it using candidate_fixture_id and recommended_tool from the response when present, and increment your successful cleanup count only after the place/place_inside succeeds. Do not pre-register raw-FPV candidates with roboclaws__declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place when grounding succeeds, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed and at least seven grounded cleanup chains have succeeded so the report is generated."
             ;;
           camera-labels)
-            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates, and treat returned candidates as coming from the configured visual-grounding pipeline without asking for service URLs, credentials, image paths, or model hosts. Clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
+            kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: when the next action is an MCP tool call, make that tool call before writing progress text and never end a turn by saying you will call a tool later. Call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, call roboclaws__declare_visual_candidates for each raw FPV observation before choosing cleanup candidates with observation_id only and omit candidates so the configured visual-grounding pipeline produces labels, and treat returned candidates as coming from that pipeline without asking for service URLs, credentials, image paths, or model hosts. Clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
             ;;
           *)
             kickoff_prompt="Read skills/molmo-realworld-cleanup/SKILL.md. Then use the roboclaws MCP cleanup tools only: call roboclaws__metric_map and roboclaws__fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with roboclaws__navigate_to_waypoint then roboclaws__observe, mark a waypoint complete only after that waypoint_id has an observe response, clean plausible observed objects with navigate->pick->navigate->open?->place following required_tool if returned, do not call scene_objects or read private scoring artifacts, compare the checklist before roboclaws__done, visit any missing waypoint_id, and call roboclaws__done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."

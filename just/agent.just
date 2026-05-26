@@ -78,7 +78,7 @@ run task driver mode="" *overrides:
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
         profile|scene|scenes|seed|seeds|souls|steps|task|timeout_s|\
-        visual_grounding|wall_budget)
+        visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -290,9 +290,11 @@ run task driver mode="" *overrides:
         esac
         robot_views="$(get robot_views "$(get record_robot_views auto)")"
         visual_grounding="$(get visual_grounding sim)"
+        visual_grounding_timeout_s="$(get visual_grounding_timeout_s "$(get visual_grounding_timeout auto)")"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
-          "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding"
+          "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
+          "$visual_grounding_timeout_s"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

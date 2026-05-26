@@ -40,6 +40,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
     parser.add_argument("--codex-provider-summary", default="system defaults")
+    parser.add_argument("--codex-max-continuations", type=int, default=8)
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -217,38 +218,91 @@ class LiveCodexCleanupRunner:
             print(f"==> Codex provider for this run: {self.args.codex_provider_summary}")
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
-        command = [
-            self.args.codex_bin,
-            "exec",
-            "--json",
-            "--output-last-message",
-            last_message_cli_path,
-            *self.args.codex_model_arg,
-            FULL_PERMISSION_ARG,
-            "--cd",
-            agent_cd,
-            self.args.kickoff_prompt,
-        ]
-        (self.run_dir / "codex-command.txt").write_text(
-            " ".join(_shell_quote(item) for item in command) + "\n",
-            encoding="utf-8",
-        )
-        codex_events_path = self.run_dir / "codex-events.jsonl"
-        try:
+        event_paths: list[Path] = []
+        max_turns = max(1, int(self.args.codex_max_continuations) + 1)
+        for turn_index in range(max_turns):
+            is_initial_turn = turn_index == 0
+            prompt = (
+                self.args.kickoff_prompt
+                if is_initial_turn
+                else _codex_continuation_prompt(turn_index=turn_index)
+            )
+            suffix = "" if is_initial_turn else f"-continuation-{turn_index}"
+            turn_last_message_cli_path = (
+                last_message_cli_path
+                if is_initial_turn
+                else last_message_cli_path.replace(".md", f"{suffix}.md")
+            )
+            turn_last_message_host_path = (
+                last_message_host_path
+                if is_initial_turn
+                else last_message_host_path.with_name(f"codex-last-message{suffix}.md")
+            )
+            command = [
+                self.args.codex_bin,
+                "exec",
+                "--json",
+                "--output-last-message",
+                turn_last_message_cli_path,
+                *self.args.codex_model_arg,
+                FULL_PERMISSION_ARG,
+                "--cd",
+                agent_cd,
+                prompt,
+            ]
+            command_path = (
+                self.run_dir / "codex-command.txt"
+                if is_initial_turn
+                else self.run_dir / f"codex-command{suffix}.txt"
+            )
+            command_path.write_text(
+                " ".join(_shell_quote(item) for item in command) + "\n",
+                encoding="utf-8",
+            )
+            codex_events_path = (
+                self.run_dir / "codex-events.jsonl"
+                if is_initial_turn
+                else self.run_dir / f"codex-events{suffix}.jsonl"
+            )
+            stderr_path = (
+                self.run_dir / "codex.stderr.log"
+                if is_initial_turn
+                else self.run_dir / f"codex{suffix}.stderr.log"
+            )
+            print(
+                "==> Codex turn "
+                f"{turn_index + 1}/{max_turns}" + ("" if is_initial_turn else " (continuation)")
+            )
             status = _run_and_tee(
                 command,
                 cwd=agent_task_dir,
                 stdout_path=codex_events_path,
-                stderr_path=self.run_dir / "codex.stderr.log",
+                stderr_path=stderr_path,
                 env=env,
             )
-        finally:
-            self._mark_timing("codex_exec_end")
-            self.live_timing["codex_events"] = _codex_event_summary(codex_events_path)
-        if last_message_host_path.is_file():
-            shutil.copyfile(last_message_host_path, self.run_dir / "codex-last-message.md")
-        if status != 0:
-            raise RuntimeError(f"Codex exec exited with status {status}")
+            event_paths.append(codex_events_path)
+            if turn_last_message_host_path.is_file():
+                shutil.copyfile(turn_last_message_host_path, self.run_dir / "codex-last-message.md")
+            if status != 0:
+                self._mark_timing("codex_exec_end")
+                self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
+                raise RuntimeError(f"Codex exec exited with status {status}")
+            if self.server_proc is not None and self.server_proc.poll() is not None:
+                break
+            if (self.run_dir / "run_result.json").is_file():
+                break
+            if turn_index + 1 < max_turns:
+                print("==> Codex turn ended before roboclaws__done; starting continuation")
+        self._mark_timing("codex_exec_end")
+        self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
+        if (
+            self.server_proc is not None
+            and self.server_proc.poll() is None
+            and not (self.run_dir / "run_result.json").is_file()
+        ):
+            raise RuntimeError(
+                f"Codex exec ended without roboclaws__done after {max_turns} turn(s)"
+            )
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -551,6 +605,63 @@ def _codex_event_summary(path: Path) -> dict[str, Any]:
         "model_api_time_s": model_api_time_s,
         "model_api_time_note": note,
     }
+
+
+def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
+    summaries = [_codex_event_summary(path) for path in paths if path.is_file()]
+    type_counts: dict[str, int] = {}
+    item_counts: dict[str, int] = {}
+    event_count = 0
+    usage: dict[str, Any] = {}
+    model_api_time_s = 0.0
+    model_api_time_known = False
+    notes = []
+    for summary in summaries:
+        event_count += int(summary.get("event_count") or 0)
+        for key, value in (summary.get("type_counts") or {}).items():
+            type_counts[str(key)] = type_counts.get(str(key), 0) + int(value or 0)
+        for key, value in (summary.get("item_counts") or {}).items():
+            item_counts[str(key)] = item_counts.get(str(key), 0) + int(value or 0)
+        if summary.get("usage"):
+            usage = dict(summary["usage"])
+        api_time = summary.get("model_api_time_s")
+        if isinstance(api_time, (int, float)):
+            model_api_time_known = True
+            model_api_time_s += float(api_time)
+        note = str(summary.get("model_api_time_note") or "")
+        if note and note not in notes:
+            notes.append(note)
+    return {
+        "turn_count": len(summaries),
+        "event_count": event_count,
+        "type_counts": type_counts,
+        "item_counts": item_counts,
+        "usage": usage,
+        "model_api_time_s": _round_duration(model_api_time_s) if model_api_time_known else None,
+        "model_api_time_note": " ".join(notes)
+        if notes
+        else "Codex event timing was not available.",
+    }
+
+
+def _codex_continuation_prompt(*, turn_index: int) -> str:
+    return (
+        "Continue the same active roboclaws MCP cleanup server. This is automatic "
+        f"continuation turn {turn_index}; do not restart the scenario and do not read "
+        "private scoring artifacts. Use roboclaws MCP tools only. First call "
+        "roboclaws__metric_map if you need current public state, cleanup_worklist, "
+        "visited waypoints, or held_object_id. If the previous turn ended by saying "
+        "it would call a tool, make that tool call now before writing progress text. "
+        "For camera-labels observations, call roboclaws__declare_visual_candidates "
+        "with observation_id only and omit candidates so the configured "
+        "visual-grounding pipeline produces labels. Continue cleaning public "
+        "camera_model_candidates with navigate_to_object -> pick -> "
+        "navigate_to_receptacle -> open? -> place/place_inside, observe after each "
+        "successful placement, sweep remaining inspection_waypoints with "
+        "navigate_to_waypoint -> observe, and call roboclaws__done only after every "
+        "inspection waypoint has an observe response and pending public cleanup "
+        "candidates are handled."
+    )
 
 
 def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:

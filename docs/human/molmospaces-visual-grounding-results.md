@@ -35,6 +35,21 @@ perception-benchmark precision; it over-rejected in the cleanup loop. Keep
 preferred refiner: it works with a 240s timeout, but its same-matrix cleanup
 result is below both Gemini refiners.
 
+The clean 2026-05-26 apple-to-apple rerun kept this split: `grounding-dino`
+remains the default real visual-grounding baseline, while
+`grounding-dino+vertex_ai/gemini-3-flash-preview` is the direct-control quality
+route when seven-minute latency is acceptable. The live Codex + DINO + Gemini
+run improved over proposer-only DINO on semantic acceptability, but it was much
+slower and below RAW_FPV/direct-refiner exact-match quality, so do not make it
+the default live-agent path yet.
+
+Success/latency conclusion: for real-agent behavior, prefer Codex `raw_fpv_only`
+when the agent can reason over images directly; it matched the best exact score
+at 8/10 in 14m57s. Use Codex + `grounding-dino` only as the fast camera-label
+baseline; it finished in 8m18s but only reached 3/10 exact. Do not default
+Codex to DINO + Gemini yet: it improved to 5/10 exact and 9/10 semantic
+accepted, but took 20m47s and still trailed RAW_FPV.
+
 ## Selection Summary
 
 | Pipeline | Current role | Why |
@@ -195,6 +210,55 @@ in the cleanup loop, while Gemini kept enough candidates to drive actual
 cleanup. Tongyi Qwen flash/plus should remain blocked until the incomplete JSON
 route is fixed.
 
+## Apple-To-Apple Cleanup Rerun
+
+Run date: 2026-05-26. All rows used seed 7, `generated_mess_count=10`,
+`assets/maps/molmospaces-procthor-val-0-7`, robot-view reports, and the same
+Chinese cleanup task prompt. Direct rows use the deterministic cleanup routine;
+Codex rows use the Docker-backed supported coding-agent route.
+
+| Route | Input / pipeline | Candidates | Raw FPV observations | Robot view steps | Exact private matches | Semantic accepted | Wall time | Status |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Direct control | `sim` | 13 | 24 | 70 | 8/10 | 10/10 | 135.3s | Success |
+| Direct proposer-only | `grounding-dino` | 20 | 18 | 38 | 3/10 | 7/10 | 145.2s | Partial success |
+| Direct proposer+refiner | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 33 | 24 | 70 | 8/10 | 10/10 | 456.6s | Success |
+| Live Codex visual reasoning | `raw_fpv_only` | 15 | 22 | 90 | 8/10 | 10/10 | 897.7s | Success |
+| Live Codex camera labels | `grounding-dino` | 23 | 16 | 52 | 3/10 | 7/10 | 498.4s | Partial success |
+| Live Codex camera labels + refiner | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 36 | 17 | 84 | 5/10 | 9/10 | 1247.9s | Partial success |
+
+Latency details:
+
+| Route | Visual/model timing note |
+| --- | --- |
+| Direct `grounding-dino` | 14 proposer calls, 67.2s total sidecar time, 4.80s average proposer latency. |
+| Direct `grounding-dino+vertex_ai/gemini-3-flash-preview` | 14 proposer calls at 4.37s average plus 14 refiner calls at 22.06s average; refiner total was 308.8s. |
+| Live Codex `raw_fpv_only` | 14m57s runner wall time; MCP trace spent 11m00s in between-tool/model gap and 3m02s in robot-view capture. |
+| Live Codex `grounding-dino` | 8m18s runner wall time; 16 DINO declares averaged 3.87s, and MCP trace spent 4m57s in between-tool/model gap. |
+| Live Codex `grounding-dino+vertex_ai/gemini-3-flash-preview` | 20m47s runner wall time; 16 declares used 68.6s proposer time and 383.2s Gemini refiner time, while MCP trace spent 10m51s in between-tool/model gap and 2m42s in robot-view capture. |
+
+Rerun artifacts:
+
+- `output/molmo/apple2apple-0526-direct-sim/0526_1322/seed-7/report.html`
+- `output/molmo/apple2apple-0526-direct-dino/0526_1325/seed-7/report.html`
+- `output/molmo/apple2apple-0526-direct-dino-gemini3flash/0526_1328/seed-7/report.html`
+- `output/molmo/apple2apple-0526-codex-raw/0526_1337/seed-7/report.html`
+- `output/molmo/apple2apple-0526-codex-dino/0526_1354/seed-7/report.html`
+- `output/molmo/apple2apple-0526-codex-dino-gemini3flash-autocontinue-timeout240/0526_1513/seed-7/report.html`
+
+Interpretation: `sim` and direct `grounding-dino+Gemini 3 Flash` tie on exact
+cleanup quality for this seed, but `sim` is privileged control data while the
+Gemini route is real camera-derived perception. Proposer-only `grounding-dino`
+is much faster than the Gemini refiner but still only restores 3/10 exactly.
+Live Codex `raw_fpv_only` achieved the same 8/10 exact score as the control,
+but took about 15 minutes and used full image-reasoning loops. Live Codex with
+DINO labels was faster than RAW_FPV but did not improve over direct
+proposer-only DINO on final cleanup quality. Live Codex with DINO + Gemini
+improved over proposer-only DINO from 3/10 to 5/10 exact and from 7/10 to 9/10
+semantic accepted, but it took 20m47s and still missed the direct
+DINO + Gemini and Codex RAW_FPV exact-match result. The refiner also encouraged
+more post-placement observations and declarations, so it is not the live-agent
+default despite being the direct-control quality route.
+
 ## End-To-End Cleanup Results
 
 All rows below use seed 7 and the MolmoSpaces camera-labels cleanup path unless
@@ -208,6 +272,7 @@ noted.
 | Direct proposer-only | `grounding-dino` | 20 | n/a | 4 | 3/10 | 1.0 | Passed |
 | MCP smoke proposer-only | `grounding-dino` | 20 | 14 | 4 | 3/10 | 1.0 | Passed |
 | Live Codex proposer-only | `grounding-dino` | 24 | 16 | 4 | 3/10 | 1.0 | Partial success |
+| Live Codex proposer+refiner | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 36 | 16 | 12 | 5/10 | 1.0 | Partial success |
 | Direct proposer+refiner, default timeout | `grounding-dino+mimo-v2-omni` | 0 | 14 | 0 | 0/10 | 1.0 | Failed usefully |
 | Direct proposer+refiner, 240s timeout | `grounding-dino+mimo-v2-omni` | 17 | 14 | 7 | 5/10 | 1.0 | Partial success |
 | Direct proposer+refiner | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 3 | 14 | 1 | 0/10 | 1.0 | Failed |
@@ -223,6 +288,7 @@ Refiner cleanup telemetry:
 | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | 14 | 8311ms | 32601 | 4518ms |
 | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | 14 | 9104ms | 46713 | 4277ms |
 | `grounding-dino+vertex_ai/gemini-3-flash-preview` | 14 | 19815ms | 78282 | 4284ms |
+| Live Codex `grounding-dino+vertex_ai/gemini-3-flash-preview` | 16 | 23950ms | 103282 | 4290ms |
 
 Refiner decision summary:
 
@@ -247,6 +313,7 @@ Cleanup artifacts:
 - `output/molmo/direct-camera-labels-grounding-dino-qwen8b-refiner-check/0526_1243/seed-7/report.html`
 - `output/molmo/direct-camera-labels-grounding-dino-gemini-lite-refiner-check/0526_1246/seed-7/report.html`
 - `output/molmo/direct-camera-labels-grounding-dino-gemini-flash-refiner-check/0526_1251/seed-7/report.html`
+- `output/molmo/apple2apple-0526-codex-dino-gemini3flash-autocontinue-timeout240/0526_1513/seed-7/report.html`
 
 ## Interpretation
 
@@ -263,16 +330,22 @@ perception, and as a proposer to revisit after we add better object hints or
 visual-prompt reference boxes.
 
 For hosted VLM refine, the end-to-end check overrides the perception-only
-ranking. `grounding-dino+vertex_ai/gemini-3-flash-preview` is the best quality
-refiner in the Gemini/Qwen set: it cleaned 10 observed handles and reached 8/10
-exact private matches. The tradeoff is cost and latency: 14 refiner calls
-averaged 19.8s and reported 78k total refiner tokens. Use it only when quality
-matters more than runtime. `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview`
+ranking. `grounding-dino+vertex_ai/gemini-3-flash-preview` is the best direct
+quality refiner in the Gemini/Qwen set: it cleaned 10 observed handles and
+reached 8/10 exact private matches. The tradeoff is cost and latency: 14 direct
+refiner calls averaged 19.8s and reported 78k total refiner tokens. Use it only
+when quality matters more than runtime. `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview`
 is the cheaper Gemini lane: 8 cleaned handles, 6/10 exact private matches, and
 9.1s average refiner latency. Qwen 8B should not be the default refiner for this
 cleanup loop; it looked precise in the isolated benchmark but over-rejected in
 E2E, producing only 3 candidates, 1 cleaned handle, and 0/10 exact private
 matches.
+
+The live Codex + DINO + Gemini run did not inherit the direct refiner win. It
+cleaned 12 public handles, but only 5/10 exact private matches, with 9/10
+semantic accepted. It also took 20m47s because Codex kept declaring after
+post-placement observations. That makes it useful evidence for real-robot-like
+Codex/MCP behavior, but not the default live-agent perception setting.
 
 `grounding-dino+mimo-v2-omni` remains a useful MiMo comparison baseline. It
 improved the end-to-end cleanup run from 4 cleaned handles / 3 exact private

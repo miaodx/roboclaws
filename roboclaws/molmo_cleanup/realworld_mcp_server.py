@@ -264,8 +264,9 @@ class RealWorldMolmoCleanupMCPServer:
             augmented["instruction"] = (
                 "Call declare_visual_candidates with observation_id="
                 f"{raw.get('observation_id', '')} before choosing cleanup candidates. "
-                "Candidates may come from the configured visual-grounding pipeline; "
-                "service URLs, credentials, and image paths are server-side details."
+                "For camera-labels, pass only observation_id and omit candidates so the "
+                "configured visual-grounding pipeline produces labels. Service URLs, "
+                "credentials, and image paths are server-side details."
             )
         if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
@@ -277,6 +278,13 @@ class RealWorldMolmoCleanupMCPServer:
                 "Use room-level fixture ids and affordances as static public landmarks. "
                 "Runtime movable objects come only from observe; acceptable destination "
                 "sets and generated mess truth are private."
+            )
+        if tool == "declare_visual_candidates" and augmented.get("ok"):
+            augmented = _compact_declare_visual_candidates_response(augmented)
+            augmented["instruction"] = (
+                "Use camera_model_candidates with cleanup_recommended=true as the actionable "
+                "worklist. For each candidate, call navigate_to_object, pick, "
+                "navigate_to_receptacle, then the recommended placement tool."
             )
         if tool in {"place", "place_inside", "close_receptacle"} and augmented.get("ok"):
             augmented["instruction"] = (
@@ -713,6 +721,145 @@ class RealWorldMolmoCleanupMCPServer:
             for line in self.trace_path.read_text(encoding="utf-8").splitlines()
             if line
         ]
+
+
+def _compact_declare_visual_candidates_response(response: dict[str, Any]) -> dict[str, Any]:
+    evidence = response.get("model_declared_observation_evidence") or {}
+    declarations = list(response.get("model_declared_observations") or [])
+    candidates = list(response.get("camera_model_candidates") or [])
+    pipeline = evidence.get("visual_grounding_pipeline") or {}
+    if not pipeline:
+        for item in declarations:
+            candidate_pipeline = item.get("visual_grounding_pipeline")
+            if isinstance(candidate_pipeline, dict) and candidate_pipeline:
+                pipeline = candidate_pipeline
+                break
+
+    return {
+        "ok": response.get("ok", True),
+        "tool": response.get("tool", "declare_visual_candidates"),
+        "status": response.get("status", "ok"),
+        "contract": response.get("contract", REALWORLD_CONTRACT),
+        "observation_id": evidence.get("observation_id", ""),
+        "waypoint_id": evidence.get("waypoint_id", ""),
+        "room_id": evidence.get("room_id", ""),
+        "producer_type": evidence.get("producer_type", ""),
+        "producer_id": evidence.get("producer_id", ""),
+        "candidate_count": evidence.get("candidate_count", len(declarations)),
+        "registered_observed_handles": list(evidence.get("registered_observed_handles") or []),
+        "visual_grounding_pipeline": _compact_visual_grounding_pipeline(pipeline),
+        "model_declared_observations": [
+            _compact_model_declared_observation(item) for item in declarations
+        ],
+        "camera_model_candidates": [_compact_camera_model_candidate(item) for item in candidates],
+        "visible_object_detections": [],
+        "private_target_truth_included": False,
+    }
+
+
+def _compact_visual_grounding_pipeline(pipeline: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(pipeline, dict):
+        return {}
+    compact = _select_keys(
+        pipeline,
+        (
+            "schema",
+            "pipeline_id",
+            "status",
+            "candidate_count",
+            "unresolved_count",
+            "duplicate_rate",
+            "failure_reason",
+            "failure_message",
+            "auth_mode",
+        ),
+    )
+    compact["stages"] = [
+        _select_keys(
+            stage,
+            ("stage", "status", "producer_id", "model_id", "latency_ms", "version"),
+        )
+        for stage in pipeline.get("stages") or []
+        if isinstance(stage, dict)
+    ]
+    return compact
+
+
+def _compact_model_declared_observation(item: dict[str, Any]) -> dict[str, Any]:
+    compact = _select_keys(
+        item,
+        (
+            "declaration_id",
+            "object_id",
+            "source_observation_id",
+            "waypoint_id",
+            "room_id",
+            "category",
+            "target_fixture_id",
+            "target_fixture_category",
+            "source_fixture_id",
+            "evidence_note",
+            "image_region",
+            "confidence",
+            "producer_type",
+            "producer_id",
+            "grounding_status",
+            "grounding_confidence",
+            "grounding_basis",
+            "recovery_hint",
+            "actionability_status",
+            "visual_grounding_destination_hint",
+            "image_dimensions",
+            "visual_grounding_overlay",
+        ),
+    )
+    target_plausibility = item.get("target_plausibility")
+    if isinstance(target_plausibility, dict):
+        compact["target_plausibility"] = _select_keys(
+            target_plausibility,
+            ("status", "basis", "expected_fixture_id"),
+        )
+    return compact
+
+
+def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
+    compact = _select_keys(
+        item,
+        (
+            "object_id",
+            "category",
+            "name",
+            "current_room_id",
+            "visibility_confidence",
+            "image_bbox",
+            "perception_source",
+            "producer_type",
+            "producer_id",
+            "source_observation_id",
+            "candidate_source",
+            "candidate_fixture_id",
+            "candidate_fixture_category",
+            "cleanup_recommended",
+            "recommended_tool",
+            "model_declared_observation_id",
+            "image_region",
+            "evidence_note",
+            "grounding_status",
+            "grounding_confidence",
+            "grounding_basis",
+        ),
+    )
+    support_estimate = item.get("support_estimate")
+    if isinstance(support_estimate, dict):
+        compact["support_estimate"] = _select_keys(
+            support_estimate,
+            ("fixture_id", "relation", "confidence", "source", "perception_source"),
+        )
+    return compact
+
+
+def _select_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: source[key] for key in keys if key in source}
 
 
 def _json_safe(value: Any) -> Any:
