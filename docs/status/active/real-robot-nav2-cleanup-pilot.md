@@ -2,6 +2,10 @@
 
 Last updated: 2026-05-19
 
+Current public task name: `household-cleanup`. Older verification logs in this
+status note may mention the legacy `molmo-cleanup` alias because they record
+the command surface that existed when those checks ran.
+
 ## Implemented
 
 - Plan and ADR-backed implementation landed in scoped commits. Current status
@@ -30,7 +34,7 @@ Last updated: 2026-05-19
   `costmaps/rby1m.costmap_params.yaml`, and `preview.png`.
 - Direct, MCP smoke, and live-agent cleanup entrypoints now accept
   `--map-bundle-dir` plus `--require-map-bundle`; non-smoke public
-  `just task::run molmo-cleanup ...` profiles default to
+  `just task::run household-cleanup ...` profiles default to
   `assets/maps/molmospaces-procthor-val-0-7` and fail before cleanup startup when
   the selected bundle is missing or invalid.
 - `RealWorldCleanupContract.metric_map()` and `fixture_hints()` can project

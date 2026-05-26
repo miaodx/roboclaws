@@ -6588,7 +6588,7 @@ def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
         [
             "just",
             "task::run",
-            "molmo-cleanup",
+            "household-cleanup",
             "direct",
             profile,
             f"seed={seed}",

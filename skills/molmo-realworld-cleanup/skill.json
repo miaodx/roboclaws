@@ -1,12 +1,12 @@
 {
   "schema": "roboclaws_skill_manifest_v1",
   "name": "molmo-realworld-cleanup",
-  "summary": "Drive the ADR-0003 MolmoSpaces real-world cleanup MCP contract.",
+  "summary": "Drive the household cleanup task through public household-world and manipulation capabilities.",
   "abstraction_level": "agent_skill",
   "role": "cleanup_task_behavior",
   "status": "active",
   "mcp": {
-    "profiles": ["molmospaces_cleanup_v1", "real_robot_cleanup_v1"],
+    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
     "required_tools": [
       "metric_map",
       "fixture_hints",
@@ -29,7 +29,12 @@
       "inspect_visible_object"
     ],
     "privileged_tools": [],
-    "boundary_notes": "ADR-0003 public/private-safe surface. No scene_objects, target list, hidden destination table, or private scoring truth."
+    "boundary_notes": "Public/private-safe household surface. No scene_objects, target list, hidden destination table, source-map mutation, or private scoring truth."
+  },
+  "capability_requirements": {
+    "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
+    "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "nav2_ros2", "agibot_gdk"],
+    "notes": "household-cleanup composes world evidence, manipulation, and task lifecycle; semantic-map-build should require household_world_v1 without manipulation."
   },
   "scripts": [
     {

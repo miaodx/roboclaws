@@ -169,10 +169,9 @@ Examples:
 
 ## Current Capability Profiles
 
-The current profile ids still reflect the older backend/domain naming style.
-Clean-slate household work should treat profiles as reusable capability
-environments, runnable tasks as the public command surface, and skills as the
-strategy layer.
+The current household profile head is task-neutral. Runnable tasks such as
+`semantic-map-build` and `household-cleanup` select skills and acceptance gates;
+profiles describe reusable capability environments and backend variants.
 
 ### `ai2thor_navigation_v1`
 
@@ -193,26 +192,50 @@ must opt in explicitly when it needs the AI2-THOR inventory oracle or
 target-relative teleport helper. They are not presented as real robot perception
 or real robot navigation capabilities.
 
-### `molmospaces_cleanup_v1`
+### `household_world_v1`
 
-Canonical public capability tools include the ADR-0003 cleanup surface:
+Canonical public capability tools cover household world evidence only:
 
-- public map and fixture context;
-- waypoint/object/receptacle navigation;
-- public observation and inspection;
-- pick/place/open/close operations;
-- episode completion.
+- public metric map and fixture context;
+- runtime metric map snapshots, observed-object priors, and update candidates
+  exposed through `metric_map()` / Agent View;
+- room and waypoint navigation for evidence capture;
+- public observation, camera adjustment, visual candidate declaration, and
+  visible-object inspection.
 
-The profile is public-agent metadata only. It must not expose generated mess
-sets, acceptable destinations, private manifests, hidden target lists,
-`is_misplaced`, private scoring truth, or AI2-THOR object inventory helpers.
+`household_world_v1` is shared by `semantic-map-build`, `household-cleanup`,
+inspection, search, and future household tasks. It excludes manipulation and
+task-completion tools such as `pick`, `place`, `open_receptacle`,
+`close_receptacle`, and `done`.
 
-### `real_robot_cleanup_v1`
+Backend variants such as `api_semantic_synthetic`, `molmospaces_subprocess`,
+`nav2_ros2`, and `agibot_gdk` are profile metadata/config. They are not new
+public task names or copied profile ids.
 
-The first physical cleanup-facing profile keeps the cleanup-shaped public tool
-list but narrows executable capability to navigation and perception. The
-backend is `physical_robot` with backend variants currently represented by
-`nav2_ros2` and `agibot_gdk`; both variants preserve the same public tool names.
+### `household_manipulation_v1` and `household_episode_v1`
+
+Cleanup skills compose `household_world_v1` with manipulation and lifecycle
+capabilities when they need to move objects:
+
+- `household_manipulation_v1` owns object/receptacle navigation plus
+  `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`.
+- `household_episode_v1` owns explicit task completion through `done`.
+
+Physical backends may expose these tools as structured `blocked_capability`
+responses until manipulation is proven.
+
+### Legacy cleanup-shaped profiles
+
+`molmospaces_cleanup_v1` remains a legacy cleanup-shaped profile composed from
+the household world, manipulation, and lifecycle capabilities. It is kept for
+older contract tests and archived report interpretation, not as the clean public
+capability head.
+
+`real_robot_cleanup_v1` remains a legacy physical cleanup-shaped profile while
+the Agibot/Nav2 pilot artifacts migrate to the task-neutral household profiles.
+It narrows executable capability to navigation and perception. The backend is
+`physical_robot` with backend variants currently represented by `nav2_ros2` and
+`agibot_gdk`; both variants preserve the same public tool names.
 
 - `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
   derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from

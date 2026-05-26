@@ -243,7 +243,7 @@ def _live_command(
     return [
         args.just_bin,
         "task::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "claude",
         profile,
         f"seed={args.seed}",
@@ -261,7 +261,7 @@ def _live_report_rerun_command(entry: MolmoLiveModelEntry, args: argparse.Namesp
     command = [
         "just",
         "task::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "claude",
         profile,
         f"seed={args.seed}",

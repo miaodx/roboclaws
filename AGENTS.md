@@ -193,7 +193,7 @@ Or use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
 just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
-just task::run molmo-cleanup codex smoke          # cheap synthetic cleanup iteration
+just task::run household-cleanup codex smoke      # cheap synthetic cleanup iteration
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -355,8 +355,9 @@ semantic, or fast AI-agent iteration evidence.
 
 Examples:
 
-- "run the molmospace cleanup task with codex" -> `just task::run molmo-cleanup codex world-labels`
-- "run the molmospace cleanup task with codex with smoke profile" -> `just task::run molmo-cleanup codex smoke`
+- "run the semantic map build task" -> `just task::run semantic-map-build direct world-labels`
+- "run the household cleanup task with codex" -> `just task::run household-cleanup codex world-labels`
+- "run the household cleanup task with codex with smoke profile" -> `just task::run household-cleanup codex smoke`
 - "run the ai2thor nav task with openclaw" -> `just task::run ai2thor-nav openclaw visual`
 
 Use `agent::*` for deeper maintainer control:

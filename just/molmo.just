@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -54,6 +54,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     robot_views="{{robot_views}}"
     visual_grounding="{{visual_grounding}}"
     visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
+    semantic_sweep="{{semantic_sweep}}"
+    runtime_map_prior="{{runtime_map_prior}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -73,6 +75,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     visual_grounding="${visual_grounding#visual_grounding=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout_s=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout=}"
+    semantic_sweep="${semantic_sweep#semantic_sweep=}"
+    runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -103,16 +107,37 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         ;;
     esac
 
+    semantic_sweep_enabled="false"
+    case "$semantic_sweep" in
+      on|true|1|yes|semantic-sweep)
+        semantic_sweep_enabled="true"
+        ;;
+      off|false|0|no|"")
+        ;;
+      *)
+        echo "error: unsupported semantic_sweep '$semantic_sweep' (expected on|off)" >&2
+        exit 1
+        ;;
+    esac
+    if [[ "$semantic_sweep_enabled" == "true" && "$driver" != "direct" ]]; then
+      echo "error: semantic sweep mode currently supports direct driver only" >&2
+      exit 1
+    fi
+
     perception_mode="visible_object_detections"
     visual_args=()
     checker_visual_args=()
     profile_requires_clean_success="true"
     visual_grounding_args=()
+    runtime_map_prior_args=()
     if [[ "$visual_grounding" != "sim" ]]; then
       visual_grounding_args=(--visual-grounding "$visual_grounding")
       if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
         visual_grounding_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
       fi
+    fi
+    if [[ -n "$runtime_map_prior" ]]; then
+      runtime_map_prior_args=(--runtime-map-prior "$runtime_map_prior")
     fi
     case "$profile" in
       smoke)
@@ -171,6 +196,13 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     if [[ "$cleanup_routine" == "auto" ]]; then
       cleanup_routine="skill"
     fi
+    semantic_sweep_args=()
+    checker_semantic_args=()
+    if [[ "$semantic_sweep_enabled" == "true" ]]; then
+      semantic_sweep_args=(--semantic-sweep)
+      checker_semantic_args=(--require-semantic-sweep)
+      profile_requires_clean_success="false"
+    fi
 
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
@@ -212,6 +244,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"
     echo "    routine  : ${cleanup_routine}"
+    echo "    sweep    : ${semantic_sweep_enabled}"
     echo "    views    : ${robot_views}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
@@ -265,7 +298,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           codex_bin="$PWD/${docker_shim_dir}/codex"
           claude_bin="$PWD/${docker_shim_dir}/claude"
           export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-molmo-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-household-cleanup}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
@@ -295,6 +328,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           "${map_bundle_args[@]}"
           "${visual_args[@]}"
           "${visual_grounding_args[@]}"
+          "${runtime_map_prior_args[@]}"
         )
 
         if [[ "$driver" == "codex-live" ]]; then
@@ -554,6 +588,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --generated-mess-count "$generated_mess_count" \
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \
+            "${runtime_map_prior_args[@]}" \
+            "${semantic_sweep_args[@]}" \
             --output-dir "$run_dir"
           ;;
         mcp-smoke|openclaw-smoke)
@@ -572,6 +608,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             "${map_bundle_args[@]}" \
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \
+            "${runtime_map_prior_args[@]}" \
             --output-dir "$run_dir"
           ;;
       esac
@@ -586,6 +623,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       --min-generated-mess-count "$min_generated_mess_count"
       --require-advisory-scoring
       "${checker_visual_args[@]}"
+      "${checker_semantic_args[@]}"
     )
     case "$driver" in
       mcp-smoke)

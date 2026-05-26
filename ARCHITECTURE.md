@@ -102,19 +102,22 @@ Examples:
 
 ```bash
 just task::run ai2thor-nav codex visual
-just task::run molmo-cleanup direct world-labels seed=7
+just task::run semantic-map-build direct world-labels seed=7
+just task::run household-cleanup direct world-labels seed=7
 ```
 
-As the clean-slate household naming lands, `molmo-cleanup` should migrate toward
-`household-cleanup`, and `semantic-map-build` should become a first-class task.
-Old task/profile names are migration targets in this repo; there is no broad
-backward-compatibility requirement for obsolete demo surfaces.
+The clean-slate household naming is the public surface: `semantic-map-build`
+produces Runtime Metric Map snapshots, and `household-cleanup` consumes
+household-world evidence for cleanup. Older Molmo-specific task/profile names
+are legacy compatibility details, not the canonical task layer.
 
 ## Capability Profiles
 
-`roboclaws/mcp/profiles.py` defines current MCP capability metadata. Existing
-ids still include older backend/domain names such as `ai2thor_navigation_v1`,
-`molmospaces_cleanup_v1`, and `real_robot_cleanup_v1`.
+`roboclaws/mcp/profiles.py` defines current MCP capability metadata. The
+household head is `household_world_v1`, composed with
+`household_manipulation_v1` and `household_episode_v1` for cleanup skills.
+Older backend/domain ids such as `molmospaces_cleanup_v1` and
+`real_robot_cleanup_v1` remain legacy compatibility details.
 
 Going forward:
 

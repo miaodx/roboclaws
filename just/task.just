@@ -4,8 +4,8 @@
 #   just task::run <task> <driver> [report|profile] [key=value ...]
 #
 # Tasks:
-#   ai2thor-nav | territory | coverage | photo-chairs | molmo-cleanup |
-#   molmo-planner-proof
+#   ai2thor-nav | territory | coverage | photo-chairs | semantic-map-build |
+#   household-cleanup | molmo-planner-proof
 #
 # Drivers:
 #   openclaw | vlm | codex | claude | script | direct | mcp-smoke
@@ -14,7 +14,7 @@
 #   visual  - default for non-Molmo tasks, reviewable artifacts for humans
 #   minimal - cheaper semantic evidence for non-Molmo agent iteration
 #
-# Molmo cleanup profiles:
+# Household task profiles:
 #   smoke | world-labels | camera-raw | camera-labels
 
 set working-directory := '..'

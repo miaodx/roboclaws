@@ -13,6 +13,9 @@ from roboclaws.mcp.entrypoint import (
 from roboclaws.mcp.profiles import (
     AI2THOR_NAVIGATION_PROFILE,
     CLASSIFICATION_PRIVILEGED_TOOL,
+    HOUSEHOLD_EPISODE_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE,
     MOLMOSPACES_CLEANUP_PROFILE,
     REAL_ROBOT_CLEANUP_PROFILE,
     ContractProfile,
@@ -53,6 +56,9 @@ def _handlers(profile_id: str) -> dict[str, Any]:
 def test_contract_profile_registry_contains_backend_domain_profiles() -> None:
     assert contract_profile_names() == (
         AI2THOR_NAVIGATION_PROFILE,
+        HOUSEHOLD_WORLD_PROFILE,
+        HOUSEHOLD_MANIPULATION_PROFILE,
+        HOUSEHOLD_EPISODE_PROFILE,
         MOLMOSPACES_CLEANUP_PROFILE,
         REAL_ROBOT_CLEANUP_PROFILE,
     )
@@ -73,7 +79,48 @@ def test_ai2thor_profile_labels_scene_objects_and_goto_as_privileged_tools() -> 
     }
 
 
-def test_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
+def test_household_world_profile_is_task_neutral_and_world_only() -> None:
+    profile = contract_profile(HOUSEHOLD_WORLD_PROFILE)
+    metadata = profile.metadata()
+    payload = json.dumps(metadata, sort_keys=True).lower()
+
+    for forbidden in profile.privacy_exclusions:
+        assert forbidden not in payload
+    assert "scene_objects" not in payload
+    assert metadata["backend"] == "multi_backend"
+    assert metadata["backend_variants"] == [
+        "api_semantic_synthetic",
+        "molmospaces_subprocess",
+        "nav2_ros2",
+        "agibot_gdk",
+    ]
+    assert set(metadata["capability_families"]).isdisjoint({"manipulation", "episode"})
+    public_names = {tool["name"] for tool in metadata["public_tools"]}
+    assert public_names >= {
+        "metric_map",
+        "fixture_hints",
+        "observe",
+        "adjust_camera",
+        "declare_visual_candidates",
+        "navigate_to_waypoint",
+    }
+    assert public_names.isdisjoint(
+        {"pick", "place", "place_inside", "open_receptacle", "close_receptacle", "done"}
+    )
+
+
+def test_household_cleanup_skill_capabilities_are_composed_not_copied() -> None:
+    world = contract_profile(HOUSEHOLD_WORLD_PROFILE)
+    manipulation = contract_profile(HOUSEHOLD_MANIPULATION_PROFILE)
+    lifecycle = contract_profile(HOUSEHOLD_EPISODE_PROFILE)
+
+    assert "metric_map" in world.public_tool_names()
+    assert "pick" not in world.public_tool_names()
+    assert {"pick", "place", "navigate_to_receptacle"} <= set(manipulation.public_tool_names())
+    assert lifecycle.public_tool_names() == ("done",)
+
+
+def test_legacy_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
     profile = contract_profile(MOLMOSPACES_CLEANUP_PROFILE)
     metadata = profile.metadata()
     payload = json.dumps(metadata, sort_keys=True).lower()
@@ -89,6 +136,7 @@ def test_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
         "place",
         "done",
     }
+    assert metadata["backend_variants"] == ["api_semantic_synthetic", "molmospaces_subprocess"]
 
 
 def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
@@ -184,7 +232,8 @@ def test_register_profile_tools_helper_registers_selected_public_tools() -> None
 def test_router_rejects_unknown_profile_with_allowed_ids() -> None:
     with pytest.raises(
         ValueError,
-        match="allowed profiles: ai2thor_navigation_v1, molmospaces_cleanup_v1, "
+        match="allowed profiles: ai2thor_navigation_v1, household_world_v1, "
+        "household_manipulation_v1, household_episode_v1, molmospaces_cleanup_v1, "
         "real_robot_cleanup_v1",
     ):
         load_contract_profile("missing_profile")

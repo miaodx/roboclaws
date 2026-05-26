@@ -89,7 +89,7 @@ and `/workspace/skills/ai2thor-navigator`; repo-root `AGENTS.md`,
 context.
 
 The same Docker isolation is task-skill driven rather than nav-specific:
-`molmo-cleanup` live Codex/Claude runs mount only
+`household-cleanup` live Codex/Claude runs mount only
 `/workspace/skills/molmo-realworld-cleanup`, and a photo-capture coding-agent
 task can mount only `/workspace/skills/capture-object-photo`. For Codex,
 isolated runs also mount an empty read-only `CODEX_HOME/skills`, so

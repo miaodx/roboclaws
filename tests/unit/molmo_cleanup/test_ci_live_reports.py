@@ -107,14 +107,14 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     assert payload["command"][:5] == [
         "just",
         "task::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "claude",
         "world-labels",
     ]
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
-        "just task::run molmo-cleanup claude world-labels"
+        "just task::run household-cleanup claude world-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -154,13 +154,13 @@ def test_dry_run_camera_raw_entry_uses_entry_profile(tmp_path: Path) -> None:
     assert payload["command"][:5] == [
         "just",
         "task::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "claude",
         "camera-raw",
     ]
     assert "generated_mess_count=10" in payload["command"]
     assert "generated_mess_count=10" in payload["rerun_command"]
-    assert "just task::run molmo-cleanup claude camera-raw" in payload["rerun_command"]
+    assert "just task::run household-cleanup claude camera-raw" in payload["rerun_command"]
 
 
 def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> None:
@@ -307,7 +307,7 @@ def test_live_claude_workspace_exposes_skill_at_task_relative_path(
 
     prepared_workspace, task_dir = run_claude._prepare_agent_workspace(
         repo_root=REPO_ROOT,
-        task_name="molmo-cleanup",
+        task_name="household-cleanup",
         skill_name="molmo-realworld-cleanup",
     )
 
@@ -333,7 +333,7 @@ def test_live_codex_normalizes_relative_docker_workspace(tmp_path: Path, monkeyp
 
     prepared_workspace, task_dir = run_codex._prepare_agent_workspace(
         repo_root=repo_root,
-        task_name="molmo-cleanup",
+        task_name="household-cleanup",
         skill_name="molmo-realworld-cleanup",
     )
 

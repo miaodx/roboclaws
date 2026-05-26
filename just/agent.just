@@ -77,7 +77,7 @@ run task driver mode="" *overrides:
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
-        profile|scene|scenes|seed|seeds|souls|steps|task|timeout_s|\
+        profile|runtime_map_prior|scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget)
           ;;
         *)
@@ -95,6 +95,17 @@ run task driver mode="" *overrides:
         printf '%s\n' "${kv[$key]}"
       else
         printf '%s\n' "$default"
+      fi
+    }
+
+    semantic_map_prompt() {
+      local default_prompt="帮我建立这个房间的语义地图"
+      if [[ -v "kv[prompt]" && -n "${kv[prompt]}" ]]; then
+        printf '%s\n' "${kv[prompt]}"
+      elif [[ -v "kv[task]" && -n "${kv[task]}" ]]; then
+        printf '%s\n' "${kv[task]}"
+      else
+        printf '%s\n' "$default_prompt"
       fi
     }
 
@@ -124,12 +135,16 @@ run task driver mode="" *overrides:
     }
 
     if [[ "$task" == "molmo-cleanup" ]]; then
+      task="household-cleanup"
+    fi
+
+    if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
         smoke|world-labels|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported molmo-cleanup profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac
@@ -146,7 +161,7 @@ run task driver mode="" *overrides:
     fi
 
     report_rerun_parts=("just" "task::run" "$task" "$driver")
-    if [[ "$task" == "molmo-cleanup" ]]; then
+    if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       report_rerun_parts+=("$profile")
     else
       report_rerun_parts+=("$report")
@@ -239,8 +254,8 @@ run task driver mode="" *overrides:
         esac
         ;;
 
-      molmo-cleanup:direct|molmo-cleanup:mcp-smoke|molmo-cleanup:codex|\
-      molmo-cleanup:claude|molmo-cleanup:openclaw)
+      semantic-map-build:direct|household-cleanup:direct|household-cleanup:mcp-smoke|\
+      household-cleanup:codex|household-cleanup:claude|household-cleanup:openclaw)
         case "$driver" in
           direct|mcp-smoke)
             impl_driver="$driver"
@@ -255,26 +270,34 @@ run task driver mode="" *overrides:
             impl_driver="openclaw-live"
             ;;
         esac
+        if [[ "$task" == "semantic-map-build" && "$driver" != "direct" ]]; then
+          echo "error: semantic-map-build currently supports direct driver only" >&2
+          exit 1
+        fi
 
         case "$profile" in
           world-labels)
-            default_output_dir="output/molmo/${driver}-report"
+            default_output_dir="output/household/${task}/${driver}-report"
             ;;
           smoke)
-            default_output_dir="output/molmo/${driver}-smoke"
+            default_output_dir="output/household/${task}/${driver}-smoke"
             ;;
           *)
-            default_output_dir="output/molmo/${driver}-${profile}"
+            default_output_dir="output/household/${task}/${driver}-${profile}"
             ;;
         esac
-        if [[ "$driver" == "direct" && "$profile" == "world-labels" ]]; then
+        if [[ "$task" == "household-cleanup" && "$driver" == "direct" && "$profile" == "world-labels" ]]; then
           default_seeds="1 2 3"
         else
           default_seeds="7"
         fi
         seeds="$(get seeds "$(get seed "$default_seeds")")"
         output_dir="$(get output_dir "$default_output_dir")"
-        prompt="$(cleanup_prompt)"
+        if [[ "$task" == "semantic-map-build" ]]; then
+          prompt="$(semantic_map_prompt)"
+        else
+          prompt="$(cleanup_prompt)"
+        fi
         generated_mess_count="$(get generated_mess_count 10)"
         host="$(get host 127.0.0.1)"
         port="$(get port 18788)"
@@ -291,10 +314,15 @@ run task driver mode="" *overrides:
         robot_views="$(get robot_views "$(get record_robot_views auto)")"
         visual_grounding="$(get visual_grounding sim)"
         visual_grounding_timeout_s="$(get visual_grounding_timeout_s "$(get visual_grounding_timeout auto)")"
+        semantic_sweep="$(get semantic_sweep off)"
+        if [[ "$task" == "semantic-map-build" ]]; then
+          semantic_sweep="on"
+        fi
+        runtime_map_prior="$(get runtime_map_prior "")"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
-          "$visual_grounding_timeout_s"
+          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

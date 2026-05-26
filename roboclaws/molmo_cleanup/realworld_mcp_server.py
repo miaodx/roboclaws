@@ -96,6 +96,8 @@ def make_molmo_realworld_cleanup_mcp(
     cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
     map_bundle_dir: str | Path | None = None,
+    runtime_map_prior: dict[str, Any] | None = None,
+    runtime_map_prior_source: str = "",
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -116,6 +118,8 @@ def make_molmo_realworld_cleanup_mcp(
         cleanup_profile=cleanup_profile,
         planner_proof_run_result=planner_proof_run_result,
         map_bundle_dir=map_bundle_dir,
+        runtime_map_prior=runtime_map_prior,
+        runtime_map_prior_source=runtime_map_prior_source,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -143,6 +147,8 @@ class RealWorldMolmoCleanupMCPServer:
         cleanup_profile: str | None = None,
         planner_proof_run_result: Path | None = None,
         map_bundle_dir: str | Path | None = None,
+        runtime_map_prior: dict[str, Any] | None = None,
+        runtime_map_prior_source: str = "",
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
@@ -155,6 +161,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
+        self.runtime_map_prior_source = runtime_map_prior_source
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
             base_contract = base_contract or CleanupBackendSession(scenario)
@@ -164,6 +171,7 @@ class RealWorldMolmoCleanupMCPServer:
                 fixture_hint_mode=fixture_hint_mode,
                 perception_mode=perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
+                runtime_map_prior=runtime_map_prior,
                 visual_grounding_client=visual_grounding_client_from_env(
                     visual_grounding,
                     base_url=visual_grounding_base_url,
@@ -337,6 +345,11 @@ class RealWorldMolmoCleanupMCPServer:
         private_evaluation_path = self.run_dir / "private_evaluation.json"
         advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
         runtime_metric_map = agent_view.get("runtime_metric_map", {})
+        runtime_prior_rows = [
+            item
+            for item in runtime_metric_map.get("observed_objects", [])
+            if item.get("freshness") == "prior"
+        ]
         agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
         runtime_metric_map_path.write_text(
             json.dumps(runtime_metric_map, indent=2, sort_keys=True) + "\n"
@@ -379,6 +392,11 @@ class RealWorldMolmoCleanupMCPServer:
             "planner_uses_private_manifest": False,
             "fixture_hint_mode": self.fixture_hint_mode,
             "perception_mode": self.perception_mode,
+            "runtime_metric_map_prior": {
+                "loaded": bool(runtime_prior_rows),
+                "source": self.runtime_map_prior_source,
+                "observed_object_count": len(runtime_prior_rows),
+            },
             "visual_grounding_pipeline_id": self.contract.visual_grounding_pipeline_id,
             "requested_generated_mess_count": requested_count,
             "generated_mess_count": private_evaluation["generated_mess_count"],

@@ -80,7 +80,6 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
         expect_task=None,
         expect_backend="api_semantic_synthetic",
         min_generated_mess_count=5,
-        allow_partial_cleanup=True,
         require_runtime_metric_map=True,
         require_semantic_sweep=True,
         require_camera_model_policy=True,

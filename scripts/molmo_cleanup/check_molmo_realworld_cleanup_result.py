@@ -276,6 +276,7 @@ def _assert_result(
         (require_clean_agent_run or not require_openclaw_minimum)
         and not raw_contract_only
         and not allow_partial_cleanup
+        and not require_semantic_sweep
     )
     semantic_success_gate = min_semantic_accepted_count is not None
     if enforce_success:

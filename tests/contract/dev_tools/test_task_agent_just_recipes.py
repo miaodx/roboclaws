@@ -250,8 +250,8 @@ def test_task_module_exposes_only_run_publicly() -> None:
     assert "task::cleanup-report" not in summary
 
 
-def test_prompt_mapping_molmo_cleanup_codex_world_labels_default() -> None:
-    route = trace_task_run("molmo-cleanup", "codex")
+def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
+    route = trace_task_run("household-cleanup", "codex")
 
     assert route[:6] == [
         "just",
@@ -259,12 +259,12 @@ def test_prompt_mapping_molmo_cleanup_codex_world_labels_default() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
     ]
 
 
-def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "smoke")
+def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
+    route = trace_task_run("household-cleanup", "codex", "smoke")
 
     assert route[:6] == [
         "just",
@@ -272,7 +272,7 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         "codex-live",
         "smoke",
         "7",
-        "output/molmo/codex-smoke",
+        "output/household/household-cleanup/codex-smoke",
     ]
 
 
@@ -282,13 +282,16 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         (("molmospace-cleanup", "codex"), "unsupported task 'molmospace-cleanup'"),
         (("molmospaces-cleanup", "codex"), "unsupported task 'molmospaces-cleanup'"),
         (("cleanup-report", "direct"), "unsupported task 'cleanup-report'"),
-        (("molmo-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
-        (("molmo-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
-        (("molmo-cleanup", "codex", "world-labels-perf"), "unsupported molmo-cleanup profile"),
-        (("molmo-cleanup", "codex", "minimal"), "unsupported molmo-cleanup profile"),
-        (("molmo-cleanup", "codex", "visual"), "unsupported molmo-cleanup profile"),
+        (("household-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
+        (("household-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
         (
-            ("molmo-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
+            ("household-cleanup", "codex", "world-labels-perf"),
+            "unsupported household profile",
+        ),
+        (("household-cleanup", "codex", "minimal"), "unsupported household profile"),
+        (("household-cleanup", "codex", "visual"), "unsupported household profile"),
+        (
+            ("household-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
         ),
     ),
@@ -301,20 +304,24 @@ def test_task_router_rejects_removed_compatibility_aliases(
 
 def test_task_router_is_importable_source_of_truth() -> None:
     resolved = resolve_task_run(
-        ("molmo-cleanup", "codex", "profile=smoke", "output_dir=output/custom")
+        ("household-cleanup", "codex", "profile=smoke", "output_dir=output/custom")
     )
 
     assert resolved.argv == (
         "just",
         "agent::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "smoke",
         "output_dir=output/custom",
     )
-    assert resolved.task == "molmo-cleanup"
+    assert resolved.task == "household-cleanup"
     assert resolved.driver == "codex"
     assert resolved.mode == "smoke"
+
+    legacy = resolve_task_run(("molmo-cleanup", "direct", "smoke"))
+    assert legacy.task == "household-cleanup"
+    assert legacy.argv[:5] == ("just", "agent::run", "household-cleanup", "direct", "smoke")
 
     with pytest.raises(CommandError, match="unsupported task 'molmospace-cleanup'"):
         resolve_task_run(("molmospace-cleanup", "codex"))
@@ -335,7 +342,7 @@ def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
 
 
 def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "output_dir=output/custom")
+    route = trace_task_run("household-cleanup", "codex", "output_dir=output/custom")
 
     assert route[:6] == [
         "just",
@@ -349,7 +356,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "world-labels",
         "map_bundle=molmo-cleanup-default-7",
@@ -361,7 +368,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
         "10",
         "127.0.0.1",
@@ -372,7 +379,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "mcp-smoke",
         "camera-labels",
         "visual_grounding=fake-http",
@@ -384,7 +391,7 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
         "mcp-smoke",
         "camera-labels",
         "7",
-        "output/molmo/mcp-smoke-camera-labels",
+        "output/household/household-cleanup/mcp-smoke-camera-labels",
     ]
     assert route[13] == "fake-http"
 
@@ -423,7 +430,7 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
 
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "world-labels",
         "robot_views=off",
@@ -435,7 +442,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
         "10",
         "127.0.0.1",
@@ -447,8 +454,8 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
 
 
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
-    raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
-    labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
+    raw_route = trace_task_run("household-cleanup", "direct", "camera-raw")
+    labels_route = trace_task_run("household-cleanup", "direct", "camera-labels")
 
     assert raw_route[:7] == [
         "just",
@@ -456,7 +463,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
         "direct",
         "camera-raw",
         "7",
-        "output/molmo/direct-camera-raw",
+        "output/household/household-cleanup/direct-camera-raw",
         "帮我收拾这个房间",
     ]
     assert labels_route[:7] == [
@@ -465,10 +472,37 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
         "direct",
         "camera-labels",
         "7",
-        "output/molmo/direct-camera-labels",
+        "output/household/household-cleanup/direct-camera-labels",
         "帮我收拾这个房间",
     ]
     assert raw_route[11] == "skill"
+
+
+def test_prompt_mapping_semantic_map_build_direct_enables_sweep() -> None:
+    route = trace_task_run("semantic-map-build", "direct", "smoke")
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "smoke",
+        "7",
+        "output/household/semantic-map-build/direct-smoke",
+    ]
+    assert route[6] == "帮我建立这个房间的语义地图"
+    assert route[15] == "on"
+
+
+def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "smoke",
+        "runtime_map_prior=output/prior/runtime_metric_map.json",
+    )
+
+    assert route[15] == "off"
+    assert route[16] == "output/prior/runtime_metric_map.json"
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:

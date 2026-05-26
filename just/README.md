@@ -26,7 +26,8 @@ Tasks:
 - `territory`
 - `coverage`
 - `photo-chairs`
-- `molmo-cleanup`
+- `semantic-map-build`
+- `household-cleanup`
 - `molmo-planner-proof`
 
 Drivers:
@@ -62,7 +63,7 @@ omitted and keeps the task default (`visual` for non-Molmo tasks,
 
 ## Live Agent Launch Behavior
 
-`just task::run molmo-cleanup codex world-labels` launches a detached tmux session.
+`just task::run household-cleanup codex world-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -110,7 +111,7 @@ search tool. Hosted CI does not run Codex or Codex provider smoke.
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just task::run molmo-cleanup claude world-labels
+just task::run household-cleanup claude world-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -123,7 +124,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just task::run molmo-cleanup codex world-labels
+just task::run household-cleanup codex world-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -135,7 +136,8 @@ Current task mappings:
 
 - `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
 - `photo-chairs` direct Codex/Claude: `capture-object-photo`
-- `molmo-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
+- `semantic-map-build` direct: `molmo-realworld-cleanup` with cleanup actions disabled
+- `household-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
 
 For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
 bundled/system Codex skills are not available. Task prompts should read the
@@ -145,11 +147,13 @@ mounted skill explicitly, for example `../skills/ai2thor-navigator/SKILL.md` or
 ## Examples
 
 ```bash
-just task::run molmo-cleanup codex
-just task::run molmo-cleanup codex smoke
-just task::run molmo-cleanup direct camera-raw
-just task::run molmo-cleanup direct camera-labels
-just task::run molmo-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just task::run semantic-map-build direct world-labels
+just task::run household-cleanup codex
+just task::run household-cleanup codex smoke
+just task::run household-cleanup direct camera-raw
+just task::run household-cleanup direct camera-labels
+just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
 just task::run ai2thor-nav openclaw
@@ -253,9 +257,10 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the MolmoSpaces cleanup task with codex" | `just task::run molmo-cleanup codex world-labels` |
-| "run the MolmoSpaces cleanup task with codex with smoke profile" | `just task::run molmo-cleanup codex smoke` |
-| "run the MolmoSpaces cleanup camera raw profile" | `just task::run molmo-cleanup direct camera-raw` |
+| "run the semantic map build task" | `just task::run semantic-map-build direct world-labels` |
+| "run the household cleanup task with codex" | `just task::run household-cleanup codex world-labels` |
+| "run the household cleanup task with codex with smoke profile" | `just task::run household-cleanup codex smoke` |
+| "run the household cleanup camera raw profile" | `just task::run household-cleanup direct camera-raw` |
 | "run the ai2thor nav task with openclaw" | `just task::run ai2thor-nav openclaw visual` |
 
 ## Maintainer Dispatch

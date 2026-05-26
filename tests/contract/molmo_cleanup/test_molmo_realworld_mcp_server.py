@@ -113,6 +113,59 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert "close_receptacle" in server.contract.public_tool_names()
 
 
+def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> None:
+    prior_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "prior",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    try:
+        metric_map = prior_server.call_tool("metric_map")
+        for waypoint in metric_map["inspection_waypoints"]:
+            prior_server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            observation = prior_server.call_tool("observe")
+            declared = prior_server.call_tool(
+                "declare_visual_candidates",
+                observation_id=observation["raw_fpv_observation"]["observation_id"],
+            )
+            if declared["model_declared_observations"]:
+                break
+        prior_snapshot = prior_server._agent_view_payload()["runtime_metric_map"]
+    finally:
+        prior_server.close()
+
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "consumer",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        runtime_map_prior=prior_snapshot,
+        runtime_map_prior_source="prior/runtime_metric_map.json",
+    )
+    try:
+        runtime_map = server._agent_view_payload()["runtime_metric_map"]
+        prior_rows = [
+            item for item in runtime_map["observed_objects"] if item["freshness"] == "prior"
+        ]
+        metric_map = server.call_tool("metric_map")
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            server.call_tool("observe")
+        done = server.call_tool("done", reason="prior seeded smoke")
+        run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    finally:
+        server.close()
+
+    assert prior_rows
+    assert all(item["actionability"] == "needs_confirm" for item in prior_rows)
+    assert run_result["runtime_metric_map_prior"] == {
+        "loaded": True,
+        "source": "prior/runtime_metric_map.json",
+        "observed_object_count": len(prior_rows),
+    }
+
+
 def test_realworld_mcp_rejects_removed_cleanup_composite(
     tmp_path: Path,
 ) -> None:
