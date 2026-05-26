@@ -234,10 +234,31 @@ An agent-facing JSON view derived from a Navigation Map Artifact and public
 semantic annotations.
 _Avoid_: Raw occupancy map, private scene graph, independent map source, backend metadata
 
+**Runtime Metric Map**:
+The current-run Metric Map Projection after it has been enriched by public
+runtime observation evidence, such as observed cleanup handles and map update
+candidates.
+_Avoid_: Source map artifact, hidden mutable global map, private target truth
+
 **Cleanup Map Semantics**:
 Public room, fixture, affordance, waypoint, and frame annotations that make a
 Navigation Map Artifact usable for cleanup planning.
 _Avoid_: Private target truth, movable-object manifest, raw occupancy grid
+
+**Observed Object Prior**:
+A movable cleanup-object observation loaded from an earlier semantic sweep or
+snapshot into a later run's Runtime Metric Map.
+_Avoid_: Static fixture, current-run confirmed handle, private generated mess target
+
+**Map Update Candidate**:
+A public-evidence-backed proposed update to static map semantics, usually for a
+large fixture or semi-static furniture item.
+_Avoid_: Automatic source-map mutation, small movable cleanup object, raw detector proposal
+
+**Semantic Sweep Mode**:
+A no-cleanup-action mode that uses the same online Runtime Metric Map update
+logic while navigating and observing only to build or refresh map evidence.
+_Avoid_: Separate semantic-map tool, cleanup execution, private target discovery
 
 **Static Fixture Footprint**:
 The occupied navigation footprint of a fixed receptacle or furniture object in
@@ -601,6 +622,23 @@ _Avoid_: Backend profile, task recipe
 - An **Agibot GDK Map Context** is one kind of **Navigation Map Artifact**.
 - A **Metric Map Projection** is generated from a **Navigation Map Artifact** for
   agent planning; it should not be maintained as an independent map source.
+- A **Runtime Metric Map** is the online, current-run view the agent uses during
+  cleanup; it may include static map projection data, current observed cleanup
+  handles, loaded **Observed Object Priors**, and **Map Update Candidates**.
+- The static-map portion of a **Runtime Metric Map** should contain coarse
+  navigation geometry and fixed or semi-static fixtures, not small movable
+  cleanup targets.
+- Small movable cleanup targets should appear as observed handles in the
+  **Runtime Metric Map** and **Cleanup Worklist**, not as **Cleanup Map
+  Semantics** or static fixture entries.
+- An **Observed Object Prior** should be reobserved or confirmed in the current
+  run before it becomes an actionable cleanup handle.
+- A **Map Update Candidate** may be produced online during cleanup or in
+  **Semantic Sweep Mode**, but it should not silently mutate the source
+  **Navigation Map Artifact**.
+- **Semantic Sweep Mode** is an offline-build convenience over the same online
+  map update path: it disables cleanup actions while preserving navigation,
+  observation, grounding, and map-update evidence.
 - For Agibot G2, a **Metric Map Projection** should come from an **Agibot GDK
   Map Context** plus **Cleanup Map Semantics**, not from a required **Nav2 Map
   Artifact**.
