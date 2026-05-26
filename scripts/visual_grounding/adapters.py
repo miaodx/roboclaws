@@ -32,8 +32,20 @@ CONTRACT_FAKE_PIPELINE_ID = "contract-fake"
 FAKE_HTTP_PIPELINE_ID = "fake-http"
 REAL_ROUTER_PIPELINE_ID = "real-router"
 ADAPTER_CATALOG_SCHEMA = "visual_grounding_adapter_catalog_v1"
-_HOSTED_VLM_PRODUCERS = {"mimo-v2-omni", "qwen3-vl"}
 _MIMO_OPENAI_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
+_PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS = (
+    "xiaomi/mimo-v2-omni",
+    "vertex_ai/gemini-3.1-flash-lite-preview",
+    "vertex_ai/gemini-3-flash-preview",
+    "tongyi/qwen3-vl-flash",
+    "tongyi/qwen3-vl-plus",
+    "siliconflow/Qwen/Qwen3-VL-8B-Instruct",
+)
+_HOSTED_VLM_MODEL_IDS = {
+    "mimo-v2-omni": "mimo-v2-omni",
+    "qwen3-vl": "Qwen/Qwen3-VL-8B-Instruct",
+    **{model_id: model_id for model_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS},
+}
 
 
 @dataclass(frozen=True)
@@ -116,6 +128,72 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
         setup_hint=(
             "Configure VISUAL_GROUNDING_QWEN_BASE_URL for a local or remote "
             "Qwen3-VL OpenAI-compatible sidecar probe."
+        ),
+    ),
+    "xiaomi/mimo-v2-omni": AdapterSpec(
+        producer_id="xiaomi/mimo-v2-omni",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="xiaomi/mimo-v2-omni",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
+        ),
+    ),
+    "vertex_ai/gemini-3.1-flash-lite-preview": AdapterSpec(
+        producer_id="vertex_ai/gemini-3.1-flash-lite-preview",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="vertex_ai/gemini-3.1-flash-lite-preview",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
+        ),
+    ),
+    "vertex_ai/gemini-3-flash-preview": AdapterSpec(
+        producer_id="vertex_ai/gemini-3-flash-preview",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="vertex_ai/gemini-3-flash-preview",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
+        ),
+    ),
+    "tongyi/qwen3-vl-flash": AdapterSpec(
+        producer_id="tongyi/qwen3-vl-flash",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="tongyi/qwen3-vl-flash",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
+        ),
+    ),
+    "tongyi/qwen3-vl-plus": AdapterSpec(
+        producer_id="tongyi/qwen3-vl-plus",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="tongyi/qwen3-vl-plus",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
+        ),
+    ),
+    "siliconflow/Qwen/Qwen3-VL-8B-Instruct": AdapterSpec(
+        producer_id="siliconflow/Qwen/Qwen3-VL-8B-Instruct",
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id="siliconflow/Qwen/Qwen3-VL-8B-Instruct",
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
+            "OpenAI-compatible aggregation route."
         ),
     ),
 }
@@ -220,7 +298,7 @@ def adapter_runtime_status(producer_id: str) -> dict[str, Any]:
                 "sidecar environment."
             ),
         )
-    if producer_id in _HOSTED_VLM_PRODUCERS:
+    if _is_hosted_vlm_producer(producer_id):
         return _hosted_runtime_status(producer_id)
     return {
         "status": "unknown_adapter",
@@ -257,23 +335,31 @@ def _dependency_runtime_status(
     }
 
 
+def _is_hosted_vlm_producer(producer_id: str) -> bool:
+    return producer_id in _HOSTED_VLM_MODEL_IDS
+
+
+def _hosted_vlm_spec(producer_id: str) -> AdapterSpec:
+    spec = ADAPTER_SPECS.get(producer_id)
+    if spec is not None:
+        return spec
+    model_id = _HOSTED_VLM_MODEL_IDS.get(producer_id, producer_id)
+    return AdapterSpec(
+        producer_id=producer_id,
+        role="direct_producer",
+        status="requires_hosted_config",
+        model_id=model_id,
+        optional_extra="",
+        setup_hint=(
+            "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for an "
+            "OpenAI-compatible hosted visual model route."
+        ),
+    )
+
+
 def _hosted_runtime_status(producer_id: str) -> dict[str, Any]:
-    upper = "MIMO" if producer_id == "mimo-v2-omni" else "QWEN"
-    default_base_url = _MIMO_OPENAI_BASE_URL if producer_id == "mimo-v2-omni" else ""
-    base_url_configured = bool(
-        (
-            os.environ.get(f"VISUAL_GROUNDING_{upper}_BASE_URL")
-            or os.environ.get("VISUAL_GROUNDING_VLM_BASE_URL")
-            or default_base_url
-        ).strip()
-    )
-    api_key_configured = bool(
-        (
-            os.environ.get(f"VISUAL_GROUNDING_{upper}_API_KEY")
-            or os.environ.get("VISUAL_GROUNDING_VLM_API_KEY")
-            or (os.environ.get("MIMO_TP_KEY", "") if producer_id == "mimo-v2-omni" else "")
-        ).strip()
-    )
+    base_url_configured = bool(_hosted_vlm_base_url(producer_id))
+    api_key_configured = bool(_hosted_vlm_api_key(producer_id))
     allow_no_api_key = _bool_env("VISUAL_GROUNDING_VLM_ALLOW_NO_API_KEY")
     checks = [
         {"name": "base_url_configured", "available": base_url_configured},
@@ -368,7 +454,7 @@ def real_adapter_response(
 ) -> dict[str, Any]:
     if pipeline_id.endswith("-direct"):
         producer_id = pipeline_id.removesuffix("-direct")
-        if producer_id in _HOSTED_VLM_PRODUCERS:
+        if _is_hosted_vlm_producer(producer_id):
             return _hosted_vlm_direct_response(
                 payload=payload,
                 pipeline_id=pipeline_id,
@@ -382,7 +468,7 @@ def real_adapter_response(
         )
     if "+" in pipeline_id:
         proposer_id, refiner_id = pipeline_id.split("+", maxsplit=1)
-        if refiner_id in _HOSTED_VLM_PRODUCERS:
+        if _is_hosted_vlm_producer(refiner_id):
             return _hosted_vlm_refiner_pipeline_response(
                 payload=payload,
                 pipeline_id=pipeline_id,
@@ -914,21 +1000,12 @@ def _hosted_vlm_config(
     producer_id: str,
     stage: str,
 ) -> dict[str, Any]:
-    spec = ADAPTER_SPECS[producer_id]
-    upper = "MIMO" if producer_id == "mimo-v2-omni" else "QWEN"
-    base_url = (
-        os.environ.get(f"VISUAL_GROUNDING_{upper}_BASE_URL")
-        or os.environ.get("VISUAL_GROUNDING_VLM_BASE_URL")
-        or (_MIMO_OPENAI_BASE_URL if producer_id == "mimo-v2-omni" else "")
-    ).strip()
-    api_key = (
-        os.environ.get(f"VISUAL_GROUNDING_{upper}_API_KEY")
-        or os.environ.get("VISUAL_GROUNDING_VLM_API_KEY")
-        or (os.environ.get("MIMO_TP_KEY", "") if producer_id == "mimo-v2-omni" else "")
-    ).strip()
+    spec = _hosted_vlm_spec(producer_id)
+    base_url = _hosted_vlm_base_url(producer_id)
+    api_key = _hosted_vlm_api_key(producer_id)
     model_id = (
         _request_model_id(payload, producer_id)
-        or os.environ.get(f"VISUAL_GROUNDING_{upper}_MODEL_ID")
+        or _hosted_vlm_model_env(producer_id)
         or spec.model_id
     )
     error_reason = ""
@@ -938,14 +1015,16 @@ def _hosted_vlm_config(
         error_reason = "missing_config"
         error_message = (
             f"{producer_id} {stage} real mode requires "
-            f"VISUAL_GROUNDING_{upper}_BASE_URL or VISUAL_GROUNDING_VLM_BASE_URL"
+            "VISUAL_GROUNDING_*_BASE_URL, VISUAL_GROUNDING_VLM_BASE_URL, "
+            "or XM_LLM_BASE_URL"
         )
     elif not api_key and not allow_no_api_key:
         error_reason = "missing_config"
         error_message = (
             f"{producer_id} {stage} real mode requires "
-            f"VISUAL_GROUNDING_{upper}_API_KEY, VISUAL_GROUNDING_VLM_API_KEY, "
-            "or VISUAL_GROUNDING_VLM_ALLOW_NO_API_KEY=true for local test servers"
+            "VISUAL_GROUNDING_*_API_KEY, VISUAL_GROUNDING_VLM_API_KEY, "
+            "XM_LLM_API_KEY, or VISUAL_GROUNDING_VLM_ALLOW_NO_API_KEY=true "
+            "for local test servers"
         )
     return {
         "producer_id": producer_id,
@@ -961,6 +1040,70 @@ def _hosted_vlm_config(
             spec,
         ),
     }
+
+
+def _hosted_vlm_base_url(producer_id: str) -> str:
+    prefixes = _hosted_vlm_env_prefixes(producer_id)
+    configured = _first_env(
+        [
+            *(f"VISUAL_GROUNDING_{prefix}_BASE_URL" for prefix in prefixes),
+            "VISUAL_GROUNDING_VLM_BASE_URL",
+        ]
+    )
+    if configured:
+        return configured
+    if producer_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS:
+        return os.environ.get("XM_LLM_BASE_URL", "").strip()
+    if producer_id == "mimo-v2-omni":
+        return _MIMO_OPENAI_BASE_URL
+    return ""
+
+
+def _hosted_vlm_api_key(producer_id: str) -> str:
+    prefixes = _hosted_vlm_env_prefixes(producer_id)
+    configured = _first_env(
+        [
+            *(f"VISUAL_GROUNDING_{prefix}_API_KEY" for prefix in prefixes),
+            "VISUAL_GROUNDING_VLM_API_KEY",
+        ]
+    )
+    if configured:
+        return configured
+    if producer_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS:
+        return os.environ.get("XM_LLM_API_KEY", "").strip()
+    if producer_id == "mimo-v2-omni":
+        return os.environ.get("MIMO_TP_KEY", "").strip()
+    return ""
+
+
+def _hosted_vlm_model_env(producer_id: str) -> str:
+    prefixes = _hosted_vlm_env_prefixes(producer_id)
+    return _first_env(
+        [
+            *(f"VISUAL_GROUNDING_{prefix}_MODEL_ID" for prefix in prefixes),
+            "VISUAL_GROUNDING_VLM_MODEL_ID",
+        ]
+    )
+
+
+def _hosted_vlm_env_prefixes(producer_id: str) -> tuple[str, ...]:
+    if producer_id == "mimo-v2-omni" or producer_id.startswith("xiaomi/"):
+        return ("MIMO",)
+    if producer_id == "qwen3-vl" or producer_id.startswith("tongyi/"):
+        return ("QWEN",)
+    if producer_id.startswith("siliconflow/"):
+        return ("QWEN", "SILICONFLOW")
+    if producer_id.startswith("vertex_ai/"):
+        return ("GEMINI",)
+    return ()
+
+
+def _first_env(names: list[str]) -> str:
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _call_hosted_vlm_json(

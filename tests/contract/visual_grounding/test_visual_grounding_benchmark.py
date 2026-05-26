@@ -542,6 +542,109 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
     )
 
 
+def test_visual_grounding_benchmark_runs_provider_prefixed_hosted_vlm_direct(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    seen: dict[str, Any] = {}
+    chat_server = _start_chat_server(
+        seen,
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "candidates": [
+                                    {
+                                        "category": "dish",
+                                        "image_region": {
+                                            "type": "bbox",
+                                            "value": [0.4, 0.42, 0.22, 0.18],
+                                        },
+                                        "confidence": 0.83,
+                                        "evidence_note": "fake hosted VLM direct output",
+                                        "destination_hint": {
+                                            "candidate_fixture_id": "sink_01",
+                                            "confidence": 0.5,
+                                        },
+                                    }
+                                ],
+                                "rejected_proposals": [],
+                            }
+                        )
+                    }
+                }
+            ],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+            },
+        },
+    )
+    monkeypatch.setenv(
+        "VISUAL_GROUNDING_VLM_BASE_URL",
+        f"http://127.0.0.1:{chat_server.server_port}/v1",
+    )
+    monkeypatch.setenv("VISUAL_GROUNDING_VLM_API_KEY", "secret-vlm-key")
+    service = _start_configurable_service(
+        pipeline_id="real-router",
+        adapter_mode="real",
+    )
+    pipelines = [
+        "xiaomi/mimo-v2-omni-direct",
+        "vertex_ai/gemini-3-flash-preview-direct",
+        "tongyi/qwen3-vl-flash-direct",
+        "siliconflow/Qwen/Qwen3-VL-8B-Instruct-direct",
+    ]
+    try:
+        base_url = f"http://127.0.0.1:{service.server_port}"
+        subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--corpus",
+                str(CORPUS),
+                "--output-dir",
+                str(tmp_path),
+                "--pipeline",
+                ",".join(pipelines),
+                "--base-url",
+                base_url,
+                "--timeout-s",
+                "2",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+    finally:
+        service.shutdown()
+        service.server_close()
+        chat_server.shutdown()
+        chat_server.server_close()
+
+    result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
+    by_pipeline = {item["pipeline_id"]: item for item in result["pipelines"]}
+    assert set(by_pipeline) == set(pipelines)
+    assert all(item["failure_count"] == 0 for item in by_pipeline.values())
+    assert all(item["auth_mode"] == "bearer_configured" for item in by_pipeline.values())
+    assert all(item["evidence_level"] == "real_or_hosted_service" for item in by_pipeline.values())
+    seen_models = {
+        request["payload"]["model"]
+        for request in seen["requests"]
+        if request["payload"].get("model")
+    }
+    assert seen_models == {
+        "xiaomi/mimo-v2-omni",
+        "vertex_ai/gemini-3-flash-preview",
+        "tongyi/qwen3-vl-flash",
+        "siliconflow/Qwen/Qwen3-VL-8B-Instruct",
+    }
+    assert {request["authorization"] for request in seen["requests"]} == {"Bearer secret-vlm-key"}
+    assert "secret-vlm-key" not in json.dumps(result)
+
+
 def _start_fake_server(*, mode: str) -> ThreadingHTTPServer:
     server = ThreadingHTTPServer(
         ("127.0.0.1", 0),
@@ -580,6 +683,13 @@ def _start_chat_server(
             seen["path"] = self.path
             seen["authorization"] = self.headers.get("Authorization")
             seen["payload"] = json.loads(self.rfile.read(length).decode("utf-8"))
+            seen.setdefault("requests", []).append(
+                {
+                    "path": seen["path"],
+                    "authorization": seen["authorization"],
+                    "payload": seen["payload"],
+                }
+            )
             body = json.dumps(response_payload).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
