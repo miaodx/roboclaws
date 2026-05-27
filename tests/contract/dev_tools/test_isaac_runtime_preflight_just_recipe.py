@@ -92,3 +92,32 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
     ]
+
+
+def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    assert "molmo-isaac-cleanup-smoke" in agent_text
+    assert re.search(r"^molmo-isaac-cleanup-smoke \*overrides:", harness_text, re.MULTILINE)
+    assert "molmospaces_realworld_cleanup.py" in harness_text
+    assert "check_molmo_realworld_cleanup_result.py" in harness_text
+    assert "--backend isaaclab_subprocess" in harness_text
+    assert "--require-isaac-real-runtime" in harness_text
+    assert "--require-isaac-scene-loaded" in harness_text
+    assert "--require-isaac-selected-usd-bindings" in harness_text
+    assert "--require-isaac-robot-view-provenance" in harness_text
+
+    route = trace_agent_harness(
+        "molmo-isaac-cleanup-smoke",
+        "output_dir=/tmp/roboclaws-isaac-cleanup",
+        "runtime_python=/tmp/isaac-python",
+        "scene_usd_path=/tmp/molmospaces-scene.usd",
+    )
+    assert route == [
+        "just",
+        "harness::molmo-isaac-cleanup-smoke",
+        "output_dir=/tmp/roboclaws-isaac-cleanup",
+        "runtime_python=/tmp/isaac-python",
+        "scene_usd_path=/tmp/molmospaces-scene.usd",
+    ]

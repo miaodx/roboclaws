@@ -375,4 +375,25 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         min_sweep_coverage=1.0,
         require_waypoint_honesty=True,
         require_real_robot_alignment=True,
+        require_isaac_runtime=True,
+        require_isaac_semantic_pose=True,
     )
+    try:
+        checker._assert_result(
+            run_result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="isaaclab_subprocess",
+            expect_policy="deterministic_sweep_baseline",
+            expect_profile="world-labels",
+            min_generated_mess_count=1,
+            require_robot_views=True,
+            require_isaac_runtime=True,
+            require_isaac_real_runtime=True,
+            require_isaac_selected_usd_bindings=True,
+            require_isaac_robot_view_provenance=True,
+        )
+    except AssertionError:
+        pass
+    else:  # pragma: no cover - assertion branch
+        raise AssertionError("strict real Isaac gates must reject fake protocol evidence")

@@ -428,7 +428,7 @@ harness target *args:
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
       molmo-planner-proof-bundle-runner|molmo-planner-proof-bundle-execute-rerun|\
       molmo-planner-manipulation-probe|molmo-visual-grounding-benchmark|\
-      molmo-isaac-runtime-preflight|molmo-isaac-runtime-smoke|\
+      molmo-isaac-runtime-preflight|molmo-isaac-runtime-smoke|molmo-isaac-cleanup-smoke|\
       list-tasks|history)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;

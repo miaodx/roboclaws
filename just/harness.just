@@ -20,6 +20,7 @@
 # - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
 # - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
 # - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
+# - just harness::molmo-isaac-cleanup-smoke  strict Isaac Lab cleanup report gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -735,6 +736,108 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$require_nonblank_image" == "true" ]]; then
       check_cmd+=(--require-nonblank-image)
+    fi
+    "${check_cmd[@]}"
+
+# Strict local Isaac Lab cleanup report smoke. This uses the existing
+# household-cleanup backend selector, then applies report-level Isaac gates so a
+# full cleanup run cannot pass with fake runtime, placeholder visuals, or
+# unbound selected USD handles.
+molmo-isaac-cleanup-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    output_dir="output/isaaclab/cleanup-smoke"
+    stamp=""
+    seed="7"
+    task="帮我收拾这个房间"
+    scene_source="procthor-10k-val"
+    scene_index="0"
+    scene_usd_path=""
+    generated_mess_count="1"
+    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    robot_name="simple_camera_rig"
+    require_real_runtime="true"
+    require_scene_loaded="true"
+    require_selected_usd_bindings="true"
+    require_robot_view_provenance="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|output_dir|stamp|seed|task|prompt|scene_source|scene_index|\
+        scene_usd_path|generated_mess_count|map_bundle|robot_name|\
+        require_real_runtime|require_scene_loaded|require_selected_usd_bindings|\
+        require_robot_view_provenance)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      if [[ "$key" == "prompt" ]]; then
+        key="task"
+      fi
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    run_dir="${output_dir}/${stamp}"
+    mkdir -p "$run_dir"
+    export ROBOCLAWS_ISAACLAB_PYTHON="$runtime_python"
+    export ROBOCLAWS_ISAACLAB_RUNTIME_MODE="real"
+    run_cmd=(.venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+      --output-dir "$run_dir" \
+      --seed "$seed" \
+      --task "$task" \
+      --backend isaaclab_subprocess \
+      --cleanup-profile world-labels \
+      --fixture-hint-mode room_only \
+      --generated-mess-count "$generated_mess_count" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --include-robot \
+      --robot-name "$robot_name" \
+      --record-robot-views \
+      --map-bundle-dir "$map_bundle" \
+      --require-map-bundle)
+    if [[ -n "$scene_usd_path" ]]; then
+      run_cmd+=(--isaac-scene-usd-path "$scene_usd_path")
+    fi
+    "${run_cmd[@]}"
+    check_cmd=(.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+      "$run_dir" \
+      --expect-backend isaaclab_subprocess \
+      --expect-policy deterministic_sweep_baseline \
+      --expect-profile world-labels \
+      --min-generated-mess-count "$generated_mess_count" \
+      --require-robot-views \
+      --require-advisory-scoring \
+      --min-semantic-accepted-count "$generated_mess_count" \
+      --min-sweep-coverage 1.0 \
+      --require-waypoint-honesty \
+      --require-real-robot-alignment \
+      --require-isaac-runtime \
+      --require-isaac-semantic-pose)
+    if [[ "$require_real_runtime" == "true" ]]; then
+      check_cmd+=(--require-isaac-real-runtime)
+    fi
+    if [[ "$require_scene_loaded" == "true" ]]; then
+      check_cmd+=(--require-isaac-scene-loaded)
+    fi
+    if [[ "$require_selected_usd_bindings" == "true" ]]; then
+      check_cmd+=(--require-isaac-selected-usd-bindings)
+    fi
+    if [[ "$require_robot_view_provenance" == "true" ]]; then
+      check_cmd+=(--require-isaac-robot-view-provenance)
     fi
     "${check_cmd[@]}"
 

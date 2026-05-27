@@ -2,8 +2,9 @@
 # Isaac Lab MolmoSpaces Backend Support
 
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
-real-mode Phase A smoke attempt, Phase B static robot-view evidence path, and
-Phase C selected USD-binding diagnostics implemented; real Isaac proof pending
+real-mode Phase A smoke attempt, Phase B static robot-view evidence path, Phase
+C selected USD-binding diagnostics, and strict full-cleanup Isaac report gate
+implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -180,6 +181,17 @@ protocol:
   `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py` and
   `just agent::harness molmo-isaac-runtime-smoke` can now require selected
   cleanup handles to bind to USD prims through `--require-selected-usd-bindings`.
+- `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py` now has
+  report-level Isaac gates for full cleanup runs:
+  `--require-isaac-real-runtime`, `--require-isaac-scene-loaded`,
+  `--require-isaac-selected-usd-bindings`,
+  `--require-isaac-robot-view-provenance`, and
+  `--require-isaac-semantic-pose`. The private
+  `just agent::harness molmo-isaac-cleanup-smoke` command runs the existing
+  `household-cleanup`-shaped direct entrypoint with
+  `backend=isaaclab_subprocess` and applies those strict report gates, so real
+  cleanup report parity has one local-dev acceptance command once
+  `.venv-isaaclab/` is available.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

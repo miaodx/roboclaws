@@ -12,6 +12,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
 )
@@ -68,6 +69,8 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     successful_semantic_phases,
 )
 from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+
+ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -137,6 +140,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     parser.add_argument("--require-waypoint-honesty", action="store_true")
     parser.add_argument("--require-real-robot-alignment", action="store_true")
+    parser.add_argument("--require-isaac-runtime", action="store_true")
+    parser.add_argument("--require-isaac-real-runtime", action="store_true")
+    parser.add_argument("--require-isaac-scene-loaded", action="store_true")
+    parser.add_argument("--require-isaac-selected-usd-bindings", action="store_true")
+    parser.add_argument("--require-isaac-semantic-pose", action="store_true")
+    parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
     return parser.parse_args()
 
 
@@ -204,6 +213,12 @@ def main() -> None:
             require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
             require_waypoint_honesty=args.require_waypoint_honesty,
             require_real_robot_alignment=args.require_real_robot_alignment,
+            require_isaac_runtime=args.require_isaac_runtime,
+            require_isaac_real_runtime=args.require_isaac_real_runtime,
+            require_isaac_scene_loaded=args.require_isaac_scene_loaded,
+            require_isaac_selected_usd_bindings=args.require_isaac_selected_usd_bindings,
+            require_isaac_semantic_pose=args.require_isaac_semantic_pose,
+            require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -259,6 +274,12 @@ def _assert_result(
     require_planner_cleanup_bridge_ready: bool = False,
     require_waypoint_honesty: bool = False,
     require_real_robot_alignment: bool = False,
+    require_isaac_runtime: bool = False,
+    require_isaac_real_runtime: bool = False,
+    require_isaac_scene_loaded: bool = False,
+    require_isaac_selected_usd_bindings: bool = False,
+    require_isaac_semantic_pose: bool = False,
+    require_isaac_robot_view_provenance: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -443,6 +464,24 @@ def _assert_result(
         _assert_waypoint_honesty(data, report_text)
     if require_real_robot_alignment:
         _assert_real_robot_alignment(data, base, report_text)
+    if (
+        require_isaac_runtime
+        or require_isaac_real_runtime
+        or require_isaac_scene_loaded
+        or require_isaac_selected_usd_bindings
+        or require_isaac_semantic_pose
+        or require_isaac_robot_view_provenance
+    ):
+        _assert_isaac_runtime(
+            data,
+            base,
+            report_text,
+            require_real_runtime=require_isaac_real_runtime,
+            require_scene_loaded=require_isaac_scene_loaded,
+            require_selected_usd_bindings=require_isaac_selected_usd_bindings,
+            require_semantic_pose=require_isaac_semantic_pose,
+            require_robot_view_provenance=require_isaac_robot_view_provenance,
+        )
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -814,6 +853,112 @@ def _assert_robot_views(
             assert OPEN_RECEPTACLE_PHASE in focused_actions, data
             assert PLACE_INSIDE_PHASE in focused_actions, data
             assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
+
+
+def _assert_isaac_runtime(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    require_real_runtime: bool,
+    require_scene_loaded: bool,
+    require_selected_usd_bindings: bool,
+    require_semantic_pose: bool,
+    require_robot_view_provenance: bool,
+) -> None:
+    assert data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, data
+    isaac = data.get("isaac_runtime") or {}
+    assert isaac, data
+    assert "Isaac Runtime Diagnostics" in report_text, report_text[:500]
+
+    runtime = isaac.get("runtime") or {}
+    rendering = runtime.get("rendering") or {}
+    scene_load = isaac.get("scene_load") or {}
+    scene_bindings = isaac.get("scene_binding_diagnostics") or {}
+    segmentation = isaac.get("segmentation") or {}
+
+    assert runtime.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, runtime
+    assert segmentation.get("status") in {
+        "blocked_capability",
+        "available",
+        "unavailable",
+    }, segmentation
+
+    if require_real_runtime:
+        assert runtime.get("runtime_mode") == "real", runtime
+        assert rendering.get("real_rendering_proven") is True, rendering
+        assert rendering.get("placeholder_visuals") is not True, rendering
+        assert rendering.get("status") == "real_rendering_proven", rendering
+
+    if require_scene_loaded:
+        assert scene_load.get("status") == "loaded", scene_load
+        assert scene_load.get("usd_stage_loaded") is True, scene_load
+        scene_usd = str(isaac.get("scene_usd") or scene_load.get("scene_usd") or "")
+        assert scene_usd, isaac
+        scene_path = Path(scene_usd)
+        if scene_path.is_absolute():
+            assert scene_path.is_file(), scene_path
+        else:
+            resolved = _resolve_path(base, scene_usd)
+            assert resolved.is_file(), resolved
+
+    if require_selected_usd_bindings:
+        _assert_selected_isaac_usd_bindings(scene_bindings)
+
+    if require_semantic_pose:
+        assert data.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, data
+        evidence = data.get("manipulation_evidence") or {}
+        assert evidence.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, evidence
+        assert evidence.get("isaac_semantic_pose_edits") is True, evidence
+        assert evidence.get("planner_backed") is False, evidence
+        assert evidence.get("physical_robot") is False, evidence
+        assert ISAAC_SEMANTIC_POSE_PROVENANCE in report_text, report_text[:500]
+        for item in data.get("semantic_substeps") or []:
+            for step in item.get("steps") or []:
+                if step.get("phase") in SEMANTIC_RESPONSE_PHASES and step.get("status") == "ok":
+                    assert step.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, step
+                    assert step.get("planner_backed") is not True, step
+                    assert step.get("physical_robot") is not True, step
+
+    if require_robot_view_provenance:
+        _assert_robot_views(data, base, require_complete_actions=False)
+        assert data.get("view_variant") == ISAACLAB_ROBOT_VIEW_VARIANT, data
+        steps = data.get("robot_view_steps") or []
+        assert steps, data
+        for step in steps:
+            provenance_text = json.dumps(step.get("view_provenance"), sort_keys=True).lower()
+            assert "placeholder" not in provenance_text, step
+            assert "isaac_lab_camera_rgb" in provenance_text, step
+
+
+def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
+    assert scene_bindings.get("schema") == ISAAC_PUBLIC_SCENE_BINDING_SCHEMA, scene_bindings
+    assert scene_bindings.get("status") == "selected_bound", scene_bindings
+    assert scene_bindings.get("source") == "usd_stage_traversal", scene_bindings
+    assert scene_bindings.get("private_manifest_exposed_to_agent") is False, scene_bindings
+    selected_object_count = int(scene_bindings.get("selected_object_count") or 0)
+    selected_receptacle_count = int(scene_bindings.get("selected_target_receptacle_count") or 0)
+    selected_object_bound_count = int(scene_bindings.get("selected_object_bound_count") or 0)
+    selected_receptacle_bound_count = int(
+        scene_bindings.get("selected_target_receptacle_bound_count") or 0
+    )
+    assert selected_object_count > 0, scene_bindings
+    assert selected_receptacle_count > 0, scene_bindings
+    assert selected_object_bound_count >= selected_object_count, scene_bindings
+    assert selected_receptacle_bound_count >= selected_receptacle_count, scene_bindings
+    assert not scene_bindings.get("blockers"), scene_bindings
+    _assert_bound_isaac_binding_rows(scene_bindings.get("selected_object_bindings") or {})
+    _assert_bound_isaac_binding_rows(
+        scene_bindings.get("selected_target_receptacle_bindings") or {}
+    )
+
+
+def _assert_bound_isaac_binding_rows(bindings: dict[str, Any]) -> None:
+    assert bindings, bindings
+    for binding in bindings.values():
+        assert binding.get("status") == "bound", binding
+        assert binding.get("usd_prim_path"), binding
+        assert binding.get("match_strategy") not in {"", "none"}, binding
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:
