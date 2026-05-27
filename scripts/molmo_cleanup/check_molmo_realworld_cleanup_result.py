@@ -920,6 +920,7 @@ def _assert_isaac_runtime(
             resolved = _resolve_path(base, scene_usd)
             assert resolved.is_file(), resolved
 
+    scene_index_payload: dict[str, Any] | None = None
     if require_selected_usd_bindings:
         _assert_selected_isaac_usd_bindings(scene_bindings)
         scene_index_payload = _assert_isaac_scene_index_artifact(data, isaac, base)
@@ -976,6 +977,11 @@ def _assert_isaac_runtime(
         assert segmentation.get("agent_facing") is False, segmentation
         assert segmentation.get("no_simulator_label_fallback") is True, segmentation
         assert "Segmentation" in report_text, report_text[:500]
+        if scene_index_payload is not None:
+            _assert_isaac_scene_index_matches_runtime_segmentation(
+                segmentation,
+                scene_index_payload.get("segmentation") or {},
+            )
 
     if require_snapshot_provenance:
         _assert_isaac_snapshot_provenance(isaac, base)
@@ -1104,6 +1110,42 @@ def _assert_isaac_scene_index_matches_runtime_bindings(
                     runtime_row,
                     artifact_row,
                 )
+
+
+def _assert_isaac_scene_index_matches_runtime_segmentation(
+    runtime_segmentation: dict[str, Any],
+    artifact_segmentation: dict[str, Any],
+) -> None:
+    for key in (
+        "schema",
+        "status",
+        "available",
+        "source",
+        "capture_method",
+        "tensor_output_available",
+        "candidate_overlay_status",
+        "candidate_bbox_count",
+        "selected_usd_prim_match_count",
+        "agent_facing",
+        "no_simulator_label_fallback",
+    ):
+        assert artifact_segmentation.get(key) == runtime_segmentation.get(key), (
+            key,
+            runtime_segmentation,
+            artifact_segmentation,
+        )
+    for key in (
+        "requested_data_types",
+        "output_data_types",
+        "selected_usd_prim_paths",
+        "selected_candidate_bboxes",
+        "candidate_bboxes",
+    ):
+        assert artifact_segmentation.get(key) == runtime_segmentation.get(key), (
+            key,
+            runtime_segmentation,
+            artifact_segmentation,
+        )
 
 
 def _assert_isaac_scene_index_report_rows(

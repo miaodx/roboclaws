@@ -309,6 +309,40 @@ def test_checker_rejects_isaac_scene_index_binding_drift_from_run_result(
         )
 
 
+def test_checker_rejects_isaac_scene_index_segmentation_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    runtime_segmentation = _isaac_available_segmentation()
+    artifact_segmentation = json.loads(json.dumps(runtime_segmentation))
+    artifact_segmentation["candidate_bbox_count"] = 2
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        segmentation=runtime_segmentation,
+    )
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        segmentation=artifact_segmentation,
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=True,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -1748,7 +1782,15 @@ def _isaac_selected_scene_bindings() -> dict[str, object]:
 def _isaac_runtime_result(
     base: Path,
     scene_bindings: dict[str, object],
+    *,
+    segmentation: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if segmentation is None:
+        segmentation = {
+            "status": "blocked_capability",
+            "agent_facing": False,
+            "no_simulator_label_fallback": True,
+        }
     return {
         "backend": "isaaclab_subprocess",
         "artifacts": {"isaac_scene_index": str(base / "isaac_scene_index.json")},
@@ -1756,11 +1798,7 @@ def _isaac_runtime_result(
             "runtime": {"primitive_provenance": "isaac_semantic_pose"},
             "scene_binding_diagnostics": scene_bindings,
             "scene_index_artifact": str(base / "isaac_scene_index.json"),
-            "segmentation": {
-                "status": "blocked_capability",
-                "agent_facing": False,
-                "no_simulator_label_fallback": True,
-            },
+            "segmentation": segmentation,
         },
     }
 
@@ -1770,10 +1808,17 @@ def _write_isaac_scene_index(
     scene_bindings: dict[str, object],
     *,
     artifact_scene_bindings: dict[str, object] | None = None,
+    segmentation: dict[str, object] | None = None,
     object_prim_path: str = "/World/Objects/mug_01",
 ) -> None:
     if artifact_scene_bindings is None:
         artifact_scene_bindings = scene_bindings
+    if segmentation is None:
+        segmentation = {
+            "status": "blocked_capability",
+            "agent_facing": False,
+            "no_simulator_label_fallback": True,
+        }
     payload = {
         "schema": "isaac_scene_index_artifact_v1",
         "backend": "isaaclab_subprocess",
@@ -1786,8 +1831,51 @@ def _write_isaac_scene_index(
         },
         "receptacle_index_count": 1,
         "scene_binding_diagnostics": artifact_scene_bindings,
+        "segmentation": segmentation,
     }
     (base / "isaac_scene_index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _isaac_available_segmentation() -> dict[str, object]:
+    bbox = _isaac_segmentation_bbox()
+    return {
+        "schema": "isaac_segmentation_diagnostics_v1",
+        "status": "available",
+        "available": True,
+        "source": "isaac_lab_camera",
+        "capture_method": "isaac_lab_camera_segmentation",
+        "requested_data_types": [
+            "semantic_segmentation",
+            "instance_segmentation_fast",
+            "instance_id_segmentation_fast",
+        ],
+        "output_data_types": ["instance_id_segmentation_fast"],
+        "tensor_output_available": True,
+        "candidate_overlay_status": "available",
+        "candidate_bbox_count": 1,
+        "selected_usd_prim_match_count": 1,
+        "selected_usd_prim_paths": [
+            "/World/Objects/mug_01",
+            "/World/Receptacles/sink_01",
+        ],
+        "selected_candidate_bboxes": [bbox],
+        "candidate_bboxes": [bbox],
+        "agent_facing": False,
+        "no_simulator_label_fallback": True,
+    }
+
+
+def _isaac_segmentation_bbox() -> dict[str, object]:
+    return {
+        "view": "fpv",
+        "data_type": "instance_id_segmentation_fast",
+        "label_id": 3,
+        "label": "/World/Objects/mug_01",
+        "usd_prim_path": "/World/Objects/mug_01",
+        "bbox_xyxy": [8, 8, 32, 36],
+        "pixel_count": 144,
+        "image_size": [64, 48],
+    }
 
 
 def _isaac_report_text(scene_bindings: dict[str, object]) -> str:
@@ -1800,7 +1888,7 @@ def _isaac_report_text(scene_bindings: dict[str, object]) -> str:
         if isinstance(row, dict)
     )
     return (
-        "Isaac Runtime Diagnostics Scene Index Artifact Rows "
+        "Isaac Runtime Diagnostics Segmentation Scene Index Artifact Rows "
         "Selected USD Binding Rows Selected USD Index Rows "
         f"{row_text}"
     )

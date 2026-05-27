@@ -244,6 +244,12 @@ protocol:
   `isaac_scene_index.json["scene_binding_diagnostics"]`, so report-only USD
   evidence cannot silently disagree with the runtime diagnostics it is meant to
   render.
+- When strict Isaac segmentation evidence is required alongside selected USD
+  bindings, the full-cleanup checker now also cross-checks
+  `isaac_scene_index.json["segmentation"]` against the runtime segmentation
+  diagnostics in `run_result.json`, including candidate counts, selected USD
+  hits, candidate bbox rows, provenance fields, and agent-facing/private-boundary
+  flags.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
