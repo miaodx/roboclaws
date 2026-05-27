@@ -215,6 +215,13 @@ protocol:
   `--require-isaac-semantic-pose` checker gate verifies that the report and
   JSON state show `isaac_semantic_pose`, `rendered_to_usd=false`,
   `planner_backed=false`, and `physical_robot=false`.
+- Full cleanup runs now persist `isaac_scene_index.json` as a report-only Phase
+  C artifact. It carries scene-load diagnostics, object/receptacle USD indexes,
+  selected binding diagnostics, segmentation diagnostics, mapping gaps, and
+  explicit `agent_facing=false` / `private_manifest_exposed_to_agent=false`
+  flags so USD handle evidence is reviewable without moving private scoring
+  truth into Agent View. The strict selected-USD-binding checker gate now
+  requires this artifact when asserting real cleanup parity.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

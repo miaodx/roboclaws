@@ -12,6 +12,7 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -921,6 +922,7 @@ def _assert_isaac_runtime(
 
     if require_selected_usd_bindings:
         _assert_selected_isaac_usd_bindings(scene_bindings)
+        _assert_isaac_scene_index_artifact(data, isaac, base)
 
     if require_semantic_pose:
         assert data.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, data
@@ -991,6 +993,41 @@ def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
     _assert_bound_isaac_binding_rows(
         scene_bindings.get("selected_target_receptacle_bindings") or {}
     )
+
+
+def _assert_isaac_scene_index_artifact(
+    data: dict[str, Any],
+    isaac: dict[str, Any],
+    base: Path,
+) -> None:
+    artifacts = data.get("artifacts") or {}
+    artifact_path = str(
+        isaac.get("scene_index_artifact") or artifacts.get("isaac_scene_index") or ""
+    )
+    assert artifact_path, isaac
+    resolved = _resolve_path(base, artifact_path)
+    assert resolved.is_file(), resolved
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    assert payload.get("schema") == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA, payload
+    assert payload.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, payload
+    assert payload.get("agent_facing") is False, payload
+    assert payload.get("private_manifest_exposed_to_agent") is False, payload
+    assert "private_manifest" not in payload, payload
+    assert payload.get("object_index"), payload
+    assert payload.get("receptacle_index"), payload
+    assert int(payload.get("object_index_count") or 0) == len(payload["object_index"]), payload
+    assert int(payload.get("receptacle_index_count") or 0) == len(payload["receptacle_index"]), (
+        payload
+    )
+    _assert_bound_isaac_index_rows(payload.get("object_index") or {})
+    _assert_bound_isaac_index_rows(payload.get("receptacle_index") or {})
+    _assert_selected_isaac_usd_bindings(payload.get("scene_binding_diagnostics") or {})
+
+
+def _assert_bound_isaac_index_rows(index: dict[str, Any]) -> None:
+    for handle, row in index.items():
+        assert isinstance(row, dict), (handle, row)
+        assert row.get("usd_prim_path"), row
 
 
 def _assert_isaac_snapshot_provenance(isaac: dict[str, Any], base: Path) -> None:

@@ -1413,6 +1413,11 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
     scene_load = isaac.get("scene_load") or {}
     scene_index = isaac.get("scene_index_diagnostics") or {}
     scene_bindings = isaac.get("scene_binding_diagnostics") or {}
+    scene_index_artifact = str(
+        isaac.get("scene_index_artifact")
+        or (run_result.get("artifacts") or {}).get("isaac_scene_index")
+        or ""
+    )
     mapping_gaps = isaac.get("mapping_gaps") or []
     snapshots = [item for item in isaac.get("snapshot_artifacts", []) if isinstance(item, dict)]
     real_snapshots = sum(1 for item in snapshots if item.get("placeholder_visuals") is False)
@@ -1441,6 +1446,7 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Objects indexed', isaac.get('object_index_count', 0))}"
         f"{_metric('Receptacles indexed', isaac.get('receptacle_index_count', 0))}"
         f"{_metric('USD index', scene_index.get('status', 'unknown'))}"
+        f"{_metric('Scene index artifact', 'available' if scene_index_artifact else 'missing')}"
         f"{_metric('Selected USD bindings', selected_binding_summary)}"
         f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
         f"{_metric('Seg bboxes', segmentation.get('candidate_bbox_count', 0))}"
@@ -1472,6 +1478,7 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(note)}</p>'
         f"{metrics}"
         f"<p><strong>Scene USD:</strong> {html.escape(str(isaac.get('scene_usd', '')))}</p>"
+        f"<p><strong>Scene index artifact:</strong> {html.escape(scene_index_artifact)}</p>"
         f"<p><strong>Scene load reason:</strong> "
         f"{html.escape(str(scene_load.get('reason', '')))}</p>"
         f"<p><strong>Rendering reason:</strong> "

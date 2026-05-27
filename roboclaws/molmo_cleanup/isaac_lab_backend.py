@@ -16,6 +16,7 @@ ISAAC_SEMANTIC_POSE_PROVENANCE = "isaac_semantic_pose"
 ISAAC_SEMANTIC_POSE_STATE_SCHEMA = "isaac_semantic_pose_state_v1"
 ISAAC_SEMANTIC_POSE_EVENT_SCHEMA = "isaac_semantic_pose_event_v1"
 ISAAC_SEMANTIC_POSE_STATE_SOURCE = "backend_json_state"
+ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA = "isaac_scene_index_artifact_v1"
 ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-map-chase-verify"
 DEFAULT_ISAACLAB_PYTHON = Path(__file__).resolve().parents[2] / ".venv-isaaclab" / "bin" / "python"
 DEFAULT_ISAAC_WORKER_TIMEOUT_S = 120.0
@@ -130,6 +131,30 @@ class IsaacLabSubprocessBackend:
     def semantic_pose_state(self) -> dict[str, Any]:
         raw = self._read_state().get("semantic_pose_state") or {}
         return dict(raw) if isinstance(raw, dict) else {}
+
+    def scene_index_artifact_payload(self) -> dict[str, Any]:
+        """Return report-only USD scene index evidence without private scoring truth."""
+
+        return {
+            "schema": ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
+            "backend": ISAACLAB_SUBPROCESS_BACKEND,
+            "runtime_mode": str(self.runtime.get("runtime_mode") or self.runtime_mode),
+            "scene_index": self.scene_index,
+            "scene_usd": self.scene_usd,
+            "object_index_count": len(self.object_index),
+            "receptacle_index_count": len(self.receptacle_index),
+            "object_index": self.object_index,
+            "receptacle_index": self.receptacle_index,
+            "scene_load": self.scene_load,
+            "scene_index_diagnostics": self.scene_index_diagnostics,
+            "scene_binding_diagnostics": self.scene_binding_diagnostics,
+            "segmentation": self.segmentation,
+            "mapping_gaps": self.mapping_gaps,
+            "requested_generated_mess_count": self.requested_generated_mess_count,
+            "generated_mess_count": self.generated_mess_count,
+            "agent_facing": False,
+            "private_manifest_exposed_to_agent": False,
+        }
 
     def write_snapshot(self, output_path: Path, *, title: str) -> Path:
         result = self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)

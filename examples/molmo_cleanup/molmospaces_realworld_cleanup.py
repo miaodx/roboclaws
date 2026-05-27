@@ -653,11 +653,22 @@ def run_realworld_cleanup(
                 "generated_mess_count": backend_instance.generated_mess_count,
             }
         elif backend == ISAACLAB_SUBPROCESS_BACKEND:
+            isaac_scene_index_path = output_dir / "isaac_scene_index.json"
+            isaac_scene_index_path.write_text(
+                json.dumps(
+                    backend_instance.scene_index_artifact_payload(),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            run_result["artifacts"]["isaac_scene_index"] = str(isaac_scene_index_path)
             run_result["isaac_runtime"] = {
                 "python_executable": str(backend_instance.python_executable),
                 "runtime": backend_instance.runtime,
                 "scene_usd": backend_instance.scene_usd,
                 "scene_index": backend_instance.scene_index,
+                "scene_index_artifact": str(isaac_scene_index_path),
                 "object_index_count": len(backend_instance.object_index),
                 "receptacle_index_count": len(backend_instance.receptacle_index),
                 "scene_index_diagnostics": backend_instance.scene_index_diagnostics,

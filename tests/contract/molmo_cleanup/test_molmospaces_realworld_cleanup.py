@@ -9,6 +9,7 @@ import pytest
 
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAACLAB_ROBOT_VIEW_VARIANT,
 )
@@ -331,6 +332,9 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
 
     run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
     report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
+    isaac_scene_index = json.loads(
+        (tmp_path / "isaac_scene_index.json").read_text(encoding="utf-8")
+    )
 
     assert result["backend"] == "isaaclab_subprocess"
     assert result["generated_mess_count"] == 1
@@ -348,6 +352,19 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["isaac_runtime"]["scene_binding_diagnostics"]["status"] == (
         "placeholder_mapping"
     )
+    assert run_result["isaac_runtime"]["scene_index_artifact"] == str(
+        tmp_path / "isaac_scene_index.json"
+    )
+    assert run_result["artifacts"]["isaac_scene_index"] == str(tmp_path / "isaac_scene_index.json")
+    assert isaac_scene_index["schema"] == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA
+    assert isaac_scene_index["backend"] == "isaaclab_subprocess"
+    assert isaac_scene_index["agent_facing"] is False
+    assert isaac_scene_index["private_manifest_exposed_to_agent"] is False
+    assert "private_manifest" not in isaac_scene_index
+    assert isaac_scene_index["scene_load"]["status"] == "fake_protocol"
+    assert isaac_scene_index["generated_mess_count"] == 1
+    assert isaac_scene_index["object_index"]
+    assert isaac_scene_index["receptacle_index"]
     assert (
         run_result["isaac_runtime"]["scene_binding_diagnostics"][
             "private_manifest_exposed_to_agent"
@@ -382,6 +399,8 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "Isaac Runtime Diagnostics" in report_text
     assert "Mapping gaps" in report_text
     assert "Selected USD bindings" in report_text
+    assert "Scene index artifact" in report_text
+    assert "isaac_scene_index.json" in report_text
     assert "placeholder_visuals" in report_text
     assert "Semantic pose events" in report_text
     assert "Semantic Pose State" in report_text

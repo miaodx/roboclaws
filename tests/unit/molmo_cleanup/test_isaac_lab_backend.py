@@ -8,6 +8,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
@@ -61,6 +62,18 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
     assert any(item["status"] == "placeholder_visuals" for item in backend.mapping_gaps)
     assert any(item["area"] == "public_scene_bindings" for item in backend.mapping_gaps)
+    scene_index_payload = backend.scene_index_artifact_payload()
+    assert scene_index_payload["schema"] == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA
+    assert scene_index_payload["backend"] == ISAACLAB_SUBPROCESS_BACKEND
+    assert scene_index_payload["agent_facing"] is False
+    assert scene_index_payload["private_manifest_exposed_to_agent"] is False
+    assert "private_manifest" not in scene_index_payload
+    assert scene_index_payload["scene_load"]["status"] == "fake_protocol"
+    assert scene_index_payload["generated_mess_count"] == 1
+    assert scene_index_payload["object_index_count"] == len(scene_index_payload["object_index"])
+    assert scene_index_payload["receptacle_index_count"] == len(
+        scene_index_payload["receptacle_index"]
+    )
 
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
