@@ -43,11 +43,20 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.runtime["visual_artifact_provenance"] == "fake_protocol_placeholder_image"
     assert backend.object_index
     assert backend.receptacle_index
+    assert backend.scene_binding_diagnostics["schema"] == "isaac_public_scene_bindings_v1"
+    assert backend.scene_binding_diagnostics["status"] == "placeholder_mapping"
+    assert backend.scene_binding_diagnostics["source"] == "scenario_fixture"
+    assert backend.scene_binding_diagnostics["selected_object_count"] == 1
+    assert backend.scene_binding_diagnostics["selected_object_bound_count"] == 1
+    assert backend.scene_binding_diagnostics["selected_target_receptacle_count"] == 1
+    assert backend.scene_binding_diagnostics["selected_target_receptacle_bound_count"] == 1
+    assert backend.scene_binding_diagnostics["private_manifest_exposed_to_agent"] is False
     assert backend.segmentation["status"] == "blocked_capability"
     assert backend.scene_load["status"] == "fake_protocol"
     assert backend.scene_load["usd_stage_loaded"] is False
     assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
     assert any(item["status"] == "placeholder_visuals" for item in backend.mapping_gaps)
+    assert any(item["area"] == "public_scene_bindings" for item in backend.mapping_gaps)
 
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
@@ -234,6 +243,37 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     assert state["real_runtime_smoke"]["scene_usd"] == str(scene_usd)
     assert state["robot_view_images"] == robot_view_images
     assert state["scene_index_diagnostics"]["status"] == "indexed"
+    assert state["scene_binding_diagnostics"]["status"] == "selected_bound"
+    assert state["scene_binding_diagnostics"]["selected_object_bound_count"] == 1
+    assert state["scene_binding_diagnostics"]["selected_target_receptacle_bound_count"] == 1
+
+
+def test_isaac_lab_generated_count_selects_private_targets_not_first_object(
+    tmp_path: Path,
+) -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(tmp_path / "state.json"),
+            "init",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--runtime-mode",
+            "fake",
+            "--generated-mess-count",
+            "1",
+        ]
+    )
+    result = isaac_lab_backend_worker.init_state(args)
+
+    object_ids = [item["object_id"] for item in result["scenario"]["objects"]]
+    target_ids = [item["object_id"] for item in result["private_manifest"]["targets"]]
+
+    assert object_ids == ["mug_01"]
+    assert target_ids == ["mug_01"]
+    assert object_ids != ["toy_car_01"]
+    assert result["scene_binding_diagnostics"]["selected_object_count"] == 1
+    assert result["scene_binding_diagnostics"]["selected_target_receptacle_count"] == 1
 
 
 def test_isaac_lab_real_worker_views_reuse_real_smoke_images(

@@ -116,6 +116,17 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
             "object_candidate_count": 1,
             "receptacle_candidate_count": 1,
         },
+        "scene_binding_diagnostics": {
+            "schema": "isaac_public_scene_bindings_v1",
+            "status": "selected_bound",
+            "source": "usd_stage_traversal",
+            "selected_object_count": 1,
+            "selected_target_receptacle_count": 1,
+            "selected_object_bound_count": 1,
+            "selected_target_receptacle_bound_count": 1,
+            "blockers": [],
+            "private_manifest_exposed_to_agent": False,
+        },
         "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
         "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
         "scene_usd": "/tmp/example.usd",
@@ -139,6 +150,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
         "--require-real-rendering",
         "--require-usd-stage-loaded",
         "--require-usd-scene-index",
+        "--require-selected-usd-bindings",
         "--require-robot-view-images",
         "--require-nonblank-image",
         robot_views=robot_views,
@@ -150,6 +162,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     assert summary["status"] == "passed"
     assert summary["errors"] == []
     assert summary["scene_index_status"] == "indexed"
+    assert summary["scene_binding_status"] == "selected_bound"
     assert summary["robot_view_status"] == "present"
 
 
@@ -185,6 +198,85 @@ def test_isaac_runtime_smoke_checker_rejects_missing_usd_scene_index(
     summary = json.loads(completed.stdout)
     assert "missing USD scene index diagnostics" in summary["errors"]
     assert "USD scene index has no object candidates" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_missing_selected_usd_bindings(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-selected-usd-bindings",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "missing selected USD binding diagnostics" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_partial_selected_usd_bindings(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "scene_binding_diagnostics": {
+            "schema": "isaac_public_scene_bindings_v1",
+            "status": "partial",
+            "source": "usd_stage_traversal",
+            "selected_object_count": 1,
+            "selected_target_receptacle_count": 1,
+            "selected_object_bound_count": 1,
+            "selected_target_receptacle_bound_count": 0,
+            "blockers": ["Selected target receptacle has no USD binding: sink_01"],
+            "private_manifest_exposed_to_agent": False,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-selected-usd-bindings",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "selected cleanup handles are not fully bound to USD prims" in summary["errors"]
+    assert "not all selected target receptacles have USD prim bindings" in summary["errors"]
+    assert "selected USD binding diagnostics still report blockers" in summary["errors"]
 
 
 def test_isaac_runtime_smoke_checker_rejects_missing_robot_views(

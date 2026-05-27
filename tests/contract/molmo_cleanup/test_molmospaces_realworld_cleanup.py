@@ -340,6 +340,15 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["isaac_runtime"]["runtime"]["rendering"]["real_rendering_proven"] is False
     assert run_result["isaac_runtime"]["scene_load"]["status"] == "fake_protocol"
     assert run_result["isaac_runtime"]["scene_load"]["usd_stage_loaded"] is False
+    assert run_result["isaac_runtime"]["scene_binding_diagnostics"]["status"] == (
+        "placeholder_mapping"
+    )
+    assert (
+        run_result["isaac_runtime"]["scene_binding_diagnostics"][
+            "private_manifest_exposed_to_agent"
+        ]
+        is False
+    )
     assert run_result["isaac_runtime"]["mapping_gaps"]
     assert run_result["isaac_runtime"]["segmentation"]["status"] == "blocked_capability"
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
@@ -348,6 +357,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["robot_view_steps"]
     assert "Isaac Runtime Diagnostics" in report_text
     assert "Mapping gaps" in report_text
+    assert "Selected USD bindings" in report_text
     assert "placeholder_visuals" in report_text
     assert "isaac_semantic_pose" in report_text
 

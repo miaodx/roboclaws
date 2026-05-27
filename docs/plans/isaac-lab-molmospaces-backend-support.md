@@ -2,8 +2,8 @@
 # Isaac Lab MolmoSpaces Backend Support
 
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
-real-mode Phase A smoke attempt, and Phase B static robot-view evidence path
-implemented; real Isaac proof pending
+real-mode Phase A smoke attempt, Phase B static robot-view evidence path, and
+Phase C selected USD-binding diagnostics implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -171,6 +171,15 @@ protocol:
   Isaac robot-view images with non-placeholder provenance. This is Phase B
   camera-evidence plumbing only: semantic pose edits are still tracked in
   backend JSON state and are not rendered back into Isaac USD state.
+- The worker now records `scene_binding_diagnostics` for public cleanup
+  objects and target receptacles. Generated smoke USDs include the selected
+  cleanup objects plus their source and target receptacles, one-object Isaac
+  scenarios are aligned to the selected private target instead of the first
+  arbitrary fixture object, and `run_result.json` / `report.html` surface the
+  selected binding counts without exposing private scoring truth to the agent.
+  `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py` and
+  `just agent::harness molmo-isaac-runtime-smoke` can now require selected
+  cleanup handles to bind to USD prims through `--require-selected-usd-bindings`.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

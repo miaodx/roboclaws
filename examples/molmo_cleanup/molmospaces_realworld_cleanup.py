@@ -661,6 +661,7 @@ def run_realworld_cleanup(
                 "object_index_count": len(backend_instance.object_index),
                 "receptacle_index_count": len(backend_instance.receptacle_index),
                 "scene_index_diagnostics": backend_instance.scene_index_diagnostics,
+                "scene_binding_diagnostics": backend_instance.scene_binding_diagnostics,
                 "segmentation": backend_instance.segmentation,
                 "scene_load": backend_instance.scene_load,
                 "mapping_gaps": backend_instance.mapping_gaps,

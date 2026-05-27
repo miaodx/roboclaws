@@ -1412,7 +1412,14 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
     rendering = runtime.get("rendering") or {}
     scene_load = isaac.get("scene_load") or {}
     scene_index = isaac.get("scene_index_diagnostics") or {}
+    scene_bindings = isaac.get("scene_binding_diagnostics") or {}
     mapping_gaps = isaac.get("mapping_gaps") or []
+    selected_binding_summary = (
+        f"{scene_bindings.get('selected_object_bound_count', 0)}/"
+        f"{scene_bindings.get('selected_object_count', 0)} objects, "
+        f"{scene_bindings.get('selected_target_receptacle_bound_count', 0)}/"
+        f"{scene_bindings.get('selected_target_receptacle_count', 0)} receptacles"
+    )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Runtime mode', runtime.get('runtime_mode', 'unknown'))}"
@@ -1426,6 +1433,7 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Objects indexed', isaac.get('object_index_count', 0))}"
         f"{_metric('Receptacles indexed', isaac.get('receptacle_index_count', 0))}"
         f"{_metric('USD index', scene_index.get('status', 'unknown'))}"
+        f"{_metric('Selected USD bindings', selected_binding_summary)}"
         f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"

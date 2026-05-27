@@ -12,6 +12,7 @@ from PIL import Image, ImageStat
 from roboclaws.molmo_cleanup.subprocess_backend import _parse_last_json_object
 
 SCHEMA = "roboclaws_isaac_lab_runtime_smoke_check_v1"
+SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-map-chase-verify"
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
 
@@ -24,6 +25,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--require-real-rendering", action="store_true")
     parser.add_argument("--require-usd-stage-loaded", action="store_true")
     parser.add_argument("--require-usd-scene-index", action="store_true")
+    parser.add_argument("--require-selected-usd-bindings", action="store_true")
     parser.add_argument("--require-robot-view-images", action="store_true")
     parser.add_argument("--require-nonblank-image", action="store_true")
     return parser.parse_args(argv)
@@ -41,6 +43,7 @@ def main(argv: list[str] | None = None) -> int:
         require_real_rendering=args.require_real_rendering,
         require_usd_stage_loaded=args.require_usd_stage_loaded,
         require_usd_scene_index=args.require_usd_scene_index,
+        require_selected_usd_bindings=args.require_selected_usd_bindings,
         require_robot_view_images=args.require_robot_view_images,
         require_nonblank_image=args.require_nonblank_image,
     )
@@ -52,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         "runtime_mode": (result.get("runtime") or {}).get("runtime_mode"),
         "scene_usd": result.get("scene_usd"),
         "scene_index_status": (_dict(result.get("scene_index_diagnostics"))).get("status"),
+        "scene_binding_status": (_dict(result.get("scene_binding_diagnostics"))).get("status"),
         "robot_view_status": _robot_view_status(robot_views_result),
     }
     print(json.dumps(summary, sort_keys=True))
@@ -66,6 +70,7 @@ def validate(
     require_real_rendering: bool,
     require_usd_stage_loaded: bool,
     require_usd_scene_index: bool,
+    require_selected_usd_bindings: bool,
     require_robot_view_images: bool,
     require_nonblank_image: bool,
 ) -> list[str]:
@@ -80,6 +85,7 @@ def validate(
     rendering = _dict(runtime.get("rendering"))
     scene_load = _dict(result.get("scene_load"))
     scene_index = _dict(result.get("scene_index_diagnostics"))
+    scene_bindings = _dict(result.get("scene_binding_diagnostics"))
     artifacts = _dict(result.get("artifacts"))
 
     if require_real_rendering:
@@ -128,6 +134,8 @@ def validate(
             "USD scene index has no receptacle candidates",
             errors,
         )
+    if require_selected_usd_bindings:
+        errors.extend(_selected_usd_binding_errors(scene_bindings))
     if require_nonblank_image:
         image_path = artifacts.get("runtime_smoke_image")
         _require(
@@ -154,6 +162,61 @@ def validate(
             "state runtime_mode does not match init result",
             errors,
         )
+    return errors
+
+
+def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(bool(scene_bindings), "missing selected USD binding diagnostics", errors)
+    if not scene_bindings:
+        return errors
+    _require(
+        scene_bindings.get("schema") == SCENE_BINDING_SCHEMA,
+        "selected USD binding diagnostics schema is not isaac_public_scene_bindings_v1",
+        errors,
+    )
+    _require(
+        scene_bindings.get("source") == "usd_stage_traversal",
+        "selected USD bindings are not sourced from USD stage traversal",
+        errors,
+    )
+    _require(
+        scene_bindings.get("status") == "selected_bound",
+        "selected cleanup handles are not fully bound to USD prims",
+        errors,
+    )
+    selected_object_count = _int(scene_bindings.get("selected_object_count"))
+    selected_receptacle_count = _int(scene_bindings.get("selected_target_receptacle_count"))
+    selected_object_bound_count = _int(scene_bindings.get("selected_object_bound_count"))
+    selected_receptacle_bound_count = _int(
+        scene_bindings.get("selected_target_receptacle_bound_count")
+    )
+    _require(selected_object_count > 0, "no selected cleanup objects were checked", errors)
+    _require(
+        selected_receptacle_count > 0,
+        "no selected target receptacles were checked",
+        errors,
+    )
+    _require(
+        selected_object_bound_count >= selected_object_count,
+        "not all selected cleanup objects have USD prim bindings",
+        errors,
+    )
+    _require(
+        selected_receptacle_bound_count >= selected_receptacle_count,
+        "not all selected target receptacles have USD prim bindings",
+        errors,
+    )
+    _require(
+        not scene_bindings.get("blockers"),
+        "selected USD binding diagnostics still report blockers",
+        errors,
+    )
+    _require(
+        scene_bindings.get("private_manifest_exposed_to_agent") is False,
+        "selected USD binding diagnostics report private manifest exposure",
+        errors,
+    )
     return errors
 
 
@@ -242,6 +305,13 @@ def _read_json(path: Path | None) -> dict[str, Any]:
 
 def _dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _require(condition: bool, message: str, errors: list[str]) -> None:

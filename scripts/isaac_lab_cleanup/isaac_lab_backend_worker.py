@@ -39,6 +39,7 @@ STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
+SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
@@ -163,11 +164,6 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         args.scene_index,
         real_smoke=real_smoke,
     )
-    mapping_gaps = mapping_gap_diagnostics(
-        runtime_mode=args.runtime_mode,
-        map_bundle_dir=args.map_bundle_dir,
-        real_smoke=real_smoke,
-    )
     initial_receptacle_id = _initial_receptacle_id(scenario)
     scene_usd = str(scene_load["scene_usd"])
     object_index = _object_index(scenario)
@@ -183,6 +179,19 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         scene_index_diagnostics = _dict(real_smoke.get("scene_index_diagnostics"))
         object_index = _index_or_default(real_smoke.get("object_index"), object_index)
         receptacle_index = _index_or_default(real_smoke.get("receptacle_index"), receptacle_index)
+    scene_binding_diagnostics = _scene_binding_diagnostics(
+        runtime_mode=args.runtime_mode,
+        scenario=scenario,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        real_smoke=real_smoke,
+    )
+    mapping_gaps = mapping_gap_diagnostics(
+        runtime_mode=args.runtime_mode,
+        map_bundle_dir=args.map_bundle_dir,
+        real_smoke=real_smoke,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+    )
     before_path = args.run_dir / "isaac_runtime_smoke.png"
     if real_smoke is not None:
         before_path = Path(str(real_smoke["image_path"]))
@@ -212,6 +221,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "object_index": object_index,
         "receptacle_index": receptacle_index,
         "scene_index_diagnostics": scene_index_diagnostics,
+        "scene_binding_diagnostics": scene_binding_diagnostics,
         "robot_view_images": _real_smoke_robot_view_images(real_smoke),
         "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
         "segmentation": {
@@ -247,6 +257,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_load": scene_load,
         "scene_index": args.scene_index,
         "scene_index_diagnostics": scene_index_diagnostics,
+        "scene_binding_diagnostics": scene_binding_diagnostics,
         "object_index": state["object_index"],
         "receptacle_index": state["receptacle_index"],
         "mapping_gaps": mapping_gaps,
@@ -384,18 +395,52 @@ def _write_generated_runtime_smoke_usd(
     UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
     UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.0, 3.0, 0.05))
 
-    fixture_id = scenario.receptacles[0].receptacle_id if scenario.receptacles else "fixture"
-    fixture = UsdGeom.Cube.Define(stage, f"/World/Receptacles/{_usd_safe_name(fixture_id)}")
-    fixture.CreateSizeAttr(1.0)
-    fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.46, 0.75)])
-    UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(0.0, 0.0, 0.35))
-    UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(1.1, 0.7, 0.35))
+    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
+        scenario.objects[0].object_id if scenario.objects else "object"
+    ]
+    selected_object_id_set = set(selected_object_ids)
+    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
+    source_receptacle_ids = [
+        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
+    ]
+    receptacle_ids = _dedupe(
+        [
+            *source_receptacle_ids,
+            *selected_receptacle_ids,
+            *(item.receptacle_id for item in scenario.receptacles[:1]),
+        ]
+    )
+    if not receptacle_ids:
+        receptacle_ids = ["fixture"]
 
-    object_id = scenario.objects[0].object_id if scenario.objects else "object"
-    cleanup_object = UsdGeom.Sphere.Define(stage, f"/World/Objects/{_usd_safe_name(object_id)}")
-    cleanup_object.CreateRadiusAttr(0.18)
-    cleanup_object.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.42, 0.12)])
-    UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(Gf.Vec3d(0.25, -0.2, 0.88))
+    fixture_positions: dict[str, tuple[float, float, float]] = {}
+    for index, receptacle_id in enumerate(receptacle_ids):
+        x = (index % 3 - 1) * 0.95
+        y = (index // 3) * 0.85
+        z = 0.35
+        fixture_positions[receptacle_id] = (x, y, z)
+        fixture = UsdGeom.Cube.Define(
+            stage,
+            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
+        )
+        fixture.CreateSizeAttr(1.0)
+        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.46, 0.75)])
+        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
+        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.25))
+
+    objects_by_id = {item.object_id: item for item in scenario.objects}
+    for index, object_id in enumerate(selected_object_ids):
+        cleanup_object = UsdGeom.Sphere.Define(
+            stage,
+            f"/World/Objects/{_usd_safe_name(object_id)}",
+        )
+        cleanup_object.CreateRadiusAttr(0.16)
+        cleanup_object.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.42, 0.12)])
+        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
+        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.35))
+        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
+            Gf.Vec3d(x + 0.18 + 0.08 * index, y - 0.16, z + 0.38)
+        )
 
     key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
     key_light.CreateIntensityAttr(5000.0)
@@ -504,6 +549,203 @@ def _category_from_usd_name(value: str) -> str:
     if normalized:
         return normalized
     return "unknown"
+
+
+def _scene_binding_diagnostics(
+    *,
+    runtime_mode: str,
+    scenario: CleanupScenario,
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+    real_smoke: dict[str, Any] | None,
+) -> dict[str, Any]:
+    object_bindings = {
+        item.object_id: _bind_public_scene_item(
+            public_id=item.object_id,
+            public_label=item.name,
+            category=item.category,
+            index=object_index,
+            kind="object",
+        )
+        for item in scenario.objects
+    }
+    receptacle_bindings = {
+        item.receptacle_id: _bind_public_scene_item(
+            public_id=item.receptacle_id,
+            public_label=item.name,
+            category=item.category or item.kind,
+            index=receptacle_index,
+            kind="receptacle",
+        )
+        for item in scenario.receptacles
+    }
+    selected_object_ids = _selected_cleanup_object_ids(scenario)
+    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
+    selected_object_bindings = {
+        object_id: object_bindings.get(object_id) or _unbound_scene_item(object_id, "object")
+        for object_id in selected_object_ids
+    }
+    selected_receptacle_bindings = {
+        receptacle_id: receptacle_bindings.get(receptacle_id)
+        or _unbound_scene_item(receptacle_id, "receptacle")
+        for receptacle_id in selected_receptacle_ids
+    }
+    selected_object_bound_count = _bound_count(selected_object_bindings)
+    selected_receptacle_bound_count = _bound_count(selected_receptacle_bindings)
+    blockers = _binding_blockers(
+        selected_object_bindings,
+        selected_receptacle_bindings,
+    )
+    if real_smoke is None:
+        status = "placeholder_mapping"
+        source = "scenario_fixture"
+    elif blockers:
+        status = "partial"
+        source = "usd_stage_traversal"
+    else:
+        status = "selected_bound"
+        source = "usd_stage_traversal"
+    return {
+        "schema": SCENE_BINDING_SCHEMA,
+        "status": status,
+        "source": source,
+        "runtime_mode": runtime_mode,
+        "public_object_count": len(object_bindings),
+        "public_receptacle_count": len(receptacle_bindings),
+        "public_object_bound_count": _bound_count(object_bindings),
+        "public_receptacle_bound_count": _bound_count(receptacle_bindings),
+        "selected_object_count": len(selected_object_bindings),
+        "selected_target_receptacle_count": len(selected_receptacle_bindings),
+        "selected_object_bound_count": selected_object_bound_count,
+        "selected_target_receptacle_bound_count": selected_receptacle_bound_count,
+        "object_bindings": object_bindings,
+        "receptacle_bindings": receptacle_bindings,
+        "selected_object_bindings": selected_object_bindings,
+        "selected_target_receptacle_bindings": selected_receptacle_bindings,
+        "blockers": blockers,
+        "private_manifest_exposed_to_agent": False,
+    }
+
+
+def _bind_public_scene_item(
+    *,
+    public_id: str,
+    public_label: str,
+    category: str | None,
+    index: dict[str, dict[str, Any]],
+    kind: str,
+) -> dict[str, Any]:
+    match = _scene_index_match(
+        public_id=public_id,
+        public_label=public_label,
+        category=category,
+        index=index,
+    )
+    if match is None:
+        return _unbound_scene_item(public_id, kind)
+    handle, entry, strategy = match
+    return {
+        "status": "bound",
+        "kind": kind,
+        "public_id": public_id,
+        "usd_handle": handle,
+        "usd_prim_path": str(entry.get("usd_prim_path") or ""),
+        "public_label": public_label,
+        "category": category or "",
+        "usd_public_label": str(entry.get("public_label") or ""),
+        "usd_category": str(entry.get("category") or ""),
+        "match_strategy": strategy,
+        "index_source": str(entry.get("index_source") or ""),
+    }
+
+
+def _scene_index_match(
+    *,
+    public_id: str,
+    public_label: str,
+    category: str | None,
+    index: dict[str, dict[str, Any]],
+) -> tuple[str, dict[str, Any], str] | None:
+    if public_id in index:
+        return public_id, index[public_id], "exact_public_id"
+    public_norm = _norm(public_id)
+    label_norm = _norm(public_label)
+    for handle, entry in index.items():
+        handle_norm = _norm(handle)
+        prim_name_norm = _norm(Path(str(entry.get("usd_prim_path") or "")).name)
+        entry_label_norm = _norm(entry.get("public_label"))
+        if public_norm and public_norm in {handle_norm, prim_name_norm, entry_label_norm}:
+            return handle, entry, "normalized_public_id"
+        if label_norm and label_norm in {handle_norm, prim_name_norm, entry_label_norm}:
+            return handle, entry, "normalized_public_label"
+
+    category_norm = _norm(category)
+    if not category_norm:
+        return None
+    category_matches = [
+        (handle, entry)
+        for handle, entry in index.items()
+        if _norm(entry.get("category")) == category_norm
+        or category_norm in _norm(entry.get("public_label"))
+    ]
+    if len(category_matches) == 1:
+        handle, entry = category_matches[0]
+        return handle, entry, "unique_category"
+    return None
+
+
+def _unbound_scene_item(public_id: str, kind: str) -> dict[str, Any]:
+    return {
+        "status": "unresolved",
+        "kind": kind,
+        "public_id": public_id,
+        "usd_handle": "",
+        "usd_prim_path": "",
+        "match_strategy": "none",
+        "blocker": "No stable USD prim candidate matched this public cleanup handle.",
+    }
+
+
+def _binding_blockers(
+    selected_object_bindings: dict[str, dict[str, Any]],
+    selected_receptacle_bindings: dict[str, dict[str, Any]],
+) -> list[str]:
+    blockers = []
+    for object_id, binding in selected_object_bindings.items():
+        if binding.get("status") != "bound":
+            blockers.append(f"Selected cleanup object has no USD binding: {object_id}")
+    for receptacle_id, binding in selected_receptacle_bindings.items():
+        if binding.get("status") != "bound":
+            blockers.append(f"Selected target receptacle has no USD binding: {receptacle_id}")
+    return blockers
+
+
+def _bound_count(bindings: dict[str, dict[str, Any]]) -> int:
+    return sum(1 for item in bindings.values() if item.get("status") == "bound")
+
+
+def _selected_cleanup_object_ids(scenario: CleanupScenario) -> list[str]:
+    return _dedupe(target.object_id for target in scenario.private_manifest.targets)
+
+
+def _selected_cleanup_receptacle_ids(scenario: CleanupScenario) -> list[str]:
+    return _dedupe(
+        receptacle_id
+        for target in scenario.private_manifest.targets
+        for receptacle_id in target.valid_receptacle_ids
+    )
+
+
+def _dedupe(values: Any) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        item = str(value or "")
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        result.append(item)
+    return result
 
 
 def _runtime_smoke_robot_view_paths(
@@ -809,8 +1051,10 @@ def mapping_gap_diagnostics(
     runtime_mode: str,
     map_bundle_dir: Path | None,
     real_smoke: dict[str, Any] | None = None,
+    scene_binding_diagnostics: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
+    scene_bindings = _dict(scene_binding_diagnostics)
     if real_smoke is not None:
         loaded_asset_kind = str(
             real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
@@ -873,6 +1117,19 @@ def mapping_gap_diagnostics(
                 ),
             },
             {
+                "area": "public_scene_bindings",
+                "status": scene_bindings.get("status", "unknown"),
+                "source": scene_bindings.get("source", "usd_stage_traversal"),
+                "detail": (
+                    "Selected cleanup USD bindings: "
+                    f"{scene_bindings.get('selected_object_bound_count', 0)}/"
+                    f"{scene_bindings.get('selected_object_count', 0)} objects and "
+                    f"{scene_bindings.get('selected_target_receptacle_bound_count', 0)}/"
+                    f"{scene_bindings.get('selected_target_receptacle_count', 0)} target "
+                    "receptacles."
+                ),
+            },
+            {
                 "area": "camera_capture",
                 "status": "real_rendering_proven",
                 "source": REAL_SMOKE_CAPTURE_METHOD,
@@ -912,6 +1169,15 @@ def mapping_gap_diagnostics(
                 "status": "placeholder_mapping",
                 "source": source,
                 "detail": "Object and receptacle USD prim paths are deterministic placeholders.",
+            },
+            {
+                "area": "public_scene_bindings",
+                "status": scene_bindings.get("status", "placeholder_mapping"),
+                "source": scene_bindings.get("source", source),
+                "detail": (
+                    "Selected cleanup object and target-receptacle bindings are "
+                    "derived from synthetic scenario fixtures, not real USD prims."
+                ),
             },
             {
                 "area": "camera_capture",
@@ -1472,11 +1738,45 @@ def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
 
 def _scenario_for_init(args: argparse.Namespace) -> CleanupScenario:
     if args.map_bundle_dir is None:
-        return build_cleanup_scenario(seed=args.seed)
-    return _scenario_from_map_bundle(
-        args.map_bundle_dir,
-        seed=args.seed,
+        return _limit_scenario_to_generated_mess_count(
+            build_cleanup_scenario(seed=args.seed),
+            generated_mess_count=args.generated_mess_count,
+        )
+    return _limit_scenario_to_generated_mess_count(
+        _scenario_from_map_bundle(
+            args.map_bundle_dir,
+            seed=args.seed,
+            generated_mess_count=args.generated_mess_count,
+        ),
         generated_mess_count=args.generated_mess_count,
+    )
+
+
+def _limit_scenario_to_generated_mess_count(
+    scenario: CleanupScenario,
+    *,
+    generated_mess_count: int,
+) -> CleanupScenario:
+    count = max(1, int(generated_mess_count))
+    targets = tuple(scenario.private_manifest.targets[:count])
+    if not targets:
+        return scenario
+    target_object_ids = {target.object_id for target in targets}
+    objects = tuple(item for item in scenario.objects if item.object_id in target_object_ids)
+    if not objects:
+        return scenario
+    scenario_id = f"{scenario.scenario_id}-isaac-{len(targets)}"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=targets,
+            success_threshold=len(targets),
+        ),
     )
 
 

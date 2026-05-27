@@ -656,6 +656,7 @@ molmo-isaac-runtime-smoke *overrides:
     require_real_rendering="true"
     require_usd_stage_loaded="true"
     require_usd_scene_index="true"
+    require_selected_usd_bindings="true"
     require_robot_view_images="true"
     require_nonblank_image="true"
     for arg in "${args[@]}"; do
@@ -671,7 +672,7 @@ molmo-isaac-runtime-smoke *overrides:
         runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
         scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
         require_real_rendering|require_usd_stage_loaded|require_usd_scene_index|\
-        require_robot_view_images|require_nonblank_image)
+        require_selected_usd_bindings|require_robot_view_images|require_nonblank_image)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -725,6 +726,9 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$require_usd_scene_index" == "true" ]]; then
       check_cmd+=(--require-usd-scene-index)
+    fi
+    if [[ "$require_selected_usd_bindings" == "true" ]]; then
+      check_cmd+=(--require-selected-usd-bindings)
     fi
     if [[ "$require_robot_view_images" == "true" ]]; then
       check_cmd+=(--require-robot-view-images)
