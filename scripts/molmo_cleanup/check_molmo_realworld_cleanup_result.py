@@ -923,6 +923,10 @@ def _assert_isaac_runtime(
     if require_selected_usd_bindings:
         _assert_selected_isaac_usd_bindings(scene_bindings)
         scene_index_payload = _assert_isaac_scene_index_artifact(data, isaac, base)
+        _assert_isaac_scene_index_matches_runtime_bindings(
+            scene_bindings,
+            scene_index_payload.get("scene_binding_diagnostics") or {},
+        )
         _assert_isaac_scene_index_report_rows(
             scene_index_payload.get("scene_binding_diagnostics") or scene_bindings,
             report_text,
@@ -1050,6 +1054,56 @@ def _assert_isaac_scene_index_artifact(
         receptacle_index=payload.get("receptacle_index") or {},
     )
     return payload
+
+
+def _assert_isaac_scene_index_matches_runtime_bindings(
+    runtime_bindings: dict[str, Any],
+    artifact_bindings: dict[str, Any],
+) -> None:
+    for key in (
+        "schema",
+        "status",
+        "source",
+        "selected_object_count",
+        "selected_target_receptacle_count",
+        "selected_object_bound_count",
+        "selected_target_receptacle_bound_count",
+        "private_manifest_exposed_to_agent",
+    ):
+        assert artifact_bindings.get(key) == runtime_bindings.get(key), (
+            key,
+            runtime_bindings,
+            artifact_bindings,
+        )
+    for bindings_key in (
+        "selected_object_bindings",
+        "selected_target_receptacle_bindings",
+    ):
+        runtime_rows = runtime_bindings.get(bindings_key) or {}
+        artifact_rows = artifact_bindings.get(bindings_key) or {}
+        assert runtime_rows.keys() == artifact_rows.keys(), (
+            bindings_key,
+            runtime_rows,
+            artifact_rows,
+        )
+        for public_id, runtime_row in runtime_rows.items():
+            artifact_row = artifact_rows.get(public_id)
+            assert isinstance(runtime_row, dict), (bindings_key, public_id, runtime_row)
+            assert isinstance(artifact_row, dict), (bindings_key, public_id, artifact_row)
+            for row_key in (
+                "status",
+                "usd_handle",
+                "usd_prim_path",
+                "match_strategy",
+                "index_source",
+            ):
+                assert artifact_row.get(row_key) == runtime_row.get(row_key), (
+                    bindings_key,
+                    public_id,
+                    row_key,
+                    runtime_row,
+                    artifact_row,
+                )
 
 
 def _assert_isaac_scene_index_report_rows(

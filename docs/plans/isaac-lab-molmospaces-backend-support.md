@@ -239,6 +239,11 @@ protocol:
   USD handles, prim paths, `index_source=usd_stage_traversal`, non-empty match
   strategies, no private manifest payload, and USD prim paths that match the
   report-only `isaac_scene_index.json` object/receptacle indexes.
+- The same full-cleanup gate now rejects drift between
+  `run_result.json["isaac_runtime"]["scene_binding_diagnostics"]` and
+  `isaac_scene_index.json["scene_binding_diagnostics"]`, so report-only USD
+  evidence cannot silently disagree with the runtime diagnostics it is meant to
+  render.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

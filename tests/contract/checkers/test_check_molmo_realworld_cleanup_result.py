@@ -277,6 +277,38 @@ def test_checker_rejects_isaac_selected_binding_index_mismatch(
         )
 
 
+def test_checker_rejects_isaac_scene_index_binding_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    artifact_scene_bindings = json.loads(json.dumps(scene_bindings))
+    artifact_scene_bindings["selected_object_bindings"]["mug_01"]["usd_prim_path"] = (
+        "/World/Objects/other_mug"
+    )
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        artifact_scene_bindings=artifact_scene_bindings,
+        object_prim_path="/World/Objects/other_mug",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(artifact_scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -1737,8 +1769,11 @@ def _write_isaac_scene_index(
     base: Path,
     scene_bindings: dict[str, object],
     *,
+    artifact_scene_bindings: dict[str, object] | None = None,
     object_prim_path: str = "/World/Objects/mug_01",
 ) -> None:
+    if artifact_scene_bindings is None:
+        artifact_scene_bindings = scene_bindings
     payload = {
         "schema": "isaac_scene_index_artifact_v1",
         "backend": "isaaclab_subprocess",
@@ -1750,7 +1785,7 @@ def _write_isaac_scene_index(
             "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
         },
         "receptacle_index_count": 1,
-        "scene_binding_diagnostics": scene_bindings,
+        "scene_binding_diagnostics": artifact_scene_bindings,
     }
     (base / "isaac_scene_index.json").write_text(json.dumps(payload), encoding="utf-8")
 
