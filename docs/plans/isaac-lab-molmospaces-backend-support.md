@@ -250,6 +250,12 @@ protocol:
   diagnostics in `run_result.json`, including candidate counts, selected USD
   hits, candidate bbox rows, provenance fields, and agent-facing/private-boundary
   flags.
+- When strict selected USD bindings and semantic pose evidence are both
+  required, the full-cleanup checker now cross-checks semantic pose object,
+  support, articulation, and mutation-event USD prim paths against the selected
+  binding rows and `isaac_scene_index.json` object/receptacle indexes. Semantic
+  pose diagnostics can no longer point at unrelated USD prim paths while still
+  passing the strict cleanup report gate.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
@@ -257,7 +263,7 @@ manipulation proof from the fake protocol evidence.
 
 Latest non-installing local preflight, run on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_045310/preflight.json` with `status=blocked`.
+`output/isaaclab/preflight/0528_054306/preflight.json` with `status=blocked`.
 The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
 NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
 Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab
