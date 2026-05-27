@@ -1,7 +1,7 @@
 <!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** CI-safe fake backend scaffold implemented; real Isaac proof pending
+**Status:** CI-safe fake backend scaffold plus local runtime preflight implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -103,9 +103,12 @@ contract tests.
     `isaac_semantic_pose` provenance;
   - no Isaac package import during normal Roboclaws module import.
 - Local-dev acceptance remains required before claiming Phase A/B real Isaac
-  success:
+  success. Start with the preflight gate, then run the worker and cleanup
+  commands only after `.venv-isaaclab/` is ready:
 
   ```bash
+  just agent::harness molmo-isaac-runtime-preflight
+
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
     --state-path output/isaaclab/smoke/state.json \
     init --run-dir output/isaaclab/smoke --scene-source procthor-10k-val --scene-index 0
@@ -132,6 +135,14 @@ protocol:
   not claim planner-backed or physical-robot manipulation.
 - Fake-worker cleanup can align to the selected Nav2 map bundle
   `assets/maps/molmospaces-procthor-val-0-7`.
+- `scripts/isaac_lab_cleanup/check_isaac_lab_runtime.py` adds the local-dev
+  Isaac runtime preflight gate. It records Python 3.12, `uv`, disk, NVIDIA GPU,
+  `.venv-isaaclab/`, Isaac Sim, Isaac Lab, and Torch readiness in
+  `output/isaaclab/preflight/.../preflight.json`, writes a reproducible
+  `install_isaac_lab_runtime.sh`, and only attempts to create/install the
+  isolated runtime when both `--install` and `--accept-nvidia-eula` are passed.
+- `just agent::harness molmo-isaac-runtime-preflight` exposes that preflight
+  through the maintainer harness without adding a new public task name.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

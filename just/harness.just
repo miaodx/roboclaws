@@ -18,6 +18,7 @@
 # - just harness::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
+# - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -566,6 +567,72 @@ molmo-visual-grounding-benchmark *overrides:
       check_cmd+=(--allow-private-label-details)
     fi
     "${check_cmd[@]}"
+
+# Isaac Lab local runtime preflight. This records host readiness and writes a
+# reproducible install script. It creates .venv-isaaclab/ only when both
+# install=true and accept_nvidia_eula=true are supplied.
+molmo-isaac-runtime-preflight *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    output_dir="output/isaaclab/preflight"
+    runtime_dir=".venv-isaaclab"
+    python="3.12"
+    python_executable=""
+    isaaclab_source=""
+    stamp=""
+    min_free_gb="80"
+    skip_gpu_probe="false"
+    install="false"
+    accept_nvidia_eula="false"
+    strict="false"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        output_dir|runtime_dir|python|python_executable|isaaclab_source|stamp|\
+        min_free_gb|skip_gpu_probe|install|accept_nvidia_eula|strict)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime.py \
+      --output-dir "$output_dir" \
+      --runtime-dir "$runtime_dir" \
+      --python "$python" \
+      --min-free-gb "$min_free_gb")
+    if [[ -n "$python_executable" ]]; then
+      cmd+=(--python-executable "$python_executable")
+    fi
+    if [[ -n "$isaaclab_source" ]]; then
+      cmd+=(--isaaclab-source "$isaaclab_source")
+    fi
+    if [[ -n "$stamp" ]]; then
+      cmd+=(--stamp "$stamp")
+    fi
+    if [[ "$skip_gpu_probe" == "true" ]]; then
+      cmd+=(--skip-gpu-probe)
+    fi
+    if [[ "$install" == "true" ]]; then
+      cmd+=(--install)
+    fi
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      cmd+=(--accept-nvidia-eula)
+    fi
+    if [[ "$strict" == "true" ]]; then
+      cmd+=(--strict)
+    fi
+    "${cmd[@]}"
 
 # List task files available under harness/tasks/.
 list-tasks:
