@@ -923,6 +923,7 @@ def _assert_isaac_runtime(
     if require_selected_usd_bindings:
         _assert_selected_isaac_usd_bindings(scene_bindings)
         _assert_isaac_scene_index_artifact(data, isaac, base)
+        _assert_isaac_scene_index_report_rows(scene_bindings, report_text)
 
     if require_semantic_pose:
         assert data.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, data
@@ -1022,6 +1023,32 @@ def _assert_isaac_scene_index_artifact(
     _assert_bound_isaac_index_rows(payload.get("object_index") or {})
     _assert_bound_isaac_index_rows(payload.get("receptacle_index") or {})
     _assert_selected_isaac_usd_bindings(payload.get("scene_binding_diagnostics") or {})
+
+
+def _assert_isaac_scene_index_report_rows(
+    scene_bindings: dict[str, Any],
+    report_text: str,
+) -> None:
+    for expected in (
+        "Scene Index Artifact Rows",
+        "Selected USD Binding Rows",
+        "Selected USD Index Rows",
+    ):
+        assert expected in report_text, report_text[:1000]
+    for bindings_key in (
+        "selected_object_bindings",
+        "selected_target_receptacle_bindings",
+    ):
+        bindings = scene_bindings.get(bindings_key) or {}
+        assert bindings, scene_bindings
+        for binding in bindings.values():
+            assert isinstance(binding, dict), binding
+            if binding.get("status") != "bound":
+                continue
+            usd_handle = str(binding.get("usd_handle") or "")
+            usd_prim_path = str(binding.get("usd_prim_path") or "")
+            assert usd_handle in report_text, (usd_handle, report_text[:1000])
+            assert usd_prim_path in report_text, (usd_prim_path, report_text[:1000])
 
 
 def _assert_bound_isaac_index_rows(index: dict[str, Any]) -> None:

@@ -400,7 +400,22 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "Mapping gaps" in report_text
     assert "Selected USD bindings" in report_text
     assert "Scene index artifact" in report_text
+    assert "Scene Index Artifact Rows" in report_text
+    assert "Selected USD Binding Rows" in report_text
+    assert "Selected USD Index Rows" in report_text
     assert "isaac_scene_index.json" in report_text
+    selected_object_binding = next(
+        iter(isaac_scene_index["scene_binding_diagnostics"]["selected_object_bindings"].values())
+    )
+    selected_receptacle_binding = next(
+        iter(
+            isaac_scene_index["scene_binding_diagnostics"][
+                "selected_target_receptacle_bindings"
+            ].values()
+        )
+    )
+    assert selected_object_binding["usd_prim_path"] in report_text
+    assert selected_receptacle_binding["usd_prim_path"] in report_text
     assert "placeholder_visuals" in report_text
     assert "Semantic pose events" in report_text
     assert "Semantic Pose State" in report_text
@@ -410,6 +425,10 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "isaac_prim_transform" in report_text
     assert first_pose_object_id in report_text
     assert "isaac_semantic_pose" in report_text
+    checker._assert_isaac_scene_index_report_rows(
+        run_result["isaac_runtime"]["scene_binding_diagnostics"],
+        report_text,
+    )
 
     checker._assert_result(
         run_result,

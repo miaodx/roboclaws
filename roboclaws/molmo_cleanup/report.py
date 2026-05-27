@@ -171,7 +171,7 @@ def _cleanup_report_sections(
                 [
                     _molmospaces_agibot_rehearsal_section(run_dir, run_result),
                     _agibot_sdk_runner_section(run_dir, run_result),
-                    _isaac_runtime_section(run_result),
+                    _isaac_runtime_section(run_dir, run_result),
                     _nav2_map_bundle_section(run_dir, run_result),
                     _real_robot_readiness_section(run_result),
                     _cleanup_policy_trace_section(run_result),
@@ -1403,7 +1403,7 @@ def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
 
 
-def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
+def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     isaac = run_result.get("isaac_runtime") or {}
     if not isaac:
         return ""
@@ -1417,6 +1417,10 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         isaac.get("scene_index_artifact")
         or (run_result.get("artifacts") or {}).get("isaac_scene_index")
         or ""
+    )
+    scene_index_artifact_payload = _load_isaac_scene_index_artifact(
+        run_dir,
+        scene_index_artifact,
     )
     mapping_gaps = isaac.get("mapping_gaps") or []
     snapshots = [item for item in isaac.get("snapshot_artifacts", []) if isinstance(item, dict)]
@@ -1478,7 +1482,8 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f'<p class="note">{html.escape(note)}</p>'
         f"{metrics}"
         f"<p><strong>Scene USD:</strong> {html.escape(str(isaac.get('scene_usd', '')))}</p>"
-        f"<p><strong>Scene index artifact:</strong> {html.escape(scene_index_artifact)}</p>"
+        f"<p><strong>Scene index artifact:</strong> "
+        f"{_artifact_link(scene_index_artifact, run_dir)}</p>"
         f"<p><strong>Scene load reason:</strong> "
         f"{html.escape(str(scene_load.get('reason', '')))}</p>"
         f"<p><strong>Rendering reason:</strong> "
@@ -1488,8 +1493,137 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"<p><strong>Semantic pose state:</strong> "
         f"{html.escape(str(semantic_pose_state.get('evidence_note', '')))}</p>"
         f"{mapping_list}"
+        f"{_isaac_scene_index_artifact_tables(scene_index_artifact_payload, scene_bindings)}"
         f"{_isaac_semantic_pose_state_tables(semantic_pose_state, semantic_pose_events)}"
         "</section>"
+    )
+
+
+def _load_isaac_scene_index_artifact(run_dir: Path, path: str) -> dict[str, Any]:
+    resolved = _resolve_report_asset_path(run_dir, path)
+    if resolved is None:
+        return {}
+    try:
+        payload = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _isaac_scene_index_artifact_tables(
+    artifact: dict[str, Any],
+    fallback_scene_bindings: dict[str, Any],
+) -> str:
+    if not artifact:
+        return ""
+    if not isinstance(fallback_scene_bindings, dict):
+        fallback_scene_bindings = {}
+    scene_bindings = artifact.get("scene_binding_diagnostics")
+    if not isinstance(scene_bindings, dict):
+        scene_bindings = fallback_scene_bindings
+    object_index = artifact.get("object_index")
+    if not isinstance(object_index, dict):
+        object_index = {}
+    receptacle_index = artifact.get("receptacle_index")
+    if not isinstance(receptacle_index, dict):
+        receptacle_index = {}
+    private_manifest_exposed = artifact.get("private_manifest_exposed_to_agent")
+    receptacle_count = artifact.get("receptacle_index_count", len(receptacle_index))
+    boundary = (
+        '<div class="metric-grid compact">'
+        f"{_metric('Artifact schema', artifact.get('schema', 'unknown'))}"
+        f"{_metric('Agent-facing', _yes_no(artifact.get('agent_facing')))}"
+        f"{_metric('Private manifest exposed', _yes_no(private_manifest_exposed))}"
+        f"{_metric('Artifact objects', artifact.get('object_index_count', len(object_index)))}"
+        f"{_metric('Artifact receptacles', receptacle_count)}"
+        "</div>"
+    )
+    return (
+        "<h3>Scene Index Artifact Rows</h3>"
+        f"{boundary}"
+        "<h4>Selected USD Binding Rows</h4>"
+        f"{_isaac_selected_binding_table(scene_bindings)}"
+        "<h4>Selected USD Index Rows</h4>"
+        f"{_isaac_selected_index_table(scene_bindings, object_index, receptacle_index)}"
+    )
+
+
+def _isaac_selected_binding_table(scene_bindings: dict[str, Any]) -> str:
+    if not scene_bindings:
+        return "<p>No selected USD binding diagnostics recorded.</p>"
+    rows = []
+    for kind, bindings_key in (
+        ("object", "selected_object_bindings"),
+        ("receptacle", "selected_target_receptacle_bindings"),
+    ):
+        bindings = scene_bindings.get(bindings_key)
+        if not isinstance(bindings, dict):
+            continue
+        for public_id, binding in sorted(bindings.items(), key=lambda item: str(item[0])):
+            if not isinstance(binding, dict):
+                continue
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(kind)}</td>"
+                f"<td>{html.escape(str(public_id))}</td>"
+                f"<td>{html.escape(str(binding.get('status', '')))}</td>"
+                f"<td>{html.escape(str(binding.get('usd_handle', '')))}</td>"
+                f"<td>{html.escape(str(binding.get('usd_prim_path', '')))}</td>"
+                f"<td>{html.escape(str(binding.get('match_strategy', '')))}</td>"
+                f"<td>{html.escape(str(binding.get('index_source', '')))}</td>"
+                "</tr>"
+            )
+    if not rows:
+        return "<p>No selected USD binding rows recorded.</p>"
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Public handle</th><th>Status</th><th>USD handle</th>"
+        "<th>USD prim</th><th>Match</th><th>Index source</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+
+
+def _isaac_selected_index_table(
+    scene_bindings: dict[str, Any],
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+) -> str:
+    if not scene_bindings:
+        return "<p>No selected USD index rows recorded.</p>"
+    rows = []
+    for kind, bindings_key, index in (
+        ("object", "selected_object_bindings", object_index),
+        ("receptacle", "selected_target_receptacle_bindings", receptacle_index),
+    ):
+        bindings = scene_bindings.get(bindings_key)
+        if not isinstance(bindings, dict):
+            continue
+        for public_id, binding in sorted(bindings.items(), key=lambda item: str(item[0])):
+            if not isinstance(binding, dict):
+                continue
+            usd_handle = str(binding.get("usd_handle") or "")
+            row = index.get(usd_handle)
+            if not isinstance(row, dict):
+                row = {}
+            usd_prim_path = row.get("usd_prim_path") or binding.get("usd_prim_path", "")
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(kind)}</td>"
+                f"<td>{html.escape(str(public_id))}</td>"
+                f"<td>{html.escape(usd_handle)}</td>"
+                f"<td>{html.escape(str(usd_prim_path))}</td>"
+                f"<td>{html.escape(str(row.get('public_label', '')))}</td>"
+                f"<td>{html.escape(str(row.get('category', '')))}</td>"
+                f"<td>{html.escape(str(row.get('index_source', '')))}</td>"
+                "</tr>"
+            )
+    if not rows:
+        return "<p>No selected USD index rows recorded.</p>"
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Kind</th><th>Public handle</th><th>USD handle</th><th>USD prim</th>"
+        "<th>USD label</th><th>USD category</th><th>Index source</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
 
 

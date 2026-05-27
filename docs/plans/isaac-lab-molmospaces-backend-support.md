@@ -222,6 +222,11 @@ protocol:
   flags so USD handle evidence is reviewable without moving private scoring
   truth into Agent View. The strict selected-USD-binding checker gate now
   requires this artifact when asserting real cleanup parity.
+- The cleanup report now expands `isaac_scene_index.json` into selected USD
+  binding rows and the corresponding USD index rows. The strict
+  selected-USD-binding checker verifies that those rows render the selected
+  USD handles and prim paths, so real Isaac cleanup parity must be visible in
+  both JSON artifacts and `report.html`.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
