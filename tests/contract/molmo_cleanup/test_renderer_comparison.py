@@ -259,6 +259,19 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
             _write_image(output_path, color=(20, 20, 20))
             return output_path
 
+        def write_snapshot_with_resolution(
+            self,
+            output_path: Path,
+            *,
+            title: str,
+            width: int,
+            height: int,
+        ) -> Path:
+            assert width == 1280
+            assert height == 720
+            _write_image(output_path, color=(20, 20, 20))
+            return output_path
+
         def navigate_to_object(self, object_id: str) -> dict[str, object]:
             return {"ok": True, "object_id": object_id}
 
@@ -279,6 +292,31 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
                 shapes[kind] = [48, 64, 3]
             return {"ok": True, "views": paths, "shapes": shapes}
 
+        def write_robot_views_with_resolution(
+            self,
+            output_dir: Path,
+            *,
+            label: str,
+            width: int,
+            height: int,
+            focus_object_id: str | None = None,
+            focus_receptacle_id: str | None = None,
+        ) -> dict[str, object]:
+            assert width == 1280
+            assert height == 720
+            paths: dict[str, str] = {}
+            shapes: dict[str, list[int]] = {}
+            for kind in ("fpv", "chase", "verify"):
+                image_path = output_dir / f"{label}.{kind}.png"
+                _write_image(image_path, color=(40, 40, 40))
+                paths[kind] = str(image_path)
+                shapes[kind] = [720, 1280, 3]
+            map_path = output_dir / f"{label}.map.png"
+            _write_image(map_path, color=(40, 40, 40))
+            paths["map"] = str(map_path)
+            shapes["map"] = [48, 64, 3]
+            return {"ok": True, "views": paths, "shapes": shapes}
+
         def close(self) -> None:
             return None
 
@@ -295,6 +333,8 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
             output_dir=tmp_path,
             standard_python=runtime,
             filament_python=runtime,
+            render_width=1280,
+            render_height=720,
         ),
         RendererLane(STANDARD_LANE_ID, runtime, "standard"),
         focuses=None,
@@ -310,6 +350,11 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
         }
     ]
     assert result["samples"][0]["images"]["fpv"]["path"] == "standard/robot_views/focus-01.fpv.png"
+    assert result["samples"][0]["images"]["fpv"]["dimensions"] == {
+        "width": 1280,
+        "height": 720,
+        "channels": 3,
+    }
     assert seen_values == ["0"]
     assert os.environ["ROBOCLAWS_MOLMOSPACES_PERSISTENT_WORKER"] == "1"
 

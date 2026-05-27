@@ -16,6 +16,8 @@ COMPARISON_SCHEMA = "molmospaces_renderer_comparison_v1"
 STANDARD_LANE_ID = "standard-mujoco"
 FILAMENT_LANE_ID = "molmospaces-mujoco-filament"
 DEFAULT_FOCUS_SAMPLE_COUNT = 4
+DEFAULT_RENDER_WIDTH = 540
+DEFAULT_RENDER_HEIGHT = 360
 
 
 @dataclass(frozen=True)
@@ -36,6 +38,8 @@ class RendererComparisonConfig:
     scene_index: int = 0
     robot_name: str = "rby1m"
     focus_sample_count: int = DEFAULT_FOCUS_SAMPLE_COUNT
+    render_width: int = DEFAULT_RENDER_WIDTH
+    render_height: int = DEFAULT_RENDER_HEIGHT
 
 
 def run_renderer_comparison(config: RendererComparisonConfig) -> dict[str, Any]:
@@ -56,6 +60,8 @@ def run_renderer_comparison(config: RendererComparisonConfig) -> dict[str, Any]:
             "include_robot": True,
             "robot_name": config.robot_name,
             "generated_mess_count": config.generated_mess_count,
+            "render_width": config.render_width,
+            "render_height": config.render_height,
         },
         "focus": {},
         "focuses": [],
@@ -154,9 +160,11 @@ def _capture_lane(
         if not lane_focuses:
             raise RuntimeError("no focus samples were available for renderer comparison")
         snapshot_path = lane_dir / "snapshot.png"
-        snapshot = backend.write_snapshot(
+        snapshot = backend.write_snapshot_with_resolution(
             snapshot_path,
             title=f"{lane.lane_id} seed={config.seed}",
+            width=config.render_width,
+            height=config.render_height,
         )
         images = {
             "snapshot": _image_entry(
@@ -175,9 +183,11 @@ def _capture_lane(
                     "focus navigation failed: "
                     f"{json.dumps(navigation, sort_keys=True, ensure_ascii=False)}"
                 )
-            robot_views = backend.write_robot_views(
+            robot_views = backend.write_robot_views_with_resolution(
                 lane_dir / "robot_views",
                 label=sample_id,
+                width=config.render_width,
+                height=config.render_height,
                 focus_object_id=lane_focus.get("object_id"),
                 focus_receptacle_id=lane_focus.get("source_receptacle_id"),
             )
@@ -485,6 +495,7 @@ def _summary(
         ("scene", f"{scene.get('scene_source', '')}:{scene.get('scene_index', '')}"),
         ("robot", scene.get("robot_name", "")),
         ("mess count", scene.get("generated_mess_count", "")),
+        ("render", f"{scene.get('render_width', '')} x {scene.get('render_height', '')}"),
         ("focus object", focus.get("object_id", "")),
         ("source", focus.get("source_receptacle_id", "")),
         ("target", focus.get("target_receptacle_id", "")),
@@ -794,6 +805,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--focus-sample-count", type=int, default=DEFAULT_FOCUS_SAMPLE_COUNT)
+    parser.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
+    parser.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
     args = parser.parse_args(argv)
 
     manifest = run_renderer_comparison(
@@ -807,6 +820,8 @@ def main(argv: list[str] | None = None) -> int:
             scene_index=args.scene_index,
             robot_name=args.robot_name,
             focus_sample_count=args.focus_sample_count,
+            render_width=args.render_width,
+            render_height=args.render_height,
         )
     )
     print(f"renderer comparison manifest: {args.output_dir / 'comparison_manifest.json'}")

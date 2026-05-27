@@ -208,6 +208,25 @@ def test_worker_normalizes_filament_renderer_frame_orientation(
     assert normalized.flags["C_CONTIGUOUS"]
 
 
+def test_worker_kwargs_parse_render_resolution_args() -> None:
+    kwargs = _worker_kwargs_from_args(
+        "robot_views",
+        (
+            "--output-dir",
+            "/tmp/views",
+            "--label",
+            "focus-01",
+            "--render-width",
+            "1280",
+            "--render-height",
+            "720",
+        ),
+    )
+
+    assert kwargs["render_width"] == "1280"
+    assert kwargs["render_height"] == "720"
+
+
 class _FakeCFunc:
     def __init__(self, callback):
         self.callback = callback

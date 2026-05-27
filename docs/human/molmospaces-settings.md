@@ -23,6 +23,13 @@ Evaluation, Score, Semantic Substeps, and Robot View Timeline. The timeline
 contains FPV, chase, map, and verification images when the backend can capture
 robot views.
 
+Current robot-view render defaults are intentionally conservative:
+FPV/chase/verify/snapshot images render at `540 x 360`, while map images render
+through a separate `620 x 420` report path. Do not raise the cleanup or RAW_FPV
+default resolution casually: visual-grounding corpora, bbox coordinates,
+latency, and image-token cost all depend on the frame size. Use the dedicated
+renderer comparison path for visual A/B checks before changing defaults.
+
 Do not use the synthetic dogfood kit as the main status artifact. It is useful
 for fast contract checks, but it has no robot camera timeline.
 
@@ -534,6 +541,18 @@ Real visual status/review report:
 ```bash
 just molmo::review-report
 ```
+
+Renderer-only standard-vs-Filament comparison:
+
+```bash
+just molmo::renderer-comparison
+just molmo::renderer-comparison 7 10 output/molmo/renderer-comparison-1280x720 procthor-10k-val 0 rby1m 8 1280 720
+```
+
+The comparison recipe is positional. When overriding render width or height,
+also pass the intermediate scene, robot, and focus-count arguments so values do
+not shift into earlier slots. The high-resolution path changes only comparison
+artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
 
 Real visual MCP smoke:
 

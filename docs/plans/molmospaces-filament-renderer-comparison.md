@@ -1,6 +1,7 @@
 # MolmoSpaces Filament Renderer Comparison
 
-**Status:** Layer 1 implemented; orientation fix and multi-position report generated
+**Status:** Layer 1 implemented; orientation fix, high-resolution comparison, and
+GPU verification generated
 **Created:** 2026-05-27
 **Source:** MolmoSpaces Filament renderer discussion. The current request is to
 first produce a fast human comparison of FPV/chase rendering quality, then only
@@ -293,3 +294,51 @@ Filament robot-view images have matched dimensions: FPV/chase/verify are
 `540 x 360`, and maps are `620 x 420`. A pixel-difference sanity check confirmed
 the corrected Filament images are closer to standard MuJoCo in their saved
 orientation than after applying another vertical flip.
+
+## High-Resolution Follow-up 2026-05-27
+
+The comparison path now accepts explicit robot-view render dimensions. The
+default remains `540 x 360` so existing RAW_FPV visual-grounding corpora and
+cleanup reports stay comparable, but operator runs can request higher
+resolution when judging renderer quality:
+
+```bash
+just molmo::renderer-comparison 7 10 output/molmo/renderer-comparison-1280x720 procthor-10k-val 0 rby1m 8 1280 720
+```
+
+Notes for `just` usage: `molmo::renderer-comparison` is a positional recipe.
+When overriding only late parameters such as render width/height, pass the
+intermediate arguments too; otherwise `just` shifts the values into earlier
+slots.
+
+The high-resolution run generated:
+
+```text
+output/molmo/renderer-comparison-1280x720/0527_1833/comparison_manifest.json
+output/molmo/renderer-comparison-1280x720/0527_1833/report.html
+```
+
+Both lanes succeeded across eight deterministic focus samples. Snapshot, FPV,
+chase, and verify images are `1280 x 720`; map images remain `620 x 420` because
+the map renderer is a separate report artifact. The scene's MuJoCo offscreen
+framebuffer reported `offwidth=1280` and `offheight=720`, matching the requested
+maximum for this scene. Higher resolutions may require larger MuJoCo offscreen
+buffer settings before `mujoco.Renderer` will accept them.
+
+GPU verification:
+
+```text
+standard lane: vendor=NVIDIA Corporation, renderer=NVIDIA RTX 3500 Ada Generation Laptop GPU/PCIe/SSE2
+filament lane: vendor=NVIDIA Corporation, renderer=NVIDIA RTX 3500 Ada Generation Laptop GPU/PCIe/SSE2
+```
+
+The `HandleAllocator arena is full` diagnostic is emitted by Filament's OpenGL
+handle allocator and says it is using a slower system heap. It does not indicate
+that MuJoCo fell back to CPU rendering.
+
+Human readout: Filament is no longer vertically flipped, but it still appears
+darker, softer, and more shadow-heavy than standard MuJoCo in the 1280x720
+report. Increasing resolution improves both lanes, but it does not make
+Filament obviously clearer for robot FPV or focused verification. Keep standard
+MuJoCo as the default cleanup renderer until a later report shows that Filament
+improves task evidence, not only screenshot aesthetics.

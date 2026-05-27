@@ -28,6 +28,8 @@ from roboclaws.molmo_cleanup.generated_mess import (
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
 HELD_LOCATION_ID = "held_by_agent"
+DEFAULT_RENDER_WIDTH = 540
+DEFAULT_RENDER_HEIGHT = 360
 _MODEL_DATA_CACHE: dict[tuple[str, str], tuple[mujoco.MjModel, mujoco.MjData]] = {}
 _FILAMENT_RESOURCE_PROVIDER: _FilamentResourceProvider | None = None
 _MUJOCO_FILAMENT_RUNTIME: bool | None = None
@@ -205,12 +207,16 @@ def main(argv: list[str] | None = None) -> None:
     snapshot = subparsers.add_parser("snapshot")
     snapshot.add_argument("--output-path", type=Path, required=True)
     snapshot.add_argument("--title", default="")
+    snapshot.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
+    snapshot.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
 
     robot_views = subparsers.add_parser("robot_views")
     robot_views.add_argument("--output-dir", type=Path, required=True)
     robot_views.add_argument("--label", required=True)
     robot_views.add_argument("--focus-object-id")
     robot_views.add_argument("--focus-receptacle-id")
+    robot_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
+    robot_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
 
     navigate_object = subparsers.add_parser("navigate_to_object")
     navigate_object.add_argument("--object-id", required=True)
@@ -260,7 +266,13 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "locations":
             result = _ok("locations", final_locations=_read_locations(state))
         elif args.command == "snapshot":
-            result = write_snapshot(state, args.output_path, args.title)
+            result = write_snapshot(
+                state,
+                args.output_path,
+                args.title,
+                width=args.render_width,
+                height=args.render_height,
+            )
         elif args.command == "robot_views":
             result = write_robot_views(
                 state,
@@ -268,6 +280,8 @@ def main(argv: list[str] | None = None) -> None:
                 args.label,
                 focus_object_id=args.focus_object_id,
                 focus_receptacle_id=args.focus_receptacle_id,
+                width=args.render_width,
+                height=args.render_height,
             )
         elif args.command == "navigate_to_object":
             result = navigate_to_object(state, args.object_id)
@@ -350,6 +364,8 @@ def run_state_command(
             state,
             Path(str(kwargs["output_path"])),
             str(kwargs.get("title") or ""),
+            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
         )
     elif command == "robot_views":
         result = write_robot_views(
@@ -358,6 +374,8 @@ def run_state_command(
             str(kwargs["label"]),
             focus_object_id=_optional_str(kwargs.get("focus_object_id")),
             focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
+            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
         )
     elif command == "navigate_to_object":
         result = navigate_to_object(state, str(kwargs["object_id"]))
@@ -530,11 +548,19 @@ def observe(state: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict[str, Any]:
+def write_snapshot(
+    state: dict[str, Any],
+    output_path: Path,
+    title: str,
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
+) -> dict[str, Any]:
+    width, height = _render_dimensions(width, height)
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
     mujoco.mj_forward(model, data)
-    renderer = mujoco.Renderer(model, height=360, width=540)
+    renderer = mujoco.Renderer(model, height=height, width=width)
     camera = mujoco.MjvCamera()
     camera.type = mujoco.mjtCamera.mjCAMERA_FREE
     camera.lookat[:] = [8.5, 6.5, 0.8]
@@ -556,7 +582,10 @@ def write_robot_views(
     *,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
 ) -> dict[str, Any]:
+    width, height = _render_dimensions(width, height)
     if not state.get("robot_included"):
         return _error("robot_views", "robot_not_included")
     if focus_object_id is not None and focus_object_id not in state["objects"]:
@@ -576,10 +605,10 @@ def write_robot_views(
     verify_path = output_dir / f"{safe_label}.verify.png"
 
     focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
-    fpv = _render_fixed_camera(model, data, "robot_0/head_camera")
-    chase = _render_fixed_camera(model, data, "robot_0/camera_follower")
+    fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
+    chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
     verify_camera = _focus_camera(state, focus)
-    verify = _render_free_camera(model, data, verify_camera)
+    verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
     focus["fpv_visibility"] = _focus_visibility(
         model,
         data,
@@ -627,6 +656,7 @@ def write_robot_views(
             "verify": list(verify.shape),
             "map": [420, 620, 3],
         },
+        render_resolution={"width": width, "height": height},
     )
 
 
@@ -2249,8 +2279,12 @@ def _render_fixed_camera(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     camera_name: str,
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    width, height = _render_dimensions(width, height)
+    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera_name)
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
@@ -2285,8 +2319,12 @@ def _render_free_camera(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     camera: mujoco.MjvCamera,
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    width, height = _render_dimensions(width, height)
+    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
@@ -2421,7 +2459,14 @@ def _focus_visibility(
     object_pixels = 0
     receptacle_pixels = 0
     try:
-        segmentation = _render_segmentation(model, data, camera)
+        render_shape = frame.shape if frame is not None and hasattr(frame, "shape") else None
+        segmentation = _render_segmentation(
+            model,
+            data,
+            camera,
+            width=_shape_width(render_shape),
+            height=_shape_height(render_shape),
+        )
     except Exception as exc:  # pragma: no cover - depends on MuJoCo renderer internals
         return {
             "status": "segmentation_unavailable",
@@ -2548,8 +2593,12 @@ def _render_segmentation(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     camera: mujoco.MjvCamera | str,
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    width, height = _render_dimensions(width, height)
+    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     renderer.render()
     renderer.enable_segmentation_rendering()
@@ -2606,6 +2655,7 @@ def _highlight_diff_box(
         return None
     import numpy as np
 
+    render_shape = frame.shape if frame is not None and hasattr(frame, "shape") else None
     baseline = frame if frame is not None else _render_color_frame(model, data, camera)
     baseline = np.asarray(baseline)
     previous_rgba = model.geom_rgba[geom_ids].copy()
@@ -2614,7 +2664,13 @@ def _highlight_diff_box(
         for geom_id in geom_ids:
             model.geom_rgba[geom_id] = np.array([1.0, 0.0, 1.0, 1.0])
             model.geom_matid[geom_id] = -1
-        highlighted = _render_color_frame(model, data, camera)
+        highlighted = _render_color_frame(
+            model,
+            data,
+            camera,
+            width=_shape_width(render_shape or baseline.shape),
+            height=_shape_height(render_shape or baseline.shape),
+        )
     finally:
         model.geom_rgba[geom_ids] = previous_rgba
         model.geom_matid[geom_ids] = previous_matid
@@ -2640,8 +2696,12 @@ def _render_color_frame(
     model: mujoco.MjModel,
     data: mujoco.MjData,
     camera: mujoco.MjvCamera | str,
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
-    renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
+    width, height = _render_dimensions(width, height)
+    renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
@@ -2971,6 +3031,33 @@ def _optional_str(value: Any) -> str | None:
         return None
     text = str(value)
     return text if text else None
+
+
+def _positive_int(value: Any, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _render_dimensions(width: int, height: int) -> tuple[int, int]:
+    return (
+        _positive_int(width, DEFAULT_RENDER_WIDTH),
+        _positive_int(height, DEFAULT_RENDER_HEIGHT),
+    )
+
+
+def _shape_width(shape: Any) -> int:
+    if isinstance(shape, (tuple, list)) and len(shape) >= 2:
+        return _positive_int(shape[1], DEFAULT_RENDER_WIDTH)
+    return DEFAULT_RENDER_WIDTH
+
+
+def _shape_height(shape: Any) -> int:
+    if isinstance(shape, (tuple, list)) and len(shape) >= 1:
+        return _positive_int(shape[0], DEFAULT_RENDER_HEIGHT)
+    return DEFAULT_RENDER_HEIGHT
 
 
 def _primary_body_name(info: dict[str, Any], *, fallback: str) -> str:
