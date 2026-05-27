@@ -959,6 +959,10 @@ def _assert_isaac_runtime(
             scene_bindings=scene_bindings if require_selected_usd_bindings else None,
             scene_index_payload=scene_index_payload,
         )
+        _assert_isaac_semantic_pose_report_rows(
+            isaac.get("semantic_pose_state") or {},
+            report_text,
+        )
 
     if require_robot_view_provenance:
         _assert_robot_views(data, base, require_complete_actions=False)
@@ -1377,6 +1381,62 @@ def _assert_semantic_usd_path_matches_scene_index(
         usd_prim_path,
         index_paths,
     )
+
+
+def _assert_isaac_semantic_pose_report_rows(
+    state: dict[str, Any],
+    report_text: str,
+) -> None:
+    for expected in (
+        "Object USD",
+        "Support USD",
+        "USD prim",
+        "Mutation",
+        "Receptacle USD",
+    ):
+        assert expected in report_text, (expected, report_text[:1000])
+
+    object_poses = state.get("object_poses") or {}
+    assert isinstance(object_poses, dict), state
+    for object_id, pose in object_poses.items():
+        assert isinstance(pose, dict), (object_id, pose)
+        _assert_report_text_values(
+            report_text,
+            str(object_id),
+            str(pose.get("support_receptacle_id") or ""),
+            str(pose.get("usd_prim_path") or ""),
+            str(pose.get("support_usd_prim_path") or ""),
+        )
+
+    articulations = state.get("articulations") or {}
+    assert isinstance(articulations, dict), state
+    for receptacle_id, articulation in articulations.items():
+        assert isinstance(articulation, dict), (receptacle_id, articulation)
+        _assert_report_text_values(
+            report_text,
+            str(receptacle_id),
+            str(articulation.get("usd_prim_path") or ""),
+        )
+
+    events = state.get("transform_events") or []
+    assert isinstance(events, list), state
+    for event in events:
+        assert isinstance(event, dict), event
+        _assert_report_text_values(
+            report_text,
+            str(event.get("tool") or ""),
+            str(event.get("state_mutation") or ""),
+            str(event.get("object_id") or ""),
+            str(event.get("receptacle_id") or ""),
+            str(event.get("object_usd_prim_path") or ""),
+            str(event.get("receptacle_usd_prim_path") or ""),
+        )
+
+
+def _assert_report_text_values(report_text: str, *values: str) -> None:
+    for value in values:
+        if value:
+            assert value in report_text, (value, report_text[:1000])
 
 
 def _assert_bound_isaac_binding_rows(

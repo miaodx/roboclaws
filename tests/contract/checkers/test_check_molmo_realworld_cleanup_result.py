@@ -359,7 +359,7 @@ def test_checker_accepts_isaac_semantic_pose_paths_when_rows_match_scene_index(
     checker._assert_isaac_runtime(
         data,
         tmp_path,
-        _isaac_report_text(scene_bindings),
+        _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
         require_real_runtime=False,
         require_scene_loaded=False,
         require_selected_usd_bindings=True,
@@ -388,7 +388,7 @@ def test_checker_rejects_isaac_semantic_pose_object_path_drift_from_scene_index(
         checker._assert_isaac_runtime(
             data,
             tmp_path,
-            _isaac_report_text(scene_bindings),
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
             require_real_runtime=False,
             require_scene_loaded=False,
             require_selected_usd_bindings=True,
@@ -419,7 +419,39 @@ def test_checker_rejects_isaac_semantic_pose_receptacle_path_drift_from_scene_in
         checker._assert_isaac_runtime(
             data,
             tmp_path,
-            _isaac_report_text(scene_bindings),
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_semantic_pose_when_report_omits_pose_rows(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(
+                scene_bindings,
+                semantic_pose_state=semantic_pose_state,
+                include_semantic_pose_rows=False,
+            ),
             require_real_runtime=False,
             require_scene_loaded=False,
             require_selected_usd_bindings=True,
@@ -2050,7 +2082,12 @@ def _isaac_segmentation_bbox() -> dict[str, object]:
     }
 
 
-def _isaac_report_text(scene_bindings: dict[str, object]) -> str:
+def _isaac_report_text(
+    scene_bindings: dict[str, object],
+    *,
+    semantic_pose_state: dict[str, object] | None = None,
+    include_semantic_pose_rows: bool = True,
+) -> str:
     selected_objects = scene_bindings.get("selected_object_bindings") or {}
     selected_receptacles = scene_bindings.get("selected_target_receptacle_bindings") or {}
     rows = [*selected_objects.values(), *selected_receptacles.values()]
@@ -2059,13 +2096,66 @@ def _isaac_report_text(scene_bindings: dict[str, object]) -> str:
         for row in rows
         if isinstance(row, dict)
     )
+    semantic_pose_text = ""
+    if semantic_pose_state is not None and include_semantic_pose_rows:
+        semantic_pose_text = _isaac_semantic_pose_report_text(semantic_pose_state)
     return (
         "Isaac Runtime Diagnostics Segmentation Scene Index Artifact Rows "
         "Selected USD Binding Rows Selected USD Index Rows "
         "isaac_semantic_pose Semantic Pose State Semantic Pose Events "
         "Rendered to USD Planner backed "
-        f"{row_text}"
+        f"{row_text} {semantic_pose_text}"
     )
+
+
+def _isaac_semantic_pose_report_text(state: dict[str, object]) -> str:
+    values: list[str] = [
+        "Object USD",
+        "Support USD",
+        "USD prim",
+        "Mutation",
+        "Receptacle USD",
+    ]
+    object_poses = state.get("object_poses") or {}
+    if isinstance(object_poses, dict):
+        for object_id, pose in object_poses.items():
+            if not isinstance(pose, dict):
+                continue
+            values.extend(
+                [
+                    str(object_id),
+                    str(pose.get("support_receptacle_id") or ""),
+                    str(pose.get("usd_prim_path") or ""),
+                    str(pose.get("support_usd_prim_path") or ""),
+                ]
+            )
+    articulations = state.get("articulations") or {}
+    if isinstance(articulations, dict):
+        for receptacle_id, articulation in articulations.items():
+            if not isinstance(articulation, dict):
+                continue
+            values.extend(
+                [
+                    str(receptacle_id),
+                    str(articulation.get("usd_prim_path") or ""),
+                ]
+            )
+    events = state.get("transform_events") or []
+    if isinstance(events, list):
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            values.extend(
+                [
+                    str(event.get("tool") or ""),
+                    str(event.get("state_mutation") or ""),
+                    str(event.get("object_id") or ""),
+                    str(event.get("receptacle_id") or ""),
+                    str(event.get("object_usd_prim_path") or ""),
+                    str(event.get("receptacle_usd_prim_path") or ""),
+                ]
+            )
+    return " ".join(value for value in values if value)
 
 
 def _seed7_cleanup_bindings() -> list[dict[str, object]]:
