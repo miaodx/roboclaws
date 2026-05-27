@@ -219,6 +219,14 @@ Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
 manipulation proof from the fake protocol evidence.
 
+Latest non-installing local preflight, run on 2026-05-28:
+`just agent::harness molmo-isaac-runtime-preflight` wrote
+`output/isaaclab/preflight/0528_040851/preflight.json` with `status=blocked`.
+The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
+NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
+Isaac Lab source checkout were missing. No install was requested and no
+NVIDIA/Omniverse EULA was accepted.
+
 ## Architecture
 
 Keep the current Roboclaws ladder intact:
