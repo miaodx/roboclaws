@@ -57,6 +57,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
+from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
@@ -963,6 +964,7 @@ def _assert_isaac_runtime(
             isaac.get("semantic_pose_state") or {},
             report_text,
         )
+        _assert_isaac_semantic_pose_trace(data, base, isaac.get("semantic_pose_state") or {})
 
     if require_robot_view_provenance:
         _assert_robot_views(data, base, require_complete_actions=False)
@@ -1437,6 +1439,47 @@ def _assert_report_text_values(report_text: str, *values: str) -> None:
     for value in values:
         if value:
             assert value in report_text, (value, report_text[:1000])
+
+
+def _assert_isaac_semantic_pose_trace(
+    data: dict[str, Any],
+    base: Path,
+    state: dict[str, Any],
+) -> None:
+    artifacts = data.get("artifacts") or {}
+    trace_path = _resolve_path(base, artifacts.get("trace", ""))
+    assert trace_path.is_file(), (trace_path, data)
+    trace_responses = [
+        event.get("response")
+        for event in _trace_events_from_path(trace_path)
+        if event.get("event") == "response" and isinstance(event.get("response"), dict)
+    ]
+    successful_pose_responses = [
+        response
+        for response in trace_responses
+        if response.get("tool") in _ISAAC_SEMANTIC_POSE_TRACE_TOOLS and response.get("ok") is True
+    ]
+    assert successful_pose_responses, trace_path
+    trace_tools = {str(response.get("tool") or "") for response in successful_pose_responses}
+    assert "pick" in trace_tools, (trace_path, trace_tools)
+    assert trace_tools & {"place", "place_inside"}, (trace_path, trace_tools)
+
+    state_events = state.get("transform_events") or []
+    assert isinstance(state_events, list), state
+    state_tools = {
+        str(event.get("tool") or "")
+        for event in state_events
+        if isinstance(event, dict) and event.get("tool") in _ISAAC_SEMANTIC_POSE_TRACE_TOOLS
+    }
+    assert state_tools <= trace_tools, (state_tools, trace_tools, trace_path)
+    for response in successful_pose_responses:
+        assert response.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, response
+        assert str(response.get("state_mutation") or "").startswith("isaac_"), response
+        assert response.get("planner_backed") is not True, response
+        assert response.get("physical_robot") is not True, response
+
+
+_ISAAC_SEMANTIC_POSE_TRACE_TOOLS = frozenset(ATOMIC_CLEANUP_TOOL_NAMES)
 
 
 def _assert_bound_isaac_binding_rows(

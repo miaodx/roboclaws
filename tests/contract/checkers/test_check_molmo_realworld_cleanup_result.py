@@ -462,6 +462,38 @@ def test_checker_rejects_isaac_semantic_pose_when_report_omits_pose_rows(
         )
 
 
+def test_checker_rejects_isaac_semantic_pose_when_trace_omits_provenance(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _write_trace(
+        tmp_path / "trace.jsonl",
+        _isaac_semantic_pose_trace_events(semantic_pose_state, include_provenance=False),
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -1922,6 +1954,9 @@ def _isaac_runtime_result(
         },
     }
     if semantic_pose_state is not None:
+        trace_path = base / "trace.jsonl"
+        _write_trace(trace_path, _isaac_semantic_pose_trace_events(semantic_pose_state))
+        result["artifacts"]["trace"] = str(trace_path)
         result["primitive_provenance"] = "isaac_semantic_pose"
         result["manipulation_evidence"] = {
             "primitive_provenance": "isaac_semantic_pose",
@@ -2067,6 +2102,32 @@ def _isaac_semantic_pose_state() -> dict[str, object]:
             },
         ],
     }
+
+
+def _isaac_semantic_pose_trace_events(
+    state: dict[str, object],
+    *,
+    include_provenance: bool = True,
+) -> list[dict[str, object]]:
+    events = state.get("transform_events") or []
+    trace_events: list[dict[str, object]] = []
+    if not isinstance(events, list):
+        return trace_events
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        response = {
+            "ok": True,
+            "status": "ok",
+            "tool": str(event.get("tool") or ""),
+            "object_id": str(event.get("object_id") or ""),
+            "receptacle_id": str(event.get("receptacle_id") or ""),
+            "state_mutation": str(event.get("state_mutation") or ""),
+        }
+        if include_provenance:
+            response["primitive_provenance"] = "isaac_semantic_pose"
+        trace_events.append(_trace_response(str(event.get("tool") or ""), response))
+    return trace_events
 
 
 def _isaac_segmentation_bbox() -> dict[str, object]:

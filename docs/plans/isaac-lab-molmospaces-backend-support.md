@@ -260,6 +260,11 @@ protocol:
   the semantic object/support USD rows, articulation USD rows, and mutation
   event USD paths. A run cannot pass with semantic pose state present only in
   JSON while the human report omits the reviewable pose evidence.
+- The same gate now checks `trace.jsonl` for successful semantic primitive
+  responses with `primitive_provenance=isaac_semantic_pose`, `isaac_*` state
+  mutations, and trace tool coverage matching the backend semantic pose events.
+  This keeps Phase D trace evidence aligned with `run_result.json` and
+  `report.html`.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
@@ -267,7 +272,7 @@ manipulation proof from the fake protocol evidence.
 
 Latest non-installing local preflight, run on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_055418/preflight.json` with `status=blocked`.
+`output/isaaclab/preflight/0528_060705/preflight.json` with `status=blocked`.
 The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
 NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
 Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab
