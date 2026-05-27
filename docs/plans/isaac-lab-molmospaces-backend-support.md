@@ -3,8 +3,8 @@
 
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
 real-mode Phase A smoke attempt, Phase B static robot-view evidence path, Phase
-C selected USD-binding diagnostics, and strict full-cleanup Isaac report gate
-implemented; real Isaac proof pending
+C selected USD-binding diagnostics, strict full-cleanup Isaac report gate, and
+Phase E segmentation diagnostics/gates implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -192,6 +192,15 @@ protocol:
   `backend=isaaclab_subprocess` and applies those strict report gates, so real
   cleanup report parity has one local-dev acceptance command once
   `.venv-isaaclab/` is available.
+- The real-mode camera path now requests Isaac semantic and instance
+  segmentation outputs and records report-only `isaac_segmentation_diagnostics_v1`
+  evidence. When Isaac returns label-mapped segmentation tensors, the worker
+  derives bounded bbox candidates and selected-USD-hit counts; otherwise the
+  report records an explicit segmentation blocker. The new smoke/checker gates
+  `--require-segmentation-evidence` and
+  `--require-isaac-segmentation-evidence` reject missing tensors, missing bbox
+  candidates, missing selected-USD matches, agent-facing leakage, and simulator
+  label fallback.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

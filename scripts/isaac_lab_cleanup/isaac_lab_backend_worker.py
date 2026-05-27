@@ -40,6 +40,13 @@ DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
 SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
+SEGMENTATION_SCHEMA = "isaac_segmentation_diagnostics_v1"
+ISAAC_SEGMENTATION_DATA_TYPES = (
+    "semantic_segmentation",
+    "instance_segmentation_fast",
+    "instance_id_segmentation_fast",
+)
+MAX_SEGMENTATION_CANDIDATES = 24
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
@@ -186,11 +193,17 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         receptacle_index=receptacle_index,
         real_smoke=real_smoke,
     )
+    segmentation = segmentation_diagnostics(
+        runtime_mode=args.runtime_mode,
+        real_smoke=real_smoke,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+    )
     mapping_gaps = mapping_gap_diagnostics(
         runtime_mode=args.runtime_mode,
         map_bundle_dir=args.map_bundle_dir,
         real_smoke=real_smoke,
         scene_binding_diagnostics=scene_binding_diagnostics,
+        segmentation=segmentation,
     )
     before_path = args.run_dir / "isaac_runtime_smoke.png"
     if real_smoke is not None:
@@ -224,14 +237,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_binding_diagnostics": scene_binding_diagnostics,
         "robot_view_images": _real_smoke_robot_view_images(real_smoke),
         "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
-        "segmentation": {
-            "available": False,
-            "status": "blocked_capability",
-            "reason": (
-                "semantic or instance segmentation is not exposed by this "
-                "initial Isaac semantic-pose worker"
-            ),
-        },
+        "segmentation": segmentation,
         "robot": _robot_payload(args.robot_name) if args.include_robot else None,
     }
     args.run_dir.mkdir(parents=True, exist_ok=True)
@@ -327,6 +333,7 @@ def real_runtime_smoke(
         )
         render_steps = int(capture["render_steps"])
         robot_view_images = dict(capture["robot_view_images"])
+        segmentation = _dict(capture.get("segmentation"))
     finally:
         if simulation_app is not None:
             simulation_app.close()
@@ -357,6 +364,7 @@ def real_runtime_smoke(
         "scene_index_diagnostics": scene_index_diagnostics,
         "object_index": scene_index_diagnostics["object_index"],
         "receptacle_index": scene_index_diagnostics["receptacle_index"],
+        "segmentation": segmentation,
     }
 
 
@@ -789,7 +797,10 @@ def _capture_isaac_lab_camera_views(
             update_period=0.0,
             height=height,
             width=width,
-            data_types=["rgb"],
+            data_types=["rgb", *ISAAC_SEGMENTATION_DATA_TYPES],
+            colorize_semantic_segmentation=False,
+            colorize_instance_segmentation=False,
+            colorize_instance_id_segmentation=False,
             spawn=sim_utils.PinholeCameraCfg(
                 focal_length=24.0,
                 focus_distance=4.0,
@@ -800,6 +811,7 @@ def _capture_isaac_lab_camera_views(
     view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device)
     sim.reset()
     saved: dict[str, str] = {}
+    segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
     for view_name in ROBOT_VIEW_KEYS:
         positions, targets = view_poses[view_name]
@@ -820,10 +832,208 @@ def _capture_isaac_lab_camera_views(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
         saved[view_name] = str(output_path)
+        segmentation_views.append(
+            _camera_segmentation_view_diagnostics(camera, view_name=view_name, np=np)
+        )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
+        "segmentation": _camera_segmentation_capture_diagnostics(segmentation_views),
     }
+
+
+def _camera_segmentation_view_diagnostics(
+    camera: Any,
+    *,
+    view_name: str,
+    np: Any,
+) -> dict[str, Any]:
+    outputs = getattr(getattr(camera, "data", None), "output", {}) or {}
+    info = getattr(getattr(camera, "data", None), "info", {}) or {}
+    output_rows: dict[str, dict[str, Any]] = {}
+    candidates: list[dict[str, Any]] = []
+    for data_type in ISAAC_SEGMENTATION_DATA_TYPES:
+        if data_type not in outputs:
+            continue
+        array = _segmentation_array(outputs.get(data_type), np=np)
+        labels = _segmentation_label_map(_dict(info.get(data_type)))
+        row: dict[str, Any] = {
+            "present": array is not None,
+            "label_count": len(labels),
+            "labels_available": bool(labels),
+        }
+        if array is not None:
+            row.update(
+                {
+                    "shape": [int(dim) for dim in array.shape],
+                    "dtype": str(array.dtype),
+                    "unique_id_count": _segmentation_unique_count(array, np=np),
+                }
+            )
+            candidates.extend(
+                _segmentation_bbox_candidates(
+                    array,
+                    labels,
+                    data_type=data_type,
+                    view_name=view_name,
+                    np=np,
+                )
+            )
+        output_rows[data_type] = row
+    return {
+        "view": view_name,
+        "outputs": output_rows,
+        "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
+    }
+
+
+def _camera_segmentation_capture_diagnostics(
+    views: list[dict[str, Any]],
+) -> dict[str, Any]:
+    output_data_types = sorted(
+        {
+            data_type
+            for view in views
+            for data_type, row in _dict(view.get("outputs")).items()
+            if _dict(row).get("present") is True
+        }
+    )
+    candidates = [
+        candidate
+        for view in views
+        for candidate in view.get("candidate_bboxes", [])
+        if isinstance(candidate, dict)
+    ]
+    return {
+        "schema": SEGMENTATION_SCHEMA,
+        "source": "isaac_lab_camera",
+        "capture_method": "isaac_lab_camera_segmentation",
+        "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
+        "output_data_types": output_data_types,
+        "tensor_output_available": bool(output_data_types),
+        "candidate_bbox_count": len(candidates),
+        "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
+        "view_outputs": views,
+        "no_simulator_label_fallback": True,
+    }
+
+
+def _segmentation_array(value: Any, *, np: Any) -> Any | None:
+    if value is None:
+        return None
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "numpy"):
+        value = value.numpy()
+    array = np.asarray(value)
+    if array.size == 0:
+        return None
+    while array.ndim > 2 and array.shape[0] == 1:
+        array = array[0]
+    if array.ndim == 3 and array.shape[-1] == 1:
+        array = array[..., 0]
+    if array.ndim != 2:
+        return None
+    return array
+
+
+def _segmentation_label_map(info: dict[str, Any]) -> dict[int, str]:
+    raw_labels = (
+        info.get("idToLabels")
+        or info.get("id_to_labels")
+        or info.get("idToSemantics")
+        or info.get("id_to_semantics")
+        or {}
+    )
+    if not isinstance(raw_labels, dict):
+        return {}
+    labels: dict[int, str] = {}
+    for raw_id, raw_label in raw_labels.items():
+        label_id = _int_or_none(raw_id)
+        if label_id is None:
+            continue
+        label = _segmentation_label_text(raw_label)
+        if label:
+            labels[label_id] = label
+    return labels
+
+
+def _segmentation_label_text(raw_label: Any) -> str:
+    if isinstance(raw_label, str):
+        return raw_label
+    if isinstance(raw_label, dict):
+        for key in (
+            "usd_prim_path",
+            "prim_path",
+            "path",
+            "instance",
+            "class",
+            "semantic",
+            "label",
+            "name",
+        ):
+            value = raw_label.get(key)
+            if isinstance(value, str) and value:
+                return value
+        return " ".join(str(value) for value in raw_label.values() if value)
+    if raw_label is None:
+        return ""
+    return str(raw_label)
+
+
+def _segmentation_unique_count(array: Any, *, np: Any) -> int:
+    try:
+        return int(np.unique(array).size)
+    except Exception:
+        return 0
+
+
+def _segmentation_bbox_candidates(
+    array: Any,
+    labels: dict[int, str],
+    *,
+    data_type: str,
+    view_name: str,
+    np: Any,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    height, width = array.shape
+    for label_id, label in sorted(labels.items()):
+        mask = array == label_id
+        pixel_count = int(np.count_nonzero(mask))
+        if pixel_count <= 0:
+            continue
+        ys, xs = np.where(mask)
+        if len(xs) == 0 or len(ys) == 0:
+            continue
+        candidate = {
+            "view": view_name,
+            "data_type": data_type,
+            "label_id": int(label_id),
+            "label": label,
+            "usd_prim_path": label if label.startswith("/") else "",
+            "bbox_xyxy": [
+                int(xs.min()),
+                int(ys.min()),
+                int(xs.max()) + 1,
+                int(ys.max()) + 1,
+            ],
+            "pixel_count": pixel_count,
+            "image_size": [int(width), int(height)],
+        }
+        candidates.append(candidate)
+        if len(candidates) >= MAX_SEGMENTATION_CANDIDATES:
+            break
+    return candidates
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _isaac_camera_view_poses(*, torch: Any, device: Any) -> dict[str, tuple[Any, Any]]:
@@ -1046,15 +1256,128 @@ def scene_load_diagnostics(
     }
 
 
+def segmentation_diagnostics(
+    runtime_mode: str,
+    *,
+    real_smoke: dict[str, Any] | None = None,
+    scene_binding_diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    selected_paths = _selected_bound_usd_prim_paths(scene_binding_diagnostics)
+    if real_smoke is None:
+        source = "fake_protocol" if runtime_mode == "fake" else "real_isaac_pending"
+        return {
+            "schema": SEGMENTATION_SCHEMA,
+            "available": False,
+            "status": "blocked_capability",
+            "source": source,
+            "capture_method": "not_attempted",
+            "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
+            "output_data_types": [],
+            "tensor_output_available": False,
+            "candidate_overlay_status": "blocked_capability",
+            "candidate_bbox_count": 0,
+            "selected_usd_prim_match_count": 0,
+            "selected_usd_prim_paths": selected_paths,
+            "candidate_bboxes": [],
+            "blockers": [
+                "Isaac semantic/instance segmentation requires a real Isaac camera capture."
+            ],
+            "agent_facing": False,
+            "no_simulator_label_fallback": True,
+            "reason": (
+                "Semantic or instance segmentation is not exposed by fake protocol "
+                "artifacts and no simulator-label fallback was used."
+            ),
+        }
+
+    captured = _dict(real_smoke.get("segmentation"))
+    output_data_types = [str(item) for item in captured.get("output_data_types", []) if str(item)]
+    candidates = [
+        dict(candidate)
+        for candidate in captured.get("candidate_bboxes", [])
+        if isinstance(candidate, dict)
+    ][:MAX_SEGMENTATION_CANDIDATES]
+    selected_matches = _segmentation_selected_matches(candidates, selected_paths)
+    blockers: list[str] = []
+    if not output_data_types:
+        blockers.append("Isaac camera capture returned no segmentation tensors.")
+    if not candidates:
+        blockers.append("Isaac segmentation tensors did not produce label-mapped bbox candidates.")
+    if selected_paths and not selected_matches:
+        blockers.append("Isaac segmentation candidates did not match selected cleanup USD prims.")
+    if not selected_paths:
+        blockers.append("Selected cleanup handles are not bound to USD prim paths.")
+    status = "available" if not blockers else "blocked_capability"
+    reason = (
+        "Isaac camera segmentation tensors produced label-mapped bbox candidates "
+        "for selected cleanup USD prims."
+        if status == "available"
+        else " ".join(blockers)
+    )
+    return {
+        "schema": SEGMENTATION_SCHEMA,
+        "available": status == "available",
+        "status": status,
+        "source": captured.get("source") or "isaac_lab_camera",
+        "capture_method": captured.get("capture_method") or "isaac_lab_camera_segmentation",
+        "requested_data_types": captured.get("requested_data_types")
+        or list(ISAAC_SEGMENTATION_DATA_TYPES),
+        "output_data_types": output_data_types,
+        "tensor_output_available": bool(output_data_types),
+        "candidate_overlay_status": (
+            "available" if status == "available" else "blocked_capability"
+        ),
+        "candidate_bbox_count": len(candidates),
+        "selected_usd_prim_match_count": len(selected_matches),
+        "selected_usd_prim_paths": selected_paths,
+        "selected_candidate_bboxes": selected_matches[:MAX_SEGMENTATION_CANDIDATES],
+        "candidate_bboxes": candidates,
+        "view_outputs": captured.get("view_outputs", []),
+        "blockers": blockers,
+        "agent_facing": False,
+        "no_simulator_label_fallback": captured.get("no_simulator_label_fallback") is not False,
+        "reason": reason,
+    }
+
+
+def _selected_bound_usd_prim_paths(
+    scene_binding_diagnostics: dict[str, Any] | None,
+) -> list[str]:
+    bindings = _dict(scene_binding_diagnostics)
+    selected_paths: list[str] = []
+    for group_key in ("selected_object_bindings", "selected_target_receptacle_bindings"):
+        for binding in _dict(bindings.get(group_key)).values():
+            item = _dict(binding)
+            if item.get("status") == "bound" and item.get("usd_prim_path"):
+                selected_paths.append(str(item["usd_prim_path"]))
+    return _dedupe(selected_paths)
+
+
+def _segmentation_selected_matches(
+    candidates: list[dict[str, Any]],
+    selected_paths: list[str],
+) -> list[dict[str, Any]]:
+    selected = set(selected_paths)
+    matches: list[dict[str, Any]] = []
+    for candidate in candidates:
+        prim_path = str(candidate.get("usd_prim_path") or "")
+        label = str(candidate.get("label") or "")
+        if prim_path in selected or any(path and path in label for path in selected):
+            matches.append(candidate)
+    return matches
+
+
 def mapping_gap_diagnostics(
     *,
     runtime_mode: str,
     map_bundle_dir: Path | None,
     real_smoke: dict[str, Any] | None = None,
     scene_binding_diagnostics: dict[str, Any] | None = None,
+    segmentation: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
     scene_bindings = _dict(scene_binding_diagnostics)
+    segmentation = _dict(segmentation)
     if real_smoke is not None:
         loaded_asset_kind = str(
             real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
@@ -1143,9 +1466,12 @@ def mapping_gap_diagnostics(
             },
             {
                 "area": "segmentation",
-                "status": "blocked_capability",
-                "source": "generated_runtime_smoke_usd",
-                "detail": "Semantic or instance segmentation masks are not exposed yet.",
+                "status": segmentation.get("status", "blocked_capability"),
+                "source": segmentation.get("source", "isaac_lab_camera"),
+                "detail": str(
+                    segmentation.get("reason")
+                    or "Semantic or instance segmentation masks are not exposed yet."
+                ),
             },
             {
                 "area": "articulation_and_collision",
@@ -1187,9 +1513,12 @@ def mapping_gap_diagnostics(
             },
             {
                 "area": "segmentation",
-                "status": "blocked_capability",
-                "source": source,
-                "detail": "Semantic or instance segmentation masks are not exposed yet.",
+                "status": segmentation.get("status", "blocked_capability"),
+                "source": segmentation.get("source", source),
+                "detail": str(
+                    segmentation.get("reason")
+                    or "Semantic or instance segmentation masks are not exposed yet."
+                ),
             },
             {
                 "area": "articulation_and_collision",

@@ -28,6 +28,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--require-selected-usd-bindings", action="store_true")
     parser.add_argument("--require-robot-view-images", action="store_true")
     parser.add_argument("--require-nonblank-image", action="store_true")
+    parser.add_argument("--require-segmentation-evidence", action="store_true")
     return parser.parse_args(argv)
 
 
@@ -46,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         require_selected_usd_bindings=args.require_selected_usd_bindings,
         require_robot_view_images=args.require_robot_view_images,
         require_nonblank_image=args.require_nonblank_image,
+        require_segmentation_evidence=args.require_segmentation_evidence,
     )
     summary = {
         "schema": SCHEMA,
@@ -73,6 +75,7 @@ def validate(
     require_selected_usd_bindings: bool,
     require_robot_view_images: bool,
     require_nonblank_image: bool,
+    require_segmentation_evidence: bool,
 ) -> list[str]:
     errors: list[str] = []
     _require(result.get("ok") is True, "init result did not report ok=true", errors)
@@ -86,6 +89,7 @@ def validate(
     scene_load = _dict(result.get("scene_load"))
     scene_index = _dict(result.get("scene_index_diagnostics"))
     scene_bindings = _dict(result.get("scene_binding_diagnostics"))
+    segmentation = _dict(result.get("segmentation"))
     artifacts = _dict(result.get("artifacts"))
 
     if require_real_rendering:
@@ -150,6 +154,8 @@ def validate(
                 require_real_rendering=require_real_rendering,
             )
         )
+    if require_segmentation_evidence:
+        errors.extend(_segmentation_errors(segmentation))
 
     if state:
         _require(
@@ -215,6 +221,59 @@ def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
     _require(
         scene_bindings.get("private_manifest_exposed_to_agent") is False,
         "selected USD binding diagnostics report private manifest exposure",
+        errors,
+    )
+    return errors
+
+
+def _segmentation_errors(segmentation: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(bool(segmentation), "missing Isaac segmentation diagnostics", errors)
+    if not segmentation:
+        return errors
+    _require(
+        segmentation.get("schema") == "isaac_segmentation_diagnostics_v1",
+        "Isaac segmentation diagnostics schema is not isaac_segmentation_diagnostics_v1",
+        errors,
+    )
+    _require(
+        segmentation.get("status") == "available",
+        "Isaac segmentation evidence is not available",
+        errors,
+    )
+    _require(
+        segmentation.get("available") is True,
+        "Isaac segmentation diagnostics do not report available=true",
+        errors,
+    )
+    _require(
+        segmentation.get("tensor_output_available") is True,
+        "Isaac segmentation tensors were not captured",
+        errors,
+    )
+    _require(
+        _int(segmentation.get("candidate_bbox_count")) > 0,
+        "Isaac segmentation produced no bbox candidates",
+        errors,
+    )
+    _require(
+        _int(segmentation.get("selected_usd_prim_match_count")) > 0,
+        "Isaac segmentation produced no selected-USD candidate matches",
+        errors,
+    )
+    _require(
+        segmentation.get("candidate_overlay_status") == "available",
+        "Isaac segmentation candidate overlays are not available",
+        errors,
+    )
+    _require(
+        segmentation.get("agent_facing") is False,
+        "Isaac segmentation diagnostics leaked into agent-facing fields",
+        errors,
+    )
+    _require(
+        segmentation.get("no_simulator_label_fallback") is True,
+        "Isaac segmentation diagnostics used simulator-label fallback",
         errors,
     )
     return errors

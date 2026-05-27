@@ -146,6 +146,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-isaac-selected-usd-bindings", action="store_true")
     parser.add_argument("--require-isaac-semantic-pose", action="store_true")
     parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
+    parser.add_argument("--require-isaac-segmentation-evidence", action="store_true")
     return parser.parse_args()
 
 
@@ -219,6 +220,7 @@ def main() -> None:
             require_isaac_selected_usd_bindings=args.require_isaac_selected_usd_bindings,
             require_isaac_semantic_pose=args.require_isaac_semantic_pose,
             require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
+            require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -280,6 +282,7 @@ def _assert_result(
     require_isaac_selected_usd_bindings: bool = False,
     require_isaac_semantic_pose: bool = False,
     require_isaac_robot_view_provenance: bool = False,
+    require_isaac_segmentation_evidence: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -471,6 +474,7 @@ def _assert_result(
         or require_isaac_selected_usd_bindings
         or require_isaac_semantic_pose
         or require_isaac_robot_view_provenance
+        or require_isaac_segmentation_evidence
     ):
         _assert_isaac_runtime(
             data,
@@ -481,6 +485,7 @@ def _assert_result(
             require_selected_usd_bindings=require_isaac_selected_usd_bindings,
             require_semantic_pose=require_isaac_semantic_pose,
             require_robot_view_provenance=require_isaac_robot_view_provenance,
+            require_segmentation_evidence=require_isaac_segmentation_evidence,
         )
 
 
@@ -865,6 +870,7 @@ def _assert_isaac_runtime(
     require_selected_usd_bindings: bool,
     require_semantic_pose: bool,
     require_robot_view_provenance: bool,
+    require_segmentation_evidence: bool,
 ) -> None:
     assert data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, data
     isaac = data.get("isaac_runtime") or {}
@@ -883,6 +889,8 @@ def _assert_isaac_runtime(
         "available",
         "unavailable",
     }, segmentation
+    assert segmentation.get("agent_facing") is not True, segmentation
+    assert segmentation.get("no_simulator_label_fallback") is not False, segmentation
 
     if require_real_runtime:
         assert runtime.get("runtime_mode") == "real", runtime
@@ -929,6 +937,18 @@ def _assert_isaac_runtime(
             provenance_text = json.dumps(step.get("view_provenance"), sort_keys=True).lower()
             assert "placeholder" not in provenance_text, step
             assert "isaac_lab_camera_rgb" in provenance_text, step
+
+    if require_segmentation_evidence:
+        assert segmentation.get("schema") == "isaac_segmentation_diagnostics_v1", segmentation
+        assert segmentation.get("status") == "available", segmentation
+        assert segmentation.get("available") is True, segmentation
+        assert segmentation.get("tensor_output_available") is True, segmentation
+        assert segmentation.get("candidate_overlay_status") == "available", segmentation
+        assert int(segmentation.get("candidate_bbox_count") or 0) > 0, segmentation
+        assert int(segmentation.get("selected_usd_prim_match_count") or 0) > 0, segmentation
+        assert segmentation.get("agent_facing") is False, segmentation
+        assert segmentation.get("no_simulator_label_fallback") is True, segmentation
+        assert "Segmentation" in report_text, report_text[:500]
 
 
 def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:

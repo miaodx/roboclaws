@@ -1435,6 +1435,8 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('USD index', scene_index.get('status', 'unknown'))}"
         f"{_metric('Selected USD bindings', selected_binding_summary)}"
         f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
+        f"{_metric('Seg bboxes', segmentation.get('candidate_bbox_count', 0))}"
+        f"{_metric('Seg selected hits', segmentation.get('selected_usd_prim_match_count', 0))}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )

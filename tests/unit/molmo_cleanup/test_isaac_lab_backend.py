@@ -52,6 +52,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.scene_binding_diagnostics["selected_target_receptacle_bound_count"] == 1
     assert backend.scene_binding_diagnostics["private_manifest_exposed_to_agent"] is False
     assert backend.segmentation["status"] == "blocked_capability"
+    assert backend.segmentation["agent_facing"] is False
+    assert backend.segmentation["no_simulator_label_fallback"] is True
     assert backend.scene_load["status"] == "fake_protocol"
     assert backend.scene_load["usd_stage_loaded"] is False
     assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
@@ -183,6 +185,32 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
                     "support_pose": {"frame": "world", "x": 0.0, "y": 0.0, "z": 0.0},
                 }
             },
+            "segmentation": {
+                "schema": "isaac_segmentation_diagnostics_v1",
+                "source": "isaac_lab_camera",
+                "capture_method": "isaac_lab_camera_segmentation",
+                "requested_data_types": [
+                    "semantic_segmentation",
+                    "instance_segmentation_fast",
+                    "instance_id_segmentation_fast",
+                ],
+                "output_data_types": ["instance_id_segmentation_fast"],
+                "tensor_output_available": True,
+                "candidate_bbox_count": 1,
+                "candidate_bboxes": [
+                    {
+                        "view": "fpv",
+                        "data_type": "instance_id_segmentation_fast",
+                        "label_id": 3,
+                        "label": "/World/Objects/mug_01",
+                        "usd_prim_path": "/World/Objects/mug_01",
+                        "bbox_xyxy": [8, 8, 32, 36],
+                        "pixel_count": 144,
+                        "image_size": [540, 360],
+                    }
+                ],
+                "no_simulator_label_fallback": True,
+            },
         }
 
     monkeypatch.setattr(
@@ -246,6 +274,64 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     assert state["scene_binding_diagnostics"]["status"] == "selected_bound"
     assert state["scene_binding_diagnostics"]["selected_object_bound_count"] == 1
     assert state["scene_binding_diagnostics"]["selected_target_receptacle_bound_count"] == 1
+    assert state["segmentation"]["status"] == "available"
+    assert state["segmentation"]["candidate_bbox_count"] == 1
+    assert state["segmentation"]["selected_usd_prim_match_count"] == 1
+    assert state["segmentation"]["agent_facing"] is False
+    assert state["segmentation"]["no_simulator_label_fallback"] is True
+
+
+def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
+    import numpy as np
+
+    class CameraData:
+        output = {
+            "instance_id_segmentation_fast": np.array(
+                [
+                    [[0], [0], [0], [0]],
+                    [[0], [3], [3], [0]],
+                    [[0], [3], [3], [0]],
+                    [[0], [0], [0], [0]],
+                ]
+            )
+        }
+        info = {
+            "instance_id_segmentation_fast": {
+                "idToLabels": {3: "/World/Objects/mug_01"},
+            }
+        }
+
+    class Camera:
+        data = CameraData()
+
+    view = isaac_lab_backend_worker._camera_segmentation_view_diagnostics(
+        Camera(),
+        view_name="fpv",
+        np=np,
+    )
+    capture = isaac_lab_backend_worker._camera_segmentation_capture_diagnostics([view])
+    diagnostics = isaac_lab_backend_worker.segmentation_diagnostics(
+        "real",
+        real_smoke={"segmentation": capture},
+        scene_binding_diagnostics={
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                }
+            },
+            "selected_target_receptacle_bindings": {},
+        },
+    )
+
+    assert capture["output_data_types"] == ["instance_id_segmentation_fast"]
+    assert capture["candidate_bbox_count"] == 1
+    assert diagnostics["status"] == "available"
+    assert diagnostics["candidate_bbox_count"] == 1
+    assert diagnostics["selected_usd_prim_match_count"] == 1
+    assert diagnostics["selected_candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
+    assert diagnostics["agent_facing"] is False
+    assert diagnostics["no_simulator_label_fallback"] is True
 
 
 def test_isaac_lab_generated_count_selects_private_targets_not_first_object(

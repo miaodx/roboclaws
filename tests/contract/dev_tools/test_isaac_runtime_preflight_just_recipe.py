@@ -76,6 +76,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "--require-usd-scene-index" in harness_text
     assert "--require-selected-usd-bindings" in harness_text
     assert "--require-robot-view-images" in harness_text
+    assert "--require-segmentation-evidence" in harness_text
     assert "robot_views_result.json" in harness_text
     assert "robot_views \\" in harness_text
 
@@ -107,6 +108,7 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-scene-loaded" in harness_text
     assert "--require-isaac-selected-usd-bindings" in harness_text
     assert "--require-isaac-robot-view-provenance" in harness_text
+    assert "--require-isaac-segmentation-evidence" in harness_text
 
     route = trace_agent_harness(
         "molmo-isaac-cleanup-smoke",

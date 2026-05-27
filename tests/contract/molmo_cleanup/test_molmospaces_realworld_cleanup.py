@@ -351,6 +351,8 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     )
     assert run_result["isaac_runtime"]["mapping_gaps"]
     assert run_result["isaac_runtime"]["segmentation"]["status"] == "blocked_capability"
+    assert run_result["isaac_runtime"]["segmentation"]["agent_facing"] is False
+    assert run_result["isaac_runtime"]["segmentation"]["no_simulator_label_fallback"] is True
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
@@ -392,6 +394,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
             require_isaac_real_runtime=True,
             require_isaac_selected_usd_bindings=True,
             require_isaac_robot_view_provenance=True,
+            require_isaac_segmentation_evidence=True,
         )
     except AssertionError:
         pass
