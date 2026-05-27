@@ -185,7 +185,7 @@ service in real-router mode:
 
 ```bash
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
-  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe
+  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe --extra omdet
 
 VISUAL_GROUNDING_DEVICE=auto \
 VISUAL_GROUNDING_TORCH_DTYPE=auto \
@@ -194,6 +194,10 @@ VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
     --pipeline real-router --adapter-mode real
 
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
+
+VISUAL_GROUNDING_OMDET_MODEL_ID=omlab/omdet-turbo-swin-tiny-hf \
   .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
     --pipeline real-router --adapter-mode real
 ```

@@ -221,7 +221,7 @@ def test_real_mode_reports_grounding_dino_device_unavailable(monkeypatch) -> Non
     assert response["diagnostics"]["runtime"]["requested_device"] == "cuda"
 
 
-def test_real_mode_dispatches_yolo_custom_through_standard_yolo_loader(monkeypatch) -> None:
+def test_real_mode_dispatches_yolo_world_through_standard_yolo_loader(monkeypatch) -> None:
     seen: dict[str, str] = {}
 
     class FakeBoxes:
@@ -248,17 +248,124 @@ def test_real_mode_dispatches_yolo_custom_through_standard_yolo_loader(monkeypat
     monkeypatch.setattr(adapters, "_load_yolo_model", fake_yolo_loader)
 
     response = adapters.visual_grounding_service_response(
-        payload=_request("yolo-custom", image=_jpeg_image_payload()),
-        configured_pipeline_id="yolo-custom",
+        payload=_request("yolo-world", image=_jpeg_image_payload()),
+        configured_pipeline_id="yolo-world",
         adapter_mode="real",
         latency_ms=1,
     )
 
     assert response["status"] == "ok"
-    assert seen["producer_id"] == "yolo-custom"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "yolo-custom"
+    assert seen["producer_id"] == "yolo-world"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "yolo-world"
     assert response["candidates"][0]["category"] == "dish"
-    assert response["diagnostics"]["diagnostic_mode"] == "real_yolo-custom"
+    assert response["diagnostics"]["diagnostic_mode"] == "real_yolo-world"
+
+
+def test_real_mode_dispatches_omdet_turbo_adapter(monkeypatch) -> None:
+    seen: dict[str, Any] = {}
+
+    class FakeInputs(dict):
+        input_ids = [[1]]
+
+        def to(self, device: str) -> "FakeInputs":
+            seen["device"] = device
+            return self
+
+    class FakeProcessor:
+        def __call__(
+            self,
+            *,
+            images: Image.Image,
+            text: list[str],
+            task: str,
+            return_tensors: str,
+        ) -> FakeInputs:
+            assert images.size == (10, 10)
+            assert text == ["a dish", "a book", "a toy"]
+            assert task.startswith("Detect")
+            assert return_tensors == "pt"
+            seen["text"] = text
+            return FakeInputs(pixel_values="fake")
+
+        def post_process_grounded_object_detection(
+            self,
+            outputs: Any,
+            *,
+            text_labels: list[str],
+            threshold: float,
+            nms_threshold: float,
+            target_sizes: list[tuple[int, int]],
+            max_num_det: int | None,
+        ) -> list[dict[str, Any]]:
+            assert outputs == {"fake": "outputs"}
+            assert text_labels == ["a dish", "a book", "a toy"]
+            assert threshold == 0.2
+            assert nms_threshold == 0.4
+            assert target_sizes == [(10, 10)]
+            assert max_num_det == 6
+            return [
+                {
+                    "boxes": [[1, 2, 7, 6]],
+                    "scores": [0.73],
+                    "text_labels": ["a dish"],
+                }
+            ]
+
+    class FakeModel:
+        def __call__(self, **inputs: Any) -> dict[str, str]:
+            assert inputs == {"pixel_values": "fake"}
+            return {"fake": "outputs"}
+
+    class FakeTorch:
+        class _NoGrad:
+            def __enter__(self) -> None:
+                return None
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+        def no_grad(self) -> "FakeTorch._NoGrad":
+            return self._NoGrad()
+
+    def fake_load_omdet(
+        model_id: str,
+        requested_device: str,
+        requested_dtype: str,
+    ) -> tuple[FakeProcessor, FakeModel, FakeTorch, dict[str, Any]]:
+        seen["model_id"] = model_id
+        seen["requested_device"] = requested_device
+        seen["requested_dtype"] = requested_dtype
+        return (
+            FakeProcessor(),
+            FakeModel(),
+            FakeTorch(),
+            {"device": "cpu", "dtype": "auto", "model_id": model_id},
+        )
+
+    monkeypatch.setattr(adapters, "_load_omdet_turbo", fake_load_omdet)
+    request = _request("omdet-turbo", image=_jpeg_image_payload())
+    request["pipeline_request"]["proposer"]["runtime_parameters"] = {
+        "confidence_threshold": 0.2,
+        "nms_threshold": 0.4,
+        "max_detections": 6,
+        "device": "cpu",
+        "torch_dtype": "auto",
+    }
+
+    response = adapters.visual_grounding_service_response(
+        payload=request,
+        configured_pipeline_id="omdet-turbo",
+        adapter_mode="real",
+        latency_ms=1,
+    )
+
+    assert response["status"] == "ok"
+    assert seen["model_id"] == "omlab/omdet-turbo-swin-tiny-hf"
+    assert seen["requested_device"] == "cpu"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "omdet-turbo"
+    assert response["pipeline"]["stages"][0]["runtime_parameters"]["confidence_threshold"] == 0.2
+    assert response["candidates"][0]["category"] == "dish"
+    assert response["diagnostics"]["diagnostic_mode"] == "real_omdet-turbo"
 
 
 def test_real_mode_direct_mimo_uses_hosted_vlm_boundary(monkeypatch) -> None:
@@ -486,6 +593,7 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
     assert "real" in catalog["adapter_modes"]
     assert catalog["private_truth_included"] is False
     by_id = {item["producer_id"]: item for item in catalog["adapters"]}
+    assert "yolo-custom" not in by_id
     assert by_id["fake-http"]["status"] == "available"
     assert by_id["fake-http"]["runtime"]["status"] == "available"
     assert by_id["grounding-dino"]["optional_extra"] == "visual-grounding-dino"
@@ -538,6 +646,7 @@ def test_configurable_service_lists_adapter_catalog_cli() -> None:
         "mimo-v2-omni",
         "qwen3-vl",
     }
+    assert "yolo-custom" not in {item["producer_id"] for item in catalog["adapters"]}
     by_id = {item["producer_id"]: item for item in catalog["adapters"]}
     assert "runtime" in by_id["grounding-dino"]
     assert "runtime" in by_id["mimo-v2-omni"]

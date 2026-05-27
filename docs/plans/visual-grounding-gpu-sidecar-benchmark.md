@@ -130,8 +130,7 @@ based on a weak default.
 | `grounding-dino` | HF tiny and base checkpoints at minimum; include any locally available larger/edge/optimized DINO-family checkpoint if it can run in the GPU sidecar. | Repairs the current baseline and tests whether a larger DINO is good enough without being too slow. |
 | `yoloe` | At least the current 11s config plus one larger available YOLOE weight; run default and tuned cleanup-prompt settings. | Existing fast open-vocabulary lane; size sweep checks whether recall improves enough before latency becomes unacceptable. |
 | `yolo-world` | Small and medium/large available weights, with the same cleanup prompt expansion as YOLOE. | Fast YOLO-family open-vocabulary candidate with a better real-time profile than DINO. |
-| `omdet-turbo` | Tiny/base or equivalent available variants. | Fast non-YOLO open-vocabulary candidate for quality/latency balance. |
-| `yolo-custom` | One fast fixed-ontology model and one larger fixed-ontology model if weights/data are available. | Deployment upper bound when cleanup categories are stable. |
+| `omdet-turbo` | The public HF tiny checkpoint, swept across threshold/NMS variants until another valid public size is identified. | Fast non-YOLO open-vocabulary candidate for quality/latency balance. |
 
 Do not include broad second-wave research candidates in the first phase unless
 all practical candidates fail to beat current CPU DINO.
@@ -164,7 +163,7 @@ Example command shape:
 VISUAL_GROUNDING_BASE_URL=http://127.0.0.1:18880 \
 VISUAL_GROUNDING_TIMEOUT_S=60 \
 just agent::harness molmo-visual-grounding-benchmark \
-  pipeline=grounding-dino,yoloe,yolo-world,omdet-turbo,yolo-custom \
+  pipeline=grounding-dino,yoloe,yolo-world,omdet-turbo \
   corpus=harness/visual_grounding/local_raw_fpv_corpus.json \
   require_success=true
 ```
@@ -325,12 +324,9 @@ Full matrix availability benchmark:
 - Checker:
   `.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py output/visual-grounding-benchmark/gpu-full-matrix-expanded/0526_1948`
 - Result: implemented `grounding-dino`, `yoloe`, and `yolo-world` rows
-  completed; `omdet-turbo` rows reported `missing_dependency`; `yolo-custom`
-  placeholder rows reported `adapter_error` because trained cleanup ontology
-  weights were not supplied.
-- Family sweep: `omdet-turbo` is marked under-sampled with zero successful
-  configs and `missing_dependency`; `yolo-custom` is marked under-sampled
-  because supplied cleanup ontology weights are still required.
+  completed; at the time `omdet-turbo` rows reported `missing_dependency`.
+- Family sweep: `omdet-turbo` was marked under-sampled with zero successful
+  configs and `missing_dependency`.
 
 Apple-to-apple direct cleanup validation:
 
@@ -353,15 +349,15 @@ Apple-to-apple direct cleanup validation:
   still passed the accepted validation gate.
 
 Codex-runtime cleanup validation was not run in this pass because the local
-network was `work`, where system-provider Codex and OpenClaw workflows are
-guarded unless an allowed repo-local key route is used.
+network was `work`, where OpenClaw workflows are guarded and coding-agent runs
+must use an allowed repo-local `.env` key route.
 
 ## Open Follow-Ups
 
-- Add a `just` setup recipe or README snippet for syncing
-  `sidecars/visual-grounding/` into `.venv-visual-grounding/`.
-- Decide whether `yolo-custom` needs a small generated cleanup ontology dataset
-  before it can be fairly compared.
+- Add a `just` setup recipe for syncing `sidecars/visual-grounding/` into
+  `.venv-visual-grounding/`; current docs include the manual `uv sync` command.
+- Re-run the first-wave matrix with the real OmDet tiny adapter now that the
+  Transformers implementation is wired.
 - Add a real Agibot G2 head-camera seed set before choosing a physical-robot
   default; the MolmoSpaces RAW_FPV corpus is sufficient for this simulator-side
   promotion gate.
@@ -392,7 +388,40 @@ Accepted decisions:
 
 Deferred decisions:
 
-- `yolo-custom` can be cataloged and benchmarked when weights are supplied, but
-  a generated cleanup ontology dataset remains a separate follow-up.
+- `yolo-custom` is removed from active support because there is no planned
+  cleanup-ontology training set or supplied weight package; YOLO-family
+  comparisons should use `yoloe` and `yolo-world`.
 - Real Agibot G2 head-camera seeds remain a physical-robot promotion input, not
   a prerequisite for the MolmoSpaces RAW_FPV simulator-side benchmark gate.
+
+## Sidecar Setup
+
+The visual-grounding sidecar uses its own uv environment so CUDA Torch and
+model packages do not enter the core Roboclaws `.venv/`:
+
+```bash
+UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
+  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe --extra omdet
+
+.venv-visual-grounding/bin/python - <<'PY'
+import torch, transformers, ultralytics
+print("torch", torch.__version__, "cuda", torch.cuda.is_available())
+print("transformers", transformers.__version__)
+print("ultralytics", ultralytics.__version__)
+PY
+```
+
+Start the service in real-router mode after the environment is ready:
+
+```bash
+VISUAL_GROUNDING_DEVICE=auto \
+VISUAL_GROUNDING_TORCH_DTYPE=auto \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
+```
+
+Grounding DINO, YOLOE/YOLO-World, and OmDet-Turbo choose their model ids from
+the benchmark row first, then `VISUAL_GROUNDING_*_MODEL_ID`, then the adapter
+default. Current OmDet support uses
+`omlab/omdet-turbo-swin-tiny-hf`; `omlab/omdet-turbo-swin-base-hf` is not a
+valid public Hugging Face model id as of this update.

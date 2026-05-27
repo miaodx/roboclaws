@@ -19,6 +19,9 @@ cuda = [
 yoloe = [
     "clip @ git+https://github.com/ultralytics/CLIP.git",
 ]
+omdet = [
+    "timm>=1.0",
+]
 qwen3vl = [
     "qwen-vl-utils>=0.0.14",
 ]

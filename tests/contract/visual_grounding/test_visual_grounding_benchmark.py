@@ -648,7 +648,7 @@ def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:
     rows = matrix["rows"]
     by_row = {row["row_id"]: row for row in rows}
 
-    assert len(rows) == 16
+    assert len(rows) == 15
     for size in ("tiny", "base"):
         for mode, box_threshold, text_threshold in (
             ("default", 0.35, 0.25),
@@ -668,8 +668,17 @@ def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:
     ):
         assert by_row[row_id]["runtime_parameters"]["prompt_expansion"] is True
 
-    assert by_row["yolo-custom-fast-placeholder"]["under_sampled_reason"]
-    assert by_row["yolo-custom-large-placeholder"]["under_sampled_reason"]
+    assert "yolo-custom-fast-placeholder" not in by_row
+    assert "yolo-custom-large-placeholder" not in by_row
+    for row_id in (
+        "omdet-turbo-tiny-default",
+        "omdet-turbo-tiny-recall",
+        "omdet-turbo-tiny-precision",
+    ):
+        row = by_row[row_id]
+        assert row["model_id"] == "omlab/omdet-turbo-swin-tiny-hf"
+        assert row["runtime_parameters"]["device"] == "auto"
+        assert row["runtime_parameters"]["torch_dtype"] == "auto"
 
 
 def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(

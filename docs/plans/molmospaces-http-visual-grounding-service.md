@@ -133,7 +133,7 @@ heavy model dependencies out of the core cleanup runtime:
 - core cleanup runtime: HTTP client, schemas, report/checker metadata only;
 - sidecar base extra: lightweight HTTP service dependencies and fake pipeline;
 - proposer extras: `visual-grounding-dino`, `visual-grounding-yoloe`, and
-  optional `visual-grounding-yolo-custom`;
+  `visual-grounding-omdet`;
 - refiner extras: `visual-grounding-qwen3vl` for local/open Qwen3-VL probes;
 - hosted refiner routes such as MiMo v2 Omni use provider env/config rather
   than local model weights.

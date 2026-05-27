@@ -122,14 +122,6 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
             "Torch, Transformers, and approved OmDet-Turbo weights."
         ),
     ),
-    "yolo-custom": AdapterSpec(
-        producer_id="yolo-custom",
-        role="proposer",
-        status="adapter_unavailable",
-        model_id="custom-yolo-cleanup-ontology",
-        optional_extra="visual-grounding-yolo-custom",
-        setup_hint="Provide trained weights through an explicit sidecar setup step.",
-    ),
     "mimo-v2-omni": AdapterSpec(
         producer_id="mimo-v2-omni",
         role="refiner_or_direct_producer",
@@ -307,7 +299,7 @@ def adapter_runtime_status(producer_id: str) -> dict[str, Any]:
                 "in the sidecar environment."
             ),
         )
-    if producer_id in {"yoloe", "yolo-world", "yolo-custom"}:
+    if producer_id in {"yoloe", "yolo-world"}:
         checks = _module_checks("ultralytics")
         return _dependency_runtime_status(
             checks=checks,
@@ -545,7 +537,7 @@ def _real_proposer_response(
             pipeline_id=pipeline_id,
             latency_ms=latency_ms,
         )
-    if producer_id in {"yoloe", "yolo-world", "yolo-custom"}:
+    if producer_id in {"yoloe", "yolo-world"}:
         return _yolo_real_response(
             payload=payload,
             pipeline_id=pipeline_id,
@@ -744,7 +736,6 @@ def _yolo_real_response(
     started = time.monotonic()
     spec = ADAPTER_SPECS[producer_id]
     env_name = {
-        "yolo-custom": "VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID",
         "yolo-world": "VISUAL_GROUNDING_YOLO_WORLD_MODEL_ID",
     }.get(producer_id, "VISUAL_GROUNDING_YOLOE_MODEL_ID")
     model_id = _request_model_id(payload, producer_id) or os.environ.get(env_name, spec.model_id)
@@ -836,10 +827,109 @@ def _omdet_turbo_real_response(
         spec.model_id,
     )
     runtime_parameters = _request_runtime_parameters(payload, producer_id)
+    device_request = str(
+        runtime_parameters.get("device") or os.environ.get("VISUAL_GROUNDING_DEVICE", "auto")
+    )
+    dtype_request = str(
+        runtime_parameters.get("torch_dtype")
+        or runtime_parameters.get("dtype")
+        or os.environ.get("VISUAL_GROUNDING_TORCH_DTYPE", "auto")
+    )
+    runtime_diagnostics: dict[str, Any] = {
+        "requested_device": device_request,
+        "requested_dtype": dtype_request,
+        "runtime_parameters": runtime_parameters,
+    }
     try:
-        raise ImportError(
-            "omdet-turbo real mode requires an approved sidecar adapter implementation "
-            "for the selected OmDet checkpoint"
+        image = _decode_request_image(payload)
+        labels = _category_hints(payload)
+        if not labels:
+            return _real_adapter_ok_response(
+                pipeline_id=pipeline_id,
+                stage="proposer",
+                producer_id=producer_id,
+                model_id=model_id,
+                latency_ms=_elapsed_ms(started, minimum=latency_ms),
+                candidates=[],
+                raw_proposals=[],
+                diagnostic_mode="real_omdet-turbo",
+                stage_metadata={
+                    "runtime": runtime_diagnostics,
+                    "runtime_parameters": runtime_parameters,
+                },
+                diagnostics_extra={"runtime": runtime_diagnostics},
+            )
+        processor, model, torch_module, runtime_diagnostics = _load_omdet_turbo(
+            model_id,
+            device_request,
+            dtype_request,
+        )
+        text_labels = [_label_prompt(label) for label in labels]
+        task = str(
+            runtime_parameters.get("task")
+            or os.environ.get("VISUAL_GROUNDING_OMDET_TASK", "")
+            or f"Detect {', '.join(text_labels)}."
+        )
+        inputs = processor(images=image, text=text_labels, task=task, return_tensors="pt")
+        device = runtime_diagnostics.get("device")
+        if device and hasattr(inputs, "to"):
+            inputs = inputs.to(str(device))
+        with torch_module.no_grad():
+            outputs = model(**inputs)
+        threshold = _runtime_float_param(
+            runtime_parameters,
+            "confidence_threshold",
+            env_name="VISUAL_GROUNDING_OMDET_CONFIDENCE_THRESHOLD",
+            default=0.25,
+        )
+        nms_threshold = _runtime_float_param(
+            runtime_parameters,
+            "nms_threshold",
+            env_name="VISUAL_GROUNDING_OMDET_NMS_THRESHOLD",
+            default=0.5,
+        )
+        max_num_det = _runtime_int_param(
+            runtime_parameters,
+            "max_detections",
+            env_name="VISUAL_GROUNDING_OMDET_MAX_DET",
+        )
+        runtime_diagnostics = {
+            **runtime_diagnostics,
+            "runtime_parameters": {
+                **runtime_parameters,
+                "confidence_threshold": threshold,
+                "nms_threshold": nms_threshold,
+                **({"max_detections": max_num_det} if max_num_det is not None else {}),
+            },
+        }
+        results = processor.post_process_grounded_object_detection(
+            outputs,
+            text_labels=text_labels,
+            threshold=threshold,
+            nms_threshold=nms_threshold,
+            target_sizes=[(image.height, image.width)],
+            max_num_det=max_num_det,
+        )
+        candidates = _omdet_candidates_from_result(
+            payload=payload,
+            image=image,
+            result=(results or [{}])[0],
+            category_hints=labels,
+        )
+        return _real_adapter_ok_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            candidates=candidates,
+            raw_proposals=candidates,
+            diagnostic_mode="real_omdet-turbo",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_diagnostics["runtime_parameters"],
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
         )
     except ImportError as exc:
         return _real_adapter_failure_response(
@@ -857,6 +947,38 @@ def _omdet_turbo_real_response(
             ),
             stage_metadata={"runtime_parameters": runtime_parameters},
             diagnostics_extra={"runtime_parameters": runtime_parameters},
+        )
+    except VisualGroundingDeviceError as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="device_unavailable",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_omdet-turbo",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
+        )
+    except Exception as exc:
+        return _real_adapter_failure_response(
+            pipeline_id=pipeline_id,
+            stage="proposer",
+            producer_id=producer_id,
+            model_id=model_id,
+            reason="adapter_error",
+            message=str(exc),
+            latency_ms=_elapsed_ms(started, minimum=latency_ms),
+            diagnostic_mode="real_omdet-turbo",
+            stage_metadata={
+                "runtime": runtime_diagnostics,
+                "runtime_parameters": runtime_parameters,
+            },
+            diagnostics_extra={"runtime": runtime_diagnostics},
         )
 
 
@@ -1167,6 +1289,64 @@ def _load_grounding_dino(
     return processor, model, torch, runtime
 
 
+@lru_cache(maxsize=4)
+def _load_omdet_turbo(
+    model_id: str,
+    requested_device: str,
+    requested_dtype: str,
+) -> tuple[Any, Any, Any, dict[str, Any]]:
+    try:
+        import torch
+        from transformers import OmDetTurboForObjectDetection, OmDetTurboProcessor
+    except ImportError as exc:
+        raise ImportError(
+            "OmDet-Turbo real mode requires sidecar dependencies: transformers and torch"
+        ) from exc
+
+    device = _resolve_torch_device(torch, requested_device)
+    dtype, dtype_name = _resolve_torch_dtype(torch, requested_dtype)
+    processor = OmDetTurboProcessor.from_pretrained(model_id)
+    model = OmDetTurboForObjectDetection.from_pretrained(model_id)
+    _materialize_omdet_meta_attention_masks(model, torch, device=device, dtype=dtype)
+    try:
+        model = model.to(device)
+        if dtype is not None:
+            model = model.to(dtype=dtype)
+    except Exception as exc:
+        raise VisualGroundingDeviceError(
+            f"failed to place OmDet-Turbo on device={device} dtype={dtype_name}: {exc}"
+        ) from exc
+    model.eval()
+    runtime = _torch_runtime_diagnostics(
+        torch,
+        requested_device=requested_device,
+        requested_dtype=requested_dtype,
+        device=device,
+        dtype_name=dtype_name,
+        model_id=model_id,
+    )
+    return processor, model, torch, runtime
+
+
+def _materialize_omdet_meta_attention_masks(
+    model: Any,
+    torch_module: Any,
+    *,
+    device: str,
+    dtype: Any | None,
+) -> None:
+    torch_device = torch_module.device(device)
+    mask_dtype = dtype or torch_module.float32
+    for module in model.modules():
+        attn_mask = getattr(module, "attn_mask", None)
+        if attn_mask is None or not bool(getattr(attn_mask, "is_meta", False)):
+            continue
+        get_attn_mask = getattr(module, "get_attn_mask", None)
+        if not callable(get_attn_mask):
+            continue
+        module.attn_mask = get_attn_mask(device=torch_device, dtype=mask_dtype)
+
+
 def _resolve_torch_device(torch_module: Any, requested_device: str) -> str:
     requested = str(requested_device or "auto").strip().lower()
     if requested in {"", "auto"}:
@@ -1237,10 +1417,6 @@ def _torch_runtime_diagnostics(
 @lru_cache(maxsize=4)
 def _load_yolo_model(model_id: str, *, producer_id: str) -> Any:
     try:
-        if producer_id == "yolo-custom":
-            from ultralytics import YOLO
-
-            return YOLO(model_id)
         if producer_id == "yolo-world":
             from ultralytics import YOLOWorld
 
@@ -1845,6 +2021,35 @@ def _grounding_dino_candidates_from_result(
             xyxy=box,
             confidence=confidence,
             evidence_note=f"Grounding DINO detected {category} from RAW_FPV pixels",
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+    return _top_candidates(candidates)
+
+
+def _omdet_candidates_from_result(
+    *,
+    payload: dict[str, Any],
+    image: Image.Image,
+    result: dict[str, Any],
+    category_hints: list[str],
+) -> list[dict[str, Any]]:
+    boxes = _rows(result.get("boxes"))
+    scores = _vector(result.get("scores"))
+    labels = _vector(result.get("text_labels") or result.get("labels"))
+    candidates: list[dict[str, Any]] = []
+    for index, box in enumerate(boxes):
+        category = _category_from_model_label(
+            _value_at(labels, index, default=""),
+            category_hints,
+        )
+        candidate = _candidate_from_xyxy(
+            payload=payload,
+            image=image,
+            category=category,
+            xyxy=box,
+            confidence=_float_at(scores, index, default=0.0),
+            evidence_note=f"OmDet-Turbo detected {category} from RAW_FPV pixels",
         )
         if candidate is not None:
             candidates.append(candidate)

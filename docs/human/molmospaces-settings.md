@@ -92,7 +92,8 @@ or detector produced the labels. Use pipeline provenance for that second axis:
 | `fake-http` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
 | `grounding-dino` | Bbox-first open-vocabulary proposer over RAW_FPV images. | Conservative first proposer target. |
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
-| `yolo-custom` | Fixed/custom YOLO proposer for a closed cleanup ontology. | Optional only when trained weights or a fixed ontology exist. |
+| `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
+| `omdet-turbo` | Transformers OmDet-Turbo open-vocabulary proposer over RAW_FPV images. | First-wave non-YOLO comparison target; current supported checkpoint is `omlab/omdet-turbo-swin-tiny-hf`. |
 | `grounding-dino+mimo-v2-omni` | Grounding DINO proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
 | `yoloe+mimo-v2-omni` | YOLOE proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
 | `grounding-dino+qwen3-vl` | Grounding DINO proposals refined by Qwen3-VL. | Design target; optional until local access is proven. |
@@ -106,9 +107,14 @@ just task::run household-cleanup direct camera-labels visual_grounding=sim
 just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
 just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino
 just task::run household-cleanup direct camera-labels visual_grounding=yoloe
+just task::run household-cleanup direct camera-labels visual_grounding=omdet-turbo
 just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
 just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
 ```
+
+`yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
+training set or supplied weights, it would only add dead configuration surface;
+use `yoloe` or `yolo-world` for YOLO-family open-vocabulary probes.
 
 For non-sim pipelines, Roboclaws should call an External Visual Grounding
 Service behind `declare_visual_candidates`. The agent should not receive service
@@ -228,7 +234,14 @@ explicitly into the dedicated sidecar environment, then run:
 
 ```bash
 UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
-  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe
+  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe --extra omdet
+
+.venv-visual-grounding/bin/python - <<'PY'
+import torch, transformers, ultralytics
+print("torch", torch.__version__, "cuda", torch.cuda.is_available())
+print("transformers", transformers.__version__)
+print("ultralytics", ultralytics.__version__)
+PY
 
 VISUAL_GROUNDING_DEVICE=auto \
 VISUAL_GROUNDING_TORCH_DTYPE=auto \
@@ -239,11 +252,19 @@ VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
   .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
     --pipeline real-router --adapter-mode real
+
+VISUAL_GROUNDING_OMDET_MODEL_ID=omlab/omdet-turbo-swin-tiny-hf \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
 ```
 
 The sidecar project intentionally does not change the core Roboclaws `.venv/`.
 Use a local PyTorch CUDA index or mirror when needed; keep that machine-local
 and out of committed project metadata.
+Current OmDet support uses Transformers' built-in `OmDetTurboProcessor` and
+`OmDetTurboForObjectDetection`; the previously listed base checkpoint is not a
+valid public model id, so the first-wave matrix sweeps the tiny checkpoint with
+threshold variants instead.
 
 Hosted VLM refiner and direct-producer probes use an OpenAI-compatible
 chat-completions endpoint from the sidecar. MiMo uses the existing hosted route
@@ -496,8 +517,9 @@ just molmo::openclaw-report
 
 `openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
 on the work network unless the repo-local `.env` contains a supported MiMo or
-Kimi key. Run `just dev::network-status` first if you are unsure which network
-you are on.
+Kimi key. `codex-report` may run on the work network with the repo-local mify
+or codex-env route configured in `.env`. Run `just dev::network-status` first
+if you are unsure which network you are on.
 
 Planner proof-bundle dry run:
 

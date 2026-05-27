@@ -33,17 +33,17 @@ Agibot contract rehearsal separate.
 ## Next Action
 
 Run Codex-runtime cleanup validation for the selected Grounding DINO pipeline
-only on a non-work network or through an allowed repo-local key route. Current
-proof level is real local CUDA sidecar benchmark plus direct MolmoSpaces
-cleanup validation; Codex/OpenClaw validation remains guarded by the
-work-network policy.
+through an allowed repo-local `.env` Codex route. Current proof level is real
+local CUDA sidecar benchmark plus direct MolmoSpaces cleanup validation;
+OpenClaw validation remains guarded by the work-network policy.
 
 ## Current Blocker
 
 No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
-support Codex and Claude Code only through repo-local `.env` configuration;
-local non-work-network runs also support OpenClaw.
+support Codex through repo-local `.env` mify or codex-env routes and support
+Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
+runs also support OpenClaw.
 
 ## Human Review Surface
 

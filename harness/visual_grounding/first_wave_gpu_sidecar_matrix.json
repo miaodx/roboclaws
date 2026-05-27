@@ -178,50 +178,41 @@
       "size_tier": "tiny",
       "runtime_parameters": {
         "confidence_threshold": 0.25,
-        "image_size": 960
+        "nms_threshold": 0.5,
+        "max_detections": 8,
+        "device": "auto",
+        "torch_dtype": "auto"
       }
     },
     {
-      "row_id": "omdet-turbo-base-default",
+      "row_id": "omdet-turbo-tiny-recall",
       "pipeline_id": "omdet-turbo",
       "model_family": "omdet-turbo",
       "producer_id": "omdet-turbo",
-      "model_id": "omlab/omdet-turbo-swin-base-hf",
-      "size_tier": "base",
+      "model_id": "omlab/omdet-turbo-swin-tiny-hf",
+      "size_tier": "tiny",
       "runtime_parameters": {
-        "confidence_threshold": 0.25,
-        "image_size": 960
+        "confidence_threshold": 0.15,
+        "nms_threshold": 0.5,
+        "max_detections": 12,
+        "device": "auto",
+        "torch_dtype": "auto"
       }
     },
     {
-      "row_id": "yolo-custom-fast-placeholder",
-      "pipeline_id": "yolo-custom",
-      "model_family": "yolo-custom",
-      "producer_id": "yolo-custom",
-      "model_id": "custom-yolo-cleanup-ontology-fast.pt",
-      "size_tier": "fast",
+      "row_id": "omdet-turbo-tiny-precision",
+      "pipeline_id": "omdet-turbo",
+      "model_family": "omdet-turbo",
+      "producer_id": "omdet-turbo",
+      "model_id": "omlab/omdet-turbo-swin-tiny-hf",
+      "size_tier": "tiny",
       "runtime_parameters": {
-        "confidence_threshold": 0.25,
-        "image_size": 640,
-        "max_detections": 8,
-        "prompt_expansion": false
-      },
-      "under_sampled_reason": "requires supplied trained cleanup-ontology weights"
-    },
-    {
-      "row_id": "yolo-custom-large-placeholder",
-      "pipeline_id": "yolo-custom",
-      "model_family": "yolo-custom",
-      "producer_id": "yolo-custom",
-      "model_id": "custom-yolo-cleanup-ontology-large.pt",
-      "size_tier": "large",
-      "runtime_parameters": {
-        "confidence_threshold": 0.25,
-        "image_size": 960,
-        "max_detections": 12,
-        "prompt_expansion": false
-      },
-      "under_sampled_reason": "requires supplied trained cleanup-ontology weights"
+        "confidence_threshold": 0.35,
+        "nms_threshold": 0.45,
+        "max_detections": 6,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
     }
   ]
 }
