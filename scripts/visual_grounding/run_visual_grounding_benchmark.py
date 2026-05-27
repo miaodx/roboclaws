@@ -36,6 +36,7 @@ from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
 CORPUS_SCHEMA = "visual_grounding_benchmark_corpus_v1"
 RESULT_SCHEMA = "visual_grounding_benchmark_result_v1"
 PREDICTION_SCHEMA = "visual_grounding_prediction_v1"
+BBOX_MATCH_IOU_THRESHOLD = 0.3
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -515,6 +516,11 @@ def _score_predictions(
     candidate_count = 0
     matched_label_count = 0
     matched_candidate_count = 0
+    bbox_label_count = 0
+    bbox_candidate_count = 0
+    bbox_matched_label_count = 0
+    bbox_matched_candidate_count = 0
+    bbox_category_correct_count = 0
     bbox_ious: list[float] = []
     duplicate_count = 0
     rejected_proposal_count = 0
@@ -531,8 +537,11 @@ def _score_predictions(
             for label in observation.get("private_labels") or []
         ]
         label_count += len(labels)
+        bbox_labels = [label for label in labels if label.get("bbox") is not None]
+        bbox_label_count += len(bbox_labels)
         candidates = list(prediction.get("candidates") or [])
         candidate_count += len(candidates)
+        bbox_candidate_count += sum(1 for candidate in candidates if candidate.get("bbox"))
         duplicate_count += _duplicate_count(candidates)
         rejected_proposal_count += int(
             ((prediction.get("diagnostic_evidence") or {}).get("rejected_proposal_count")) or 0
@@ -559,8 +568,18 @@ def _score_predictions(
             matched_candidate_count += 1
             matched_categories.append(candidate_family)
             iou = _bbox_iou(candidate.get("bbox"), label.get("bbox"))
-            if iou is not None:
+            if iou is not None and not bbox_labels:
                 bbox_ious.append(iou)
+        bbox_match_summary = _match_bbox_labels(
+            labels=bbox_labels,
+            candidates=candidates,
+            category_family_map=category_family_map,
+            iou_threshold=BBOX_MATCH_IOU_THRESHOLD,
+        )
+        bbox_matched_label_count += int(bbox_match_summary["matched_label_count"])
+        bbox_matched_candidate_count += int(bbox_match_summary["matched_candidate_count"])
+        bbox_category_correct_count += int(bbox_match_summary["category_correct_count"])
+        bbox_ious.extend(float(value) for value in bbox_match_summary["matched_ious"])
         for candidate in candidates:
             hint_quality = _destination_hint_quality(candidate, fixture_hints)
             if hint_quality["has_hint"]:
@@ -576,9 +595,13 @@ def _score_predictions(
                 "observation_id": prediction.get("observation_id", ""),
                 "private_category_families": [label["family"] for label in labels],
                 "matched_category_families": matched_categories,
+                "bbox_private_category_families": [label["family"] for label in bbox_labels],
+                "bbox_matched_label_count": bbox_match_summary["matched_label_count"],
             }
         )
     false_positive_count = max(0, candidate_count - matched_candidate_count)
+    bbox_false_positive_count = max(0, bbox_candidate_count - bbox_matched_candidate_count)
+    bbox_metrics_available = bbox_label_count > 0
     metrics = {
         "label_count": label_count,
         "matched_label_count": matched_label_count,
@@ -590,6 +613,20 @@ def _score_predictions(
         "category_family_accuracy": _ratio(matched_candidate_count, candidate_count),
         "duplicate_count": duplicate_count,
         "duplicate_rate": _ratio(duplicate_count, candidate_count),
+        "bbox_metrics_available": bbox_metrics_available,
+        "bbox_iou_threshold": BBOX_MATCH_IOU_THRESHOLD,
+        "bbox_label_count": bbox_label_count,
+        "bbox_candidate_count": bbox_candidate_count,
+        "bbox_matched_label_count": bbox_matched_label_count,
+        "bbox_matched_candidate_count": bbox_matched_candidate_count,
+        "bbox_false_positive_count": bbox_false_positive_count,
+        "bbox_recall_at_iou": _ratio(bbox_matched_label_count, bbox_label_count),
+        "bbox_precision_at_iou": _ratio(bbox_matched_candidate_count, bbox_candidate_count),
+        "bbox_category_family_accuracy_at_iou": _ratio(
+            bbox_category_correct_count,
+            bbox_matched_label_count,
+        ),
+        "bbox_false_positive_rate": _ratio(bbox_false_positive_count, bbox_candidate_count),
         "bbox_quality_available_count": len(bbox_ious),
         "mean_bbox_iou": round(sum(bbox_ious) / len(bbox_ious), 6) if bbox_ious else None,
         "bbox_quality_note": "overlay_review_required" if not bbox_ious else "iou_available",
@@ -627,12 +664,22 @@ def _rank_pipelines(pipeline_results: list[dict[str, Any]]) -> list[dict[str, An
     ranking: list[dict[str, Any]] = []
     for result in pipeline_results:
         metrics = result.get("metrics") or {}
-        score = (
-            0.55 * float(metrics.get("recall") or 0.0)
-            + 0.25 * float(metrics.get("precision") or 0.0)
-            + 0.10 * float(metrics.get("category_family_accuracy") or 0.0)
-            + 0.10 * (1.0 - float(result.get("failure_rate") or 0.0))
-        )
+        if metrics.get("bbox_metrics_available"):
+            score_basis = "bbox_iou"
+            score = (
+                0.60 * float(metrics.get("bbox_recall_at_iou") or 0.0)
+                + 0.20 * float(metrics.get("bbox_precision_at_iou") or 0.0)
+                + 0.10 * float(metrics.get("bbox_category_family_accuracy_at_iou") or 0.0)
+                + 0.10 * (1.0 - float(result.get("failure_rate") or 0.0))
+            )
+        else:
+            score_basis = "category_presence"
+            score = (
+                0.55 * float(metrics.get("recall") or 0.0)
+                + 0.25 * float(metrics.get("precision") or 0.0)
+                + 0.10 * float(metrics.get("category_family_accuracy") or 0.0)
+                + 0.10 * (1.0 - float(result.get("failure_rate") or 0.0))
+            )
         ranking.append(
             {
                 "benchmark_row_id": result.get("benchmark_row_id", result.get("pipeline_id", "")),
@@ -642,8 +689,16 @@ def _rank_pipelines(pipeline_results: list[dict[str, Any]]) -> list[dict[str, An
                 "size_tier": result.get("size_tier", ""),
                 "runtime_parameters": result.get("runtime_parameters", {}),
                 "score": round(score, 6),
+                "score_basis": score_basis,
                 "recall": metrics.get("recall", 0.0),
                 "precision": metrics.get("precision", 0.0),
+                "bbox_recall_at_iou": metrics.get("bbox_recall_at_iou", 0.0),
+                "bbox_precision_at_iou": metrics.get("bbox_precision_at_iou", 0.0),
+                "bbox_category_family_accuracy_at_iou": metrics.get(
+                    "bbox_category_family_accuracy_at_iou",
+                    0.0,
+                ),
+                "bbox_iou_threshold": metrics.get("bbox_iou_threshold"),
                 "actionability_proxy_rate": metrics.get("actionability_proxy_rate", 0.0),
                 "failure_rate": result.get("failure_rate", 0.0),
                 "timeout_rate": result.get("timeout_rate", 0.0),
@@ -864,6 +919,9 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
         f"<td>{escape(str(row.get('model_family', '')))}</td>"
         f"<td>{escape(str(row.get('size_tier', '')))}</td>"
         f"<td>{escape(str(row.get('score', 0)))}</td>"
+        f"<td>{escape(str(row.get('score_basis', '')))}</td>"
+        f"<td>{escape(str(row.get('bbox_recall_at_iou', 0)))}</td>"
+        f"<td>{escape(str(row.get('bbox_precision_at_iou', 0)))}</td>"
         f"<td>{escape(str(row.get('recall', 0)))}</td>"
         f"<td>{escape(str(row.get('precision', 0)))}</td>"
         f"<td>{escape(str(row.get('failure_rate', 0)))}</td>"
@@ -929,7 +987,8 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
   <table>
     <tr>
       <th>Row</th><th>Pipeline</th><th>Family</th><th>Size</th>
-      <th>Score</th><th>Recall</th><th>Precision</th>
+      <th>Score</th><th>Basis</th><th>Bbox recall</th><th>Bbox precision</th>
+      <th>Recall</th><th>Precision</th>
       <th>Failure rate</th><th>Timeout rate</th><th>Mean latency ms</th>
       <th>Evidence level</th>
     </tr>
@@ -1342,6 +1401,66 @@ def _private_label(label: dict[str, Any], category_family_map: dict[str, str]) -
         "category": category,
         "family": family,
         "bbox": label.get("bbox"),
+        "visible": bool(label.get("visible", True)),
+    }
+
+
+def _match_bbox_labels(
+    *,
+    labels: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+    category_family_map: dict[str, str],
+    iou_threshold: float,
+) -> dict[str, Any]:
+    candidate_rows = []
+    for index, candidate in enumerate(candidates):
+        bbox = candidate.get("bbox")
+        if not isinstance(bbox, list) or len(bbox) != 4:
+            continue
+        candidate_rows.append(
+            {
+                "index": index,
+                "family": _category_family(
+                    str(candidate.get("category") or ""),
+                    category_family_map,
+                ),
+                "bbox": bbox,
+            }
+        )
+
+    possible_matches: list[tuple[float, int, int, bool]] = []
+    for label_index, label in enumerate(labels):
+        if not label.get("visible", True):
+            continue
+        for candidate in candidate_rows:
+            iou = _bbox_iou(candidate["bbox"], label.get("bbox"))
+            if iou is None or iou < iou_threshold:
+                continue
+            category_correct = candidate["family"] == label["family"]
+            possible_matches.append((iou, label_index, int(candidate["index"]), category_correct))
+
+    matched_labels: set[int] = set()
+    matched_candidates: set[int] = set()
+    matched_ious: list[float] = []
+    category_correct_count = 0
+    for iou, label_index, candidate_index, category_correct in sorted(
+        possible_matches,
+        key=lambda item: (item[0], item[3]),
+        reverse=True,
+    ):
+        if label_index in matched_labels or candidate_index in matched_candidates:
+            continue
+        matched_labels.add(label_index)
+        matched_candidates.add(candidate_index)
+        matched_ious.append(iou)
+        if category_correct:
+            category_correct_count += 1
+
+    return {
+        "matched_label_count": len(matched_labels),
+        "matched_candidate_count": len(matched_candidates),
+        "category_correct_count": category_correct_count,
+        "matched_ious": matched_ious,
     }
 
 
@@ -1460,6 +1579,12 @@ def _int_or_none(value: Any) -> int | None:
 def _recommendation_reason(row: dict[str, Any]) -> str:
     if not row:
         return "No successful pipeline result was available."
+    if row.get("score_basis") == "bbox_iou":
+        return (
+            "Highest weighted bbox-aware benchmark score from visible-object "
+            "recall at IoU threshold, bbox precision, category-family accuracy, "
+            "and failure-rate metrics."
+        )
     return (
         "Highest weighted benchmark score from recall, precision, category-family "
         "accuracy, and failure-rate metrics."

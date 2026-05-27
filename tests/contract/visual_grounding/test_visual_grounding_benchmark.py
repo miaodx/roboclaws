@@ -20,7 +20,10 @@ from scripts.visual_grounding.adapters import (
     should_use_contract_fake,
     visual_grounding_adapter_catalog,
 )
-from scripts.visual_grounding.run_visual_grounding_benchmark import _family_sweep_summary
+from scripts.visual_grounding.run_visual_grounding_benchmark import (
+    _family_sweep_summary,
+    _score_predictions,
+)
 from scripts.visual_grounding.serve_fake_visual_grounding import make_handler
 from scripts.visual_grounding.serve_visual_grounding_service import (
     make_handler as make_configurable_handler,
@@ -641,6 +644,79 @@ def test_visual_grounding_family_sweep_marks_failed_family_under_sampled() -> No
             ),
         }
     ]
+
+
+def test_visual_grounding_bbox_metrics_require_iou_not_category_only() -> None:
+    observations = {
+        "bbox-dish": {
+            "observation_id": "bbox-dish",
+            "fixture_hints": [],
+            "private_labels": [
+                {
+                    "category": "dish",
+                    "category_family": "dish",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "visible": True,
+                }
+            ],
+        },
+        "bbox-book": {
+            "observation_id": "bbox-book",
+            "fixture_hints": [],
+            "private_labels": [
+                {
+                    "category": "book",
+                    "category_family": "book",
+                    "bbox": [0.6, 0.6, 0.2, 0.2],
+                    "visible": True,
+                }
+            ],
+        },
+    }
+    predictions = [
+        {
+            "observation_id": "bbox-dish",
+            "pipeline": {"parse_failed": False},
+            "diagnostic_evidence": {},
+            "candidates": [
+                {
+                    "category": "dish",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
+                }
+            ],
+        },
+        {
+            "observation_id": "bbox-book",
+            "pipeline": {"parse_failed": False},
+            "diagnostic_evidence": {},
+            "candidates": [
+                {
+                    "category": "book",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
+                }
+            ],
+        },
+    ]
+
+    score = _score_predictions(
+        predictions,
+        observations,
+        {"dish": "dish", "book": "book"},
+    )
+    metrics = score["metrics"]
+
+    assert metrics["recall"] == 1.0
+    assert metrics["precision"] == 1.0
+    assert metrics["bbox_metrics_available"] is True
+    assert metrics["bbox_iou_threshold"] == 0.3
+    assert metrics["bbox_label_count"] == 2
+    assert metrics["bbox_matched_label_count"] == 1
+    assert metrics["bbox_recall_at_iou"] == 0.5
+    assert metrics["bbox_precision_at_iou"] == 0.5
+    assert metrics["bbox_category_family_accuracy_at_iou"] == 1.0
+    assert metrics["bbox_false_positive_rate"] == 0.5
 
 
 def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:

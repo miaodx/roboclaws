@@ -157,6 +157,9 @@ just task::run household-cleanup direct world-labels runtime_map_prior=output/ma
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
+.venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
+.venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline real-router --adapter-mode real
 just task::run ai2thor-nav openclaw
 just task::run photo-chairs codex
 just task::run territory vlm steps=20 agents=2
@@ -189,7 +192,9 @@ UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
 
 VISUAL_GROUNDING_DEVICE=auto \
 VISUAL_GROUNDING_TORCH_DTYPE=auto \
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
+VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
+VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
   .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
     --pipeline real-router --adapter-mode real
 
