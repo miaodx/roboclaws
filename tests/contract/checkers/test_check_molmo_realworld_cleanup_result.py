@@ -226,6 +226,59 @@ def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
     )
 
 
+def test_checker_accepts_isaac_real_runtime_when_diagnostics_are_present(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    data["isaac_runtime"]["runtime"] = _isaac_real_runtime_diagnostics()
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=True,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=False,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_isaac_real_runtime_when_diagnostics_are_missing(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    data["isaac_runtime"]["runtime"] = {
+        "runtime_mode": "real",
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendering": {
+            "status": "real_rendering_proven",
+            "real_rendering_proven": True,
+            "placeholder_visuals": False,
+        },
+    }
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=True,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_checker_rejects_isaac_selected_binding_rows_without_usd_handle(
     tmp_path: Path,
 ) -> None:
@@ -1986,6 +2039,26 @@ def _isaac_runtime_result(
         ]
         result["isaac_runtime"]["semantic_pose_state"] = semantic_pose_state
     return result
+
+
+def _isaac_real_runtime_diagnostics() -> dict[str, object]:
+    return {
+        "runtime_mode": "real",
+        "python_version": "3.12.3",
+        "isaac_sim_version": "unit-isaacsim",
+        "isaac_lab_version": "unit-isaaclab",
+        "cuda_available": True,
+        "gpu_name": "unit-gpu",
+        "gpu_vram_mb": 16384,
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "camera_resolution": [540, 360],
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendering": {
+            "status": "real_rendering_proven",
+            "real_rendering_proven": True,
+            "placeholder_visuals": False,
+        },
+    }
 
 
 def _write_isaac_scene_index(

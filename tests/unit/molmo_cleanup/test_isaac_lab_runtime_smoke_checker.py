@@ -51,6 +51,28 @@ def run_checker(
     )
 
 
+def real_runtime_diagnostics(
+    *,
+    real_rendering_proven: bool = True,
+    placeholder_visuals: bool = False,
+) -> dict[str, object]:
+    return {
+        "runtime_mode": "real",
+        "python_version": "3.12.3",
+        "isaac_sim_version": "unit-isaacsim",
+        "isaac_lab_version": "unit-isaaclab",
+        "cuda_available": True,
+        "gpu_name": "unit-gpu",
+        "gpu_vram_mb": 16384,
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "camera_resolution": [540, 360],
+        "rendering": {
+            "real_rendering_proven": real_rendering_proven,
+            "placeholder_visuals": placeholder_visuals,
+        },
+    }
+
+
 def test_isaac_runtime_smoke_checker_rejects_placeholder_real_mode(
     tmp_path: Path,
 ) -> None:
@@ -59,13 +81,10 @@ def test_isaac_runtime_smoke_checker_rejects_placeholder_real_mode(
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
-        "runtime": {
-            "runtime_mode": "real",
-            "rendering": {
-                "real_rendering_proven": False,
-                "placeholder_visuals": True,
-            },
-        },
+        "runtime": real_runtime_diagnostics(
+            real_rendering_proven=False,
+            placeholder_visuals=True,
+        ),
         "scene_load": {
             "status": "blocked_capability",
             "usd_stage_loaded": False,
@@ -89,13 +108,11 @@ def test_isaac_runtime_smoke_checker_rejects_placeholder_real_mode(
     assert "smoke image appears blank" not in summary["errors"]
 
 
-def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
+def test_isaac_runtime_smoke_checker_rejects_missing_runtime_diagnostics(
     tmp_path: Path,
 ) -> None:
     image_path = tmp_path / "smoke.png"
-    state_path = tmp_path / "state.json"
     write_smoke_image(image_path)
-    robot_views = write_robot_views_result(tmp_path)
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
@@ -106,6 +123,38 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
                 "placeholder_visuals": False,
             },
         },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(tmp_path, result, "--require-real-rendering")
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "missing runtime Python version" in summary["errors"]
+    assert "missing Isaac Sim version" in summary["errors"]
+    assert "missing Isaac Lab version" in summary["errors"]
+    assert "runtime CUDA is not available" in summary["errors"]
+    assert "missing runtime GPU name" in summary["errors"]
+    assert "missing runtime GPU VRAM" in summary["errors"]
+    assert "missing runtime renderer mode" in summary["errors"]
+    assert "missing runtime camera resolution" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    state_path = tmp_path / "state.json"
+    write_smoke_image(image_path)
+    robot_views = write_robot_views_result(tmp_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": real_runtime_diagnostics(),
         "scene_load": {
             "status": "loaded",
             "usd_stage_loaded": True,
@@ -196,13 +245,7 @@ def test_isaac_runtime_smoke_checker_rejects_blocked_segmentation(
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
-        "runtime": {
-            "runtime_mode": "real",
-            "rendering": {
-                "real_rendering_proven": True,
-                "placeholder_visuals": False,
-            },
-        },
+        "runtime": real_runtime_diagnostics(),
         "scene_load": {
             "status": "loaded",
             "usd_stage_loaded": True,
@@ -242,13 +285,7 @@ def test_isaac_runtime_smoke_checker_rejects_missing_usd_scene_index(
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
-        "runtime": {
-            "runtime_mode": "real",
-            "rendering": {
-                "real_rendering_proven": True,
-                "placeholder_visuals": False,
-            },
-        },
+        "runtime": real_runtime_diagnostics(),
         "scene_load": {
             "status": "loaded",
             "usd_stage_loaded": True,
@@ -276,13 +313,7 @@ def test_isaac_runtime_smoke_checker_rejects_missing_selected_usd_bindings(
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
-        "runtime": {
-            "runtime_mode": "real",
-            "rendering": {
-                "real_rendering_proven": True,
-                "placeholder_visuals": False,
-            },
-        },
+        "runtime": real_runtime_diagnostics(),
         "scene_load": {
             "status": "loaded",
             "usd_stage_loaded": True,

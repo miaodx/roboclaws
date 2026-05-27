@@ -265,6 +265,10 @@ protocol:
   mutations, and trace tool coverage matching the backend semantic pose events.
   This keeps Phase D trace evidence aligned with `run_result.json` and
   `report.html`.
+- Strict real-mode smoke and full-cleanup gates now require runtime diagnostics
+  named by the plan: Python, Isaac Sim, Isaac Lab, CUDA/GPU/VRAM, renderer
+  mode, and camera resolution. A run can no longer pass strict real Isaac gates
+  with only `runtime_mode=real` and `real_rendering_proven=true` booleans.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
@@ -272,7 +276,7 @@ manipulation proof from the fake protocol evidence.
 
 Latest non-installing local preflight, run on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_060705/preflight.json` with `status=blocked`.
+`output/isaaclab/preflight/0528_062018/preflight.json` with `status=blocked`.
 The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
 NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
 Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab

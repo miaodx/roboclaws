@@ -905,6 +905,7 @@ def _assert_isaac_runtime(
 
     if require_real_runtime:
         assert runtime.get("runtime_mode") == "real", runtime
+        _assert_isaac_real_runtime_diagnostics(runtime)
         assert rendering.get("real_rendering_proven") is True, rendering
         assert rendering.get("placeholder_visuals") is not True, rendering
         assert rendering.get("status") == "real_rendering_proven", rendering
@@ -995,6 +996,20 @@ def _assert_isaac_runtime(
 
     if require_snapshot_provenance:
         _assert_isaac_snapshot_provenance(isaac, base)
+
+
+def _assert_isaac_real_runtime_diagnostics(runtime: dict[str, Any]) -> None:
+    assert runtime.get("python_version"), runtime
+    assert runtime.get("isaac_sim_version"), runtime
+    assert runtime.get("isaac_lab_version"), runtime
+    assert runtime.get("cuda_available") is True, runtime
+    assert runtime.get("gpu_name"), runtime
+    assert int(runtime.get("gpu_vram_mb") or 0) > 0, runtime
+    assert runtime.get("renderer_mode"), runtime
+    camera_resolution = runtime.get("camera_resolution")
+    assert isinstance(camera_resolution, list), runtime
+    assert len(camera_resolution) == 2, runtime
+    assert all(int(value or 0) > 0 for value in camera_resolution), runtime
 
 
 def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:

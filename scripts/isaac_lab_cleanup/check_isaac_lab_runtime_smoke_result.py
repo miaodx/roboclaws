@@ -100,6 +100,7 @@ def validate(
             "runtime_mode is not real",
             errors,
         )
+        errors.extend(_real_runtime_diagnostic_errors(runtime))
         _require(
             rendering.get("real_rendering_proven") is True,
             "real Isaac rendering is not proven",
@@ -174,6 +175,26 @@ def validate(
             "state runtime_mode does not match init result",
             errors,
         )
+    return errors
+
+
+def _real_runtime_diagnostic_errors(runtime: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    _require(bool(runtime.get("python_version")), "missing runtime Python version", errors)
+    _require(bool(runtime.get("isaac_sim_version")), "missing Isaac Sim version", errors)
+    _require(bool(runtime.get("isaac_lab_version")), "missing Isaac Lab version", errors)
+    _require(runtime.get("cuda_available") is True, "runtime CUDA is not available", errors)
+    _require(bool(runtime.get("gpu_name")), "missing runtime GPU name", errors)
+    _require(_int(runtime.get("gpu_vram_mb")) > 0, "missing runtime GPU VRAM", errors)
+    _require(bool(runtime.get("renderer_mode")), "missing runtime renderer mode", errors)
+    resolution = runtime.get("camera_resolution")
+    _require(
+        isinstance(resolution, list)
+        and len(resolution) == 2
+        and all(_int(item) > 0 for item in resolution),
+        "missing runtime camera resolution",
+        errors,
+    )
     return errors
 
 
