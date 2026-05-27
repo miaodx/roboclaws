@@ -223,6 +223,75 @@ def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
         "selected USD binding diagnostics report private manifest exposure",
         errors,
     )
+    errors.extend(
+        _selected_binding_row_errors(
+            scene_bindings,
+            bindings_key="selected_object_bindings",
+            expected_count=selected_object_count,
+            label="object",
+        )
+    )
+    errors.extend(
+        _selected_binding_row_errors(
+            scene_bindings,
+            bindings_key="selected_target_receptacle_bindings",
+            expected_count=selected_receptacle_count,
+            label="target receptacle",
+        )
+    )
+    return errors
+
+
+def _selected_binding_row_errors(
+    scene_bindings: dict[str, Any],
+    *,
+    bindings_key: str,
+    expected_count: int,
+    label: str,
+) -> list[str]:
+    errors: list[str] = []
+    rows = scene_bindings.get(bindings_key)
+    _require(
+        isinstance(rows, dict) and len(rows) >= expected_count,
+        f"selected {label} binding rows are missing",
+        errors,
+    )
+    if not isinstance(rows, dict):
+        return errors
+    for public_id, row in rows.items():
+        if not isinstance(row, dict):
+            errors.append(f"selected {label} binding row is not an object: {public_id}")
+            continue
+        _require(
+            row.get("status") == "bound",
+            f"selected {label} binding row is not bound: {public_id}",
+            errors,
+        )
+        _require(
+            bool(row.get("usd_handle")),
+            f"selected {label} binding row has no USD handle: {public_id}",
+            errors,
+        )
+        _require(
+            bool(row.get("usd_prim_path")),
+            f"selected {label} binding row has no USD prim path: {public_id}",
+            errors,
+        )
+        _require(
+            row.get("index_source") == "usd_stage_traversal",
+            f"selected {label} binding row is not from USD stage traversal: {public_id}",
+            errors,
+        )
+        _require(
+            str(row.get("match_strategy") or "") not in {"", "none"},
+            f"selected {label} binding row has no match strategy: {public_id}",
+            errors,
+        )
+        _require(
+            "private_manifest" not in row,
+            f"selected {label} binding row exposes private manifest: {public_id}",
+            errors,
+        )
     return errors
 
 

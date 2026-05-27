@@ -227,6 +227,10 @@ protocol:
   selected-USD-binding checker verifies that those rows render the selected
   USD handles and prim paths, so real Isaac cleanup parity must be visible in
   both JSON artifacts and `report.html`.
+- The Isaac runtime smoke checker now rejects count-only selected binding
+  claims. `--require-selected-usd-bindings` requires selected object and target
+  receptacle binding rows with bound status, USD handles, USD prim paths,
+  match strategy, USD-stage index provenance, and no private manifest payload.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
@@ -234,10 +238,11 @@ manipulation proof from the fake protocol evidence.
 
 Latest non-installing local preflight, run on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_040851/preflight.json` with `status=blocked`.
+`output/isaaclab/preflight/0528_045310/preflight.json` with `status=blocked`.
 The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
 NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
-Isaac Lab source checkout were missing. No install was requested and no
+Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab
+runtime imports could not be checked. No install was requested and no
 NVIDIA/Omniverse EULA was accepted.
 
 ## Architecture

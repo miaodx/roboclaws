@@ -124,6 +124,26 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
             "selected_target_receptacle_count": 1,
             "selected_object_bound_count": 1,
             "selected_target_receptacle_bound_count": 1,
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "public_id": "mug_01",
+                    "usd_handle": "mug_01",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "match_strategy": "exact_public_id",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "bound",
+                    "public_id": "sink_01",
+                    "usd_handle": "sink_01",
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "match_strategy": "exact_public_id",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
             "blockers": [],
             "private_manifest_exposed_to_agent": False,
         },
@@ -325,6 +345,119 @@ def test_isaac_runtime_smoke_checker_rejects_partial_selected_usd_bindings(
     assert "selected cleanup handles are not fully bound to USD prims" in summary["errors"]
     assert "not all selected target receptacles have USD prim bindings" in summary["errors"]
     assert "selected USD binding diagnostics still report blockers" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_missing_selected_binding_rows(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "scene_binding_diagnostics": {
+            "schema": "isaac_public_scene_bindings_v1",
+            "status": "selected_bound",
+            "source": "usd_stage_traversal",
+            "selected_object_count": 1,
+            "selected_target_receptacle_count": 1,
+            "selected_object_bound_count": 1,
+            "selected_target_receptacle_bound_count": 1,
+            "blockers": [],
+            "private_manifest_exposed_to_agent": False,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-selected-usd-bindings",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "selected object binding rows are missing" in summary["errors"]
+    assert "selected target receptacle binding rows are missing" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_invalid_selected_binding_row(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "scene_binding_diagnostics": {
+            "schema": "isaac_public_scene_bindings_v1",
+            "status": "selected_bound",
+            "source": "usd_stage_traversal",
+            "selected_object_count": 1,
+            "selected_target_receptacle_count": 1,
+            "selected_object_bound_count": 1,
+            "selected_target_receptacle_bound_count": 1,
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_handle": "",
+                    "usd_prim_path": "",
+                    "index_source": "scenario_fixture",
+                    "private_manifest": {"target": "sink_01"},
+                }
+            },
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "unresolved",
+                    "usd_handle": "sink_01",
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
+            "blockers": [],
+            "private_manifest_exposed_to_agent": False,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-selected-usd-bindings",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "selected object binding row has no USD handle: mug_01" in summary["errors"]
+    assert "selected object binding row has no USD prim path: mug_01" in summary["errors"]
+    assert (
+        "selected object binding row is not from USD stage traversal: mug_01" in (summary["errors"])
+    )
+    assert "selected object binding row has no match strategy: mug_01" in summary["errors"]
+    assert "selected object binding row exposes private manifest: mug_01" in (summary["errors"])
+    assert "selected target receptacle binding row is not bound: sink_01" in (summary["errors"])
 
 
 def test_isaac_runtime_smoke_checker_rejects_missing_robot_views(
