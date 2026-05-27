@@ -269,6 +269,11 @@ protocol:
   named by the plan: Python, Isaac Sim, Isaac Lab, CUDA/GPU/VRAM, renderer
   mode, and camera resolution. A run can no longer pass strict real Isaac gates
   with only `runtime_mode=real` and `real_rendering_proven=true` booleans.
+- Strict loaded-scene gates now require a concrete readable `scene_usd` path,
+  `loaded_asset_kind`, and `manual_editor_steps_required=false`. This keeps
+  Phase A/B smoke and full-cleanup proof from passing on a status-only
+  `usd_stage_loaded=true` claim or on scene setup that still requires manual
+  editor steps.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
@@ -276,7 +281,7 @@ manipulation proof from the fake protocol evidence.
 
 Latest non-installing local preflight, run on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_062018/preflight.json` with `status=blocked`.
+`output/isaaclab/preflight/0528_062922/preflight.json` with `status=blocked`.
 The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
 NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
 Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab

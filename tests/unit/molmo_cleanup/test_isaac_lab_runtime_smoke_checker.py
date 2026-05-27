@@ -148,8 +148,10 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     tmp_path: Path,
 ) -> None:
     image_path = tmp_path / "smoke.png"
+    scene_usd = tmp_path / "example.usda"
     state_path = tmp_path / "state.json"
     write_smoke_image(image_path)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
     robot_views = write_robot_views_result(tmp_path)
     result = {
         "ok": True,
@@ -158,6 +160,9 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
         "scene_load": {
             "status": "loaded",
             "usd_stage_loaded": True,
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "manual_editor_steps_required": False,
         },
         "scene_index_diagnostics": {
             "status": "indexed",
@@ -199,7 +204,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
         "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
         "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
         "segmentation": available_segmentation_diagnostics(),
-        "scene_usd": "/tmp/example.usd",
+        "scene_usd": str(scene_usd),
         "artifacts": {"runtime_smoke_image": str(image_path)},
     }
     state_path.write_text(
@@ -235,6 +240,59 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     assert summary["scene_index_status"] == "indexed"
     assert summary["scene_binding_status"] == "selected_bound"
     assert summary["robot_view_status"] == "present"
+
+
+def test_isaac_runtime_smoke_checker_rejects_loaded_stage_without_scene_usd(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": real_runtime_diagnostics(),
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+            "loaded_asset_kind": "local_scene_usd",
+            "manual_editor_steps_required": False,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(tmp_path, result, "--require-usd-stage-loaded")
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "missing loaded scene USD path" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_manual_editor_scene_load(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    scene_usd = tmp_path / "manual.usda"
+    write_smoke_image(image_path)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": real_runtime_diagnostics(),
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "manual_editor_steps_required": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(tmp_path, result, "--require-usd-stage-loaded")
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "USD stage loading still requires manual editor steps" in summary["errors"]
 
 
 def test_isaac_runtime_smoke_checker_rejects_blocked_segmentation(

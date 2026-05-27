@@ -913,6 +913,8 @@ def _assert_isaac_runtime(
     if require_scene_loaded:
         assert scene_load.get("status") == "loaded", scene_load
         assert scene_load.get("usd_stage_loaded") is True, scene_load
+        assert scene_load.get("loaded_asset_kind"), scene_load
+        assert scene_load.get("manual_editor_steps_required") is False, scene_load
         scene_usd = str(isaac.get("scene_usd") or scene_load.get("scene_usd") or "")
         assert scene_usd, isaac
         scene_path = Path(scene_usd)

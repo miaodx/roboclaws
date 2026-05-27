@@ -122,6 +122,7 @@ def validate(
             "scene_load status is not loaded",
             errors,
         )
+        errors.extend(_scene_load_errors(result, scene_load))
     if require_usd_scene_index:
         _require(bool(scene_index), "missing USD scene index diagnostics", errors)
         _require(
@@ -175,6 +176,21 @@ def validate(
             "state runtime_mode does not match init result",
             errors,
         )
+    return errors
+
+
+def _scene_load_errors(result: dict[str, Any], scene_load: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    scene_usd = str(scene_load.get("scene_usd") or result.get("scene_usd") or "")
+    _require(bool(scene_usd), "missing loaded scene USD path", errors)
+    if scene_usd:
+        _require(Path(scene_usd).is_file(), f"loaded scene USD is missing: {scene_usd}", errors)
+    _require(bool(scene_load.get("loaded_asset_kind")), "missing loaded asset kind", errors)
+    _require(
+        scene_load.get("manual_editor_steps_required") is False,
+        "USD stage loading still requires manual editor steps",
+        errors,
+    )
     return errors
 
 
