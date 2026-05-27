@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
 from roboclaws.molmo_cleanup.isaac_lab_backend import ISAACLAB_ROBOT_VIEW_VARIANT
 from roboclaws.molmo_cleanup.realworld_contract import (
@@ -353,6 +355,11 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["isaac_runtime"]["segmentation"]["status"] == "blocked_capability"
     assert run_result["isaac_runtime"]["segmentation"]["agent_facing"] is False
     assert run_result["isaac_runtime"]["segmentation"]["no_simulator_label_fallback"] is True
+    assert len(run_result["isaac_runtime"]["snapshot_artifacts"]) == 2
+    assert all(
+        item["placeholder_visuals"] is True
+        for item in run_result["isaac_runtime"]["snapshot_artifacts"]
+    )
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
@@ -380,7 +387,16 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         require_isaac_runtime=True,
         require_isaac_semantic_pose=True,
     )
-    try:
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            run_result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="isaaclab_subprocess",
+            require_isaac_runtime=True,
+            require_isaac_snapshot_provenance=True,
+        )
+    with pytest.raises(AssertionError):
         checker._assert_result(
             run_result,
             tmp_path,
@@ -395,8 +411,5 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
             require_isaac_selected_usd_bindings=True,
             require_isaac_robot_view_provenance=True,
             require_isaac_segmentation_evidence=True,
+            require_isaac_snapshot_provenance=True,
         )
-    except AssertionError:
-        pass
-    else:  # pragma: no cover - assertion branch
-        raise AssertionError("strict real Isaac gates must reject fake protocol evidence")

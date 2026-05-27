@@ -665,6 +665,7 @@ def run_realworld_cleanup(
                 "segmentation": backend_instance.segmentation,
                 "scene_load": backend_instance.scene_load,
                 "mapping_gaps": backend_instance.mapping_gaps,
+                "snapshot_artifacts": backend_instance.snapshot_artifacts,
                 "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
                 "generated_mess_count": backend_instance.generated_mess_count,
             }

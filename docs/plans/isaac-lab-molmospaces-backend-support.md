@@ -4,7 +4,8 @@
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
 real-mode Phase A smoke attempt, Phase B static robot-view evidence path, Phase
 C selected USD-binding diagnostics, strict full-cleanup Isaac report gate, and
-Phase E segmentation diagnostics/gates implemented; real Isaac proof pending
+Phase E segmentation diagnostics/gates plus real-mode snapshot provenance
+implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -201,6 +202,12 @@ protocol:
   `--require-isaac-segmentation-evidence` reject missing tensors, missing bbox
   candidates, missing selected-USD matches, agent-facing leakage, and simulator
   label fallback.
+- Real-mode snapshot calls now reuse the captured Isaac RGB frame instead of
+  drawing placeholder images. `run_result.json` records `snapshot_artifacts`
+  with provenance, static-capture status, and `semantic_pose_rendered=false`;
+  the strict cleanup checker can require this through
+  `--require-isaac-snapshot-provenance`. This still does not claim that later
+  semantic pose edits are rendered back into the USD stage.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

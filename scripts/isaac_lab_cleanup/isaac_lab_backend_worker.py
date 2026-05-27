@@ -1724,6 +1724,38 @@ def done(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
 
 def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     _count(state, "snapshot")
+    if _real_rendering_proven(state):
+        try:
+            source_path = _real_snapshot_source_image(state)
+            shape = _copy_real_snapshot_image(
+                source_path,
+                args.output_path,
+                width=args.render_width,
+                height=args.render_height,
+            )
+        except RuntimeError as exc:
+            return _error("snapshot", "real_snapshot_image_invalid", reason=str(exc))
+        write_state_from_state_arg(state)
+        return _ok(
+            "snapshot",
+            output_path=str(args.output_path),
+            visual_artifact_provenance=REAL_SMOKE_CAPTURE_METHOD,
+            placeholder_visuals=False,
+            snapshot_provenance={
+                "source": "isaac_runtime_rgb_capture",
+                "source_path": str(source_path),
+                "output_path": str(args.output_path),
+                "visual_artifact_provenance": REAL_SMOKE_CAPTURE_METHOD,
+                "placeholder_visuals": False,
+                "static_isaac_capture": True,
+                "semantic_pose_rendered": False,
+                "shape": shape,
+                "reason": (
+                    "Snapshot reuses a real Isaac RGB capture. Semantic pose edits "
+                    "are not rendered back into the USD stage yet."
+                ),
+            },
+        )
     _write_placeholder_image(
         args.output_path,
         title=args.title,
@@ -1733,7 +1765,21 @@ def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str,
         height=args.render_height,
     )
     write_state_from_state_arg(state)
-    return _ok("snapshot", output_path=str(args.output_path))
+    return _ok(
+        "snapshot",
+        output_path=str(args.output_path),
+        visual_artifact_provenance=state["runtime"]["visual_artifact_provenance"],
+        placeholder_visuals=True,
+        snapshot_provenance={
+            "source": "placeholder_protocol_image",
+            "output_path": str(args.output_path),
+            "visual_artifact_provenance": state["runtime"]["visual_artifact_provenance"],
+            "placeholder_visuals": True,
+            "static_isaac_capture": False,
+            "semantic_pose_rendered": False,
+            "reason": "Snapshot is a CI-safe placeholder because real Isaac rendering is unproven.",
+        },
+    )
 
 
 def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
@@ -1864,25 +1910,65 @@ def _copy_real_robot_view_images(
     for key in ROBOT_VIEW_KEYS:
         source = Path(source_images[key])
         target = target_images[key]
-        if not source.is_file():
-            raise RuntimeError(f"missing real Isaac {key} view image: {source}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if source.resolve() == target.resolve():
-            with Image.open(source) as image:
-                rgb = image.convert("RGB")
-                if not _pil_image_has_variance(rgb):
-                    raise RuntimeError(f"real Isaac {key} view image appears blank: {source}")
-                shapes[key] = [rgb.height, rgb.width, 3]
-            continue
-        with Image.open(source) as image:
-            rgb = image.convert("RGB")
-            if not _pil_image_has_variance(rgb):
-                raise RuntimeError(f"real Isaac {key} view image appears blank: {source}")
-            if rgb.size != (width, height):
-                rgb = rgb.resize((width, height))
-            rgb.save(target)
-            shapes[key] = [rgb.height, rgb.width, 3]
+        shapes[key] = _copy_nonblank_rgb_image(
+            source,
+            target,
+            width=width,
+            height=height,
+            description=f"real Isaac {key} view image",
+        )
     return shapes
+
+
+def _real_snapshot_source_image(state: dict[str, Any]) -> Path:
+    real_smoke = _dict(state.get("real_runtime_smoke"))
+    image_path = str(real_smoke.get("image_path") or "")
+    if image_path:
+        return Path(image_path)
+    robot_views = _real_robot_view_images(state)
+    fpv_path = str(robot_views.get("fpv") or "")
+    if fpv_path:
+        return Path(fpv_path)
+    raise RuntimeError("real Isaac rendering is proven, but no RGB snapshot source is recorded")
+
+
+def _copy_real_snapshot_image(
+    source: Path,
+    target: Path,
+    *,
+    width: int,
+    height: int,
+) -> list[int]:
+    return _copy_nonblank_rgb_image(
+        source,
+        target,
+        width=width,
+        height=height,
+        description="real Isaac snapshot source image",
+    )
+
+
+def _copy_nonblank_rgb_image(
+    source: Path,
+    target: Path,
+    *,
+    width: int,
+    height: int,
+    description: str,
+) -> list[int]:
+    if not source.is_file():
+        raise RuntimeError(f"missing {description}: {source}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    same_path = source.resolve() == target.resolve()
+    with Image.open(source) as image:
+        rgb = image.convert("RGB")
+        if not _pil_image_has_variance(rgb):
+            raise RuntimeError(f"{description} appears blank: {source}")
+        if not same_path and rgb.size != (width, height):
+            rgb = rgb.resize((width, height))
+        if not same_path:
+            rgb.save(target)
+        return [rgb.height, rgb.width, 3]
 
 
 def _pil_image_has_variance(image: Image.Image) -> bool:

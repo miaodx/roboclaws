@@ -61,6 +61,7 @@ class IsaacLabSubprocessBackend:
         self.runtime_mode = runtime_mode or os.environ.get(
             "ROBOCLAWS_ISAACLAB_RUNTIME_MODE", "real"
         )
+        self.snapshot_artifacts: list[dict[str, Any]] = []
         init_args = [
             "--run-dir",
             str(run_dir),
@@ -123,7 +124,8 @@ class IsaacLabSubprocessBackend:
         return [dict(item) for item in raw if isinstance(item, dict)]
 
     def write_snapshot(self, output_path: Path, *, title: str) -> Path:
-        self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
+        result = self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
+        self._record_snapshot_artifact(result, title=title)
         return output_path
 
     def write_snapshot_with_resolution(
@@ -134,7 +136,7 @@ class IsaacLabSubprocessBackend:
         width: int,
         height: int,
     ) -> Path:
-        self._run_worker(
+        result = self._run_worker(
             "snapshot",
             "--output-path",
             str(output_path),
@@ -145,7 +147,24 @@ class IsaacLabSubprocessBackend:
             "--render-height",
             str(height),
         )
+        self._record_snapshot_artifact(result, title=title)
         return output_path
+
+    def _record_snapshot_artifact(self, result: dict[str, Any], *, title: str) -> None:
+        if result.get("ok") is not True:
+            raise RuntimeError(f"Isaac Lab snapshot failed: {result}")
+        provenance = result.get("snapshot_provenance")
+        if not isinstance(provenance, dict):
+            provenance = {}
+        self.snapshot_artifacts.append(
+            {
+                "title": title,
+                "output_path": str(result.get("output_path") or ""),
+                "visual_artifact_provenance": result.get("visual_artifact_provenance"),
+                "placeholder_visuals": result.get("placeholder_visuals"),
+                "snapshot_provenance": provenance,
+            }
+        )
 
     def write_robot_views(
         self,

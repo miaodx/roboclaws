@@ -64,6 +64,11 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
     assert snapshot_path.is_file()
     assert snapshot_path.stat().st_size > 0
+    assert backend.snapshot_artifacts[-1]["placeholder_visuals"] is True
+    assert (
+        backend.snapshot_artifacts[-1]["snapshot_provenance"]["source"]
+        == "placeholder_protocol_image"
+    )
 
     views = backend.write_robot_views(
         tmp_path / "robot_views",
@@ -451,6 +456,95 @@ def test_isaac_lab_real_worker_views_reuse_real_smoke_images(
     assert result["shapes"]["fpv"] == [48, 64, 3]
     for path in result["views"].values():
         assert Path(path).is_file()
+
+
+def test_isaac_lab_real_worker_snapshot_reuses_real_smoke_image(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    _write_nonblank_image(image_path)
+
+    def fake_real_runtime_smoke(
+        args: object,
+        scenario: object,
+    ) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(run_dir / "scene.usda"),
+            "loaded_asset_kind": "generated_runtime_smoke_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(run_dir / "scene.usda"),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+        }
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    init_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "init",
+            "--run-dir",
+            str(run_dir),
+            "--runtime-mode",
+            "real",
+        ]
+    )
+    isaac_lab_backend_worker.init_state(init_args)
+    snapshot_path = run_dir / "before.png"
+    snapshot_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "snapshot",
+            "--output-path",
+            str(snapshot_path),
+            "--title",
+            "Before cleanup",
+            "--render-width",
+            "64",
+            "--render-height",
+            "48",
+        ]
+    )
+    result = isaac_lab_backend_worker.write_snapshot(
+        snapshot_args,
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["placeholder_visuals"] is False
+    assert result["visual_artifact_provenance"] == "isaac_lab_camera_rgb"
+    assert result["snapshot_provenance"]["source_path"] == str(image_path)
+    assert result["snapshot_provenance"]["static_isaac_capture"] is True
+    assert result["snapshot_provenance"]["semantic_pose_rendered"] is False
+    with Image.open(snapshot_path) as image:
+        assert image.size == (64, 48)
 
 
 def test_isaac_lab_real_init_fails_without_renderer_proof(

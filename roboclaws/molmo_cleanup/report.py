@@ -1414,6 +1414,8 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
     scene_index = isaac.get("scene_index_diagnostics") or {}
     scene_bindings = isaac.get("scene_binding_diagnostics") or {}
     mapping_gaps = isaac.get("mapping_gaps") or []
+    snapshots = [item for item in isaac.get("snapshot_artifacts", []) if isinstance(item, dict)]
+    real_snapshots = sum(1 for item in snapshots if item.get("placeholder_visuals") is False)
     selected_binding_summary = (
         f"{scene_bindings.get('selected_object_bound_count', 0)}/"
         f"{scene_bindings.get('selected_object_count', 0)} objects, "
@@ -1437,6 +1439,7 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
         f"{_metric('Seg bboxes', segmentation.get('candidate_bbox_count', 0))}"
         f"{_metric('Seg selected hits', segmentation.get('selected_usd_prim_match_count', 0))}"
+        f"{_metric('Snapshots', f'{real_snapshots}/{len(snapshots)} real')}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )

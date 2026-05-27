@@ -768,6 +768,7 @@ molmo-isaac-cleanup-smoke *overrides:
     require_selected_usd_bindings="true"
     require_robot_view_provenance="true"
     require_segmentation_evidence="false"
+    require_snapshot_provenance="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2
@@ -781,7 +782,7 @@ molmo-isaac-cleanup-smoke *overrides:
         runtime_python|output_dir|stamp|seed|task|prompt|scene_source|scene_index|\
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
         require_real_runtime|require_scene_loaded|require_selected_usd_bindings|\
-        require_robot_view_provenance|require_segmentation_evidence)
+        require_robot_view_provenance|require_segmentation_evidence|require_snapshot_provenance)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -847,6 +848,9 @@ molmo-isaac-cleanup-smoke *overrides:
     fi
     if [[ "$require_segmentation_evidence" == "true" ]]; then
       check_cmd+=(--require-isaac-segmentation-evidence)
+    fi
+    if [[ "$require_snapshot_provenance" == "true" ]]; then
+      check_cmd+=(--require-isaac-snapshot-provenance)
     fi
     "${check_cmd[@]}"
 

@@ -147,6 +147,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-isaac-semantic-pose", action="store_true")
     parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
     parser.add_argument("--require-isaac-segmentation-evidence", action="store_true")
+    parser.add_argument("--require-isaac-snapshot-provenance", action="store_true")
     return parser.parse_args()
 
 
@@ -221,6 +222,7 @@ def main() -> None:
             require_isaac_semantic_pose=args.require_isaac_semantic_pose,
             require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
             require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
+            require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -283,6 +285,7 @@ def _assert_result(
     require_isaac_semantic_pose: bool = False,
     require_isaac_robot_view_provenance: bool = False,
     require_isaac_segmentation_evidence: bool = False,
+    require_isaac_snapshot_provenance: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -475,6 +478,7 @@ def _assert_result(
         or require_isaac_semantic_pose
         or require_isaac_robot_view_provenance
         or require_isaac_segmentation_evidence
+        or require_isaac_snapshot_provenance
     ):
         _assert_isaac_runtime(
             data,
@@ -486,6 +490,7 @@ def _assert_result(
             require_semantic_pose=require_isaac_semantic_pose,
             require_robot_view_provenance=require_isaac_robot_view_provenance,
             require_segmentation_evidence=require_isaac_segmentation_evidence,
+            require_snapshot_provenance=require_isaac_snapshot_provenance,
         )
 
 
@@ -871,6 +876,7 @@ def _assert_isaac_runtime(
     require_semantic_pose: bool,
     require_robot_view_provenance: bool,
     require_segmentation_evidence: bool,
+    require_snapshot_provenance: bool,
 ) -> None:
     assert data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, data
     isaac = data.get("isaac_runtime") or {}
@@ -950,6 +956,9 @@ def _assert_isaac_runtime(
         assert segmentation.get("no_simulator_label_fallback") is True, segmentation
         assert "Segmentation" in report_text, report_text[:500]
 
+    if require_snapshot_provenance:
+        _assert_isaac_snapshot_provenance(isaac, base)
+
 
 def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
     assert scene_bindings.get("schema") == ISAAC_PUBLIC_SCENE_BINDING_SCHEMA, scene_bindings
@@ -971,6 +980,28 @@ def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
     _assert_bound_isaac_binding_rows(
         scene_bindings.get("selected_target_receptacle_bindings") or {}
     )
+
+
+def _assert_isaac_snapshot_provenance(isaac: dict[str, Any], base: Path) -> None:
+    snapshots = isaac.get("snapshot_artifacts") or []
+    assert len(snapshots) >= 2, isaac
+    for snapshot in snapshots:
+        assert isinstance(snapshot, dict), snapshot
+        assert snapshot.get("placeholder_visuals") is False, snapshot
+        assert snapshot.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", snapshot
+        output_path = _resolve_path(base, snapshot.get("output_path", ""))
+        assert output_path.is_file(), output_path
+        assert output_path.stat().st_size > 0, output_path
+        provenance = snapshot.get("snapshot_provenance") or {}
+        assert provenance.get("placeholder_visuals") is False, provenance
+        assert provenance.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", provenance
+        assert provenance.get("static_isaac_capture") is True, provenance
+        assert provenance.get("semantic_pose_rendered") is False, provenance
+        source_path = _resolve_path(base, provenance.get("source_path", ""))
+        assert source_path.is_file(), source_path
+        assert "placeholder_protocol_image" not in json.dumps(provenance, sort_keys=True).lower(), (
+            provenance
+        )
 
 
 def _assert_bound_isaac_binding_rows(bindings: dict[str, Any]) -> None:
