@@ -102,7 +102,8 @@ Create an isolated Isaac runtime, for example:
 .venv-isaaclab/
 ```
 
-or a dedicated Docker image if local Isaac pip setup is too brittle. This is a
+Use `.venv-isaaclab/` for the first local spike. A dedicated Docker image is a
+fallback only if local Isaac pip setup is too brittle to reproduce. This is a
 deliberate exception to the repo's normal one-`.venv/` rule because Isaac Sim,
 CUDA Torch, RTX rendering, and Omniverse dependencies should not contaminate the
 core cleanup runtime.
@@ -135,6 +136,11 @@ Build an `IsaacSceneIndex` that maps:
 - room and fixture metadata to the existing Runtime Metric Map / fixture hints
   shape.
 
+For the MVP, reuse the existing prebuilt map bundle for public Agent View and
+report comparison. USD-derived map or projection data may be recorded as backend
+diagnostics, but it should not replace the public Metric Map contract until it
+has its own parity/audit gate.
+
 The MuJoCo backend stores mutable truth in `qpos`, object body positions, and
 joint positions. The Isaac backend must store equivalent public/private state in
 terms of USD prim transforms, articulation states, and backend-side JSON state.
@@ -143,6 +149,12 @@ terms of USD prim transforms, articulation states, and backend-side JSON state.
 
 Start with semantic control, then graduate to real controllers only after the
 report path is stable.
+
+Do not require RBY1M for the first Isaac runtime and rendering smoke tests.
+Phase A and Phase B may use the simplest Isaac-compatible camera/robot rig that
+proves scene loading, camera capture, and report plumbing. RBY1M becomes a
+target for the semantic cleanup backend only after the USD/Isaac embodiment path
+is practical enough to avoid blocking renderer and scene parity work.
 
 ### Phase 1 Control: Semantic Pose Backend
 
@@ -196,6 +208,11 @@ Do not change the global cleanup default resolution. Use a renderer comparison
 or Isaac-specific probe to test `1280x720` / 1280p images before changing
 RAW_FPV or visual-grounding defaults.
 
+Segmentation is not agent-facing in the MVP. Capture semantic or instance
+segmentation as backend/report evidence first. When it becomes cleanup input,
+route it through the existing camera-label producer boundary rather than adding
+a new MCP tool field or exposing private simulator truth directly.
+
 Isaac camera outputs should feed the same report and visual-grounding paths:
 
 - `raw_fpv_observation`;
@@ -214,6 +231,8 @@ Deliver a standalone local script that:
 - loads one tiny USD scene or a MolmoSpaces USD scene if already available;
 - captures one RGB image;
 - writes runtime diagnostics and a small HTML or JSON artifact.
+- may use the simplest Isaac-compatible camera/robot rig; RBY1M is not required
+  for this phase.
 
 Acceptance:
 
@@ -231,6 +250,8 @@ Acceptance:
 - object and receptacle counts are recorded;
 - at least one FPV, one chase, and one verification image are saved;
 - report diagnostics list unresolved mapping gaps.
+- public map/fixture context still comes from the existing map bundle unless a
+  separate USD map-projection parity gate has passed.
 
 ### Phase C: Public Object/Receptacle Index
 
@@ -266,6 +287,8 @@ Acceptance:
 - segmentation availability is recorded as explicit success or blocker;
 - bbox/candidate overlays can be generated from Isaac camera evidence;
 - no fallback silently substitutes MuJoCo or simulator labels.
+- segmentation remains report/backend evidence or camera-label producer input,
+  not a new direct agent-facing MCP field.
 
 ### Phase F: Planner-Backed Follow-Up
 
@@ -323,14 +346,12 @@ just agent::harness molmo-isaac-renderer-comparison \
 - Isaac Lab AppLauncher:
   <https://isaac-sim.github.io/IsaacLab/main/source/tutorials/00_sim/launch_app.html>
 
-## Open Questions
+## Deferred Implementation Defaults
 
-- Which MolmoSpaces USD scene should be the first pinned test scene?
-- Is local Isaac installation acceptable, or should the first runtime be Docker?
-- Do we target RBY1M shape immediately, or start with a simpler Isaac robot for
-  camera/report parity?
-- Which segmentation output should be canonical for Roboclaws reports:
-  semantic label, instance id, or both?
-- Should the first Isaac backend reuse the existing MolmoSpaces map bundle or
-  generate a fresh map projection from USD geometry?
-
+- First pinned scene: default to the current MolmoSpaces cleanup baseline,
+  `procthor-10k-val` scene index `0`, unless the USD asset path cannot load it
+  cleanly. If it fails, choose the smallest MolmoSpaces USD scene that can
+  prove scene loading, camera capture, and object/receptacle indexing.
+- Segmentation report shape: record semantic label and instance id when both are
+  available. Choose a canonical report field only after Phase E proves the
+  selected Isaac renderer path exposes stable outputs.
