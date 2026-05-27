@@ -90,6 +90,8 @@ class IsaacLabSubprocessBackend:
         self.object_index = result.get("object_index", {})
         self.receptacle_index = result.get("receptacle_index", {})
         self.segmentation = result.get("segmentation", {})
+        self.scene_load = result.get("scene_load", {})
+        self.mapping_gaps = result.get("mapping_gaps", [])
         self.requested_generated_mess_count = int(
             result.get("requested_generated_mess_count", generated_mess_count)
         )

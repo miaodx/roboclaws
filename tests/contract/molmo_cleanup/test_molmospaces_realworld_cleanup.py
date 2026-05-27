@@ -336,12 +336,19 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert result["semantic_substeps"]
     assert result["score"]["semantic_acceptability"]["accepted_count"] >= 1
     assert run_result["isaac_runtime"]["runtime"]["runtime_mode"] == "fake"
+    assert run_result["isaac_runtime"]["runtime"]["rendering"]["status"] == "fake_protocol"
+    assert run_result["isaac_runtime"]["runtime"]["rendering"]["real_rendering_proven"] is False
+    assert run_result["isaac_runtime"]["scene_load"]["status"] == "fake_protocol"
+    assert run_result["isaac_runtime"]["scene_load"]["usd_stage_loaded"] is False
+    assert run_result["isaac_runtime"]["mapping_gaps"]
     assert run_result["isaac_runtime"]["segmentation"]["status"] == "blocked_capability"
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
     assert run_result["robot_view_steps"]
     assert "Isaac Runtime Diagnostics" in report_text
+    assert "Mapping gaps" in report_text
+    assert "placeholder_visuals" in report_text
     assert "isaac_semantic_pose" in report_text
 
     checker._assert_result(

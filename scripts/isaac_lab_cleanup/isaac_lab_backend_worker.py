@@ -136,12 +136,18 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         _require_isaac_import()
     scenario = _scenario_for_init(args)
     runtime = runtime_diagnostics(args.runtime_mode)
+    scene_load = scene_load_diagnostics(args.runtime_mode, args.scene_source, args.scene_index)
+    mapping_gaps = mapping_gap_diagnostics(
+        runtime_mode=args.runtime_mode,
+        map_bundle_dir=args.map_bundle_dir,
+    )
     initial_receptacle_id = _initial_receptacle_id(scenario)
     state = {
         "schema": STATE_SCHEMA,
         "backend": ISAACLAB_SUBPROCESS_BACKEND,
         "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
         "runtime": runtime,
+        "scene_load": scene_load,
         "scene_source": args.scene_source,
         "scene_index": args.scene_index,
         "scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
@@ -155,6 +161,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "containment": {},
         "tool_event_counts": {},
         "placement_diagnostics": [],
+        "mapping_gaps": mapping_gaps,
         "object_index": _object_index(scenario),
         "receptacle_index": _receptacle_index(scenario),
         "segmentation": {
@@ -187,9 +194,11 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "private_manifest": state["private_manifest"],
         "runtime": runtime,
         "scene_usd": state["scene_usd"],
+        "scene_load": scene_load,
         "scene_index": args.scene_index,
         "object_index": state["object_index"],
         "receptacle_index": state["receptacle_index"],
+        "mapping_gaps": mapping_gaps,
         "segmentation": state["segmentation"],
         "requested_generated_mess_count": args.generated_mess_count,
         "generated_mess_count": len(state["private_manifest"]["targets"]),
@@ -238,6 +247,7 @@ def runtime_diagnostics(runtime_mode: str) -> dict[str, Any]:
             gpu_vram_mb = int(props.total_memory / (1024 * 1024))
     except Exception:
         pass
+    rendering = rendering_diagnostics(runtime_mode)
     return {
         "runtime_mode": runtime_mode,
         "python_version": platform.python_version(),
@@ -246,12 +256,119 @@ def runtime_diagnostics(runtime_mode: str) -> dict[str, Any]:
         "cuda_available": cuda_available,
         "gpu_name": gpu_name,
         "gpu_vram_mb": gpu_vram_mb,
-        "renderer_mode": "isaac_rtx" if runtime_mode == "real" else "fake_isaac_protocol",
+        "renderer_mode": rendering["renderer_mode"],
+        "rendering": rendering,
+        "visual_artifact_provenance": rendering["visual_artifact_provenance"],
         "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
         "physical_robot": False,
         "planner_backed": False,
         "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
     }
+
+
+def rendering_diagnostics(runtime_mode: str) -> dict[str, Any]:
+    if runtime_mode == "real":
+        return {
+            "status": "runtime_import_only",
+            "renderer_mode": "isaac_runtime_unvalidated",
+            "real_rendering_proven": False,
+            "placeholder_visuals": True,
+            "visual_artifact_provenance": "placeholder_protocol_image",
+            "reason": (
+                "The worker imports Isaac Lab in real mode, but real Isaac app "
+                "launch, scene loading, and camera capture are not implemented "
+                "in this semantic-pose scaffold yet."
+            ),
+        }
+    return {
+        "status": "fake_protocol",
+        "renderer_mode": "fake_isaac_protocol",
+        "real_rendering_proven": False,
+        "placeholder_visuals": True,
+        "visual_artifact_provenance": "fake_protocol_placeholder_image",
+        "reason": "CI-safe fake mode writes deterministic placeholder images only.",
+    }
+
+
+def scene_load_diagnostics(
+    runtime_mode: str,
+    scene_source: str,
+    scene_index: int,
+) -> dict[str, Any]:
+    if runtime_mode == "real":
+        status = "blocked_capability"
+        reason = (
+            "Real Isaac USD scene loading is not implemented in this "
+            "semantic-pose scaffold. A future local-dev pass must launch Isaac "
+            "Sim/Lab and prove the selected USD scene loads."
+        )
+    else:
+        status = "fake_protocol"
+        reason = (
+            "Fake mode derives scenario state from synthetic/map fixtures, not an Isaac USD stage."
+        )
+    return {
+        "status": status,
+        "scene_source": scene_source,
+        "scene_index": scene_index,
+        "scene_usd": _scene_usd_path(scene_source, scene_index),
+        "usd_stage_loaded": False,
+        "manual_editor_steps_required": None if runtime_mode == "real" else False,
+        "reason": reason,
+    }
+
+
+def mapping_gap_diagnostics(
+    *,
+    runtime_mode: str,
+    map_bundle_dir: Path | None,
+) -> list[dict[str, Any]]:
+    source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
+    gaps = [
+        {
+            "area": "usd_stage_loading",
+            "status": "blocked_capability" if runtime_mode == "real" else "not_attempted",
+            "source": source,
+            "detail": "MolmoSpaces USD stage loading has not been proven by this worker.",
+        },
+        {
+            "area": "usd_prim_index",
+            "status": "placeholder_mapping",
+            "source": source,
+            "detail": "Object and receptacle USD prim paths are deterministic placeholders.",
+        },
+        {
+            "area": "camera_capture",
+            "status": "placeholder_visuals",
+            "source": source,
+            "detail": "FPV, chase, map, and verification images are generated placeholders.",
+        },
+        {
+            "area": "segmentation",
+            "status": "blocked_capability",
+            "source": source,
+            "detail": "Semantic or instance segmentation masks are not exposed yet.",
+        },
+        {
+            "area": "articulation_and_collision",
+            "status": "semantic_pose_only",
+            "source": source,
+            "detail": "Open/place effects are semantic state edits, not physics or planner proof.",
+        },
+    ]
+    if map_bundle_dir is not None:
+        map_bundle_detail = (
+            "Public map and fixture context still come from the selected Nav2 bundle."
+        )
+        gaps.append(
+            {
+                "area": "public_map_source",
+                "status": "external_map_bundle",
+                "source": str(map_bundle_dir),
+                "detail": map_bundle_detail,
+            }
+        )
+    return gaps
 
 
 def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:

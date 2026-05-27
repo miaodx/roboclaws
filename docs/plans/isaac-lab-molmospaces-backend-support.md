@@ -125,6 +125,9 @@ protocol:
   image artifacts, emits robot view keys `fpv`, `chase`, `map`, and `verify`,
   and labels segmentation as unavailable/blocked instead of fabricating visual
   grounding proof.
+- The report now records scene-load status, rendering-proof status, and
+  explicit mapping gaps so fake protocol artifacts cannot be mistaken for real
+  Isaac renderer/USD scene evidence.
 - Cleanup primitive provenance is `isaac_semantic_pose`; reports explicitly do
   not claim planner-backed or physical-robot manipulation.
 - Fake-worker cleanup can align to the selected Nav2 map bundle

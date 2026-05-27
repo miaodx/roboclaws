@@ -1409,10 +1409,15 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         return ""
     runtime = isaac.get("runtime") or {}
     segmentation = isaac.get("segmentation") or {}
+    rendering = runtime.get("rendering") or {}
+    scene_load = isaac.get("scene_load") or {}
+    mapping_gaps = isaac.get("mapping_gaps") or []
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Runtime mode', runtime.get('runtime_mode', 'unknown'))}"
         f"{_metric('Renderer', runtime.get('renderer_mode', 'unknown'))}"
+        f"{_metric('Rendering proof', rendering.get('status', 'unknown'))}"
+        f"{_metric('Scene load', scene_load.get('status', 'unknown'))}"
         f"{_metric('Isaac Sim', runtime.get('isaac_sim_version') or 'unavailable')}"
         f"{_metric('Isaac Lab', runtime.get('isaac_lab_version') or 'unavailable')}"
         f"{_metric('CUDA', _yes_no(runtime.get('cuda_available')))}"
@@ -1420,6 +1425,7 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Objects indexed', isaac.get('object_index_count', 0))}"
         f"{_metric('Receptacles indexed', isaac.get('receptacle_index_count', 0))}"
         f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
+        f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )
     note = (
@@ -1427,14 +1433,29 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         "effects are labeled isaac_semantic_pose and are not planner-backed "
         "or physical-robot manipulation proof."
     )
+    mapping_items = "".join(
+        "<li>"
+        f"<strong>{html.escape(str(item.get('area', 'unknown')))}:</strong> "
+        f"{html.escape(str(item.get('status', 'unknown')))} - "
+        f"{html.escape(str(item.get('detail', '')))}"
+        "</li>"
+        for item in mapping_gaps
+        if isinstance(item, dict)
+    )
+    mapping_list = f"<ul>{mapping_items}</ul>" if mapping_items else ""
     return (
         '<section class="panel isaac-runtime">'
         "<h2>Isaac Runtime Diagnostics</h2>"
         f'<p class="note">{html.escape(note)}</p>'
         f"{metrics}"
         f"<p><strong>Scene USD:</strong> {html.escape(str(isaac.get('scene_usd', '')))}</p>"
+        f"<p><strong>Scene load reason:</strong> "
+        f"{html.escape(str(scene_load.get('reason', '')))}</p>"
+        f"<p><strong>Rendering reason:</strong> "
+        f"{html.escape(str(rendering.get('reason', '')))}</p>"
         f"<p><strong>Segmentation reason:</strong> "
         f"{html.escape(str(segmentation.get('reason', '')))}</p>"
+        f"{mapping_list}"
         "</section>"
     )
 

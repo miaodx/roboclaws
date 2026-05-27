@@ -35,9 +35,16 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.backend == ISAACLAB_SUBPROCESS_BACKEND
     assert backend.runtime["runtime_mode"] == "fake"
     assert backend.runtime["renderer_mode"] == "fake_isaac_protocol"
+    assert backend.runtime["rendering"]["status"] == "fake_protocol"
+    assert backend.runtime["rendering"]["real_rendering_proven"] is False
+    assert backend.runtime["visual_artifact_provenance"] == "fake_protocol_placeholder_image"
     assert backend.object_index
     assert backend.receptacle_index
     assert backend.segmentation["status"] == "blocked_capability"
+    assert backend.scene_load["status"] == "fake_protocol"
+    assert backend.scene_load["usd_stage_loaded"] is False
+    assert any(item["area"] == "camera_capture" for item in backend.mapping_gaps)
+    assert any(item["status"] == "placeholder_visuals" for item in backend.mapping_gaps)
 
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
