@@ -460,6 +460,77 @@ def test_isaac_runtime_smoke_checker_rejects_invalid_selected_binding_row(
     assert "selected target receptacle binding row is not bound: sink_01" in (summary["errors"])
 
 
+def test_isaac_runtime_smoke_checker_rejects_selected_binding_index_mismatch(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "scene_binding_diagnostics": {
+            "schema": "isaac_public_scene_bindings_v1",
+            "status": "selected_bound",
+            "source": "usd_stage_traversal",
+            "selected_object_count": 1,
+            "selected_target_receptacle_count": 1,
+            "selected_object_bound_count": 1,
+            "selected_target_receptacle_bound_count": 1,
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_handle": "mug_01",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "match_strategy": "exact_public_id",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "bound",
+                    "usd_handle": "sink_01",
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "match_strategy": "exact_public_id",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
+            "blockers": [],
+            "private_manifest_exposed_to_agent": False,
+        },
+        "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/other_mug"}},
+        "receptacle_index": {},
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-selected-usd-bindings",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert (
+        "selected object binding row USD prim path does not match object index: mug_01"
+        in summary["errors"]
+    )
+    assert (
+        "selected target receptacle binding row USD handle is missing from receptacle index: "
+        "sink_01"
+    ) in summary["errors"]
+
+
 def test_isaac_runtime_smoke_checker_rejects_missing_robot_views(
     tmp_path: Path,
 ) -> None:

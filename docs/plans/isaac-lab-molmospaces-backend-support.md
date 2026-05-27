@@ -231,6 +231,9 @@ protocol:
   claims. `--require-selected-usd-bindings` requires selected object and target
   receptacle binding rows with bound status, USD handles, USD prim paths,
   match strategy, USD-stage index provenance, and no private manifest payload.
+- The same smoke gate now cross-checks selected binding rows against the
+  emitted USD `object_index` / `receptacle_index`, so selected handles must
+  point at indexed USD prim paths rather than standalone row claims.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

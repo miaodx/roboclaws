@@ -89,6 +89,8 @@ def validate(
     scene_load = _dict(result.get("scene_load"))
     scene_index = _dict(result.get("scene_index_diagnostics"))
     scene_bindings = _dict(result.get("scene_binding_diagnostics"))
+    object_index = _dict(result.get("object_index"))
+    receptacle_index = _dict(result.get("receptacle_index"))
     segmentation = _dict(result.get("segmentation"))
     artifacts = _dict(result.get("artifacts"))
 
@@ -120,8 +122,6 @@ def validate(
             errors,
         )
     if require_usd_scene_index:
-        object_index = _dict(result.get("object_index"))
-        receptacle_index = _dict(result.get("receptacle_index"))
         _require(bool(scene_index), "missing USD scene index diagnostics", errors)
         _require(
             int(scene_index.get("stage_prim_count") or 0) > 0,
@@ -139,7 +139,13 @@ def validate(
             errors,
         )
     if require_selected_usd_bindings:
-        errors.extend(_selected_usd_binding_errors(scene_bindings))
+        errors.extend(
+            _selected_usd_binding_errors(
+                scene_bindings,
+                object_index=object_index,
+                receptacle_index=receptacle_index,
+            )
+        )
     if require_nonblank_image:
         image_path = artifacts.get("runtime_smoke_image")
         _require(
@@ -171,7 +177,12 @@ def validate(
     return errors
 
 
-def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
+def _selected_usd_binding_errors(
+    scene_bindings: dict[str, Any],
+    *,
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+) -> list[str]:
     errors: list[str] = []
     _require(bool(scene_bindings), "missing selected USD binding diagnostics", errors)
     if not scene_bindings:
@@ -228,6 +239,8 @@ def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
             scene_bindings,
             bindings_key="selected_object_bindings",
             expected_count=selected_object_count,
+            index=object_index,
+            index_label="object index",
             label="object",
         )
     )
@@ -236,6 +249,8 @@ def _selected_usd_binding_errors(scene_bindings: dict[str, Any]) -> list[str]:
             scene_bindings,
             bindings_key="selected_target_receptacle_bindings",
             expected_count=selected_receptacle_count,
+            index=receptacle_index,
+            index_label="receptacle index",
             label="target receptacle",
         )
     )
@@ -247,6 +262,8 @@ def _selected_binding_row_errors(
     *,
     bindings_key: str,
     expected_count: int,
+    index: dict[str, Any],
+    index_label: str,
     label: str,
 ) -> list[str]:
     errors: list[str] = []
@@ -262,36 +279,93 @@ def _selected_binding_row_errors(
         if not isinstance(row, dict):
             errors.append(f"selected {label} binding row is not an object: {public_id}")
             continue
+        row_is_bound = row.get("status") == "bound"
+        has_usd_handle = bool(row.get("usd_handle"))
+        has_usd_prim_path = bool(row.get("usd_prim_path"))
+        has_usd_index_source = row.get("index_source") == "usd_stage_traversal"
+        has_match_strategy = str(row.get("match_strategy") or "") not in {"", "none"}
+        hides_private_manifest = "private_manifest" not in row
         _require(
-            row.get("status") == "bound",
+            row_is_bound,
             f"selected {label} binding row is not bound: {public_id}",
             errors,
         )
         _require(
-            bool(row.get("usd_handle")),
+            has_usd_handle,
             f"selected {label} binding row has no USD handle: {public_id}",
             errors,
         )
         _require(
-            bool(row.get("usd_prim_path")),
+            has_usd_prim_path,
             f"selected {label} binding row has no USD prim path: {public_id}",
             errors,
         )
         _require(
-            row.get("index_source") == "usd_stage_traversal",
+            has_usd_index_source,
             f"selected {label} binding row is not from USD stage traversal: {public_id}",
             errors,
         )
         _require(
-            str(row.get("match_strategy") or "") not in {"", "none"},
+            has_match_strategy,
             f"selected {label} binding row has no match strategy: {public_id}",
             errors,
         )
         _require(
-            "private_manifest" not in row,
+            hides_private_manifest,
             f"selected {label} binding row exposes private manifest: {public_id}",
             errors,
         )
+        if not all(
+            (
+                row_is_bound,
+                has_usd_handle,
+                has_usd_prim_path,
+                has_usd_index_source,
+                has_match_strategy,
+                hides_private_manifest,
+            )
+        ):
+            continue
+        errors.extend(
+            _selected_binding_index_errors(
+                public_id=str(public_id),
+                row=row,
+                index=index,
+                index_label=index_label,
+                label=label,
+            )
+        )
+    return errors
+
+
+def _selected_binding_index_errors(
+    *,
+    public_id: str,
+    row: dict[str, Any],
+    index: dict[str, Any],
+    index_label: str,
+    label: str,
+) -> list[str]:
+    errors: list[str] = []
+    usd_handle = str(row.get("usd_handle") or "")
+    usd_prim_path = str(row.get("usd_prim_path") or "")
+    index_row = index.get(usd_handle)
+    if not isinstance(index_row, dict):
+        errors.append(
+            f"selected {label} binding row USD handle is missing from {index_label}: {public_id}"
+        )
+        return errors
+    index_prim_path = str(index_row.get("usd_prim_path") or "")
+    _require(
+        bool(index_prim_path),
+        f"selected {label} binding row {index_label} row has no USD prim path: {public_id}",
+        errors,
+    )
+    _require(
+        usd_prim_path == index_prim_path,
+        f"selected {label} binding row USD prim path does not match {index_label}: {public_id}",
+        errors,
+    )
     return errors
 
 
