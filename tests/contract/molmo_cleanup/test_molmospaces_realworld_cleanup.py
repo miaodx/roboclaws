@@ -369,6 +369,12 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert semantic_pose_state["planner_backed"] is False
     assert semantic_pose_state["physical_robot"] is False
     assert len(semantic_pose_state["transform_events"]) >= 4
+    assert semantic_pose_state["object_poses"]
+    first_pose_object_id = next(iter(semantic_pose_state["object_poses"]))
+    assert any(
+        event["state_mutation"] == "isaac_prim_transform"
+        for event in semantic_pose_state["transform_events"]
+    )
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
@@ -378,6 +384,12 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "Selected USD bindings" in report_text
     assert "placeholder_visuals" in report_text
     assert "Semantic pose events" in report_text
+    assert "Semantic Pose State" in report_text
+    assert "Semantic Pose Events" in report_text
+    assert "Rendered to USD" in report_text
+    assert "Planner backed" in report_text
+    assert "isaac_prim_transform" in report_text
+    assert first_pose_object_id in report_text
     assert "isaac_semantic_pose" in report_text
 
     checker._assert_result(

@@ -1416,7 +1416,9 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
     mapping_gaps = isaac.get("mapping_gaps") or []
     snapshots = [item for item in isaac.get("snapshot_artifacts", []) if isinstance(item, dict)]
     real_snapshots = sum(1 for item in snapshots if item.get("placeholder_visuals") is False)
-    semantic_pose_state = isaac.get("semantic_pose_state") or {}
+    semantic_pose_state = isaac.get("semantic_pose_state")
+    if not isinstance(semantic_pose_state, dict):
+        semantic_pose_state = {}
     semantic_pose_events = [
         item for item in semantic_pose_state.get("transform_events", []) if isinstance(item, dict)
     ]
@@ -1479,7 +1481,115 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"<p><strong>Semantic pose state:</strong> "
         f"{html.escape(str(semantic_pose_state.get('evidence_note', '')))}</p>"
         f"{mapping_list}"
+        f"{_isaac_semantic_pose_state_tables(semantic_pose_state, semantic_pose_events)}"
         "</section>"
+    )
+
+
+def _isaac_semantic_pose_state_tables(
+    semantic_pose_state: dict[str, Any],
+    semantic_pose_events: list[dict[str, Any]],
+) -> str:
+    if not semantic_pose_state:
+        return ""
+    object_poses = semantic_pose_state.get("object_poses")
+    if not isinstance(object_poses, dict):
+        object_poses = {}
+    articulations = semantic_pose_state.get("articulations")
+    if not isinstance(articulations, dict):
+        articulations = {}
+    return (
+        "<h3>Semantic Pose State</h3>"
+        f"{_isaac_semantic_object_pose_table(object_poses)}"
+        f"{_isaac_semantic_articulation_table(articulations)}"
+        "<h3>Semantic Pose Events</h3>"
+        f"{_isaac_semantic_pose_event_table(semantic_pose_events)}"
+    )
+
+
+def _isaac_semantic_object_pose_table(object_poses: dict[str, Any]) -> str:
+    if not object_poses:
+        return "<p>No semantic object pose state recorded.</p>"
+    rows = []
+    for object_id, pose in sorted(object_poses.items(), key=lambda item: str(item[0])):
+        if not isinstance(pose, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(object_id))}</td>"
+            f"<td>{html.escape(str(pose.get('location_id', '')))}</td>"
+            f"<td>{html.escape(str(pose.get('support_receptacle_id', '')))}</td>"
+            f"<td>{_yes_no(pose.get('attached_to_robot'))}</td>"
+            f"<td>{html.escape(str(pose.get('location_relation', '')))}</td>"
+            f"<td>{_yes_no(pose.get('rendered_to_usd'))}</td>"
+            f"<td>{html.escape(str(pose.get('usd_prim_path', '')))}</td>"
+            f"<td>{html.escape(str(pose.get('support_usd_prim_path', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return "<p>No semantic object pose rows recorded.</p>"
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Object</th><th>Location</th><th>Support</th><th>Attached</th>"
+        "<th>Relation</th><th>Rendered to USD</th><th>Object USD</th><th>Support USD</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+
+
+def _isaac_semantic_articulation_table(articulations: dict[str, Any]) -> str:
+    if not articulations:
+        return "<p>No semantic articulation state recorded.</p>"
+    rows = []
+    for receptacle_id, articulation in sorted(
+        articulations.items(),
+        key=lambda item: str(item[0]),
+    ):
+        if not isinstance(articulation, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(receptacle_id))}</td>"
+            f"<td>{html.escape(str(articulation.get('joint_state', '')))}</td>"
+            f"<td>{_yes_no(articulation.get('open'))}</td>"
+            f"<td>{_yes_no(articulation.get('rendered_to_usd'))}</td>"
+            f"<td>{html.escape(str(articulation.get('usd_prim_path', '')))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return "<p>No semantic articulation rows recorded.</p>"
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>Receptacle</th><th>Joint state</th><th>Open</th>"
+        "<th>Rendered to USD</th><th>USD prim</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+    )
+
+
+def _isaac_semantic_pose_event_table(events: list[dict[str, Any]]) -> str:
+    if not events:
+        return "<p>No semantic pose mutation events recorded.</p>"
+    rows = []
+    for event in events:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(event.get('sequence', '')))}</td>"
+            f"<td>{html.escape(str(event.get('tool', '')))}</td>"
+            f"<td>{html.escape(str(event.get('state_mutation', '')))}</td>"
+            f"<td>{html.escape(str(event.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(event.get('location_id', '')))}</td>"
+            f"<td>{_yes_no(event.get('rendered_to_usd'))}</td>"
+            f"<td>{_yes_no(event.get('planner_backed'))}</td>"
+            f"<td>{html.escape(str(event.get('object_usd_prim_path', '')))}</td>"
+            f"<td>{html.escape(str(event.get('receptacle_usd_prim_path', '')))}</td>"
+            "</tr>"
+        )
+    return (
+        '<div class="table-wrap"><table><thead><tr>'
+        "<th>#</th><th>Tool</th><th>Mutation</th><th>Object</th><th>Receptacle</th>"
+        "<th>Location</th><th>Rendered to USD</th><th>Planner backed</th>"
+        "<th>Object USD</th><th>Receptacle USD</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
 
 

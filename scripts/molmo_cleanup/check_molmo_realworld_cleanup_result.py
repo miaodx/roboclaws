@@ -930,6 +930,13 @@ def _assert_isaac_runtime(
         assert evidence.get("planner_backed") is False, evidence
         assert evidence.get("physical_robot") is False, evidence
         assert ISAAC_SEMANTIC_POSE_PROVENANCE in report_text, report_text[:500]
+        for expected_label in (
+            "Semantic Pose State",
+            "Semantic Pose Events",
+            "Rendered to USD",
+            "Planner backed",
+        ):
+            assert expected_label in report_text, report_text[:1000]
         for item in data.get("semantic_substeps") or []:
             for step in item.get("steps") or []:
                 if step.get("phase") in SEMANTIC_RESPONSE_PHASES and step.get("status") == "ok":

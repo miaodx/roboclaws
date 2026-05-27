@@ -210,10 +210,11 @@ protocol:
   semantic pose edits are rendered back into the USD stage.
 - Phase D semantic controls now maintain `semantic_pose_state` under
   `isaac_runtime`, recording backend JSON object poses, articulation state, USD
-  prim handles, and per-tool mutation events. The report and
-  `--require-isaac-semantic-pose` checker gate verify that the state is
-  `isaac_semantic_pose`, `rendered_to_usd=false`, `planner_backed=false`, and
-  `physical_robot=false`.
+  prim handles, and per-tool mutation events. The report now renders reviewable
+  `Semantic Pose State` and `Semantic Pose Events` tables, and the
+  `--require-isaac-semantic-pose` checker gate verifies that the report and
+  JSON state show `isaac_semantic_pose`, `rendered_to_usd=false`,
+  `planner_backed=false`, and `physical_robot=false`.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
