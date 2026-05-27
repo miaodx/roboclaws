@@ -1,11 +1,12 @@
+<!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** Proposed
+**Status:** CI-safe fake backend scaffold implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
-**Workflow:** Pre-GSD plan; use this file as the shaping source before any
-implementation phase is opened.
+**Workflow:** Pre-GSD plan reviewed through `intuitive-flow` autoplan intake;
+use this file as the canonical implementation source and closeout ledger.
 
 ## Problem
 
@@ -53,6 +54,85 @@ Isaac Lab RL benchmark and not real manipulation control.
   integration in the first phase.
 - Do not block existing MolmoSpaces cleanup, visual-grounding, or Agibot work
   on Isaac support.
+
+## Autoplan Review Decisions
+
+The `intuitive-flow` autoplan precheck accepted the plan with scope-preserving
+implementation constraints. Outside Codex/Claude subagent voices were not run:
+the supported repo route forbids bare host coding-agent launches, and no
+subagent tool is available in this session. The primary review inspected the
+current cleanup subprocess seam, direct cleanup runner, just facade, and
+contract tests.
+
+### Accepted Decisions
+
+| # | Area | Decision | Rationale |
+|---|------|----------|-----------|
+| 1 | Scope | Keep the full Isaac backend objective, but execute it as ordered vertical slices from runtime smoke through semantic cleanup parity. | The plan is too hardware-sensitive for one unverified jump, but slicing does not reduce the final state. |
+| 2 | Backend seam | Add `IsaacLabSubprocessBackend` beside `MolmoSpacesSubprocessBackend`; do not import Isaac from normal Roboclaws modules. | This matches the existing heavy-runtime subprocess boundary and preserves the core `.venv/`. |
+| 3 | Provenance | Use a dedicated `isaac_semantic_pose` primitive provenance in all Phase D semantic-pose responses. | `api_semantic` is MuJoCo-shaped today; Isaac pose edits need honest, distinct labeling. |
+| 4 | Command surface | Keep `household-cleanup` as the public task and add a local-dev backend selector rather than a new public task. | This preserves task/profile layering and makes Isaac a backend variant. |
+| 5 | Test strategy | Add CI-safe protocol/unit tests with a fake worker path, plus local-only real Isaac acceptance commands. | CI can prove routing, schema, provenance, and no-import boundaries; real renderer/GPU proof remains local-dev evidence. |
+| 6 | Report shape | Extend `run_result.json` with `isaac_runtime` diagnostics and segmentation status instead of changing agent-facing MCP fields. | Diagnostics belong in backend/report evidence; private or simulator segmentation must not leak into Agent View. |
+| 7 | Map source | Keep public map/fixture context from the existing map bundle until a separate USD map-projection parity gate exists. | Avoids silently changing the Runtime Metric Map contract while backend mapping is immature. |
+
+### Implementation Task Order
+
+1. **Runtime smoke scaffold**: create the isolated worker script, runtime
+   diagnostics schema, nonblank image writer, and no-normal-startup Isaac
+   import test.
+2. **Backend protocol**: add `IsaacLabSubprocessBackend`, command timeouts,
+   JSON parsing/error handling, and fake-worker tests for `init`, snapshots,
+   robot views, and semantic cleanup primitives.
+3. **Run facade integration**: add `backend=isaaclab_subprocess` to the direct
+   `household-cleanup` route while keeping `world-labels` defaults unchanged.
+4. **Semantic cleanup parity**: make one-object direct cleanup produce
+   `run_result.json`, `trace.jsonl`, `report.html`, Isaac robot-view timeline
+   artifacts, and `primitive_provenance=isaac_semantic_pose`.
+5. **Local-dev real Isaac proof**: run the real `.venv-isaaclab/` command on a
+   GPU/Isaac host and record unresolved USD/segmentation mapping blockers.
+
+### Verification Expectations
+
+- Focused CI-safe tests cover:
+  - the new backend wrapper and worker protocol;
+  - direct cleanup runner acceptance for `backend=isaaclab_subprocess` using a
+    fake worker;
+  - just/task routing for `backend=isaaclab_subprocess`;
+  - report/checker handling of `isaac_runtime` diagnostics and
+    `isaac_semantic_pose` provenance;
+  - no Isaac package import during normal Roboclaws module import.
+- Local-dev acceptance remains required before claiming Phase A/B real Isaac
+  success:
+
+  ```bash
+  .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
+    --state-path output/isaaclab/smoke/state.json \
+    init --run-dir output/isaaclab/smoke --scene-source procthor-10k-val --scene-index 0
+
+  just task::run household-cleanup direct world-labels \
+    backend=isaaclab_subprocess seed=7 generated_mess_count=1
+  ```
+
+### Implementation Evidence
+
+The CI-safe scaffold implements task-order items 1-4 with a fake Isaac worker
+protocol:
+
+- `IsaacLabSubprocessBackend` runs behind the existing `household-cleanup`
+  surface as `backend=isaaclab_subprocess`.
+- The worker records Isaac runtime diagnostics, writes nonblank placeholder
+  image artifacts, emits robot view keys `fpv`, `chase`, `map`, and `verify`,
+  and labels segmentation as unavailable/blocked instead of fabricating visual
+  grounding proof.
+- Cleanup primitive provenance is `isaac_semantic_pose`; reports explicitly do
+  not claim planner-backed or physical-robot manipulation.
+- Fake-worker cleanup can align to the selected Nav2 map bundle
+  `assets/maps/molmospaces-procthor-val-0-7`.
+
+Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
+not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
+manipulation proof from the fake protocol evidence.
 
 ## Architecture
 

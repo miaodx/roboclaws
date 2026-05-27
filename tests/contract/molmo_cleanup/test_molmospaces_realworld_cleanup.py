@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
+from roboclaws.molmo_cleanup.isaac_lab_backend import ISAACLAB_ROBOT_VIEW_VARIANT
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -20,6 +22,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
+CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_cleanup_result.py"
 AGIBOT_SEMANTIC_ACTIONS_PATH = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_agibot_robot_map_9_semantic_actions.py"
 )
@@ -30,6 +33,18 @@ ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_con
 
 def _load_demo_module():
     spec = importlib.util.spec_from_file_location("molmospaces_realworld_cleanup", DEMO_PATH)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_checker_module():
+    spec = importlib.util.spec_from_file_location(
+        "check_molmo_realworld_cleanup_result",
+        CHECKER_PATH,
+    )
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
@@ -286,3 +301,61 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
     assert "Model-Declared Observations" in report
     assert "Raw FPV Observations" in report
     assert "Semantic Substeps" in report
+
+
+def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    demo = _load_demo_module()
+    checker = _load_checker_module()
+    monkeypatch.setenv("ROBOCLAWS_ISAACLAB_PYTHON", sys.executable)
+    monkeypatch.setenv("ROBOCLAWS_ISAACLAB_RUNTIME_MODE", "fake")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        backend="isaaclab_subprocess",
+        include_robot=True,
+        record_robot_views=True,
+        generated_mess_count=1,
+        cleanup_profile="world-labels",
+        map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
+        require_map_bundle=True,
+    )
+
+    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
+    report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
+
+    assert result["backend"] == "isaaclab_subprocess"
+    assert result["generated_mess_count"] == 1
+    assert result["primitive_provenance"] == "isaac_semantic_pose"
+    assert result["manipulation_evidence"]["isaac_semantic_pose_edits"] is True
+    assert result["manipulation_evidence"]["planner_backed"] is False
+    assert result["agent_view"]["observed_objects"]
+    assert result["semantic_substeps"]
+    assert result["score"]["semantic_acceptability"]["accepted_count"] >= 1
+    assert run_result["isaac_runtime"]["runtime"]["runtime_mode"] == "fake"
+    assert run_result["isaac_runtime"]["segmentation"]["status"] == "blocked_capability"
+    assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
+    assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
+    assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
+    assert run_result["robot_view_steps"]
+    assert "Isaac Runtime Diagnostics" in report_text
+    assert "isaac_semantic_pose" in report_text
+
+    checker._assert_result(
+        run_result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="isaaclab_subprocess",
+        expect_policy="deterministic_sweep_baseline",
+        expect_profile="world-labels",
+        min_generated_mess_count=1,
+        require_robot_views=True,
+        require_advisory_scoring=True,
+        min_semantic_accepted_count=1,
+        min_sweep_coverage=1.0,
+        require_waypoint_honesty=True,
+        require_real_robot_alignment=True,
+    )

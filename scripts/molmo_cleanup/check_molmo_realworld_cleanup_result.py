@@ -11,6 +11,10 @@ from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
+from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAACLAB_ROBOT_VIEW_VARIANT,
+    ISAACLAB_SUBPROCESS_BACKEND,
+)
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
     validate_planner_cleanup_bridge_evidence,
 )
@@ -774,7 +778,10 @@ def _assert_robot_views(
     *,
     require_complete_actions: bool = True,
 ) -> None:
-    assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
+    expected_variants = {"molmospaces-rby1m-fpv-map-chase-verify"}
+    if data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND:
+        expected_variants.add(ISAACLAB_ROBOT_VIEW_VARIANT)
+    assert data.get("view_variant") in expected_variants, data
     artifacts = data.get("artifacts") or {}
     robot_views_dir = _resolve_path(base, artifacts.get("robot_views", ""))
     assert robot_views_dir.is_dir(), robot_views_dir

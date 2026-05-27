@@ -72,7 +72,7 @@ run task driver mode="" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        agent_souls|agents|baseline|candidate|cap|generated_mess_count|\
+        agent_souls|agents|backend|baseline|candidate|cap|generated_mess_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
@@ -319,10 +319,11 @@ run task driver mode="" *overrides:
           semantic_sweep="on"
         fi
         runtime_map_prior="$(get runtime_map_prior "")"
+        backend="$(get backend auto)"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
-          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior"
+          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

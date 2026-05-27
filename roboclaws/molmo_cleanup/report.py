@@ -171,6 +171,7 @@ def _cleanup_report_sections(
                 [
                     _molmospaces_agibot_rehearsal_section(run_dir, run_result),
                     _agibot_sdk_runner_section(run_dir, run_result),
+                    _isaac_runtime_section(run_result),
                     _nav2_map_bundle_section(run_dir, run_result),
                     _real_robot_readiness_section(run_result),
                     _cleanup_policy_trace_section(run_result),
@@ -1400,6 +1401,42 @@ def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
         f"{metadata.get('model_input_note', '')}"
     )
     return f'<section class="panel note-panel"><p class="note">{html.escape(note)}</p></section>'
+
+
+def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
+    isaac = run_result.get("isaac_runtime") or {}
+    if not isaac:
+        return ""
+    runtime = isaac.get("runtime") or {}
+    segmentation = isaac.get("segmentation") or {}
+    metrics = (
+        '<div class="metric-grid">'
+        f"{_metric('Runtime mode', runtime.get('runtime_mode', 'unknown'))}"
+        f"{_metric('Renderer', runtime.get('renderer_mode', 'unknown'))}"
+        f"{_metric('Isaac Sim', runtime.get('isaac_sim_version') or 'unavailable')}"
+        f"{_metric('Isaac Lab', runtime.get('isaac_lab_version') or 'unavailable')}"
+        f"{_metric('CUDA', _yes_no(runtime.get('cuda_available')))}"
+        f"{_metric('GPU', runtime.get('gpu_name') or 'n/a')}"
+        f"{_metric('Objects indexed', isaac.get('object_index_count', 0))}"
+        f"{_metric('Receptacles indexed', isaac.get('receptacle_index_count', 0))}"
+        f"{_metric('Segmentation', segmentation.get('status', 'unknown'))}"
+        "</div>"
+    )
+    note = (
+        "Isaac backend diagnostics are report evidence only. Early cleanup "
+        "effects are labeled isaac_semantic_pose and are not planner-backed "
+        "or physical-robot manipulation proof."
+    )
+    return (
+        '<section class="panel isaac-runtime">'
+        "<h2>Isaac Runtime Diagnostics</h2>"
+        f'<p class="note">{html.escape(note)}</p>'
+        f"{metrics}"
+        f"<p><strong>Scene USD:</strong> {html.escape(str(isaac.get('scene_usd', '')))}</p>"
+        f"<p><strong>Segmentation reason:</strong> "
+        f"{html.escape(str(segmentation.get('reason', '')))}</p>"
+        "</section>"
+    )
 
 
 def _manipulation_provenance_section(run_result: dict[str, Any]) -> str:

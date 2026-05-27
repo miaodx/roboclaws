@@ -396,6 +396,27 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     assert route[13] == "fake-http"
 
 
+def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=isaaclab_subprocess",
+        "seed=7",
+        "generated_mess_count=1",
+    )
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels",
+        "7",
+        "output/household/household-cleanup/direct-report",
+    ]
+    assert route[-1] == "isaaclab_subprocess"
+
+
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     match = re.search(r"camera-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)

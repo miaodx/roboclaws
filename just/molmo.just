@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -56,6 +56,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
     semantic_sweep="{{semantic_sweep}}"
     runtime_map_prior="{{runtime_map_prior}}"
+    backend_override="{{backend_override}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -77,6 +78,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout=}"
     semantic_sweep="${semantic_sweep#semantic_sweep=}"
     runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
+    backend_override="${backend_override#backend=}"
+    backend_override="${backend_override#backend_override=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -193,6 +196,28 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         exit 1
         ;;
     esac
+    case "$backend_override" in
+      auto|"")
+        ;;
+      api_semantic_synthetic|molmospaces_subprocess|isaaclab_subprocess)
+        backend="$backend_override"
+        ;;
+      *)
+        echo "error: unsupported backend '$backend_override' (expected api_semantic_synthetic|molmospaces_subprocess|isaaclab_subprocess)" >&2
+        exit 1
+        ;;
+    esac
+    if [[ "$profile" == "world-labels" && "$backend" == "isaaclab_subprocess" ]]; then
+      checker_visual_args=(
+        --require-waypoint-honesty
+        --require-real-robot-alignment
+        --min-semantic-accepted-count "$generated_mess_count"
+        --min-sweep-coverage 1.0
+      )
+      if [[ "$robot_views" != "off" && "$robot_views" != "false" && "$robot_views" != "0" ]]; then
+        checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
+      fi
+    fi
     if [[ "$cleanup_routine" == "auto" ]]; then
       cleanup_routine="skill"
     fi
