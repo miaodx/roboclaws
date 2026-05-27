@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import importlib.metadata as importlib_metadata
 import json
 import math
 import re
@@ -29,6 +30,7 @@ API_SEMANTIC_PROVENANCE = "api_semantic"
 HELD_LOCATION_ID = "held_by_agent"
 _MODEL_DATA_CACHE: dict[tuple[str, str], tuple[mujoco.MjModel, mujoco.MjData]] = {}
 _FILAMENT_RESOURCE_PROVIDER: _FilamentResourceProvider | None = None
+_MUJOCO_FILAMENT_RUNTIME: bool | None = None
 
 
 class _MjResource(ctypes.Structure):
@@ -155,6 +157,33 @@ def _register_filament_resource_provider_if_available() -> None:
 
 
 _register_filament_resource_provider_if_available()
+
+
+def _is_mujoco_filament_runtime() -> bool:
+    """Return true when imported ``mujoco`` is the TestPyPI Filament wheel."""
+    global _MUJOCO_FILAMENT_RUNTIME
+    if _MUJOCO_FILAMENT_RUNTIME is not None:
+        return _MUJOCO_FILAMENT_RUNTIME
+    try:
+        filament_version = importlib_metadata.version("mujoco-filament")
+    except importlib_metadata.PackageNotFoundError:
+        _MUJOCO_FILAMENT_RUNTIME = False
+        return False
+    assets_dir = Path(mujoco.__file__).resolve().parent / "filament" / "assets" / "data"
+    _MUJOCO_FILAMENT_RUNTIME = filament_version == mujoco.__version__ and assets_dir.is_dir()
+    return _MUJOCO_FILAMENT_RUNTIME
+
+
+def _mujoco_renderer_runtime_id() -> str:
+    return "mujoco-filament" if _is_mujoco_filament_runtime() else "standard-mujoco"
+
+
+def _normalize_renderer_frame(frame: Any) -> Any:
+    if not _is_mujoco_filament_runtime():
+        return frame
+    import numpy as np
+
+    return np.ascontiguousarray(np.flipud(frame))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -417,6 +446,7 @@ def init_state(
         "runtime": {
             "python_version": sys.version.split()[0],
             "mujoco_version": mujoco.__version__,
+            "mujoco_renderer_runtime": _mujoco_renderer_runtime_id(),
         },
         "model_stats": {
             "nbody": int(model.nbody),
@@ -512,7 +542,7 @@ def write_snapshot(state: dict[str, Any], output_path: Path, title: str) -> dict
     camera.azimuth = 225
     camera.elevation = -45
     renderer.update_scene(data, camera=camera)
-    frame = renderer.render()
+    frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(frame).save(output_path)
@@ -2222,7 +2252,7 @@ def _render_fixed_camera(
 ) -> Any:
     renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
     renderer.update_scene(data, camera=camera_name)
-    frame = renderer.render()
+    frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
 
@@ -2258,7 +2288,7 @@ def _render_free_camera(
 ) -> Any:
     renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
     renderer.update_scene(data, camera=camera)
-    frame = renderer.render()
+    frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
 
@@ -2524,7 +2554,7 @@ def _render_segmentation(
     renderer.render()
     renderer.enable_segmentation_rendering()
     renderer.update_scene(data, camera=camera)
-    segmentation = renderer.render()
+    segmentation = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return segmentation
 
@@ -2613,7 +2643,7 @@ def _render_color_frame(
 ) -> Any:
     renderer = mujoco.Renderer(model, height=360, width=540, max_geom=20000)
     renderer.update_scene(data, camera=camera)
-    frame = renderer.render()
+    frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
 

@@ -1,6 +1,6 @@
 # MolmoSpaces Filament Renderer Comparison
 
-**Status:** Layer 1 implemented; local render report generated
+**Status:** Layer 1 implemented; orientation fix and multi-position report generated
 **Created:** 2026-05-27
 **Source:** MolmoSpaces Filament renderer discussion. The current request is to
 first produce a fast human comparison of FPV/chase rendering quality, then only
@@ -88,10 +88,10 @@ The runner should:
   `scene_source=procthor-10k-val`, `scene_index=0`, `include_robot=true`,
   `robot_name=rby1m`, and `generated_mess_count`;
 - capture the existing `write_snapshot` output;
-- capture one or more `write_robot_views` outputs with FPV, chase, verify, and
+- capture multiple `write_robot_views` outputs with FPV, chase, verify, and
   map images;
-- use the same deterministic focus target in both lanes, preferably the first
-  generated cleanup target and its current source receptacle;
+- use the same deterministic focus targets in both lanes, preferably the first
+  generated cleanup targets and their current source receptacles;
 - write `comparison_manifest.json` with Python version, MuJoCo version,
   MolmoSpaces scene XML, image paths, dimensions, and failure status per lane;
 - write `report.html` with side-by-side image grids for human review.
@@ -254,3 +254,42 @@ Both lanes reported success and produced matched `snapshot`, `fpv`, `chase`,
 Python `3.12.3` with MuJoCo `3.4.0`, and the Filament lane as Python `3.11.14`
 with MuJoCo `3.5.1`. The Filament lane now renders with the imported
 `mujoco-filament` distribution instead of falling back to regular MuJoCo.
+
+Human review of this first report found two issues: Filament frames appeared
+vertically flipped compared with standard MuJoCo, and one focus position was
+too weak for judging whether the renderer was actually clearer.
+
+## Follow-up Fix 2026-05-27
+
+The subprocess worker now detects the active `mujoco-filament` runtime and
+normalizes rendered frames with a vertical flip at the Roboclaws worker boundary.
+The fix applies consistently to `snapshot`, FPV, chase, verify, segmentation,
+and color frames so the rendered image and focus boxes use the same orientation.
+
+The comparison runner now captures four deterministic focus samples by default.
+For each sample, both lanes navigate the robot to the same generated cleanup
+object before rendering FPV, chase, verify, and map views. The report keeps the
+snapshot comparison at the top, then groups robot views by `focus-01` through
+`focus-04`.
+
+Local follow-up verification passed:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_renderer_comparison.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py -q
+.venv/bin/python -m ruff check roboclaws/molmo_cleanup/renderer_comparison.py scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/contract/molmo_cleanup/test_renderer_comparison.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py
+.venv/bin/python -m ruff format --check roboclaws/molmo_cleanup/renderer_comparison.py scripts/molmo_cleanup/molmospaces_subprocess_worker.py tests/contract/molmo_cleanup/test_renderer_comparison.py tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py
+just molmo::renderer-comparison seed=7 generated_mess_count=10
+```
+
+The updated report is:
+
+```text
+output/molmo/renderer-comparison/0527_1731/comparison_manifest.json
+output/molmo/renderer-comparison/0527_1731/report.html
+```
+
+The updated manifest reports four samples in both lanes. All standard and
+Filament robot-view images have matched dimensions: FPV/chase/verify are
+`540 x 360`, and maps are `620 x 420`. A pixel-difference sanity check confirmed
+the corrected Filament images are closer to standard MuJoCo in their saved
+orientation than after applying another vertical flip.

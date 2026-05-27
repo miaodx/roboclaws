@@ -190,6 +190,24 @@ def test_worker_registers_filament_resource_provider_when_assets_exist(
     assert provider.provider.prefix == b"filament"
 
 
+def test_worker_normalizes_filament_renderer_frame_orientation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker_module()
+    import numpy as np
+
+    frame = np.array([[[1], [2]], [[3], [4]], [[5], [6]]], dtype=np.uint8)
+
+    monkeypatch.setattr(worker, "_is_mujoco_filament_runtime", lambda: False)
+    assert worker._normalize_renderer_frame(frame) is frame
+
+    monkeypatch.setattr(worker, "_is_mujoco_filament_runtime", lambda: True)
+    normalized = worker._normalize_renderer_frame(frame)
+
+    assert normalized.tolist() == [[[5], [6]], [[3], [4]], [[1], [2]]]
+    assert normalized.flags["C_CONTIGUOUS"]
+
+
 class _FakeCFunc:
     def __init__(self, callback):
         self.callback = callback

@@ -15,7 +15,7 @@ from roboclaws.molmo_cleanup.subprocess_backend import MolmoSpacesSubprocessBack
 COMPARISON_SCHEMA = "molmospaces_renderer_comparison_v1"
 STANDARD_LANE_ID = "standard-mujoco"
 FILAMENT_LANE_ID = "molmospaces-mujoco-filament"
-VIEW_KINDS = ("snapshot", "fpv", "chase", "verify", "map")
+DEFAULT_FOCUS_SAMPLE_COUNT = 4
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class RendererComparisonConfig:
     scene_source: str = "procthor-10k-val"
     scene_index: int = 0
     robot_name: str = "rby1m"
+    focus_sample_count: int = DEFAULT_FOCUS_SAMPLE_COUNT
 
 
 def run_renderer_comparison(config: RendererComparisonConfig) -> dict[str, Any]:
@@ -57,18 +58,20 @@ def run_renderer_comparison(config: RendererComparisonConfig) -> dict[str, Any]:
             "generated_mess_count": config.generated_mess_count,
         },
         "focus": {},
+        "focuses": [],
         "lanes": {},
         "artifacts": {
             "comparison_manifest": "comparison_manifest.json",
             "report": "report.html",
         },
     }
-    focus: dict[str, str] | None = None
+    focuses: list[dict[str, str]] | None = None
     for lane in lanes:
-        lane_result = _capture_lane(config, lane, focus=focus)
-        if focus is None and lane_result.get("focus"):
-            focus = _string_dict(lane_result["focus"])
-            manifest["focus"] = dict(focus)
+        lane_result = _capture_lane(config, lane, focuses=focuses)
+        if focuses is None and lane_result.get("focuses"):
+            focuses = _string_dicts(lane_result["focuses"])
+            manifest["focuses"] = [dict(focus) for focus in focuses]
+            manifest["focus"] = dict(focuses[0]) if focuses else {}
         manifest["lanes"][lane.lane_id] = lane_result
 
     manifest_path = output_dir / "comparison_manifest.json"
@@ -108,7 +111,7 @@ def _capture_lane(
     config: RendererComparisonConfig,
     lane: RendererLane,
     *,
-    focus: dict[str, str] | None,
+    focuses: list[dict[str, str]] | None,
 ) -> dict[str, Any]:
     lane_dir = config.output_dir / lane.output_subdir
     lane_dir.mkdir(parents=True, exist_ok=True)
@@ -144,22 +147,60 @@ def _capture_lane(
             robot_name=config.robot_name,
             generated_mess_count=config.generated_mess_count,
         )
-        lane_focus = focus or _focus_from_backend(backend)
+        lane_focuses = focuses or _focuses_from_backend(
+            backend,
+            limit=config.focus_sample_count,
+        )
+        if not lane_focuses:
+            raise RuntimeError("no focus samples were available for renderer comparison")
         snapshot_path = lane_dir / "snapshot.png"
         snapshot = backend.write_snapshot(
             snapshot_path,
             title=f"{lane.lane_id} seed={config.seed}",
         )
-        robot_views = backend.write_robot_views(
-            lane_dir / "robot_views",
-            label="focused",
-            focus_object_id=lane_focus.get("object_id"),
-            focus_receptacle_id=lane_focus.get("source_receptacle_id"),
-        )
-        if not robot_views.get("ok", False):
-            raise RuntimeError(
-                "robot view capture failed: "
-                f"{json.dumps(robot_views, sort_keys=True, ensure_ascii=False)}"
+        images = {
+            "snapshot": _image_entry(
+                output_dir=config.output_dir,
+                path=snapshot,
+                shape=_image_shape(snapshot),
+            )
+        }
+        samples: list[dict[str, Any]] = []
+        first_robot_view_provenance: dict[str, Any] = {}
+        for index, lane_focus in enumerate(lane_focuses, start=1):
+            sample_id = lane_focus.get("sample_id") or f"focus-{index:02d}"
+            navigation = backend.navigate_to_object(lane_focus["object_id"])
+            if not navigation.get("ok", False):
+                raise RuntimeError(
+                    "focus navigation failed: "
+                    f"{json.dumps(navigation, sort_keys=True, ensure_ascii=False)}"
+                )
+            robot_views = backend.write_robot_views(
+                lane_dir / "robot_views",
+                label=sample_id,
+                focus_object_id=lane_focus.get("object_id"),
+                focus_receptacle_id=lane_focus.get("source_receptacle_id"),
+            )
+            if not robot_views.get("ok", False):
+                raise RuntimeError(
+                    "robot view capture failed: "
+                    f"{json.dumps(robot_views, sort_keys=True, ensure_ascii=False)}"
+                )
+            view_images = _robot_view_images(
+                output_dir=config.output_dir,
+                robot_views=robot_views,
+            )
+            if not first_robot_view_provenance:
+                first_robot_view_provenance = dict(robot_views.get("view_provenance", {}))
+                images.update(view_images)
+            samples.append(
+                {
+                    "sample_id": sample_id,
+                    "focus": dict(lane_focus),
+                    "navigation": navigation,
+                    "images": view_images,
+                    "robot_view_provenance": robot_views.get("view_provenance", {}),
+                }
             )
         result.update(
             {
@@ -169,13 +210,11 @@ def _capture_lane(
                 "scene_xml": backend.scene_xml,
                 "requested_generated_mess_count": backend.requested_generated_mess_count,
                 "generated_mess_count": backend.generated_mess_count,
-                "focus": dict(lane_focus),
-                "images": _lane_images(
-                    output_dir=config.output_dir,
-                    snapshot=snapshot,
-                    robot_views=robot_views,
-                ),
-                "robot_view_provenance": robot_views.get("view_provenance", {}),
+                "focus": dict(lane_focuses[0]),
+                "focuses": [dict(focus) for focus in lane_focuses],
+                "images": images,
+                "samples": samples,
+                "robot_view_provenance": first_robot_view_provenance,
             }
         )
     except Exception as exc:  # pragma: no cover - exercised by local runtime failures.
@@ -199,32 +238,35 @@ def _capture_lane(
     return result
 
 
-def _focus_from_backend(backend: MolmoSpacesSubprocessBackend) -> dict[str, str]:
-    first_target = backend.scenario.private_manifest.targets[0]
-    object_id = first_target.object_id
+def _focuses_from_backend(
+    backend: MolmoSpacesSubprocessBackend,
+    *,
+    limit: int,
+) -> list[dict[str, str]]:
     locations = backend.object_locations()
-    source_receptacle_id = locations.get(object_id, "")
-    target_receptacle_id = first_target.valid_receptacle_ids[0]
-    return {
-        "object_id": object_id,
-        "source_receptacle_id": source_receptacle_id,
-        "target_receptacle_id": target_receptacle_id,
-    }
+    focuses = []
+    for index, target in enumerate(
+        backend.scenario.private_manifest.targets[: max(1, limit)],
+        start=1,
+    ):
+        object_id = target.object_id
+        focuses.append(
+            {
+                "sample_id": f"focus-{index:02d}",
+                "object_id": object_id,
+                "source_receptacle_id": locations.get(object_id, ""),
+                "target_receptacle_id": target.valid_receptacle_ids[0],
+            }
+        )
+    return focuses
 
 
-def _lane_images(
+def _robot_view_images(
     *,
     output_dir: Path,
-    snapshot: Path,
     robot_views: dict[str, Any],
 ) -> dict[str, dict[str, Any]]:
-    images = {
-        "snapshot": _image_entry(
-            output_dir=output_dir,
-            path=snapshot,
-            shape=_image_shape(snapshot),
-        )
-    }
+    images = {}
     view_paths = robot_views.get("views") if isinstance(robot_views.get("views"), dict) else {}
     shapes = robot_views.get("shapes") if isinstance(robot_views.get("shapes"), dict) else {}
     for kind in ("fpv", "chase", "verify", "map"):
@@ -281,6 +323,12 @@ def _string_dict(data: Any) -> dict[str, str]:
     return {str(key): str(value) for key, value in data.items() if value is not None}
 
 
+def _string_dicts(data: Any) -> list[dict[str, str]]:
+    if not isinstance(data, list):
+        return []
+    return [_string_dict(item) for item in data if isinstance(item, dict)]
+
+
 def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
     title = "MolmoSpaces Renderer Comparison"
     scene = manifest.get("scene") if isinstance(manifest.get("scene"), dict) else {}
@@ -291,7 +339,8 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _summary(title, scene, focus, lanes),
             _runtime_section(lanes),
             _failure_section(lanes),
-            *[_image_section(kind, lanes, output_dir=output_dir) for kind in VIEW_KINDS],
+            _snapshot_section(lanes, output_dir=output_dir),
+            _sample_sections(lanes, output_dir=output_dir),
         ]
     )
     return f"""<!doctype html>
@@ -367,6 +416,22 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 12px;
     }}
+    .sample-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+    }}
+    .sample-header {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 12px;
+    }}
+    .sample-block {{
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #e5e8ee;
+    }}
     figure {{
       margin: 0;
       background: #fff;
@@ -396,6 +461,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
     @media (max-width: 640px) {{
       main {{ padding: 18px 12px 36px; }}
       .image-comparison-grid {{ grid-template-columns: 1fr; }}
+      .sample-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -451,6 +517,7 @@ def _runtime_section(lanes: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('python_executable', '')))}</td>"
             f"<td>{html.escape(str(runtime.get('python_version', '')))}</td>"
             f"<td>{html.escape(str(runtime.get('mujoco_version', '')))}</td>"
+            f"<td>{html.escape(str(runtime.get('mujoco_renderer_runtime', '')))}</td>"
             f"<td>{html.escape(str(lane.get('scene_xml', '')))}</td>"
             "</tr>"
         )
@@ -462,7 +529,7 @@ def _runtime_section(lanes: dict[str, Any]) -> str:
       <thead>
         <tr>
           <th>Lane</th><th>Status</th><th>Python</th>
-          <th>Python version</th><th>MuJoCo</th><th>Scene XML</th>
+          <th>Python version</th><th>MuJoCo</th><th>Renderer runtime</th><th>Scene XML</th>
         </tr>
       </thead>
       <tbody>{"".join(rows)}</tbody>
@@ -502,7 +569,85 @@ def _failure_section(lanes: dict[str, Any]) -> str:
 """
 
 
-def _image_section(kind: str, lanes: dict[str, Any], *, output_dir: Path) -> str:
+def _snapshot_section(lanes: dict[str, Any], *, output_dir: Path) -> str:
+    figures = []
+    for lane_id, lane in lanes.items():
+        if not isinstance(lane, dict):
+            continue
+        image = _lane_image(lane, "snapshot")
+        figures.append(
+            _figure(lane_id=str(lane_id), kind="snapshot", image=image, output_dir=output_dir)
+        )
+    return f"""
+<section class="panel" data-view-kind="snapshot">
+  <h2>Snapshot Comparison</h2>
+  <div class="image-comparison-grid">{"".join(figures)}</div>
+</section>
+"""
+
+
+def _sample_sections(lanes: dict[str, Any], *, output_dir: Path) -> str:
+    sample_ids = _sample_ids(lanes)
+    if not sample_ids:
+        return "\n".join(
+            _legacy_image_section(kind, lanes, output_dir=output_dir)
+            for kind in ("fpv", "chase", "verify", "map")
+        )
+    blocks = []
+    for sample_id in sample_ids:
+        focus = _sample_focus(lanes, sample_id)
+        badges = _badges(
+            [
+                ("sample", sample_id),
+                ("focus object", focus.get("object_id", "")),
+                ("source", focus.get("source_receptacle_id", "")),
+                ("target", focus.get("target_receptacle_id", "")),
+            ]
+        )
+        kind_blocks = []
+        for kind in ("fpv", "chase", "verify", "map"):
+            figures = []
+            for lane_id, lane in lanes.items():
+                if not isinstance(lane, dict):
+                    continue
+                sample = _lane_sample(lane, sample_id)
+                image = _sample_image(sample, kind)
+                figures.append(
+                    _figure(
+                        lane_id=str(lane_id),
+                        kind=f"{sample_id} {kind}",
+                        image=image,
+                        output_dir=output_dir,
+                    )
+                )
+            title = "FPV" if kind == "fpv" else kind.title()
+            kind_blocks.append(
+                f"""
+<h3>{html.escape(title)}</h3>
+<div class="sample-grid">{"".join(figures)}</div>
+"""
+            )
+        blocks.append(
+            f"""
+<div class="sample-block" data-sample-id="{html.escape(sample_id)}">
+  <div class="sample-header">{badges}</div>
+  {"".join(kind_blocks)}
+</div>
+"""
+        )
+    return f"""
+<section class="panel">
+  <h2>Robot View Samples</h2>
+  <p class="note">
+    Each sample navigates the robot to a different generated cleanup object before
+    rendering FPV, chase, verify, and map views.
+  </p>
+  {"".join(blocks)}
+</section>
+"""
+
+
+def _legacy_image_section(kind: str, lanes: dict[str, Any], *, output_dir: Path) -> str:
     figures = []
     for lane_id, lane in lanes.items():
         if not isinstance(lane, dict):
@@ -516,6 +661,50 @@ def _image_section(kind: str, lanes: dict[str, Any], *, output_dir: Path) -> str
   <div class="image-comparison-grid">{"".join(figures)}</div>
 </section>
 """
+
+
+def _sample_ids(lanes: dict[str, Any]) -> list[str]:
+    ids: list[str] = []
+    for lane in lanes.values():
+        if not isinstance(lane, dict):
+            continue
+        for sample in lane.get("samples") or []:
+            if not isinstance(sample, dict):
+                continue
+            sample_id = str(sample.get("sample_id") or "")
+            if sample_id and sample_id not in ids:
+                ids.append(sample_id)
+    return ids
+
+
+def _lane_sample(lane: dict[str, Any], sample_id: str) -> dict[str, Any] | None:
+    samples = lane.get("samples")
+    if not isinstance(samples, list):
+        return None
+    for sample in samples:
+        if isinstance(sample, dict) and str(sample.get("sample_id")) == sample_id:
+            return sample
+    return None
+
+
+def _sample_focus(lanes: dict[str, Any], sample_id: str) -> dict[str, Any]:
+    for lane in lanes.values():
+        if not isinstance(lane, dict):
+            continue
+        sample = _lane_sample(lane, sample_id)
+        if isinstance(sample, dict) and isinstance(sample.get("focus"), dict):
+            return sample["focus"]
+    return {}
+
+
+def _sample_image(sample: dict[str, Any] | None, kind: str) -> dict[str, Any] | None:
+    if not isinstance(sample, dict):
+        return None
+    images = sample.get("images")
+    if not isinstance(images, dict):
+        return None
+    image = images.get(kind)
+    return image if isinstance(image, dict) else None
 
 
 def _lane_image(lane: dict[str, Any], kind: str) -> dict[str, Any] | None:
@@ -604,6 +793,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument("--robot-name", default="rby1m")
+    parser.add_argument("--focus-sample-count", type=int, default=DEFAULT_FOCUS_SAMPLE_COUNT)
     args = parser.parse_args(argv)
 
     manifest = run_renderer_comparison(
@@ -616,6 +806,7 @@ def main(argv: list[str] | None = None) -> int:
             scene_source=args.scene_source,
             scene_index=args.scene_index,
             robot_name=args.robot_name,
+            focus_sample_count=args.focus_sample_count,
         )
     )
     print(f"renderer comparison manifest: {args.output_dir / 'comparison_manifest.json'}")

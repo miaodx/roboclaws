@@ -745,7 +745,7 @@ openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我�
     just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
 
 # Fast render-only comparison: current MuJoCo vs Python 3.11 MolmoSpaces Filament.
-renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/renderer-comparison" scene_source="procthor-10k-val" scene_index="0" robot_name="rby1m":
+renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/renderer-comparison" scene_source="procthor-10k-val" scene_index="0" robot_name="rby1m" focus_sample_count="4":
     #!/usr/bin/env bash
     set -euo pipefail
     seed="{{seed}}"
@@ -754,12 +754,14 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
     scene_source="{{scene_source}}"
     scene_index="{{scene_index}}"
     robot_name="{{robot_name}}"
+    focus_sample_count="{{focus_sample_count}}"
     seed="${seed#seed=}"
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
     output_dir="${output_dir#output_dir=}"
     scene_source="${scene_source#scene_source=}"
     scene_index="${scene_index#scene_index=}"
     robot_name="${robot_name#robot_name=}"
+    focus_sample_count="${focus_sample_count#focus_sample_count=}"
 
     standard_python="${ROBOCLAWS_MOLMOSPACES_STANDARD_PYTHON:-.venv/bin/python}"
     filament_python="${ROBOCLAWS_MOLMOSPACES_FILAMENT_PYTHON:-.venv-molmospaces-filament/bin/python}"
@@ -815,4 +817,5 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
       --generated-mess-count "$generated_mess_count" \
       --scene-source "$scene_source" \
       --scene-index "$scene_index" \
-      --robot-name "$robot_name"
+      --robot-name "$robot_name" \
+      --focus-sample-count "$focus_sample_count"

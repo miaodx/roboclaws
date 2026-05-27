@@ -116,6 +116,58 @@ def _manifest() -> dict[str, object]:
     }
 
 
+def _multi_sample_manifest() -> dict[str, object]:
+    manifest = _manifest()
+    manifest["focuses"] = [
+        {
+            "sample_id": "focus-01",
+            "object_id": "mug_01",
+            "source_receptacle_id": "table_01",
+            "target_receptacle_id": "sink_01",
+        },
+        {
+            "sample_id": "focus-02",
+            "object_id": "book_01",
+            "source_receptacle_id": "desk_01",
+            "target_receptacle_id": "shelf_01",
+        },
+    ]
+    for lane_dir, lane in (
+        ("standard", manifest["lanes"][STANDARD_LANE_ID]),  # type: ignore[index]
+        ("filament", manifest["lanes"][FILAMENT_LANE_ID]),  # type: ignore[index]
+    ):
+        lane["runtime"]["mujoco_renderer_runtime"] = lane_dir  # type: ignore[index]
+        lane["focuses"] = list(manifest["focuses"])  # type: ignore[index]
+        lane["samples"] = []  # type: ignore[index]
+        for focus in manifest["focuses"]:  # type: ignore[union-attr]
+            sample_id = focus["sample_id"]
+            lane["samples"].append(  # type: ignore[index,union-attr]
+                {
+                    "sample_id": sample_id,
+                    "focus": dict(focus),
+                    "images": {
+                        "fpv": {
+                            "path": f"{lane_dir}/robot_views/{sample_id}.fpv.png",
+                            "dimensions": {"width": 64, "height": 48, "channels": 3},
+                        },
+                        "chase": {
+                            "path": f"{lane_dir}/robot_views/{sample_id}.chase.png",
+                            "dimensions": {"width": 64, "height": 48, "channels": 3},
+                        },
+                        "verify": {
+                            "path": f"{lane_dir}/robot_views/{sample_id}.verify.png",
+                            "dimensions": {"width": 64, "height": 48, "channels": 3},
+                        },
+                        "map": {
+                            "path": f"{lane_dir}/robot_views/{sample_id}.map.png",
+                            "dimensions": {"width": 64, "height": 48, "channels": 3},
+                        },
+                    },
+                }
+            )
+    return manifest
+
+
 def test_renderer_comparison_report_renders_side_by_side_sections(tmp_path: Path) -> None:
     manifest = _manifest()
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
@@ -142,6 +194,27 @@ def test_renderer_comparison_report_renders_side_by_side_sections(tmp_path: Path
     assert "filament/robot_views/focused.verify.png" in html
     assert "Runtime Metadata" in html
     assert "3.11.14" in html
+
+
+def test_renderer_comparison_report_renders_multiple_robot_view_samples(tmp_path: Path) -> None:
+    manifest = _multi_sample_manifest()
+    for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
+        for image in lane["images"].values():  # type: ignore[index,union-attr]
+            _write_image(tmp_path / image["path"], color=(20, 80, 120))  # type: ignore[index]
+        for sample in lane["samples"]:  # type: ignore[index,union-attr]
+            for image in sample["images"].values():  # type: ignore[index,union-attr]
+                _write_image(tmp_path / image["path"], color=(40, 120, 80))  # type: ignore[index]
+
+    report_path = render_renderer_comparison_report(manifest, output_dir=tmp_path)
+    html = report_path.read_text(encoding="utf-8")
+
+    assert "Robot View Samples" in html
+    assert "focus-01" in html
+    assert "focus-02" in html
+    assert "book_01" in html
+    assert "standard/robot_views/focus-02.fpv.png" in html
+    assert "filament/robot_views/focus-02.verify.png" in html
+    assert "Renderer runtime" in html
 
 
 def test_renderer_comparison_manifest_shape_is_json_serializable() -> None:
@@ -186,6 +259,9 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
             _write_image(output_path, color=(20, 20, 20))
             return output_path
 
+        def navigate_to_object(self, object_id: str) -> dict[str, object]:
+            return {"ok": True, "object_id": object_id}
+
         def write_robot_views(
             self,
             output_dir: Path,
@@ -221,10 +297,19 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
             filament_python=runtime,
         ),
         RendererLane(STANDARD_LANE_ID, runtime, "standard"),
-        focus=None,
+        focuses=None,
     )
 
     assert result["status"] == "success"
+    assert result["focuses"] == [
+        {
+            "sample_id": "focus-01",
+            "object_id": "obj_1",
+            "source_receptacle_id": "table_1",
+            "target_receptacle_id": "sink_1",
+        }
+    ]
+    assert result["samples"][0]["images"]["fpv"]["path"] == "standard/robot_views/focus-01.fpv.png"
     assert seen_values == ["0"]
     assert os.environ["ROBOCLAWS_MOLMOSPACES_PERSISTENT_WORKER"] == "1"
 
