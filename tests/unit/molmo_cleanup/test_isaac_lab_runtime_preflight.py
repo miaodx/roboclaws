@@ -70,6 +70,7 @@ def test_isaac_lab_runtime_preflight_writes_blocked_report_without_install(
         "upgrade_pip",
         "install_isaacsim",
         "install_cuda_torch",
+        "create_isaaclab_source_parent",
         "clone_isaac_lab_source",
         "install_isaac_lab_source",
     ]

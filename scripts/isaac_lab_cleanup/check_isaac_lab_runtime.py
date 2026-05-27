@@ -173,6 +173,11 @@ def build_install_steps(
             "cwd": str(repo_root),
         },
         {
+            "name": "create_isaaclab_source_parent",
+            "argv": ["mkdir", "-p", str(source_dir.parent)],
+            "cwd": str(repo_root),
+        },
+        {
             "name": "clone_isaac_lab_source",
             "argv": ["git", "clone", "--depth", "1", ISAACLAB_GIT_URL, str(source_dir)],
             "cwd": str(repo_root),

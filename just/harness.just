@@ -19,6 +19,7 @@
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
 # - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
+# - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -633,6 +634,84 @@ molmo-isaac-runtime-preflight *overrides:
       cmd+=(--strict)
     fi
     "${cmd[@]}"
+
+# Strict local Isaac Lab runtime smoke. This intentionally fails until the
+# worker proves a real Isaac renderer capture and USD stage load; import-only or
+# placeholder evidence is rejected by the checker.
+molmo-isaac-runtime-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    output_dir="output/isaaclab/runtime-smoke"
+    stamp=""
+    scene_source="procthor-10k-val"
+    scene_index="0"
+    seed="7"
+    generated_mess_count="1"
+    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    include_robot="true"
+    robot_name="simple_camera_rig"
+    require_real_rendering="true"
+    require_usd_stage_loaded="true"
+    require_nonblank_image="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
+        generated_mess_count|map_bundle|include_robot|robot_name|\
+        require_real_rendering|require_usd_stage_loaded|require_nonblank_image)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    run_dir="${output_dir}/${stamp}"
+    state_path="${run_dir}/state.json"
+    init_result="${run_dir}/init_result.json"
+    mkdir -p "$run_dir"
+    worker_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
+      --state-path "$state_path" \
+      init \
+      --run-dir "$run_dir" \
+      --seed "$seed" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --generated-mess-count "$generated_mess_count" \
+      --runtime-mode real)
+    if [[ "$include_robot" == "true" ]]; then
+      worker_cmd+=(--include-robot --robot-name "$robot_name")
+    fi
+    if [[ -n "$map_bundle" ]]; then
+      worker_cmd+=(--map-bundle-dir "$map_bundle")
+    fi
+    "${worker_cmd[@]}" | tee "$init_result"
+    check_cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py \
+      --init-result "$init_result" \
+      --state-path "$state_path")
+    if [[ "$require_real_rendering" == "true" ]]; then
+      check_cmd+=(--require-real-rendering)
+    fi
+    if [[ "$require_usd_stage_loaded" == "true" ]]; then
+      check_cmd+=(--require-usd-stage-loaded)
+    fi
+    if [[ "$require_nonblank_image" == "true" ]]; then
+      check_cmd+=(--require-nonblank-image)
+    fi
+    "${check_cmd[@]}"
 
 # List task files available under harness/tasks/.
 list-tasks:

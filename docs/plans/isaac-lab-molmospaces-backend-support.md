@@ -109,6 +109,8 @@ contract tests.
   ```bash
   just agent::harness molmo-isaac-runtime-preflight
 
+  just agent::harness molmo-isaac-runtime-smoke
+
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
     --state-path output/isaaclab/smoke/state.json \
     init --run-dir output/isaaclab/smoke --scene-source procthor-10k-val --scene-index 0
@@ -143,6 +145,11 @@ protocol:
   isolated runtime when both `--install` and `--accept-nvidia-eula` are passed.
 - `just agent::harness molmo-isaac-runtime-preflight` exposes that preflight
   through the maintainer harness without adding a new public task name.
+- `scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py` and
+  `just agent::harness molmo-isaac-runtime-smoke` add a strict local proof gate
+  for Phase A. The checker rejects import-only real mode, placeholder visuals,
+  and unproven USD stage loading so the current scaffold cannot be mistaken for
+  real Isaac renderer or scene-load evidence.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
