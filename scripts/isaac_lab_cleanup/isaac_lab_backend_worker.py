@@ -38,7 +38,9 @@ from roboclaws.molmo_cleanup.types import (
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
+ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
+REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
 
 
@@ -210,6 +212,8 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "object_index": object_index,
         "receptacle_index": receptacle_index,
         "scene_index_diagnostics": scene_index_diagnostics,
+        "robot_view_images": _real_smoke_robot_view_images(real_smoke),
+        "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
         "segmentation": {
             "available": False,
             "status": "blocked_capability",
@@ -250,7 +254,10 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "requested_generated_mess_count": args.generated_mess_count,
         "generated_mess_count": len(state["private_manifest"]["targets"]),
         "robot": state["robot"],
-        "artifacts": {"runtime_smoke_image": str(before_path)},
+        "artifacts": {
+            "runtime_smoke_image": str(before_path),
+            "robot_view_images": state["robot_view_images"],
+        },
     }
 
 
@@ -278,6 +285,7 @@ def real_runtime_smoke(
     _require_isaac_import()
     args.run_dir.mkdir(parents=True, exist_ok=True)
     smoke_image = args.run_dir / "isaac_runtime_smoke.png"
+    robot_view_paths = _runtime_smoke_robot_view_paths(args.run_dir, smoke_image=smoke_image)
     if args.scene_usd_path is not None:
         scene_usd = args.scene_usd_path
         if not scene_usd.is_file():
@@ -299,19 +307,26 @@ def real_runtime_smoke(
         app_launcher = AppLauncher(launcher_args)
         simulation_app = app_launcher.app
 
-        render_steps = _capture_isaac_lab_camera_rgb(
+        capture = _capture_isaac_lab_camera_views(
             scene_usd=scene_usd,
-            output_path=smoke_image,
+            view_paths=robot_view_paths,
             width=DEFAULT_WIDTH,
             height=DEFAULT_HEIGHT,
             simulation_app=simulation_app,
         )
+        render_steps = int(capture["render_steps"])
+        robot_view_images = dict(capture["robot_view_images"])
     finally:
         if simulation_app is not None:
             simulation_app.close()
 
     if not smoke_image.is_file():
         raise RuntimeError(f"Isaac Lab camera capture did not write {smoke_image}")
+    missing_views = sorted(
+        key for key in ROBOT_VIEW_KEYS if not Path(str(robot_view_images.get(key, ""))).is_file()
+    )
+    if missing_views:
+        raise RuntimeError(f"Isaac Lab robot view capture missed views: {', '.join(missing_views)}")
     return {
         "image_path": str(smoke_image),
         "scene_usd": str(scene_usd),
@@ -323,6 +338,8 @@ def real_runtime_smoke(
         "isaac_sim_version": _module_version("isaacsim"),
         "renderer_mode": REAL_SMOKE_RENDERER_MODE,
         "capture_method": REAL_SMOKE_CAPTURE_METHOD,
+        "robot_view_capture_method": REAL_ROBOT_VIEW_CAPTURE_METHOD,
+        "robot_view_images": robot_view_images,
         "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
         "stage_prim_count": stage_prim_count,
         "render_steps": render_steps,
@@ -489,14 +506,27 @@ def _category_from_usd_name(value: str) -> str:
     return "unknown"
 
 
-def _capture_isaac_lab_camera_rgb(
+def _runtime_smoke_robot_view_paths(
+    run_dir: Path,
+    *,
+    smoke_image: Path,
+) -> dict[str, Path]:
+    return {
+        "fpv": smoke_image,
+        "chase": run_dir / "isaac_runtime_smoke.chase.png",
+        "map": run_dir / "isaac_runtime_smoke.map.png",
+        "verify": run_dir / "isaac_runtime_smoke.verify.png",
+    }
+
+
+def _capture_isaac_lab_camera_views(
     *,
     scene_usd: Path,
-    output_path: Path,
+    view_paths: dict[str, Path],
     width: int,
     height: int,
     simulation_app: Any,
-) -> int:
+) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
     import numpy as np
@@ -525,26 +555,45 @@ def _capture_isaac_lab_camera_rgb(
             ),
         )
     )
-    positions = torch.tensor([[2.4, -2.6, 1.8]], dtype=torch.float32, device=sim.device)
-    targets = torch.tensor([[0.0, 0.0, 0.35]], dtype=torch.float32, device=sim.device)
+    view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device)
     sim.reset()
-    camera.set_world_poses_from_view(positions, targets)
-    rgb_image = None
-    render_steps = 0
-    for render_steps in range(1, 25):
-        sim.step()
-        camera.update(dt=sim.get_physics_dt())
-        rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-        if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-            break
-    if rgb_image is None:
-        raise RuntimeError("Isaac Lab camera did not produce an RGB tensor")
-    if not _image_has_variance(rgb_image, np=np):
-        raise RuntimeError("Isaac Lab camera RGB tensor was blank")
+    saved: dict[str, str] = {}
+    total_render_steps = 0
+    for view_name in ROBOT_VIEW_KEYS:
+        positions, targets = view_poses[view_name]
+        camera.set_world_poses_from_view(positions, targets)
+        rgb_image = None
+        for _ in range(24):
+            sim.step()
+            total_render_steps += 1
+            camera.update(dt=sim.get_physics_dt())
+            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+                break
+        if rgb_image is None:
+            raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_name}")
+        if not _image_has_variance(rgb_image, np=np):
+            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
+        output_path = view_paths[view_name]
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rgb_image, mode="RGB").save(output_path)
+        saved[view_name] = str(output_path)
+    return {
+        "render_steps": total_render_steps,
+        "robot_view_images": saved,
+    }
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(rgb_image, mode="RGB").save(output_path)
-    return render_steps
+
+def _isaac_camera_view_poses(*, torch: Any, device: Any) -> dict[str, tuple[Any, Any]]:
+    def tensor(values: list[list[float]]) -> Any:
+        return torch.tensor(values, dtype=torch.float32, device=device)
+
+    return {
+        "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
+        "chase": (tensor([[2.4, -2.6, 1.8]]), tensor([[0.0, 0.0, 0.35]])),
+        "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
+        "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
+    }
 
 
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
@@ -792,6 +841,19 @@ def mapping_gap_diagnostics(
         stage_loading_detail = "Generated local Phase A USD stage loaded through Isaac Sim."
         if loaded_asset_kind == "local_scene_usd":
             stage_loading_detail = "Caller-supplied local USD stage loaded through Isaac Sim."
+        robot_view_images = _real_smoke_robot_view_images(real_smoke)
+        robot_view_status = (
+            "real_rendering_proven"
+            if _has_required_robot_view_images(robot_view_images)
+            else "blocked_capability"
+        )
+        robot_view_detail = (
+            "FPV, chase, map, and verification images were captured from the loaded USD scene. "
+            "They are static Phase B camera evidence; semantic pose edits are not yet rendered "
+            "back into Isaac USD state."
+            if robot_view_status == "real_rendering_proven"
+            else "FPV/chase/map/verify Isaac camera variants are not fully captured yet."
+        )
         gaps = [
             {
                 "area": "phase_a_usd_stage_loading",
@@ -818,9 +880,9 @@ def mapping_gap_diagnostics(
             },
             {
                 "area": "robot_view_variants",
-                "status": "blocked_capability",
-                "source": "generated_runtime_smoke_usd",
-                "detail": "FPV/chase/map/verify Isaac camera variants are not implemented yet.",
+                "status": robot_view_status,
+                "source": REAL_ROBOT_VIEW_CAPTURE_METHOD,
+                "detail": robot_view_detail,
             },
             {
                 "area": "segmentation",
@@ -1081,30 +1143,60 @@ def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str,
 
 def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     _count(state, "robot_views")
+    if state.get("robot") is None:
+        return _error("robot_views", "robot_not_included")
     args.output_dir.mkdir(parents=True, exist_ok=True)
+    safe_label = _safe_file_stem(args.label)
     views = {
-        "fpv": args.output_dir / f"{args.label}_fpv.png",
-        "chase": args.output_dir / f"{args.label}_chase.png",
-        "map": args.output_dir / f"{args.label}_map.png",
-        "verify": args.output_dir / f"{args.label}_verify.png",
+        "fpv": args.output_dir / f"{safe_label}.fpv.png",
+        "chase": args.output_dir / f"{safe_label}.chase.png",
+        "map": args.output_dir / f"{safe_label}.map.png",
+        "verify": args.output_dir / f"{safe_label}.verify.png",
     }
-    for view_name, path in views.items():
-        _write_placeholder_image(
-            path,
-            title=f"{args.label} {view_name}",
-            subtitle=state["runtime"]["renderer_mode"],
-            state=state,
-            width=args.render_width,
-            height=args.render_height,
-            focus_object_id=args.focus_object_id,
-            focus_receptacle_id=args.focus_receptacle_id,
+    real_views = _real_robot_view_images(state)
+    shapes: dict[str, list[int]] = {}
+    if real_views:
+        try:
+            shapes = _copy_real_robot_view_images(
+                real_views,
+                views,
+                width=args.render_width,
+                height=args.render_height,
+            )
+        except RuntimeError as exc:
+            return _error(
+                "robot_views",
+                "real_robot_view_images_invalid",
+                reason=str(exc),
+            )
+    elif _real_rendering_proven(state):
+        return _error(
+            "robot_views",
+            "real_robot_view_images_unavailable",
+            reason=(
+                "Real Isaac rendering was proven, but FPV/chase/map/verify view images "
+                "were not recorded in worker state."
+            ),
         )
+    else:
+        for view_name, path in views.items():
+            _write_placeholder_image(
+                path,
+                title=f"{args.label} {view_name}",
+                subtitle=state["runtime"]["renderer_mode"],
+                state=state,
+                width=args.render_width,
+                height=args.render_height,
+                focus_object_id=args.focus_object_id,
+                focus_receptacle_id=args.focus_receptacle_id,
+            )
+            shapes[view_name] = [args.render_height, args.render_width, 3]
     write_state_from_state_arg(state)
     return _ok(
         "robot_views",
         output_dir=str(args.output_dir),
         view_variant=ISAACLAB_ROBOT_VIEW_VARIANT,
-        view_provenance="isaac_lab_worker",
+        view_provenance=state.get("robot_view_provenance", {}),
         robot_pose=_pose_near(str(state.get("current_receptacle_id") or "floor_01")),
         robot_trajectory=[_pose_near(str(state.get("current_receptacle_id") or "floor_01"))],
         room_outline_count=len(state.get("receptacle_index") or {}),
@@ -1113,6 +1205,8 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
             focus_receptacle_id=args.focus_receptacle_id,
         ),
         views={key: str(path) for key, path in views.items()},
+        shapes=shapes,
+        render_resolution={"width": args.render_width, "height": args.render_height},
     )
 
 
@@ -1124,7 +1218,7 @@ def _focus_payload(
     has_focus = bool(focus_object_id or focus_receptacle_id)
     segmentation_unavailable = {
         "status": "segmentation_unavailable",
-        "reason": "Isaac semantic-pose fake protocol has no segmentation mask evidence.",
+        "reason": "Isaac semantic-pose worker has no segmentation mask evidence.",
     }
     return {
         "has_focus": has_focus,
@@ -1134,6 +1228,113 @@ def _focus_payload(
         "visibility": dict(segmentation_unavailable),
         "fpv_visibility": dict(segmentation_unavailable),
     }
+
+
+def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
+    images = {
+        key: str(value)
+        for key, value in _dict(state.get("robot_view_images")).items()
+        if key in ROBOT_VIEW_KEYS and value
+    }
+    if _has_required_robot_view_images(images):
+        return images
+    return {}
+
+
+def _real_smoke_robot_view_images(real_smoke: dict[str, Any] | None) -> dict[str, str]:
+    if real_smoke is None:
+        return {}
+    images = {
+        key: str(value)
+        for key, value in _dict(real_smoke.get("robot_view_images")).items()
+        if key in ROBOT_VIEW_KEYS and value
+    }
+    if not _has_required_robot_view_images(images):
+        return {}
+    return images if all(Path(value).is_file() for value in images.values()) else {}
+
+
+def _has_required_robot_view_images(images: dict[str, str]) -> bool:
+    return all(bool(images.get(key)) for key in ROBOT_VIEW_KEYS)
+
+
+def _copy_real_robot_view_images(
+    source_images: dict[str, str],
+    target_images: dict[str, Path],
+    *,
+    width: int,
+    height: int,
+) -> dict[str, list[int]]:
+    shapes: dict[str, list[int]] = {}
+    for key in ROBOT_VIEW_KEYS:
+        source = Path(source_images[key])
+        target = target_images[key]
+        if not source.is_file():
+            raise RuntimeError(f"missing real Isaac {key} view image: {source}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if source.resolve() == target.resolve():
+            with Image.open(source) as image:
+                rgb = image.convert("RGB")
+                if not _pil_image_has_variance(rgb):
+                    raise RuntimeError(f"real Isaac {key} view image appears blank: {source}")
+                shapes[key] = [rgb.height, rgb.width, 3]
+            continue
+        with Image.open(source) as image:
+            rgb = image.convert("RGB")
+            if not _pil_image_has_variance(rgb):
+                raise RuntimeError(f"real Isaac {key} view image appears blank: {source}")
+            if rgb.size != (width, height):
+                rgb = rgb.resize((width, height))
+            rgb.save(target)
+            shapes[key] = [rgb.height, rgb.width, 3]
+    return shapes
+
+
+def _pil_image_has_variance(image: Image.Image) -> bool:
+    return any(high > low for low, high in image.getextrema())
+
+
+def _real_rendering_proven(state: dict[str, Any]) -> bool:
+    rendering = _dict(_dict(state.get("runtime")).get("rendering"))
+    return rendering.get("real_rendering_proven") is True
+
+
+def _robot_view_provenance(
+    runtime_mode: str,
+    real_smoke: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if _has_required_robot_view_images(_real_smoke_robot_view_images(real_smoke)):
+        method = str(real_smoke.get("robot_view_capture_method") or REAL_ROBOT_VIEW_CAPTURE_METHOD)
+        provenance = {key: f"{method}:{key}" for key in ROBOT_VIEW_KEYS}
+        provenance["semantic_pose_state_refreshed"] = False
+        provenance["evidence_note"] = (
+            "Robot-view images are static captures from the loaded USD scene during init; "
+            "semantic pose edits are tracked in backend JSON state and are not rendered "
+            "back into Isaac yet."
+        )
+        return provenance
+    if runtime_mode == "real":
+        provenance = {key: "isaac_robot_view_capture_pending" for key in ROBOT_VIEW_KEYS}
+        provenance.update(
+            {
+                "semantic_pose_state_refreshed": False,
+                "evidence_note": "Real Isaac robot-view captures were not recorded.",
+            }
+        )
+        return provenance
+    provenance = {key: "fake_protocol_placeholder_image" for key in ROBOT_VIEW_KEYS}
+    provenance.update(
+        {
+            "semantic_pose_state_refreshed": False,
+            "evidence_note": "CI fake mode writes deterministic placeholder robot-view images.",
+        }
+    )
+    return provenance
+
+
+def _safe_file_stem(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in value)
+    return cleaned or "view"
 
 
 def _write_placeholder_image(

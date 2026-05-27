@@ -656,6 +656,7 @@ molmo-isaac-runtime-smoke *overrides:
     require_real_rendering="true"
     require_usd_stage_loaded="true"
     require_usd_scene_index="true"
+    require_robot_view_images="true"
     require_nonblank_image="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
@@ -670,7 +671,7 @@ molmo-isaac-runtime-smoke *overrides:
         runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
         scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
         require_real_rendering|require_usd_stage_loaded|require_usd_scene_index|\
-        require_nonblank_image)
+        require_robot_view_images|require_nonblank_image)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -685,6 +686,7 @@ molmo-isaac-runtime-smoke *overrides:
     run_dir="${output_dir}/${stamp}"
     state_path="${run_dir}/state.json"
     init_result="${run_dir}/init_result.json"
+    robot_views_result="${run_dir}/robot_views_result.json"
     mkdir -p "$run_dir"
     worker_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
       --state-path "$state_path" \
@@ -705,9 +707,16 @@ molmo-isaac-runtime-smoke *overrides:
       worker_cmd+=(--map-bundle-dir "$map_bundle")
     fi
     "${worker_cmd[@]}" | tee "$init_result"
+    robot_views_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
+      --state-path "$state_path" \
+      robot_views \
+      --output-dir "${run_dir}/robot_views" \
+      --label "runtime_smoke")
+    "${robot_views_cmd[@]}" | tee "$robot_views_result"
     check_cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py \
       --init-result "$init_result" \
-      --state-path "$state_path")
+      --state-path "$state_path" \
+      --robot-views-result "$robot_views_result")
     if [[ "$require_real_rendering" == "true" ]]; then
       check_cmd+=(--require-real-rendering)
     fi
@@ -716,6 +725,9 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$require_usd_scene_index" == "true" ]]; then
       check_cmd+=(--require-usd-scene-index)
+    fi
+    if [[ "$require_robot_view_images" == "true" ]]; then
+      check_cmd+=(--require-robot-view-images)
     fi
     if [[ "$require_nonblank_image" == "true" ]]; then
       check_cmd+=(--require-nonblank-image)

@@ -119,6 +119,7 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     run_dir = tmp_path / "run"
     state_path = tmp_path / "state.json"
     image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
     scene_usd = run_dir / "roboclaws_phase_a_smoke_scene.usda"
     _write_nonblank_image(image_path)
     scene_usd.parent.mkdir(parents=True, exist_ok=True)
@@ -142,6 +143,8 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
             "isaac_sim_version": "unit-isaacsim",
             "renderer_mode": "isaac_lab_headless_rtx",
             "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
             "camera_resolution": [540, 360],
             "stage_prim_count": 6,
             "render_steps": 3,
@@ -207,6 +210,7 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     assert result["scene_load"]["usd_stage_loaded"] is True
     assert result["scene_load"]["loaded_asset_kind"] == "local_scene_usd"
     assert result["artifacts"]["runtime_smoke_image"] == str(image_path)
+    assert result["artifacts"]["robot_view_images"] == robot_view_images
     assert result["scene_index_diagnostics"]["status"] == "indexed"
     assert result["scene_index_diagnostics"]["object_candidate_count"] == 1
     assert result["object_index"]["mug_01"]["usd_prim_path"] == "/World/Objects/mug_01"
@@ -219,12 +223,108 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
         item["area"] == "local_usd_scene_loading" and item["status"] == "loaded"
         for item in result["mapping_gaps"]
     )
+    assert any(
+        item["area"] == "robot_view_variants" and item["status"] == "real_rendering_proven"
+        for item in result["mapping_gaps"]
+    )
 
     state = json.loads(state_path.read_text(encoding="utf-8"))
     assert state["runtime"]["rendering"]["status"] == "real_rendering_proven"
     assert state["scene_load"]["usd_stage_loaded"] is True
     assert state["real_runtime_smoke"]["scene_usd"] == str(scene_usd)
+    assert state["robot_view_images"] == robot_view_images
     assert state["scene_index_diagnostics"]["status"] == "indexed"
+
+
+def test_isaac_lab_real_worker_views_reuse_real_smoke_images(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
+    _write_nonblank_image(image_path)
+
+    def fake_real_runtime_smoke(
+        args: object,
+        scenario: object,
+    ) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(run_dir / "scene.usda"),
+            "loaded_asset_kind": "generated_runtime_smoke_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(run_dir / "scene.usda"),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+        }
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    init_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "init",
+            "--run-dir",
+            str(run_dir),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+        ]
+    )
+    isaac_lab_backend_worker.init_state(init_args)
+    view_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "robot_views",
+            "--output-dir",
+            str(run_dir / "robot_views"),
+            "--label",
+            "runtime smoke",
+            "--render-width",
+            "64",
+            "--render-height",
+            "48",
+        ]
+    )
+    result = isaac_lab_backend_worker.write_robot_views(
+        view_args,
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
+    assert "placeholder" not in json.dumps(result["view_provenance"])
+    assert set(result["views"]) == {"fpv", "chase", "map", "verify"}
+    assert result["shapes"]["fpv"] == [48, 64, 3]
+    for path in result["views"].values():
+        assert Path(path).is_file()
 
 
 def test_isaac_lab_real_init_fails_without_renderer_proof(
@@ -315,3 +415,19 @@ def _write_nonblank_image(path: Path) -> None:
     draw = ImageDraw.Draw(image)
     draw.rectangle((8, 8, 56, 40), outline=(240, 180, 60), width=3)
     image.save(path)
+
+
+def _write_robot_view_images(run_dir: Path) -> dict[str, str]:
+    paths = {
+        "fpv": run_dir / "isaac_runtime_smoke.png",
+        "chase": run_dir / "isaac_runtime_smoke.chase.png",
+        "map": run_dir / "isaac_runtime_smoke.map.png",
+        "verify": run_dir / "isaac_runtime_smoke.verify.png",
+    }
+    for index, path in enumerate(paths.values(), start=1):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        image = Image.new("RGB", (64, 48), color=(18 + index, 32, 48))
+        draw = ImageDraw.Draw(image)
+        draw.rectangle((8, 8, 56, 40), outline=(240, 180 - index, 60), width=3)
+        image.save(path)
+    return {key: str(path) for key, path in paths.items()}

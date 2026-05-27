@@ -1,8 +1,9 @@
 <!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** CI-safe fake backend scaffold plus local runtime preflight and
-real-mode Phase A smoke attempt implemented; real Isaac proof pending
+**Status:** CI-safe fake backend scaffold plus local runtime preflight,
+real-mode Phase A smoke attempt, and Phase B static robot-view evidence path
+implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -163,6 +164,13 @@ protocol:
   counts, and USD prim paths when current path heuristics can identify them.
   The strict smoke checker can require this USD scene index so missing
   object/receptacle parity remains a visible blocker instead of a silent pass.
+- The real-mode worker now captures FPV, chase, map, and verification images
+  from the loaded USD scene during init and carries them into `robot_views`
+  calls as static Isaac camera evidence. The local smoke harness runs the
+  `robot_views` command after init, and the checker can now require nonblank
+  Isaac robot-view images with non-placeholder provenance. This is Phase B
+  camera-evidence plumbing only: semantic pose edits are still tracked in
+  backend JSON state and are not rendered back into Isaac USD state.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

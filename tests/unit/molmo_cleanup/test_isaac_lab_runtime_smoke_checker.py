@@ -22,6 +22,7 @@ def run_checker(
     tmp_path: Path,
     result: dict[str, object],
     *args: str,
+    robot_views: dict[str, object] | None = None,
     prefix_logs: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     result_path = tmp_path / "init_result.json"
@@ -29,12 +30,18 @@ def run_checker(
     if prefix_logs:
         text = f"Isaac startup log line\n{text}\n"
     result_path.write_text(text, encoding="utf-8")
+    robot_views_args: list[str] = []
+    if robot_views is not None:
+        robot_views_path = tmp_path / "robot_views_result.json"
+        robot_views_path.write_text(json.dumps(robot_views), encoding="utf-8")
+        robot_views_args = ["--robot-views-result", str(robot_views_path)]
     return subprocess.run(
         [
             sys.executable,
             str(CHECKER),
             "--init-result",
             str(result_path),
+            *robot_views_args,
             *args,
         ],
         cwd=REPO_ROOT,
@@ -88,6 +95,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     image_path = tmp_path / "smoke.png"
     state_path = tmp_path / "state.json"
     write_smoke_image(image_path)
+    robot_views = write_robot_views_result(tmp_path)
     result = {
         "ok": True,
         "backend": "isaaclab_subprocess",
@@ -131,7 +139,9 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
         "--require-real-rendering",
         "--require-usd-stage-loaded",
         "--require-usd-scene-index",
+        "--require-robot-view-images",
         "--require-nonblank-image",
+        robot_views=robot_views,
         prefix_logs=True,
     )
 
@@ -140,6 +150,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     assert summary["status"] == "passed"
     assert summary["errors"] == []
     assert summary["scene_index_status"] == "indexed"
+    assert summary["robot_view_status"] == "present"
 
 
 def test_isaac_runtime_smoke_checker_rejects_missing_usd_scene_index(
@@ -174,3 +185,95 @@ def test_isaac_runtime_smoke_checker_rejects_missing_usd_scene_index(
     summary = json.loads(completed.stdout)
     assert "missing USD scene index diagnostics" in summary["errors"]
     assert "USD scene index has no object candidates" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_missing_robot_views(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-real-rendering",
+        "--require-robot-view-images",
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "missing robot views result" in summary["errors"]
+
+
+def test_isaac_runtime_smoke_checker_rejects_placeholder_robot_views(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    write_smoke_image(image_path)
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": {
+            "runtime_mode": "real",
+            "rendering": {
+                "real_rendering_proven": True,
+                "placeholder_visuals": False,
+            },
+        },
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+        },
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+    robot_views = write_robot_views_result(tmp_path)
+    robot_views["view_provenance"] = {"fpv": "fake_protocol_placeholder_image"}
+
+    completed = run_checker(
+        tmp_path,
+        result,
+        "--require-real-rendering",
+        "--require-robot-view-images",
+        robot_views=robot_views,
+    )
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "robot view provenance still reports placeholder visuals" in summary["errors"]
+
+
+def write_robot_views_result(tmp_path: Path) -> dict[str, object]:
+    view_dir = tmp_path / "robot_views"
+    view_dir.mkdir(parents=True, exist_ok=True)
+    views = {}
+    for key in ("fpv", "chase", "map", "verify"):
+        path = view_dir / f"runtime_smoke.{key}.png"
+        write_smoke_image(path)
+        views[key] = str(path)
+    return {
+        "ok": True,
+        "view_variant": "isaaclab-fpv-map-chase-verify",
+        "view_provenance": {
+            "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
+            "chase": "isaac_lab_camera_rgb_static_robot_views:chase",
+            "map": "isaac_lab_camera_rgb_static_robot_views:map",
+            "verify": "isaac_lab_camera_rgb_static_robot_views:verify",
+        },
+        "views": views,
+    }
