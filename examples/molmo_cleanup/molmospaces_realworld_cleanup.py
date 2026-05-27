@@ -166,6 +166,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument(
+        "--isaac-scene-usd-path",
+        type=Path,
+        help=(
+            "Optional local USD/USDA scene for backend=isaaclab_subprocess real-mode "
+            "scene parity checks."
+        ),
+    )
+    parser.add_argument(
         "--map-bundle-dir",
         type=Path,
         help=(
@@ -212,6 +220,7 @@ def run_realworld_cleanup(
     generated_mess_count: int = 10,
     scene_source: str = "procthor-10k-val",
     scene_index: int = 0,
+    isaac_scene_usd_path: str | Path | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
@@ -270,6 +279,7 @@ def run_realworld_cleanup(
             scene_source=scene_source,
             scene_index=scene_index,
             map_bundle_dir=selected_bundle_dir,
+            scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
         )
         scenario = backend_instance.scenario
     else:
@@ -650,6 +660,7 @@ def run_realworld_cleanup(
                 "scene_index": backend_instance.scene_index,
                 "object_index_count": len(backend_instance.object_index),
                 "receptacle_index_count": len(backend_instance.receptacle_index),
+                "scene_index_diagnostics": backend_instance.scene_index_diagnostics,
                 "segmentation": backend_instance.segmentation,
                 "scene_load": backend_instance.scene_load,
                 "mapping_gaps": backend_instance.mapping_gaps,
@@ -1050,6 +1061,7 @@ def main(argv: list[str] | None = None) -> int:
         generated_mess_count=args.generated_mess_count,
         scene_source=args.scene_source,
         scene_index=args.scene_index,
+        isaac_scene_usd_path=args.isaac_scene_usd_path,
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,

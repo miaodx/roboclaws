@@ -50,6 +50,7 @@ class IsaacLabSubprocessBackend:
         robot_name: str = "simple_camera_rig",
         generated_mess_count: int = 1,
         map_bundle_dir: Path | None = None,
+        scene_usd_path: Path | None = None,
         runtime_mode: str | None = None,
     ) -> None:
         self.run_dir = run_dir
@@ -78,6 +79,8 @@ class IsaacLabSubprocessBackend:
             init_args.extend(["--include-robot", "--robot-name", robot_name])
         if map_bundle_dir is not None:
             init_args.extend(["--map-bundle-dir", str(map_bundle_dir)])
+        if scene_usd_path is not None:
+            init_args.extend(["--scene-usd-path", str(scene_usd_path)])
         result = self._run_worker("init", *init_args)
         self.backend = ISAACLAB_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(
@@ -91,6 +94,7 @@ class IsaacLabSubprocessBackend:
         self.receptacle_index = result.get("receptacle_index", {})
         self.segmentation = result.get("segmentation", {})
         self.scene_load = result.get("scene_load", {})
+        self.scene_index_diagnostics = result.get("scene_index_diagnostics", {})
         self.mapping_gaps = result.get("mapping_gaps", [])
         self.requested_generated_mess_count = int(
             result.get("requested_generated_mess_count", generated_mess_count)

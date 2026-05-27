@@ -70,17 +70,21 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert re.search(r"^molmo-isaac-runtime-smoke \*overrides:", harness_text, re.MULTILINE)
     assert "isaac_lab_backend_worker.py" in harness_text
     assert "check_isaac_lab_runtime_smoke_result.py" in harness_text
+    assert "scene_usd_path" in harness_text
     assert "--require-real-rendering" in harness_text
     assert "--require-usd-stage-loaded" in harness_text
+    assert "--require-usd-scene-index" in harness_text
 
     route = trace_agent_harness(
         "molmo-isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
+        "scene_usd_path=/tmp/molmospaces-scene.usd",
     )
     assert route == [
         "just",
         "harness::molmo-isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
+        "scene_usd_path=/tmp/molmospaces-scene.usd",
     ]

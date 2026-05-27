@@ -157,6 +157,12 @@ protocol:
   capture one RGB camera frame, and mark rendering/USD diagnostics as proven
   only if that image exists. CI tests monkeypatch this helper to verify the
   diagnostics contract without importing Isaac.
+- The real-mode worker and local smoke harness now accept a caller-supplied
+  local USD path for Phase B probing. When a local USD is loaded, the worker
+  records `scene_index_diagnostics`, USD-derived object/receptacle candidate
+  counts, and USD prim paths when current path heuristics can identify them.
+  The strict smoke checker can require this USD scene index so missing
+  object/receptacle parity remains a visible blocker instead of a silent pass.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

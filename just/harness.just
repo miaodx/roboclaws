@@ -647,6 +647,7 @@ molmo-isaac-runtime-smoke *overrides:
     stamp=""
     scene_source="procthor-10k-val"
     scene_index="0"
+    scene_usd_path=""
     seed="7"
     generated_mess_count="1"
     map_bundle="assets/maps/molmospaces-procthor-val-0-7"
@@ -654,6 +655,7 @@ molmo-isaac-runtime-smoke *overrides:
     robot_name="simple_camera_rig"
     require_real_rendering="true"
     require_usd_stage_loaded="true"
+    require_usd_scene_index="true"
     require_nonblank_image="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
@@ -666,8 +668,9 @@ molmo-isaac-runtime-smoke *overrides:
       key="${key//-/_}"
       case "$key" in
         runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
-        generated_mess_count|map_bundle|include_robot|robot_name|\
-        require_real_rendering|require_usd_stage_loaded|require_nonblank_image)
+        scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
+        require_real_rendering|require_usd_stage_loaded|require_usd_scene_index|\
+        require_nonblank_image)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -692,6 +695,9 @@ molmo-isaac-runtime-smoke *overrides:
       --scene-index "$scene_index" \
       --generated-mess-count "$generated_mess_count" \
       --runtime-mode real)
+    if [[ -n "$scene_usd_path" ]]; then
+      worker_cmd+=(--scene-usd-path "$scene_usd_path")
+    fi
     if [[ "$include_robot" == "true" ]]; then
       worker_cmd+=(--include-robot --robot-name "$robot_name")
     fi
@@ -707,6 +713,9 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$require_usd_stage_loaded" == "true" ]]; then
       check_cmd+=(--require-usd-stage-loaded)
+    fi
+    if [[ "$require_usd_scene_index" == "true" ]]; then
+      check_cmd+=(--require-usd-scene-index)
     fi
     if [[ "$require_nonblank_image" == "true" ]]; then
       check_cmd+=(--require-nonblank-image)

@@ -20,6 +20,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--state-path", type=Path)
     parser.add_argument("--require-real-rendering", action="store_true")
     parser.add_argument("--require-usd-stage-loaded", action="store_true")
+    parser.add_argument("--require-usd-scene-index", action="store_true")
     parser.add_argument("--require-nonblank-image", action="store_true")
     return parser.parse_args(argv)
 
@@ -33,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         state=state,
         require_real_rendering=args.require_real_rendering,
         require_usd_stage_loaded=args.require_usd_stage_loaded,
+        require_usd_scene_index=args.require_usd_scene_index,
         require_nonblank_image=args.require_nonblank_image,
     )
     summary = {
@@ -42,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         "backend": result.get("backend"),
         "runtime_mode": (result.get("runtime") or {}).get("runtime_mode"),
         "scene_usd": result.get("scene_usd"),
+        "scene_index_status": (_dict(result.get("scene_index_diagnostics"))).get("status"),
     }
     print(json.dumps(summary, sort_keys=True))
     return 1 if errors else 0
@@ -53,6 +56,7 @@ def validate(
     state: dict[str, Any],
     require_real_rendering: bool,
     require_usd_stage_loaded: bool,
+    require_usd_scene_index: bool,
     require_nonblank_image: bool,
 ) -> list[str]:
     errors: list[str] = []
@@ -65,6 +69,7 @@ def validate(
     runtime = _dict(result.get("runtime"))
     rendering = _dict(runtime.get("rendering"))
     scene_load = _dict(result.get("scene_load"))
+    scene_index = _dict(result.get("scene_index_diagnostics"))
     artifacts = _dict(result.get("artifacts"))
 
     if require_real_rendering:
@@ -92,6 +97,25 @@ def validate(
         _require(
             scene_load.get("status") == "loaded",
             "scene_load status is not loaded",
+            errors,
+        )
+    if require_usd_scene_index:
+        object_index = _dict(result.get("object_index"))
+        receptacle_index = _dict(result.get("receptacle_index"))
+        _require(bool(scene_index), "missing USD scene index diagnostics", errors)
+        _require(
+            int(scene_index.get("stage_prim_count") or 0) > 0,
+            "USD scene index has no stage prims",
+            errors,
+        )
+        _require(
+            int(scene_index.get("object_candidate_count") or 0) > 0 or bool(object_index),
+            "USD scene index has no object candidates",
+            errors,
+        )
+        _require(
+            int(scene_index.get("receptacle_candidate_count") or 0) > 0 or bool(receptacle_index),
+            "USD scene index has no receptacle candidates",
             errors,
         )
     if require_nonblank_image:

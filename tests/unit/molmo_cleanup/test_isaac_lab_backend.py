@@ -105,6 +105,13 @@ def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> N
     assert backend.done("map aligned fake protocol")["cleanup_status"] == "success"
 
 
+def test_isaac_usd_index_path_heuristics_skip_container_prims() -> None:
+    assert isaac_lab_backend_worker._is_object_prim_path("/World/Objects") is False
+    assert isaac_lab_backend_worker._is_object_prim_path("/World/Objects/mug_01") is True
+    assert isaac_lab_backend_worker._is_receptacle_prim_path("/World/Receptacles") is False
+    assert isaac_lab_backend_worker._is_receptacle_prim_path("/World/Receptacles/sink_01") is True
+
+
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -123,10 +130,11 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     ) -> dict[str, object]:
         del scenario
         assert getattr(args, "runtime_mode") == "real"
+        assert getattr(args, "scene_usd_path") == scene_usd
         return {
             "image_path": str(image_path),
             "scene_usd": str(scene_usd),
-            "loaded_asset_kind": "generated_runtime_smoke_usd",
+            "loaded_asset_kind": "local_scene_usd",
             "requested_scene_source": "procthor-10k-val",
             "requested_scene_index": 0,
             "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
@@ -137,6 +145,32 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
             "camera_resolution": [540, 360],
             "stage_prim_count": 6,
             "render_steps": 3,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(scene_usd),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": {
+                "mug_01": {
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "category": "mug01",
+                    "public_label": "mug_01",
+                    "index_source": "usd_stage_traversal",
+                }
+            },
+            "receptacle_index": {
+                "sink_01": {
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "category": "sink01",
+                    "public_label": "sink_01",
+                    "index_source": "usd_stage_traversal",
+                    "support_pose": {"frame": "world", "x": 0.0, "y": 0.0, "z": 0.0},
+                }
+            },
         }
 
     monkeypatch.setattr(
@@ -156,6 +190,8 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
             "real",
             "--generated-mess-count",
             "1",
+            "--scene-usd-path",
+            str(scene_usd),
         ]
     )
     result = isaac_lab_backend_worker.init_state(args)
@@ -169,14 +205,18 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     assert result["scene_usd"] == str(scene_usd)
     assert result["scene_load"]["status"] == "loaded"
     assert result["scene_load"]["usd_stage_loaded"] is True
-    assert result["scene_load"]["loaded_asset_kind"] == "generated_runtime_smoke_usd"
+    assert result["scene_load"]["loaded_asset_kind"] == "local_scene_usd"
     assert result["artifacts"]["runtime_smoke_image"] == str(image_path)
+    assert result["scene_index_diagnostics"]["status"] == "indexed"
+    assert result["scene_index_diagnostics"]["object_candidate_count"] == 1
+    assert result["object_index"]["mug_01"]["usd_prim_path"] == "/World/Objects/mug_01"
+    assert result["receptacle_index"]["sink_01"]["usd_prim_path"] == ("/World/Receptacles/sink_01")
     assert any(
         item["area"] == "camera_capture" and item["status"] == "real_rendering_proven"
         for item in result["mapping_gaps"]
     )
     assert any(
-        item["area"] == "molmospaces_usd_scene_loading" and item["status"] == "not_attempted"
+        item["area"] == "local_usd_scene_loading" and item["status"] == "loaded"
         for item in result["mapping_gaps"]
     )
 
@@ -184,6 +224,7 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     assert state["runtime"]["rendering"]["status"] == "real_rendering_proven"
     assert state["scene_load"]["usd_stage_loaded"] is True
     assert state["real_runtime_smoke"]["scene_usd"] == str(scene_usd)
+    assert state["scene_index_diagnostics"]["status"] == "indexed"
 
 
 def test_isaac_lab_real_init_fails_without_renderer_proof(

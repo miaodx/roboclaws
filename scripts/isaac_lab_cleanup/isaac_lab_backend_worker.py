@@ -57,6 +57,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     init.add_argument("--include-robot", action="store_true")
     init.add_argument("--robot-name", default="simple_camera_rig")
     init.add_argument("--map-bundle-dir", type=Path)
+    init.add_argument(
+        "--scene-usd-path",
+        type=Path,
+        help=(
+            "Optional local USD/USDA scene to load in real mode. Use this for "
+            "MolmoSpaces Isaac scene parity once a scene shard is available locally."
+        ),
+    )
 
     subparsers.add_parser("locations")
     subparsers.add_parser("observe")
@@ -160,6 +168,19 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
     )
     initial_receptacle_id = _initial_receptacle_id(scenario)
     scene_usd = str(scene_load["scene_usd"])
+    object_index = _object_index(scenario)
+    receptacle_index = _receptacle_index(scenario)
+    scene_index_diagnostics: dict[str, Any] = {
+        "status": "placeholder_mapping",
+        "source": "scenario_fixture",
+        "object_candidate_count": len(object_index),
+        "receptacle_candidate_count": len(receptacle_index),
+        "blockers": ["Object and receptacle USD prim paths are deterministic placeholders."],
+    }
+    if real_smoke is not None:
+        scene_index_diagnostics = _dict(real_smoke.get("scene_index_diagnostics"))
+        object_index = _index_or_default(real_smoke.get("object_index"), object_index)
+        receptacle_index = _index_or_default(real_smoke.get("receptacle_index"), receptacle_index)
     before_path = args.run_dir / "isaac_runtime_smoke.png"
     if real_smoke is not None:
         before_path = Path(str(real_smoke["image_path"]))
@@ -186,8 +207,9 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "tool_event_counts": {},
         "placement_diagnostics": [],
         "mapping_gaps": mapping_gaps,
-        "object_index": _object_index(scenario),
-        "receptacle_index": _receptacle_index(scenario),
+        "object_index": object_index,
+        "receptacle_index": receptacle_index,
+        "scene_index_diagnostics": scene_index_diagnostics,
         "segmentation": {
             "available": False,
             "status": "blocked_capability",
@@ -220,6 +242,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_usd": state["scene_usd"],
         "scene_load": scene_load,
         "scene_index": args.scene_index,
+        "scene_index_diagnostics": scene_index_diagnostics,
         "object_index": state["object_index"],
         "receptacle_index": state["receptacle_index"],
         "mapping_gaps": mapping_gaps,
@@ -255,8 +278,17 @@ def real_runtime_smoke(
     _require_isaac_import()
     args.run_dir.mkdir(parents=True, exist_ok=True)
     smoke_image = args.run_dir / "isaac_runtime_smoke.png"
-    scene_usd = args.run_dir / "roboclaws_phase_a_smoke_scene.usda"
-    stage_prim_count = _write_generated_runtime_smoke_usd(scene_usd, scenario)
+    if args.scene_usd_path is not None:
+        scene_usd = args.scene_usd_path
+        if not scene_usd.is_file():
+            raise RuntimeError(f"local Isaac scene USD is missing: {scene_usd}")
+        loaded_asset_kind = "local_scene_usd"
+    else:
+        scene_usd = args.run_dir / "roboclaws_phase_a_smoke_scene.usda"
+        _write_generated_runtime_smoke_usd(scene_usd, scenario)
+        loaded_asset_kind = "generated_runtime_smoke_usd"
+    scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
+    stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
 
     simulation_app = None
     render_steps = 0
@@ -283,7 +315,7 @@ def real_runtime_smoke(
     return {
         "image_path": str(smoke_image),
         "scene_usd": str(scene_usd),
-        "loaded_asset_kind": "generated_runtime_smoke_usd",
+        "loaded_asset_kind": loaded_asset_kind,
         "requested_scene_source": args.scene_source,
         "requested_scene_index": args.scene_index,
         "requested_molmospaces_scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
@@ -294,6 +326,9 @@ def real_runtime_smoke(
         "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
         "stage_prim_count": stage_prim_count,
         "render_steps": render_steps,
+        "scene_index_diagnostics": scene_index_diagnostics,
+        "object_index": scene_index_diagnostics["object_index"],
+        "receptacle_index": scene_index_diagnostics["receptacle_index"],
     }
 
 
@@ -356,6 +391,102 @@ def _write_generated_runtime_smoke_usd(
 
     stage.GetRootLayer().Save()
     return sum(1 for _ in stage.Traverse())
+
+
+def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
+    from pxr import Usd
+
+    stage = Usd.Stage.Open(str(usd_path))
+    if stage is None:
+        raise RuntimeError(f"Isaac USD stage could not be opened for indexing: {usd_path}")
+
+    object_index: dict[str, dict[str, Any]] = {}
+    receptacle_index: dict[str, dict[str, Any]] = {}
+    stage_prim_count = 0
+    for prim in stage.Traverse():
+        stage_prim_count += 1
+        prim_path = str(prim.GetPath())
+        handle = _usd_handle_from_prim(prim_path, object_index, receptacle_index)
+        if _is_object_prim_path(prim_path):
+            object_index[handle] = _usd_index_entry(prim_path, prim.GetName(), "object")
+        elif _is_receptacle_prim_path(prim_path):
+            receptacle_index[handle] = {
+                **_usd_index_entry(prim_path, prim.GetName(), "receptacle"),
+                "support_pose": _pose_near(handle),
+            }
+
+    blockers = []
+    if not object_index:
+        blockers.append("No movable-object USD prim candidates matched current path heuristics.")
+    if not receptacle_index:
+        blockers.append(
+            "No receptacle/support USD prim candidates matched current path heuristics."
+        )
+    return {
+        "schema": "isaac_usd_scene_index_v1",
+        "status": "indexed" if not blockers else "partial",
+        "source": str(usd_path),
+        "stage_prim_count": stage_prim_count,
+        "object_candidate_count": len(object_index),
+        "receptacle_candidate_count": len(receptacle_index),
+        "object_index": object_index,
+        "receptacle_index": receptacle_index,
+        "blockers": blockers,
+    }
+
+
+def _usd_index_entry(prim_path: str, prim_name: str, kind: str) -> dict[str, Any]:
+    return {
+        "usd_prim_path": prim_path,
+        "category": _category_from_usd_name(prim_name),
+        "public_label": prim_name,
+        "index_source": "usd_stage_traversal",
+        "kind": kind,
+    }
+
+
+def _usd_handle_from_prim(
+    prim_path: str,
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+) -> str:
+    base = _usd_safe_name(Path(prim_path).name)
+    if base in {"World", "Objects", "Receptacles", "Fixtures", "Scene"}:
+        base = _usd_safe_name(prim_path.strip("/").replace("/", "_"))
+    existing = set(object_index) | set(receptacle_index)
+    if base not in existing:
+        return base
+    suffix = 2
+    while f"{base}_{suffix}" in existing:
+        suffix += 1
+    return f"{base}_{suffix}"
+
+
+def _is_object_prim_path(prim_path: str) -> bool:
+    normalized = f"/{prim_path.strip('/').lower()}/"
+    return any(
+        _contains_child_segment(normalized, segment) for segment in ("objects", "movable", "props")
+    )
+
+
+def _is_receptacle_prim_path(prim_path: str) -> bool:
+    normalized = f"/{prim_path.strip('/').lower()}/"
+    return any(
+        _contains_child_segment(normalized, segment)
+        for segment in ("receptacles", "fixtures", "surfaces", "support_surfaces")
+    )
+
+
+def _contains_child_segment(normalized_path: str, segment: str) -> bool:
+    token = f"/{segment}/"
+    return token in normalized_path and not normalized_path.endswith(token)
+
+
+def _category_from_usd_name(value: str) -> str:
+    normalized = _norm(value)
+    if normalized:
+        return normalized
+    return "unknown"
 
 
 def _capture_isaac_lab_camera_rgb(
@@ -576,22 +707,30 @@ def scene_load_diagnostics(
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if real_smoke is not None:
+        loaded_asset_kind = str(
+            real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
+        )
+        reason = (
+            "Phase A loaded a generated local USD stage through Isaac Sim. "
+            "MolmoSpaces USD scene loading remains a separate parity gate."
+        )
+        if loaded_asset_kind == "local_scene_usd":
+            reason = (
+                "Real mode loaded the caller-supplied local USD stage through Isaac Sim. "
+                "If this is a MolmoSpaces scene, object/receptacle parity is recorded "
+                "in the USD scene index diagnostics."
+            )
         return {
             "status": "loaded",
             "scene_source": scene_source,
             "scene_index": scene_index,
             "scene_usd": str(real_smoke["scene_usd"]),
             "usd_stage_loaded": True,
-            "loaded_asset_kind": str(
-                real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
-            ),
+            "loaded_asset_kind": loaded_asset_kind,
             "requested_molmospaces_scene_usd": _scene_usd_path(scene_source, scene_index),
             "manual_editor_steps_required": False,
             "stage_prim_count": int(real_smoke.get("stage_prim_count") or 0),
-            "reason": (
-                "Phase A loaded a generated local USD stage through Isaac Sim. "
-                "MolmoSpaces USD scene loading remains a separate parity gate."
-            ),
+            "reason": reason,
         }
     if runtime_mode == "real":
         status = "blocked_capability"
@@ -624,32 +763,51 @@ def mapping_gap_diagnostics(
 ) -> list[dict[str, Any]]:
     source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
     if real_smoke is not None:
+        loaded_asset_kind = str(
+            real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
+        )
+        scene_index = _dict(real_smoke.get("scene_index_diagnostics"))
+        scene_loading_gap = {
+            "area": "molmospaces_usd_scene_loading",
+            "status": "not_attempted",
+            "source": _scene_usd_path(
+                str(real_smoke.get("requested_scene_source") or ""),
+                int(real_smoke.get("requested_scene_index") or 0),
+            ),
+            "detail": (
+                "The real smoke proves Isaac renderer/USD plumbing only; loading "
+                "the MolmoSpaces USD shard remains a Phase B blocker."
+            ),
+        }
+        if loaded_asset_kind == "local_scene_usd":
+            scene_loading_gap = {
+                "area": "local_usd_scene_loading",
+                "status": "loaded",
+                "source": str(real_smoke["scene_usd"]),
+                "detail": (
+                    "The worker loaded the caller-supplied USD stage. Use a "
+                    "MolmoSpaces USD here for Phase B parity evidence."
+                ),
+            }
+        stage_loading_detail = "Generated local Phase A USD stage loaded through Isaac Sim."
+        if loaded_asset_kind == "local_scene_usd":
+            stage_loading_detail = "Caller-supplied local USD stage loaded through Isaac Sim."
         gaps = [
             {
                 "area": "phase_a_usd_stage_loading",
                 "status": "loaded",
                 "source": str(real_smoke["scene_usd"]),
-                "detail": "Generated local Phase A USD stage loaded through Isaac Sim.",
+                "detail": stage_loading_detail,
             },
-            {
-                "area": "molmospaces_usd_scene_loading",
-                "status": "not_attempted",
-                "source": _scene_usd_path(
-                    str(real_smoke.get("requested_scene_source") or ""),
-                    int(real_smoke.get("requested_scene_index") or 0),
-                ),
-                "detail": (
-                    "The real smoke proves Isaac renderer/USD plumbing only; loading "
-                    "the MolmoSpaces USD shard remains a Phase B blocker."
-                ),
-            },
+            scene_loading_gap,
             {
                 "area": "usd_prim_index",
-                "status": "placeholder_mapping",
-                "source": "generated_runtime_smoke_usd",
+                "status": scene_index.get("status", "partial"),
+                "source": scene_index.get("source", "usd_stage_traversal"),
                 "detail": (
-                    "Cleanup object and receptacle USD prim paths are still "
-                    "deterministic placeholders."
+                    f"USD traversal found {scene_index.get('object_candidate_count', 0)} "
+                    "object candidates and "
+                    f"{scene_index.get('receptacle_candidate_count', 0)} receptacle candidates."
                 ),
             },
             {
@@ -1273,6 +1431,21 @@ def _first_fixture_matching(
 
 def _norm(value: Any) -> str:
     return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _index_or_default(
+    value: Any,
+    default: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(value, dict) or not value:
+        return default
+    return {
+        str(key): dict(item) for key, item in value.items() if isinstance(item, dict)
+    } or default
 
 
 def _objects_by_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
