@@ -1,7 +1,8 @@
 <!-- /autoplan restore point: /home/mi/.gstack/projects/MiaoDX-roboclaws/dongxu-dev-0525-autoplan-restore-20260527-231144.md -->
 # Isaac Lab MolmoSpaces Backend Support
 
-**Status:** CI-safe fake backend scaffold plus local runtime preflight implemented; real Isaac proof pending
+**Status:** CI-safe fake backend scaffold plus local runtime preflight and
+real-mode Phase A smoke attempt implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -150,6 +151,12 @@ protocol:
   for Phase A. The checker rejects import-only real mode, placeholder visuals,
   and unproven USD stage loading so the current scaffold cannot be mistaken for
   real Isaac renderer or scene-load evidence.
+- `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` now has a real-mode
+  Phase A smoke path: after `.venv-isaaclab/` is installed, `init` attempts to
+  launch Isaac Lab through `AppLauncher`, load a generated local USD stage,
+  capture one RGB camera frame, and mark rendering/USD diagnostics as proven
+  only if that image exists. CI tests monkeypatch this helper to verify the
+  diagnostics contract without importing Isaac.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

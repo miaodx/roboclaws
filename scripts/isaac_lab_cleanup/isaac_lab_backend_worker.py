@@ -38,6 +38,8 @@ from roboclaws.molmo_cleanup.types import (
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
 DEFAULT_HEIGHT = 360
+REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
+REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -132,16 +134,37 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
-    if args.runtime_mode == "real":
-        _require_isaac_import()
     scenario = _scenario_for_init(args)
-    runtime = runtime_diagnostics(args.runtime_mode)
-    scene_load = scene_load_diagnostics(args.runtime_mode, args.scene_source, args.scene_index)
+    real_smoke = None
+    if args.runtime_mode == "real":
+        try:
+            real_smoke = real_runtime_smoke(args, scenario)
+        except Exception as exc:
+            raise RuntimeError(
+                "Real Isaac runtime smoke failed before backend init could prove "
+                "renderer/USD evidence. Run `just agent::harness "
+                "molmo-isaac-runtime-preflight` first and keep CI-only protocol "
+                "tests on ROBOCLAWS_ISAACLAB_RUNTIME_MODE=fake."
+            ) from exc
+    runtime = runtime_diagnostics(args.runtime_mode, real_smoke=real_smoke)
+    scene_load = scene_load_diagnostics(
+        args.runtime_mode,
+        args.scene_source,
+        args.scene_index,
+        real_smoke=real_smoke,
+    )
     mapping_gaps = mapping_gap_diagnostics(
         runtime_mode=args.runtime_mode,
         map_bundle_dir=args.map_bundle_dir,
+        real_smoke=real_smoke,
     )
     initial_receptacle_id = _initial_receptacle_id(scenario)
+    scene_usd = str(scene_load["scene_usd"])
+    before_path = args.run_dir / "isaac_runtime_smoke.png"
+    if real_smoke is not None:
+        before_path = Path(str(real_smoke["image_path"]))
+        if not before_path.is_file():
+            raise RuntimeError(f"real Isaac smoke image is missing: {before_path}")
     state = {
         "schema": STATE_SCHEMA,
         "backend": ISAACLAB_SUBPROCESS_BACKEND,
@@ -150,7 +173,8 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_load": scene_load,
         "scene_source": args.scene_source,
         "scene_index": args.scene_index,
-        "scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
+        "scene_usd": scene_usd,
+        "real_runtime_smoke": real_smoke,
         "requested_generated_mess_count": args.generated_mess_count,
         "scenario": scenario.public_payload(),
         "private_manifest": scenario.private_manifest.to_private_dict(),
@@ -176,15 +200,15 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
     }
     args.run_dir.mkdir(parents=True, exist_ok=True)
     write_state(args.state_path, state)
-    before_path = args.run_dir / "isaac_runtime_smoke.png"
-    _write_placeholder_image(
-        before_path,
-        title="Isaac Lab runtime smoke",
-        subtitle=runtime["renderer_mode"],
-        state=state,
-        width=DEFAULT_WIDTH,
-        height=DEFAULT_HEIGHT,
-    )
+    if real_smoke is None:
+        _write_placeholder_image(
+            before_path,
+            title="Isaac Lab runtime smoke",
+            subtitle=runtime["renderer_mode"],
+            state=state,
+            width=DEFAULT_WIDTH,
+            height=DEFAULT_HEIGHT,
+        )
     return {
         "ok": True,
         "tool": "init",
@@ -218,22 +242,252 @@ def _require_isaac_import() -> None:
         ) from exc
 
 
-def runtime_diagnostics(runtime_mode: str) -> dict[str, Any]:
-    isaac_lab_version = None
-    isaac_sim_version = None
+def real_runtime_smoke(
+    args: argparse.Namespace,
+    scenario: CleanupScenario,
+) -> dict[str, Any]:
+    """Launch Isaac Lab and capture the minimal renderer/USD proof for Phase A.
+
+    This function intentionally stays behind the worker subprocess. Normal
+    Roboclaws imports must not import Isaac packages or start Omniverse.
+    """
+
+    _require_isaac_import()
+    args.run_dir.mkdir(parents=True, exist_ok=True)
+    smoke_image = args.run_dir / "isaac_runtime_smoke.png"
+    scene_usd = args.run_dir / "roboclaws_phase_a_smoke_scene.usda"
+    stage_prim_count = _write_generated_runtime_smoke_usd(scene_usd, scenario)
+
+    simulation_app = None
+    render_steps = 0
+    try:
+        from isaaclab.app import AppLauncher
+
+        launcher_args = _isaac_app_launcher_args(AppLauncher)
+        app_launcher = AppLauncher(launcher_args)
+        simulation_app = app_launcher.app
+
+        render_steps = _capture_isaac_lab_camera_rgb(
+            scene_usd=scene_usd,
+            output_path=smoke_image,
+            width=DEFAULT_WIDTH,
+            height=DEFAULT_HEIGHT,
+            simulation_app=simulation_app,
+        )
+    finally:
+        if simulation_app is not None:
+            simulation_app.close()
+
+    if not smoke_image.is_file():
+        raise RuntimeError(f"Isaac Lab camera capture did not write {smoke_image}")
+    return {
+        "image_path": str(smoke_image),
+        "scene_usd": str(scene_usd),
+        "loaded_asset_kind": "generated_runtime_smoke_usd",
+        "requested_scene_source": args.scene_source,
+        "requested_scene_index": args.scene_index,
+        "requested_molmospaces_scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
+        "isaac_lab_version": _module_version("isaaclab"),
+        "isaac_sim_version": _module_version("isaacsim"),
+        "renderer_mode": REAL_SMOKE_RENDERER_MODE,
+        "capture_method": REAL_SMOKE_CAPTURE_METHOD,
+        "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
+        "stage_prim_count": stage_prim_count,
+        "render_steps": render_steps,
+    }
+
+
+def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--width", type=int, default=DEFAULT_WIDTH)
+    parser.add_argument("--height", type=int, default=DEFAULT_HEIGHT)
+    app_launcher_type.add_app_launcher_args(parser)
+    return parser.parse_args(
+        [
+            "--headless",
+            "--enable_cameras",
+            "--width",
+            str(DEFAULT_WIDTH),
+            "--height",
+            str(DEFAULT_HEIGHT),
+        ]
+    )
+
+
+def _write_generated_runtime_smoke_usd(
+    usd_path: Path,
+    scenario: CleanupScenario,
+) -> int:
+    from pxr import Gf, Usd, UsdGeom, UsdLux
+
+    usd_path.parent.mkdir(parents=True, exist_ok=True)
+    stage = Usd.Stage.CreateNew(str(usd_path))
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    world = UsdGeom.Xform.Define(stage, "/World")
+    stage.SetDefaultPrim(world.GetPrim())
+
+    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
+    floor.CreateSizeAttr(1.0)
+    floor.CreateDisplayColorAttr([Gf.Vec3f(0.28, 0.31, 0.33)])
+    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
+    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.0, 3.0, 0.05))
+
+    fixture_id = scenario.receptacles[0].receptacle_id if scenario.receptacles else "fixture"
+    fixture = UsdGeom.Cube.Define(stage, f"/World/Receptacles/{_usd_safe_name(fixture_id)}")
+    fixture.CreateSizeAttr(1.0)
+    fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.46, 0.75)])
+    UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(0.0, 0.0, 0.35))
+    UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(1.1, 0.7, 0.35))
+
+    object_id = scenario.objects[0].object_id if scenario.objects else "object"
+    cleanup_object = UsdGeom.Sphere.Define(stage, f"/World/Objects/{_usd_safe_name(object_id)}")
+    cleanup_object.CreateRadiusAttr(0.18)
+    cleanup_object.CreateDisplayColorAttr([Gf.Vec3f(0.95, 0.42, 0.12)])
+    UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(Gf.Vec3d(0.25, -0.2, 0.88))
+
+    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
+    key_light.CreateIntensityAttr(5000.0)
+    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
+
+    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
+    camera.CreateFocalLengthAttr(24.0)
+    camera.CreateHorizontalApertureAttr(20.955)
+    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
+
+    stage.GetRootLayer().Save()
+    return sum(1 for _ in stage.Traverse())
+
+
+def _capture_isaac_lab_camera_rgb(
+    *,
+    scene_usd: Path,
+    output_path: Path,
+    width: int,
+    height: int,
+    simulation_app: Any,
+) -> int:
+    import isaaclab.sim as sim_utils
+    import isaacsim.core.utils.stage as stage_utils
+    import numpy as np
+    import torch
+    from isaaclab.sensors.camera import Camera, CameraCfg
+
+    opened = stage_utils.open_stage(str(scene_usd))
+    if opened is False:
+        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
+    _wait_for_stage_load(stage_utils, simulation_app)
+
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
+    sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
+    camera = Camera(
+        cfg=CameraCfg(
+            prim_path="/World/RoboclawsSmokeCameraRig/Camera",
+            update_period=0.0,
+            height=height,
+            width=width,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=24.0,
+                focus_distance=4.0,
+                horizontal_aperture=20.955,
+            ),
+        )
+    )
+    positions = torch.tensor([[2.4, -2.6, 1.8]], dtype=torch.float32, device=sim.device)
+    targets = torch.tensor([[0.0, 0.0, 0.35]], dtype=torch.float32, device=sim.device)
+    sim.reset()
+    camera.set_world_poses_from_view(positions, targets)
+    rgb_image = None
+    render_steps = 0
+    for render_steps in range(1, 25):
+        sim.step()
+        camera.update(dt=sim.get_physics_dt())
+        rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+        if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+            break
+    if rgb_image is None:
+        raise RuntimeError("Isaac Lab camera did not produce an RGB tensor")
+    if not _image_has_variance(rgb_image, np=np):
+        raise RuntimeError("Isaac Lab camera RGB tensor was blank")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(rgb_image, mode="RGB").save(output_path)
+    return render_steps
+
+
+def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
+    is_loading = getattr(stage_utils, "is_stage_loading", None)
+    if not callable(is_loading):
+        return
+    for _ in range(240):
+        if not is_loading():
+            return
+        simulation_app.update()
+    raise RuntimeError("Isaac Sim did not finish loading the generated USD stage")
+
+
+def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "detach"):
+        value = value.detach().cpu().numpy()
+    array = np.asarray(value)
+    if array.ndim == 4:
+        array = array[0]
+    if array.ndim != 3:
+        raise RuntimeError(f"unexpected Isaac camera RGB tensor shape: {array.shape}")
+    if array.shape[-1] > 3:
+        array = array[..., :3]
+    if array.shape[-1] != 3:
+        raise RuntimeError(f"unexpected Isaac camera RGB channel count: {array.shape}")
+    if array.dtype.kind == "f":
+        scale = 255.0 if float(array.max(initial=0.0)) <= 1.0 else 1.0
+        array = array * scale
+    return np.clip(array, 0, 255).astype("uint8")
+
+
+def _image_has_variance(array: Any, *, np: Any) -> bool:
+    return bool(np.max(array) > np.min(array))
+
+
+def _module_version(module_name: str) -> str | None:
+    try:
+        module = __import__(module_name)
+    except Exception:
+        return None
+    return str(getattr(module, "__version__", "unknown"))
+
+
+def _usd_safe_name(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in value)
+    if not cleaned:
+        return "unnamed"
+    if cleaned[0].isdigit():
+        return f"_{cleaned}"
+    return cleaned
+
+
+def runtime_diagnostics(
+    runtime_mode: str,
+    *,
+    real_smoke: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    isaac_lab_version = real_smoke.get("isaac_lab_version") if real_smoke else None
+    isaac_sim_version = real_smoke.get("isaac_sim_version") if real_smoke else None
     if runtime_mode == "real":
         try:
             import isaaclab
 
-            isaac_lab_version = getattr(isaaclab, "__version__", "unknown")
+            isaac_lab_version = isaac_lab_version or getattr(isaaclab, "__version__", "unknown")
         except Exception:
-            isaac_lab_version = None
+            isaac_lab_version = isaac_lab_version or None
         try:
             import isaacsim
 
-            isaac_sim_version = getattr(isaacsim, "__version__", "unknown")
+            isaac_sim_version = isaac_sim_version or getattr(isaacsim, "__version__", "unknown")
         except Exception:
-            isaac_sim_version = None
+            isaac_sim_version = isaac_sim_version or None
     cuda_available = False
     gpu_name = ""
     gpu_vram_mb = None
@@ -247,7 +501,12 @@ def runtime_diagnostics(runtime_mode: str) -> dict[str, Any]:
             gpu_vram_mb = int(props.total_memory / (1024 * 1024))
     except Exception:
         pass
-    rendering = rendering_diagnostics(runtime_mode)
+    rendering = rendering_diagnostics(runtime_mode, real_smoke=real_smoke)
+    camera_resolution = (
+        list(real_smoke["camera_resolution"])
+        if real_smoke and real_smoke.get("camera_resolution")
+        else [DEFAULT_WIDTH, DEFAULT_HEIGHT]
+    )
     return {
         "runtime_mode": runtime_mode,
         "python_version": platform.python_version(),
@@ -259,14 +518,33 @@ def runtime_diagnostics(runtime_mode: str) -> dict[str, Any]:
         "renderer_mode": rendering["renderer_mode"],
         "rendering": rendering,
         "visual_artifact_provenance": rendering["visual_artifact_provenance"],
-        "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
+        "camera_resolution": camera_resolution,
         "physical_robot": False,
         "planner_backed": False,
         "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
     }
 
 
-def rendering_diagnostics(runtime_mode: str) -> dict[str, Any]:
+def rendering_diagnostics(
+    runtime_mode: str,
+    *,
+    real_smoke: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if real_smoke is not None:
+        return {
+            "status": "real_rendering_proven",
+            "renderer_mode": str(real_smoke.get("renderer_mode") or REAL_SMOKE_RENDERER_MODE),
+            "real_rendering_proven": True,
+            "placeholder_visuals": False,
+            "visual_artifact_provenance": REAL_SMOKE_CAPTURE_METHOD,
+            "capture_method": str(real_smoke.get("capture_method") or REAL_SMOKE_CAPTURE_METHOD),
+            "render_steps": int(real_smoke.get("render_steps") or 0),
+            "image_path": str(real_smoke["image_path"]),
+            "reason": (
+                "The worker launched Isaac Lab, loaded a generated Phase A USD "
+                "stage, and saved an RGB camera frame from the Isaac renderer."
+            ),
+        }
     if runtime_mode == "real":
         return {
             "status": "runtime_import_only",
@@ -294,7 +572,27 @@ def scene_load_diagnostics(
     runtime_mode: str,
     scene_source: str,
     scene_index: int,
+    *,
+    real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if real_smoke is not None:
+        return {
+            "status": "loaded",
+            "scene_source": scene_source,
+            "scene_index": scene_index,
+            "scene_usd": str(real_smoke["scene_usd"]),
+            "usd_stage_loaded": True,
+            "loaded_asset_kind": str(
+                real_smoke.get("loaded_asset_kind") or "generated_runtime_smoke_usd"
+            ),
+            "requested_molmospaces_scene_usd": _scene_usd_path(scene_source, scene_index),
+            "manual_editor_steps_required": False,
+            "stage_prim_count": int(real_smoke.get("stage_prim_count") or 0),
+            "reason": (
+                "Phase A loaded a generated local USD stage through Isaac Sim. "
+                "MolmoSpaces USD scene loading remains a separate parity gate."
+            ),
+        }
     if runtime_mode == "real":
         status = "blocked_capability"
         reason = (
@@ -322,40 +620,100 @@ def mapping_gap_diagnostics(
     *,
     runtime_mode: str,
     map_bundle_dir: Path | None,
+    real_smoke: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     source = "real_isaac_pending" if runtime_mode == "real" else "fake_protocol"
-    gaps = [
-        {
-            "area": "usd_stage_loading",
-            "status": "blocked_capability" if runtime_mode == "real" else "not_attempted",
-            "source": source,
-            "detail": "MolmoSpaces USD stage loading has not been proven by this worker.",
-        },
-        {
-            "area": "usd_prim_index",
-            "status": "placeholder_mapping",
-            "source": source,
-            "detail": "Object and receptacle USD prim paths are deterministic placeholders.",
-        },
-        {
-            "area": "camera_capture",
-            "status": "placeholder_visuals",
-            "source": source,
-            "detail": "FPV, chase, map, and verification images are generated placeholders.",
-        },
-        {
-            "area": "segmentation",
-            "status": "blocked_capability",
-            "source": source,
-            "detail": "Semantic or instance segmentation masks are not exposed yet.",
-        },
-        {
-            "area": "articulation_and_collision",
-            "status": "semantic_pose_only",
-            "source": source,
-            "detail": "Open/place effects are semantic state edits, not physics or planner proof.",
-        },
-    ]
+    if real_smoke is not None:
+        gaps = [
+            {
+                "area": "phase_a_usd_stage_loading",
+                "status": "loaded",
+                "source": str(real_smoke["scene_usd"]),
+                "detail": "Generated local Phase A USD stage loaded through Isaac Sim.",
+            },
+            {
+                "area": "molmospaces_usd_scene_loading",
+                "status": "not_attempted",
+                "source": _scene_usd_path(
+                    str(real_smoke.get("requested_scene_source") or ""),
+                    int(real_smoke.get("requested_scene_index") or 0),
+                ),
+                "detail": (
+                    "The real smoke proves Isaac renderer/USD plumbing only; loading "
+                    "the MolmoSpaces USD shard remains a Phase B blocker."
+                ),
+            },
+            {
+                "area": "usd_prim_index",
+                "status": "placeholder_mapping",
+                "source": "generated_runtime_smoke_usd",
+                "detail": (
+                    "Cleanup object and receptacle USD prim paths are still "
+                    "deterministic placeholders."
+                ),
+            },
+            {
+                "area": "camera_capture",
+                "status": "real_rendering_proven",
+                "source": REAL_SMOKE_CAPTURE_METHOD,
+                "detail": "An Isaac Lab RGB camera frame was written as the runtime smoke image.",
+            },
+            {
+                "area": "robot_view_variants",
+                "status": "blocked_capability",
+                "source": "generated_runtime_smoke_usd",
+                "detail": "FPV/chase/map/verify Isaac camera variants are not implemented yet.",
+            },
+            {
+                "area": "segmentation",
+                "status": "blocked_capability",
+                "source": "generated_runtime_smoke_usd",
+                "detail": "Semantic or instance segmentation masks are not exposed yet.",
+            },
+            {
+                "area": "articulation_and_collision",
+                "status": "semantic_pose_only",
+                "source": "generated_runtime_smoke_usd",
+                "detail": (
+                    "Open/place effects are semantic state edits, not physics or planner proof."
+                ),
+            },
+        ]
+    else:
+        gaps = [
+            {
+                "area": "usd_stage_loading",
+                "status": "blocked_capability" if runtime_mode == "real" else "not_attempted",
+                "source": source,
+                "detail": "MolmoSpaces USD stage loading has not been proven by this worker.",
+            },
+            {
+                "area": "usd_prim_index",
+                "status": "placeholder_mapping",
+                "source": source,
+                "detail": "Object and receptacle USD prim paths are deterministic placeholders.",
+            },
+            {
+                "area": "camera_capture",
+                "status": "placeholder_visuals",
+                "source": source,
+                "detail": "FPV, chase, map, and verification images are generated placeholders.",
+            },
+            {
+                "area": "segmentation",
+                "status": "blocked_capability",
+                "source": source,
+                "detail": "Semantic or instance segmentation masks are not exposed yet.",
+            },
+            {
+                "area": "articulation_and_collision",
+                "status": "semantic_pose_only",
+                "source": source,
+                "detail": (
+                    "Open/place effects are semantic state edits, not physics or planner proof."
+                ),
+            },
+        ]
     if map_bundle_dir is not None:
         map_bundle_detail = (
             "Public map and fixture context still come from the selected Nav2 bundle."
