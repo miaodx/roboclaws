@@ -9,6 +9,8 @@ from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_PROVENANCE,
+    ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+    ISAAC_SEMANTIC_POSE_STATE_SOURCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
     IsaacLabSubprocessBackend,
@@ -95,7 +97,23 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         assert response["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
         assert response["planner_backed"] is False
         assert response["physical_robot"] is False
+        assert response["semantic_pose_event"]["rendered_to_usd"] is False
+        assert response["semantic_pose_event"]["state_source"] == ISAAC_SEMANTIC_POSE_STATE_SOURCE
     assert done["final_locations"][object_id] == receptacle_id
+    semantic_pose_state = backend.semantic_pose_state
+    assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
+    assert semantic_pose_state["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
+    assert semantic_pose_state["rendered_to_usd"] is False
+    assert semantic_pose_state["planner_backed"] is False
+    assert semantic_pose_state["physical_robot"] is False
+    assert semantic_pose_state["object_poses"][object_id]["location_id"] == receptacle_id
+    assert semantic_pose_state["object_poses"][object_id]["rendered_to_usd"] is False
+    assert [event["tool"] for event in semantic_pose_state["transform_events"]] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+        "place",
+    ]
 
 
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:

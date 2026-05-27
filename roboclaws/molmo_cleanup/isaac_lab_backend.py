@@ -13,6 +13,9 @@ from roboclaws.molmo_cleanup.subprocess_backend import (
 
 ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 ISAAC_SEMANTIC_POSE_PROVENANCE = "isaac_semantic_pose"
+ISAAC_SEMANTIC_POSE_STATE_SCHEMA = "isaac_semantic_pose_state_v1"
+ISAAC_SEMANTIC_POSE_EVENT_SCHEMA = "isaac_semantic_pose_event_v1"
+ISAAC_SEMANTIC_POSE_STATE_SOURCE = "backend_json_state"
 ISAACLAB_ROBOT_VIEW_VARIANT = "isaaclab-fpv-map-chase-verify"
 DEFAULT_ISAACLAB_PYTHON = Path(__file__).resolve().parents[2] / ".venv-isaaclab" / "bin" / "python"
 DEFAULT_ISAAC_WORKER_TIMEOUT_S = 120.0
@@ -122,6 +125,11 @@ class IsaacLabSubprocessBackend:
     def placement_diagnostics(self) -> list[dict[str, Any]]:
         raw = self._read_state().get("placement_diagnostics") or []
         return [dict(item) for item in raw if isinstance(item, dict)]
+
+    @property
+    def semantic_pose_state(self) -> dict[str, Any]:
+        raw = self._read_state().get("semantic_pose_state") or {}
+        return dict(raw) if isinstance(raw, dict) else {}
 
     def write_snapshot(self, output_path: Path, *, title: str) -> Path:
         result = self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)

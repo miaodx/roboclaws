@@ -8,7 +8,10 @@ from pathlib import Path
 import pytest
 
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
-from roboclaws.molmo_cleanup.isaac_lab_backend import ISAACLAB_ROBOT_VIEW_VARIANT
+from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+    ISAACLAB_ROBOT_VIEW_VARIANT,
+)
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
@@ -360,6 +363,12 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         item["placeholder_visuals"] is True
         for item in run_result["isaac_runtime"]["snapshot_artifacts"]
     )
+    semantic_pose_state = run_result["isaac_runtime"]["semantic_pose_state"]
+    assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
+    assert semantic_pose_state["rendered_to_usd"] is False
+    assert semantic_pose_state["planner_backed"] is False
+    assert semantic_pose_state["physical_robot"] is False
+    assert len(semantic_pose_state["transform_events"]) >= 4
     assert run_result["cleanup_profile_metadata"]["backend"] == "isaaclab_subprocess"
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
@@ -368,6 +377,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert "Mapping gaps" in report_text
     assert "Selected USD bindings" in report_text
     assert "placeholder_visuals" in report_text
+    assert "Semantic pose events" in report_text
     assert "isaac_semantic_pose" in report_text
 
     checker._assert_result(

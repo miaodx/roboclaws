@@ -4,8 +4,8 @@
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
 real-mode Phase A smoke attempt, Phase B static robot-view evidence path, Phase
 C selected USD-binding diagnostics, strict full-cleanup Isaac report gate, and
-Phase E segmentation diagnostics/gates plus real-mode snapshot provenance
-implemented; real Isaac proof pending
+Phase E segmentation diagnostics/gates, real-mode snapshot provenance, and
+backend semantic-pose state diagnostics implemented; real Isaac proof pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -208,6 +208,12 @@ protocol:
   the strict cleanup checker can require this through
   `--require-isaac-snapshot-provenance`. This still does not claim that later
   semantic pose edits are rendered back into the USD stage.
+- Phase D semantic controls now maintain `semantic_pose_state` under
+  `isaac_runtime`, recording backend JSON object poses, articulation state, USD
+  prim handles, and per-tool mutation events. The report and
+  `--require-isaac-semantic-pose` checker gate verify that the state is
+  `isaac_semantic_pose`, `rendered_to_usd=false`, `planner_backed=false`, and
+  `physical_robot=false`.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

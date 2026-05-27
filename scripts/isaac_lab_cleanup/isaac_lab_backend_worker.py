@@ -18,7 +18,10 @@ from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.backend import HELD_LOCATION_ID
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
+    ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+    ISAAC_SEMANTIC_POSE_STATE_SOURCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
 )
@@ -230,6 +233,12 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "containment": {},
         "tool_event_counts": {},
         "placement_diagnostics": [],
+        "semantic_pose_state": _initial_semantic_pose_state(
+            scenario=scenario,
+            object_index=object_index,
+            receptacle_index=receptacle_index,
+            initial_receptacle_id=initial_receptacle_id,
+        ),
         "mapping_gaps": mapping_gaps,
         "object_index": object_index,
         "receptacle_index": receptacle_index,
@@ -1544,6 +1553,172 @@ def mapping_gap_diagnostics(
     return gaps
 
 
+def _initial_semantic_pose_state(
+    *,
+    scenario: CleanupScenario,
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+    initial_receptacle_id: str,
+) -> dict[str, Any]:
+    state = {
+        "scenario": scenario.public_payload(),
+        "locations": scenario.object_locations(),
+        "containment": {},
+        "held_object_id": None,
+        "current_receptacle_id": initial_receptacle_id,
+        "open_receptacle_ids": [],
+        "object_index": object_index,
+        "receptacle_index": receptacle_index,
+    }
+    return {
+        "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "rendered_to_usd": False,
+        "planner_backed": False,
+        "physical_robot": False,
+        "semantic_pose_only": True,
+        "robot_pose": _pose_near(initial_receptacle_id),
+        "held_object_id": None,
+        "open_receptacle_ids": [],
+        "object_poses": _semantic_object_poses_from_state(state),
+        "articulations": _semantic_articulations_from_state(state),
+        "transform_events": [],
+        "evidence_note": (
+            "Semantic cleanup primitives update backend JSON pose/articulation state "
+            "against public USD prim handles. These edits are not rendered back into "
+            "the Isaac USD stage and are not planner-backed manipulation proof."
+        ),
+    }
+
+
+def _record_semantic_pose_event(
+    state: dict[str, Any],
+    *,
+    tool: str,
+    state_mutation: str,
+    object_id: str = "",
+    receptacle_id: str = "",
+    previous_location_id: str = "",
+    location_id: str = "",
+    relation: str = "",
+    **extra: Any,
+) -> dict[str, Any]:
+    semantic_pose_state = _dict(state.get("semantic_pose_state"))
+    events = [
+        dict(item)
+        for item in semantic_pose_state.get("transform_events", [])
+        if isinstance(item, dict)
+    ]
+    event = {
+        "schema": ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+        "sequence": len(events) + 1,
+        "tool": tool,
+        "state_mutation": state_mutation,
+        "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "rendered_to_usd": False,
+        "planner_backed": False,
+        "physical_robot": False,
+        "object_id": object_id,
+        "object_usd_prim_path": _index_usd_prim_path(state.get("object_index"), object_id),
+        "receptacle_id": receptacle_id,
+        "receptacle_usd_prim_path": _index_usd_prim_path(
+            state.get("receptacle_index"), receptacle_id
+        ),
+        "previous_location_id": previous_location_id,
+        "location_id": location_id,
+        "location_relation": relation,
+        "robot_pose": _pose_near(str(state.get("current_receptacle_id") or receptacle_id)),
+    }
+    event.update({key: value for key, value in extra.items() if value is not None})
+    events.append(event)
+    semantic_pose_state.update(
+        {
+            "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+            "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+            "rendered_to_usd": False,
+            "planner_backed": False,
+            "physical_robot": False,
+            "semantic_pose_only": True,
+            "robot_pose": _pose_near(str(state.get("current_receptacle_id") or receptacle_id)),
+            "held_object_id": state.get("held_object_id"),
+            "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
+            "object_poses": _semantic_object_poses_from_state(state),
+            "articulations": _semantic_articulations_from_state(state),
+            "transform_events": events,
+            "evidence_note": (
+                "Semantic cleanup primitives update backend JSON pose/articulation state "
+                "against public USD prim handles. These edits are not rendered back into "
+                "the Isaac USD stage and are not planner-backed manipulation proof."
+            ),
+        }
+    )
+    state["semantic_pose_state"] = semantic_pose_state
+    return event
+
+
+def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    poses: dict[str, dict[str, Any]] = {}
+    locations = state.get("locations") or {}
+    containment = state.get("containment") or {}
+    current_receptacle_id = str(state.get("current_receptacle_id") or "")
+    for item in _dict(state.get("scenario")).get("objects", []):
+        if not isinstance(item, dict):
+            continue
+        object_id = str(item.get("object_id") or "")
+        if not object_id:
+            continue
+        location_id = str(locations.get(object_id) or item.get("location_id") or "")
+        support_receptacle_id = (
+            current_receptacle_id if location_id == HELD_LOCATION_ID else location_id
+        )
+        relation = _dict(containment.get(object_id)).get("location_relation") or "on"
+        poses[object_id] = {
+            "object_id": object_id,
+            "usd_prim_path": _index_usd_prim_path(state.get("object_index"), object_id),
+            "location_id": location_id,
+            "support_receptacle_id": support_receptacle_id,
+            "support_usd_prim_path": _index_usd_prim_path(
+                state.get("receptacle_index"), support_receptacle_id
+            ),
+            "attached_to_robot": location_id == HELD_LOCATION_ID,
+            "location_relation": relation,
+            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+            "rendered_to_usd": False,
+        }
+    return poses
+
+
+def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    open_ids = set(state.get("open_receptacle_ids") or [])
+    articulations: dict[str, dict[str, Any]] = {}
+    for item in _dict(state.get("scenario")).get("receptacles", []):
+        if not isinstance(item, dict):
+            continue
+        receptacle_id = str(item.get("receptacle_id") or "")
+        if not receptacle_id:
+            continue
+        opened = receptacle_id in open_ids
+        articulations[receptacle_id] = {
+            "receptacle_id": receptacle_id,
+            "usd_prim_path": _index_usd_prim_path(state.get("receptacle_index"), receptacle_id),
+            "open": opened,
+            "joint_state": "open" if opened else "closed",
+            "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+            "rendered_to_usd": False,
+        }
+    return articulations
+
+
+def _index_usd_prim_path(index: Any, handle: str) -> str:
+    if not handle:
+        return ""
+    entry = _dict(_dict(index).get(handle))
+    return str(entry.get("usd_prim_path") or "")
+
+
 def observe(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     del args
     _count(state, "observe")
@@ -1567,6 +1742,15 @@ def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         return _error("navigate_to_object", "object_not_at_public_location", object_id=object_id)
     previous = state["current_receptacle_id"]
     state["current_receptacle_id"] = str(location_id)
+    event = _record_semantic_pose_event(
+        state,
+        tool="navigate_to_object",
+        state_mutation="isaac_root_pose",
+        object_id=object_id,
+        receptacle_id=str(location_id),
+        previous_location_id=previous,
+        location_id=str(location_id),
+    )
     write_state_from_state_arg(state)
     return _ok(
         "navigate_to_object",
@@ -1576,6 +1760,7 @@ def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         location_id=str(location_id),
         robot_pose=_pose_near(str(location_id)),
         state_mutation="isaac_root_pose",
+        semantic_pose_event=event,
     )
 
 
@@ -1587,6 +1772,15 @@ def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> d
     previous = state["current_receptacle_id"]
     state["current_receptacle_id"] = receptacle_id
     held_object_id = state.get("held_object_id")
+    event = _record_semantic_pose_event(
+        state,
+        tool="navigate_to_receptacle",
+        state_mutation="isaac_root_pose",
+        object_id=str(held_object_id or ""),
+        receptacle_id=receptacle_id,
+        previous_location_id=previous,
+        location_id=receptacle_id,
+    )
     write_state_from_state_arg(state)
     return _ok(
         "navigate_to_receptacle",
@@ -1595,6 +1789,7 @@ def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> d
         previous_receptacle_id=previous,
         robot_pose=_pose_near(receptacle_id),
         state_mutation="isaac_root_pose",
+        semantic_pose_event=event,
     )
 
 
@@ -1612,6 +1807,15 @@ def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
     previous_location_id = state["locations"][object_id]
     state["held_object_id"] = object_id
     state["locations"][object_id] = HELD_LOCATION_ID
+    event = _record_semantic_pose_event(
+        state,
+        tool="pick",
+        state_mutation="isaac_prim_attach",
+        object_id=object_id,
+        receptacle_id=str(previous_location_id),
+        previous_location_id=previous_location_id,
+        location_id=HELD_LOCATION_ID,
+    )
     write_state_from_state_arg(state)
     return _ok(
         "pick",
@@ -1619,6 +1823,7 @@ def pick(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
         previous_location_id=previous_location_id,
         location_id=HELD_LOCATION_ID,
         state_mutation="isaac_prim_attach",
+        semantic_pose_event=event,
     )
 
 
@@ -1633,6 +1838,16 @@ def open_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str
     if opened:
         open_ids.add(receptacle_id)
     state["open_receptacle_ids"] = sorted(open_ids)
+    event = _record_semantic_pose_event(
+        state,
+        tool="open_receptacle",
+        state_mutation="isaac_articulation_joint_pose",
+        object_id=str(state.get("held_object_id") or ""),
+        receptacle_id=receptacle_id,
+        location_id=receptacle_id,
+        articulation_open=opened,
+        requested_open=True,
+    )
     write_state_from_state_arg(state)
     return _ok(
         "open_receptacle",
@@ -1640,6 +1855,7 @@ def open_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[str
         object_id=state.get("held_object_id"),
         opened=opened,
         state_mutation="isaac_articulation_joint_pose",
+        semantic_pose_event=event,
     )
 
 
@@ -1652,6 +1868,16 @@ def close_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[st
     was_open = receptacle_id in open_ids
     open_ids.discard(receptacle_id)
     state["open_receptacle_ids"] = sorted(open_ids)
+    event = _record_semantic_pose_event(
+        state,
+        tool="close_receptacle",
+        state_mutation="isaac_articulation_joint_pose",
+        object_id=str(state.get("held_object_id") or ""),
+        receptacle_id=receptacle_id,
+        location_id=receptacle_id,
+        articulation_open=False,
+        was_open=was_open,
+    )
     write_state_from_state_arg(state)
     return _ok(
         "close_receptacle",
@@ -1659,6 +1885,7 @@ def close_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> dict[st
         object_id=state.get("held_object_id"),
         closed=was_open,
         state_mutation="isaac_articulation_joint_pose",
+        semantic_pose_event=event,
     )
 
 
@@ -1689,6 +1916,16 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
         "relation": relation,
     }
     state["placement_diagnostics"].append(diagnostic)
+    event = _record_semantic_pose_event(
+        state,
+        tool=tool,
+        state_mutation="isaac_prim_transform",
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        previous_location_id=HELD_LOCATION_ID,
+        location_id=receptacle_id,
+        relation=relation,
+    )
     write_state_from_state_arg(state)
     return _ok(
         tool,
@@ -1699,6 +1936,7 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
         location_relation=relation,
         placement_diagnostic=diagnostic,
         state_mutation="isaac_prim_transform",
+        semantic_pose_event=event,
     )
 
 

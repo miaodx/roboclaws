@@ -12,7 +12,10 @@ from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
+    ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+    ISAAC_SEMANTIC_POSE_STATE_SOURCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
 )
@@ -933,6 +936,7 @@ def _assert_isaac_runtime(
                     assert step.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, step
                     assert step.get("planner_backed") is not True, step
                     assert step.get("physical_robot") is not True, step
+        _assert_isaac_semantic_pose_state(isaac)
 
     if require_robot_view_provenance:
         _assert_robot_views(data, base, require_complete_actions=False)
@@ -1002,6 +1006,42 @@ def _assert_isaac_snapshot_provenance(isaac: dict[str, Any], base: Path) -> None
         assert "placeholder_protocol_image" not in json.dumps(provenance, sort_keys=True).lower(), (
             provenance
         )
+
+
+def _assert_isaac_semantic_pose_state(isaac: dict[str, Any]) -> None:
+    state = isaac.get("semantic_pose_state") or {}
+    assert state.get("schema") == ISAAC_SEMANTIC_POSE_STATE_SCHEMA, state
+    assert state.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, state
+    assert state.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, state
+    assert state.get("rendered_to_usd") is False, state
+    assert state.get("planner_backed") is False, state
+    assert state.get("physical_robot") is False, state
+    assert state.get("semantic_pose_only") is True, state
+    object_poses = state.get("object_poses") or {}
+    assert object_poses, state
+    events = state.get("transform_events") or []
+    assert events, state
+    tools = {str(event.get("tool") or "") for event in events if isinstance(event, dict)}
+    assert "pick" in tools, events
+    assert tools & {"place", "place_inside"}, events
+    event_object_ids = {
+        str(event.get("object_id") or "") for event in events if isinstance(event, dict)
+    }
+    assert any(object_id in object_poses for object_id in event_object_ids), (
+        event_object_ids,
+        object_poses,
+    )
+    for event in events:
+        assert event.get("schema") == ISAAC_SEMANTIC_POSE_EVENT_SCHEMA, event
+        assert event.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, event
+        assert event.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, event
+        assert event.get("rendered_to_usd") is False, event
+        assert event.get("planner_backed") is False, event
+        assert event.get("physical_robot") is False, event
+        assert str(event.get("state_mutation") or "").startswith("isaac_"), event
+    for pose in object_poses.values():
+        assert pose.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, pose
+        assert pose.get("rendered_to_usd") is False, pose
 
 
 def _assert_bound_isaac_binding_rows(bindings: dict[str, Any]) -> None:

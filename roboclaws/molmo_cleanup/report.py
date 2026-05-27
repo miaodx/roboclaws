@@ -1416,6 +1416,10 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
     mapping_gaps = isaac.get("mapping_gaps") or []
     snapshots = [item for item in isaac.get("snapshot_artifacts", []) if isinstance(item, dict)]
     real_snapshots = sum(1 for item in snapshots if item.get("placeholder_visuals") is False)
+    semantic_pose_state = isaac.get("semantic_pose_state") or {}
+    semantic_pose_events = [
+        item for item in semantic_pose_state.get("transform_events", []) if isinstance(item, dict)
+    ]
     selected_binding_summary = (
         f"{scene_bindings.get('selected_object_bound_count', 0)}/"
         f"{scene_bindings.get('selected_object_count', 0)} objects, "
@@ -1440,6 +1444,8 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{_metric('Seg bboxes', segmentation.get('candidate_bbox_count', 0))}"
         f"{_metric('Seg selected hits', segmentation.get('selected_usd_prim_match_count', 0))}"
         f"{_metric('Snapshots', f'{real_snapshots}/{len(snapshots)} real')}"
+        f"{_metric('Semantic pose events', len(semantic_pose_events))}"
+        f"{_metric('Pose rendered to USD', _yes_no(semantic_pose_state.get('rendered_to_usd')))}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )
@@ -1470,6 +1476,8 @@ def _isaac_runtime_section(run_result: dict[str, Any]) -> str:
         f"{html.escape(str(rendering.get('reason', '')))}</p>"
         f"<p><strong>Segmentation reason:</strong> "
         f"{html.escape(str(segmentation.get('reason', '')))}</p>"
+        f"<p><strong>Semantic pose state:</strong> "
+        f"{html.escape(str(semantic_pose_state.get('evidence_note', '')))}</p>"
         f"{mapping_list}"
         "</section>"
     )
