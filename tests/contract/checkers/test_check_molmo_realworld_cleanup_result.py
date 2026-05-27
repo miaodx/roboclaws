@@ -204,6 +204,79 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
     )
 
 
+def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_isaac_selected_binding_rows_without_usd_handle(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    scene_bindings["selected_object_bindings"]["mug_01"].pop("usd_handle")
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_selected_binding_index_mismatch(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        object_prim_path="/World/Objects/other_mug",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
@@ -1605,6 +1678,96 @@ def _write_trace(path: Path, events: list[dict[str, object]]) -> None:
     path.write_text(
         "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
         encoding="utf-8",
+    )
+
+
+def _isaac_selected_scene_bindings() -> dict[str, object]:
+    return {
+        "schema": "isaac_public_scene_bindings_v1",
+        "status": "selected_bound",
+        "source": "usd_stage_traversal",
+        "selected_object_count": 1,
+        "selected_target_receptacle_count": 1,
+        "selected_object_bound_count": 1,
+        "selected_target_receptacle_bound_count": 1,
+        "selected_object_bindings": {
+            "mug_01": {
+                "status": "bound",
+                "usd_handle": "mug_01",
+                "usd_prim_path": "/World/Objects/mug_01",
+                "match_strategy": "exact_public_id",
+                "index_source": "usd_stage_traversal",
+            }
+        },
+        "selected_target_receptacle_bindings": {
+            "sink_01": {
+                "status": "bound",
+                "usd_handle": "sink_01",
+                "usd_prim_path": "/World/Receptacles/sink_01",
+                "match_strategy": "exact_public_id",
+                "index_source": "usd_stage_traversal",
+            }
+        },
+        "blockers": [],
+        "private_manifest_exposed_to_agent": False,
+    }
+
+
+def _isaac_runtime_result(
+    base: Path,
+    scene_bindings: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "backend": "isaaclab_subprocess",
+        "artifacts": {"isaac_scene_index": str(base / "isaac_scene_index.json")},
+        "isaac_runtime": {
+            "runtime": {"primitive_provenance": "isaac_semantic_pose"},
+            "scene_binding_diagnostics": scene_bindings,
+            "scene_index_artifact": str(base / "isaac_scene_index.json"),
+            "segmentation": {
+                "status": "blocked_capability",
+                "agent_facing": False,
+                "no_simulator_label_fallback": True,
+            },
+        },
+    }
+
+
+def _write_isaac_scene_index(
+    base: Path,
+    scene_bindings: dict[str, object],
+    *,
+    object_prim_path: str = "/World/Objects/mug_01",
+) -> None:
+    payload = {
+        "schema": "isaac_scene_index_artifact_v1",
+        "backend": "isaaclab_subprocess",
+        "agent_facing": False,
+        "private_manifest_exposed_to_agent": False,
+        "object_index": {"mug_01": {"usd_prim_path": object_prim_path}},
+        "object_index_count": 1,
+        "receptacle_index": {
+            "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
+        },
+        "receptacle_index_count": 1,
+        "scene_binding_diagnostics": scene_bindings,
+    }
+    (base / "isaac_scene_index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _isaac_report_text(scene_bindings: dict[str, object]) -> str:
+    selected_objects = scene_bindings.get("selected_object_bindings") or {}
+    selected_receptacles = scene_bindings.get("selected_target_receptacle_bindings") or {}
+    rows = [*selected_objects.values(), *selected_receptacles.values()]
+    row_text = " ".join(
+        f"{row.get('usd_handle', '')} {row.get('usd_prim_path', '')}"
+        for row in rows
+        if isinstance(row, dict)
+    )
+    return (
+        "Isaac Runtime Diagnostics Scene Index Artifact Rows "
+        "Selected USD Binding Rows Selected USD Index Rows "
+        f"{row_text}"
     )
 
 

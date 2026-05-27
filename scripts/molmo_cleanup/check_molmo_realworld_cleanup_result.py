@@ -922,8 +922,11 @@ def _assert_isaac_runtime(
 
     if require_selected_usd_bindings:
         _assert_selected_isaac_usd_bindings(scene_bindings)
-        _assert_isaac_scene_index_artifact(data, isaac, base)
-        _assert_isaac_scene_index_report_rows(scene_bindings, report_text)
+        scene_index_payload = _assert_isaac_scene_index_artifact(data, isaac, base)
+        _assert_isaac_scene_index_report_rows(
+            scene_index_payload.get("scene_binding_diagnostics") or scene_bindings,
+            report_text,
+        )
 
     if require_semantic_pose:
         assert data.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, data
@@ -975,6 +978,15 @@ def _assert_isaac_runtime(
 
 
 def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
+    _assert_selected_isaac_usd_bindings_for_indexes(scene_bindings)
+
+
+def _assert_selected_isaac_usd_bindings_for_indexes(
+    scene_bindings: dict[str, Any],
+    *,
+    object_index: dict[str, Any] | None = None,
+    receptacle_index: dict[str, Any] | None = None,
+) -> None:
     assert scene_bindings.get("schema") == ISAAC_PUBLIC_SCENE_BINDING_SCHEMA, scene_bindings
     assert scene_bindings.get("status") == "selected_bound", scene_bindings
     assert scene_bindings.get("source") == "usd_stage_traversal", scene_bindings
@@ -990,9 +1002,19 @@ def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
     assert selected_object_bound_count >= selected_object_count, scene_bindings
     assert selected_receptacle_bound_count >= selected_receptacle_count, scene_bindings
     assert not scene_bindings.get("blockers"), scene_bindings
-    _assert_bound_isaac_binding_rows(scene_bindings.get("selected_object_bindings") or {})
     _assert_bound_isaac_binding_rows(
-        scene_bindings.get("selected_target_receptacle_bindings") or {}
+        scene_bindings.get("selected_object_bindings") or {},
+        expected_count=selected_object_count,
+        index=object_index,
+        index_label="object index",
+        label="object",
+    )
+    _assert_bound_isaac_binding_rows(
+        scene_bindings.get("selected_target_receptacle_bindings") or {},
+        expected_count=selected_receptacle_count,
+        index=receptacle_index,
+        index_label="receptacle index",
+        label="target receptacle",
     )
 
 
@@ -1000,7 +1022,7 @@ def _assert_isaac_scene_index_artifact(
     data: dict[str, Any],
     isaac: dict[str, Any],
     base: Path,
-) -> None:
+) -> dict[str, Any]:
     artifacts = data.get("artifacts") or {}
     artifact_path = str(
         isaac.get("scene_index_artifact") or artifacts.get("isaac_scene_index") or ""
@@ -1022,7 +1044,12 @@ def _assert_isaac_scene_index_artifact(
     )
     _assert_bound_isaac_index_rows(payload.get("object_index") or {})
     _assert_bound_isaac_index_rows(payload.get("receptacle_index") or {})
-    _assert_selected_isaac_usd_bindings(payload.get("scene_binding_diagnostics") or {})
+    _assert_selected_isaac_usd_bindings_for_indexes(
+        payload.get("scene_binding_diagnostics") or {},
+        object_index=payload.get("object_index") or {},
+        receptacle_index=payload.get("receptacle_index") or {},
+    )
+    return payload
 
 
 def _assert_isaac_scene_index_report_rows(
@@ -1115,12 +1142,38 @@ def _assert_isaac_semantic_pose_state(isaac: dict[str, Any]) -> None:
         assert pose.get("rendered_to_usd") is False, pose
 
 
-def _assert_bound_isaac_binding_rows(bindings: dict[str, Any]) -> None:
-    assert bindings, bindings
-    for binding in bindings.values():
-        assert binding.get("status") == "bound", binding
-        assert binding.get("usd_prim_path"), binding
-        assert binding.get("match_strategy") not in {"", "none"}, binding
+def _assert_bound_isaac_binding_rows(
+    bindings: dict[str, Any],
+    *,
+    expected_count: int,
+    index: dict[str, Any] | None,
+    index_label: str,
+    label: str,
+) -> None:
+    assert bindings and len(bindings) >= expected_count, (label, expected_count, bindings)
+    for public_id, binding in bindings.items():
+        assert isinstance(binding, dict), (label, public_id, binding)
+        assert binding.get("status") == "bound", (label, public_id, binding)
+        usd_handle = str(binding.get("usd_handle") or "")
+        usd_prim_path = str(binding.get("usd_prim_path") or "")
+        assert usd_handle, (label, public_id, binding)
+        assert usd_prim_path, (label, public_id, binding)
+        assert binding.get("index_source") == "usd_stage_traversal", (label, public_id, binding)
+        assert binding.get("match_strategy") not in {"", "none"}, (label, public_id, binding)
+        assert "private_manifest" not in binding, (label, public_id, binding)
+        if index is None:
+            continue
+        index_row = index.get(usd_handle)
+        assert isinstance(index_row, dict), (label, public_id, usd_handle, index_label, index)
+        index_prim_path = str(index_row.get("usd_prim_path") or "")
+        assert index_prim_path, (label, public_id, usd_handle, index_row)
+        assert usd_prim_path == index_prim_path, (
+            label,
+            public_id,
+            usd_prim_path,
+            index_label,
+            index_prim_path,
+        )
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:

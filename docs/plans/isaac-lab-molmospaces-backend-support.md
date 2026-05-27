@@ -234,6 +234,11 @@ protocol:
 - The same smoke gate now cross-checks selected binding rows against the
   emitted USD `object_index` / `receptacle_index`, so selected handles must
   point at indexed USD prim paths rather than standalone row claims.
+- The full cleanup checker now applies the same row/index rigor to
+  `--require-isaac-selected-usd-bindings`: selected binding rows must carry
+  USD handles, prim paths, `index_source=usd_stage_traversal`, non-empty match
+  strategies, no private manifest payload, and USD prim paths that match the
+  report-only `isaac_scene_index.json` object/receptacle indexes.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
