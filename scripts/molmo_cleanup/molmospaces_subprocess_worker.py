@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import math
 import re
@@ -27,6 +28,133 @@ BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
 HELD_LOCATION_ID = "held_by_agent"
 _MODEL_DATA_CACHE: dict[tuple[str, str], tuple[mujoco.MjModel, mujoco.MjData]] = {}
+_FILAMENT_RESOURCE_PROVIDER: _FilamentResourceProvider | None = None
+
+
+class _MjResource(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("data", ctypes.c_void_p),
+        ("vfs", ctypes.c_void_p),
+        ("timestamp", ctypes.c_char * 512),
+        ("provider", ctypes.c_void_p),
+    ]
+
+
+_OpenResourceCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(_MjResource))
+_ReadResourceCallback = ctypes.CFUNCTYPE(
+    ctypes.c_int,
+    ctypes.POINTER(_MjResource),
+    ctypes.POINTER(ctypes.c_void_p),
+)
+_CloseResourceCallback = ctypes.CFUNCTYPE(None, ctypes.POINTER(_MjResource))
+
+
+class _MjpResourceProvider(ctypes.Structure):
+    _fields_ = [
+        ("prefix", ctypes.c_char_p),
+        ("open", ctypes.c_void_p),
+        ("read", ctypes.c_void_p),
+        ("close", ctypes.c_void_p),
+        ("mount", ctypes.c_void_p),
+        ("unmount", ctypes.c_void_p),
+        ("modified", ctypes.c_void_p),
+        ("data", ctypes.c_void_p),
+    ]
+
+
+class _FilamentResourceProvider:
+    """Keep ctypes callbacks alive while MuJoCo reads bundled Filament assets."""
+
+    def __init__(self, assets_dir: Path) -> None:
+        self.assets_dir = assets_dir
+        self._buffers: dict[int, tuple[ctypes.Array[ctypes.c_char], int]] = {}
+        self.open_callback = _OpenResourceCallback(self._open)
+        self.read_callback = _ReadResourceCallback(self._read)
+        self.close_callback = _CloseResourceCallback(self._close)
+        self.provider = _MjpResourceProvider(
+            prefix=b"filament",
+            open=ctypes.cast(self.open_callback, ctypes.c_void_p).value,
+            read=ctypes.cast(self.read_callback, ctypes.c_void_p).value,
+            close=ctypes.cast(self.close_callback, ctypes.c_void_p).value,
+            mount=None,
+            unmount=None,
+            modified=None,
+            data=None,
+        )
+
+    def _key(self, resource: ctypes.POINTER(_MjResource)) -> int:
+        return ctypes.addressof(resource.contents)
+
+    def _open(self, resource: ctypes.POINTER(_MjResource)) -> int:
+        resource_name = (resource.contents.name or b"").decode("utf-8", errors="replace")
+        if not resource_name.startswith("filament:"):
+            return 0
+        relative_name = resource_name.split(":", 1)[1]
+        if (
+            not relative_name
+            or "/" in relative_name
+            or "\\" in relative_name
+            or relative_name in {".", ".."}
+        ):
+            return 0
+        asset_path = self.assets_dir / relative_name
+        if not asset_path.is_file():
+            return 0
+        asset_bytes = asset_path.read_bytes()
+        buffer = ctypes.create_string_buffer(asset_bytes, len(asset_bytes))
+        self._buffers[self._key(resource)] = (buffer, len(asset_bytes))
+        timestamp = str(asset_path.stat().st_mtime_ns).encode("ascii")[:511]
+        resource.contents.timestamp = timestamp
+        return 1
+
+    def _read(
+        self,
+        resource: ctypes.POINTER(_MjResource),
+        output_buffer: ctypes.POINTER(ctypes.c_void_p),
+    ) -> int:
+        entry = self._buffers.get(self._key(resource))
+        if entry is None:
+            return -1
+        buffer, byte_count = entry
+        output_buffer[0] = ctypes.cast(buffer, ctypes.c_void_p).value
+        return byte_count
+
+    def _close(self, resource: ctypes.POINTER(_MjResource)) -> None:
+        self._buffers.pop(self._key(resource), None)
+
+
+def _register_filament_resource_provider_if_available() -> None:
+    """Register MuJoCo's packaged Filament assets when the sidecar wheel is active."""
+    global _FILAMENT_RESOURCE_PROVIDER
+    if _FILAMENT_RESOURCE_PROVIDER is not None:
+        return
+    assets_dir = Path(mujoco.__file__).resolve().parent / "filament" / "assets" / "data"
+    if not assets_dir.is_dir():
+        return
+    if not (assets_dir / "pbr.filamat").is_file():
+        raise RuntimeError(f"incomplete MuJoCo Filament asset directory: {assets_dir}")
+    lib_path = Path(mujoco.__file__).resolve().parent / f"libmujoco.so.{mujoco.__version__}"
+    if not lib_path.is_file():
+        return
+    lib = ctypes.CDLL(str(lib_path))
+    try:
+        lib.mjp_getResourceProvider.argtypes = [ctypes.c_char_p]
+        lib.mjp_getResourceProvider.restype = ctypes.c_void_p
+        if lib.mjp_getResourceProvider(b"filament:pbr.filamat"):
+            return
+        lib.mjp_registerResourceProvider.argtypes = [ctypes.POINTER(_MjpResourceProvider)]
+        lib.mjp_registerResourceProvider.restype = ctypes.c_int
+    except AttributeError:
+        return
+    provider = _FilamentResourceProvider(assets_dir)
+    slot = lib.mjp_registerResourceProvider(ctypes.byref(provider.provider))
+    if slot < 0:
+        raise RuntimeError("failed to register MuJoCo Filament resource provider")
+    _FILAMENT_RESOURCE_PROVIDER = provider
+
+
+_register_filament_resource_provider_if_available()
 
 
 def main(argv: list[str] | None = None) -> None:

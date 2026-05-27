@@ -1,0 +1,38 @@
+[project]
+name = "roboclaws-molmospaces-filament-sidecar"
+version = "0.1.0"
+description = "Python 3.11 MolmoSpaces Filament renderer sidecar for Roboclaws visual comparison"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "Pillow>=10.0",
+    "numpy>=1.24",
+    "molmo-spaces @ git+https://github.com/allenai/molmospaces.git@3c50ae6093f7e4a4ef32529f8a773715da410a2f",
+    "mujoco-filament==3.5.1",
+    "torch==2.7.1+cpu",
+    "torchvision==0.22.1+cpu",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = []
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+mujoco-filament = { index = "testpypi" }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
