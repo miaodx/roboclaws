@@ -15,10 +15,13 @@ running on the local GPU first rather than CI. The 2026-05-28 local pass loaded
 `procthor-10k-val` scene `val_0` through Isaac Sim/Lab, indexed real
 MolmoSpaces USD geometry prims from adjacent scene metadata, bound the selected
 cleanup handles to USD prim paths, and passed one-object cleanup/report parity
-with `primitive_provenance=isaac_semantic_pose`. The visual-grounding GPU
-sidecar benchmark remains a separate active confidence layer; Grounding DINO
-base-recall is still the current default real `camera-labels` pipeline until a
-broader corpus changes that ranking.
+with `primitive_provenance=isaac_semantic_pose`. A second local GPU pass on
+`val_1` broadened scene-load/render/index/report coverage, but also showed that
+cross-scene cleanup still needs stricter scene-specific scenario or binding
+semantics because public `mug_01` rebound to a `sponge` USD prim by semantic
+fallback. The visual-grounding GPU sidecar benchmark remains a separate active
+confidence layer; Grounding DINO base-recall is still the current default real
+`camera-labels` pipeline until a broader corpus changes that ranking.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -32,10 +35,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Broaden local GPU coverage beyond the proven Isaac/MolmoSpaces `val_0` slice
-and decide whether to invest next in Isaac segmentation tensors or a larger
-multi-scene semantic cleanup subset. Keep Grounding DINO base-recall as the
-visual-grounding default until the broader corpus changes that ranking.
+Tighten Isaac multi-scene parity before treating broader cleanup smoke as exact:
+add scene-specific scenario generation or stricter cross-scene binding semantics
+so selected public cleanup handles cannot silently bind to unrelated USD
+categories. Keep Grounding DINO base-recall as the visual-grounding default
+until the broader corpus changes that ranking.
 
 ## Current Blocker
 
@@ -43,9 +47,11 @@ No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
 support Codex through repo-local `.env` mify or codex-env routes and support
 Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
-runs also support OpenClaw. The current Isaac blocker is segmentation:
-MolmoSpaces USD RGB/robot-view evidence passes for `val_0`, but Isaac returned
-no usable segmentation tensors or bbox candidates for the selected USD prims.
+runs also support OpenClaw. The current Isaac blockers are segmentation and
+multi-scene binding strictness: MolmoSpaces USD RGB/robot-view evidence passes
+for `val_0` and `val_1`, but Isaac returned no usable segmentation tensors or
+bbox candidates for the selected USD prims, and the `val_1` cleanup-shaped
+smoke only passed through loose semantic object rebinding.
 
 ## Human Review Surface
 

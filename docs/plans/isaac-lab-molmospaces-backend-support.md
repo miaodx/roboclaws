@@ -383,14 +383,39 @@ the selected binding diagnostics. The run completed one deterministic cleanup
 with `backend=isaaclab_subprocess`, `cleanup_status=success`, and
 `primitive_provenance=isaac_semantic_pose`.
 
+Additional MolmoSpaces USD scene broadening, run on 2026-05-28:
+`procthor-10k-val_val_1.tar.zst` (`125.204` MB) was downloaded from the same
+R2-backed USD manifest and linked to
+`output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda`.
+`just agent::harness molmo-isaac-runtime-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+require_local_scene_usd=true stamp=0528_val1_runtime_smoke` passed the strict
+runtime checker with real Isaac RGB/robot-view evidence, `stage_prim_count=110`,
+`object_candidate_count=18`, `receptacle_candidate_count=11`, and
+`scene_binding_status=selected_bound`. `just agent::harness
+molmo-isaac-cleanup-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+stamp=0528_val1_cleanup_smoke` also returned `molmo-realworld-cleanup ok`.
+This broadens local GPU scene-load, RGB, indexing, selected-binding, report,
+and semantic-pose cleanup evidence beyond `val_0`, but it is not yet exact
+scene-specific cleanup truth: the public cleanup scenario still comes from
+`assets/maps/molmospaces-procthor-val-0-7`, so public `mug_01` rebound to
+`/val_1/Geometry/sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3` through
+`semantic_label_token_first`, while the sink rebound by prefix to
+`/val_1/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3`.
+
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability` because Isaac returned
 no usable segmentation tensors/bbox candidates for the selected USD prims;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
-manipulation is still out of scope for this slice; Isaac/Omniverse runtime logs
-still include non-fatal USD/runtime warnings, so broader scene coverage should
-keep strict artifact gates enabled rather than relying on import success.
+manipulation is still out of scope for this slice; broader scene coverage can
+pass with loose semantic object rebinding when the public map bundle and loaded
+USD scene differ, so the next multi-scene slice should add scene-specific
+scenario generation or stricter cross-scene binding semantics before treating
+additional scene cleanup as exact; Isaac/Omniverse runtime logs still include
+non-fatal USD/runtime warnings, so broader scene coverage should keep strict
+artifact gates enabled rather than relying on import success.
 
 ## Architecture
 
