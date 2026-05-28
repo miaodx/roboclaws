@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageStat
+
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
@@ -977,6 +979,13 @@ def _assert_isaac_runtime(
             provenance_text = json.dumps(step.get("view_provenance"), sort_keys=True).lower()
             assert "placeholder" not in provenance_text, step
             assert "isaac_lab_camera_rgb" in provenance_text, step
+            views = step.get("views") or {}
+            assert isinstance(views, dict), step
+            for key in ("fpv", "chase", "map", "verify"):
+                _assert_nonblank_image(
+                    _resolve_path(base, str(views.get(key) or "")),
+                    f"Isaac {key} robot view",
+                )
 
     if require_segmentation_evidence:
         assert segmentation.get("schema") == "isaac_segmentation_diagnostics_v1", segmentation
@@ -1233,18 +1242,32 @@ def _assert_isaac_snapshot_provenance(isaac: dict[str, Any], base: Path) -> None
         assert snapshot.get("placeholder_visuals") is False, snapshot
         assert snapshot.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", snapshot
         output_path = _resolve_path(base, snapshot.get("output_path", ""))
-        assert output_path.is_file(), output_path
-        assert output_path.stat().st_size > 0, output_path
+        _assert_nonblank_image(output_path, "Isaac snapshot")
         provenance = snapshot.get("snapshot_provenance") or {}
         assert provenance.get("placeholder_visuals") is False, provenance
         assert provenance.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", provenance
         assert provenance.get("static_isaac_capture") is True, provenance
         assert provenance.get("semantic_pose_rendered") is False, provenance
         source_path = _resolve_path(base, provenance.get("source_path", ""))
-        assert source_path.is_file(), source_path
+        _assert_nonblank_image(source_path, "Isaac snapshot source")
         assert "placeholder_protocol_image" not in json.dumps(provenance, sort_keys=True).lower(), (
             provenance
         )
+
+
+def _assert_nonblank_image(path: Path, label: str) -> None:
+    assert path.is_file(), path
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            extrema = rgb.getextrema()
+            stat = ImageStat.Stat(rgb)
+    except Exception as exc:
+        raise AssertionError(f"{label} is not a readable image: {path}") from exc
+    assert any(high > low for low, high in extrema), (label, path)
+    assert max(stat.stddev or [0.0]) > 0.0, (label, path)
 
 
 def _assert_isaac_semantic_pose_state(

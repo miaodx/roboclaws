@@ -283,6 +283,10 @@ protocol:
   gate on and fails early without `scene_usd_path=...`, so a generated Phase A
   USD smoke scene cannot be mistaken for caller-supplied MolmoSpaces/local USD
   scene parity.
+- Strict full-cleanup Isaac robot-view and snapshot provenance gates now verify
+  that the referenced artifacts are readable, nonblank RGB images. Provenance
+  strings and nonempty placeholder files are no longer enough to satisfy the
+  real Isaac visual-evidence checks.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

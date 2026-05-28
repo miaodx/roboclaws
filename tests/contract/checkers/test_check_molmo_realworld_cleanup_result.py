@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
@@ -296,6 +297,54 @@ def test_checker_rejects_isaac_generated_usd_when_local_scene_required(
             require_robot_view_provenance=False,
             require_segmentation_evidence=False,
             require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_blank_isaac_robot_view_images(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(data, tmp_path, blank_key="verify")
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_local_scene_usd=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=True,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_blank_isaac_snapshot_provenance(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_snapshot_artifacts(data, tmp_path, blank_output=True)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_local_scene_usd=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=True,
         )
 
 
@@ -2156,6 +2205,98 @@ def _add_isaac_loaded_scene(
         "manual_editor_steps_required": manual_editor_steps_required,
     }
     return scene_usd
+
+
+def _add_isaac_robot_view_step(
+    data: dict[str, object],
+    base: Path,
+    *,
+    blank_key: str = "",
+) -> None:
+    view_dir = base / "isaac_robot_views"
+    view_dir.mkdir(parents=True, exist_ok=True)
+    views: dict[str, str] = {}
+    for key in ("fpv", "chase", "map", "verify"):
+        path = view_dir / f"step.{key}.png"
+        if key == blank_key:
+            _write_blank_png(path)
+        else:
+            _write_nonblank_png(path)
+        views[key] = str(path.relative_to(base))
+    report = base / "report.html"
+    report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
+    artifacts = data.setdefault("artifacts", {})
+    assert isinstance(artifacts, dict)
+    artifacts["robot_views"] = str(view_dir.relative_to(base))
+    artifacts["report"] = str(report.relative_to(base))
+    data["view_variant"] = "isaaclab-fpv-map-chase-verify"
+    data["robot_view_steps"] = [
+        {
+            "action": "observe mug_01",
+            "room_outline_count": 1,
+            "view_provenance": {
+                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
+            },
+            "views": views,
+        },
+        {
+            "action": "observe sink_01",
+            "room_outline_count": 1,
+            "view_provenance": {
+                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
+            },
+            "views": views,
+        },
+    ]
+
+
+def _add_isaac_snapshot_artifacts(
+    data: dict[str, object],
+    base: Path,
+    *,
+    blank_output: bool = False,
+) -> None:
+    snapshot_dir = base / "isaac_snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    source_path = snapshot_dir / "source.png"
+    _write_nonblank_png(source_path)
+    snapshots: list[dict[str, object]] = []
+    for index in range(2):
+        output_path = snapshot_dir / f"snapshot_{index}.png"
+        if blank_output and index == 0:
+            _write_blank_png(output_path)
+        else:
+            _write_nonblank_png(output_path)
+        snapshots.append(
+            {
+                "title": f"snapshot {index}",
+                "output_path": str(output_path.relative_to(base)),
+                "visual_artifact_provenance": "isaac_lab_camera_rgb",
+                "placeholder_visuals": False,
+                "snapshot_provenance": {
+                    "source_path": str(source_path.relative_to(base)),
+                    "visual_artifact_provenance": "isaac_lab_camera_rgb",
+                    "placeholder_visuals": False,
+                    "static_isaac_capture": True,
+                    "semantic_pose_rendered": False,
+                },
+            }
+        )
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    isaac_runtime["snapshot_artifacts"] = snapshots
+
+
+def _write_nonblank_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (8, 8), (24, 40, 72))
+    image.putpixel((0, 0), (220, 180, 40))
+    image.save(path)
+
+
+def _write_blank_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (8, 8), (0, 0, 0)).save(path)
 
 
 def _write_isaac_scene_index(
