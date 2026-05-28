@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -48,6 +49,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
     parser.add_argument("--just-bin", default="just")
+    parser.add_argument("--live-wait-timeout-s", type=float, default=7200.0)
+    parser.add_argument("--live-wait-poll-s", type=float, default=10.0)
     return parser.parse_args(argv)
 
 
@@ -122,23 +125,72 @@ def _execute_row(row: dict[str, Any], args: argparse.Namespace) -> int:
     env.update({str(key): str(value) for key, value in (row.get("env") or {}).items()})
     print("+ " + row_rerun_command({**row, "command": command}))
     status = subprocess.run(command, env=env, check=False).returncode
-    row["exit_status"] = status
-    row["updated_at"] = _now()
     run_dir = _latest_seed_dir(Path(row["output_dir"]), seed=args.seed)
     if run_dir is not None:
         row["run_dir"] = str(run_dir)
-        report_path = run_dir / "report.html"
-        if report_path.is_file():
-            row["report_path"] = str(report_path)
+        live_status = _wait_for_live_terminal_status(
+            run_dir,
+            timeout_s=args.live_wait_timeout_s,
+            poll_s=args.live_wait_poll_s,
+        )
+        if live_status is not None:
+            status = int(live_status.get("exit_status") or 0)
+            row["live_status"] = live_status
+    row["exit_status"] = status
+    row["updated_at"] = _now()
+    if run_dir is not None:
+        _refresh_row_artifacts(row, run_dir)
     if status == 0:
-        row["status"] = "success" if row.get("run_dir") else "launched"
+        row["status"] = "success" if row.get("report_path") else "launched"
         row["reason"] = (
-            "" if row.get("run_dir") else "command returned before seed artifact existed"
+            "" if row.get("report_path") else "command returned before seed report existed"
         )
     else:
         row["status"] = "failed"
         row["reason"] = f"command exited with status {status}"
     return status
+
+
+def _wait_for_live_terminal_status(
+    run_dir: Path,
+    *,
+    timeout_s: float,
+    poll_s: float,
+) -> dict[str, Any] | None:
+    status_path = run_dir / "live_status.json"
+    if not status_path.is_file():
+        return None
+    deadline = _monotonic() + timeout_s
+    last_status = _read_status(status_path)
+    while True:
+        phase = str(last_status.get("phase") or "")
+        if phase in {"finished", "failed"} and "exit_status" in last_status:
+            return last_status
+        if _monotonic() >= deadline:
+            timed_out = dict(last_status)
+            timed_out["phase"] = "failed"
+            timed_out["exit_status"] = 124
+            timed_out["reason"] = "live row did not reach terminal status before timeout"
+            return timed_out
+        _sleep(max(float(poll_s), 0.1))
+        last_status = _read_status(status_path)
+
+
+def _refresh_row_artifacts(row: dict[str, Any], run_dir: Path) -> None:
+    report_path = run_dir / "report.html"
+    if report_path.is_file():
+        row["report_path"] = str(report_path)
+    run_result_path = run_dir / "run_result.json"
+    if run_result_path.is_file():
+        row["run_result_path"] = str(run_result_path)
+
+
+def _read_status(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"phase": "unknown"}
+    return data if isinstance(data, dict) else {"phase": "unknown"}
 
 
 def _selected_rows(grid: dict[str, Any], *, filters: set[str]) -> list[dict[str, Any]]:
@@ -189,6 +241,8 @@ def _latest_seed_dir(output_dir: Path, *, seed: int) -> Path | None:
             (path / "run_result.json").is_file()
             or (path / "runtime_metric_map.json").is_file()
             or (path / "report.html").is_file()
+            or (path / "live_status.json").is_file()
+            or (path / "tmux_session.txt").is_file()
         )
     )
     return candidates[-1] if candidates else None
@@ -203,6 +257,18 @@ def _now() -> str:
     import datetime as dt
 
     return dt.datetime.now(dt.UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _monotonic() -> float:
+    import time
+
+    return time.monotonic()
+
+
+def _sleep(seconds: float) -> None:
+    import time
+
+    time.sleep(seconds)
 
 
 if __name__ == "__main__":

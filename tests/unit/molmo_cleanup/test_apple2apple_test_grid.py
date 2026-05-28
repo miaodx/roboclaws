@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 from roboclaws.molmo_cleanup.apple2apple_test_grid import (
@@ -131,3 +133,65 @@ def test_apple2apple_grid_script_dry_run_writes_manifest_and_report(tmp_path: Pa
     assert manifest["schema"] == GRID_SCHEMA
     assert {row["status"] for row in manifest["rows"]} == {"dry_run"}
     assert "online-codex-api-router-grounding-dino" in report_path.read_text(encoding="utf-8")
+
+
+def test_apple2apple_grid_execute_waits_for_detached_live_status(tmp_path: Path) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_live_wait")
+    output_dir = tmp_path / "grid"
+    run_dir = output_dir / "0528_1200" / "seed-7"
+    run_dir.mkdir(parents=True)
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
+    row = {
+        "command": [sys.executable, "-c", ""],
+        "env": {},
+        "output_dir": str(output_dir),
+    }
+    args = argparse.Namespace(
+        seed=7,
+        just_bin="just",
+        live_wait_timeout_s=0.1,
+        live_wait_poll_s=0.1,
+    )
+
+    status = run_grid._execute_row(row, args)
+
+    assert status == 0
+    assert row["status"] == "success"
+    assert row["run_dir"] == str(run_dir)
+    assert row["report_path"] == str(run_dir / "report.html")
+    assert row["live_status"]["phase"] == "finished"
+
+
+def test_apple2apple_grid_execute_discovers_live_status_only_seed_dir(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_live_status_only")
+    output_dir = tmp_path / "grid"
+    run_dir = output_dir / "0528_1200" / "seed-7"
+    run_dir.mkdir(parents=True)
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    row = {
+        "command": [sys.executable, "-c", ""],
+        "env": {},
+        "output_dir": str(output_dir),
+    }
+    args = argparse.Namespace(
+        seed=7,
+        just_bin="just",
+        live_wait_timeout_s=0.1,
+        live_wait_poll_s=0.1,
+    )
+
+    status = run_grid._execute_row(row, args)
+
+    assert status == 0
+    assert row["run_dir"] == str(run_dir)
+    assert row["live_status"]["phase"] == "finished"
+    assert row["status"] == "launched"
