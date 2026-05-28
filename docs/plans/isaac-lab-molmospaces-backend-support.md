@@ -2,10 +2,11 @@
 # Isaac Lab MolmoSpaces Backend Support
 
 **Status:** CI-safe fake backend scaffold plus local runtime preflight,
-real-mode Phase A smoke attempt, Phase B static robot-view evidence path, Phase
-C selected USD-binding diagnostics, strict full-cleanup Isaac report gate, and
-Phase E segmentation diagnostics/gates, real-mode snapshot provenance, and
-backend semantic-pose state diagnostics implemented; real Isaac proof pending
+local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
+path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
+gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
+provenance, and backend semantic-pose state diagnostics implemented;
+MolmoSpaces/local USD scene parity remains pending
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -293,18 +294,43 @@ protocol:
   artifact can no longer drift to unrelated non-selected USD prim rows while
   selected binding rows still happen to pass.
 
-Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
-not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed
-manipulation proof from the fake protocol evidence.
+Real `.venv-isaaclab/` execution on this GPU host now proves Phase A renderer
+and generated-USD plumbing, but does not yet prove MolmoSpaces USD scene parity,
+segmentation, or planner-backed manipulation.
 
-Latest non-installing local preflight, run on 2026-05-28:
-`just agent::harness molmo-isaac-runtime-preflight` wrote
-`output/isaaclab/preflight/0528_062922/preflight.json` with `status=blocked`.
-The host passed runtime isolation, `.gitignore`, `uv`, Python 3.12, disk, and
-NVIDIA GPU checks, but `.venv-isaaclab/`, `.venv-isaaclab/bin/python`, and the
-Isaac Lab source checkout were missing, so Torch, Isaac Sim, and Isaac Lab
-runtime imports could not be checked. No install was requested and no
-NVIDIA/Omniverse EULA was accepted.
+Latest installing local preflight, run on 2026-05-28 with the NVIDIA/Omniverse
+EULA accepted by the human:
+`just agent::harness molmo-isaac-runtime-preflight install=true
+accept_nvidia_eula=true strict=true` wrote
+`output/isaaclab/preflight/0528_115717/preflight.json` with `status=ready`.
+The host recorded Python 3.12, `torch==2.7.0+cu128`, Isaac Lab `0.54.3`,
+Isaac Sim import readiness, and an NVIDIA RTX 3500 Ada GPU.
+
+Latest local Phase A smoke, run on 2026-05-28:
+`just agent::harness molmo-isaac-runtime-smoke` wrote
+`output/isaaclab/runtime-smoke/0528_1223/` and the strict checker returned
+`status=passed`. Evidence includes `state.json`, `init_result.json`,
+`isaac_runtime_smoke.png`, FPV/chase/map/verify robot-view images, generated
+`roboclaws_phase_a_smoke_scene.usda`, real runtime diagnostics, selected USD
+binding rows, and nonblank image checks. No stale Isaac worker or telemetry
+process remained after the run.
+
+Latest generated-local-USD cleanup smoke, run on 2026-05-28:
+`just agent::harness molmo-isaac-cleanup-smoke
+scene_usd_path=output/isaaclab/runtime-smoke/0528_1223/roboclaws_phase_a_smoke_scene.usda`
+wrote `output/isaaclab/cleanup-smoke/0528_1226/` and the strict cleanup checker
+returned `molmo-realworld-cleanup ok`. Evidence includes `run_result.json`,
+`trace.jsonl`, `report.html`, `isaac_scene_index.json`, real Isaac runtime
+diagnostics, nonblank before/after images, FPV/chase/map/verify robot-view
+timelines, `primitive_provenance=isaac_semantic_pose`, and a successful
+one-object deterministic cleanup score. This proves the cleanup/report path over
+a generated local USD scene, not MolmoSpaces scene parity.
+
+A repo/output search did not find a caller-supplied MolmoSpaces scene USD
+outside generated Phase A smoke artifacts. Do not claim Phase B or full cleanup
+MolmoSpaces scene parity until `just agent::harness molmo-isaac-cleanup-smoke
+scene_usd_path=/path/to/molmospaces-scene.usd` passes against a real local
+scene USD.
 
 ## Architecture
 

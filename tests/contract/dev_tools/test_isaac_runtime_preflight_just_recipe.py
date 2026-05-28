@@ -78,14 +78,18 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "--require-selected-usd-bindings" in harness_text
     assert "--require-robot-view-images" in harness_text
     assert "--require-segmentation-evidence" in harness_text
+    assert "--enable-segmentation" in harness_text
     assert "robot_views_result.json" in harness_text
     assert "robot_views \\" in harness_text
+    assert 'accept_nvidia_eula="true"' in harness_text
+    assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
 
     route = trace_agent_harness(
         "molmo-isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "accept_nvidia_eula=false",
     )
     assert route == [
         "just",
@@ -93,6 +97,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "accept_nvidia_eula=false",
     ]
 
 
@@ -112,12 +117,15 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-robot-view-provenance" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text
     assert "--require-isaac-snapshot-provenance" in harness_text
+    assert 'accept_nvidia_eula="true"' in harness_text
+    assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
 
     route = trace_agent_harness(
         "molmo-isaac-cleanup-smoke",
         "output_dir=/tmp/roboclaws-isaac-cleanup",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "accept_nvidia_eula=false",
     )
     assert route == [
         "just",
@@ -125,4 +133,5 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
         "output_dir=/tmp/roboclaws-isaac-cleanup",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "accept_nvidia_eula=false",
     ]

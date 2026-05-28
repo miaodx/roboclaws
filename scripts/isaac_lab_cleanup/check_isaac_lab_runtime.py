@@ -17,8 +17,10 @@ from zoneinfo import ZoneInfo
 SCHEMA = "roboclaws_isaac_lab_runtime_preflight_v1"
 DEFAULT_MIN_FREE_GB = 80
 ISAACSIM_VERSION = "6.0.0"
-TORCH_VERSION = "2.10.0"
-TORCHVISION_VERSION = "0.25.0"
+TORCH_VERSION = "2.7.0"
+TORCHVISION_VERSION = "0.22.0"
+UV_HTTP_TIMEOUT_SECONDS = "300"
+OMNI_KIT_ACCEPT_EULA = "YES"
 NVIDIA_PYPI_INDEX = "https://pypi.nvidia.com"
 PYTORCH_CUDA_INDEX = "https://download.pytorch.org/whl/cu128"
 ISAACLAB_GIT_URL = "https://github.com/isaac-sim/IsaacLab.git"
@@ -68,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         runtime_dir=runtime_dir,
         python_spec=args.python,
         source_dir=source_dir,
+        accepted_nvidia_eula=args.accept_nvidia_eula,
     )
     install_script = run_dir / "install_isaac_lab_runtime.sh"
     write_install_script(install_script, install_steps)
@@ -119,8 +122,11 @@ def build_install_steps(
     runtime_dir: Path,
     python_spec: str,
     source_dir: Path,
+    accepted_nvidia_eula: bool = False,
 ) -> list[dict[str, Any]]:
     runtime_python = runtime_dir / "bin" / "python"
+    uv_env = uv_network_env()
+    isaac_env = isaac_runtime_env(accepted_nvidia_eula=accepted_nvidia_eula)
     return [
         {
             "name": "create_runtime_env",
@@ -156,6 +162,7 @@ def build_install_steps(
                 "--prerelease=allow",
             ],
             "cwd": str(repo_root),
+            "env": uv_env,
         },
         {
             "name": "install_cuda_torch",
@@ -171,6 +178,7 @@ def build_install_steps(
                 PYTORCH_CUDA_INDEX,
             ],
             "cwd": str(repo_root),
+            "env": uv_env,
         },
         {
             "name": "create_isaaclab_source_parent",
@@ -190,9 +198,21 @@ def build_install_steps(
             "env": {
                 "VIRTUAL_ENV": str(runtime_dir),
                 "PATH_PREFIX": str(runtime_dir / "bin"),
+                **isaac_env,
             },
         },
     ]
+
+
+def uv_network_env() -> dict[str, str]:
+    return {"UV_HTTP_TIMEOUT": UV_HTTP_TIMEOUT_SECONDS}
+
+
+def isaac_runtime_env(*, accepted_nvidia_eula: bool) -> dict[str, str]:
+    env = uv_network_env()
+    if accepted_nvidia_eula:
+        env["OMNI_KIT_ACCEPT_EULA"] = OMNI_KIT_ACCEPT_EULA
+    return env
 
 
 def write_install_script(path: Path, steps: list[dict[str, Any]]) -> None:
@@ -373,7 +393,12 @@ def collect_checks(
         path_check("runtime_python_exists", runtime_python, "runtime Python"),
         path_check("isaaclab_source_exists", source_dir, "Isaac Lab source checkout"),
     ]
-    checks.extend(package_checks(runtime_python))
+    checks.extend(
+        package_checks(
+            runtime_python,
+            accepted_nvidia_eula=args.accept_nvidia_eula,
+        )
+    )
     return checks
 
 
@@ -541,7 +566,7 @@ def path_check(name: str, path: Path, label: str) -> dict[str, Any]:
     return check(name, "blocked", f"{label} is missing.", path=str(path))
 
 
-def package_checks(runtime_python: Path) -> list[dict[str, Any]]:
+def package_checks(runtime_python: Path, *, accepted_nvidia_eula: bool) -> list[dict[str, Any]]:
     if not runtime_python.exists():
         return [
             check("runtime_import_torch", "blocked", "runtime Python is missing."),
@@ -549,13 +574,29 @@ def package_checks(runtime_python: Path) -> list[dict[str, Any]]:
             check("runtime_import_isaaclab", "blocked", "runtime Python is missing."),
         ]
     return [
-        package_check(runtime_python, "torch"),
-        package_check(runtime_python, "isaacsim"),
-        package_check(runtime_python, "isaaclab"),
+        package_check(runtime_python, "torch", accepted_nvidia_eula=accepted_nvidia_eula),
+        package_check(runtime_python, "isaacsim", accepted_nvidia_eula=accepted_nvidia_eula),
+        package_check(runtime_python, "isaaclab", accepted_nvidia_eula=accepted_nvidia_eula),
     ]
 
 
-def package_check(runtime_python: Path, package: str) -> dict[str, Any]:
+def package_check(
+    runtime_python: Path,
+    package: str,
+    *,
+    accepted_nvidia_eula: bool,
+) -> dict[str, Any]:
+    env = None
+    if package == "isaacsim":
+        if not accepted_nvidia_eula:
+            return check(
+                "runtime_import_isaacsim",
+                "blocked",
+                "Isaac Sim import may prompt for the NVIDIA Omniverse EULA; rerun with "
+                "--accept-nvidia-eula after reviewing the license terms.",
+            )
+        env = os.environ.copy()
+        env.update(isaac_runtime_env(accepted_nvidia_eula=True))
     code = (
         "import importlib; "
         f"mod = importlib.import_module({package!r}); "
@@ -565,6 +606,7 @@ def package_check(runtime_python: Path, package: str) -> dict[str, Any]:
         [str(runtime_python), "-c", code],
         check=False,
         capture_output=True,
+        env=env,
         text=True,
         timeout=30,
     )

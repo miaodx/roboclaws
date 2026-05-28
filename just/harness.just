@@ -662,6 +662,7 @@ molmo-isaac-runtime-smoke *overrides:
     require_robot_view_images="true"
     require_nonblank_image="true"
     require_segmentation_evidence="false"
+    accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2
@@ -677,7 +678,7 @@ molmo-isaac-runtime-smoke *overrides:
         require_real_rendering|require_usd_stage_loaded|require_local_scene_usd|\
         require_usd_scene_index|\
         require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
-        require_segmentation_evidence)
+        require_segmentation_evidence|accept_nvidia_eula)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -694,6 +695,9 @@ molmo-isaac-runtime-smoke *overrides:
     init_result="${run_dir}/init_result.json"
     robot_views_result="${run_dir}/robot_views_result.json"
     mkdir -p "$run_dir"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
     worker_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
       --state-path "$state_path" \
       init \
@@ -708,6 +712,9 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$include_robot" == "true" ]]; then
       worker_cmd+=(--include-robot --robot-name "$robot_name")
+    fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      worker_cmd+=(--enable-segmentation)
     fi
     if [[ -n "$map_bundle" ]]; then
       worker_cmd+=(--map-bundle-dir "$map_bundle")
@@ -775,6 +782,7 @@ molmo-isaac-cleanup-smoke *overrides:
     require_robot_view_provenance="true"
     require_segmentation_evidence="false"
     require_snapshot_provenance="true"
+    accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         echo "error: override '$arg' is not key=value" >&2
@@ -789,7 +797,7 @@ molmo-isaac-cleanup-smoke *overrides:
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
         require_real_runtime|require_scene_loaded|require_local_scene_usd|\
         require_selected_usd_bindings|require_robot_view_provenance|\
-        require_segmentation_evidence|require_snapshot_provenance)
+        require_segmentation_evidence|require_snapshot_provenance|accept_nvidia_eula)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -812,6 +820,9 @@ molmo-isaac-cleanup-smoke *overrides:
     mkdir -p "$run_dir"
     export ROBOCLAWS_ISAACLAB_PYTHON="$runtime_python"
     export ROBOCLAWS_ISAACLAB_RUNTIME_MODE="real"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
     run_cmd=(.venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
       --output-dir "$run_dir" \
       --seed "$seed" \

@@ -53,6 +53,7 @@ MAX_SEGMENTATION_CANDIDATES = 24
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
+_DEFERRED_SIMULATION_APP: Any | None = None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -70,6 +71,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     init.add_argument("--include-robot", action="store_true")
     init.add_argument("--robot-name", default="simple_camera_rig")
     init.add_argument("--map-bundle-dir", type=Path)
+    init.add_argument(
+        "--enable-segmentation",
+        action="store_true",
+        help="Request Isaac semantic/instance segmentation tensors during real RGB capture.",
+    )
     init.add_argument(
         "--scene-usd-path",
         type=Path,
@@ -122,6 +128,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.command == "init":
         result = init_state(args)
+        print(json.dumps(result, sort_keys=True), flush=True)
+        _close_deferred_simulation_app()
+        return 0
     else:
         state = read_state(args.state_path)
         if args.command == "locations":
@@ -150,8 +159,17 @@ def main(argv: list[str] | None = None) -> int:
             result = done(args, state)
         else:  # pragma: no cover - argparse prevents this.
             raise ValueError(f"unsupported command: {args.command}")
-    print(json.dumps(result, sort_keys=True))
+    print(json.dumps(result, sort_keys=True), flush=True)
     return 0
+
+
+def _close_deferred_simulation_app() -> None:
+    global _DEFERRED_SIMULATION_APP
+    if _DEFERRED_SIMULATION_APP is None:
+        return
+    simulation_app = _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = None
+    simulation_app.close(wait_for_replicator=False, skip_cleanup=True)
 
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
@@ -319,36 +337,44 @@ def real_runtime_smoke(
         loaded_asset_kind = "local_scene_usd"
     else:
         scene_usd = args.run_dir / "roboclaws_phase_a_smoke_scene.usda"
-        _write_generated_runtime_smoke_usd(scene_usd, scenario)
         loaded_asset_kind = "generated_runtime_smoke_usd"
-    scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
-    stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
 
     simulation_app = None
     render_steps = 0
-    try:
-        from isaaclab.app import AppLauncher
+    scene_index_diagnostics: dict[str, Any] | None = None
+    stage_prim_count = 0
+    from isaaclab.app import AppLauncher
 
-        launcher_args = _isaac_app_launcher_args(AppLauncher)
-        app_launcher = AppLauncher(launcher_args)
-        simulation_app = app_launcher.app
+    launcher_args = _isaac_app_launcher_args(AppLauncher)
+    app_launcher = AppLauncher(launcher_args)
+    simulation_app = app_launcher.app
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
 
-        capture = _capture_isaac_lab_camera_views(
-            scene_usd=scene_usd,
-            view_paths=robot_view_paths,
-            width=DEFAULT_WIDTH,
-            height=DEFAULT_HEIGHT,
-            simulation_app=simulation_app,
-        )
-        render_steps = int(capture["render_steps"])
-        robot_view_images = dict(capture["robot_view_images"])
-        segmentation = _dict(capture.get("segmentation"))
-    finally:
-        if simulation_app is not None:
-            simulation_app.close()
+    # Isaac Sim requires that Omniverse/pxr modules are not imported before
+    # SimulationApp starts. Generate and inspect USD only after AppLauncher
+    # owns the Kit bootstrap.
+    if args.scene_usd_path is None:
+        _write_generated_runtime_smoke_usd(scene_usd, scenario)
+    scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
+    stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
+
+    capture = _capture_isaac_lab_camera_views(
+        scene_usd=scene_usd,
+        view_paths=robot_view_paths,
+        width=DEFAULT_WIDTH,
+        height=DEFAULT_HEIGHT,
+        simulation_app=simulation_app,
+        include_segmentation=args.enable_segmentation,
+    )
+    render_steps = int(capture["render_steps"])
+    robot_view_images = dict(capture["robot_view_images"])
+    segmentation = _dict(capture.get("segmentation"))
 
     if not smoke_image.is_file():
         raise RuntimeError(f"Isaac Lab camera capture did not write {smoke_image}")
+    if scene_index_diagnostics is None:
+        raise RuntimeError("Isaac Lab runtime smoke did not inspect the USD scene index.")
     missing_views = sorted(
         key for key in ROBOT_VIEW_KEYS if not Path(str(robot_view_images.get(key, ""))).is_file()
     )
@@ -785,6 +811,7 @@ def _capture_isaac_lab_camera_views(
     width: int,
     height: int,
     simulation_app: Any,
+    include_segmentation: bool = False,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -806,7 +833,10 @@ def _capture_isaac_lab_camera_views(
             update_period=0.0,
             height=height,
             width=width,
-            data_types=["rgb", *ISAAC_SEGMENTATION_DATA_TYPES],
+            data_types=[
+                "rgb",
+                *(ISAAC_SEGMENTATION_DATA_TYPES if include_segmentation else ()),
+            ],
             colorize_semantic_segmentation=False,
             colorize_instance_segmentation=False,
             colorize_instance_id_segmentation=False,
@@ -841,13 +871,16 @@ def _capture_isaac_lab_camera_views(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
         saved[view_name] = str(output_path)
-        segmentation_views.append(
-            _camera_segmentation_view_diagnostics(camera, view_name=view_name, np=np)
-        )
+        if include_segmentation:
+            segmentation_views.append(
+                _camera_segmentation_view_diagnostics(camera, view_name=view_name, np=np)
+            )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
-        "segmentation": _camera_segmentation_capture_diagnostics(segmentation_views),
+        "segmentation": _camera_segmentation_capture_diagnostics(segmentation_views)
+        if include_segmentation
+        else _camera_segmentation_not_requested_diagnostics(),
     }
 
 
@@ -923,6 +956,21 @@ def _camera_segmentation_capture_diagnostics(
         "candidate_bbox_count": len(candidates),
         "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
         "view_outputs": views,
+        "no_simulator_label_fallback": True,
+    }
+
+
+def _camera_segmentation_not_requested_diagnostics() -> dict[str, Any]:
+    return {
+        "schema": SEGMENTATION_SCHEMA,
+        "source": "isaac_lab_camera",
+        "capture_method": "not_requested_for_rgb_runtime_smoke",
+        "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
+        "output_data_types": [],
+        "tensor_output_available": False,
+        "candidate_bbox_count": 0,
+        "candidate_bboxes": [],
+        "view_outputs": [],
         "no_simulator_label_fallback": True,
     }
 

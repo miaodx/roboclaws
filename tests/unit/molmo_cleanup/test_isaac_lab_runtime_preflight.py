@@ -75,9 +75,31 @@ def test_isaac_lab_runtime_preflight_writes_blocked_report_without_install(
         "install_isaac_lab_source",
     ]
     install_script = Path(install_plan["script_path"])
+    install_script_text = install_script.read_text(encoding="utf-8")
     assert install_script.is_file()
     assert "--accept-nvidia-eula" in json.dumps(install_plan)
-    assert "isaacsim[all,extscache]==6.0.0" in install_script.read_text(encoding="utf-8")
+    assert "isaacsim[all,extscache]==6.0.0" in install_script_text
+    assert "UV_HTTP_TIMEOUT=300" in install_script_text
+    assert "torch==2.7.0" in install_script_text
+    assert "torchvision==0.22.0" in install_script_text
+    assert "OMNI_KIT_ACCEPT_EULA=YES" not in install_script_text
+
+
+def test_isaac_lab_runtime_preflight_threads_eula_acceptance_into_install_script(
+    tmp_path: Path,
+) -> None:
+    result = run_preflight(tmp_path, "--accept-nvidia-eula")
+
+    assert result.returncode == 0
+    report = load_report(result)
+    install_plan = report["install_plan"]  # type: ignore[index]
+    install_script = Path(install_plan["script_path"])
+    install_script_text = install_script.read_text(encoding="utf-8")
+    assert "OMNI_KIT_ACCEPT_EULA=YES" in install_script_text
+    install_source_step = [
+        item for item in install_plan["steps"] if item["name"] == "install_isaac_lab_source"
+    ][0]
+    assert install_source_step["env"]["OMNI_KIT_ACCEPT_EULA"] == "YES"
 
 
 def test_isaac_lab_runtime_install_requires_eula_acknowledgement(tmp_path: Path) -> None:
