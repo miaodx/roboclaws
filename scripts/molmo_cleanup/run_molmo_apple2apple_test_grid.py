@@ -75,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.row:
         _merge_existing_grid_state(grid, args.output_dir, selected_row_ids=set(args.row))
+    if args.runtime_map_prior:
+        _mark_explicit_runtime_map_prior(grid, args.runtime_map_prior)
     status = _execute_grid(grid, args)
     _write_outputs(grid, args.output_dir)
     return status
@@ -234,6 +236,28 @@ def _merge_existing_grid_state(
         else:
             merged_rows.append(row)
     grid["rows"] = merged_rows
+
+
+def _mark_explicit_runtime_map_prior(grid: dict[str, Any], prior_path: str) -> None:
+    prior = Path(prior_path)
+    for row in grid.get("setup_rows") or []:
+        row["runtime_map_prior"] = str(prior)
+        row["updated_at"] = _now()
+        if prior.is_file():
+            row["status"] = "artifact_success"
+            row["reason"] = (
+                "using explicit runtime_map_prior; setup command was not executed by this grid"
+            )
+            row["run_dir"] = str(prior.parent)
+            report_path = prior.parent / "report.html"
+            if report_path.is_file():
+                row["report_path"] = str(report_path)
+            run_result_path = prior.parent / "run_result.json"
+            if run_result_path.is_file():
+                row["run_result_path"] = str(run_result_path)
+        else:
+            row["status"] = "failed"
+            row["reason"] = "explicit runtime_map_prior does not exist"
 
 
 def _rows_by_id(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

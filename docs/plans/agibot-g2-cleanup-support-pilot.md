@@ -273,6 +273,36 @@ movement gate, not physical PNC execution.
   `output/molmo/apple2apple-grid-0528-just-dry-run/apple2apple_test_grid.html`.
   These artifacts prove command coverage and provider/profile pinning, not live
   provider execution or real G2 hardware behavior.
+- Live local provider evidence was generated at
+  `output/molmo/apple2apple-grid-0528-live-full-rows/apple2apple_test_grid.html`,
+  with the machine-readable manifest at
+  `output/molmo/apple2apple-grid-0528-live-full-rows/apple2apple_test_grid.json`.
+  The offline rows used the Runtime Metric Map prior from
+  `output/molmo/apple2apple-grid-0528-live-full/_offline-semantic-map-prior/0528_1457/seed-7/runtime_metric_map.json`.
+  This is still MolmoSpaces/RBY1M simulation evidence, not real G2 hardware
+  execution.
+- Live row results for seed 7, 10 generated mess objects:
+
+  | Map | Agent route | Perception lane | Row status | Private scorer result |
+  | --- | --- | --- | --- | --- |
+  | online | Codex API router | Grounding DINO labels | success | partial_success; 3/10 exact, 7/10 semantic, sweep 1.0 |
+  | online | Codex API router | RAW_FPV direct | success | success; 7/10 exact, 8/10 semantic, sweep 1.0 |
+  | online | Claude Code Kimi | Grounding DINO labels | success | partial_success; 3/10 exact, 7/10 semantic, sweep 1.0 |
+  | online | Claude Code Kimi | RAW_FPV direct | success | success; 7/10 exact, 8/10 semantic, sweep 1.0 |
+  | online | Claude Code MiMo v2 Omni | Grounding DINO labels | success | partial_success; 2/10 exact, 7/10 semantic, sweep 1.0 |
+  | online | Claude Code MiMo v2 Omni | RAW_FPV direct | success | partial_success; 5/10 exact, 8/10 semantic, sweep 1.0 |
+  | offline | Codex API router | Grounding DINO labels | success | partial_success; 3/10 exact, 7/10 semantic, sweep 1.0 |
+  | offline | Codex API router | RAW_FPV direct | failed | no final report; 9 cleanup chains completed, then MCP transport failed before final `observe`/`done` |
+  | offline | Claude Code Kimi | Grounding DINO labels | success | partial_success; 2/10 exact, 7/10 semantic, sweep 1.0 |
+  | offline | Claude Code Kimi | RAW_FPV direct | success | success; 8/10 exact, 9/10 semantic, sweep 1.0 |
+  | offline | Claude Code MiMo v2 Omni | Grounding DINO labels | success | partial_success; 2/10 exact, 7/10 semantic, sweep 1.0 |
+  | offline | Claude Code MiMo v2 Omni | RAW_FPV direct | success | partial_success; 6/10 exact, 8/10 semantic, sweep 1.0 |
+
+  The failed offline Codex RAW_FPV row is retained as a grid outcome, not
+  omitted: `live_status.json` records `phase=failed`, `exit_status=1`, and
+  `reason="cleanup MCP server exited with status -15"`; the agent's final
+  message records 13/14 observed waypoints, 9 successful cleanup chains, and
+  repeated HTTP transport failures to `127.0.0.1:18788/mcp`.
 
 ## Non-Goals
 
