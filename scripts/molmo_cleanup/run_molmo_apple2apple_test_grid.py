@@ -73,6 +73,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"apple-to-apple grid report: {args.output_dir / 'apple2apple_test_grid.html'}")
         return 0
 
+    if args.row:
+        _merge_existing_grid_state(grid, args.output_dir, selected_row_ids=set(args.row))
     status = _execute_grid(grid, args)
     _write_outputs(grid, args.output_dir)
     return status
@@ -83,8 +85,11 @@ def _execute_grid(grid: dict[str, Any], args: argparse.Namespace) -> int:
     if not selected_rows:
         raise SystemExit("no cleanup rows selected")
 
+    selected_row_ids = {str(row.get("row_id") or "") for row in selected_rows}
     for row in grid.get("rows") or []:
-        if row not in selected_rows:
+        if str(row.get("row_id") or "") not in selected_row_ids:
+            if _has_existing_row_evidence(row):
+                continue
             row["status"] = "not_selected"
             row["reason"] = "row was not selected for this execution"
 
@@ -196,6 +201,54 @@ def _read_status(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {"phase": "unknown"}
     return data if isinstance(data, dict) else {"phase": "unknown"}
+
+
+def _merge_existing_grid_state(
+    grid: dict[str, Any],
+    output_dir: Path,
+    *,
+    selected_row_ids: set[str],
+) -> None:
+    manifest_path = output_dir / "apple2apple_test_grid.json"
+    if not manifest_path.is_file():
+        return
+    try:
+        existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(existing, dict):
+        return
+
+    existing_setup_rows = _rows_by_id(existing.get("setup_rows") or [])
+    grid["setup_rows"] = [
+        existing_setup_rows.get(str(row.get("row_id") or ""), row)
+        for row in grid.get("setup_rows") or []
+    ]
+
+    existing_rows = _rows_by_id(existing.get("rows") or [])
+    merged_rows = []
+    for row in grid.get("rows") or []:
+        row_id = str(row.get("row_id") or "")
+        if row_id not in selected_row_ids and row_id in existing_rows:
+            merged_rows.append(existing_rows[row_id])
+        else:
+            merged_rows.append(row)
+    grid["rows"] = merged_rows
+
+
+def _rows_by_id(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {str(row.get("row_id") or ""): row for row in rows if isinstance(row, dict)}
+
+
+def _has_existing_row_evidence(row: dict[str, Any]) -> bool:
+    return bool(
+        row.get("run_result_path")
+        or row.get("report_path")
+        or row.get("live_status")
+        or row.get("run_dir")
+        or row.get("exit_status") is not None
+        or row.get("status") in {"success", "failed", "artifact_success", "launched"}
+    )
 
 
 def _selected_rows(grid: dict[str, Any], *, filters: set[str]) -> list[dict[str, Any]]:
