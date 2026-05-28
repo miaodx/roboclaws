@@ -11,6 +11,7 @@ from roboclaws.molmo_cleanup.apple2apple_test_grid import (
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
     build_apple2apple_test_grid,
     row_rerun_command,
+    write_grid_manifest,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -133,6 +134,48 @@ def test_apple2apple_grid_script_dry_run_writes_manifest_and_report(tmp_path: Pa
     assert manifest["schema"] == GRID_SCHEMA
     assert {row["status"] for row in manifest["rows"]} == {"dry_run"}
     assert "online-codex-api-router-grounding-dino" in report_path.read_text(encoding="utf-8")
+
+
+def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Path) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_preserve")
+    output_dir = tmp_path / "grid"
+    existing = build_apple2apple_test_grid(output_dir=output_dir, task="clean")
+    existing_rows = _rows_by_id(existing)
+    preserved_row = existing_rows["online-codex-api-router-grounding-dino"]
+    preserved_row["status"] = "success"
+    preserved_row["exit_status"] = 0
+    preserved_row["run_result_path"] = str(output_dir / "online-codex" / "run_result.json")
+    preserved_row["report_path"] = str(output_dir / "online-codex" / "report.html")
+    write_grid_manifest(existing, output_dir)
+
+    def fake_execute_row(row: dict, _args: argparse.Namespace) -> int:
+        row["status"] = "success"
+        row["exit_status"] = 0
+        return 0
+
+    run_grid._execute_row = fake_execute_row
+
+    status = run_grid.main(
+        [
+            "--output-dir",
+            str(output_dir),
+            "--task",
+            "clean",
+            "--execute",
+            "--row",
+            "online-claude-kimi-raw-fpv",
+        ]
+    )
+
+    manifest = json.loads((output_dir / "apple2apple_test_grid.json").read_text(encoding="utf-8"))
+    rows = _rows_by_id(manifest)
+    assert status == 0
+    assert rows["online-codex-api-router-grounding-dino"]["status"] == "success"
+    assert rows["online-codex-api-router-grounding-dino"]["run_result_path"].endswith(
+        "run_result.json"
+    )
+    assert rows["online-claude-kimi-raw-fpv"]["status"] == "success"
+    assert rows["online-claude-mimo-omni-grounding-dino"]["status"] == "not_selected"
 
 
 def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
