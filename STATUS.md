@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -10,15 +10,15 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible, honest, and aligned with future real-robot backends.
 
-The active follow-up is the visual-grounding GPU sidecar benchmark for
-MolmoSpaces cleanup. The current implementation keeps the existing HTTP
-visual-grounding service boundary, records sidecar runtime diagnostics, and
-keeps CUDA/model dependencies in a dedicated `.venv-visual-grounding/` sidecar
-environment instead of the core cleanup `.venv/`. The 2026-05-27 local pass
-promoted Grounding DINO base-recall as the default real `camera-labels`
-pipeline, validated it through live Codex against the `world-labels` control on
-scene-0 seed-7, and recorded the current `camera-raw` mify route as not yet an
-apple-to-apple score.
+The active follow-up is Isaac Lab backend support for MolmoSpaces cleanup,
+running on the local GPU first rather than CI. The 2026-05-28 local pass loaded
+`procthor-10k-val` scene `val_0` through Isaac Sim/Lab, indexed real
+MolmoSpaces USD geometry prims from adjacent scene metadata, bound the selected
+cleanup handles to USD prim paths, and passed one-object cleanup/report parity
+with `primitive_provenance=isaac_semantic_pose`. The visual-grounding GPU
+sidecar benchmark remains a separate active confidence layer; Grounding DINO
+base-recall is still the current default real `camera-labels` pipeline until a
+broader corpus changes that ranking.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -32,11 +32,10 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Generate a more representative MolmoSpaces visual-grounding corpus and cleanup
-comparison: about 10 scene indices x 10 target-focused bbox examples for model
-selection, plus a smaller multi-scene live cleanup subset for agent behavior.
-Keep Grounding DINO base-recall as the default until that broader pass changes
-the ranking.
+Broaden local GPU coverage beyond the proven Isaac/MolmoSpaces `val_0` slice
+and decide whether to invest next in Isaac segmentation tensors or a larger
+multi-scene semantic cleanup subset. Keep Grounding DINO base-recall as the
+visual-grounding default until the broader corpus changes that ranking.
 
 ## Current Blocker
 
@@ -44,9 +43,9 @@ No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
 support Codex through repo-local `.env` mify or codex-env routes and support
 Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
-runs also support OpenClaw. The current `camera-raw` live Codex mify route is
-not comparable yet: the latest rerun placed one object, failed the sweep gate,
-and then hit a provider/tool namespace error.
+runs also support OpenClaw. The current Isaac blocker is segmentation:
+MolmoSpaces USD RGB/robot-view evidence passes for `val_0`, but Isaac returned
+no usable segmentation tensors or bbox candidates for the selected USD prims.
 
 ## Human Review Surface
 
@@ -64,6 +63,8 @@ and then hit a provider/tool namespace error.
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`
 - Auto semantic map build:
   `docs/plans/auto-semantic-map-build.md`
+- Isaac Lab MolmoSpaces backend support:
+  `docs/plans/isaac-lab-molmospaces-backend-support.md`
 - Visual grounding GPU sidecar benchmark:
   `docs/plans/visual-grounding-gpu-sidecar-benchmark.md`
 - Current status: `STATUS.md`

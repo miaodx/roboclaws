@@ -159,6 +159,126 @@ def test_isaac_usd_index_path_heuristics_skip_container_prims() -> None:
     assert isaac_lab_backend_worker._is_receptacle_prim_path("/World/Receptacles/sink_01") is True
 
 
+def test_isaac_molmospaces_scene_metadata_indexes_real_geometry_prims(
+    tmp_path: Path,
+) -> None:
+    scene_dir = tmp_path / "val_0"
+    scene_dir.mkdir()
+    scene_usd = scene_dir / "scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    (scene_dir / "scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7": {
+                        "hash_name": "mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7",
+                        "asset_id": "Mug_1",
+                        "object_id": "Mug|surface|7|71",
+                        "category": "Mug",
+                        "is_static": False,
+                        "parent": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7",
+                        "children": [],
+                    },
+                    "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5": {
+                        "hash_name": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+                        "asset_id": "Sink_1",
+                        "object_id": "Sink|5|1|0",
+                        "category": "Sink",
+                        "is_static": True,
+                        "children": [],
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    object_index: dict[str, dict[str, object]] = {}
+    receptacle_index: dict[str, dict[str, object]] = {}
+
+    isaac_lab_backend_worker._merge_molmospaces_metadata_index(
+        usd_path=scene_usd,
+        prim_paths_by_name={
+            "mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7": [
+                "/val_0/Geometry/mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7"
+            ],
+            "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5": [
+                "/val_0/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5"
+            ],
+        },
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    mug = object_index["mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7"]
+    sink = receptacle_index["sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5"]
+    assert mug["usd_prim_path"] == "/val_0/Geometry/mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7"
+    assert mug["category"] == "Mug"
+    assert mug["index_source"] == "usd_stage_traversal"
+    assert mug["metadata_source"] == "molmospaces_scene_metadata"
+    assert sink["usd_prim_path"] == "/val_0/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5"
+    assert sink["category"] == "Sink"
+    assert sink["kind"] == "receptacle"
+
+
+def test_isaac_molmospaces_metadata_prefers_top_level_geometry_prim() -> None:
+    assert (
+        isaac_lab_backend_worker._molmospaces_metadata_prim_path(
+            "mug_01",
+            {
+                "mug_01": [
+                    "/val_0/A/mug_01",
+                    "/val_0/Geometry/mug_01",
+                    "/val_0/Geometry/mug_01/mesh",
+                ]
+            },
+        )
+        == "/val_0/Geometry/mug_01"
+    )
+
+
+def test_isaac_scene_binding_can_match_synthetic_handle_to_real_usd_metadata() -> None:
+    object_index = {
+        "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6": {
+            "usd_prim_path": "/val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6",
+            "category": "Mug",
+            "public_label": "Mug Mug|surface|6|56 RoboTHOR_mug_ai2_2_v",
+            "index_source": "usd_stage_traversal",
+            "metadata_handle": "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6",
+        },
+        "mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7": {
+            "usd_prim_path": "/val_0/Geometry/mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7",
+            "category": "Mug",
+            "public_label": "Mug Mug|surface|7|71 Mug_1",
+            "index_source": "usd_stage_traversal",
+            "metadata_handle": "mug_8caf1bb3f88e9a00e02dfe9e6518aeb0_1_0_7",
+        },
+    }
+
+    binding = isaac_lab_backend_worker._bind_public_scene_item(
+        public_id="mug_01",
+        public_label="ceramic mug",
+        category="dish",
+        index=object_index,
+        kind="object",
+    )
+
+    assert binding["status"] == "bound"
+    assert binding["usd_handle"] == "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6"
+    assert binding["usd_prim_path"] == (
+        "/val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6"
+    )
+    assert binding["match_strategy"] == "public_id_prefix_first"
+    assert binding["index_source"] == "usd_stage_traversal"
+
+    state = {
+        "scene_binding_diagnostics": {"selected_object_bindings": {"mug_01": binding}},
+        "object_index": object_index,
+    }
+    assert isaac_lab_backend_worker._object_usd_prim_path(state, "mug_01") == (
+        "/val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6"
+    )
+
+
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

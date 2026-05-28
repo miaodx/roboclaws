@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import platform
+import re
 import sys
 import traceback
 from collections import Counter
@@ -265,6 +267,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
             scenario=scenario,
             object_index=object_index,
             receptacle_index=receptacle_index,
+            scene_binding_diagnostics=scene_binding_diagnostics,
             initial_receptacle_id=initial_receptacle_id,
         ),
         "mapping_gaps": mapping_gaps,
@@ -404,6 +407,7 @@ def real_runtime_smoke(
         "robot_view_capture_method": REAL_ROBOT_VIEW_CAPTURE_METHOD,
         "robot_view_images": robot_view_images,
         "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
+        "scene_bounds": capture.get("scene_bounds"),
         "stage_prim_count": stage_prim_count,
         "render_steps": render_steps,
         "scene_index_diagnostics": scene_index_diagnostics,
@@ -517,10 +521,12 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
 
     object_index: dict[str, dict[str, Any]] = {}
     receptacle_index: dict[str, dict[str, Any]] = {}
+    prim_paths_by_name: dict[str, list[str]] = {}
     stage_prim_count = 0
     for prim in stage.Traverse():
         stage_prim_count += 1
         prim_path = str(prim.GetPath())
+        prim_paths_by_name.setdefault(prim.GetName(), []).append(prim_path)
         handle = _usd_handle_from_prim(prim_path, object_index, receptacle_index)
         if _is_object_prim_path(prim_path):
             object_index[handle] = _usd_index_entry(prim_path, prim.GetName(), "object")
@@ -529,6 +535,12 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
                 **_usd_index_entry(prim_path, prim.GetName(), "receptacle"),
                 "support_pose": _pose_near(handle),
             }
+    _merge_molmospaces_metadata_index(
+        usd_path=usd_path,
+        prim_paths_by_name=prim_paths_by_name,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
 
     blockers = []
     if not object_index:
@@ -548,6 +560,131 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
         "receptacle_index": receptacle_index,
         "blockers": blockers,
     }
+
+
+def _merge_molmospaces_metadata_index(
+    *,
+    usd_path: Path,
+    prim_paths_by_name: dict[str, list[str]],
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+) -> None:
+    metadata = _load_molmospaces_scene_metadata(usd_path)
+    if not metadata:
+        return
+
+    for handle, raw_info in metadata.items():
+        if not isinstance(raw_info, dict):
+            continue
+        prim_path = _molmospaces_metadata_prim_path(handle, prim_paths_by_name)
+        if prim_path is None:
+            continue
+        if _is_molmospaces_receptacle_metadata(raw_info):
+            receptacle_index.setdefault(
+                handle,
+                {
+                    **_usd_metadata_index_entry(prim_path, handle, raw_info, "receptacle"),
+                    "support_pose": _pose_near(handle),
+                },
+            )
+        elif _is_molmospaces_object_metadata(raw_info):
+            object_index.setdefault(
+                handle,
+                _usd_metadata_index_entry(prim_path, handle, raw_info, "object"),
+            )
+
+
+def _load_molmospaces_scene_metadata(usd_path: Path) -> dict[str, dict[str, Any]]:
+    metadata_path = usd_path.parent / "scene_metadata.json"
+    if not metadata_path.is_file():
+        return {}
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    objects = payload.get("objects") if isinstance(payload, dict) else None
+    if not isinstance(objects, dict):
+        return {}
+    return {
+        str(handle): dict(info)
+        for handle, info in objects.items()
+        if isinstance(info, dict) and str(handle)
+    }
+
+
+def _molmospaces_metadata_prim_path(
+    handle: str,
+    prim_paths_by_name: dict[str, list[str]],
+) -> str | None:
+    candidates = list(prim_paths_by_name.get(handle) or [])
+    if not candidates:
+        return None
+    return sorted(candidates, key=_molmospaces_prim_path_rank)[0]
+
+
+def _molmospaces_prim_path_rank(prim_path: str) -> tuple[int, int, str]:
+    normalized = f"/{prim_path.strip('/')}/"
+    is_top_level_geometry = "/geometry/" in normalized.lower() and normalized.count("/") <= 4
+    return (0 if is_top_level_geometry else 1, normalized.count("/"), prim_path)
+
+
+def _usd_metadata_index_entry(
+    prim_path: str,
+    handle: str,
+    metadata: dict[str, Any],
+    kind: str,
+) -> dict[str, Any]:
+    category = str(metadata.get("category") or _category_from_usd_name(handle))
+    metadata_object_id = str(metadata.get("object_id") or "")
+    asset_id = str(metadata.get("asset_id") or "")
+    label_parts = [category, metadata_object_id, asset_id]
+    public_label = " ".join(part for part in label_parts if part)
+    return {
+        "usd_prim_path": prim_path,
+        "category": category,
+        "public_label": public_label or handle,
+        "index_source": "usd_stage_traversal",
+        "kind": kind,
+        "metadata_source": "molmospaces_scene_metadata",
+        "metadata_handle": handle,
+        "metadata_object_id": metadata_object_id,
+        "asset_id": asset_id,
+        "parent": str(metadata.get("parent") or ""),
+        "is_static": bool(metadata.get("is_static")),
+    }
+
+
+def _is_molmospaces_object_metadata(metadata: dict[str, Any]) -> bool:
+    return metadata.get("is_static") is False
+
+
+def _is_molmospaces_receptacle_metadata(metadata: dict[str, Any]) -> bool:
+    category = _norm(metadata.get("category"))
+    if not category:
+        return False
+    if category in _MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS:
+        return True
+    return bool(metadata.get("children")) and metadata.get("is_static") is True
+
+
+_MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS = {
+    "bed",
+    "bookshelf",
+    "chair",
+    "countertop",
+    "desk",
+    "diningtable",
+    "dresser",
+    "fridge",
+    "garbagecan",
+    "shelf",
+    "shelvingunit",
+    "sink",
+    "sofa",
+    "stand",
+    "toilet",
+    "tvstand",
+}
 
 
 def _usd_index_entry(prim_path: str, prim_name: str, kind: str) -> dict[str, Any]:
@@ -732,6 +869,15 @@ def _scene_index_match(
         if label_norm and label_norm in {handle_norm, prim_name_norm, entry_label_norm}:
             return handle, entry, "normalized_public_label"
 
+    prefix_match = _first_semantic_index_match(
+        public_id=public_id,
+        public_label=public_label,
+        category=category,
+        index=index,
+    )
+    if prefix_match is not None:
+        return prefix_match
+
     category_norm = _norm(category)
     if not category_norm:
         return None
@@ -745,6 +891,83 @@ def _scene_index_match(
         handle, entry = category_matches[0]
         return handle, entry, "unique_category"
     return None
+
+
+def _first_semantic_index_match(
+    *,
+    public_id: str,
+    public_label: str,
+    category: str | None,
+    index: dict[str, dict[str, Any]],
+) -> tuple[str, dict[str, Any], str] | None:
+    public_prefix = _public_handle_prefix(public_id)
+    if public_prefix:
+        matches = _semantic_index_matches((public_prefix,), index)
+        if matches:
+            handle, entry = matches[0]
+            return handle, entry, "public_id_prefix_first"
+
+    tokens = _scene_match_tokens(public_label, category)
+    if tokens:
+        matches = _semantic_index_matches(tuple(sorted(tokens)), index)
+        if matches:
+            handle, entry = matches[0]
+            return handle, entry, "semantic_label_token_first"
+    return None
+
+
+def _semantic_index_matches(
+    tokens: tuple[str, ...],
+    index: dict[str, dict[str, Any]],
+) -> list[tuple[str, dict[str, Any]]]:
+    matches: list[tuple[str, dict[str, Any]]] = []
+    for handle, entry in sorted(index.items()):
+        entry_text = _norm(
+            " ".join(
+                str(entry.get(key) or "")
+                for key in (
+                    "metadata_handle",
+                    "public_label",
+                    "category",
+                    "metadata_object_id",
+                    "asset_id",
+                )
+            )
+        )
+        handle_norm = _norm(handle)
+        if any(
+            token and (handle_norm.startswith(token) or token in entry_text) for token in tokens
+        ):
+            matches.append((handle, entry))
+    return matches
+
+
+def _public_handle_prefix(public_id: str) -> str:
+    prefix = str(public_id or "").split("_", 1)[0]
+    normalized = _norm(prefix)
+    return normalized if len(normalized) >= 3 else ""
+
+
+def _scene_match_tokens(*values: Any) -> set[str]:
+    tokens: set[str] = set()
+    for value in values:
+        text = str(value or "")
+        for token in re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)|\d+", text):
+            normalized = _norm(token)
+            if len(normalized) >= 3:
+                tokens.add(normalized)
+        normalized = _norm(text)
+        if len(normalized) >= 3:
+            tokens.add(normalized)
+    for token, aliases in {
+        "remotecontrol": ("remote",),
+        "cellphone": ("phone", "cellulartelephone"),
+        "cellulartelephone": ("phone", "cellphone"),
+        "tvstand": ("stand",),
+    }.items():
+        if token in tokens:
+            tokens.update(aliases)
+    return tokens
 
 
 def _unbound_scene_item(public_id: str, kind: str) -> dict[str, Any]:
@@ -833,6 +1056,8 @@ def _capture_isaac_lab_camera_views(
     if opened is False:
         raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
     _wait_for_stage_load(stage_utils, simulation_app)
+    scene_bounds = _current_stage_bounds(stage_utils)
+    _ensure_capture_lighting(stage_utils)
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
@@ -857,7 +1082,7 @@ def _capture_isaac_lab_camera_views(
             ),
         )
     )
-    view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device)
+    view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device, scene_bounds=scene_bounds)
     sim.reset()
     saved: dict[str, str] = {}
     segmentation_views: list[dict[str, Any]] = []
@@ -888,6 +1113,7 @@ def _capture_isaac_lab_camera_views(
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
+        "scene_bounds": scene_bounds,
         "segmentation": _camera_segmentation_capture_diagnostics(segmentation_views)
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
@@ -1103,9 +1329,82 @@ def _int_or_none(value: Any) -> int | None:
         return None
 
 
-def _isaac_camera_view_poses(*, torch: Any, device: Any) -> dict[str, tuple[Any, Any]]:
+def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
+    from pxr import Usd, UsdGeom
+
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return None
+    stage = get_current_stage()
+    if stage is None:
+        return None
+    root = stage.GetDefaultPrim() or stage.GetPseudoRoot()
+    cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+    )
+    bbox = cache.ComputeWorldBound(root).ComputeAlignedBox()
+    min_point = [float(value) for value in bbox.GetMin()]
+    max_point = [float(value) for value in bbox.GetMax()]
+    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
+    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]) or max(size) <= 0:
+        return None
+    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
+    return {"min": min_point, "max": max_point, "size": size, "center": center}
+
+
+def _ensure_capture_lighting(stage_utils: Any) -> None:
+    from pxr import Gf, UsdGeom, UsdLux
+
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return
+    stage = get_current_stage()
+    if stage is None:
+        return
+    dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
+    dome.CreateIntensityAttr(1500.0)
+    key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
+    key.CreateIntensityAttr(7000.0)
+    UsdGeom.XformCommonAPI(key).SetRotate(Gf.Vec3f(-55.0, 0.0, 35.0))
+
+
+def _isaac_camera_view_poses(
+    *,
+    torch: Any,
+    device: Any,
+    scene_bounds: dict[str, list[float]] | None = None,
+) -> dict[str, tuple[Any, Any]]:
     def tensor(values: list[list[float]]) -> Any:
         return torch.tensor(values, dtype=torch.float32, device=device)
+
+    if scene_bounds:
+        center = scene_bounds["center"]
+        size = scene_bounds["size"]
+        span_x = max(size[0], 1.5)
+        span_y = max(size[1], 1.5)
+        span = max(span_x, span_y, size[2], 2.0)
+        floor_z = scene_bounds["min"][2]
+        target_z = max(floor_z + 0.9, center[2])
+        target = [center[0], center[1], target_z]
+        return {
+            "fpv": (
+                tensor([[center[0] - span_x * 0.35, center[1] - span_y * 0.55, floor_z + 1.25]]),
+                tensor([target]),
+            ),
+            "chase": (
+                tensor([[center[0] + span_x * 0.55, center[1] - span_y * 0.75, floor_z + 2.4]]),
+                tensor([[center[0], center[1], target_z * 0.9]]),
+            ),
+            "map": (
+                tensor([[center[0], center[1], scene_bounds["max"][2] + span * 1.25]]),
+                tensor([[center[0], center[1], floor_z]]),
+            ),
+            "verify": (
+                tensor([[center[0] - span_x * 0.18, center[1] - span_y * 0.35, floor_z + 1.6]]),
+                tensor([[center[0] + span_x * 0.08, center[1] + span_y * 0.05, target_z]]),
+            ),
+        }
 
     return {
         "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
@@ -1616,6 +1915,7 @@ def _initial_semantic_pose_state(
     scenario: CleanupScenario,
     object_index: dict[str, Any],
     receptacle_index: dict[str, Any],
+    scene_binding_diagnostics: dict[str, Any] | None,
     initial_receptacle_id: str,
 ) -> dict[str, Any]:
     state = {
@@ -1627,6 +1927,7 @@ def _initial_semantic_pose_state(
         "open_receptacle_ids": [],
         "object_index": object_index,
         "receptacle_index": receptacle_index,
+        "scene_binding_diagnostics": scene_binding_diagnostics or {},
     }
     return {
         "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -1679,11 +1980,9 @@ def _record_semantic_pose_event(
         "planner_backed": False,
         "physical_robot": False,
         "object_id": object_id,
-        "object_usd_prim_path": _index_usd_prim_path(state.get("object_index"), object_id),
+        "object_usd_prim_path": _object_usd_prim_path(state, object_id),
         "receptacle_id": receptacle_id,
-        "receptacle_usd_prim_path": _index_usd_prim_path(
-            state.get("receptacle_index"), receptacle_id
-        ),
+        "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
         "previous_location_id": previous_location_id,
         "location_id": location_id,
         "location_relation": relation,
@@ -1735,12 +2034,10 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
         relation = _dict(containment.get(object_id)).get("location_relation") or "on"
         poses[object_id] = {
             "object_id": object_id,
-            "usd_prim_path": _index_usd_prim_path(state.get("object_index"), object_id),
+            "usd_prim_path": _object_usd_prim_path(state, object_id),
             "location_id": location_id,
             "support_receptacle_id": support_receptacle_id,
-            "support_usd_prim_path": _index_usd_prim_path(
-                state.get("receptacle_index"), support_receptacle_id
-            ),
+            "support_usd_prim_path": _receptacle_usd_prim_path(state, support_receptacle_id),
             "attached_to_robot": location_id == HELD_LOCATION_ID,
             "location_relation": relation,
             "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
@@ -1761,13 +2058,44 @@ def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[
         opened = receptacle_id in open_ids
         articulations[receptacle_id] = {
             "receptacle_id": receptacle_id,
-            "usd_prim_path": _index_usd_prim_path(state.get("receptacle_index"), receptacle_id),
+            "usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
             "open": opened,
             "joint_state": "open" if opened else "closed",
             "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
             "rendered_to_usd": False,
         }
     return articulations
+
+
+def _object_usd_prim_path(state: dict[str, Any], object_id: str) -> str:
+    return _binding_usd_prim_path(
+        state.get("scene_binding_diagnostics"),
+        object_id,
+        ("selected_object_bindings", "object_bindings"),
+    ) or _index_usd_prim_path(state.get("object_index"), object_id)
+
+
+def _receptacle_usd_prim_path(state: dict[str, Any], receptacle_id: str) -> str:
+    return _binding_usd_prim_path(
+        state.get("scene_binding_diagnostics"),
+        receptacle_id,
+        ("selected_target_receptacle_bindings", "receptacle_bindings"),
+    ) or _index_usd_prim_path(state.get("receptacle_index"), receptacle_id)
+
+
+def _binding_usd_prim_path(
+    scene_binding_diagnostics: Any,
+    public_id: str,
+    binding_keys: tuple[str, ...],
+) -> str:
+    if not public_id:
+        return ""
+    diagnostics = _dict(scene_binding_diagnostics)
+    for key in binding_keys:
+        binding = _dict(_dict(diagnostics.get(key)).get(public_id))
+        if binding.get("status") == "bound" and binding.get("usd_prim_path"):
+            return str(binding["usd_prim_path"])
+    return ""
 
 
 def _index_usd_prim_path(index: Any, handle: str) -> str:

@@ -6,8 +6,12 @@ local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
 path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
 provenance, and backend semantic-pose state diagnostics implemented;
-MolmoSpaces USD scene parity is now blocked on real-scene camera framing
+local GPU MolmoSpaces USD scene indexing, selected USD binding, and one-object
+cleanup/report parity now pass over `procthor-10k-val` scene `val_0`.
+Segmentation remains unavailable/blocked, and manipulation is still explicitly
+`isaac_semantic_pose`, not planner-backed.
 **Created:** 2026-05-27
+**Last updated:** 2026-05-28
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
 **Workflow:** Pre-GSD plan reviewed through `intuitive-flow` autoplan intake;
@@ -295,8 +299,11 @@ protocol:
   selected binding rows still happen to pass.
 
 Real `.venv-isaaclab/` execution on this GPU host now proves Phase A renderer
-and generated-USD plumbing, but does not yet prove MolmoSpaces USD scene parity,
-segmentation, or planner-backed manipulation.
+and generated-USD plumbing. It also proves a first Phase B/Phase C/Phase D
+slice over one real MolmoSpaces USD scene: scene load, USD object/receptacle
+indexing, selected cleanup handle binding, static Isaac robot-view provenance,
+snapshot provenance, and one-object semantic cleanup/report parity. It still
+does not prove Isaac segmentation or planner-backed manipulation.
 
 Latest installing local preflight, run on 2026-05-28 with the NVIDIA/Omniverse
 EULA accepted by the human:
@@ -326,7 +333,7 @@ timelines, `primitive_provenance=isaac_semantic_pose`, and a successful
 one-object deterministic cleanup score. This proves the cleanup/report path over
 a generated local USD scene, not MolmoSpaces scene parity.
 
-Latest MolmoSpaces USD scene probe, run on 2026-05-28:
+MolmoSpaces USD scene download/probe, run on 2026-05-28:
 the upstream `molmo_spaces_isaac` downloader source was available from the local
 uv git checkout, and R2 access to `isaac-thor-resources` worked from this
 mainland-China host. The USD `procthor-10k-val` manifest reported about 64GB
@@ -334,15 +341,56 @@ available data in on-demand mode; only `procthor-10k-val_val_0.tar.zst`
 (`58.063` MB) was downloaded and linked to
 `output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda`.
 
+The first real-scene runtime smoke against that USD failed on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-smoke
 scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda
 require_local_scene_usd=true stamp=0528_val0_blank_gate` then failed quickly
 with `Isaac Lab camera RGB tensor was blank for fpv`. The failure run wrote
 `output/isaaclab/runtime-smoke/0528_val0_blank_gate/init_result.json` and left
 no stale Isaac worker or telemetry process after the failure-path cleanup fix.
-Do not claim Phase B or full cleanup MolmoSpaces scene parity until the real
-scene camera pose/framing is fixed and the local-scene smoke plus
-`molmo-isaac-cleanup-smoke scene_usd_path=...` both pass against this real USD.
+
+That real-scene blocker was resolved by dynamically deriving camera poses from
+the loaded USD stage bounds, adding smoke lighting, indexing MolmoSpaces
+`scene_metadata.json`, and resolving synthetic public cleanup ids such as
+`mug_01` through selected USD binding diagnostics.
+
+Latest MolmoSpaces USD runtime smoke, run on 2026-05-28:
+`just agent::harness molmo-isaac-runtime-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda
+require_local_scene_usd=true stamp=0528_val0_metadata_index`
+wrote `output/isaaclab/runtime-smoke/0528_val0_metadata_index/` and passed the
+strict checker. Evidence records `scene_index_status=indexed`,
+`stage_prim_count=308`, `object_candidate_count=86`,
+`receptacle_candidate_count=29`, `scene_binding_status=selected_bound`, and no
+scene-index blockers. The selected public object `mug_01` is bound by
+`public_id_prefix_first` to
+`/val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6`; the selected
+sink target is bound to
+`/val_0/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5`. Both selected
+rows use `index_source=usd_stage_traversal`.
+
+Latest MolmoSpaces USD cleanup-shaped smoke, run on 2026-05-28:
+`just agent::harness molmo-isaac-cleanup-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda
+stamp=0528_val0_semantic_path_cleanup`
+wrote `output/isaaclab/cleanup-smoke/0528_val0_semantic_path_cleanup/` and the
+strict cleanup checker returned `molmo-realworld-cleanup ok`. Evidence includes
+`run_result.json`, `trace.jsonl`, `report.html`, `isaac_scene_index.json`,
+real Isaac runtime diagnostics, readable nonblank before/after snapshots,
+FPV/chase/map/verify robot-view provenance, selected USD binding rows, and
+semantic pose events whose object/support/articulation USD paths resolve through
+the selected binding diagnostics. The run completed one deterministic cleanup
+with `backend=isaaclab_subprocess`, `cleanup_status=success`, and
+`primitive_provenance=isaac_semantic_pose`.
+
+Remaining limitations after the passing MolmoSpaces USD smoke runs:
+segmentation is still recorded as `blocked_capability` because Isaac returned
+no usable segmentation tensors/bbox candidates for the selected USD prims;
+semantic pose edits are tracked in backend JSON state and snapshots rather than
+rendered back into the live USD stage; planner-backed/physics-backed
+manipulation is still out of scope for this slice; Isaac/Omniverse runtime logs
+still include non-fatal USD/runtime warnings, so broader scene coverage should
+keep strict artifact gates enabled rather than relying on import success.
 
 ## Architecture
 
