@@ -9,6 +9,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
+    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
@@ -308,6 +309,50 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
     assert current_rows[0]["prior_object_id"] == prior_rows[0]["prior_object_id"]
     assert current_rows[0]["snapshot_object_id"] == prior_rows[0]["snapshot_object_id"]
     _assert_no_forbidden_keys(runtime_map)
+
+
+def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+    waypoint = metric_map["inspection_waypoints"][0]
+    navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    for candidate in metric_map["inspection_waypoints"][1:]:
+        if observation["visible_object_detections"]:
+            break
+        waypoint = candidate
+        navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+
+    assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert metric_map["rooms"] == []
+    assert metric_map["driveable_ways"] == []
+    assert fixture_hints["rooms"] == []
+    assert waypoint["waypoint_id"].startswith("generated_")
+    assert waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert waypoint["candidate_provenance"]["source"] == "public_occupancy_free_space"
+    assert waypoint["candidate_provenance"]["source_pose"] == "free_space_sample"
+    assert waypoint["candidate_provenance"]["source_room_hidden"] is True
+    assert waypoint["candidate_provenance"]["source_fixtures_hidden"] is True
+    assert waypoint["candidate_provenance"]["source_waypoint_hidden"] is True
+    assert "source_waypoint_id" not in waypoint["candidate_provenance"]
+    assert navigation["ok"] is True
+    assert observation["visible_object_detections"]
+    assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
+    assert runtime_map["minimal_map_mode"] is True
+    assert runtime_map["static_map"]["rooms"] == []
+    assert runtime_map["static_map"]["fixtures"] == []
+    assert runtime_map["static_map"]["driveable_ways"] == []
+    assert runtime_map["generated_exploration_candidates"]
+    assert runtime_map["observed_objects"]
+    _assert_no_forbidden_keys(agent_view)
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:

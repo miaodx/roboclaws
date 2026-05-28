@@ -106,6 +106,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-runtime-metric-map", action="store_true")
     parser.add_argument("--require-semantic-sweep", action="store_true")
+    parser.add_argument("--require-minimal-map", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
     parser.add_argument("--require-visual-grounding-failure", action="store_true")
     parser.add_argument("--require-model-declared-observations", action="store_true")
@@ -198,6 +199,7 @@ def main() -> None:
             require_camera_model_policy=args.require_camera_model_policy,
             require_runtime_metric_map=args.require_runtime_metric_map,
             require_semantic_sweep=args.require_semantic_sweep,
+            require_minimal_map=args.require_minimal_map,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
             require_visual_grounding_failure=args.require_visual_grounding_failure,
             require_model_declared_observations=args.require_model_declared_observations,
@@ -268,6 +270,7 @@ def _assert_result(
     require_camera_model_policy: bool = False,
     require_runtime_metric_map: bool = False,
     require_semantic_sweep: bool = False,
+    require_minimal_map: bool = False,
     expect_visual_grounding_pipeline: str | None = None,
     require_visual_grounding_failure: bool = False,
     require_model_declared_observations: bool = False,
@@ -345,6 +348,8 @@ def _assert_result(
 
     agent_view = data.get("agent_view") or {}
     _assert_public_agent_view(agent_view)
+    if require_minimal_map:
+        _assert_minimal_map(data, agent_view)
     if require_runtime_metric_map:
         _assert_runtime_metric_map(
             data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {},
@@ -645,7 +650,12 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
     worklist = agent_view.get("cleanup_worklist") or {}
     if worklist:
         assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
-        assert worklist.get("waypoint_source") == "static_map_fixture_coverage", worklist
+        expected_waypoint_source = (
+            "generated_exploration_candidate"
+            if (agent_view.get("runtime_metric_map") or {}).get("minimal_map_mode") is True
+            else "static_map_fixture_coverage"
+        )
+        assert worklist.get("waypoint_source") == expected_waypoint_source, worklist
     policy_view = agent_view.get("policy_view") or {}
     if policy_view:
         assert policy_view.get("chase_camera_policy_input") is False, policy_view
@@ -772,6 +782,41 @@ def _assert_runtime_metric_map(
         assert "is_misplaced" not in candidate, candidate
         assert candidate.get("promotion_status") != "promoted", candidate
     _assert_no_forbidden_keys(runtime_metric_map)
+
+
+def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:
+    assert data.get("map_mode") == "minimal", data
+    metric_map = agent_view.get("metric_map") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    static_map = runtime_map.get("static_map") or {}
+    assert metric_map.get("mode") == "minimal", metric_map
+    assert fixture_hints.get("mode") == "minimal", fixture_hints
+    assert runtime_map.get("map_mode") == "minimal", runtime_map
+    assert runtime_map.get("minimal_map_mode") is True, runtime_map
+    assert metric_map.get("rooms") == [], metric_map
+    assert metric_map.get("driveable_ways") == [], metric_map
+    assert fixture_hints.get("rooms") == [], fixture_hints
+    assert static_map.get("rooms") == [], static_map
+    assert static_map.get("fixtures") == [], static_map
+    assert static_map.get("driveable_ways") == [], static_map
+    waypoints = metric_map.get("inspection_waypoints") or []
+    assert waypoints, metric_map
+    generated = runtime_map.get("generated_exploration_candidates") or []
+    assert len(generated) == len(waypoints), runtime_map
+    for waypoint in waypoints:
+        assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
+        assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
+        assert waypoint.get("purpose") == "minimal_map_exploration", waypoint
+        provenance = waypoint.get("candidate_provenance") or {}
+        assert provenance.get("source") == "public_occupancy_free_space", waypoint
+        assert provenance.get("source_room_hidden") is True, waypoint
+        assert provenance.get("source_fixtures_hidden") is True, waypoint
+        assert provenance.get("source_waypoint_hidden") is True, waypoint
+        assert "source_waypoint_id" not in provenance, waypoint
+    assert (data.get("semantic_sweep") or {}).get("minimal_map_mode") is True, data
+    _assert_no_forbidden_keys(metric_map)
+    _assert_no_forbidden_keys(fixture_hints)
 
 
 def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:

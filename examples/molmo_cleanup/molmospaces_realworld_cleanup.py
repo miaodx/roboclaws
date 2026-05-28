@@ -61,8 +61,11 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
     MAIN_CLEANUP_AGENT_PRODUCER,
+    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    REALWORLD_MAP_MODES,
+    RICH_MAP_MODE,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
@@ -152,6 +155,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Visit inspection waypoints and update the runtime metric map without "
             "attempting cleanup actions."
+        ),
+    )
+    parser.add_argument(
+        "--map-mode",
+        choices=tuple(sorted(REALWORLD_MAP_MODES)),
+        default=RICH_MAP_MODE,
+        help=(
+            "Agent-facing map projection: rich exposes authored public semantics; "
+            "minimal exposes occupancy geometry plus generated exploration candidates."
         ),
     )
     parser.add_argument(
@@ -248,6 +260,7 @@ def run_realworld_cleanup(
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
     semantic_sweep: bool = False,
+    map_mode: str = RICH_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
@@ -266,6 +279,9 @@ def run_realworld_cleanup(
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    if map_mode not in REALWORLD_MAP_MODES:
+        allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
+        raise ValueError(f"map_mode must be one of: {allowed}")
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
@@ -326,6 +342,7 @@ def run_realworld_cleanup(
         visual_grounding_artifact_base_dir=output_dir,
         visual_grounding_run_id=f"seed-{seed}",
         runtime_map_prior=runtime_map_prior,
+        map_mode=map_mode,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -604,6 +621,7 @@ def run_realworld_cleanup(
         "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
+        "map_mode": map_mode,
         "semantic_sweep_mode": semantic_sweep,
         "cleanup_actions_disabled": semantic_sweep,
         "runtime_metric_map_prior": {
@@ -634,6 +652,8 @@ def run_realworld_cleanup(
         ),
         "semantic_sweep": {
             "enabled": semantic_sweep,
+            "map_mode": map_mode,
+            "minimal_map_mode": map_mode == MINIMAL_MAP_MODE,
             "camera_schedule": list(SEMANTIC_SWEEP_CAMERA_SCHEDULE) if semantic_sweep else [],
             "snapshot_artifact": str(runtime_metric_map_path) if semantic_sweep else "",
             "cleanup_actions_disabled": semantic_sweep,
@@ -1110,6 +1130,7 @@ def main(argv: list[str] | None = None) -> int:
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,
         semantic_sweep=args.semantic_sweep,
+        map_mode=args.map_mode,
         runtime_map_prior_path=args.runtime_map_prior,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,

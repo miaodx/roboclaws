@@ -5330,10 +5330,14 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     static_map = runtime_metric_map.get("static_map") or {}
     observed = runtime_metric_map.get("observed_objects") or []
     candidates = runtime_metric_map.get("map_update_candidates") or []
+    map_mode = runtime_metric_map.get("map_mode", "rich")
+    generated = runtime_metric_map.get("generated_exploration_candidates") or []
     summary = (
         f"schema={runtime_metric_map.get('schema', '')}, "
+        f"map mode={map_mode}, "
         f"static fixtures={len(static_map.get('fixtures') or [])}, "
         f"observed objects={len(observed)}, update candidates={len(candidates)}, "
+        f"generated exploration candidates={len(generated)}, "
         f"source map mutated={runtime_metric_map.get('source_map_mutated')}"
     )
     rows = []

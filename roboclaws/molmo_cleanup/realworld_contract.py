@@ -42,6 +42,9 @@ RUNTIME_METRIC_MAP_SCHEMA = "runtime_metric_map_v1"
 CLEANUP_WORKLIST_SCHEMA = "cleanup_worklist_v1"
 CLEANUP_POLICY_TRACE_SCHEMA = "cleanup_policy_trace_v1"
 REAL_ROBOT_READINESS_SCHEMA = "real_robot_readiness_v1"
+RICH_MAP_MODE = "rich"
+MINIMAL_MAP_MODE = "minimal"
+REALWORLD_MAP_MODES = frozenset({RICH_MAP_MODE, MINIMAL_MAP_MODE})
 DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
 VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
@@ -184,18 +187,23 @@ class RealWorldCleanupContract:
         visual_grounding_artifact_base_dir: str | Path | None = None,
         visual_grounding_run_id: str = "",
         runtime_map_prior: dict[str, Any] | None = None,
+        map_mode: str = RICH_MAP_MODE,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
         if perception_mode not in REALWORLD_PERCEPTION_MODES:
             allowed = ", ".join(sorted(REALWORLD_PERCEPTION_MODES))
             raise ValueError(f"perception_mode must be one of: {allowed}")
+        if map_mode not in REALWORLD_MAP_MODES:
+            allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
+            raise ValueError(f"map_mode must be one of: {allowed}")
         self.contract = contract
         self.backend = contract.backend
         self.scenario: CleanupScenario = contract.backend.scenario
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = perception_mode
+        self.map_mode = map_mode
         self.visual_grounding_client = visual_grounding_client
         self.visual_grounding_pipeline_id = str(
             visual_grounding_pipeline_id
@@ -246,7 +254,30 @@ class RealWorldCleanupContract:
             self._rooms = _rooms_from_fixtures(self._fixtures)
             self._waypoints = _inspection_waypoints(self._rooms)
             self._scene_index_fixture_overlay = {}
+        if self.map_mode == MINIMAL_MAP_MODE:
+            source_metric_map = (
+                self._bundle_metric_map_template
+                if self._bundle_metric_map_template is not None
+                else self._fallback_metric_map_template()
+            )
+            self._public_rooms = []
+            self._public_fixtures: dict[str, dict[str, Any]] = {}
+            self._public_waypoints = _minimal_generated_exploration_waypoints(
+                source_metric_map,
+                fallback_waypoints=self._waypoints,
+            )
+            self._private_waypoint_by_public_id = _private_waypoint_map_for_generated_candidates(
+                self._public_waypoints,
+                self._waypoints,
+            )
+        else:
+            self._public_rooms = self._rooms
+            self._public_fixtures = self._fixtures
+            self._public_waypoints = self._waypoints
+            self._private_waypoint_by_public_id = {}
         first_waypoint = self._waypoints[0]["waypoint_id"] if self._waypoints else ""
+        if self.map_mode == MINIMAL_MAP_MODE and self._public_waypoints:
+            first_waypoint = str(self._public_waypoints[0]["waypoint_id"])
         self._current_waypoint_id = first_waypoint
         self._observed_waypoint_ids: set[str] = set()
         self._observed_handles_by_object_id: dict[str, str] = {}
@@ -291,7 +322,93 @@ class RealWorldCleanupContract:
     def public_receptacles_by_id(self) -> dict[str, dict[str, Any]]:
         return {fixture_id: dict(fixture) for fixture_id, fixture in self._fixtures.items()}
 
+    def _minimal_metric_map(self) -> dict[str, Any]:
+        source = (
+            copy.deepcopy(self._bundle_metric_map_template)
+            if self._bundle_metric_map_template is not None
+            else self._fallback_metric_map_template()
+        )
+        frame_id = str(source.get("frame_id") or "map")
+        map_id = str(source.get("map_id") or f"{self.scenario.scenario_id}_minimal_map")
+        map_version = str(source.get("map_version") or "minimal-navigation-map-v1")
+        metric_map = {
+            "ok": True,
+            "tool": "metric_map",
+            "status": "ok",
+            "contract": REALWORLD_CONTRACT,
+            "schema": REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+            "mode": MINIMAL_MAP_MODE,
+            "frame_id": frame_id,
+            "map_id": map_id,
+            "map_version": map_version,
+            "resolution_m": float(source.get("resolution_m") or 0.05),
+            "origin": dict(source.get("origin") or {"x": 0.0, "y": 0.0, "yaw": 0.0}),
+            "width": int(source.get("width") or 240),
+            "height": int(source.get("height") or 180),
+            "occupancy_values": dict(
+                source.get("occupancy_values") or {"unknown": -1, "free": 0, "occupied": 100}
+            ),
+            "occupancy_grid_artifact": source.get("occupancy_grid_artifact"),
+            "map_bundle": dict(
+                source.get("map_bundle")
+                or metric_map_bundle_metadata(
+                    environment_id=self.scenario.scenario_id,
+                    map_id=map_id,
+                    map_version=map_version,
+                )
+            ),
+            "rooms": [],
+            "driveable_ways": [],
+            "robot_pose": {
+                "frame_id": frame_id,
+                **self._current_pose(),
+                "room_id": self._current_room_id(),
+                "waypoint_id": self._current_waypoint_id,
+                "pose_source": "generated_exploration_candidate",
+            },
+            "inspection_waypoints": [
+                {
+                    **dict(item),
+                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
+                }
+                for item in self._public_waypoints
+            ],
+            "generated_exploration_candidates": [
+                {
+                    **dict(item),
+                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
+                }
+                for item in self._public_waypoints
+            ],
+            "minimal_map": {
+                "enabled": True,
+                "source": "public_occupancy_free_space",
+                "generated_candidate_count": len(self._public_waypoints),
+                "source_rooms_hidden": True,
+                "source_fixtures_hidden": True,
+                "source_inspection_waypoints_hidden": True,
+                "public_contract_note": (
+                    "Minimal map mode exposes occupancy geometry and generated "
+                    "exploration candidates, not authored room or fixture semantics."
+                ),
+            },
+            "public_contract_note": (
+                "Minimal Navigation Map Artifact projection: authored rooms, fixtures, "
+                "and inspection waypoints are hidden from Agent View. The robot may "
+                "navigate only to generated exploration candidates while Runtime Metric "
+                "Map observations enrich the run."
+            ),
+        }
+        metric_map["runtime_metric_map"] = self.runtime_metric_map_payload(
+            metric_map=metric_map,
+            fixture_hints=self.fixture_hints(),
+        )
+        _assert_no_forbidden_agent_view_keys(metric_map)
+        return metric_map
+
     def metric_map(self) -> dict[str, Any]:
+        if self.map_mode == MINIMAL_MAP_MODE:
+            return self._minimal_metric_map()
         if self._bundle_metric_map_template is not None:
             metric_map = copy.deepcopy(self._bundle_metric_map_template)
             frame_id = str(metric_map.get("frame_id") or "map")
@@ -397,6 +514,8 @@ class RealWorldCleanupContract:
         return metric_map
 
     def fixture_hints(self) -> dict[str, Any]:
+        if self.map_mode == MINIMAL_MAP_MODE:
+            return self._minimal_fixture_hints()
         if self._bundle_fixture_hints_template is not None:
             fixture_hints = copy.deepcopy(self._bundle_fixture_hints_template)
             if self._scene_index_fixture_overlay:
@@ -479,6 +598,25 @@ class RealWorldCleanupContract:
             ),
             rooms=rooms,
         )
+
+    def _minimal_fixture_hints(self) -> dict[str, Any]:
+        payload = self._ok(
+            "fixture_hints",
+            contract=REALWORLD_CONTRACT,
+            schema="static_fixture_semantic_map_v1",
+            mode=MINIMAL_MAP_MODE,
+            fixture_hint_mode=self.fixture_hint_mode,
+            contains_runtime_observations=False,
+            rooms=[],
+            generated_exploration_candidate_count=len(self._public_waypoints),
+            public_contract_note=(
+                "Minimal map mode intentionally hides authored rooms and fixtures. "
+                "Runtime observed handles and map update candidates must come from "
+                "public observations, not source-map semantics."
+            ),
+        )
+        _assert_no_forbidden_agent_view_keys(payload)
+        return payload
 
     def navigate_to_room(self, room_id: str) -> dict[str, Any]:
         room = next((item for item in self._rooms if item["room_id"] == room_id), None)
@@ -1208,6 +1346,8 @@ class RealWorldCleanupContract:
             "schema": RUNTIME_METRIC_MAP_SCHEMA,
             "contract": REALWORLD_CONTRACT,
             "freshness": "current_run",
+            "map_mode": self.map_mode,
+            "minimal_map_mode": self.map_mode == MINIMAL_MAP_MODE,
             "source_map_mutated": False,
             "private_truth_included": False,
             "static_map": self._runtime_static_map_payload(
@@ -1234,6 +1374,19 @@ class RealWorldCleanupContract:
                 "Navigation Map Artifact or include private scoring truth."
             ),
         }
+        if self.map_mode == MINIMAL_MAP_MODE:
+            payload["generated_exploration_candidates"] = [
+                {
+                    **dict(item),
+                    "visited": str(item.get("waypoint_id") or "") in self._observed_waypoint_ids,
+                }
+                for item in self._public_waypoints
+            ]
+            payload["public_contract_note"] = (
+                "Minimal-map Runtime Metric Map starts from public occupancy/free-space "
+                "geometry and generated exploration candidates, then enriches the run "
+                "with public observations without mutating source-map semantics."
+            )
         _assert_no_forbidden_agent_view_keys(payload)
         return payload
 
@@ -1299,6 +1452,11 @@ class RealWorldCleanupContract:
             "driveable_ways": [dict(item) for item in metric_map.get("driveable_ways") or []],
             "map_bundle": dict(metric_map.get("map_bundle") or {}),
             "contains_runtime_observations": False,
+            "map_mode": self.map_mode,
+            "minimal_map_mode": self.map_mode == MINIMAL_MAP_MODE,
+            "generated_exploration_candidates": [
+                dict(item) for item in metric_map.get("generated_exploration_candidates") or []
+            ],
         }
 
     def _runtime_observed_object_payload(
@@ -1449,7 +1607,7 @@ class RealWorldCleanupContract:
                 }
             )
         waypoint_rows = []
-        for waypoint in self._waypoints:
+        for waypoint in self._public_waypoints:
             waypoint_id = str(waypoint["waypoint_id"])
             waypoint_rows.append(
                 {
@@ -1463,7 +1621,7 @@ class RealWorldCleanupContract:
                 }
             )
         rooms = []
-        for room in self._rooms:
+        for room in self._public_rooms:
             room_waypoints = [
                 item for item in waypoint_rows if item.get("room_id") == room["room_id"]
             ]
@@ -1488,7 +1646,9 @@ class RealWorldCleanupContract:
             )
         payload = {
             "schema": CLEANUP_WORKLIST_SCHEMA,
-            "waypoint_source": "static_map_fixture_coverage",
+            "waypoint_source": "generated_exploration_candidate"
+            if self.map_mode == MINIMAL_MAP_MODE
+            else "static_map_fixture_coverage",
             "held_object_id": self._held_handle,
             "objects": lifecycle_rows,
             "waypoints": waypoint_rows,
@@ -1709,6 +1869,8 @@ class RealWorldCleanupContract:
         )
 
     def _visible_detections_for_waypoint(self, waypoint: dict[str, Any]) -> list[dict[str, Any]]:
+        public_waypoint = waypoint
+        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
         locations = self.backend.object_locations()
         fixture_ids = set(waypoint.get("fixture_ids") or [])
         detections = []
@@ -1720,7 +1882,7 @@ class RealWorldCleanupContract:
             if fixture is None:
                 continue
             room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if room_id != waypoint["room_id"]:
+            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
                 continue
             if fixture_ids and location_id not in fixture_ids:
                 continue
@@ -1741,7 +1903,7 @@ class RealWorldCleanupContract:
             }
             detection.update(self._public_candidate_hint(detection))
             self._detections_by_handle[handle] = detection
-            self._record_detection_lifecycle(handle, detection, waypoint)
+            self._record_detection_lifecycle(handle, detection, public_waypoint)
             detections.append(dict(detection))
         return sorted(detections, key=lambda item: str(item["object_id"]))
 
@@ -1752,6 +1914,8 @@ class RealWorldCleanupContract:
         observation_id: str,
         model_provenance: str,
     ) -> list[dict[str, Any]]:
+        public_waypoint = waypoint
+        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
         locations = self.backend.object_locations()
         fixture_ids = set(waypoint.get("fixture_ids") or [])
         candidates = []
@@ -1763,7 +1927,7 @@ class RealWorldCleanupContract:
             if fixture is None:
                 continue
             room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if room_id != waypoint["room_id"]:
+            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
                 continue
             if fixture_ids and location_id not in fixture_ids:
                 continue
@@ -1792,7 +1956,7 @@ class RealWorldCleanupContract:
             detection.update(self._public_candidate_hint(detection))
             _assert_no_forbidden_agent_view_keys(detection)
             self._detections_by_handle[handle] = detection
-            self._record_detection_lifecycle(handle, detection, waypoint)
+            self._record_detection_lifecycle(handle, detection, public_waypoint)
             candidates.append(dict(detection))
         return sorted(candidates, key=lambda item: str(item["object_id"]))
 
@@ -2500,6 +2664,7 @@ class RealWorldCleanupContract:
         return detection
 
     def _objects_visible_from_waypoint(self, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:
+        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
         locations = self.backend.object_locations()
         fixture_ids = set(waypoint.get("fixture_ids") or [])
         visible = []
@@ -2511,7 +2676,7 @@ class RealWorldCleanupContract:
             if fixture is None:
                 continue
             room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if room_id != waypoint["room_id"]:
+            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
                 continue
             if fixture_ids and location_id not in fixture_ids:
                 continue
@@ -2519,6 +2684,7 @@ class RealWorldCleanupContract:
         return visible
 
     def _objects_visible_from_room(self, waypoint: dict[str, Any]) -> list[tuple[Any, str]]:
+        waypoint = self._private_waypoint_for_public_waypoint(waypoint)
         locations = self.backend.object_locations()
         visible = []
         for obj in self.scenario.objects:
@@ -2529,7 +2695,7 @@ class RealWorldCleanupContract:
             if fixture is None:
                 continue
             room_id = _room_id(str(fixture.get("room_area", "unknown")))
-            if room_id != waypoint["room_id"]:
+            if self.map_mode != MINIMAL_MAP_MODE and room_id != waypoint["room_id"]:
                 continue
             visible.append((obj, str(location_id)))
         return visible
@@ -2695,6 +2861,58 @@ class RealWorldCleanupContract:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)
         return str(waypoint["room_id"]) if waypoint is not None else ""
 
+    def _fallback_metric_map_template(self) -> dict[str, Any]:
+        frame_id = "map"
+        map_id = f"{self.scenario.scenario_id}_minimal_map"
+        map_version = "minimal-navigation-map-v1"
+        return {
+            "ok": True,
+            "tool": "metric_map",
+            "status": "ok",
+            "contract": REALWORLD_CONTRACT,
+            "schema": REAL_ROBOT_MAP_BUNDLE_SCHEMA,
+            "frame_id": frame_id,
+            "map_id": map_id,
+            "map_version": map_version,
+            "resolution_m": 0.05,
+            "origin": {"x": 0.0, "y": 0.0, "yaw": 0.0},
+            "width": 240,
+            "height": 180,
+            "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
+            "occupancy_grid_artifact": None,
+            "map_bundle": metric_map_bundle_metadata(
+                environment_id=self.scenario.scenario_id,
+                map_id=map_id,
+                map_version=map_version,
+            ),
+            "rooms": [
+                {
+                    "room_id": room["room_id"],
+                    "room_label": room["room_label"],
+                    "fixture_count": len(room["fixture_ids"]),
+                    "polygon": room.get("polygon", []),
+                }
+                for room in self._rooms
+            ],
+            "driveable_ways": _driveable_ways(self._rooms),
+            "inspection_waypoints": [
+                {
+                    "waypoint_id": item["waypoint_id"],
+                    "frame_id": frame_id,
+                    "x": item["x"],
+                    "y": item["y"],
+                    "yaw": item["yaw"],
+                    "room_id": item["room_id"],
+                    "label": item["label"],
+                    "purpose": item["purpose"],
+                    "waypoint_source": item["waypoint_source"],
+                    "coverage_estimate": item["coverage_estimate"],
+                    "fixture_ids": list(item.get("fixture_ids") or []),
+                }
+                for item in self._waypoints
+            ],
+        }
+
     def _current_pose(self) -> dict[str, float]:
         waypoint = self._waypoint_by_id(self._current_waypoint_id)
         if waypoint is None:
@@ -2817,7 +3035,22 @@ class RealWorldCleanupContract:
         lifecycle[handle] = item
 
     def _waypoint_by_id(self, waypoint_id: str) -> dict[str, Any] | None:
+        if self.map_mode == MINIMAL_MAP_MODE:
+            public_waypoint = next(
+                (item for item in self._public_waypoints if item["waypoint_id"] == waypoint_id),
+                None,
+            )
+            if public_waypoint is not None:
+                return public_waypoint
         return next((item for item in self._waypoints if item["waypoint_id"] == waypoint_id), None)
+
+    def _private_waypoint_for_public_waypoint(self, waypoint: dict[str, Any]) -> dict[str, Any]:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return waypoint
+        return (
+            self._private_waypoint_by_public_id.get(str(waypoint.get("waypoint_id") or ""))
+            or waypoint
+        )
 
     def _handle_for_object(self, object_id: str) -> str:
         existing = self._observed_handles_by_object_id.get(object_id)
@@ -3396,6 +3629,53 @@ def _inspection_waypoints_from_bundle_projection(
             )
         waypoints.append(waypoint)
     return waypoints
+
+
+def _minimal_generated_exploration_waypoints(
+    metric_map: dict[str, Any],
+    *,
+    fallback_waypoints: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    source_waypoints = [
+        item for item in metric_map.get("inspection_waypoints") or [] if isinstance(item, dict)
+    ] or [item for item in fallback_waypoints if isinstance(item, dict)]
+    frame_id = str(metric_map.get("frame_id") or "map")
+    generated = []
+    for index, source in enumerate(source_waypoints, start=1):
+        waypoint_id = f"generated_exploration_{index:03d}"
+        generated.append(
+            {
+                "waypoint_id": waypoint_id,
+                "frame_id": frame_id,
+                "x": float(source.get("x", 0.0)),
+                "y": float(source.get("y", 0.0)),
+                "yaw": float(source.get("yaw", 0.0)),
+                "room_id": "generated_area",
+                "label": f"Generated exploration candidate {index}",
+                "purpose": "minimal_map_exploration",
+                "waypoint_source": "generated_exploration_candidate",
+                "coverage_estimate": round(1.0 / max(len(source_waypoints), 1), 6),
+                "candidate_provenance": {
+                    "source": "public_occupancy_free_space",
+                    "candidate_index": index,
+                    "source_pose": "free_space_sample",
+                    "source_room_hidden": True,
+                    "source_fixtures_hidden": True,
+                    "source_waypoint_hidden": True,
+                },
+            }
+        )
+    return generated
+
+
+def _private_waypoint_map_for_generated_candidates(
+    generated_waypoints: list[dict[str, Any]],
+    private_waypoints: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    result = {}
+    for generated, private in zip(generated_waypoints, private_waypoints, strict=False):
+        result[str(generated.get("waypoint_id") or "")] = private
+    return result
 
 
 def _polygon_center_world(polygon: list[Any]) -> dict[str, float]:

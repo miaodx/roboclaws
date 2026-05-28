@@ -354,6 +354,26 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
+def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "direct",
+        "world-labels",
+        "map_mode=minimal",
+        "output_dir=output/custom-map",
+    )
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels",
+        "7",
+        "output/custom-map",
+    ]
+    assert route[-4:] == ["on", "", "auto", "minimal"]
+
+
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_task_run(
         "household-cleanup",
@@ -414,7 +434,7 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "7",
         "output/household/household-cleanup/direct-report",
     ]
-    assert route[-1] == "isaaclab_subprocess"
+    assert route[-2:] == ["isaaclab_subprocess", "rich"]
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:

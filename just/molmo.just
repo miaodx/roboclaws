@@ -37,7 +37,7 @@ default:
     @just --list molmo
 
 # Explicit profile runner.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="rich":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -57,6 +57,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     semantic_sweep="{{semantic_sweep}}"
     runtime_map_prior="{{runtime_map_prior}}"
     backend_override="{{backend_override}}"
+    map_mode="{{map_mode}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -80,6 +81,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
     backend_override="${backend_override#backend=}"
     backend_override="${backend_override#backend_override=}"
+    map_mode="${map_mode#map_mode=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -126,6 +128,14 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       echo "error: semantic sweep mode currently supports direct driver only" >&2
       exit 1
     fi
+    case "$map_mode" in
+      rich|minimal)
+        ;;
+      *)
+        echo "error: unsupported map_mode '$map_mode' (expected rich|minimal)" >&2
+        exit 1
+        ;;
+    esac
 
     perception_mode="visible_object_detections"
     visual_args=()
@@ -228,6 +238,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       checker_semantic_args=(--require-semantic-sweep)
       profile_requires_clean_success="false"
     fi
+    semantic_sweep_args+=(--map-mode "$map_mode")
+    if [[ "$map_mode" == "minimal" ]]; then
+      checker_semantic_args+=(--require-minimal-map)
+    fi
 
     map_bundle_dir="$map_bundle"
     case "$map_bundle_dir" in
@@ -268,6 +282,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"
+    echo "    map mode : ${map_mode}"
     echo "    routine  : ${cleanup_routine}"
     echo "    sweep    : ${semantic_sweep_enabled}"
     echo "    views    : ${robot_views}"
@@ -354,6 +369,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           "${visual_args[@]}"
           "${visual_grounding_args[@]}"
           "${runtime_map_prior_args[@]}"
+          --map-mode "$map_mode"
         )
 
         if [[ "$driver" == "codex-live" ]]; then
