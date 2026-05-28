@@ -87,8 +87,15 @@ def install_references(args: argparse.Namespace) -> dict[str, Any]:
     if plan.packages and not args.dry_run:
         manager.install_packages("objects", {args.source: plan.packages})
         installed = True
+    cache_root_links = _ensure_cache_root_asset_links(
+        cache_dir=args.cache_dir,
+        source=args.source,
+        version=version,
+        asset_suffixes=plan.asset_suffixes,
+        dry_run=args.dry_run,
+    )
     status = "ready"
-    if plan.unresolved_assets:
+    if plan.unresolved_assets or cache_root_links["conflicts"]:
         status = "blocked"
     elif not plan.packages:
         status = "no_references"
@@ -108,6 +115,7 @@ def install_references(args: argparse.Namespace) -> dict[str, Any]:
         "packages": plan.packages,
         "package_count": len(plan.packages),
         "unresolved_assets": plan.unresolved_assets,
+        "cache_root_links": cache_root_links,
     }
 
 
@@ -239,6 +247,114 @@ def _package_for_asset_suffix(suffix: str, tries: dict[str, Any]) -> str:
         if any(str(leaf) == suffix for leaf in trie.leaf_paths()):
             return str(package)
     return ""
+
+
+def _ensure_cache_root_asset_links(
+    *,
+    cache_dir: Path,
+    source: str,
+    version: str,
+    asset_suffixes: list[str],
+    dry_run: bool,
+) -> dict[str, Any]:
+    """Expose versioned object assets at the cache root for Kit-resolved scene paths.
+
+    MolmoSpaces scene files reference object assets as
+    ``../../../../objects/<source>/<asset_dir>/<asset>.usda`` from payload files
+    under ``.../scenes/<scene>/<version>/<scene_id>/Payload``. Isaac Kit resolves
+    those references under ``.../scenes/objects/<source>/<asset_dir>`` rather
+    than the versioned ``.../objects/<source>/<version>/<asset_dir>`` cache used
+    by ``molmospaces_resources``.
+    """
+
+    object_root = cache_dir / "usd" / "objects" / source
+    scene_object_root = cache_dir / "usd" / "scenes" / "objects" / source
+    version_root = object_root / version
+    asset_roots = _dedupe([suffix.split("/", 1)[0] for suffix in asset_suffixes if "/" in suffix])
+    link_roots = [
+        ("cache_object_root", object_root),
+        ("kit_scene_object_root", scene_object_root),
+    ]
+    created_links: list[dict[str, str]] = []
+    present_links: list[dict[str, str]] = []
+    missing: list[str] = []
+    conflicts: list[dict[str, str]] = []
+    for asset_root in asset_roots:
+        target = version_root / asset_root
+        if not target.exists():
+            missing.append(asset_root)
+            continue
+        for root_kind, root in link_roots:
+            link = root / asset_root
+            if link.exists() or link.is_symlink():
+                try:
+                    if link.resolve() == target.resolve():
+                        present_links.append(
+                            _cache_link_record(root_kind, asset_root, link, target)
+                        )
+                        continue
+                except OSError:
+                    pass
+                conflicts.append(
+                    {
+                        **_cache_link_record(root_kind, asset_root, link, target),
+                        "root_kind": root_kind,
+                    }
+                )
+                continue
+            if not dry_run:
+                root.mkdir(parents=True, exist_ok=True)
+                link.symlink_to(target, target_is_directory=target.is_dir())
+            created_links.append(_cache_link_record(root_kind, asset_root, link, target))
+    created = _dedupe([entry["asset_root"] for entry in created_links])
+    present = _dedupe([entry["asset_root"] for entry in present_links])
+    missing = _dedupe(missing)
+    link_root_reports = []
+    for root_kind, root in link_roots:
+        link_root_reports.append(
+            {
+                "kind": root_kind,
+                "path": str(root),
+                "created": [
+                    entry["asset_root"]
+                    for entry in created_links
+                    if entry["root_kind"] == root_kind
+                ],
+                "present": [
+                    entry["asset_root"]
+                    for entry in present_links
+                    if entry["root_kind"] == root_kind
+                ],
+                "conflicts": [entry for entry in conflicts if entry.get("root_kind") == root_kind],
+            }
+        )
+    return {
+        "schema": "roboclaws_molmospaces_usd_cache_root_links_v1",
+        "cache_object_root": str(object_root),
+        "kit_scene_object_root": str(scene_object_root),
+        "version_root": str(version_root),
+        "requested_count": len(asset_roots),
+        "created_count": len(created_links),
+        "present_count": len(present_links),
+        "missing_count": len(missing),
+        "conflict_count": len(conflicts),
+        "created": created,
+        "present": present,
+        "missing": missing,
+        "conflicts": conflicts,
+        "created_links": created_links,
+        "present_links": present_links,
+        "link_roots": link_root_reports,
+    }
+
+
+def _cache_link_record(root_kind: str, asset_root: str, link: Path, target: Path) -> dict[str, str]:
+    return {
+        "root_kind": root_kind,
+        "asset_root": asset_root,
+        "path": str(link),
+        "target": str(target),
+    }
 
 
 def _dedupe(items: list[str]) -> list[str]:

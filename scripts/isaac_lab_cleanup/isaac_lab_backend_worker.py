@@ -1266,7 +1266,7 @@ def _capture_isaac_lab_camera_views(
         if include_segmentation
         else _semantic_label_application_not_requested()
     )
-
+    semantic_filter = ["class"] if include_segmentation else "*:*"
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
@@ -1280,6 +1280,7 @@ def _capture_isaac_lab_camera_views(
                 "rgb",
                 *(segmentation_data_types if include_segmentation else ()),
             ],
+            semantic_filter=semantic_filter,
             colorize_semantic_segmentation=False,
             colorize_instance_segmentation=False,
             colorize_instance_id_segmentation=False,
@@ -1331,6 +1332,7 @@ def _capture_isaac_lab_camera_views(
             segmentation_views,
             requested_data_types=segmentation_data_types,
             semantic_label_application=semantic_label_application,
+            semantic_filter=semantic_filter,
         )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
@@ -1368,6 +1370,8 @@ def _apply_scene_index_semantic_labels(
         *(_dict(index.get("receptacle_index")).values()),
     ]
     applied = 0
+    labeled_prim_count = 0
+    descendant_label_count = 0
     missing = 0
     failed: list[dict[str, str]] = []
     for raw_entry in entries:
@@ -1381,8 +1385,13 @@ def _apply_scene_index_semantic_labels(
             continue
         labels = _scene_index_semantic_labels(entry, prim_path)
         try:
-            for instance_name, label in labels.items():
-                add_labels(prim, labels=[label], instance_name=instance_name, overwrite=True)
+            targets = _semantic_label_target_prims(prim)
+            for target in targets:
+                for instance_name, label in labels.items():
+                    add_labels(target, labels=[label], instance_name=instance_name, overwrite=True)
+                labeled_prim_count += 1
+                if target != prim:
+                    descendant_label_count += 1
             applied += 1
         except Exception as exc:  # pragma: no cover - defensive around Isaac extension APIs
             failed.append({"prim_path": prim_path, "error": str(exc)})
@@ -1391,6 +1400,8 @@ def _apply_scene_index_semantic_labels(
         "schema": "isaac_scene_index_semantic_label_application_v1",
         "status": status,
         "applied_count": applied,
+        "labeled_prim_count": labeled_prim_count,
+        "descendant_label_count": descendant_label_count,
         "failed_count": len(failed),
         "missing_prim_count": missing,
         "requested_prim_count": len(entries),
@@ -1404,11 +1415,31 @@ def _apply_scene_index_semantic_labels(
     }
 
 
+def _semantic_label_target_prims(prim: Any) -> list[Any]:
+    try:
+        from pxr import Usd, UsdGeom
+    except Exception:
+        return [prim]
+
+    targets = [prim]
+    for descendant in Usd.PrimRange(prim):
+        if descendant == prim:
+            continue
+        try:
+            if descendant.IsA(UsdGeom.Gprim):
+                targets.append(descendant)
+        except Exception:
+            continue
+    return targets
+
+
 def _semantic_label_application_not_requested() -> dict[str, Any]:
     return {
         "schema": "isaac_scene_index_semantic_label_application_v1",
         "status": "not_requested",
         "applied_count": 0,
+        "labeled_prim_count": 0,
+        "descendant_label_count": 0,
         "failed_count": 0,
         "missing_prim_count": 0,
         "requested_prim_count": 0,
@@ -1479,6 +1510,7 @@ def _camera_segmentation_capture_diagnostics(
     *,
     requested_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
     semantic_label_application: dict[str, Any] | None = None,
+    semantic_filter: str | list[str] | None = None,
 ) -> dict[str, Any]:
     output_data_types = sorted(
         {
@@ -1501,6 +1533,7 @@ def _camera_segmentation_capture_diagnostics(
         "requested_data_types": list(requested_data_types),
         "output_data_types": output_data_types,
         "tensor_output_available": bool(output_data_types),
+        "semantic_filter": semantic_filter,
         "candidate_bbox_count": len(candidates),
         "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
         "view_outputs": views,
@@ -2032,6 +2065,7 @@ def segmentation_diagnostics(
         or list(ISAAC_SEGMENTATION_DATA_TYPES),
         "output_data_types": output_data_types,
         "tensor_output_available": bool(output_data_types),
+        "semantic_filter": captured.get("semantic_filter"),
         "candidate_overlay_status": (
             "available" if status == "available" else "blocked_capability"
         ),

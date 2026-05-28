@@ -667,6 +667,7 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
     capture = isaac_lab_backend_worker._camera_segmentation_capture_diagnostics(
         [view],
         requested_data_types=("instance_id_segmentation_fast",),
+        semantic_filter=["class"],
     )
     diagnostics = isaac_lab_backend_worker.segmentation_diagnostics(
         "real",
@@ -684,8 +685,10 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
 
     assert capture["output_data_types"] == ["instance_id_segmentation_fast"]
     assert capture["requested_data_types"] == ["instance_id_segmentation_fast"]
+    assert capture["semantic_filter"] == ["class"]
     assert capture["candidate_bbox_count"] == 1
     assert diagnostics["status"] == "available"
+    assert diagnostics["semantic_filter"] == ["class"]
     assert diagnostics["candidate_bbox_count"] == 1
     assert diagnostics["selected_usd_prim_match_count"] == 1
     assert diagnostics["selected_candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
@@ -816,7 +819,9 @@ def test_isaac_lab_segmentation_capture_accepts_list_info_shape() -> None:
     assert capture["candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
 
 
-def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims() -> None:
+def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     records: list[tuple[str, str, tuple[str, ...]]] = []
 
     class Prim:
@@ -827,11 +832,15 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims() -> None:
         def IsValid(self) -> bool:
             return self.valid
 
+    bowl = Prim("/World/Objects/bowl_01")
+    bowl_mesh = Prim("/World/Objects/bowl_01/mesh")
+    sink = Prim("/World/Receptacles/sink_01")
+
     class Stage:
         def __init__(self) -> None:
             self.prims = {
-                "/World/Objects/bowl_01": Prim("/World/Objects/bowl_01"),
-                "/World/Receptacles/sink_01": Prim("/World/Receptacles/sink_01"),
+                "/World/Objects/bowl_01": bowl,
+                "/World/Receptacles/sink_01": sink,
             }
 
         def GetPrimAtPath(self, path: str) -> Prim:
@@ -853,6 +862,12 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims() -> None:
         ) -> None:
             assert overwrite is True
             records.append((prim.path, instance_name, tuple(labels)))
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "_semantic_label_target_prims",
+        lambda prim: [bowl, bowl_mesh] if prim is bowl else [prim],
+    )
 
     result = isaac_lab_backend_worker._apply_scene_index_semantic_labels(
         stage_utils=StageUtils(),
@@ -882,8 +897,11 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims() -> None:
 
     assert result["status"] == "applied"
     assert result["applied_count"] == 2
+    assert result["labeled_prim_count"] == 3
+    assert result["descendant_label_count"] == 1
     assert result["missing_prim_count"] == 1
     assert ("/World/Objects/bowl_01", "class", ("Bowl",)) in records
+    assert ("/World/Objects/bowl_01/mesh", "class", ("Bowl",)) in records
     assert (
         "/World/Objects/bowl_01",
         "usd_prim_path",

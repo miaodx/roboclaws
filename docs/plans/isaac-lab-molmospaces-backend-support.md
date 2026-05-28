@@ -563,6 +563,28 @@ the returned tensors instead of crashing on our own parser.
   `OgnSdSemanticLabelsMap: invalid input AOV SemanticLabelTokenSD`. This closes
   the missing referenced USD object asset blocker and leaves the semantic AOV
   path as the active segmentation blocker.
+- A cache-link compatibility follow-up, run on 2026-05-28, extends the targeted
+  reference installer to expose versioned MolmoSpaces object assets at both
+  `~/.molmospaces/usd/objects/thor/<asset>` and
+  `~/.molmospaces/usd/scenes/objects/thor/<asset>`. The latter is the path
+  Isaac Kit resolves from scene payload references such as
+  `../../../../objects/thor/Bowl_12_mesh/Bowl_12_mesh.usda`. The run wrote
+  `output/isaaclab/molmospaces-usd/usd_reference_install_val1_scene_object_links.json`
+  with `status="ready"`, `conflict_count=0`, and 26
+  `kit_scene_object_root` symlinks created.
+- The follow-up strict semantic segmentation probe
+  `stamp=0528_val1_seg_scene_object_links_probe` still failed only the strict
+  segmentation checker: scene loading, RGB/robot-view capture, scene-index
+  binding, and selected Bowl/Sink renderable geometry all remained valid, but
+  all four `semantic_segmentation` candidates were still full-frame
+  `BACKGROUND` rows. A second probe,
+  `stamp=0528_val1_seg_semantic_filter_class_probe`, set IsaacLab
+  `CameraCfg.semantic_filter=["class"]` and recorded that filter in the worker
+  capture diagnostics; it produced the same `BACKGROUND` result and the same
+  `OgnSdSemanticLabelsMap: invalid input AOV SemanticLabelTokenSD` warnings.
+  This keeps the active blocker at Isaac/Replicator semantic AOV generation,
+  not MolmoSpaces object package availability, scene-index labels, or semantic
+  filter breadth.
 
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability`. Default cleanup runs do
