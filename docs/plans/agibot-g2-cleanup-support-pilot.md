@@ -70,7 +70,9 @@ Nav2-backed robots:
   `reachability_status` values: `verified`, `blocked`, or `timeout`.
 - Agibot runtime `observe()` defaults to `head_color` as the Policy Observation
   Camera. Other cameras may be captured for report/debug artifacts.
-- `adjust_camera` remains `blocked_capability` in the first pilot.
+- `adjust_camera` may appear in the first map-build tool boundary, but real G2
+  camera motion remains `blocked_capability` or a no-op with explicit evidence
+  until bounded camera control is proven.
 - Before an agent run starts, an Operator Localization Gate must confirm the
   selected map, G02 Pad relocalization, and localization readiness.
 - Before autonomous motion starts, an Operator Run Enablement Gate must confirm
@@ -273,6 +275,11 @@ movement gate, not physical PNC execution.
 - Existing public navigation tools resolve to verified waypoints and execute via
   GDK PNC without exposing new Agibot agent tools.
 - `observe()` uses `head_color` as the policy observation camera.
+- First G2 map-build runs use robot-local `head_color` / RAW_FPV evidence with
+  `camera-labels` plus real External Visual Grounding Service output as the
+  primary perception lane; `camera-raw` remains a comparison/fallback lane.
+- `world-labels` and `visual_grounding=sim` remain simulator/control evidence,
+  not G2 readiness evidence.
 - Manipulation tools remain blocked and report that physical cleanup is not
   ready.
 - Reports distinguish top-level `agibot_gdk_normal_navi` navigation evidence
