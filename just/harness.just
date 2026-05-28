@@ -720,6 +720,10 @@ molmo-isaac-runtime-smoke *overrides:
       worker_cmd+=(--map-bundle-dir "$map_bundle")
     fi
     "${worker_cmd[@]}" | tee "$init_result"
+    if [[ ! -s "$state_path" ]]; then
+      echo "error: Isaac runtime smoke init did not write state: ${state_path}" >&2
+      exit 1
+    fi
     robot_views_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
       --state-path "$state_path" \
       robot_views \

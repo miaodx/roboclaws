@@ -6,7 +6,7 @@ local GPU real-mode Phase A smoke proof, Phase B static robot-view evidence
 path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
 provenance, and backend semantic-pose state diagnostics implemented;
-MolmoSpaces/local USD scene parity remains pending
+MolmoSpaces USD scene parity is now blocked on real-scene camera framing
 **Created:** 2026-05-27
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
@@ -326,11 +326,23 @@ timelines, `primitive_provenance=isaac_semantic_pose`, and a successful
 one-object deterministic cleanup score. This proves the cleanup/report path over
 a generated local USD scene, not MolmoSpaces scene parity.
 
-A repo/output search did not find a caller-supplied MolmoSpaces scene USD
-outside generated Phase A smoke artifacts. Do not claim Phase B or full cleanup
-MolmoSpaces scene parity until `just agent::harness molmo-isaac-cleanup-smoke
-scene_usd_path=/path/to/molmospaces-scene.usd` passes against a real local
-scene USD.
+Latest MolmoSpaces USD scene probe, run on 2026-05-28:
+the upstream `molmo_spaces_isaac` downloader source was available from the local
+uv git checkout, and R2 access to `isaac-thor-resources` worked from this
+mainland-China host. The USD `procthor-10k-val` manifest reported about 64GB
+available data in on-demand mode; only `procthor-10k-val_val_0.tar.zst`
+(`58.063` MB) was downloaded and linked to
+`output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda`.
+
+`just agent::harness molmo-isaac-runtime-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda
+require_local_scene_usd=true stamp=0528_val0_blank_gate` then failed quickly
+with `Isaac Lab camera RGB tensor was blank for fpv`. The failure run wrote
+`output/isaaclab/runtime-smoke/0528_val0_blank_gate/init_result.json` and left
+no stale Isaac worker or telemetry process after the failure-path cleanup fix.
+Do not claim Phase B or full cleanup MolmoSpaces scene parity until the real
+scene camera pose/framing is fixed and the local-scene smoke plus
+`molmo-isaac-cleanup-smoke scene_usd_path=...` both pass against this real USD.
 
 ## Architecture
 

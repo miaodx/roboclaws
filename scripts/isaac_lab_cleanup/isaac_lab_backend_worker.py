@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import sys
+import traceback
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -127,7 +129,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.command == "init":
-        result = init_state(args)
+        try:
+            result = init_state(args)
+        except Exception:
+            traceback.print_exc()
+            if _DEFERRED_SIMULATION_APP is not None:
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os._exit(1)
+            raise
         print(json.dumps(result, sort_keys=True), flush=True)
         _close_deferred_simulation_app()
         return 0
