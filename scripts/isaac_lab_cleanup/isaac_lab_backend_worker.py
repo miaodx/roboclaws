@@ -186,6 +186,7 @@ def _close_deferred_simulation_app() -> None:
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
     scenario = _scenario_for_init(args)
+    scenario_source = _scenario_source(args)
     real_smoke = None
     if args.runtime_mode == "real":
         try:
@@ -204,7 +205,6 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         args.scene_index,
         real_smoke=real_smoke,
     )
-    initial_receptacle_id = _initial_receptacle_id(scenario)
     scene_usd = str(scene_load["scene_usd"])
     object_index = _object_index(scenario)
     receptacle_index = _receptacle_index(scenario)
@@ -226,6 +226,23 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         receptacle_index=receptacle_index,
         real_smoke=real_smoke,
     )
+    scene_specific_scenario = _scene_specific_scenario_if_needed(
+        args=args,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        real_smoke=real_smoke,
+    )
+    if scene_specific_scenario is not None:
+        scenario = scene_specific_scenario
+        scenario_source = "isaac_scene_index"
+        scene_binding_diagnostics = _scene_binding_diagnostics(
+            runtime_mode=args.runtime_mode,
+            scenario=scenario,
+            object_index=object_index,
+            receptacle_index=receptacle_index,
+            real_smoke=real_smoke,
+        )
     segmentation = segmentation_diagnostics(
         runtime_mode=args.runtime_mode,
         real_smoke=real_smoke,
@@ -238,6 +255,8 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         scene_binding_diagnostics=scene_binding_diagnostics,
         segmentation=segmentation,
     )
+    runtime["scenario_source"] = scenario_source
+    initial_receptacle_id = _initial_receptacle_id(scenario)
     before_path = args.run_dir / "isaac_runtime_smoke.png"
     if real_smoke is not None:
         before_path = Path(str(real_smoke["image_path"]))
@@ -252,6 +271,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_source": args.scene_source,
         "scene_index": args.scene_index,
         "scene_usd": scene_usd,
+        "scenario_source": scenario_source,
         "real_runtime_smoke": real_smoke,
         "requested_generated_mess_count": args.generated_mess_count,
         "scenario": scenario.public_payload(),
@@ -302,6 +322,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_usd": state["scene_usd"],
         "scene_load": scene_load,
         "scene_index": args.scene_index,
+        "scenario_source": scenario_source,
         "scene_index_diagnostics": scene_index_diagnostics,
         "scene_binding_diagnostics": scene_binding_diagnostics,
         "object_index": state["object_index"],
@@ -2820,6 +2841,184 @@ def _scenario_for_init(args: argparse.Namespace) -> CleanupScenario:
         ),
         generated_mess_count=args.generated_mess_count,
     )
+
+
+def _scenario_source(args: argparse.Namespace) -> str:
+    return "nav2_map_bundle" if args.map_bundle_dir is not None else "default_cleanup_scenario"
+
+
+def _scene_specific_scenario_if_needed(
+    *,
+    args: argparse.Namespace,
+    scene_binding_diagnostics: dict[str, Any],
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+    real_smoke: dict[str, Any] | None,
+) -> CleanupScenario | None:
+    if real_smoke is None or args.scene_usd_path is None:
+        return None
+    if scene_binding_diagnostics.get("status") == "selected_bound":
+        return None
+    return _scenario_from_scene_index(
+        scene_source=args.scene_source,
+        scene_index=args.scene_index,
+        seed=args.seed,
+        generated_mess_count=args.generated_mess_count,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+
+def _scenario_from_scene_index(
+    *,
+    scene_source: str,
+    scene_index: int,
+    seed: int,
+    generated_mess_count: int,
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+) -> CleanupScenario | None:
+    receptacles = tuple(
+        _cleanup_receptacle_from_scene_index(handle, entry)
+        for handle, entry in sorted(receptacle_index.items())
+    )
+    if not receptacles:
+        return None
+
+    objects: list[CleanupObject] = []
+    targets: list[TargetRule] = []
+    count = max(1, int(generated_mess_count))
+    for handle, entry in sorted(object_index.items()):
+        target_id = _scene_target_receptacle_id(entry, receptacle_index)
+        if not target_id:
+            continue
+        source_id = _scene_source_receptacle_id(entry, receptacle_index, target_id=target_id)
+        objects.append(
+            CleanupObject(
+                object_id=handle,
+                name=_scene_object_name(handle, entry),
+                category=_scene_object_category(entry),
+                location_id=source_id,
+            )
+        )
+        targets.append(TargetRule(object_id=handle, valid_receptacle_ids=(target_id,)))
+        if len(targets) >= count:
+            break
+
+    if not targets:
+        return None
+    scenario_id = f"isaac-scene-index-{scene_source}-{scene_index}-{seed}-{len(targets)}"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task="Clean up this Isaac-loaded MolmoSpaces scene using scene-indexed objects.",
+        seed=seed,
+        objects=tuple(objects),
+        receptacles=receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=tuple(targets),
+            success_threshold=len(targets),
+        ),
+    )
+
+
+def _cleanup_receptacle_from_scene_index(
+    handle: str,
+    entry: dict[str, Any],
+) -> CleanupReceptacle:
+    category = _scene_object_category(entry)
+    return CleanupReceptacle(
+        receptacle_id=handle,
+        name=str(entry.get("public_label") or category or handle),
+        room_area="isaac_scene",
+        kind=str(entry.get("kind") or "receptacle"),
+        category=category,
+    )
+
+
+def _scene_object_name(handle: str, entry: dict[str, Any]) -> str:
+    category = _scene_object_category(entry)
+    asset_id = str(entry.get("asset_id") or "").strip()
+    if category and asset_id:
+        return f"{category} ({asset_id})"
+    return str(entry.get("public_label") or category or handle)
+
+
+def _scene_object_category(entry: dict[str, Any]) -> str:
+    return str(entry.get("category") or entry.get("asset_id") or "object")
+
+
+def _scene_target_receptacle_id(
+    entry: dict[str, Any],
+    receptacle_index: dict[str, dict[str, Any]],
+) -> str:
+    entry_tokens = _scene_entry_tokens("", entry)
+    for category_aliases, target_aliases in _SCENE_CLEANUP_TARGET_ALIASES:
+        if any(alias in entry_tokens for alias in category_aliases):
+            target_id = _first_receptacle_matching_aliases(receptacle_index, target_aliases)
+            if target_id:
+                return target_id
+    return ""
+
+
+def _first_receptacle_matching_aliases(
+    receptacle_index: dict[str, dict[str, Any]],
+    aliases: tuple[str, ...],
+) -> str:
+    for handle, entry in sorted(receptacle_index.items()):
+        tokens = _scene_entry_tokens(handle, entry)
+        if any(alias in tokens for alias in aliases):
+            return handle
+    return ""
+
+
+def _scene_source_receptacle_id(
+    entry: dict[str, Any],
+    receptacle_index: dict[str, dict[str, Any]],
+    *,
+    target_id: str,
+) -> str:
+    parent = str(entry.get("parent") or "")
+    if parent and parent in receptacle_index and parent != target_id:
+        return parent
+    for handle in sorted(receptacle_index):
+        if handle != target_id:
+            return handle
+    return target_id
+
+
+def _scene_entry_tokens(handle: str, entry: dict[str, Any]) -> set[str]:
+    return _scene_match_tokens(
+        handle,
+        entry.get("metadata_handle"),
+        entry.get("public_label"),
+        entry.get("category"),
+        entry.get("metadata_object_id"),
+        entry.get("asset_id"),
+    )
+
+
+_SCENE_CLEANUP_TARGET_ALIASES = (
+    (
+        ("dish", "cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"),
+        ("sink", "countertop"),
+    ),
+    (
+        ("book", "newspaper", "notebook", "paper", "magazine"),
+        ("shelvingunit", "bookshelf", "shelf", "desk"),
+    ),
+    (
+        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
+        ("fridge", "refrigerator"),
+    ),
+    (
+        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
+        ("tvstand", "televisionstand"),
+    ),
+    (("pillow", "teddybear", "cushion"), ("bed", "sofa")),
+    (("linen", "towel", "cloth", "blanket", "shirt", "clothing"), ("laundryhamper", "hamper")),
+    (("toy", "toycar", "ball", "basketball", "soccer"), ("toybin",)),
+)
 
 
 def _limit_scenario_to_generated_mess_count(

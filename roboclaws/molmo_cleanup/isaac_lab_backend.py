@@ -93,6 +93,7 @@ class IsaacLabSubprocessBackend:
             result["private_manifest"],
         )
         self.runtime = result["runtime"]
+        self.scenario_source = str(result.get("scenario_source") or "")
         self.scene_usd = result.get("scene_usd", "")
         self.scene_index = int(result.get("scene_index", scene_index))
         self.object_index = result.get("object_index", {})
@@ -141,6 +142,7 @@ class IsaacLabSubprocessBackend:
             "runtime_mode": str(self.runtime.get("runtime_mode") or self.runtime_mode),
             "scene_index": self.scene_index,
             "scene_usd": self.scene_usd,
+            "scenario_source": self.scenario_source,
             "object_index_count": len(self.object_index),
             "receptacle_index_count": len(self.receptacle_index),
             "object_index": self.object_index,

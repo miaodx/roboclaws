@@ -46,6 +46,7 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.runtime["visual_artifact_provenance"] == "fake_protocol_placeholder_image"
     assert backend.object_index
     assert backend.receptacle_index
+    assert backend.scenario_source == "default_cleanup_scenario"
     assert backend.scene_binding_diagnostics["schema"] == "isaac_public_scene_bindings_v1"
     assert backend.scene_binding_diagnostics["status"] == "placeholder_mapping"
     assert backend.scene_binding_diagnostics["source"] == "scenario_fixture"
@@ -69,6 +70,7 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert scene_index_payload["private_manifest_exposed_to_agent"] is False
     assert "private_manifest" not in scene_index_payload
     assert scene_index_payload["scene_load"]["status"] == "fake_protocol"
+    assert scene_index_payload["scenario_source"] == "default_cleanup_scenario"
     assert scene_index_payload["generated_mess_count"] == 1
     assert scene_index_payload["object_index_count"] == len(scene_index_payload["object_index"])
     assert scene_index_payload["receptacle_index_count"] == len(
@@ -325,6 +327,103 @@ def test_isaac_scene_binding_still_allows_specific_unique_category() -> None:
     assert binding["status"] == "bound"
     assert binding["usd_handle"] == "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6"
     assert binding["match_strategy"] in {"semantic_category_token_unique", "unique_category"}
+
+
+def test_isaac_scene_index_can_generate_scene_specific_cleanup_scenario() -> None:
+    object_index = {
+        "baseballbat_37665ef33aee57e330674e8ff865507e_1_0_2": {
+            "asset_id": "BaseballBat_2",
+            "category": "BaseballBat",
+            "index_source": "usd_stage_traversal",
+            "is_static": False,
+            "kind": "object",
+            "metadata_handle": "baseballbat_37665ef33aee57e330674e8ff865507e_1_0_2",
+            "metadata_object_id": "BaseballBat|surface|2|10",
+            "parent": "bed_258d27d5fe50e324961c7a8698ace951_1_0_2",
+            "public_label": "BaseballBat BaseballBat|surface|2|10 BaseballBat_2",
+            "usd_prim_path": "/val_1/Geometry/baseballbat_37665ef33aee57e330674e8ff865507e_1_0_2",
+        },
+        "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2": {
+            "asset_id": "Bowl_12",
+            "category": "Bowl",
+            "index_source": "usd_stage_traversal",
+            "is_static": False,
+            "kind": "object",
+            "metadata_handle": "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+            "metadata_object_id": "Bowl|surface|2|4",
+            "parent": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+            "public_label": "Bowl Bowl|surface|2|4 Bowl_12",
+            "usd_prim_path": "/val_1/Geometry/bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+        },
+        "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3": {
+            "asset_id": "Dish_Sponge_1",
+            "category": "DishSponge",
+            "index_source": "usd_stage_traversal",
+            "is_static": False,
+            "kind": "object",
+            "metadata_handle": "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3",
+            "metadata_object_id": "DishSponge|surface|3|17",
+            "parent": "crapper_cd6fa77f725b7ec4a4ced5913731ae93_1_0_3",
+            "public_label": "DishSponge DishSponge|surface|3|17 Dish_Sponge_1",
+            "usd_prim_path": "/val_1/Geometry/sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3",
+        },
+    }
+    receptacle_index = {
+        "ashcan_a20a3404d9e4ddd7e8d84c88e9975333_1_0_3": {
+            "asset_id": "bin_16",
+            "category": "GarbageCan",
+            "index_source": "usd_stage_traversal",
+            "kind": "receptacle",
+            "metadata_handle": "ashcan_a20a3404d9e4ddd7e8d84c88e9975333_1_0_3",
+            "public_label": "GarbageCan GarbageCan|3|2 bin_16",
+            "usd_prim_path": "/val_1/Geometry/ashcan_a20a3404d9e4ddd7e8d84c88e9975333_1_0_3",
+        },
+        "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2": {
+            "asset_id": "Dining_Table_203_1",
+            "category": "DiningTable",
+            "index_source": "usd_stage_traversal",
+            "kind": "receptacle",
+            "metadata_handle": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+            "public_label": "DiningTable DiningTable|2|1|0 Dining_Table_203_1",
+            "usd_prim_path": "/val_1/Geometry/diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+        },
+        "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3": {
+            "asset_id": "Sink_1",
+            "category": "Sink",
+            "index_source": "usd_stage_traversal",
+            "kind": "receptacle",
+            "metadata_handle": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+            "public_label": "Sink Sink|3|1|0 Sink_1",
+            "usd_prim_path": "/val_1/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+        },
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=1,
+        seed=7,
+        generated_mess_count=1,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    assert scenario.scenario_id == "isaac-scene-index-procthor-10k-val-1-7-1"
+    assert scenario.objects[0].object_id == "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2"
+    assert scenario.objects[0].location_id == "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2"
+    target = scenario.private_manifest.targets[0]
+    assert target.object_id == "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2"
+    assert target.valid_receptacle_ids == ("sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",)
+    bindings = isaac_lab_backend_worker._scene_binding_diagnostics(
+        runtime_mode="real",
+        scenario=scenario,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        real_smoke={},
+    )
+    assert bindings["status"] == "selected_bound"
+    assert bindings["selected_object_bound_count"] == 1
+    assert bindings["selected_target_receptacle_bound_count"] == 1
 
 
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(

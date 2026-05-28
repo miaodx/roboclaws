@@ -666,6 +666,7 @@ def run_realworld_cleanup(
             run_result["isaac_runtime"] = {
                 "python_executable": str(backend_instance.python_executable),
                 "runtime": backend_instance.runtime,
+                "scenario_source": backend_instance.scenario_source,
                 "scene_usd": backend_instance.scene_usd,
                 "scene_index": backend_instance.scene_index,
                 "scene_index_artifact": str(isaac_scene_index_path),
