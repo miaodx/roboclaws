@@ -110,11 +110,16 @@ def _execute_prior_build(grid: dict[str, Any], args: argparse.Namespace) -> str:
         raise RuntimeError("offline rows require a runtime-map prior but no setup row exists")
     row = setup_rows[0]
     status = _execute_row(row, args)
-    if status != 0:
-        raise RuntimeError("offline semantic-map prior build failed")
     prior = _latest_runtime_map(Path(row["output_dir"]), seed=args.seed)
     if prior is None:
+        if status != 0:
+            raise RuntimeError("offline semantic-map prior build failed")
         raise RuntimeError("semantic-map prior build produced no runtime_metric_map.json")
+    if status != 0:
+        row["status"] = "artifact_success"
+        row["reason"] = (
+            f"runtime_metric_map.json was produced; setup command exited with status {status}"
+        )
     row["runtime_map_prior"] = str(prior)
     return str(prior)
 

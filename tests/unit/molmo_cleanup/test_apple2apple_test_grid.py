@@ -135,6 +135,34 @@ def test_apple2apple_grid_script_dry_run_writes_manifest_and_report(tmp_path: Pa
     assert "online-codex-api-router-grounding-dino" in report_path.read_text(encoding="utf-8")
 
 
+def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
+    tmp_path: Path,
+) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_prior_nonzero")
+    output_dir = tmp_path / "grid" / "_offline-semantic-map-prior"
+    run_dir = output_dir / "0528_1200" / "seed-7"
+    run_dir.mkdir(parents=True)
+    prior_path = run_dir / "runtime_metric_map.json"
+    prior_path.write_text("{}", encoding="utf-8")
+    row = {"output_dir": str(output_dir), "status": "pending", "reason": ""}
+    grid = {"setup_rows": [row]}
+    args = argparse.Namespace(seed=7)
+
+    def fake_execute_row(_row: dict, _args: argparse.Namespace) -> int:
+        _row["run_dir"] = str(run_dir)
+        _row["exit_status"] = 1
+        return 1
+
+    run_grid._execute_row = fake_execute_row
+
+    prior = run_grid._execute_prior_build(grid, args)
+
+    assert prior == str(prior_path)
+    assert row["runtime_map_prior"] == str(prior_path)
+    assert row["status"] == "artifact_success"
+    assert "exited with status 1" in row["reason"]
+
+
 def test_apple2apple_grid_execute_waits_for_detached_live_status(tmp_path: Path) -> None:
     run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_live_wait")
     output_dir = tmp_path / "grid"
