@@ -18,13 +18,13 @@ cleanup handles to USD prim paths, and passed one-object cleanup/report parity
 with `primitive_provenance=isaac_semantic_pose`. A second local GPU pass on
 `val_1` broadened scene-load/render/index/report coverage, but also showed that
 cross-scene cleanup needed stricter semantics because public `mug_01` rebound to
-a `sponge` USD prim by semantic fallback. The current local slice now blocks
-that loose generic-category object fallback: `val_0` still binds `mug_01` to a
-real Mug USD prim, while `val_1` correctly reports `mug_01` as unresolved until
-scene-specific scenario generation exists. The visual-grounding GPU sidecar
-benchmark remains a separate active confidence layer; Grounding DINO base-recall
-is still the current default real `camera-labels` pipeline until a broader
-corpus changes that ranking.
+a `sponge` USD prim by semantic fallback. The current slice blocks that loose
+generic-category object fallback and can generate a cleanup scenario from the
+loaded scene index when default selected handles do not bind. The next local GPU
+pass should verify that path against real MolmoSpaces USD scenes. The
+visual-grounding GPU sidecar benchmark remains a separate active confidence
+layer; Grounding DINO base-recall is still the current default real
+`camera-labels` pipeline until a broader corpus changes that ranking.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -38,11 +38,10 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Continue Isaac multi-scene parity by adding scene-specific cleanup scenario
-generation from the loaded MolmoSpaces USD scene; strict binding now prevents
-selected public cleanup handles from silently binding to unrelated USD
-categories. Keep Grounding DINO base-recall as the visual-grounding default
-until the broader corpus changes that ranking.
+Run the next local GPU Isaac pass with scene-index-derived cleanup scenarios
+enabled, then verify multi-scene cleanup/report parity and continue the
+segmentation/bbox candidate investigation. Keep Grounding DINO base-recall as
+the visual-grounding default until the broader corpus changes that ranking.
 
 ## Current Blocker
 
@@ -50,12 +49,10 @@ No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
 support Codex through repo-local `.env` mify or codex-env routes and support
 Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
-runs also support OpenClaw. The current Isaac blockers are segmentation and
-scene-specific scenario generation: MolmoSpaces USD RGB/robot-view evidence
-passes for `val_0` and `val_1`, but Isaac returned no usable segmentation
-tensors or bbox candidates for the selected USD prims, and `val_1` no longer has
-an exact cleanup object because strict binding correctly rejects the old
-Mug-to-DishSponge fallback.
+runs also support OpenClaw. The current Isaac blockers are local GPU validation
+of the new scene-index scenario path plus segmentation: MolmoSpaces USD
+RGB/robot-view evidence passes for `val_0` and `val_1`, but Isaac returned no
+usable segmentation tensors or bbox candidates for the selected USD prims.
 
 ## Human Review Surface
 
