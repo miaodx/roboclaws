@@ -7,8 +7,11 @@ path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
 provenance, and backend semantic-pose state diagnostics implemented;
 local GPU MolmoSpaces USD scene indexing, selected USD binding, and one-object
-cleanup/report parity now pass over `procthor-10k-val` scene `val_0`.
-Segmentation remains unavailable/blocked, and manipulation is still explicitly
+cleanup/report parity now pass over `procthor-10k-val` scene `val_0`. Strict
+cross-scene binding now rejects loose generic-category object fallback, so
+`val_1` no longer falsely binds public `mug_01` to a DishSponge USD prim.
+Segmentation remains unavailable/blocked, scene-specific scenario generation is
+still needed for broader exact cleanup, and manipulation is still explicitly
 `isaac_semantic_pose`, not planner-backed.
 **Created:** 2026-05-27
 **Last updated:** 2026-05-28
@@ -404,18 +407,37 @@ scene-specific cleanup truth: the public cleanup scenario still comes from
 `semantic_label_token_first`, while the sink rebound by prefix to
 `/val_1/Geometry/sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3`.
 
+Strict cross-scene binding follow-up, implemented on 2026-05-28:
+generic public cleanup object buckets such as `dish`, `book`, `food`,
+`electronics`, `linen`, and `toy` no longer drive category-token USD fallback
+for selected objects. Specific object labels and exact/prefix USD handles still
+bind, so `val_0` continues to bind public `mug_01` to a real Mug USD prim while
+`val_1` now reports public `mug_01` as unresolved instead of binding it to
+DishSponge. Focused unit coverage verifies both the rejected DishSponge fallback
+and the preserved specific unique-category path. Existing local checker
+evidence:
+
+- `output/isaaclab/runtime-smoke/0528_val0_strict_binding_runtime/` passes the
+  strict runtime smoke checker with `scene_binding_status=selected_bound`,
+  selected object `mug_01 -> /val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6`,
+  and selected sink target bound by exact public id.
+- `output/isaaclab/runtime-smoke/0528_val1_strict_binding_runtime/` fails the
+  strict selected-USD-binding checker as intended with
+  `scene_binding_status=partial` and blocker
+  `Selected cleanup object has no USD binding: mug_01`.
+
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability` because Isaac returned
 no usable segmentation tensors/bbox candidates for the selected USD prims;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
-manipulation is still out of scope for this slice; broader scene coverage can
-pass with loose semantic object rebinding when the public map bundle and loaded
-USD scene differ, so the next multi-scene slice should add scene-specific
-scenario generation or stricter cross-scene binding semantics before treating
-additional scene cleanup as exact; Isaac/Omniverse runtime logs still include
-non-fatal USD/runtime warnings, so broader scene coverage should keep strict
-artifact gates enabled rather than relying on import success.
+manipulation is still out of scope for this slice; broader scene coverage now
+fails instead of passing with loose semantic object rebinding when the public map
+bundle and loaded USD scene differ, so the next multi-scene slice should add
+scene-specific scenario generation before treating additional scene cleanup as
+exact; Isaac/Omniverse runtime logs still include non-fatal USD/runtime warnings,
+so broader scene coverage should keep strict artifact gates enabled rather than
+relying on import success.
 
 ## Architecture
 

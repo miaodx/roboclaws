@@ -279,6 +279,54 @@ def test_isaac_scene_binding_can_match_synthetic_handle_to_real_usd_metadata() -
     )
 
 
+def test_isaac_scene_binding_does_not_bind_generic_dish_to_unrelated_category() -> None:
+    object_index = {
+        "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3": {
+            "usd_prim_path": "/val_1/Geometry/sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3",
+            "category": "DishSponge",
+            "public_label": "DishSponge DishSponge|surface|3|17 Dish_Sponge_1",
+            "index_source": "usd_stage_traversal",
+            "metadata_handle": "sponge_41cc9aa65073b4cd1fc4d9871335148d_1_0_3",
+        }
+    }
+
+    binding = isaac_lab_backend_worker._bind_public_scene_item(
+        public_id="mug_01",
+        public_label="ceramic mug",
+        category="dish",
+        index=object_index,
+        kind="object",
+    )
+
+    assert binding["status"] == "unresolved"
+    assert binding["match_strategy"] == "none"
+    assert binding["usd_prim_path"] == ""
+
+
+def test_isaac_scene_binding_still_allows_specific_unique_category() -> None:
+    object_index = {
+        "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6": {
+            "usd_prim_path": "/val_0/Geometry/mug_3ebc45568ed53a18c8797978b3744a99_1_0_6",
+            "category": "Mug",
+            "public_label": "Mug Mug|surface|6|56 RoboTHOR_mug_ai2_2_v",
+            "index_source": "usd_stage_traversal",
+            "metadata_handle": "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6",
+        }
+    }
+
+    binding = isaac_lab_backend_worker._bind_public_scene_item(
+        public_id="cleanup_object_01",
+        public_label="unlabeled cleanup object",
+        category="Mug",
+        index=object_index,
+        kind="object",
+    )
+
+    assert binding["status"] == "bound"
+    assert binding["usd_handle"] == "mug_3ebc45568ed53a18c8797978b3744a99_1_0_6"
+    assert binding["match_strategy"] in {"semantic_category_token_unique", "unique_category"}
+
+
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

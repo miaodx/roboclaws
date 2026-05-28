@@ -830,6 +830,7 @@ def _bind_public_scene_item(
         public_label=public_label,
         category=category,
         index=index,
+        kind=kind,
     )
     if match is None:
         return _unbound_scene_item(public_id, kind)
@@ -855,6 +856,7 @@ def _scene_index_match(
     public_label: str,
     category: str | None,
     index: dict[str, dict[str, Any]],
+    kind: str,
 ) -> tuple[str, dict[str, Any], str] | None:
     if public_id in index:
         return public_id, index[public_id], "exact_public_id"
@@ -874,12 +876,13 @@ def _scene_index_match(
         public_label=public_label,
         category=category,
         index=index,
+        kind=kind,
     )
     if prefix_match is not None:
         return prefix_match
 
     category_norm = _norm(category)
-    if not category_norm:
+    if not category_norm or not _allow_category_fallback(kind, category_norm):
         return None
     category_matches = [
         (handle, entry)
@@ -899,6 +902,7 @@ def _first_semantic_index_match(
     public_label: str,
     category: str | None,
     index: dict[str, dict[str, Any]],
+    kind: str,
 ) -> tuple[str, dict[str, Any], str] | None:
     public_prefix = _public_handle_prefix(public_id)
     if public_prefix:
@@ -907,12 +911,20 @@ def _first_semantic_index_match(
             handle, entry = matches[0]
             return handle, entry, "public_id_prefix_first"
 
-    tokens = _scene_match_tokens(public_label, category)
-    if tokens:
-        matches = _semantic_index_matches(tuple(sorted(tokens)), index)
+    label_tokens = _scene_match_tokens(public_label)
+    if label_tokens:
+        matches = _semantic_index_matches(tuple(sorted(label_tokens)), index)
         if matches:
             handle, entry = matches[0]
             return handle, entry, "semantic_label_token_first"
+
+    category_norm = _norm(category)
+    if category_norm and _allow_category_fallback(kind, category_norm):
+        category_tokens = _scene_match_tokens(category)
+        matches = _semantic_index_matches(tuple(sorted(category_tokens)), index)
+        if len(matches) == 1:
+            handle, entry = matches[0]
+            return handle, entry, "semantic_category_token_unique"
     return None
 
 
@@ -946,6 +958,25 @@ def _public_handle_prefix(public_id: str) -> str:
     prefix = str(public_id or "").split("_", 1)[0]
     normalized = _norm(prefix)
     return normalized if len(normalized) >= 3 else ""
+
+
+def _allow_category_fallback(kind: str, category_norm: str) -> bool:
+    if not category_norm:
+        return False
+    if kind == "object" and category_norm in _GENERIC_CLEANUP_OBJECT_CATEGORY_NORMS:
+        return False
+    return True
+
+
+_GENERIC_CLEANUP_OBJECT_CATEGORY_NORMS = {
+    # These are public cleanup buckets, not Isaac USD object categories.
+    "book",
+    "dish",
+    "electronics",
+    "food",
+    "linen",
+    "toy",
+}
 
 
 def _scene_match_tokens(*values: Any) -> set[str]:
