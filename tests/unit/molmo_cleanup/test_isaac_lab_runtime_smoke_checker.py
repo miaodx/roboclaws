@@ -224,6 +224,7 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
         str(state_path),
         "--require-real-rendering",
         "--require-usd-stage-loaded",
+        "--require-local-scene-usd",
         "--require-usd-scene-index",
         "--require-selected-usd-bindings",
         "--require-robot-view-images",
@@ -240,6 +241,35 @@ def test_isaac_runtime_smoke_checker_accepts_real_rendering_evidence(
     assert summary["scene_index_status"] == "indexed"
     assert summary["scene_binding_status"] == "selected_bound"
     assert summary["robot_view_status"] == "present"
+
+
+def test_isaac_runtime_smoke_checker_rejects_generated_usd_for_local_scene_gate(
+    tmp_path: Path,
+) -> None:
+    image_path = tmp_path / "smoke.png"
+    scene_usd = tmp_path / "roboclaws_phase_a_smoke_scene.usda"
+    write_smoke_image(image_path)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    result = {
+        "ok": True,
+        "backend": "isaaclab_subprocess",
+        "runtime": real_runtime_diagnostics(),
+        "scene_load": {
+            "status": "loaded",
+            "usd_stage_loaded": True,
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "generated_runtime_smoke_usd",
+            "manual_editor_steps_required": False,
+        },
+        "scene_usd": str(scene_usd),
+        "artifacts": {"runtime_smoke_image": str(image_path)},
+    }
+
+    completed = run_checker(tmp_path, result, "--require-local-scene-usd")
+
+    assert completed.returncode == 1
+    summary = json.loads(completed.stdout)
+    assert "loaded scene USD was not caller supplied local_scene_usd" in summary["errors"]
 
 
 def test_isaac_runtime_smoke_checker_rejects_loaded_stage_without_scene_usd(

@@ -148,6 +148,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-isaac-runtime", action="store_true")
     parser.add_argument("--require-isaac-real-runtime", action="store_true")
     parser.add_argument("--require-isaac-scene-loaded", action="store_true")
+    parser.add_argument("--require-isaac-local-scene-usd", action="store_true")
     parser.add_argument("--require-isaac-selected-usd-bindings", action="store_true")
     parser.add_argument("--require-isaac-semantic-pose", action="store_true")
     parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
@@ -223,6 +224,7 @@ def main() -> None:
             require_isaac_runtime=args.require_isaac_runtime,
             require_isaac_real_runtime=args.require_isaac_real_runtime,
             require_isaac_scene_loaded=args.require_isaac_scene_loaded,
+            require_isaac_local_scene_usd=args.require_isaac_local_scene_usd,
             require_isaac_selected_usd_bindings=args.require_isaac_selected_usd_bindings,
             require_isaac_semantic_pose=args.require_isaac_semantic_pose,
             require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
@@ -286,6 +288,7 @@ def _assert_result(
     require_isaac_runtime: bool = False,
     require_isaac_real_runtime: bool = False,
     require_isaac_scene_loaded: bool = False,
+    require_isaac_local_scene_usd: bool = False,
     require_isaac_selected_usd_bindings: bool = False,
     require_isaac_semantic_pose: bool = False,
     require_isaac_robot_view_provenance: bool = False,
@@ -479,6 +482,7 @@ def _assert_result(
         require_isaac_runtime
         or require_isaac_real_runtime
         or require_isaac_scene_loaded
+        or require_isaac_local_scene_usd
         or require_isaac_selected_usd_bindings
         or require_isaac_semantic_pose
         or require_isaac_robot_view_provenance
@@ -491,6 +495,7 @@ def _assert_result(
             report_text,
             require_real_runtime=require_isaac_real_runtime,
             require_scene_loaded=require_isaac_scene_loaded,
+            require_local_scene_usd=require_isaac_local_scene_usd,
             require_selected_usd_bindings=require_isaac_selected_usd_bindings,
             require_semantic_pose=require_isaac_semantic_pose,
             require_robot_view_provenance=require_isaac_robot_view_provenance,
@@ -877,6 +882,7 @@ def _assert_isaac_runtime(
     *,
     require_real_runtime: bool,
     require_scene_loaded: bool,
+    require_local_scene_usd: bool = False,
     require_selected_usd_bindings: bool,
     require_semantic_pose: bool,
     require_robot_view_provenance: bool,
@@ -911,18 +917,11 @@ def _assert_isaac_runtime(
         assert rendering.get("status") == "real_rendering_proven", rendering
 
     if require_scene_loaded:
-        assert scene_load.get("status") == "loaded", scene_load
-        assert scene_load.get("usd_stage_loaded") is True, scene_load
-        assert scene_load.get("loaded_asset_kind"), scene_load
-        assert scene_load.get("manual_editor_steps_required") is False, scene_load
-        scene_usd = str(isaac.get("scene_usd") or scene_load.get("scene_usd") or "")
-        assert scene_usd, isaac
-        scene_path = Path(scene_usd)
-        if scene_path.is_absolute():
-            assert scene_path.is_file(), scene_path
-        else:
-            resolved = _resolve_path(base, scene_usd)
-            assert resolved.is_file(), resolved
+        _assert_isaac_scene_loaded(isaac, scene_load, base)
+
+    if require_local_scene_usd:
+        _assert_isaac_scene_loaded(isaac, scene_load, base)
+        assert scene_load.get("loaded_asset_kind") == "local_scene_usd", scene_load
 
     scene_index_payload: dict[str, Any] | None = None
     if require_selected_usd_bindings:
@@ -1012,6 +1011,25 @@ def _assert_isaac_real_runtime_diagnostics(runtime: dict[str, Any]) -> None:
     assert isinstance(camera_resolution, list), runtime
     assert len(camera_resolution) == 2, runtime
     assert all(int(value or 0) > 0 for value in camera_resolution), runtime
+
+
+def _assert_isaac_scene_loaded(
+    isaac: dict[str, Any],
+    scene_load: dict[str, Any],
+    base: Path,
+) -> None:
+    assert scene_load.get("status") == "loaded", scene_load
+    assert scene_load.get("usd_stage_loaded") is True, scene_load
+    assert scene_load.get("loaded_asset_kind"), scene_load
+    assert scene_load.get("manual_editor_steps_required") is False, scene_load
+    scene_usd = str(isaac.get("scene_usd") or scene_load.get("scene_usd") or "")
+    assert scene_usd, isaac
+    scene_path = Path(scene_usd)
+    if scene_path.is_absolute():
+        assert scene_path.is_file(), scene_path
+    else:
+        resolved = _resolve_path(base, scene_usd)
+        assert resolved.is_file(), resolved
 
 
 def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:

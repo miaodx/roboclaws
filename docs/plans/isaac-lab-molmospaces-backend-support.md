@@ -115,6 +115,10 @@ contract tests.
 
   just agent::harness molmo-isaac-runtime-smoke
 
+  # Phase B / full cleanup parity must pass a caller-supplied MolmoSpaces/local USD path.
+  just agent::harness molmo-isaac-cleanup-smoke \
+    scene_usd_path=/path/to/molmospaces-scene.usd
+
   .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
     --state-path output/isaaclab/smoke/state.json \
     init --run-dir output/isaaclab/smoke --scene-source procthor-10k-val --scene-index 0
@@ -274,6 +278,11 @@ protocol:
   Phase A/B smoke and full-cleanup proof from passing on a status-only
   `usd_stage_loaded=true` claim or on scene setup that still requires manual
   editor steps.
+- Strict Phase B/full-cleanup local-scene gates can now require
+  `loaded_asset_kind=local_scene_usd`. The cleanup smoke harness defaults this
+  gate on and fails early without `scene_usd_path=...`, so a generated Phase A
+  USD smoke scene cannot be mistaken for caller-supplied MolmoSpaces/local USD
+  scene parity.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

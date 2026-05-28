@@ -73,6 +73,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "scene_usd_path" in harness_text
     assert "--require-real-rendering" in harness_text
     assert "--require-usd-stage-loaded" in harness_text
+    assert "--require-local-scene-usd" in harness_text
     assert "--require-usd-scene-index" in harness_text
     assert "--require-selected-usd-bindings" in harness_text
     assert "--require-robot-view-images" in harness_text
@@ -106,6 +107,7 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--backend isaaclab_subprocess" in harness_text
     assert "--require-isaac-real-runtime" in harness_text
     assert "--require-isaac-scene-loaded" in harness_text
+    assert "--require-isaac-local-scene-usd" in harness_text
     assert "--require-isaac-selected-usd-bindings" in harness_text
     assert "--require-isaac-robot-view-provenance" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text

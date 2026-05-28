@@ -262,12 +262,41 @@ def test_checker_accepts_isaac_loaded_scene_when_usd_file_is_present(
         _isaac_report_text(scene_bindings),
         require_real_runtime=False,
         require_scene_loaded=True,
+        require_local_scene_usd=True,
         require_selected_usd_bindings=False,
         require_semantic_pose=False,
         require_robot_view_provenance=False,
         require_segmentation_evidence=False,
         require_snapshot_provenance=False,
     )
+
+
+def test_checker_rejects_isaac_generated_usd_when_local_scene_required(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_loaded_scene(
+        data,
+        tmp_path,
+        loaded_asset_kind="generated_runtime_smoke_usd",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=True,
+            require_local_scene_usd=True,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
 
 
 def test_checker_rejects_isaac_loaded_scene_when_manual_editor_steps_remain(
@@ -285,6 +314,7 @@ def test_checker_rejects_isaac_loaded_scene_when_manual_editor_steps_remain(
             _isaac_report_text(scene_bindings),
             require_real_runtime=False,
             require_scene_loaded=True,
+            require_local_scene_usd=False,
             require_selected_usd_bindings=False,
             require_semantic_pose=False,
             require_robot_view_provenance=False,
@@ -2111,6 +2141,7 @@ def _add_isaac_loaded_scene(
     base: Path,
     *,
     manual_editor_steps_required: bool = False,
+    loaded_asset_kind: str = "local_scene_usd",
 ) -> Path:
     scene_usd = base / "loaded_scene.usda"
     scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
@@ -2121,7 +2152,7 @@ def _add_isaac_loaded_scene(
         "status": "loaded",
         "usd_stage_loaded": True,
         "scene_usd": str(scene_usd),
-        "loaded_asset_kind": "local_scene_usd",
+        "loaded_asset_kind": loaded_asset_kind,
         "manual_editor_steps_required": manual_editor_steps_required,
     }
     return scene_usd

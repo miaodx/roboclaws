@@ -656,6 +656,7 @@ molmo-isaac-runtime-smoke *overrides:
     robot_name="simple_camera_rig"
     require_real_rendering="true"
     require_usd_stage_loaded="true"
+    require_local_scene_usd="false"
     require_usd_scene_index="true"
     require_selected_usd_bindings="true"
     require_robot_view_images="true"
@@ -673,7 +674,8 @@ molmo-isaac-runtime-smoke *overrides:
       case "$key" in
         runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
         scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
-        require_real_rendering|require_usd_stage_loaded|require_usd_scene_index|\
+        require_real_rendering|require_usd_stage_loaded|require_local_scene_usd|\
+        require_usd_scene_index|\
         require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
         require_segmentation_evidence)
           ;;
@@ -727,6 +729,9 @@ molmo-isaac-runtime-smoke *overrides:
     if [[ "$require_usd_stage_loaded" == "true" ]]; then
       check_cmd+=(--require-usd-stage-loaded)
     fi
+    if [[ "$require_local_scene_usd" == "true" ]]; then
+      check_cmd+=(--require-local-scene-usd)
+    fi
     if [[ "$require_usd_scene_index" == "true" ]]; then
       check_cmd+=(--require-usd-scene-index)
     fi
@@ -765,6 +770,7 @@ molmo-isaac-cleanup-smoke *overrides:
     robot_name="simple_camera_rig"
     require_real_runtime="true"
     require_scene_loaded="true"
+    require_local_scene_usd="true"
     require_selected_usd_bindings="true"
     require_robot_view_provenance="true"
     require_segmentation_evidence="false"
@@ -781,8 +787,9 @@ molmo-isaac-cleanup-smoke *overrides:
       case "$key" in
         runtime_python|output_dir|stamp|seed|task|prompt|scene_source|scene_index|\
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
-        require_real_runtime|require_scene_loaded|require_selected_usd_bindings|\
-        require_robot_view_provenance|require_segmentation_evidence|require_snapshot_provenance)
+        require_real_runtime|require_scene_loaded|require_local_scene_usd|\
+        require_selected_usd_bindings|require_robot_view_provenance|\
+        require_segmentation_evidence|require_snapshot_provenance)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -796,6 +803,10 @@ molmo-isaac-cleanup-smoke *overrides:
     done
     if [[ -z "$stamp" ]]; then
       stamp="$({{timestamp_cmd}})"
+    fi
+    if [[ "$require_local_scene_usd" == "true" && -z "$scene_usd_path" ]]; then
+      echo "error: require_local_scene_usd=true needs scene_usd_path=<caller-supplied MolmoSpaces/local USD>" >&2
+      exit 1
     fi
     run_dir="${output_dir}/${stamp}"
     mkdir -p "$run_dir"
@@ -839,6 +850,9 @@ molmo-isaac-cleanup-smoke *overrides:
     fi
     if [[ "$require_scene_loaded" == "true" ]]; then
       check_cmd+=(--require-isaac-scene-loaded)
+    fi
+    if [[ "$require_local_scene_usd" == "true" ]]; then
+      check_cmd+=(--require-isaac-local-scene-usd)
     fi
     if [[ "$require_selected_usd_bindings" == "true" ]]; then
       check_cmd+=(--require-isaac-selected-usd-bindings)

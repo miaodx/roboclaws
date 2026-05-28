@@ -24,6 +24,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-views-result", type=Path)
     parser.add_argument("--require-real-rendering", action="store_true")
     parser.add_argument("--require-usd-stage-loaded", action="store_true")
+    parser.add_argument("--require-local-scene-usd", action="store_true")
     parser.add_argument("--require-usd-scene-index", action="store_true")
     parser.add_argument("--require-selected-usd-bindings", action="store_true")
     parser.add_argument("--require-robot-view-images", action="store_true")
@@ -43,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         robot_views_result=robot_views_result,
         require_real_rendering=args.require_real_rendering,
         require_usd_stage_loaded=args.require_usd_stage_loaded,
+        require_local_scene_usd=args.require_local_scene_usd,
         require_usd_scene_index=args.require_usd_scene_index,
         require_selected_usd_bindings=args.require_selected_usd_bindings,
         require_robot_view_images=args.require_robot_view_images,
@@ -56,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         "backend": result.get("backend"),
         "runtime_mode": (result.get("runtime") or {}).get("runtime_mode"),
         "scene_usd": result.get("scene_usd"),
+        "loaded_asset_kind": (_dict(result.get("scene_load"))).get("loaded_asset_kind"),
         "scene_index_status": (_dict(result.get("scene_index_diagnostics"))).get("status"),
         "scene_binding_status": (_dict(result.get("scene_binding_diagnostics"))).get("status"),
         "robot_view_status": _robot_view_status(robot_views_result),
@@ -71,6 +74,7 @@ def validate(
     robot_views_result: dict[str, Any],
     require_real_rendering: bool,
     require_usd_stage_loaded: bool,
+    require_local_scene_usd: bool,
     require_usd_scene_index: bool,
     require_selected_usd_bindings: bool,
     require_robot_view_images: bool,
@@ -123,6 +127,23 @@ def validate(
             errors,
         )
         errors.extend(_scene_load_errors(result, scene_load))
+    if require_local_scene_usd:
+        _require(
+            scene_load.get("usd_stage_loaded") is True,
+            "local scene USD loading is not proven",
+            errors,
+        )
+        _require(
+            scene_load.get("status") == "loaded",
+            "local scene_load status is not loaded",
+            errors,
+        )
+        errors.extend(_scene_load_errors(result, scene_load))
+        _require(
+            scene_load.get("loaded_asset_kind") == "local_scene_usd",
+            "loaded scene USD was not caller supplied local_scene_usd",
+            errors,
+        )
     if require_usd_scene_index:
         _require(bool(scene_index), "missing USD scene index diagnostics", errors)
         _require(
