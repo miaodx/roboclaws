@@ -411,6 +411,7 @@ def real_runtime_smoke(
         simulation_app=simulation_app,
         include_segmentation=args.enable_segmentation,
         segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
+        scene_index_diagnostics=scene_index_diagnostics,
     )
     render_steps = int(capture["render_steps"])
     robot_view_images = dict(capture["robot_view_images"])
@@ -1109,6 +1110,7 @@ def _capture_isaac_lab_camera_views(
     simulation_app: Any,
     include_segmentation: bool = False,
     segmentation_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
+    scene_index_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1122,6 +1124,15 @@ def _capture_isaac_lab_camera_views(
     _wait_for_stage_load(stage_utils, simulation_app)
     scene_bounds = _current_stage_bounds(stage_utils)
     _ensure_capture_lighting(stage_utils)
+    semantic_label_application = (
+        _apply_scene_index_semantic_labels(
+            stage_utils=stage_utils,
+            sim_utils=sim_utils,
+            scene_index_diagnostics=scene_index_diagnostics,
+        )
+        if include_segmentation
+        else _semantic_label_application_not_requested()
+    )
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
@@ -1186,9 +1197,101 @@ def _capture_isaac_lab_camera_views(
         "segmentation": _camera_segmentation_capture_diagnostics(
             segmentation_views,
             requested_data_types=segmentation_data_types,
+            semantic_label_application=semantic_label_application,
         )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
+    }
+
+
+def _apply_scene_index_semantic_labels(
+    *,
+    stage_utils: Any,
+    sim_utils: Any,
+    scene_index_diagnostics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    add_labels = getattr(sim_utils, "add_labels", None)
+    if not callable(get_current_stage) or not callable(add_labels):
+        return {
+            "status": "unavailable",
+            "applied_count": 0,
+            "failed_count": 0,
+            "missing_prim_count": 0,
+            "reason": "Isaac semantic label utilities were unavailable.",
+        }
+    stage = get_current_stage()
+    if stage is None:
+        return {
+            "status": "unavailable",
+            "applied_count": 0,
+            "failed_count": 0,
+            "missing_prim_count": 0,
+            "reason": "No current Isaac stage was available for semantic labels.",
+        }
+    index = _dict(scene_index_diagnostics)
+    entries = [
+        *(_dict(index.get("object_index")).values()),
+        *(_dict(index.get("receptacle_index")).values()),
+    ]
+    applied = 0
+    missing = 0
+    failed: list[dict[str, str]] = []
+    for raw_entry in entries:
+        entry = _dict(raw_entry)
+        prim_path = str(entry.get("usd_prim_path") or "")
+        if not prim_path:
+            continue
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim or not prim.IsValid():
+            missing += 1
+            continue
+        labels = _scene_index_semantic_labels(entry, prim_path)
+        try:
+            for instance_name, label in labels.items():
+                add_labels(prim, labels=[label], instance_name=instance_name, overwrite=True)
+            applied += 1
+        except Exception as exc:  # pragma: no cover - defensive around Isaac extension APIs
+            failed.append({"prim_path": prim_path, "error": str(exc)})
+    status = "applied" if applied and not failed else "partial" if applied else "unavailable"
+    return {
+        "schema": "isaac_scene_index_semantic_label_application_v1",
+        "status": status,
+        "applied_count": applied,
+        "failed_count": len(failed),
+        "missing_prim_count": missing,
+        "requested_prim_count": len(entries),
+        "failed": failed[:10],
+        "label_instances": ["class", "kind", "usd_prim_path"],
+        "reason": (
+            "Scene-index USD prims were labeled for Isaac camera segmentation."
+            if applied
+            else "No scene-index USD prims were labeled for Isaac camera segmentation."
+        ),
+    }
+
+
+def _semantic_label_application_not_requested() -> dict[str, Any]:
+    return {
+        "schema": "isaac_scene_index_semantic_label_application_v1",
+        "status": "not_requested",
+        "applied_count": 0,
+        "failed_count": 0,
+        "missing_prim_count": 0,
+        "requested_prim_count": 0,
+        "failed": [],
+        "label_instances": [],
+        "reason": "Segmentation was not requested.",
+    }
+
+
+def _scene_index_semantic_labels(entry: dict[str, Any], prim_path: str) -> dict[str, str]:
+    category = str(entry.get("category") or entry.get("public_label") or Path(prim_path).name)
+    kind = str(entry.get("kind") or "scene_prim")
+    return {
+        "class": category,
+        "kind": kind,
+        "usd_prim_path": prim_path,
     }
 
 
@@ -1242,6 +1345,7 @@ def _camera_segmentation_capture_diagnostics(
     views: list[dict[str, Any]],
     *,
     requested_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
+    semantic_label_application: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_data_types = sorted(
         {
@@ -1267,6 +1371,7 @@ def _camera_segmentation_capture_diagnostics(
         "candidate_bbox_count": len(candidates),
         "candidate_bboxes": candidates[:MAX_SEGMENTATION_CANDIDATES],
         "view_outputs": views,
+        "semantic_label_application": _dict(semantic_label_application),
         "no_simulator_label_fallback": True,
     }
 
@@ -1797,6 +1902,7 @@ def segmentation_diagnostics(
         "selected_candidate_bboxes": selected_matches[:MAX_SEGMENTATION_CANDIDATES],
         "candidate_bboxes": candidates,
         "view_outputs": captured.get("view_outputs", []),
+        "semantic_label_application": _dict(captured.get("semantic_label_application")),
         "blockers": blockers,
         "agent_facing": False,
         "no_simulator_label_fallback": captured.get("no_simulator_label_fallback") is not False,

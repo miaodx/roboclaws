@@ -527,12 +527,27 @@ the returned tensors instead of crashing on our own parser.
   contains the `CUDBG_EXCEPTION_WARP_ILLEGAL_ADDRESS` coredump line and
   `_Z20array_copy_1d_kernel...` stack frame. No stale Isaac worker process
   remained after the abort.
+- Follow-up scene-index semantic labeling probes, run on 2026-05-28, apply
+  `class`, `kind`, and `usd_prim_path` labels to all 29 object/receptacle USD
+  prims from the loaded `val_1` scene index before camera capture. Both
+  `stamp=0528_val1_seg_semantic_labeled_probe` and
+  `stamp=0528_val1_seg_instance_labeled_probe` record
+  `semantic_label_application.status="applied"`, `applied_count=29`,
+  `failed_count=0`, and `missing_prim_count=0`, but the strict segmentation
+  checker still fails. `semantic_segmentation` and
+  `instance_segmentation_fast` continue to return four full-frame `BACKGROUND`
+  candidates, zero selected USD prim matches, and repeated
+  `OgnSdSemanticLabelsMap: invalid input AOV SemanticLabelTokenSD` warnings.
+  This narrows the remaining Phase E blocker away from missing scene-index
+  labels and toward the Isaac Camera/Replicator semantic AOV or render-product
+  path for these loaded MolmoSpaces USD stages.
 
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability`. Default cleanup runs do
 not request segmentation tensors. Explicit local segmentation probes now show
 that `semantic_segmentation` and `instance_segmentation_fast` return tensors,
-but only background candidates with no selected-USD matches, while
+but only background candidates with no selected-USD matches, even after
+scene-index labels are applied to the loaded USD prims. Meanwhile
 `instance_id_segmentation_fast` aborts inside Isaac/Omniverse before producing
 worker state;
 semantic pose edits are tracked in backend JSON state and snapshots rather than

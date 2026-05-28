@@ -29,7 +29,10 @@ probes show `semantic_segmentation` and `instance_segmentation_fast` return
 tensors, but only full-frame `BACKGROUND` candidates with zero selected USD
 matches; `instance_id_segmentation_fast` still aborts inside Isaac/Omniverse
 with a CUDA illegal-address coredump before worker state is written, now
-captured in the runtime-smoke artifact.
+captured in the runtime-smoke artifact. A follow-up label-application probe
+successfully applies scene-index semantic labels to 29 USD prims before camera
+capture, but semantic and instance-fast annotators still return only
+`BACKGROUND`.
 Default segmentation-off cleanup still passes on `val_1`. The
 visual-grounding GPU sidecar benchmark remains a separate active confidence
 layer; Grounding DINO base-recall is still the current default real
@@ -63,6 +66,7 @@ MolmoSpaces USD RGB/robot-view and exact scene-index cleanup evidence passes
 for `val_0` and `val_1`, but Isaac has not produced usable selected-prim
 segmentation evidence. `semantic_segmentation` and
 `instance_segmentation_fast` produce tensors with only `BACKGROUND` candidates,
+even after scene-index labels are applied to the loaded USD prims,
 while `instance_id_segmentation_fast` aborts with a CUDA illegal-address
 coredump.
 

@@ -735,6 +735,82 @@ def test_isaac_lab_segmentation_capture_accepts_list_info_shape() -> None:
     assert capture["candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
 
 
+def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims() -> None:
+    records: list[tuple[str, str, tuple[str, ...]]] = []
+
+    class Prim:
+        def __init__(self, path: str, valid: bool = True) -> None:
+            self.path = path
+            self.valid = valid
+
+        def IsValid(self) -> bool:
+            return self.valid
+
+    class Stage:
+        def __init__(self) -> None:
+            self.prims = {
+                "/World/Objects/bowl_01": Prim("/World/Objects/bowl_01"),
+                "/World/Receptacles/sink_01": Prim("/World/Receptacles/sink_01"),
+            }
+
+        def GetPrimAtPath(self, path: str) -> Prim:
+            return self.prims.get(path, Prim(path, valid=False))
+
+    class StageUtils:
+        @staticmethod
+        def get_current_stage() -> Stage:
+            return Stage()
+
+    class SimUtils:
+        @staticmethod
+        def add_labels(
+            prim: Prim,
+            *,
+            labels: list[str],
+            instance_name: str,
+            overwrite: bool,
+        ) -> None:
+            assert overwrite is True
+            records.append((prim.path, instance_name, tuple(labels)))
+
+    result = isaac_lab_backend_worker._apply_scene_index_semantic_labels(
+        stage_utils=StageUtils(),
+        sim_utils=SimUtils(),
+        scene_index_diagnostics={
+            "object_index": {
+                "bowl_01": {
+                    "usd_prim_path": "/World/Objects/bowl_01",
+                    "category": "Bowl",
+                    "kind": "object",
+                }
+            },
+            "receptacle_index": {
+                "sink_01": {
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "category": "Sink",
+                    "kind": "receptacle",
+                },
+                "missing": {
+                    "usd_prim_path": "/World/Receptacles/missing",
+                    "category": "CounterTop",
+                    "kind": "receptacle",
+                },
+            },
+        },
+    )
+
+    assert result["status"] == "applied"
+    assert result["applied_count"] == 2
+    assert result["missing_prim_count"] == 1
+    assert ("/World/Objects/bowl_01", "class", ("Bowl",)) in records
+    assert (
+        "/World/Objects/bowl_01",
+        "usd_prim_path",
+        ("/World/Objects/bowl_01",),
+    ) in records
+    assert ("/World/Receptacles/sink_01", "kind", ("receptacle",)) in records
+
+
 def test_isaac_lab_generated_count_selects_private_targets_not_first_object(
     tmp_path: Path,
 ) -> None:
