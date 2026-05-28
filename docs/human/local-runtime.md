@@ -17,6 +17,7 @@ MIMO_TP_KEY=        # MiMo
 NV_API_KEY=          # NVIDIA NIM, optional
 
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1  # Internal multi-model aggregator
+XM_LLM_ANTHROPIC_BASE_URL=      # Optional Claude mify route override
 XM_LLM_API_KEY=      # Default Codex mify route
 
 CODEX_BASE_URL=      # Optional non-mify Codex Responses-compatible endpoint
@@ -27,14 +28,16 @@ The launch recipes infer the repo-local runtime route from those keys. Codex
 prefers the internal multi-model aggregator when `XM_LLM_API_KEY` is present
 (`mify`, `xiaomi/mimo-v2-omni`, Responses API, web search disabled). Explicit
 `CODEX_BASE_URL` / `CODEX_API_KEY` remains available for non-mify debugging.
-Claude Code prefers a MiMo key when available, then Kimi, and otherwise falls
-back to the host system provider only off the work network.
+Claude Code prefers a MiMo key when available, then Kimi, then the mify
+Anthropic route from `XM_LLM_API_KEY` (`mify-anthropic`,
+`xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
+network.
 
 Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
 workflows. On the work network, OpenClaw and system-provider Claude Code are
 blocked; repo-local `.env` Codex routes (`XM_LLM_API_KEY`, or
-`CODEX_BASE_URL` plus `CODEX_API_KEY`) remain allowed. Work-network
-restrictions are documented in
+`CODEX_BASE_URL` plus `CODEX_API_KEY`) and Claude `mify-anthropic` remain
+allowed. Work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see

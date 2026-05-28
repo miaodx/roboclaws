@@ -46,10 +46,13 @@ multi-model aggregator when `XM_LLM_API_KEY` is present (`mify`,
 `xiaomi/mimo-v2-omni`, Responses API, web search disabled). `CODEX_BASE_URL`
 and `CODEX_API_KEY` remain available only for explicit non-mify Codex
 debugging. Claude Code prefers `MIMO_TP_KEY` when present, then `KIMI_API_KEY`,
-and otherwise falls back to the host system provider only off the work network.
+then `XM_LLM_API_KEY` through the `mify-anthropic` profile
+(`xiaomi/mimo-v2.5`, Anthropic API). It otherwise falls back to the host system
+provider only off the work network.
 
 ```bash
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+XM_LLM_ANTHROPIC_BASE_URL=https://api.llm.mioffice.cn/anthropic  # optional
 XM_LLM_API_KEY=...
 MIMO_TP_KEY=...
 KIMI_API_KEY=...
@@ -62,11 +65,11 @@ The `code::cc` and `code::codex` launchers also pass the selected coding-agent
 model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
 capability catalog:
 
-- `mimo-v2.5-pro` and `mimo-v2.5` are text-only. They should use
+- `mimo-v2.5-pro` is text-only. It should use
   `observe_archived` for photo evidence or a configured vision bridge for
   ordinary navigation observations. `scene_objects` and `goto` are available
   only when the server is started with privileged helpers enabled.
-- `mimo-v2-omni` is the MiMo image-capable route and can receive raw
+- `mimo-v2.5` and `mimo-v2-omni` are MiMo image-capable routes and can receive raw
   `observe` images.
 - `kimi-k2.6` is image-capable, but the Claude Code Kimi coding endpoint has
   shown intermittent generic server errors when a long skill-reading context is

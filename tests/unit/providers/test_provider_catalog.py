@@ -51,10 +51,12 @@ def test_provider_factory_routes_through_catalog(monkeypatch) -> None:
 
 def test_text_bridge_uses_catalog_image_capabilities() -> None:
     assert model_supports_images("mimo_openai/mimo-v2.5-pro") is False
+    assert model_supports_images("mimo_openai/mimo-v2.5") is True
     assert model_supports_images("mimo_openai/mimo-v2-omni") is True
     assert (
         resolve_observe_delivery("mimo_openai/mimo-v2.5-pro", observe_mode="auto") == "text-bridge"
     )
+    assert resolve_observe_delivery("mimo_openai/mimo-v2.5", observe_mode="auto") == "images"
     assert resolve_observe_delivery("mimo_openai/mimo-v2-omni", observe_mode="auto") == "images"
 
 

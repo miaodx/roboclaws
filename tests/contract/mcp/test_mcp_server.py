@@ -355,7 +355,7 @@ def test_observe_text_bridge_failure_returns_safe_text_shape(
         agent_id=0,
         run_dir=tmp_path,
         port=0,
-        model_name="mimo_openai/mimo-v2.5",
+        model_name="mimo_openai/mimo-v2.5-pro",
         image_model="mimo_openai/mimo-v2-omni",
         observe_mode="auto",
         vision_bridge=bridge,

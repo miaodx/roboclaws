@@ -1014,6 +1014,42 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
     ]
 
 
+def test_coding_agent_claude_mify_anthropic_profile_builds_scoped_env() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CLAUDE_PROVIDER=mify-anthropic
+            XM_LLM_API_KEY=fake-xm-key
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            model_args=()
+            env_args=()
+            roboclaws_claude_provider_args model_args env_args
+            printf 'model:%s\n' "${model_args[@]}"
+            printf 'env:%s\n' "${env_args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "model:--model",
+        "model:xiaomi/mimo-v2.5",
+        "env:ANTHROPIC_API_KEY=fake-xm-key",
+        "env:ANTHROPIC_BASE_URL=https://api.llm.mioffice.cn/anthropic",
+        "env:CLAUDE_CODE_SIMPLE=1",
+    ]
+
+
 def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
