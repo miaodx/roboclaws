@@ -538,11 +538,21 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "mark a waypoint complete only after" in prompt
-    assert "compare the checklist before roboclaws__done" in prompt
+    assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
+    assert "namespace cleanup" in prompt
+    assert "server named cleanup" not in prompt
+    assert "compare the checklist before done" in prompt
+    assert "never mcp__cleanup__" in prompt
+    assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
-    assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
-    assert "do not send bare x/y/width/height fields" in prompt
+    assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
+    assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
+    assert "Never send bbox_normalized" in prompt
+    assert 'target_fixture_id=\\"\\"' in prompt
+    assert 'target_fixture_id=\\"None\\"' in prompt
+    assert "target_fixture_id=null" in prompt
+    assert "bare x/y/width/height fields" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
     assert "place/place_inside" in prompt
     assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
@@ -561,7 +571,12 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "mark a waypoint complete only after" in prompt
     assert "place/place_inside" in prompt
     assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
-    assert "compare the checklist before roboclaws__done" in prompt
+    assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
+    assert "namespace cleanup" in prompt
+    assert "server named cleanup" not in prompt
+    assert "compare the checklist before done" in prompt
+    assert "never mcp__cleanup__" in prompt
+    assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
 
 
@@ -684,6 +699,8 @@ def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -
         "-c",
         'model_providers.mify.wire_api="responses"',
         "-c",
+        "model_providers.mify.supports_parallel_tool_calls=false",
+        "-c",
         'web_search="disabled"',
     ]
 
@@ -729,6 +746,8 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
         'model_providers.mify.env_key="XM_LLM_API_KEY"',
         "-c",
         'model_providers.mify.wire_api="responses"',
+        "-c",
+        "model_providers.mify.supports_parallel_tool_calls=false",
         "-c",
         'web_search="disabled"',
     ]

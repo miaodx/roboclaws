@@ -150,7 +150,8 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
     ):
         assert expected in text
 
-    assert '"mcp", "add", "roboclaws"' in runner_text
+    assert '"add",\n                CODEX_CLEANUP_MCP_SERVER_NAME,' in runner_text
+    assert 'CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"' in runner_text
 
 
 def test_molmo_visual_reports_require_robot_timeline_and_real_robot_checks() -> None:

@@ -140,9 +140,11 @@ Current task mappings:
 - `household-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
 
 For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
-bundled/system Codex skills are not available. Task prompts should read the
-mounted skill explicitly, for example `../skills/ai2thor-navigator/SKILL.md` or
-`../skills/molmo-realworld-cleanup/SKILL.md`.
+bundled/system Codex skills are not available. Recipe-owned prompts should state
+that the bundled task skill instructions are already available in the generated
+workspace and should include the operative task constraints directly; avoid
+prompting Codex to call `read_mcp_resource`, `resources/read`, or invented MCP
+namespaces such as `mcp__<server>__`.
 
 ## Examples
 

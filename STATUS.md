@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -12,13 +12,13 @@ artifacts visible, honest, and aligned with future real-robot backends.
 
 The active follow-up is the visual-grounding GPU sidecar benchmark for
 MolmoSpaces cleanup. The current implementation keeps the existing HTTP
-visual-grounding service boundary, adds first-wave benchmark-matrix support,
-records sidecar runtime diagnostics, and keeps CUDA/model dependencies in a
-dedicated `.venv-visual-grounding/` sidecar environment instead of the core
-cleanup `.venv/`. The local GPU pass on 2026-05-26 promoted a stored
-RAW_FPV corpus, benchmarked the implemented first-wave rows against a real CUDA
-sidecar, and validated the selected Grounding DINO row against a direct cleanup
-control run.
+visual-grounding service boundary, records sidecar runtime diagnostics, and
+keeps CUDA/model dependencies in a dedicated `.venv-visual-grounding/` sidecar
+environment instead of the core cleanup `.venv/`. The 2026-05-27 local pass
+promoted Grounding DINO base-recall as the default real `camera-labels`
+pipeline, validated it through live Codex against the `world-labels` control on
+scene-0 seed-7, and recorded the current `camera-raw` mify route as not yet an
+apple-to-apple score.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -32,10 +32,11 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Run Codex-runtime cleanup validation for the selected Grounding DINO pipeline
-through an allowed repo-local `.env` Codex route. Current proof level is real
-local CUDA sidecar benchmark plus direct MolmoSpaces cleanup validation;
-OpenClaw validation remains guarded by the work-network policy.
+Generate a more representative MolmoSpaces visual-grounding corpus and cleanup
+comparison: about 10 scene indices x 10 target-focused bbox examples for model
+selection, plus a smaller multi-scene live cleanup subset for agent behavior.
+Keep Grounding DINO base-recall as the default until that broader pass changes
+the ranking.
 
 ## Current Blocker
 
@@ -43,7 +44,9 @@ No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
 support Codex through repo-local `.env` mify or codex-env routes and support
 Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
-runs also support OpenClaw.
+runs also support OpenClaw. The current `camera-raw` live Codex mify route is
+not comparable yet: the latest rerun placed one object, failed the sweep gate,
+and then hit a provider/tool namespace error.
 
 ## Human Review Surface
 
