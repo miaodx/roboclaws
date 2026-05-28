@@ -365,6 +365,8 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert isaac_scene_index["generated_mess_count"] == 1
     assert isaac_scene_index["object_index"]
     assert isaac_scene_index["receptacle_index"]
+    assert run_result["isaac_runtime"]["object_index"] == isaac_scene_index["object_index"]
+    assert run_result["isaac_runtime"]["receptacle_index"] == isaac_scene_index["receptacle_index"]
     assert (
         run_result["isaac_runtime"]["scene_binding_diagnostics"][
             "private_manifest_exposed_to_agent"

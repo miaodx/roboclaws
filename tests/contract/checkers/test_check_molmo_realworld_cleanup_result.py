@@ -486,6 +486,39 @@ def test_checker_rejects_isaac_scene_index_binding_drift_from_run_result(
         )
 
 
+def test_checker_rejects_isaac_scene_index_object_index_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    object_index = isaac_runtime["object_index"]
+    assert isinstance(object_index, dict)
+    object_index["book_01"] = {"usd_prim_path": "/World/Objects/book_01"}
+    isaac_runtime["object_index_count"] = 2
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        extra_object_index={"book_01": {"usd_prim_path": "/World/Objects/book_renamed"}},
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_checker_rejects_isaac_scene_index_segmentation_drift_from_run_result(
     tmp_path: Path,
 ) -> None:
@@ -2125,6 +2158,12 @@ def _isaac_runtime_result(
         "artifacts": {"isaac_scene_index": str(base / "isaac_scene_index.json")},
         "isaac_runtime": {
             "runtime": {"primitive_provenance": "isaac_semantic_pose"},
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "object_index_count": 1,
+            "receptacle_index": {
+                "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
+            },
+            "receptacle_index_count": 1,
             "scene_binding_diagnostics": scene_bindings,
             "scene_index_artifact": str(base / "isaac_scene_index.json"),
             "segmentation": segmentation,
@@ -2306,6 +2345,7 @@ def _write_isaac_scene_index(
     artifact_scene_bindings: dict[str, object] | None = None,
     segmentation: dict[str, object] | None = None,
     object_prim_path: str = "/World/Objects/mug_01",
+    extra_object_index: dict[str, object] | None = None,
 ) -> None:
     if artifact_scene_bindings is None:
         artifact_scene_bindings = scene_bindings
@@ -2315,13 +2355,15 @@ def _write_isaac_scene_index(
             "agent_facing": False,
             "no_simulator_label_fallback": True,
         }
+    object_index = {"mug_01": {"usd_prim_path": object_prim_path}}
+    object_index.update(extra_object_index or {})
     payload = {
         "schema": "isaac_scene_index_artifact_v1",
         "backend": "isaaclab_subprocess",
         "agent_facing": False,
         "private_manifest_exposed_to_agent": False,
-        "object_index": {"mug_01": {"usd_prim_path": object_prim_path}},
-        "object_index_count": 1,
+        "object_index": object_index,
+        "object_index_count": len(object_index),
         "receptacle_index": {
             "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
         },

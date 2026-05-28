@@ -287,6 +287,11 @@ protocol:
   that the referenced artifacts are readable, nonblank RGB images. Provenance
   strings and nonempty placeholder files are no longer enough to satisfy the
   real Isaac visual-evidence checks.
+- Full cleanup `run_result.json` now carries the report-only Isaac
+  object/receptacle USD indexes, and the strict `isaac_scene_index.json` gate
+  cross-checks those indexes against the runtime payload. The scene-index
+  artifact can no longer drift to unrelated non-selected USD prim rows while
+  selected binding rows still happen to pass.
 
 Real `.venv-isaaclab/` execution on a GPU/Isaac host remains unvalidated. Do
 not claim real Isaac renderer, USD scene parity, segmentation, or planner-backed

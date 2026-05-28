@@ -671,6 +671,8 @@ def run_realworld_cleanup(
                 "scene_index_artifact": str(isaac_scene_index_path),
                 "object_index_count": len(backend_instance.object_index),
                 "receptacle_index_count": len(backend_instance.receptacle_index),
+                "object_index": backend_instance.object_index,
+                "receptacle_index": backend_instance.receptacle_index,
                 "scene_index_diagnostics": backend_instance.scene_index_diagnostics,
                 "scene_binding_diagnostics": backend_instance.scene_binding_diagnostics,
                 "segmentation": backend_instance.segmentation,

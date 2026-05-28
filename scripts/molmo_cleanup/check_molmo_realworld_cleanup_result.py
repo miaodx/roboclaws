@@ -1108,12 +1108,29 @@ def _assert_isaac_scene_index_artifact(
     )
     _assert_bound_isaac_index_rows(payload.get("object_index") or {})
     _assert_bound_isaac_index_rows(payload.get("receptacle_index") or {})
+    _assert_isaac_scene_index_matches_runtime_indexes(isaac, payload)
     _assert_selected_isaac_usd_bindings_for_indexes(
         payload.get("scene_binding_diagnostics") or {},
         object_index=payload.get("object_index") or {},
         receptacle_index=payload.get("receptacle_index") or {},
     )
     return payload
+
+
+def _assert_isaac_scene_index_matches_runtime_indexes(
+    isaac: dict[str, Any],
+    payload: dict[str, Any],
+) -> None:
+    for index_key, count_key in (
+        ("object_index", "object_index_count"),
+        ("receptacle_index", "receptacle_index_count"),
+    ):
+        runtime_index = isaac.get(index_key) or {}
+        artifact_index = payload.get(index_key) or {}
+        assert runtime_index, (index_key, isaac)
+        assert runtime_index == artifact_index, (index_key, runtime_index, artifact_index)
+        assert int(isaac.get(count_key) or 0) == len(runtime_index), (count_key, isaac)
+        assert int(payload.get(count_key) or 0) == len(artifact_index), (count_key, payload)
 
 
 def _assert_isaac_scene_index_matches_runtime_bindings(
