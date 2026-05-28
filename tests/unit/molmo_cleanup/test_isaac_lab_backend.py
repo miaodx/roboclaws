@@ -154,9 +154,14 @@ def test_isaac_lab_backend_can_request_segmentation(
         python_executable=Path(sys.executable),
         runtime_mode="fake",
         enable_segmentation=True,
+        segmentation_data_types=("instance_id_segmentation_fast",),
     )
 
     assert "--enable-segmentation" in captured_init_args
+    assert captured_init_args[-2:] == [
+        "--segmentation-data-type",
+        "instance_id_segmentation_fast",
+    ]
 
 
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
@@ -655,10 +660,14 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
 
     view = isaac_lab_backend_worker._camera_segmentation_view_diagnostics(
         Camera(),
+        data_types=("instance_id_segmentation_fast",),
         view_name="fpv",
         np=np,
     )
-    capture = isaac_lab_backend_worker._camera_segmentation_capture_diagnostics([view])
+    capture = isaac_lab_backend_worker._camera_segmentation_capture_diagnostics(
+        [view],
+        requested_data_types=("instance_id_segmentation_fast",),
+    )
     diagnostics = isaac_lab_backend_worker.segmentation_diagnostics(
         "real",
         real_smoke={"segmentation": capture},
@@ -674,6 +683,7 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
     )
 
     assert capture["output_data_types"] == ["instance_id_segmentation_fast"]
+    assert capture["requested_data_types"] == ["instance_id_segmentation_fast"]
     assert capture["candidate_bbox_count"] == 1
     assert diagnostics["status"] == "available"
     assert diagnostics["candidate_bbox_count"] == 1
@@ -681,6 +691,48 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
     assert diagnostics["selected_candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
     assert diagnostics["agent_facing"] is False
     assert diagnostics["no_simulator_label_fallback"] is True
+
+
+def test_isaac_lab_segmentation_capture_accepts_list_info_shape() -> None:
+    import numpy as np
+
+    class CameraData:
+        output = {
+            "semantic_segmentation": np.array(
+                [
+                    [[0], [0], [0], [0]],
+                    [[0], [5], [5], [0]],
+                    [[0], [5], [5], [0]],
+                    [[0], [0], [0], [0]],
+                ]
+            )
+        }
+        info = [
+            {
+                "semantic_segmentation": {
+                    "idToLabels": {"5": {"usd_prim_path": "/World/Objects/bowl_01"}},
+                }
+            }
+        ]
+
+    class Camera:
+        data = CameraData()
+
+    view = isaac_lab_backend_worker._camera_segmentation_view_diagnostics(
+        Camera(),
+        data_types=("semantic_segmentation",),
+        view_name="fpv",
+        np=np,
+    )
+    capture = isaac_lab_backend_worker._camera_segmentation_capture_diagnostics(
+        [view],
+        requested_data_types=("semantic_segmentation",),
+    )
+
+    assert capture["output_data_types"] == ["semantic_segmentation"]
+    assert capture["candidate_bbox_count"] == 1
+    assert capture["candidate_bboxes"][0]["label"] == "/World/Objects/bowl_01"
+    assert capture["candidate_bboxes"][0]["bbox_xyxy"] == [1, 1, 3, 3]
 
 
 def test_isaac_lab_generated_count_selects_private_targets_not_first_object(

@@ -79,6 +79,8 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "--require-robot-view-images" in harness_text
     assert "--require-segmentation-evidence" in harness_text
     assert "--enable-segmentation" in harness_text
+    assert '2>&1 | tee "$init_result"' in harness_text
+    assert '2>&1 | tee "$robot_views_result"' in harness_text
     assert "robot_views_result.json" in harness_text
     assert "robot_views \\" in harness_text
     assert 'accept_nvidia_eula="true"' in harness_text
@@ -117,6 +119,8 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-robot-view-provenance" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text
     assert "--isaac-enable-segmentation" in harness_text
+    assert "segmentation_data_types" in harness_text
+    assert "--isaac-segmentation-data-type" in harness_text
     assert "--require-isaac-snapshot-provenance" in harness_text
     assert 'accept_nvidia_eula="true"' in harness_text
     assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text

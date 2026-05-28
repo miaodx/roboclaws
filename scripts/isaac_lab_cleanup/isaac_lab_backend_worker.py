@@ -81,6 +81,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Request Isaac semantic/instance segmentation tensors during real RGB capture.",
     )
     init.add_argument(
+        "--segmentation-data-type",
+        action="append",
+        choices=ISAAC_SEGMENTATION_DATA_TYPES,
+        help=(
+            "Isaac segmentation data type to request. Repeat to probe individual "
+            "annotators; defaults to all supported segmentation data types."
+        ),
+    )
+    init.add_argument(
         "--scene-usd-path",
         type=Path,
         help=(
@@ -401,6 +410,7 @@ def real_runtime_smoke(
         height=DEFAULT_HEIGHT,
         simulation_app=simulation_app,
         include_segmentation=args.enable_segmentation,
+        segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
     )
     render_steps = int(capture["render_steps"])
     robot_view_images = dict(capture["robot_view_images"])
@@ -1098,6 +1108,7 @@ def _capture_isaac_lab_camera_views(
     height: int,
     simulation_app: Any,
     include_segmentation: bool = False,
+    segmentation_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1123,7 +1134,7 @@ def _capture_isaac_lab_camera_views(
             width=width,
             data_types=[
                 "rgb",
-                *(ISAAC_SEGMENTATION_DATA_TYPES if include_segmentation else ()),
+                *(segmentation_data_types if include_segmentation else ()),
             ],
             colorize_semantic_segmentation=False,
             colorize_instance_segmentation=False,
@@ -1161,13 +1172,21 @@ def _capture_isaac_lab_camera_views(
         saved[view_name] = str(output_path)
         if include_segmentation:
             segmentation_views.append(
-                _camera_segmentation_view_diagnostics(camera, view_name=view_name, np=np)
+                _camera_segmentation_view_diagnostics(
+                    camera,
+                    data_types=segmentation_data_types,
+                    view_name=view_name,
+                    np=np,
+                )
             )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
         "scene_bounds": scene_bounds,
-        "segmentation": _camera_segmentation_capture_diagnostics(segmentation_views)
+        "segmentation": _camera_segmentation_capture_diagnostics(
+            segmentation_views,
+            requested_data_types=segmentation_data_types,
+        )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
     }
@@ -1176,6 +1195,7 @@ def _capture_isaac_lab_camera_views(
 def _camera_segmentation_view_diagnostics(
     camera: Any,
     *,
+    data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
     view_name: str,
     np: Any,
 ) -> dict[str, Any]:
@@ -1183,11 +1203,11 @@ def _camera_segmentation_view_diagnostics(
     info = getattr(getattr(camera, "data", None), "info", {}) or {}
     output_rows: dict[str, dict[str, Any]] = {}
     candidates: list[dict[str, Any]] = []
-    for data_type in ISAAC_SEGMENTATION_DATA_TYPES:
+    for data_type in data_types:
         if data_type not in outputs:
             continue
         array = _segmentation_array(outputs.get(data_type), np=np)
-        labels = _segmentation_label_map(_dict(info.get(data_type)))
+        labels = _segmentation_label_map(_segmentation_info_for_data_type(info, data_type))
         row: dict[str, Any] = {
             "present": array is not None,
             "label_count": len(labels),
@@ -1220,6 +1240,8 @@ def _camera_segmentation_view_diagnostics(
 
 def _camera_segmentation_capture_diagnostics(
     views: list[dict[str, Any]],
+    *,
+    requested_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
 ) -> dict[str, Any]:
     output_data_types = sorted(
         {
@@ -1239,7 +1261,7 @@ def _camera_segmentation_capture_diagnostics(
         "schema": SEGMENTATION_SCHEMA,
         "source": "isaac_lab_camera",
         "capture_method": "isaac_lab_camera_segmentation",
-        "requested_data_types": list(ISAAC_SEGMENTATION_DATA_TYPES),
+        "requested_data_types": list(requested_data_types),
         "output_data_types": output_data_types,
         "tensor_output_available": bool(output_data_types),
         "candidate_bbox_count": len(candidates),
@@ -1285,7 +1307,30 @@ def _segmentation_array(value: Any, *, np: Any) -> Any | None:
     return array
 
 
-def _segmentation_label_map(info: dict[str, Any]) -> dict[int, str]:
+def _segmentation_info_for_data_type(info: Any, data_type: str) -> dict[str, Any]:
+    if isinstance(info, dict):
+        nested = info.get(data_type)
+        if isinstance(nested, dict):
+            return nested
+        return info
+    if isinstance(info, (list, tuple)):
+        merged: dict[str, Any] = {}
+        for item in info:
+            labels = _segmentation_label_map(_segmentation_info_for_data_type(item, data_type))
+            if labels:
+                merged.setdefault("idToLabels", {}).update(labels)
+        return merged
+    return {}
+
+
+def _segmentation_label_map(info: Any) -> dict[int, str]:
+    if isinstance(info, (list, tuple)):
+        labels: dict[int, str] = {}
+        for item in info:
+            labels.update(_segmentation_label_map(item))
+        return labels
+    if not isinstance(info, dict):
+        return {}
     raw_labels = (
         info.get("idToLabels")
         or info.get("id_to_labels")

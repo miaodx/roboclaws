@@ -486,17 +486,55 @@ of only enabling the final checker gate.
 Post-routing default cleanup regression, run on 2026-05-28:
 `just agent::harness molmo-isaac-cleanup-smoke
 scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
-stamp=0528_val1_seg_route_default_cleanup` wrote
-`output/isaaclab/cleanup-smoke/0528_val1_seg_route_default_cleanup/` and the
+stamp=0528_val1_seg_filter_default_cleanup` wrote
+`output/isaaclab/cleanup-smoke/0528_val1_seg_filter_default_cleanup/` and the
 strict cleanup checker returned `molmo-realworld-cleanup ok`. This confirms the
 passing local GPU cleanup path is unchanged when segmentation remains at its
-default off state.
+default off state after the segmentation data-type diagnostic changes.
+
+Segmentation data-type narrowing, run on 2026-05-28:
+the runtime smoke and cleanup smoke harnesses now accept
+`segmentation_data_types=...`, and the backend/worker can request individual
+Isaac camera annotators. The worker segmentation label parser now accepts
+Isaac's list-shaped `camera.data.info` payloads, so report diagnostics record
+the returned tensors instead of crashing on our own parser.
+
+- `just agent::harness molmo-isaac-runtime-smoke
+  scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+  require_local_scene_usd=true stamp=0528_val1_seg_semantic_probe_v2
+  require_segmentation_evidence=true
+  segmentation_data_types=semantic_segmentation` completed worker init and
+  robot-view capture, then failed the strict segmentation checker as expected.
+  The artifact at
+  `output/isaaclab/runtime-smoke/0528_val1_seg_semantic_probe_v2/` records
+  `tensor_output_available=true`,
+  `output_data_types=["semantic_segmentation"]`, `candidate_bbox_count=4`,
+  and `selected_usd_prim_match_count=0`; all four candidates are full-frame
+  `BACKGROUND` rows rather than selected USD prims.
+- `just agent::harness molmo-isaac-runtime-smoke ...
+  stamp=0528_val1_seg_instance_probe
+  segmentation_data_types=instance_segmentation_fast` produced the same shape:
+  `tensor_output_available=true`,
+  `output_data_types=["instance_segmentation_fast"]`,
+  `candidate_bbox_count=4`, and `selected_usd_prim_match_count=0`, with only
+  full-frame `BACKGROUND` candidates.
+- `just agent::harness molmo-isaac-runtime-smoke ...
+  stamp=0528_val1_seg_instance_id_probe_v3
+  segmentation_data_types=instance_id_segmentation_fast` still exits 134 inside
+  Isaac/Omniverse before worker state is written. The runtime-smoke harness now
+  captures stderr into `init_result.json`, so
+  `output/isaaclab/runtime-smoke/0528_val1_seg_instance_id_probe_v3/init_result.json`
+  contains the `CUDBG_EXCEPTION_WARP_ILLEGAL_ADDRESS` coredump line and
+  `_Z20array_copy_1d_kernel...` stack frame. No stale Isaac worker process
+  remained after the abort.
 
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability`. Default cleanup runs do
-not request segmentation tensors, and explicit local segmentation probes
-currently abort inside Isaac/Omniverse before producing bbox candidates for the
-selected USD prims;
+not request segmentation tensors. Explicit local segmentation probes now show
+that `semantic_segmentation` and `instance_segmentation_fast` return tensors,
+but only background candidates with no selected-USD matches, while
+`instance_id_segmentation_fast` aborts inside Isaac/Omniverse before producing
+worker state;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
 manipulation is still out of scope for this slice; broader scene coverage should

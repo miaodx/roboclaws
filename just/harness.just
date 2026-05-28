@@ -662,6 +662,7 @@ molmo-isaac-runtime-smoke *overrides:
     require_robot_view_images="true"
     require_nonblank_image="true"
     require_segmentation_evidence="false"
+    segmentation_data_types=""
     accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
@@ -678,7 +679,7 @@ molmo-isaac-runtime-smoke *overrides:
         require_real_rendering|require_usd_stage_loaded|require_local_scene_usd|\
         require_usd_scene_index|\
         require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
-        require_segmentation_evidence|accept_nvidia_eula)
+        require_segmentation_evidence|segmentation_data_types|accept_nvidia_eula)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -715,11 +716,19 @@ molmo-isaac-runtime-smoke *overrides:
     fi
     if [[ "$require_segmentation_evidence" == "true" ]]; then
       worker_cmd+=(--enable-segmentation)
+      if [[ -n "$segmentation_data_types" ]]; then
+        IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"
+        for data_type in "${segmentation_type_args[@]}"; do
+          if [[ -n "$data_type" ]]; then
+            worker_cmd+=(--segmentation-data-type "$data_type")
+          fi
+        done
+      fi
     fi
     if [[ -n "$map_bundle" ]]; then
       worker_cmd+=(--map-bundle-dir "$map_bundle")
     fi
-    "${worker_cmd[@]}" | tee "$init_result"
+    "${worker_cmd[@]}" 2>&1 | tee "$init_result"
     if [[ ! -s "$state_path" ]]; then
       echo "error: Isaac runtime smoke init did not write state: ${state_path}" >&2
       exit 1
@@ -729,7 +738,7 @@ molmo-isaac-runtime-smoke *overrides:
       robot_views \
       --output-dir "${run_dir}/robot_views" \
       --label "runtime_smoke")
-    "${robot_views_cmd[@]}" | tee "$robot_views_result"
+    "${robot_views_cmd[@]}" 2>&1 | tee "$robot_views_result"
     check_cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py \
       --init-result "$init_result" \
       --state-path "$state_path" \
@@ -785,6 +794,7 @@ molmo-isaac-cleanup-smoke *overrides:
     require_selected_usd_bindings="true"
     require_robot_view_provenance="true"
     require_segmentation_evidence="false"
+    segmentation_data_types=""
     require_snapshot_provenance="true"
     accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
@@ -801,7 +811,8 @@ molmo-isaac-cleanup-smoke *overrides:
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
         require_real_runtime|require_scene_loaded|require_local_scene_usd|\
         require_selected_usd_bindings|require_robot_view_provenance|\
-        require_segmentation_evidence|require_snapshot_provenance|accept_nvidia_eula)
+        require_segmentation_evidence|segmentation_data_types|\
+        require_snapshot_provenance|accept_nvidia_eula)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -847,6 +858,14 @@ molmo-isaac-cleanup-smoke *overrides:
     fi
     if [[ "$require_segmentation_evidence" == "true" ]]; then
       run_cmd+=(--isaac-enable-segmentation)
+      if [[ -n "$segmentation_data_types" ]]; then
+        IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"
+        for data_type in "${segmentation_type_args[@]}"; do
+          if [[ -n "$data_type" ]]; then
+            run_cmd+=(--isaac-segmentation-data-type "$data_type")
+          fi
+        done
+      fi
     fi
     "${run_cmd[@]}"
     check_cmd=(.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
