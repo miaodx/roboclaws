@@ -32,7 +32,11 @@ with a CUDA illegal-address coredump before worker state is written, now
 captured in the runtime-smoke artifact. A follow-up label-application probe
 successfully applies scene-index semantic labels to 29 USD prims before camera
 capture, but semantic and instance-fast annotators still return only
-`BACKGROUND`.
+`BACKGROUND`. A targeted local USD reference install now maps missing
+MolmoSpaces USD object references from the `val_1` state artifact to 22
+`objects/thor` R2 archives and installs them under
+`output/isaaclab/molmospaces-usd/objects/thor`; the follow-up probe confirms
+selected Bowl/Sink geometry is renderable with no missing referenced assets.
 Default segmentation-off cleanup still passes on `val_1`. The
 visual-grounding GPU sidecar benchmark remains a separate active confidence
 layer; Grounding DINO base-recall is still the current default real
@@ -64,11 +68,15 @@ Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
 runs also support OpenClaw. The current Isaac blocker is segmentation:
 MolmoSpaces USD RGB/robot-view and exact scene-index cleanup evidence passes
 for `val_0` and `val_1`, but Isaac has not produced usable selected-prim
-segmentation evidence. `semantic_segmentation` and
-`instance_segmentation_fast` produce tensors with only `BACKGROUND` candidates,
-even after scene-index labels are applied to the loaded USD prims,
+segmentation evidence. Missing selected USD object references are no longer the
+active blocker for `val_1`; selected Bowl/Sink geometry now resolves as
+renderable. `semantic_segmentation` and `instance_segmentation_fast` produce
+tensors with only `BACKGROUND` candidates, even after scene-index labels are
+applied to the loaded USD prims and referenced object geometry resolves,
 while `instance_id_segmentation_fast` aborts with a CUDA illegal-address
-coredump.
+coredump. The current blocker is the Isaac semantic AOV/render-product path,
+including repeated `OgnSdSemanticLabelsMap: invalid input AOV
+SemanticLabelTokenSD` warnings.
 
 ## Human Review Surface
 

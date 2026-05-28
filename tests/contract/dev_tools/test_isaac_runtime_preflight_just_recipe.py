@@ -103,6 +103,30 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     ]
 
 
+def test_agent_harness_allows_isaac_usd_reference_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    assert "molmo-isaac-usd-references" in agent_text
+    assert re.search(r"^molmo-isaac-usd-references \*overrides:", harness_text, re.MULTILINE)
+    assert "install_molmospaces_usd_references.py" in harness_text
+    assert "state_path" in harness_text
+    assert "--state-path" in harness_text
+    assert "--use-r2" in harness_text
+
+    route = trace_agent_harness(
+        "molmo-isaac-usd-references",
+        "state_path=/tmp/state.json",
+        "dry_run=true",
+    )
+    assert route == [
+        "just",
+        "harness::molmo-isaac-usd-references",
+        "state_path=/tmp/state.json",
+        "dry_run=true",
+    ]
+
+
 def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")

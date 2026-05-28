@@ -541,6 +541,28 @@ the returned tensors instead of crashing on our own parser.
   This narrows the remaining Phase E blocker away from missing scene-index
   labels and toward the Isaac Camera/Replicator semantic AOV or render-product
   path for these loaded MolmoSpaces USD stages.
+- A targeted USD reference install pass, run on 2026-05-28, uses
+  `just agent::harness molmo-isaac-usd-references
+  state_path=output/isaaclab/runtime-smoke/0528_val1_seg_geometry_diag_probe_v2/state.json`
+  to read the worker's `missing_referenced_assets`, map them to upstream
+  MolmoSpaces USD object packages, and install only the 22 required
+  `objects/thor` archives from R2. The run wrote
+  `output/isaaclab/molmospaces-usd/usd_reference_install_val1.json` with
+  `status="ready"`, `installed=true`, `package_count=22`, and no unresolved
+  assets. The installed cache is about 694 MB and exposes the expected
+  `output/isaaclab/molmospaces-usd/objects/thor` symlink without pulling the
+  whole Objaverse catalog.
+- The follow-up strict semantic segmentation probe
+  `stamp=0528_val1_seg_refs_installed_probe` confirms that USD object geometry
+  now resolves: selected Bowl and Sink bindings report
+  `geometry_status="renderable"`, `has_renderable_geometry=true`,
+  `missing_referenced_asset_count=0`, and nonzero mesh/renderable descendant
+  counts. The strict segmentation checker still fails because all four
+  `semantic_segmentation` candidates remain full-frame `BACKGROUND` rows with
+  `selected_usd_prim_match_count=0`, and Isaac logs
+  `OgnSdSemanticLabelsMap: invalid input AOV SemanticLabelTokenSD`. This closes
+  the missing referenced USD object asset blocker and leaves the semantic AOV
+  path as the active segmentation blocker.
 
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability`. Default cleanup runs do

@@ -636,6 +636,83 @@ molmo-isaac-runtime-preflight *overrides:
     fi
     "${cmd[@]}"
 
+# Install MolmoSpaces USD object packages referenced by Isaac diagnostics. This
+# keeps upstream molmo_spaces_isaac as asset tooling and downloads only the
+# missing object archives needed by local scene evidence unless all_objects=true.
+molmo-isaac-usd-references *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    install_dir="output/isaaclab/molmospaces-usd"
+    cache_dir="${HOME}/.molmospaces"
+    source="thor"
+    version=""
+    state_path=""
+    asset_path=""
+    package=""
+    output_path="output/isaaclab/molmospaces-usd/usd_reference_install.json"
+    use_r2="true"
+    dry_run="false"
+    all_objects="false"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        install_dir|cache_dir|source|version|state_path|asset_path|package|\
+        output_path|use_r2|dry_run|all_objects)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    cmd=(.venv/bin/python scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py \
+      --install-dir "$install_dir" \
+      --cache-dir "$cache_dir" \
+      --source "$source" \
+      --output-path "$output_path")
+    if [[ -n "$version" ]]; then
+      cmd+=(--version "$version")
+    fi
+    if [[ "$use_r2" == "true" ]]; then
+      cmd+=(--use-r2)
+    else
+      cmd+=(--no-use-r2)
+    fi
+    if [[ "$dry_run" == "true" ]]; then
+      cmd+=(--dry-run)
+    fi
+    if [[ "$all_objects" == "true" ]]; then
+      cmd+=(--all-objects)
+    fi
+    if [[ -n "$state_path" ]]; then
+      IFS=', ' read -r -a state_path_args <<< "$state_path"
+      for item in "${state_path_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--state-path "$item")
+      done
+    fi
+    if [[ -n "$asset_path" ]]; then
+      IFS=', ' read -r -a asset_path_args <<< "$asset_path"
+      for item in "${asset_path_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--asset-path "$item")
+      done
+    fi
+    if [[ -n "$package" ]]; then
+      IFS=', ' read -r -a package_args <<< "$package"
+      for item in "${package_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--package "$item")
+      done
+    fi
+    "${cmd[@]}"
+
 # Strict local Isaac Lab runtime smoke. This intentionally fails until the
 # worker proves a real Isaac renderer capture and USD stage load; import-only or
 # placeholder evidence is rejected by the checker.
