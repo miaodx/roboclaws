@@ -131,6 +131,34 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     ]
 
 
+def test_isaac_lab_backend_can_request_segmentation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_init_args: list[str] = []
+    original_run_worker = IsaacLabSubprocessBackend._run_worker
+
+    def wrapped_run_worker(
+        self: IsaacLabSubprocessBackend,
+        command: str,
+        *args: str,
+    ) -> dict[str, object]:
+        if command == "init":
+            captured_init_args.extend(args)
+        return original_run_worker(self, command, *args)
+
+    monkeypatch.setattr(IsaacLabSubprocessBackend, "_run_worker", wrapped_run_worker)
+
+    IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        enable_segmentation=True,
+    )
+
+    assert "--enable-segmentation" in captured_init_args
+
+
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
     map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
     backend = IsaacLabSubprocessBackend(

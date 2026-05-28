@@ -174,6 +174,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--isaac-enable-segmentation",
+        action="store_true",
+        help=(
+            "Request Isaac semantic/instance segmentation tensors for "
+            "backend=isaaclab_subprocess local probes."
+        ),
+    )
+    parser.add_argument(
         "--map-bundle-dir",
         type=Path,
         help=(
@@ -221,6 +229,7 @@ def run_realworld_cleanup(
     scene_source: str = "procthor-10k-val",
     scene_index: int = 0,
     isaac_scene_usd_path: str | Path | None = None,
+    isaac_enable_segmentation: bool = False,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
@@ -280,6 +289,7 @@ def run_realworld_cleanup(
             scene_index=scene_index,
             map_bundle_dir=selected_bundle_dir,
             scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
+            enable_segmentation=isaac_enable_segmentation,
         )
         scenario = backend_instance.scenario
     else:
@@ -1079,6 +1089,7 @@ def main(argv: list[str] | None = None) -> int:
         scene_source=args.scene_source,
         scene_index=args.scene_index,
         isaac_scene_usd_path=args.isaac_scene_usd_path,
+        isaac_enable_segmentation=args.isaac_enable_segmentation,
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,

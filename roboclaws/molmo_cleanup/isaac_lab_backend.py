@@ -55,6 +55,7 @@ class IsaacLabSubprocessBackend:
         generated_mess_count: int = 1,
         map_bundle_dir: Path | None = None,
         scene_usd_path: Path | None = None,
+        enable_segmentation: bool | None = None,
         runtime_mode: str | None = None,
     ) -> None:
         self.run_dir = run_dir
@@ -86,6 +87,16 @@ class IsaacLabSubprocessBackend:
             init_args.extend(["--map-bundle-dir", str(map_bundle_dir)])
         if scene_usd_path is not None:
             init_args.extend(["--scene-usd-path", str(scene_usd_path)])
+        if enable_segmentation is None:
+            enable_segmentation = os.environ.get("ROBOCLAWS_ISAACLAB_ENABLE_SEGMENTATION") in {
+                "1",
+                "true",
+                "TRUE",
+                "yes",
+                "YES",
+            }
+        if enable_segmentation:
+            init_args.append("--enable-segmentation")
         result = self._run_worker("init", *init_args)
         self.backend = ISAACLAB_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(

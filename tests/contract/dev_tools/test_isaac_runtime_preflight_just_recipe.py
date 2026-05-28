@@ -116,6 +116,7 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-selected-usd-bindings" in harness_text
     assert "--require-isaac-robot-view-provenance" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text
+    assert "--isaac-enable-segmentation" in harness_text
     assert "--require-isaac-snapshot-provenance" in harness_text
     assert 'accept_nvidia_eula="true"' in harness_text
     assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text

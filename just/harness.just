@@ -845,6 +845,9 @@ molmo-isaac-cleanup-smoke *overrides:
     if [[ -n "$scene_usd_path" ]]; then
       run_cmd+=(--isaac-scene-usd-path "$scene_usd_path")
     fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      run_cmd+=(--isaac-enable-segmentation)
+    fi
     "${run_cmd[@]}"
     check_cmd=(.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
       "$run_dir" \

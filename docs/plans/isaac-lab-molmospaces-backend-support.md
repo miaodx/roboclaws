@@ -346,6 +346,21 @@ available data in on-demand mode; only `procthor-10k-val_val_0.tar.zst`
 (`58.063` MB) was downloaded and linked to
 `output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda`.
 
+Dependency/version check, run on 2026-05-28:
+official Isaac Sim/Isaac Lab latest docs now target Isaac Sim 6.x on Python
+3.12 and show `isaacsim[all,extscache]==6.0.0` with the NVIDIA package index.
+The local isolated runtime matches that direction for Roboclaws:
+Python 3.12.12, `isaacsim==6.0.0.0`, Torch `2.7.0+cu128`, and an Isaac Lab
+source checkout at commit `84d0ff0`. The upstream pinned
+`molmo_spaces_isaac` checkout remains asset/USD tooling rather than the
+Roboclaws runtime dependency: its `sim` extra is
+`isaaclab[all,isaacsim]>=2.3.1`, its README says that install path pulls
+IsaacSim 5.1.0 and IsaacLab 2.3.1, and its package metadata still targets
+`>=3.11`. Tsinghua TUNA simple index checks from this host returned entries for
+`isaacsim`, `isaaclab`, and `torch`, but returned 404 for `molmo-spaces` and
+`molmo-spaces-isaac`; direct GitHub, NVIDIA, and PyTorch CUDA indexes remain
+part of the real setup path.
+
 The first real-scene runtime smoke against that USD failed on 2026-05-28:
 `just agent::harness molmo-isaac-runtime-smoke
 scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_0/scene.usda
@@ -452,9 +467,36 @@ records `scenario_id=isaac-scene-index-procthor-10k-val-1-7-1`,
 `sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3`, `cleanup_status=success`,
 and `primitive_provenance=isaac_semantic_pose`.
 
+Segmentation opt-in probe, run on 2026-05-28:
+`just agent::harness molmo-isaac-runtime-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+require_local_scene_usd=true stamp=0528_val1_segmentation_probe
+require_segmentation_evidence=true` now requests Isaac segmentation tensors
+through `--enable-segmentation`, but the local Isaac/Omniverse process aborts
+before writing a worker state. The captured log at
+`output/isaaclab/runtime-smoke/0528_val1_segmentation_probe/init_result.json`
+shows `omni.syntheticdata.plugin` semantic-label AOV warnings before the
+process exits with code 134 and a CUDA illegal-address coredump. No stale Isaac
+worker process remained after the abort. Follow-up routing now makes
+`molmo-isaac-cleanup-smoke require_segmentation_evidence=true` pass
+`--isaac-enable-segmentation` into the direct cleanup runner and backend, so
+segmentation-required cleanup probes actually request Isaac segmentation instead
+of only enabling the final checker gate.
+
+Post-routing default cleanup regression, run on 2026-05-28:
+`just agent::harness molmo-isaac-cleanup-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+stamp=0528_val1_seg_route_default_cleanup` wrote
+`output/isaaclab/cleanup-smoke/0528_val1_seg_route_default_cleanup/` and the
+strict cleanup checker returned `molmo-realworld-cleanup ok`. This confirms the
+passing local GPU cleanup path is unchanged when segmentation remains at its
+default off state.
+
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
-segmentation is still recorded as `blocked_capability` because Isaac returned
-no usable segmentation tensors/bbox candidates for the selected USD prims;
+segmentation is still recorded as `blocked_capability`. Default cleanup runs do
+not request segmentation tensors, and explicit local segmentation probes
+currently abort inside Isaac/Omniverse before producing bbox candidates for the
+selected USD prims;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
 manipulation is still out of scope for this slice; broader scene coverage should

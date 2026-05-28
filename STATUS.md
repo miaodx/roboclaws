@@ -23,6 +23,11 @@ generic-category object fallback, generates cleanup scenarios from the loaded
 scene index when default selected handles do not bind, and now passes exact
 one-object cleanup/report parity on `val_1` by preferring public USD
 scene-index fixture candidates over stale map-bundle fixture ids. The
+segmentation opt-in path is now wired so a segmentation-required cleanup probe
+actually requests Isaac segmentation tensors, and the latest local GPU probe
+shows that request aborts inside Isaac/Omniverse with semantic-label AOV
+warnings and a CUDA illegal-address coredump before worker state is written.
+Default segmentation-off cleanup still passes on `val_1`. The
 visual-grounding GPU sidecar benchmark remains a separate active confidence
 layer; Grounding DINO base-recall is still the current default real
 `camera-labels` pipeline until a broader corpus changes that ranking.
@@ -53,7 +58,9 @@ Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
 runs also support OpenClaw. The current Isaac blocker is segmentation:
 MolmoSpaces USD RGB/robot-view and exact scene-index cleanup evidence passes
 for `val_0` and `val_1`, but Isaac returned no usable segmentation tensors or
-bbox candidates for the selected USD prims.
+bbox candidates for the selected USD prims; with segmentation explicitly
+requested on `val_1`, the Isaac/Omniverse process currently aborts before
+usable diagnostics can be persisted.
 
 ## Human Review Surface
 
