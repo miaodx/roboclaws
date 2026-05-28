@@ -726,6 +726,7 @@ molmo-isaac-runtime-smoke *overrides:
     scene_source="procthor-10k-val"
     scene_index="0"
     scene_usd_path=""
+    generated_scene_kind="roboclaws_smoke"
     seed="7"
     generated_mess_count="1"
     map_bundle="assets/maps/molmospaces-procthor-val-0-7"
@@ -738,6 +739,7 @@ molmo-isaac-runtime-smoke *overrides:
     require_selected_usd_bindings="true"
     require_robot_view_images="true"
     require_nonblank_image="true"
+    enable_segmentation="false"
     require_segmentation_evidence="false"
     segmentation_data_types=""
     accept_nvidia_eula="true"
@@ -752,11 +754,12 @@ molmo-isaac-runtime-smoke *overrides:
       key="${key//-/_}"
       case "$key" in
         runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
-        scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
+        scene_usd_path|generated_scene_kind|generated_mess_count|map_bundle|include_robot|robot_name|\
         require_real_rendering|require_usd_stage_loaded|require_local_scene_usd|\
         require_usd_scene_index|\
         require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
-        require_segmentation_evidence|segmentation_data_types|accept_nvidia_eula)
+        enable_segmentation|require_segmentation_evidence|segmentation_data_types|\
+        accept_nvidia_eula)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -783,6 +786,7 @@ molmo-isaac-runtime-smoke *overrides:
       --seed "$seed" \
       --scene-source "$scene_source" \
       --scene-index "$scene_index" \
+      --generated-scene-kind "$generated_scene_kind" \
       --generated-mess-count "$generated_mess_count" \
       --runtime-mode real)
     if [[ -n "$scene_usd_path" ]]; then
@@ -791,7 +795,7 @@ molmo-isaac-runtime-smoke *overrides:
     if [[ "$include_robot" == "true" ]]; then
       worker_cmd+=(--include-robot --robot-name "$robot_name")
     fi
-    if [[ "$require_segmentation_evidence" == "true" ]]; then
+    if [[ "$enable_segmentation" == "true" || "$require_segmentation_evidence" == "true" ]]; then
       worker_cmd+=(--enable-segmentation)
       if [[ -n "$segmentation_data_types" ]]; then
         IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"

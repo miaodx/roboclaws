@@ -825,16 +825,17 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
     records: list[tuple[str, str, tuple[str, ...]]] = []
 
     class Prim:
-        def __init__(self, path: str, valid: bool = True) -> None:
+        def __init__(self, path: str, valid: bool = True, type_name: str = "") -> None:
             self.path = path
             self.valid = valid
+            self.type_name = type_name
 
         def IsValid(self) -> bool:
             return self.valid
 
     bowl = Prim("/World/Objects/bowl_01")
-    bowl_mesh = Prim("/World/Objects/bowl_01/mesh")
-    sink = Prim("/World/Receptacles/sink_01")
+    bowl_mesh = Prim("/World/Objects/bowl_01/mesh", type_name="Mesh")
+    sink = Prim("/World/Receptacles/sink_01", type_name="Cube")
 
     class Stage:
         def __init__(self) -> None:
@@ -899,7 +900,15 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
     assert result["applied_count"] == 2
     assert result["labeled_prim_count"] == 3
     assert result["descendant_label_count"] == 1
+    assert result["gprim_label_count"] == 2
+    assert result["mesh_label_count"] == 1
     assert result["missing_prim_count"] == 1
+    assert {
+        "source_prim_path": "/World/Objects/bowl_01",
+        "target_prim_path": "/World/Objects/bowl_01/mesh",
+        "target_type": "Mesh",
+        "target_kind": "gprim:Mesh",
+    } in result["target_samples"]
     assert ("/World/Objects/bowl_01", "class", ("Bowl",)) in records
     assert ("/World/Objects/bowl_01/mesh", "class", ("Bowl",)) in records
     assert (
@@ -908,6 +917,30 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
         ("/World/Objects/bowl_01",),
     ) in records
     assert ("/World/Receptacles/sink_01", "kind", ("receptacle",)) in records
+
+
+def test_isaac_runtime_smoke_accepts_official_blocks_generated_scene(
+    tmp_path: Path,
+) -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(tmp_path / "state.json"),
+            "init",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--runtime-mode",
+            "fake",
+            "--generated-scene-kind",
+            "isaac_official_blocks",
+        ]
+    )
+
+    assert args.generated_scene_kind == "isaac_official_blocks"
+    assert (
+        isaac_lab_backend_worker._generated_scene_filename(args.generated_scene_kind)
+        == "roboclaws_isaac_official_blocks_scene.usda"
+    )
 
 
 def test_isaac_lab_generated_count_selects_private_targets_not_first_object(

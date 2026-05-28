@@ -53,6 +53,15 @@ ISAAC_SEGMENTATION_DATA_TYPES = (
     "instance_segmentation_fast",
     "instance_id_segmentation_fast",
 )
+GENERATED_SCENE_KINDS = ("roboclaws_smoke", "isaac_official_blocks")
+ISAAC_OFFICIAL_ASSET_ROOT = (
+    "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac"
+)
+ISAAC_OFFICIAL_BLOCK_ASSETS = (
+    "Props/Blocks/blue_block.usd",
+    "Props/Blocks/red_block.usd",
+    "Props/Blocks/green_block.usd",
+)
 MAX_SEGMENTATION_CANDIDATES = 24
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
@@ -71,6 +80,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     init.add_argument("--scene-source", default="procthor-10k-val")
     init.add_argument("--scene-index", type=int, default=0)
     init.add_argument("--generated-mess-count", type=int, default=1)
+    init.add_argument(
+        "--generated-scene-kind",
+        choices=GENERATED_SCENE_KINDS,
+        default="roboclaws_smoke",
+        help=(
+            "Generated USD control scene to write when --scene-usd-path is omitted. "
+            "Use isaac_official_blocks to probe NVIDIA Isaac sample assets."
+        ),
+    )
     init.add_argument("--runtime-mode", choices=("real", "fake"), default="real")
     init.add_argument("--include-robot", action="store_true")
     init.add_argument("--robot-name", default="simple_camera_rig")
@@ -380,7 +398,7 @@ def real_runtime_smoke(
             raise RuntimeError(f"local Isaac scene USD is missing: {scene_usd}")
         loaded_asset_kind = "local_scene_usd"
     else:
-        scene_usd = args.run_dir / "roboclaws_phase_a_smoke_scene.usda"
+        scene_usd = args.run_dir / _generated_scene_filename(args.generated_scene_kind)
         loaded_asset_kind = "generated_runtime_smoke_usd"
 
     simulation_app = None
@@ -399,7 +417,11 @@ def real_runtime_smoke(
     # SimulationApp starts. Generate and inspect USD only after AppLauncher
     # owns the Kit bootstrap.
     if args.scene_usd_path is None:
-        _write_generated_runtime_smoke_usd(scene_usd, scenario)
+        _write_generated_runtime_smoke_usd(
+            scene_usd,
+            scenario,
+            scene_kind=args.generated_scene_kind,
+        )
     scene_index_diagnostics = _inspect_usd_scene_index(scene_usd)
     stage_prim_count = int(scene_index_diagnostics["stage_prim_count"])
 
@@ -430,6 +452,7 @@ def real_runtime_smoke(
         "image_path": str(smoke_image),
         "scene_usd": str(scene_usd),
         "loaded_asset_kind": loaded_asset_kind,
+        "generated_scene_kind": args.generated_scene_kind if args.scene_usd_path is None else "",
         "requested_scene_source": args.scene_source,
         "requested_scene_index": args.scene_index,
         "requested_molmospaces_scene_usd": _scene_usd_path(args.scene_source, args.scene_index),
@@ -467,7 +490,24 @@ def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
     )
 
 
+def _generated_scene_filename(scene_kind: str) -> str:
+    if scene_kind == "isaac_official_blocks":
+        return "roboclaws_isaac_official_blocks_scene.usda"
+    return "roboclaws_phase_a_smoke_scene.usda"
+
+
 def _write_generated_runtime_smoke_usd(
+    usd_path: Path,
+    scenario: CleanupScenario,
+    *,
+    scene_kind: str = "roboclaws_smoke",
+) -> int:
+    if scene_kind == "isaac_official_blocks":
+        return _write_isaac_official_blocks_runtime_smoke_usd(usd_path, scenario)
+    return _write_roboclaws_runtime_smoke_usd(usd_path, scenario)
+
+
+def _write_roboclaws_runtime_smoke_usd(
     usd_path: Path,
     scenario: CleanupScenario,
 ) -> int:
@@ -531,6 +571,84 @@ def _write_generated_runtime_smoke_usd(
         UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
             Gf.Vec3d(x + 0.18 + 0.08 * index, y - 0.16, z + 0.38)
         )
+
+    key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
+    key_light.CreateIntensityAttr(5000.0)
+    UsdGeom.XformCommonAPI(key_light).SetRotate(Gf.Vec3f(-45.0, 0.0, 35.0))
+
+    camera = UsdGeom.Camera.Define(stage, "/World/ReferenceCamera")
+    camera.CreateFocalLengthAttr(24.0)
+    camera.CreateHorizontalApertureAttr(20.955)
+    UsdGeom.XformCommonAPI(camera).SetTranslate(Gf.Vec3d(2.4, -2.6, 1.8))
+
+    stage.GetRootLayer().Save()
+    return sum(1 for _ in stage.Traverse())
+
+
+def _write_isaac_official_blocks_runtime_smoke_usd(
+    usd_path: Path,
+    scenario: CleanupScenario,
+) -> int:
+    from pxr import Gf, Usd, UsdGeom, UsdLux
+
+    usd_path.parent.mkdir(parents=True, exist_ok=True)
+    stage = Usd.Stage.CreateNew(str(usd_path))
+    UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.z)
+    world = UsdGeom.Xform.Define(stage, "/World")
+    stage.SetDefaultPrim(world.GetPrim())
+
+    floor = UsdGeom.Cube.Define(stage, "/World/Floor")
+    floor.CreateSizeAttr(1.0)
+    floor.CreateDisplayColorAttr([Gf.Vec3f(0.24, 0.26, 0.28)])
+    UsdGeom.XformCommonAPI(floor).SetTranslate(Gf.Vec3d(0.0, 0.0, -0.025))
+    UsdGeom.XformCommonAPI(floor).SetScale(Gf.Vec3f(3.2, 3.2, 0.05))
+
+    selected_object_ids = _selected_cleanup_object_ids(scenario) or [
+        scenario.objects[0].object_id if scenario.objects else "official_block"
+    ]
+    selected_object_id_set = set(selected_object_ids)
+    selected_receptacle_ids = _selected_cleanup_receptacle_ids(scenario)
+    source_receptacle_ids = [
+        obj.location_id for obj in scenario.objects if obj.object_id in selected_object_id_set
+    ]
+    receptacle_ids = _dedupe(
+        [
+            *source_receptacle_ids,
+            *selected_receptacle_ids,
+            *(item.receptacle_id for item in scenario.receptacles[:1]),
+        ]
+    )
+    if not receptacle_ids:
+        receptacle_ids = ["fixture"]
+
+    fixture_positions: dict[str, tuple[float, float, float]] = {}
+    for index, receptacle_id in enumerate(receptacle_ids):
+        x = (index % 3 - 1) * 0.95
+        y = (index // 3) * 0.85
+        z = 0.28
+        fixture_positions[receptacle_id] = (x, y, z)
+        fixture = UsdGeom.Cube.Define(
+            stage,
+            f"/World/Receptacles/{_usd_safe_name(receptacle_id)}",
+        )
+        fixture.CreateSizeAttr(1.0)
+        fixture.CreateDisplayColorAttr([Gf.Vec3f(0.1, 0.44, 0.72)])
+        UsdGeom.XformCommonAPI(fixture).SetTranslate(Gf.Vec3d(x, y, z))
+        UsdGeom.XformCommonAPI(fixture).SetScale(Gf.Vec3f(0.9, 0.55, 0.18))
+
+    objects_by_id = {item.object_id: item for item in scenario.objects}
+    for index, object_id in enumerate(selected_object_ids):
+        object_prim_path = f"/World/Objects/{_usd_safe_name(object_id)}"
+        cleanup_object = UsdGeom.Xform.Define(stage, object_prim_path)
+        cleanup_asset = UsdGeom.Xform.Define(stage, f"{object_prim_path}/Asset")
+        asset = ISAAC_OFFICIAL_BLOCK_ASSETS[index % len(ISAAC_OFFICIAL_BLOCK_ASSETS)]
+        cleanup_asset.GetPrim().GetReferences().AddReference(f"{ISAAC_OFFICIAL_ASSET_ROOT}/{asset}")
+        source_id = objects_by_id.get(object_id).location_id if object_id in objects_by_id else ""
+        x, y, z = fixture_positions.get(source_id, (0.0, 0.0, 0.28))
+        UsdGeom.XformCommonAPI(cleanup_object).SetTranslate(
+            Gf.Vec3d(x + 0.22 + 0.12 * index, y - 0.18, z + 0.26)
+        )
+        UsdGeom.XformCommonAPI(cleanup_object).SetScale(Gf.Vec3f(1.6, 1.6, 1.6))
 
     key_light = UsdLux.DistantLight.Define(stage, "/World/KeyLight")
     key_light.CreateIntensityAttr(5000.0)
@@ -1255,6 +1373,7 @@ def _capture_isaac_lab_camera_views(
     if opened is False:
         raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
     _wait_for_stage_load(stage_utils, simulation_app)
+    _load_current_stage_payloads(stage_utils)
     scene_bounds = _current_stage_bounds(stage_utils)
     _ensure_capture_lighting(stage_utils)
     semantic_label_application = (
@@ -1339,6 +1458,19 @@ def _capture_isaac_lab_camera_views(
     }
 
 
+def _load_current_stage_payloads(stage_utils: Any) -> None:
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return
+    stage = get_current_stage()
+    if stage is None:
+        return
+    try:
+        stage.Load()
+    except Exception:
+        return
+
+
 def _apply_scene_index_semantic_labels(
     *,
     stage_utils: Any,
@@ -1353,6 +1485,9 @@ def _apply_scene_index_semantic_labels(
             "applied_count": 0,
             "failed_count": 0,
             "missing_prim_count": 0,
+            "gprim_label_count": 0,
+            "mesh_label_count": 0,
+            "target_samples": [],
             "reason": "Isaac semantic label utilities were unavailable.",
         }
     stage = get_current_stage()
@@ -1362,6 +1497,9 @@ def _apply_scene_index_semantic_labels(
             "applied_count": 0,
             "failed_count": 0,
             "missing_prim_count": 0,
+            "gprim_label_count": 0,
+            "mesh_label_count": 0,
+            "target_samples": [],
             "reason": "No current Isaac stage was available for semantic labels.",
         }
     index = _dict(scene_index_diagnostics)
@@ -1372,8 +1510,11 @@ def _apply_scene_index_semantic_labels(
     applied = 0
     labeled_prim_count = 0
     descendant_label_count = 0
+    gprim_label_count = 0
+    mesh_label_count = 0
     missing = 0
     failed: list[dict[str, str]] = []
+    target_samples: list[dict[str, str]] = []
     for raw_entry in entries:
         entry = _dict(raw_entry)
         prim_path = str(entry.get("usd_prim_path") or "")
@@ -1392,6 +1533,20 @@ def _apply_scene_index_semantic_labels(
                 labeled_prim_count += 1
                 if target != prim:
                     descendant_label_count += 1
+                classification = _semantic_label_target_classification(target)
+                if classification["is_gprim"]:
+                    gprim_label_count += 1
+                if classification["type_name"] == "Mesh":
+                    mesh_label_count += 1
+                if len(target_samples) < 20:
+                    target_samples.append(
+                        {
+                            "source_prim_path": prim_path,
+                            "target_prim_path": classification["path"],
+                            "target_type": classification["type_name"],
+                            "target_kind": classification["kind"],
+                        }
+                    )
             applied += 1
         except Exception as exc:  # pragma: no cover - defensive around Isaac extension APIs
             failed.append({"prim_path": prim_path, "error": str(exc)})
@@ -1402,10 +1557,13 @@ def _apply_scene_index_semantic_labels(
         "applied_count": applied,
         "labeled_prim_count": labeled_prim_count,
         "descendant_label_count": descendant_label_count,
+        "gprim_label_count": gprim_label_count,
+        "mesh_label_count": mesh_label_count,
         "failed_count": len(failed),
         "missing_prim_count": missing,
         "requested_prim_count": len(entries),
         "failed": failed[:10],
+        "target_samples": target_samples,
         "label_instances": ["class", "kind", "usd_prim_path"],
         "reason": (
             "Scene-index USD prims were labeled for Isaac camera segmentation."
@@ -1415,22 +1573,70 @@ def _apply_scene_index_semantic_labels(
     }
 
 
+def _semantic_label_target_classification(prim: Any) -> dict[str, Any]:
+    try:
+        from pxr import UsdGeom
+    except Exception:
+        UsdGeom = None
+
+    try:
+        path = str(prim.GetPath())
+    except Exception:
+        path = str(getattr(prim, "path", "") or "")
+    try:
+        type_name = str(prim.GetTypeName() or "")
+    except Exception:
+        type_name = str(getattr(prim, "type_name", "") or "")
+    is_gprim = False
+    if UsdGeom is not None:
+        try:
+            is_gprim = bool(prim.IsA(UsdGeom.Gprim))
+        except Exception:
+            is_gprim = False
+    if not is_gprim and type_name in {"Mesh", "Cube", "Sphere", "Capsule", "Cone", "Cylinder"}:
+        is_gprim = True
+    kind = "gprim" if is_gprim else "prim"
+    if type_name:
+        kind = f"{kind}:{type_name}"
+    return {
+        "path": path,
+        "type_name": type_name,
+        "kind": kind,
+        "is_gprim": is_gprim,
+    }
+
+
 def _semantic_label_target_prims(prim: Any) -> list[Any]:
     try:
         from pxr import Usd, UsdGeom
     except Exception:
         return [prim]
 
+    targets = _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
+    if any(_prim_is_gprim(target, UsdGeom=UsdGeom) for target in targets):
+        return targets
+    try:
+        prim.Load()
+    except Exception:
+        return targets
+    return _semantic_label_target_prims_once(prim, Usd=Usd, UsdGeom=UsdGeom)
+
+
+def _semantic_label_target_prims_once(prim: Any, *, Usd: Any, UsdGeom: Any) -> list[Any]:
     targets = [prim]
     for descendant in Usd.PrimRange(prim):
         if descendant == prim:
             continue
-        try:
-            if descendant.IsA(UsdGeom.Gprim):
-                targets.append(descendant)
-        except Exception:
-            continue
+        if _prim_is_gprim(descendant, UsdGeom=UsdGeom):
+            targets.append(descendant)
     return targets
+
+
+def _prim_is_gprim(prim: Any, *, UsdGeom: Any) -> bool:
+    try:
+        return bool(prim.IsA(UsdGeom.Gprim))
+    except Exception:
+        return False
 
 
 def _semantic_label_application_not_requested() -> dict[str, Any]:
@@ -1440,10 +1646,13 @@ def _semantic_label_application_not_requested() -> dict[str, Any]:
         "applied_count": 0,
         "labeled_prim_count": 0,
         "descendant_label_count": 0,
+        "gprim_label_count": 0,
+        "mesh_label_count": 0,
         "failed_count": 0,
         "missing_prim_count": 0,
         "requested_prim_count": 0,
         "failed": [],
+        "target_samples": [],
         "label_instances": [],
         "reason": "Segmentation was not requested.",
     }

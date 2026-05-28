@@ -71,6 +71,8 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "isaac_lab_backend_worker.py" in harness_text
     assert "check_isaac_lab_runtime_smoke_result.py" in harness_text
     assert "scene_usd_path" in harness_text
+    assert "generated_scene_kind" in harness_text
+    assert "--generated-scene-kind" in harness_text
     assert "--require-real-rendering" in harness_text
     assert "--require-usd-stage-loaded" in harness_text
     assert "--require-local-scene-usd" in harness_text
@@ -78,6 +80,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "--require-selected-usd-bindings" in harness_text
     assert "--require-robot-view-images" in harness_text
     assert "--require-segmentation-evidence" in harness_text
+    assert "enable_segmentation" in harness_text
     assert "--enable-segmentation" in harness_text
     assert '2>&1 | tee "$init_result"' in harness_text
     assert '2>&1 | tee "$robot_views_result"' in harness_text
@@ -90,6 +93,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "molmo-isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
+        "generated_scene_kind=isaac_official_blocks",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
         "accept_nvidia_eula=false",
     )
@@ -98,6 +102,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "harness::molmo-isaac-runtime-smoke",
         "output_dir=/tmp/roboclaws-isaac-smoke",
         "runtime_python=/tmp/isaac-python",
+        "generated_scene_kind=isaac_official_blocks",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
         "accept_nvidia_eula=false",
     ]
