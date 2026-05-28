@@ -693,6 +693,87 @@ def test_isaac_lab_segmentation_capture_extracts_selected_bbox() -> None:
     assert diagnostics["no_simulator_label_fallback"] is True
 
 
+def test_isaac_segmentation_diagnostics_reports_unrenderable_selected_prims() -> None:
+    diagnostics = isaac_lab_backend_worker.segmentation_diagnostics(
+        "real",
+        real_smoke={
+            "segmentation": {
+                "requested_data_types": ["semantic_segmentation"],
+                "output_data_types": ["semantic_segmentation"],
+                "candidate_bboxes": [
+                    {
+                        "data_type": "semantic_segmentation",
+                        "label": "BACKGROUND",
+                        "label_id": 0,
+                        "usd_prim_path": "",
+                        "bbox_xyxy": [0, 0, 540, 360],
+                        "pixel_count": 194400,
+                        "image_size": [540, 360],
+                    }
+                ],
+                "no_simulator_label_fallback": True,
+            }
+        },
+        scene_binding_diagnostics={
+            "selected_object_bindings": {
+                "bowl_01": {
+                    "status": "bound",
+                    "usd_prim_path": "/World/Objects/bowl_01",
+                    "has_renderable_geometry": False,
+                }
+            },
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "bound",
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                    "has_renderable_geometry": True,
+                }
+            },
+        },
+    )
+
+    assert diagnostics["available"] is False
+    assert diagnostics["selected_usd_unrenderable_prim_paths"] == ["/World/Objects/bowl_01"]
+    assert any("no renderable geometry" in blocker for blocker in diagnostics["blockers"])
+
+
+def test_isaac_segmentation_matches_usd_paths_case_insensitively() -> None:
+    diagnostics = isaac_lab_backend_worker.segmentation_diagnostics(
+        "real",
+        real_smoke={
+            "segmentation": {
+                "requested_data_types": ["semantic_segmentation"],
+                "output_data_types": ["semantic_segmentation"],
+                "candidate_bboxes": [
+                    {
+                        "data_type": "semantic_segmentation",
+                        "label": "/world/objects/mug_01",
+                        "label_id": 4,
+                        "usd_prim_path": "/world/objects/mug_01",
+                        "bbox_xyxy": [8, 8, 32, 36],
+                        "pixel_count": 144,
+                        "image_size": [540, 360],
+                    }
+                ],
+                "no_simulator_label_fallback": True,
+            }
+        },
+        scene_binding_diagnostics={
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "has_renderable_geometry": True,
+                }
+            },
+            "selected_target_receptacle_bindings": {},
+        },
+    )
+
+    assert diagnostics["available"] is True
+    assert diagnostics["selected_usd_prim_match_count"] == 1
+
+
 def test_isaac_lab_segmentation_capture_accepts_list_info_shape() -> None:
     import numpy as np
 

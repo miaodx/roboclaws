@@ -11,7 +11,7 @@ import sys
 import traceback
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -546,7 +546,7 @@ def _write_generated_runtime_smoke_usd(
 
 
 def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
-    from pxr import Usd
+    from pxr import Usd, UsdGeom
 
     stage = Usd.Stage.Open(str(usd_path))
     if stage is None:
@@ -574,6 +574,13 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
         object_index=object_index,
         receptacle_index=receptacle_index,
     )
+    _annotate_usd_index_geometry(
+        usd_path=usd_path,
+        stage=stage,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+        usd_geom=UsdGeom,
+    )
 
     blockers = []
     if not object_index:
@@ -593,6 +600,125 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
         "receptacle_index": receptacle_index,
         "blockers": blockers,
     }
+
+
+def _annotate_usd_index_geometry(
+    *,
+    usd_path: Path,
+    stage: Any,
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+    usd_geom: Any,
+) -> None:
+    for index in (object_index, receptacle_index):
+        for entry in index.values():
+            prim_path = str(entry.get("usd_prim_path") or "")
+            if not prim_path:
+                entry.update(
+                    {
+                        "prim_type": "",
+                        "valid_stage_prim": False,
+                        "has_renderable_geometry": False,
+                        "renderable_descendant_count": 0,
+                        "mesh_descendant_count": 0,
+                        "authored_reference_count": 0,
+                        "missing_referenced_asset_count": 0,
+                        "missing_referenced_assets": [],
+                        "geometry_status": "missing_prim_path",
+                    }
+                )
+                continue
+            prim = stage.GetPrimAtPath(prim_path)
+            diagnostics = _usd_prim_geometry_diagnostics(
+                usd_path=usd_path,
+                prim=prim,
+                usd_geom=usd_geom,
+            )
+            entry.update(diagnostics)
+
+
+def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) -> dict[str, Any]:
+    if not prim or not prim.IsValid():
+        return {
+            "prim_type": "",
+            "valid_stage_prim": False,
+            "has_renderable_geometry": False,
+            "renderable_descendant_count": 0,
+            "mesh_descendant_count": 0,
+            "authored_reference_count": 0,
+            "missing_referenced_asset_count": 0,
+            "missing_referenced_assets": [],
+            "geometry_status": "missing_stage_prim",
+        }
+    gprim_type = getattr(usd_geom, "Gprim", None)
+    renderable_descendant_count = 0
+    mesh_descendant_count = 0
+    for descendant in _iter_usd_prim_range(prim):
+        if gprim_type is not None and descendant.IsA(gprim_type):
+            renderable_descendant_count += 1
+        if str(descendant.GetTypeName() or "") == "Mesh":
+            mesh_descendant_count += 1
+    reference_assets = _authored_reference_asset_paths(usd_path=usd_path, prim=prim)
+    missing_assets = [asset for asset in reference_assets if _local_reference_asset_missing(asset)]
+    has_renderable_geometry = renderable_descendant_count > 0
+    if has_renderable_geometry:
+        geometry_status = "renderable"
+    elif missing_assets:
+        geometry_status = "missing_referenced_geometry"
+    else:
+        geometry_status = "no_renderable_descendants"
+    return {
+        "prim_type": str(prim.GetTypeName() or ""),
+        "valid_stage_prim": True,
+        "has_renderable_geometry": has_renderable_geometry,
+        "renderable_descendant_count": renderable_descendant_count,
+        "mesh_descendant_count": mesh_descendant_count,
+        "authored_reference_count": len(reference_assets),
+        "missing_referenced_asset_count": len(missing_assets),
+        "missing_referenced_assets": missing_assets[:5],
+        "geometry_status": geometry_status,
+        "is_instanceable": bool(prim.IsInstanceable()),
+        "is_instance": bool(prim.IsInstance()),
+    }
+
+
+def _iter_usd_prim_range(prim: Any) -> Iterable[Any]:
+    from pxr import Usd
+
+    return Usd.PrimRange(prim)
+
+
+def _authored_reference_asset_paths(*, usd_path: Path, prim: Any) -> list[str]:
+    assets: list[str] = []
+    for spec in prim.GetPrimStack():
+        reference_list = getattr(spec, "referenceList", None)
+        for reference in _usd_list_op_items(reference_list):
+            asset_path = str(getattr(reference, "assetPath", "") or "")
+            if not asset_path:
+                continue
+            layer_path = Path(str(getattr(spec.layer, "realPath", "") or usd_path))
+            if not _is_local_reference_asset_path(asset_path):
+                assets.append(asset_path)
+            else:
+                assets.append(str((layer_path.parent / asset_path).resolve()))
+    return sorted(dict.fromkeys(assets))
+
+
+def _usd_list_op_items(list_op: Any) -> list[Any]:
+    items: list[Any] = []
+    for attr in ("prependedItems", "addedItems", "appendedItems", "explicitItems"):
+        values = getattr(list_op, attr, None)
+        if values:
+            items.extend(list(values))
+    return items
+
+
+def _is_local_reference_asset_path(asset_path: str) -> bool:
+    return "://" not in asset_path and not asset_path.startswith("@")
+
+
+def _local_reference_asset_missing(asset_path: str) -> bool:
+    return _is_local_reference_asset_path(asset_path) and not Path(asset_path).exists()
 
 
 def _merge_molmospaces_metadata_index(
@@ -880,6 +1006,13 @@ def _bind_public_scene_item(
         "usd_category": str(entry.get("category") or ""),
         "match_strategy": strategy,
         "index_source": str(entry.get("index_source") or ""),
+        "has_renderable_geometry": entry.get("has_renderable_geometry"),
+        "renderable_descendant_count": int(entry.get("renderable_descendant_count") or 0),
+        "mesh_descendant_count": int(entry.get("mesh_descendant_count") or 0),
+        "authored_reference_count": int(entry.get("authored_reference_count") or 0),
+        "missing_referenced_asset_count": int(entry.get("missing_referenced_asset_count") or 0),
+        "missing_referenced_assets": list(entry.get("missing_referenced_assets") or [])[:5],
+        "geometry_status": str(entry.get("geometry_status") or ""),
     }
 
 
@@ -1832,6 +1965,7 @@ def segmentation_diagnostics(
     scene_binding_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     selected_paths = _selected_bound_usd_prim_paths(scene_binding_diagnostics)
+    selected_unrenderable_paths = _selected_unrenderable_usd_prim_paths(scene_binding_diagnostics)
     if real_smoke is None:
         source = "fake_protocol" if runtime_mode == "fake" else "real_isaac_pending"
         return {
@@ -1874,6 +2008,11 @@ def segmentation_diagnostics(
         blockers.append("Isaac segmentation tensors did not produce label-mapped bbox candidates.")
     if selected_paths and not selected_matches:
         blockers.append("Isaac segmentation candidates did not match selected cleanup USD prims.")
+    if selected_unrenderable_paths:
+        blockers.append(
+            "Selected cleanup USD prims have no renderable geometry: "
+            + ", ".join(selected_unrenderable_paths[:5])
+        )
     if not selected_paths:
         blockers.append("Selected cleanup handles are not bound to USD prim paths.")
     status = "available" if not blockers else "blocked_capability"
@@ -1899,6 +2038,7 @@ def segmentation_diagnostics(
         "candidate_bbox_count": len(candidates),
         "selected_usd_prim_match_count": len(selected_matches),
         "selected_usd_prim_paths": selected_paths,
+        "selected_usd_unrenderable_prim_paths": selected_unrenderable_paths,
         "selected_candidate_bboxes": selected_matches[:MAX_SEGMENTATION_CANDIDATES],
         "candidate_bboxes": candidates,
         "view_outputs": captured.get("view_outputs", []),
@@ -1923,18 +2063,45 @@ def _selected_bound_usd_prim_paths(
     return _dedupe(selected_paths)
 
 
+def _selected_unrenderable_usd_prim_paths(
+    scene_binding_diagnostics: dict[str, Any] | None,
+) -> list[str]:
+    bindings = _dict(scene_binding_diagnostics)
+    selected_paths: list[str] = []
+    for group_key in ("selected_object_bindings", "selected_target_receptacle_bindings"):
+        for binding in _dict(bindings.get(group_key)).values():
+            item = _dict(binding)
+            if item.get("status") != "bound":
+                continue
+            if item.get("has_renderable_geometry") is False and item.get("usd_prim_path"):
+                selected_paths.append(str(item["usd_prim_path"]))
+    return _dedupe(selected_paths)
+
+
 def _segmentation_selected_matches(
     candidates: list[dict[str, Any]],
     selected_paths: list[str],
 ) -> list[dict[str, Any]]:
     selected = set(selected_paths)
+    selected_normalized = {_normalize_usd_path(path) for path in selected_paths if path}
     matches: list[dict[str, Any]] = []
     for candidate in candidates:
         prim_path = str(candidate.get("usd_prim_path") or "")
         label = str(candidate.get("label") or "")
-        if prim_path in selected or any(path and path in label for path in selected):
+        prim_path_normalized = _normalize_usd_path(prim_path)
+        label_normalized = _normalize_usd_path(label)
+        if (
+            prim_path in selected
+            or prim_path_normalized in selected_normalized
+            or any(path and path in label for path in selected)
+            or any(path and path in label_normalized for path in selected_normalized)
+        ):
             matches.append(candidate)
     return matches
+
+
+def _normalize_usd_path(value: str) -> str:
+    return str(value or "").strip().casefold()
 
 
 def mapping_gap_diagnostics(
