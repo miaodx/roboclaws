@@ -242,6 +242,23 @@ subphases intentionally render `blocked_capability` without `--execute`, so
 these artifacts prove the CLI boundary, report shape, privacy boundary, and
 movement gate, not physical PNC execution.
 
+2026-05-28 MolmoSpaces/G2 perception comparison grid:
+
+- Added a first-class apple-to-apple grid surface for the G2-adjacent
+  MolmoSpaces cleanup comparison:
+  `just molmo::apple2apple-grid dry-run`.
+- The grid contains one offline Runtime Metric Map setup row plus 12 cleanup
+  rows across two map modes (`online`, `offline`), three live-agent routes
+  (`codex-api-router`, `claude-kimi`, `claude-mimo-omni`), and two perception
+  lanes (`camera-labels` with `visual_grounding=grounding-dino`, and
+  `camera-raw` / RAW_FPV direct input with the same Grounding DINO grounding
+  boundary).
+- Dry-run evidence was generated at
+  `output/molmo/apple2apple-grid-0528-dry-run/apple2apple_test_grid.html` and
+  `output/molmo/apple2apple-grid-0528-just-dry-run/apple2apple_test_grid.html`.
+  These artifacts prove command coverage and provider/profile pinning, not live
+  provider execution or real G2 hardware behavior.
+
 ## Non-Goals
 
 - Do not claim physical cleanup.

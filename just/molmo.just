@@ -772,6 +772,51 @@ ci-rehearsal-all dry_run="":
       --published-dir "output/molmo/ci-rehearsal/site/molmo/live" \
       "${dry_args[@]}"
 
+# Build or execute the current MolmoSpaces apple-to-apple comparison grid.
+apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed="7" generated_mess_count="10" row="" runtime_map_prior="" visual_grounding_timeout_s="auto":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mode="{{mode}}"
+    output_dir="{{output_dir}}"
+    seed="{{seed}}"
+    generated_mess_count="{{generated_mess_count}}"
+    row="{{row}}"
+    runtime_map_prior="{{runtime_map_prior}}"
+    visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
+
+    mode="${mode#mode=}"
+    output_dir="${output_dir#output_dir=}"
+    seed="${seed#seed=}"
+    generated_mess_count="${generated_mess_count#generated_mess_count=}"
+    row="${row#row=}"
+    runtime_map_prior="${runtime_map_prior#runtime_map_prior=}"
+    visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout_s=}"
+
+    args=(
+      --output-dir "$output_dir"
+      --seed "$seed"
+      --generated-mess-count "$generated_mess_count"
+      --visual-grounding-timeout-s "$visual_grounding_timeout_s"
+    )
+    if [[ -n "$row" ]]; then
+      args+=(--row "$row")
+    fi
+    if [[ -n "$runtime_map_prior" ]]; then
+      args+=(--runtime-map-prior "$runtime_map_prior")
+    fi
+    case "$mode" in
+      dry-run|dry|"")
+        ;;
+      execute|run|live)
+        args+=(--execute)
+        ;;
+      *)
+        echo "error: unsupported apple2apple-grid mode '$mode' (expected dry-run or execute)" >&2
+        exit 1
+        ;;
+    esac
+    .venv/bin/python scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
+
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
     just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"

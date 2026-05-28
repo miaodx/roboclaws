@@ -428,6 +428,28 @@ def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() 
     assert "--min-sweep-coverage 1.0" in body
 
 
+def test_molmo_apple2apple_grid_recipe_strips_key_value_prefixes(tmp_path: Path) -> None:
+    output_dir = tmp_path / "apple2apple-grid"
+    result = subprocess.run(
+        [
+            just_bin(),
+            "molmo::apple2apple-grid",
+            "dry-run",
+            f"output_dir={output_dir}",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert (output_dir / "apple2apple_test_grid.json").is_file()
+    assert (output_dir / "apple2apple_test_grid.html").is_file()
+    assert f"apple-to-apple grid manifest: {output_dir / 'apple2apple_test_grid.json'}" in (
+        result.stdout
+    )
+
+
 def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
