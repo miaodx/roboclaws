@@ -6,6 +6,7 @@ from pathlib import Path
 from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
+    AgibotSDKRunnerAdapter,
     run_physical_agibot_cleanup_pilot,
 )
 from roboclaws.molmo_cleanup.artifact_report import (
@@ -128,6 +129,61 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution" in report_text
     assert "Fetched AgiBot occupancy map artifact" in subphase_report
     assert "map_artifacts/map_preview.png" in subphase_report
+
+
+def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    adapter = AgibotSDKRunnerAdapter(
+        context_json=context_path,
+        run_dir=tmp_path / "run",
+    )
+
+    room_nav = adapter.navigate_to_room(room_id="living_room")
+    candidate_nav = adapter.navigate_to_visual_candidate(
+        source_observation_id="agibot_observe_001",
+        candidate_id="candidate_001",
+        target_fixture_id="sofa",
+    )
+    object_nav = adapter.navigate_to_object(object_id="observed_unknown")
+
+    assert room_nav["tool"] == "navigate_to_room"
+    assert room_nav["room_id"] == "living_room"
+    assert room_nav["waypoint_id"] == "wp_sofa_front"
+    assert room_nav["navigation_status"] == "dry_run_not_executed"
+    assert candidate_nav["tool"] == "navigate_to_visual_candidate"
+    assert candidate_nav["source_observation_id"] == "agibot_observe_001"
+    assert candidate_nav["target_fixture_id"] == "sofa"
+    assert candidate_nav["waypoint_id"] == "wp_sofa_front"
+    assert candidate_nav["bounded_local_nudge"]["agent_facing_tool"] is False
+    assert object_nav["tool"] == "navigate_to_object"
+    assert object_nav["status"] == "blocked_capability"
+    assert object_nav["failure_type"] == "object_not_mapped_to_public_waypoint"
+
+
+def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+
+    run_result = run_physical_agibot_cleanup_pilot(
+        run_dir=tmp_path / "run",
+        context_json=context_path,
+        real_movement_enabled=True,
+    )
+
+    readiness = run_result["real_robot_readiness"]
+    pilot = run_result["physical_agibot_pilot"]
+    runner = run_result["agibot_sdk_runner"]
+
+    assert readiness["movement_enabled"] is True
+    assert readiness["operator_localization_gate"]["status"] == "missing"
+    assert readiness["operator_run_enablement_gate"]["status"] == "missing"
+    assert readiness["human_takeover_stop"] is True
+    assert pilot["observation"]["failure_type"] == "operator_localization_gate_not_confirmed"
+    assert pilot["navigation_attempt"]["failure_type"] == "operator_localization_gate_not_confirmed"
+    assert [item["stage"] for item in runner["subphase_reports"]] == ["agent_view_export"]
+    assert "navigate_to_room" in runner["public_tool_boundary"]
+    assert "navigate_to_visual_candidate" in runner["public_tool_boundary"]
 
 
 def _completed_context() -> dict:

@@ -232,12 +232,20 @@ class RealWorldCleanupContract:
                 self._bundle_metric_map_template,
                 self._bundle_fixture_hints_template,
             )
+            self._scene_index_fixture_overlay = _scene_index_public_fixture_overlay(
+                backend=self.backend,
+                scenario=self.scenario,
+                existing_fixtures=self._fixtures,
+                fallback_waypoint_id=_first_waypoint_id(self._waypoints),
+            )
+            self._fixtures.update(self._scene_index_fixture_overlay)
         else:
             self._fixtures = {
                 item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
             }
             self._rooms = _rooms_from_fixtures(self._fixtures)
             self._waypoints = _inspection_waypoints(self._rooms)
+            self._scene_index_fixture_overlay = {}
         first_waypoint = self._waypoints[0]["waypoint_id"] if self._waypoints else ""
         self._current_waypoint_id = first_waypoint
         self._observed_waypoint_ids: set[str] = set()
@@ -391,15 +399,37 @@ class RealWorldCleanupContract:
     def fixture_hints(self) -> dict[str, Any]:
         if self._bundle_fixture_hints_template is not None:
             fixture_hints = copy.deepcopy(self._bundle_fixture_hints_template)
+            if self._scene_index_fixture_overlay:
+                fixture_hints["rooms"] = _fixture_hints_with_scene_index_overlay(
+                    fixture_hints.get("rooms") or [],
+                    self._scene_index_fixture_overlay,
+                    fixture_hint_mode=self.fixture_hint_mode,
+                )
+                fixture_hints["scene_index_fixture_overlay"] = {
+                    "enabled": True,
+                    "source": "isaac_scene_index",
+                    "fixture_count": len(self._scene_index_fixture_overlay),
+                    "public_contract_note": (
+                        "Scene-index fixtures are public USD-stage receptacle candidates "
+                        "used to keep cleanup routing aligned with the loaded Isaac scene. "
+                        "They do not include private acceptable-destination sets."
+                    ),
+                }
             fixture_hints["contract"] = REALWORLD_CONTRACT
             fixture_hints["tool"] = "fixture_hints"
             fixture_hints["status"] = "ok"
             fixture_hints["ok"] = True
             fixture_hints["fixture_hint_mode"] = self.fixture_hint_mode
+            overlay_note = (
+                " A public Isaac scene-index fixture overlay is preferred for "
+                "backend-generated scene-specific cleanup scenarios."
+                if self._scene_index_fixture_overlay
+                else ""
+            )
             fixture_hints["public_contract_note"] = (
                 "Static fixture hints are projected from the selected prebuilt Nav2 "
                 "map bundle. Runtime movable-object observations remain separate "
-                "observed_* handles."
+                f"observed_* handles.{overlay_note}"
             )
             _assert_no_forbidden_agent_view_keys(fixture_hints)
             return fixture_hints
@@ -3210,6 +3240,93 @@ def _fixtures_from_bundle_fixture_hints(fixture_hints: dict[str, Any]) -> dict[s
             fixture.setdefault("category", fixture.get("name", fixture_id))
             fixtures[fixture_id] = fixture
     return fixtures
+
+
+def _scene_index_public_fixture_overlay(
+    *,
+    backend: Any,
+    scenario: CleanupScenario,
+    existing_fixtures: dict[str, dict[str, Any]],
+    fallback_waypoint_id: str,
+) -> dict[str, dict[str, Any]]:
+    if str(getattr(backend, "scenario_source", "")) != "isaac_scene_index":
+        return {}
+
+    overlay: dict[str, dict[str, Any]] = {}
+    for receptacle in scenario.receptacles:
+        fixture_id = str(receptacle.receptacle_id)
+        if not fixture_id:
+            continue
+        fixture = dict(existing_fixtures.get(fixture_id, {}))
+        fixture["fixture_id"] = fixture_id
+        fixture["receptacle_id"] = fixture_id
+        fixture["category"] = str(
+            receptacle.category or fixture.get("category") or receptacle.name or fixture_id
+        )
+        fixture["name"] = str(receptacle.name or fixture.get("name") or fixture_id)
+        fixture.setdefault("kind", receptacle.kind)
+        fixture.setdefault("room_area", receptacle.room_area)
+        fixture.setdefault("room_id", _room_id(str(receptacle.room_area)))
+        fixture.setdefault("preferred_inspection_waypoint_id", fallback_waypoint_id)
+        fixture.setdefault("preferred_manipulation_waypoint_id", fallback_waypoint_id)
+        fixture["public_fixture_source"] = "isaac_scene_index"
+        overlay[fixture_id] = fixture
+    return overlay
+
+
+def _fixture_hints_with_scene_index_overlay(
+    rooms: list[Any],
+    overlay_fixtures: dict[str, dict[str, Any]],
+    *,
+    fixture_hint_mode: str,
+) -> list[dict[str, Any]]:
+    overlay_room = {
+        "room_id": "isaac_scene_index",
+        "room_label": "Isaac scene index fixtures",
+        "fixture_source": "isaac_scene_index",
+        "fixtures": [
+            _scene_index_fixture_hint_row(fixture_id, fixture, fixture_hint_mode)
+            for fixture_id, fixture in sorted(overlay_fixtures.items())
+        ],
+    }
+    return [overlay_room] + [dict(room) for room in rooms if isinstance(room, dict)]
+
+
+def _scene_index_fixture_hint_row(
+    fixture_id: str,
+    fixture: dict[str, Any],
+    fixture_hint_mode: str,
+) -> dict[str, Any]:
+    pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+    return {
+        "fixture_id": fixture_id,
+        "category": str(fixture.get("category") or fixture.get("name") or fixture_id),
+        "name": str(fixture.get("name") or fixture_id),
+        "room_id": "isaac_scene_index",
+        "affordances": _fixture_affordances(fixture),
+        "footprint": _fixture_footprint(fixture_id),
+        "pose": {
+            "frame_id": str(pose.get("frame_id") or "map"),
+            "x": float(pose.get("x", 0.0)),
+            "y": float(pose.get("y", 0.0)),
+            "yaw": float(pose.get("yaw", 0.0)),
+        },
+        "manipulation_frame": f"{fixture_id}_manipulation",
+        "preferred_inspection_waypoint_id": str(
+            fixture.get("preferred_inspection_waypoint_id") or ""
+        ),
+        "preferred_manipulation_waypoint_id": str(
+            fixture.get("preferred_manipulation_waypoint_id") or ""
+        ),
+        "position_detail": fixture_hint_mode,
+        "public_fixture_source": "isaac_scene_index",
+    }
+
+
+def _first_waypoint_id(waypoints: list[dict[str, Any]]) -> str:
+    if not waypoints:
+        return ""
+    return str(waypoints[0].get("waypoint_id") or "")
 
 
 def _rooms_from_bundle_projection(

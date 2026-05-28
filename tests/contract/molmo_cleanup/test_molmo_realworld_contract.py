@@ -117,6 +117,79 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_bundle() -> None:
+    scenario = CleanupScenario(
+        scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+        task="Clean up this loaded Isaac scene.",
+        seed=7,
+        objects=(
+            CleanupObject(
+                object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                name="Bowl (Bowl_12)",
+                category="Bowl",
+                location_id="diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+            ),
+        ),
+        receptacles=(
+            CleanupReceptacle(
+                "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+                "DiningTable DiningTable|2|1|0 Dining_Table_203_1",
+                "isaac_scene",
+                category="DiningTable",
+            ),
+            CleanupReceptacle(
+                "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+                "Sink Sink|3|1|0 Sink_1",
+                "isaac_scene",
+                category="Sink",
+            ),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+            targets=(
+                TargetRule(
+                    object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                    valid_receptacle_ids=("sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",),
+                ),
+            ),
+            success_threshold=1,
+        ),
+    )
+    session = CleanupBackendSession(scenario)
+    session.backend.scenario_source = "isaac_scene_index"
+    contract = RealWorldCleanupContract(
+        session,
+        map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
+    )
+
+    fixture_hints = contract.fixture_hints()
+    detection = None
+    inspection_waypoints = contract.metric_map()["inspection_waypoints"]
+    for waypoint in inspection_waypoints:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        if observation["visible_object_detections"]:
+            detection = observation["visible_object_detections"][0]
+            break
+
+    assert detection is not None
+    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    assert target_fixture is not None
+    assert target_fixture["fixture_id"] == "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3"
+    assert target_fixture["public_fixture_source"] == "isaac_scene_index"
+    assert fixture_hints["scene_index_fixture_overlay"]["enabled"] is True
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    assert contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))["ok"] is True
+    assert contract.place(str(target_fixture["fixture_id"]))["ok"] is True
+    for waypoint in inspection_waypoints:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+    assert contract.done("scene-index overlay cleanup")["cleanup_status"] == "success"
+    _assert_no_forbidden_keys(fixture_hints)
+
+
 def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe() -> None:
     trace = cleanup_policy_trace_from_events(
         [

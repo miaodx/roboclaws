@@ -242,6 +242,21 @@ subphases intentionally render `blocked_capability` without `--execute`, so
 these artifacts prove the CLI boundary, report shape, privacy boundary, and
 movement gate, not physical PNC execution.
 
+2026-05-28 Agibot pilot gap closure:
+
+- Extended the `AgibotSDKRunnerAdapter` public-tool family beyond waypoint and
+  receptacle navigation: `navigate_to_room`, `navigate_to_object`, and
+  `navigate_to_visual_candidate` now resolve through verified public waypoints
+  or return structured `blocked_capability` responses without exposing raw GDK
+  primitives.
+- Added explicit Operator Localization Gate and Operator Run Enablement Gate
+  evidence before any real-movement path can pass `--execute` through the SDK
+  runner. Missing gates stop at `blocked_capability` / Human Takeover Stop
+  evidence before importing or calling `agibot_gdk`.
+- Wired the Isaac scene-index cleanup scenario path into public fixture hints
+  for map-bundle runs so scene-index receptacles can route cleanup without
+  leaking private target truth.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
