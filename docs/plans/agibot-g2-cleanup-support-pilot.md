@@ -36,9 +36,14 @@ Nav2-backed robots:
   `navigate_to_visual_candidate`, and blocked manipulation tools.
 - Generate Agibot agent map context from an operator-authored Agibot GDK Map
   Context, not from a required Nav2 map bundle.
-- Let operators capture robot views and fill public map semantics, including
-  multiple rooms, fixtures, and inspection waypoints.
-- Verify public waypoints through GDK PNC before treating them as hardware-ready.
+- Support a minimal-map path from Agibot occupancy/free-space artifacts where
+  semantic-map-build enriches rooms, fixtures, and observation targets through
+  public robot-local evidence.
+- Let operators capture robot views and fill or review public map semantics
+  when needed, without making complete manual semantics the long-term
+  prerequisite for map-build pilots.
+- Verify public or generated navigation targets through GDK PNC before treating
+  them as hardware-ready.
 - Execute existing navigation tools through Agibot GDK PNC without adding
   Agibot-specific agent-facing API names.
 - Preserve honest evidence in reports: map/localization gates, waypoint
@@ -52,18 +57,22 @@ Nav2-backed robots:
 - `real_robot_cleanup_v1` should describe a shared physical robot cleanup pilot
   boundary, with metadata equivalent to `backend=physical_robot` and a backend
   variant set such as `nav2_ros2` and `agibot_gdk`.
-- `metric_map()` is backend-agnostic agent input. It may contain public rooms,
-  fixtures, waypoints, driveable links, reachability status, and preview
-  artifacts, but not backend variant metadata, Agibot map ids/names, current-map
-  evidence, raw GDK map data, or PNC internals.
+- `metric_map()` is backend-agnostic agent input. In rich-map mode it may
+  contain public rooms, fixtures, waypoints, driveable links, reachability
+  status, and preview artifacts. In minimal-map mode it may start from
+  occupancy/free-space geometry, pose/frame metadata, safety bounds, and
+  generated exploration candidates. It must not expose backend variant metadata,
+  Agibot map ids/names, current-map evidence, raw GDK map data, or PNC internals.
 - Agibot G2 uses an Agibot GDK Map Context plus Cleanup Map Semantics as its
   Navigation Map Artifact. A Nav2 Map Artifact is not required unless a real
   Agibot-to-Nav2 bridge is later proven.
-- Operator-Recorded Waypoints are the first-pilot source of Agibot public
-  navigation points. One map context may contain multiple waypoints for
-  different rooms, fixtures, and observation poses.
-- A waypoint is hardware-ready only after PNC verification. Verification is an
-  operator preparation action, not an agent-facing cleanup tool.
+- Operator-Recorded Waypoints remain the safest first-pilot navigation source,
+  but minimal-map rehearsals should add system-generated exploration candidates
+  derived from public free-space geometry. The agent may select or order those
+  candidates; it may not invent arbitrary physical coordinates.
+- A waypoint or generated exploration candidate is hardware-ready only after
+  PNC verification or an equivalent backend reachability gate. Verification is
+  an operator/backend preparation action, not an agent-facing cleanup tool.
 - Agibot PNC waypoint verification evidence should use
   `navigation_backend=agibot_gdk`,
   `primitive_provenance=agibot_gdk_normal_navi`, and normalized
@@ -83,8 +92,8 @@ Nav2-backed robots:
   `blocked_capability`.
 - Navigation failure, local-motion failure, map mismatch, or missing
   localization enters Human Takeover Stop. The first pilot should not try hidden
-  fallback waypoints, unverified goals, map switching, relocalization, or extra
-  local nudges.
+  fallback waypoints, unverified goals, map switching, relocalization, arbitrary
+  coordinates, or extra local nudges.
 - Bounded Local Nudge is backend-internal only. It is not a new agent-facing
   tool and should not replace waypoint navigation as the primary route
   mechanism.
@@ -117,8 +126,12 @@ Agent-facing `metric_map()` output:
 
 - `schema="real_robot_map_bundle_v1"` for shared real-robot map projection
   compatibility.
-- Public rooms, fixture ids/labels/categories, public inspection waypoints, and
-  optional driveable links.
+- Rich-map mode: public rooms, fixture ids/labels/categories, public inspection
+  waypoints, and optional driveable links.
+- Minimal-map mode: occupancy/free-space metadata, current pose/frame context,
+  safety bounds, and generated exploration candidates. Runtime rooms, fixture
+  candidates, and observed objects are added only from public observation
+  evidence.
 - Waypoint fields: id, frame id, x/y/yaw, room id, fixture id, label, purpose,
   source, visited flag, optional capture artifact, and public reachability
   status.
@@ -127,8 +140,8 @@ Agent-facing `metric_map()` output:
 
 Operator/report evidence:
 
-- Completed Agibot map context JSON, including GDK map source and captured robot
-  pose.
+- Completed or minimal Agibot map context JSON, including GDK map source,
+  captured robot pose, safety bounds, and any generated exploration candidates.
 - Captured camera images for map-context authoring and report review.
 - Waypoint verification payloads with map check, task states, timeout, final
   state, `navigation_backend=agibot_gdk`, and
@@ -142,6 +155,11 @@ Tool behavior:
 
 - `navigate_to_waypoint` resolves the public waypoint id to a PNC-Verified
   Waypoint and executes `Pnc.normal_navi`.
+- Minimal-map generated exploration candidates should first be represented as
+  `generated_*` waypoint entries and use `navigate_to_waypoint`. Add a dedicated
+  `navigate_to_exploration_candidate` tool only if simulator evidence shows
+  waypoint projection is ambiguous or unsafe. Either way, the target must resolve
+  to a backend-verified navigation target before executing `Pnc.normal_navi`.
 - `navigate_to_room` resolves a room-level goal to a verified public waypoint.
 - `navigate_to_receptacle` resolves a fixture to its preferred verified public
   waypoint. It may be used for inspection even when no object is held and must
@@ -167,6 +185,12 @@ Tool behavior:
    map evidence, SLAM pose, and camera images, and creates or updates an
    `agibot_gdk_map_context_authoring_v1` JSON file. The script should support
    repeated captures so an operator can mark multiple waypoints.
+
+2A. **Minimal Map Context Path**
+   Add a sparse context path that can start from Agibot occupancy/free-space
+   artifacts, current pose, frame metadata, and operator safety bounds without
+   requiring complete room/fixture semantics. This path is for
+   `semantic-map-build` pilots, not physical cleanup.
 
 3. **Human Semantic Authoring Path**
    Define the operator-filled fields for rooms, fixtures, fixture categories,

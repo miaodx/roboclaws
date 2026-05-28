@@ -23,6 +23,13 @@ context. Movable cleanup objects are deliberately excluded from that static map;
 they become `observed_*` handles only after public camera evidence or
 model-declared observation.
 
+That path is currently richer than many physical robot maps. Agibot G2 map
+artifacts, for example, can start as occupancy/free-space data without public
+rooms, fixtures, or inspection waypoints. To make simulator rehearsal predictive
+for that path, semantic-map-build needs an occ-only/minimal-map mode where the
+runtime map is enriched from public observation rather than seeded from a
+complete authored semantic bundle.
+
 The next useful step is to let household robot tasks build and update a
 semantic view of the world while the robot is operating. Cleanup is the first
 consumer, but it should not own the map-building abstraction. The design should
@@ -55,6 +62,10 @@ that a separate query surface is necessary.
   capability requirements.
 - Keep one agent-facing map surface: extend the meaning of `metric_map()` /
   Agent View rather than adding a new MCP tool.
+- Support an occ-only/minimal-map rehearsal mode in simulation so the agent sees
+  only occupancy/free-space geometry, pose/frame metadata, safety bounds, and
+  generated exploration candidates until public observations enrich the Runtime
+  Metric Map.
 - Preserve the static/dynamic boundary:
   - static map data contains coarse navigation geometry and fixed or semi-static
     fixtures;
@@ -93,6 +104,10 @@ that a separate query surface is necessary.
   of the same online map-update logic.
 - Do not require a complex next-best-view or global coverage planner for the
   first slice.
+- Do not let Codex or another Agent Skill directly invent arbitrary physical
+  robot coordinates. For minimal maps, system-generated safe exploration
+  candidates form the first navigation surface; physical backends still apply
+  localization, run-enablement, and waypoint/reachability gates.
 - Do not make real Grounding DINO, YOLOE, Qwen, MiMo, vLLM, or SGLang
   dependencies part of the core cleanup runtime.
 
@@ -100,6 +115,9 @@ that a separate query surface is necessary.
 
 This plan uses the terms added to `CONTEXT.md`:
 
+- **Minimal Navigation Map Artifact**: an intentionally sparse map source that
+  exposes occupancy/free-space geometry, localization/safety context, and frame
+  metadata without preauthored room, fixture, or object semantics.
 - **Runtime Metric Map**: the current-run `metric_map()` view after public
   runtime observation evidence is added.
 - **Semantic Map Build Task**: a first-class Runnable Task that navigates and
@@ -123,6 +141,10 @@ This plan uses the terms added to `CONTEXT.md`:
   fixture or semi-static furniture item.
 - **Semantic Sweep Mode**: a no-cleanup-action mode that navigates and observes
   to build or refresh runtime-map evidence.
+- **Generated Exploration Candidate**: a safe navigation or observation
+  candidate derived from public free-space geometry and safety bounds. The agent
+  may choose among candidates, but they are not source-map semantics or
+  arbitrary robot-motion permission.
 
 ## Runtime Map Shape
 
@@ -219,6 +241,34 @@ camera-view schedule. Random sampling may be used as a baseline or fallback, but
 the default should be deterministic enough to make report comparison useful.
 Next-best-view and path-optimized coverage planning are later improvements.
 
+### Minimal-map rehearsal mode
+
+Minimal-map rehearsal is the simulator bridge to raw physical maps:
+
+```text
+load occupancy/free-space map plus pose/frame/safety metadata
+derive safe exploration candidates from public free space
+project candidates as generated_* waypoint entries in metric_map
+agent chooses candidate order through semantic-map-build skill
+navigate / observe / declare_visual_candidates
+update runtime rooms, fixture candidates, observed objects, and map candidates
+disable source-map mutation and cleanup actions
+write runtime-map snapshot plus candidate provenance
+```
+
+This mode should run first in simulation, using MolmoSpaces or another backend
+with private truth hidden from Agent View. The acceptance bar is not cleanup
+success; it is evidence that a sparse map can be enriched into a useful Runtime
+Metric Map through the same public observation path a physical Agibot run will
+use.
+
+Default command surface for the first slice:
+`just task::run semantic-map-build direct <profile> map_mode=minimal`. Keep the
+driver `direct` until the deterministic minimal-map contract and report are
+stable. Do not add a new MCP tool for exploration candidates in this slice;
+represent them as `generated_*` inspection waypoints and use the existing
+`navigate_to_waypoint` tool.
+
 ## Prior And Merge Rules
 
 - A runtime-map snapshot may seed a later cleanup run.
@@ -273,6 +323,9 @@ after the HTTP service is available.
 - Runtime observations never include private generated mess sets, acceptable
   destinations, scorer object results, or private benchmark labels.
 - Runtime updates do not silently mutate reusable source map artifacts.
+- A minimal-map run can start without preauthored rooms, fixtures, or
+  inspection waypoints while still exposing bounded navigation geometry and
+  generated exploration candidates.
 
 ### Online cleanup success
 
@@ -289,6 +342,8 @@ after the HTTP service is available.
 - A sweep-only run can visit existing inspection waypoints, observe with a
   bounded camera schedule, and produce a runtime-map snapshot without attempting
   cleanup actions.
+- In minimal-map rehearsal, a sweep-only run can visit generated exploration
+  candidates instead of preauthored inspection waypoints.
 - The snapshot can seed a later cleanup run as priors.
 - Prior movable objects default to needing current-run confirmation before
   action.
@@ -418,6 +473,21 @@ with no backward-compatibility requirement for old public names:
   grounding update path.
 - Use existing inspection waypoints and a bounded camera-view schedule.
 - Write a runtime-map snapshot artifact that can seed a later cleanup run.
+
+### Slice 3A: Minimal-map simulator rehearsal
+
+- Add an occ-only/minimal map source for simulation that hides rooms, fixtures,
+  and inspection waypoints from Agent View at startup.
+- Generate safe exploration candidates from occupancy/free-space geometry,
+  current pose, and safety bounds.
+- Expose candidates as `generated_*` waypoint entries and run
+  `semantic-map-build direct ... map_mode=minimal` over those candidates with
+  cleanup actions disabled.
+- Reuse `navigate_to_waypoint` for candidate navigation; defer a dedicated
+  `navigate_to_exploration_candidate` tool until waypoint projection proves
+  insufficient.
+- Require the report to show candidate provenance, runtime enrichment, and no
+  private-truth leakage.
 
 ### Slice 4: Snapshot priors and merge
 
