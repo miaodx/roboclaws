@@ -7,12 +7,14 @@ path, Phase C selected USD-binding diagnostics, strict full-cleanup Isaac report
 gate, and Phase E segmentation diagnostics/gates, real-mode snapshot
 provenance, and backend semantic-pose state diagnostics implemented;
 local GPU MolmoSpaces USD scene indexing, selected USD binding, and one-object
-cleanup/report parity now pass over `procthor-10k-val` scene `val_0`. Strict
-cross-scene binding now rejects loose generic-category object fallback, so
-`val_1` no longer falsely binds public `mug_01` to a DishSponge USD prim.
-Segmentation remains unavailable/blocked, scene-specific scenario generation is
-still needed for broader exact cleanup, and manipulation is still explicitly
-`isaac_semantic_pose`, not planner-backed.
+cleanup/report parity now pass over `procthor-10k-val` scenes `val_0` and
+`val_1`. Strict cross-scene binding now rejects loose generic-category object
+fallback, scene-index scenario generation selects real USD objects/receptacles
+when default selected handles do not bind, and the public cleanup worklist now
+prefers public USD scene-index fixture candidates over stale map-bundle fixture
+ids for scene-specific Isaac runs. Segmentation remains unavailable/blocked,
+and manipulation is still explicitly `isaac_semantic_pose`, not
+planner-backed.
 **Created:** 2026-05-27
 **Last updated:** 2026-05-28
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
@@ -426,18 +428,38 @@ evidence:
   `scene_binding_status=partial` and blocker
   `Selected cleanup object has no USD binding: mug_01`.
 
+Scene-index cleanup parity follow-up, implemented and locally verified on
+2026-05-28:
+when a real Isaac scene does not bind the default map-bundle selected cleanup
+object, the worker generates a one-object cleanup scenario from the loaded USD
+scene index. The public cleanup contract keeps the existing static map-bundle
+coverage waypoints but adds a public USD scene-index fixture overlay ahead of
+the stale map-bundle fixtures, so observed scene objects route to scene-local
+public receptacles instead of old fixture ids. The worker also infers
+`scene_index` from caller-supplied `.../val_<n>/scene.usda` paths, so local
+proof artifacts no longer report `scene_index=0` for `val_1` runs.
+
+Latest exact `val_1` cleanup-shaped smoke, run on 2026-05-28:
+`just agent::harness molmo-isaac-cleanup-smoke
+scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda
+stamp=0528_val1_scene_overlay_indexed_cleanup` wrote
+`output/isaaclab/cleanup-smoke/0528_val1_scene_overlay_indexed_cleanup/` and
+the strict cleanup checker returned `molmo-realworld-cleanup ok`. Evidence
+records `scenario_id=isaac-scene-index-procthor-10k-val-1-7-1`,
+`scene_index=1`, `scenario_source=isaac_scene_index`, selected binding status
+`selected_bound`, public worklist candidate
+`sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3`, final Bowl location
+`sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3`, `cleanup_status=success`,
+and `primitive_provenance=isaac_semantic_pose`.
+
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
 segmentation is still recorded as `blocked_capability` because Isaac returned
 no usable segmentation tensors/bbox candidates for the selected USD prims;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
-manipulation is still out of scope for this slice; broader scene coverage now
-fails instead of passing with loose semantic object rebinding when the public map
-bundle and loaded USD scene differ, so the next multi-scene slice should add
-scene-specific scenario generation before treating additional scene cleanup as
-exact; Isaac/Omniverse runtime logs still include non-fatal USD/runtime warnings,
-so broader scene coverage should keep strict artifact gates enabled rather than
-relying on import success.
+manipulation is still out of scope for this slice; broader scene coverage should
+keep strict artifact gates enabled rather than relying on import success because
+Isaac/Omniverse runtime logs still include non-fatal USD/runtime warnings.
 
 ## Architecture
 

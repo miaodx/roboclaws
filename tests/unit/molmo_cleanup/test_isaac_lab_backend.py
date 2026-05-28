@@ -426,6 +426,24 @@ def test_isaac_scene_index_can_generate_scene_specific_cleanup_scenario() -> Non
     assert bindings["selected_target_receptacle_bound_count"] == 1
 
 
+def test_isaac_worker_infers_scene_index_from_local_val_path() -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            "state.json",
+            "init",
+            "--run-dir",
+            "run",
+            "--scene-index",
+            "0",
+            "--scene-usd-path",
+            "output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_12/scene.usda",
+        ]
+    )
+
+    assert isaac_lab_backend_worker._effective_scene_index(args) == 12
+
+
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

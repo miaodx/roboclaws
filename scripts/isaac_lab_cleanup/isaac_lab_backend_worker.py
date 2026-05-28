@@ -185,6 +185,7 @@ def _close_deferred_simulation_app() -> None:
 
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
+    args.scene_index = _effective_scene_index(args)
     scenario = _scenario_for_init(args)
     scenario_source = _scenario_source(args)
     real_smoke = None
@@ -2845,6 +2846,24 @@ def _scenario_for_init(args: argparse.Namespace) -> CleanupScenario:
 
 def _scenario_source(args: argparse.Namespace) -> str:
     return "nav2_map_bundle" if args.map_bundle_dir is not None else "default_cleanup_scenario"
+
+
+def _effective_scene_index(args: argparse.Namespace) -> int:
+    scene_usd_path = getattr(args, "scene_usd_path", None)
+    inferred = _scene_index_from_usd_path(scene_usd_path)
+    if inferred is not None:
+        return inferred
+    return int(getattr(args, "scene_index", 0) or 0)
+
+
+def _scene_index_from_usd_path(path: Any) -> int | None:
+    if path is None:
+        return None
+    for part in reversed(Path(path).parts):
+        match = re.fullmatch(r"val_(\d+)", part)
+        if match:
+            return int(match.group(1))
+    return None
 
 
 def _scene_specific_scenario_if_needed(
