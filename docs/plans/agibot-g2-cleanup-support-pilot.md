@@ -366,6 +366,23 @@ movement gate, not physical PNC execution.
   Codex control for `semantic-map-build` is still unimplemented and must not be
   claimed from direct-run artifacts.
 
+2026-05-29 mocked Agibot GDK navigation gate:
+
+- Added a focused contract test that injects a fake `agibot_gdk` module into
+  the SDK runner execute path and verifies successful `Pnc.normal_navi`
+  evidence: `navigation_status=succeeded`,
+  `navigation_backend=agibot_gdk`,
+  `primitive_provenance=agibot_gdk_normal_navi`, and
+  `pose_source=agibot_gdk_pnc_arrival`.
+- Corrected SDK-runner navigation request evidence so dry-run requests render
+  `sent=false` / `not_sent=true`, while mocked successful execution renders
+  `sent=true` / `not_sent=false`.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
+  `./.venv/bin/ruff check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`,
+  and `./.venv/bin/ruff format --check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`.
+  This is mocked SDK evidence, not real G2 hardware validation.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

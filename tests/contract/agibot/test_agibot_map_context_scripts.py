@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
@@ -324,6 +325,42 @@ def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_pat
     assert navigate_result["tool_response"]["navigation_status"] == "blocked"
 
 
+def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_success")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    fake_gdk = _FakeAgibotGDK()
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=1.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is True
+    assert response["navigation_status"] == "succeeded"
+    assert response["navigation_backend"] == "agibot_gdk"
+    assert response["primitive_provenance"] == "agibot_gdk_normal_navi"
+    assert response["pose_source"] == "agibot_gdk_pnc_arrival"
+    assert response["navi_request"]["sent"] is True
+    assert response["navi_request"]["not_sent"] is False
+    assert fake_gdk.pnc.normal_navi_calls == 1
+    assert fake_gdk.gdk_release_calls == 1
+
+
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
 
@@ -401,8 +438,62 @@ def _load_module(path: Path, name: str):
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
+
+
+class _FakeTask:
+    def __init__(self, state: int, *, task_id: int = 1, message: str = "") -> None:
+        self.id = task_id
+        self.state = state
+        self.type = "normal_navi"
+        self.message = message
+
+
+class _FakePnc:
+    def __init__(self) -> None:
+        self._tasks = [_FakeTask(0, message="idle"), _FakeTask(9, message="success")]
+        self.normal_navi_calls = 0
+        self.last_request: object | None = None
+
+    def get_task_state(self) -> _FakeTask:
+        if len(self._tasks) > 1:
+            return self._tasks.pop(0)
+        return self._tasks[0]
+
+    def normal_navi(self, request: object) -> None:
+        self.normal_navi_calls += 1
+        self.last_request = request
+
+
+class _FakeAgibotGDK:
+    class GDKRes:
+        kSuccess = 0
+
+    class NaviReq:
+        def __init__(self) -> None:
+            self.target = SimpleNamespace(
+                position=SimpleNamespace(x=0.0, y=0.0, z=0.0),
+                orientation=SimpleNamespace(x=0.0, y=0.0, z=0.0, w=1.0),
+            )
+            self.timestamp_ns = 0
+
+    def __init__(self) -> None:
+        self.pnc = _FakePnc()
+        self.gdk_release_calls = 0
+
+    def gdk_init(self) -> int:
+        return self.GDKRes.kSuccess
+
+    def gdk_release(self) -> None:
+        self.gdk_release_calls += 1
+
+    def Pnc(self) -> _FakePnc:
+        return self.pnc
 
 
 def _run_sdk(*args: str) -> subprocess.CompletedProcess[str]:
