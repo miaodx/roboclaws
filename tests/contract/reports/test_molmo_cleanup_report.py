@@ -381,6 +381,18 @@ def test_cleanup_report_marks_refreshed_isaac_semantic_pose_views(tmp_path: Path
         "primitive_provenance": API_SEMANTIC_PROVENANCE,
         "score": score.to_dict(),
         "robot_name": "rby1m",
+        "isaac_runtime": {
+            "runtime": {},
+            "semantic_pose_state": {
+                "rendered_to_usd": True,
+                "semantic_pose_view_capture": {
+                    "schema": "isaac_semantic_pose_robot_view_capture_v1",
+                    "capture_method": "isaac_lab_camera_rgb_semantic_pose_robot_views",
+                    "render_steps": 4,
+                    "rendered_to_usd": True,
+                },
+            },
+        },
     }
 
     report_path = render_cleanup_report(
@@ -420,6 +432,9 @@ def test_cleanup_report_marks_refreshed_isaac_semantic_pose_views(tmp_path: Path
     assert "semantic pose rerender" in html
     assert "Step render: <strong>refreshed</strong>" in html
     assert "after applying backend semantic pose state" in html
+    assert "Pose view capture" in html
+    assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in html
+    assert "Pose render steps" in html
 
 
 def test_cleanup_report_renders_runtime_timing_breakdown(tmp_path: Path) -> None:

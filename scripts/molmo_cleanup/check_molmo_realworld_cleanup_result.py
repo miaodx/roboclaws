@@ -1054,10 +1054,16 @@ def _assert_isaac_runtime(
         assert data.get("view_variant") == ISAACLAB_ROBOT_VIEW_VARIANT, data
         steps = data.get("robot_view_steps") or []
         assert steps, data
+        semantic_pose_state = isaac.get("semantic_pose_state") or {}
+        require_refreshed_views = semantic_pose_state.get("rendered_to_usd") is True
         for step in steps:
-            provenance_text = json.dumps(step.get("view_provenance"), sort_keys=True).lower()
+            provenance = step.get("view_provenance") or {}
+            provenance_text = json.dumps(provenance, sort_keys=True).lower()
             assert "placeholder" not in provenance_text, step
             assert "isaac_lab_camera_rgb" in provenance_text, step
+            if require_refreshed_views:
+                assert provenance.get("semantic_pose_state_refreshed") is True, step
+                assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in provenance_text, step
             views = step.get("views") or {}
             assert isinstance(views, dict), step
             for key in ("fpv", "chase", "map", "verify"):
@@ -1376,7 +1382,17 @@ def _assert_isaac_semantic_pose_state(
     assert state.get("schema") == ISAAC_SEMANTIC_POSE_STATE_SCHEMA, state
     assert state.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, state
     assert state.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, state
-    assert state.get("rendered_to_usd") is False, state
+    rendered_to_usd = state.get("rendered_to_usd")
+    assert rendered_to_usd in {False, True}, state
+    if rendered_to_usd is True:
+        capture = state.get("semantic_pose_view_capture") or {}
+        assert isinstance(capture, dict), state
+        assert capture.get("schema") == "isaac_semantic_pose_robot_view_capture_v1", capture
+        assert capture.get("capture_method") == (
+            "isaac_lab_camera_rgb_semantic_pose_robot_views"
+        ), capture
+        assert capture.get("rendered_to_usd") is True, capture
+        assert int(capture.get("render_steps") or 0) > 0, capture
     assert state.get("planner_backed") is False, state
     assert state.get("physical_robot") is False, state
     assert state.get("semantic_pose_only") is True, state

@@ -1428,6 +1428,13 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     semantic_pose_state = isaac.get("semantic_pose_state")
     if not isinstance(semantic_pose_state, dict):
         semantic_pose_state = {}
+    semantic_pose_view_capture = (
+        semantic_pose_state.get("semantic_pose_view_capture")
+        if isinstance(semantic_pose_state.get("semantic_pose_view_capture"), dict)
+        else isaac.get("semantic_pose_view_capture")
+    )
+    if not isinstance(semantic_pose_view_capture, dict):
+        semantic_pose_view_capture = {}
     semantic_pose_events = [
         item for item in semantic_pose_state.get("transform_events", []) if isinstance(item, dict)
     ]
@@ -1437,6 +1444,8 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         f"{scene_bindings.get('selected_target_receptacle_bound_count', 0)}/"
         f"{scene_bindings.get('selected_target_receptacle_count', 0)} receptacles"
     )
+    pose_view_capture_method = semantic_pose_view_capture.get("capture_method") or "none"
+    pose_render_steps = semantic_pose_view_capture.get("render_steps", 0)
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Runtime mode', runtime.get('runtime_mode', 'unknown'))}"
@@ -1458,6 +1467,8 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         f"{_metric('Snapshots', f'{real_snapshots}/{len(snapshots)} real')}"
         f"{_metric('Semantic pose events', len(semantic_pose_events))}"
         f"{_metric('Pose rendered to USD', _yes_no(semantic_pose_state.get('rendered_to_usd')))}"
+        f"{_metric('Pose view capture', pose_view_capture_method)}"
+        f"{_metric('Pose render steps', pose_render_steps)}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )

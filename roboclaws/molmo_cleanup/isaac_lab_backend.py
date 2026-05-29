@@ -167,6 +167,16 @@ class IsaacLabSubprocessBackend:
         raw = self._read_state().get("semantic_pose_state") or {}
         return dict(raw) if isinstance(raw, dict) else {}
 
+    @property
+    def current_mapping_gaps(self) -> list[dict[str, Any]]:
+        raw = self._read_state().get("mapping_gaps") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
+
+    @property
+    def semantic_pose_view_capture(self) -> dict[str, Any]:
+        raw = self._read_state().get("semantic_pose_view_capture") or {}
+        return dict(raw) if isinstance(raw, dict) else {}
+
     def scene_index_artifact_payload(self) -> dict[str, Any]:
         """Return report-only USD scene index evidence without private scoring truth."""
 
@@ -185,7 +195,7 @@ class IsaacLabSubprocessBackend:
             "scene_index_diagnostics": self.scene_index_diagnostics,
             "scene_binding_diagnostics": self.scene_binding_diagnostics,
             "segmentation": self.segmentation,
-            "mapping_gaps": self.mapping_gaps,
+            "mapping_gaps": self.current_mapping_gaps,
             "requested_generated_mess_count": self.requested_generated_mess_count,
             "generated_mess_count": self.generated_mess_count,
             "agent_facing": False,

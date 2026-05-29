@@ -208,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         else:  # pragma: no cover - argparse prevents this.
             raise ValueError(f"unsupported command: {args.command}")
     print(json.dumps(result, sort_keys=True), flush=True)
+    _close_deferred_simulation_app()
     return 0
 
 
@@ -499,17 +500,14 @@ def capture_semantic_pose_robot_views(
     simulation_app = app_launcher.app
     global _DEFERRED_SIMULATION_APP
     _DEFERRED_SIMULATION_APP = simulation_app
-    try:
-        return _capture_isaac_lab_camera_views(
-            scene_usd=scene_usd,
-            view_paths=view_paths,
-            width=width,
-            height=height,
-            simulation_app=simulation_app,
-            semantic_pose_state=_dict(state.get("semantic_pose_state")),
-        )
-    finally:
-        _close_deferred_simulation_app()
+    return _capture_isaac_lab_camera_views(
+        scene_usd=scene_usd,
+        view_paths=view_paths,
+        width=width,
+        height=height,
+        simulation_app=simulation_app,
+        semantic_pose_state=_dict(state.get("semantic_pose_state")),
+    )
 
 
 def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
@@ -3259,6 +3257,7 @@ def _real_semantic_pose_robot_view_images(
                 "detail": str(exc),
             }
         )
+        write_state_from_state_arg(state)
         return {}
     images = {
         key: str(value)
@@ -3276,9 +3275,34 @@ def _real_semantic_pose_robot_view_images(
         "rendered_to_usd": True,
         "render_steps": int(capture.get("render_steps") or 0),
     }
+    mapping_gaps = [
+        item
+        for item in state.get("mapping_gaps", [])
+        if not (isinstance(item, dict) and item.get("area") == "robot_view_variants")
+    ]
+    mapping_gaps.append(
+        {
+            "area": "robot_view_variants",
+            "status": "real_rendering_proven",
+            "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
+            "detail": (
+                "FPV, chase, map, and verification images were recaptured from the "
+                "loaded USD scene after applying backend semantic pose state. This is "
+                "semantic pose report evidence, not planner-backed or physics-backed "
+                "manipulation proof."
+            ),
+        }
+    )
+    state["mapping_gaps"] = mapping_gaps
     semantic_pose_state = _dict(state.get("semantic_pose_state"))
     semantic_pose_state["rendered_to_usd"] = True
     semantic_pose_state["semantic_pose_view_capture"] = dict(state["semantic_pose_view_capture"])
+    semantic_pose_state["evidence_note"] = (
+        "Semantic cleanup primitives still update backend JSON pose/articulation state "
+        "and are not planner-backed manipulation proof. The current report robot-view "
+        "images were recaptured from Isaac after applying that semantic pose state to "
+        "the loaded USD stage."
+    )
     state["semantic_pose_state"] = semantic_pose_state
     write_state_from_state_arg(state)
     return images

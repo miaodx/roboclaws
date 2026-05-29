@@ -818,6 +818,68 @@ def test_checker_accepts_isaac_semantic_pose_paths_when_rows_match_scene_index(
     )
 
 
+def test_checker_accepts_isaac_semantic_pose_rerendered_robot_views(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state_with_refreshed_robot_views()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(
+        data,
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+    )
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=True,
+        require_robot_view_provenance=True,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_refreshed_isaac_semantic_pose_without_refreshed_views(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state_with_refreshed_robot_views()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(data, tmp_path)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=True,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
 def test_checker_rejects_isaac_semantic_pose_object_path_drift_from_scene_index(
     tmp_path: Path,
 ) -> None:
@@ -2507,6 +2569,8 @@ def _add_isaac_robot_view_step(
     base: Path,
     *,
     blank_key: str = "",
+    capture_method: str = "isaac_lab_camera_rgb_static_robot_views",
+    semantic_pose_state_refreshed: bool = False,
 ) -> None:
     view_dir = base / "isaac_robot_views"
     view_dir.mkdir(parents=True, exist_ok=True)
@@ -2543,6 +2607,10 @@ def _add_isaac_robot_view_step(
             "views": views,
         },
     ]
+    for step in data["robot_view_steps"]:
+        provenance = {key: f"{capture_method}:{key}" for key in views}
+        provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
+        step["view_provenance"] = provenance
 
 
 def _add_isaac_snapshot_artifacts(
@@ -2711,6 +2779,19 @@ def _isaac_semantic_pose_state() -> dict[str, object]:
             },
         ],
     }
+
+
+def _isaac_semantic_pose_state_with_refreshed_robot_views() -> dict[str, object]:
+    state = _isaac_semantic_pose_state()
+    state["rendered_to_usd"] = True
+    state["semantic_pose_view_capture"] = {
+        "schema": "isaac_semantic_pose_robot_view_capture_v1",
+        "capture_method": "isaac_lab_camera_rgb_semantic_pose_robot_views",
+        "rendered_to_usd": True,
+        "scene_usd": "loaded_scene.usda",
+        "render_steps": 4,
+    }
+    return state
 
 
 def _isaac_semantic_pose_trace_events(

@@ -731,9 +731,10 @@ def run_realworld_cleanup(
                 "scene_binding_diagnostics": backend_instance.scene_binding_diagnostics,
                 "segmentation": backend_instance.segmentation,
                 "scene_load": backend_instance.scene_load,
-                "mapping_gaps": backend_instance.mapping_gaps,
+                "mapping_gaps": backend_instance.current_mapping_gaps,
                 "snapshot_artifacts": backend_instance.snapshot_artifacts,
                 "semantic_pose_state": backend_instance.semantic_pose_state,
+                "semantic_pose_view_capture": backend_instance.semantic_pose_view_capture,
                 "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
                 "generated_mess_count": backend_instance.generated_mess_count,
             }
