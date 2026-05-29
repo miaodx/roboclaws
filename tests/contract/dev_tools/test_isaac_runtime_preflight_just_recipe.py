@@ -82,6 +82,8 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
     assert "--require-segmentation-evidence" in harness_text
     assert "enable_segmentation" in harness_text
     assert "--enable-segmentation" in harness_text
+    assert "segmentation_semantic_filter" in harness_text
+    assert "--segmentation-semantic-filter" in harness_text
     assert '2>&1 | tee "$init_result"' in harness_text
     assert '2>&1 | tee "$robot_views_result"' in harness_text
     assert "robot_views_result.json" in harness_text
@@ -95,6 +97,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "runtime_python=/tmp/isaac-python",
         "generated_scene_kind=isaac_official_blocks",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "segmentation_semantic_filter=usd_prim_path",
         "accept_nvidia_eula=false",
     )
     assert route == [
@@ -104,6 +107,7 @@ def test_agent_harness_allows_isaac_runtime_smoke_target() -> None:
         "runtime_python=/tmp/isaac-python",
         "generated_scene_kind=isaac_official_blocks",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "segmentation_semantic_filter=usd_prim_path",
         "accept_nvidia_eula=false",
     ]
 

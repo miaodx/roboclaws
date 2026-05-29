@@ -108,6 +108,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     init.add_argument(
+        "--segmentation-semantic-filter",
+        action="append",
+        help=(
+            "Semantic label instance name to request from Isaac camera semantic filters. "
+            "Repeat to probe class vs usd_prim_path labels; defaults to class."
+        ),
+    )
+    init.add_argument(
         "--scene-usd-path",
         type=Path,
         help=(
@@ -433,6 +441,7 @@ def real_runtime_smoke(
         simulation_app=simulation_app,
         include_segmentation=args.enable_segmentation,
         segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
+        semantic_filter=tuple(args.segmentation_semantic_filter or ("class",)),
         scene_index_diagnostics=scene_index_diagnostics,
     )
     render_steps = int(capture["render_steps"])
@@ -1361,6 +1370,7 @@ def _capture_isaac_lab_camera_views(
     simulation_app: Any,
     include_segmentation: bool = False,
     segmentation_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
+    semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
@@ -1385,7 +1395,8 @@ def _capture_isaac_lab_camera_views(
         if include_segmentation
         else _semantic_label_application_not_requested()
     )
-    semantic_filter = ["class"] if include_segmentation else "*:*"
+    camera_semantic_filter: str | list[str]
+    camera_semantic_filter = list(semantic_filter) if include_segmentation else "*:*"
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
@@ -1399,7 +1410,7 @@ def _capture_isaac_lab_camera_views(
                 "rgb",
                 *(segmentation_data_types if include_segmentation else ()),
             ],
-            semantic_filter=semantic_filter,
+            semantic_filter=camera_semantic_filter,
             colorize_semantic_segmentation=False,
             colorize_instance_segmentation=False,
             colorize_instance_id_segmentation=False,
@@ -1451,7 +1462,7 @@ def _capture_isaac_lab_camera_views(
             segmentation_views,
             requested_data_types=segmentation_data_types,
             semantic_label_application=semantic_label_application,
-            semantic_filter=semantic_filter,
+            semantic_filter=camera_semantic_filter,
         )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),

@@ -36,8 +36,13 @@ capture, but semantic and instance-fast annotators still return only
 MolmoSpaces USD object references from the `val_1` state artifact to 22
 `objects/thor` R2 archives and installs them under
 `output/isaaclab/molmospaces-usd/objects/thor`; the follow-up probe confirms
-selected Bowl/Sink geometry is renderable with no missing referenced assets.
-Default segmentation-off cleanup still passes on `val_1`. The
+selected Bowl/Sink geometry is renderable with no missing referenced assets. A
+root-cause probe now shows the raw MolmoSpaces composed scene is the failing
+layer for Isaac semantic AOV: flattening `val_1`, authoring semantic labels on
+637 final renderable Gprims including 408 Mesh prims, and requesting
+`semantic_filter=["usd_prim_path"]` produces selected Bowl/Sink segmentation
+matches and passes the strict Isaac runtime-smoke segmentation gate. Default
+segmentation-off cleanup still passes on `val_1`. The
 visual-grounding GPU sidecar benchmark remains a separate active confidence
 layer; Grounding DINO base-recall is still the current default real
 `camera-labels` pipeline until a broader corpus changes that ranking.
@@ -65,18 +70,15 @@ No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
 support Codex through repo-local `.env` mify or codex-env routes and support
 Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
-runs also support OpenClaw. The current Isaac blocker is segmentation:
+runs also support OpenClaw. The current Isaac blocker has narrowed from
+"segmentation unavailable" to integration of the proven prep path:
 MolmoSpaces USD RGB/robot-view and exact scene-index cleanup evidence passes
-for `val_0` and `val_1`, but Isaac has not produced usable selected-prim
-segmentation evidence. Missing selected USD object references are no longer the
-active blocker for `val_1`; selected Bowl/Sink geometry now resolves as
-renderable. `semantic_segmentation` and `instance_segmentation_fast` produce
-tensors with only `BACKGROUND` candidates, even after scene-index labels are
-applied to the loaded USD prims and referenced object geometry resolves,
-while `instance_id_segmentation_fast` aborts with a CUDA illegal-address
-coredump. The current blocker is the Isaac semantic AOV/render-product path,
-including repeated `OgnSdSemanticLabelsMap: invalid input AOV
-SemanticLabelTokenSD` warnings.
+for `val_0` and `val_1`; raw composed `val_1` semantic AOV still collapses or
+fails selected matching, but a flattened semantic USD with labels on final
+renderable descendants and `semantic_filter=["usd_prim_path"]` produces usable
+selected-prim segmentation evidence. Missing selected USD object references are
+no longer the active blocker for `val_1`; selected Bowl/Sink geometry now
+resolves as renderable.
 
 ## Human Review Surface
 

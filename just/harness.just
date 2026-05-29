@@ -742,6 +742,7 @@ molmo-isaac-runtime-smoke *overrides:
     enable_segmentation="false"
     require_segmentation_evidence="false"
     segmentation_data_types=""
+    segmentation_semantic_filter=""
     accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
@@ -759,6 +760,7 @@ molmo-isaac-runtime-smoke *overrides:
         require_usd_scene_index|\
         require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
         enable_segmentation|require_segmentation_evidence|segmentation_data_types|\
+        segmentation_semantic_filter|\
         accept_nvidia_eula)
           ;;
         *)
@@ -802,6 +804,14 @@ molmo-isaac-runtime-smoke *overrides:
         for data_type in "${segmentation_type_args[@]}"; do
           if [[ -n "$data_type" ]]; then
             worker_cmd+=(--segmentation-data-type "$data_type")
+          fi
+        done
+      fi
+      if [[ -n "$segmentation_semantic_filter" ]]; then
+        IFS=', ' read -r -a semantic_filter_args <<< "$segmentation_semantic_filter"
+        for instance_name in "${semantic_filter_args[@]}"; do
+          if [[ -n "$instance_name" ]]; then
+            worker_cmd+=(--segmentation-semantic-filter "$instance_name")
           fi
         done
       fi

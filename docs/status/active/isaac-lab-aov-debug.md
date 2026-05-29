@@ -6,23 +6,46 @@ Last updated: 2026-05-29
 
 Isaac Sim/Lab semantic AOV is available for generated controls, including a
 control scene that references NVIDIA Isaac 5.1 official Blocks assets.
-MolmoSpaces `val_1` still loads and renders, but its `semantic_segmentation`
-output collapses to full-frame `BACKGROUND` in every view with zero selected
-USD prim matches. The same collapse now reproduces under the MolmoSpaces
-official Isaac package route: `molmo_spaces_isaac[sim]` with IsaacSim 5.1.0.0
-and IsaacLab 2.3.2.post1.
+MolmoSpaces `val_1` still collapses to full-frame `BACKGROUND` through the raw
+composed scene path, including the MolmoSpaces official Isaac package route.
+The blocker has narrowed: a flattened MolmoSpaces `val_1` USD with semantic
+labels authored directly on renderable Gprim/Mesh targets produces usable Isaac
+semantic segmentation when the camera semantic filter is `usd_prim_path`.
 
 ## Blocker Fingerprint
 
 - `blocker_kind`: `isaac_semantic_aov`
-- `root_cause_classification`: `molmospaces_scene_usd_semantic_aov_projection`
+- `root_cause_classification`:
+  `raw_molmospaces_scene_composition_hides_renderable_semantic_label_targets`
 - `known_not_root_cause`: request routing, selected USD binding, missing object
   references, renderable geometry, scene-index label application, semantic
   filter breadth, global Isaac runtime AOV support, current runtime preflight,
-  Roboclaws-only IsaacSim 6 / IsaacLab 0.54 version skew
+  Roboclaws-only IsaacSim 6 / IsaacLab 0.54 version skew, MolmoSpaces
+  renderable Gprim/Mesh labels after flattening, Isaac semantic AOV path labels
 
 ## Last Proven Evidence
 
+- Flattened semantic USD prep artifact:
+  `output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/summary.json`
+  - `status=ready`
+  - matched 40 MolmoSpaces metadata entries
+  - authored labels on 637 renderable Gprims, including 408 Mesh prims
+  - copied `scene_metadata.json` next to the flattened USD for the normal
+    scene-index binding path
+- Flattened `class` AOV probe:
+  `output/isaaclab/runtime-smoke/0529_val1_flattened_semantic_aov_probe/state.json`
+  - `semantic_filter=["class"]`
+  - semantic tensors no longer collapsed to full-frame `BACKGROUND`
+  - produced category candidates such as `bowl` and `sink`
+  - still failed selected USD matching because class labels do not carry USD
+    prim paths
+- Flattened `usd_prim_path` AOV probe:
+  `output/isaaclab/runtime-smoke/0529_val1_flattened_usdprimpath_aov_probe/state.json`
+  - `semantic_filter=["usd_prim_path"]`
+  - `status=available`
+  - `candidate_bbox_count=24`
+  - `selected_usd_prim_match_count=2`
+  - checker passed with selected Bowl/Sink USD prim matches
 - A-E matrix artifact:
   `output/isaaclab/aov-comparison/0529_A_to_E_official_isaac51_matrix.json`
   - `status=decision_ready`
@@ -74,34 +97,33 @@ and IsaacLab 2.3.2.post1.
 
 ## Next Hypothesis
 
-MolmoSpaces USD composition differs from generated controls and official Isaac
-asset references at the semantic AOV projection layer. The selected MolmoSpaces
-top-level prims are valid and renderable, but in the composed stage they still
-expose no Gprim/Mesh semantic label targets to the current label application
-pass, and the render product reports only background semantic IDs. This is no
-longer explained by using Roboclaws' IsaacSim 6 / IsaacLab 0.54 runtime instead
-of the MolmoSpaces official IsaacSim 5.1 / IsaacLab 2.3.x package route.
+MolmoSpaces USD composition is the failing layer, not Isaac semantic AOV as a
+whole. Raw composed scene loading still hides or prevents effective semantic
+projection to rendered Gprims/Meshes, but flattening the composed stage and
+authoring `UsdSemantics.LabelsAPI` directly on final renderable descendants
+makes selected-object semantic evidence available when the semantic filter asks
+for `usd_prim_path`.
 
 ## Expected Decision Delta
 
-The official-scene control and official MolmoSpaces Isaac runtime probe rule out
-a broad Isaac AOV absence and the first-order version-skew hypothesis. Treat
-MolmoSpaces segmentation as a scene/USD composition blocked capability for now,
-and continue the Isaac cleanup path with segmentation disabled unless a later
-upstream MolmoSpaces/Isaac USD semantic fix is available.
+Do not treat MolmoSpaces Isaac segmentation as globally unavailable anymore.
+Keep default cleanup segmentation disabled until the prep step is integrated
+into the normal local Isaac path, but use flattened semantic USD plus
+`segmentation_semantic_filter=usd_prim_path` as the next candidate route for
+selected-object segmentation evidence.
 
 ## Next Command Or Artifact
 
-Use the A-E matrix artifact when explaining the decision. Next implementation
-work should continue segmentation-off MolmoSpaces scene coverage, not spend more
-turns on low-information AOV observability.
+Next implementation work should integrate the flattened semantic USD prep step
+behind an explicit opt-in for local Isaac segmentation probes, then run cleanup
+smoke with segmentation required against the prepared scene.
 
 ## Stop Condition
 
-Do not make another low-information observability edit for
-`isaac_semantic_aov`. Reopen this only with a new root-cause experiment that can
-make MolmoSpaces semantic labels reach composed rendered Gprims/Meshes, or with
-new upstream Isaac/MolmoSpaces evidence.
+The root-cause experiment succeeded. Avoid further low-information AOV
+observability; continue only with integration work that makes the proven
+flattened/path-label route available through a normal command or with upstream
+MolmoSpaces/Isaac evidence.
 
 ## No-Touch Scope
 
@@ -109,11 +131,12 @@ new upstream Isaac/MolmoSpaces evidence.
 - No checker threshold changes.
 - No default segmentation-on behavior for cleanup runs.
 - No broad Roboclaws refactor.
-- No `STATUS.md` update unless the project-level blocker or next action changes.
+- No broad cleanup behavior change until the flattened semantic USD prep route
+  is explicitly selected.
 
 ## Parked Work
 
 - Broaden segmentation-off MolmoSpaces scene-index cleanup coverage beyond
   `val_0` and `val_1`.
-- Revisit Isaac segmentation only with a root-cause AOV/render-product
-  experiment or upstream Isaac evidence.
+- Integrate flattened semantic USD prep into an explicit local Isaac
+  segmentation probe path.

@@ -164,6 +164,25 @@ def test_isaac_lab_backend_can_request_segmentation(
     ]
 
 
+def test_isaac_worker_can_request_semantic_filter_override(tmp_path: Path) -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(tmp_path / "state.json"),
+            "init",
+            "--run-dir",
+            str(tmp_path),
+            "--runtime-mode",
+            "fake",
+            "--enable-segmentation",
+            "--segmentation-semantic-filter",
+            "usd_prim_path",
+        ]
+    )
+
+    assert getattr(args, "segmentation_semantic_filter") == ["usd_prim_path"]
+
+
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
     map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
     backend = IsaacLabSubprocessBackend(
