@@ -85,12 +85,23 @@ def validate_context(context: dict[str, Any]) -> list[str]:
     rooms = _list(context.get("rooms"))
     fixtures = _list(context.get("fixtures"))
     waypoints = _list(context.get("inspection_waypoints"))
-    if not rooms:
-        errors.append("rooms must contain at least one room")
-    if not fixtures:
-        errors.append("fixtures must contain at least one fixture")
-    if not waypoints:
-        errors.append("inspection_waypoints must contain at least one waypoint")
+    generated_candidates = generated_exploration_candidates(context)
+    minimal_mode = _minimal_context_mode(context)
+    if minimal_mode:
+        if not _list(_dict(context.get("safety_bounds")).get("polygon")):
+            errors.append("minimal context safety_bounds.polygon must contain at least one point")
+        if not generated_candidates:
+            errors.append(
+                "minimal context must include free_space_samples, exploration_candidates, "
+                "or generated_exploration_candidates"
+            )
+    else:
+        if not rooms:
+            errors.append("rooms must contain at least one room")
+        if not fixtures:
+            errors.append("fixtures must contain at least one fixture")
+        if not waypoints:
+            errors.append("inspection_waypoints must contain at least one waypoint")
 
     room_ids = set()
     for index, room in enumerate(rooms):
@@ -137,12 +148,16 @@ def metric_map_from_context(
     frame_id = str(context.get("frame_id") or "map")
     bounds = _coordinate_bounds(context)
     robot_pose = _robot_pose(context, frame_id=frame_id)
+    minimal_mode = _minimal_context_mode(context)
+    generated_candidates = generated_exploration_candidates(context)
+    waypoints = generated_candidates if minimal_mode else _list(context.get("inspection_waypoints"))
     return {
         "ok": True,
         "tool": "metric_map",
         "status": "ok",
         "contract": REALWORLD_CONTRACT,
         "schema": METRIC_MAP_SCHEMA,
+        **({"mode": "minimal"} if minimal_mode else {}),
         "frame_id": frame_id,
         "map_id": map_id,
         "map_version": map_version,
@@ -153,22 +168,65 @@ def metric_map_from_context(
         "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
         "occupancy_grid_artifact": None,
         "map_preview_artifact": semantic_preview_artifact,
-        "rooms": [_room_payload(room) for room in _list(context.get("rooms"))],
+        "rooms": []
+        if minimal_mode
+        else [_room_payload(room) for room in _list(context.get("rooms"))],
         "driveable_ways": _list(context.get("driveable_ways")),
         "robot_pose": robot_pose,
-        "inspection_waypoints": [
-            _waypoint_payload(item, frame_id=frame_id)
-            for item in _list(context.get("inspection_waypoints"))
-        ],
+        "inspection_waypoints": [_waypoint_payload(item, frame_id=frame_id) for item in waypoints],
+        **(
+            {
+                "generated_exploration_candidates": [
+                    _waypoint_payload(item, frame_id=frame_id) for item in generated_candidates
+                ],
+                "safety_bounds": _public_safety_bounds(context),
+                "minimal_map": {
+                    "enabled": True,
+                    "source": "public_occupancy_free_space",
+                    "generated_candidate_count": len(generated_candidates),
+                    "source_rooms_hidden": True,
+                    "source_fixtures_hidden": True,
+                    "source_inspection_waypoints_hidden": True,
+                    "public_contract_note": (
+                        "Minimal Agibot map projection exposes operator safety bounds and "
+                        "generated exploration candidates, not authored room or fixture "
+                        "semantics."
+                    ),
+                },
+            }
+            if minimal_mode
+            else {}
+        ),
         "public_contract_note": (
             "Metric map projection contains backend-agnostic public rooms, fixtures, "
             "and operator-recorded waypoints. Runtime movable objects and private "
             "scoring truth are not encoded."
+            if not minimal_mode
+            else "Minimal Agibot map projection contains backend-agnostic safety bounds "
+            "and generated exploration candidates. Runtime movable objects, private "
+            "scoring truth, and Agibot backend internals are not encoded."
         ),
     }
 
 
 def fixture_hints_from_context(context: dict[str, Any]) -> dict[str, Any]:
+    if _minimal_context_mode(context):
+        return {
+            "ok": True,
+            "tool": "fixture_hints",
+            "status": "ok",
+            "contract": REALWORLD_CONTRACT,
+            "schema": FIXTURE_HINTS_SCHEMA,
+            "mode": "minimal",
+            "fixture_hint_mode": "minimal_map_no_fixtures",
+            "contains_runtime_observations": False,
+            "generated_exploration_candidate_count": len(generated_exploration_candidates(context)),
+            "public_contract_note": (
+                "Minimal Agibot map contexts do not require hand-authored room or "
+                "fixture semantics. Runtime observations may add public anchors later."
+            ),
+            "rooms": [],
+        }
     fixtures_by_room: dict[str, list[dict[str, Any]]] = {}
     for fixture in _list(context.get("fixtures")):
         room_id = str(fixture.get("room_id"))
@@ -232,6 +290,11 @@ def write_semantic_preview(context: dict[str, Any], output_path: Path) -> None:
         draw.ellipse((px - 7, py - 7, px + 7, py + 7), fill=(43, 116, 185))
         draw.text((px + 9, py + 5), str(waypoint.get("waypoint_id", ""))[:28], fill=(30, 72, 120))
 
+    for waypoint in generated_exploration_candidates(context):
+        px, py = point(float(waypoint["x"]), float(waypoint["y"]))
+        draw.ellipse((px - 7, py - 7, px + 7, py + 7), fill=(43, 116, 185))
+        draw.text((px + 9, py + 5), str(waypoint.get("waypoint_id", ""))[:28], fill=(30, 72, 120))
+
     robot = _dict(context.get("robot_pose"))
     if _number_or_none(robot.get("x")) is not None and _number_or_none(robot.get("y")) is not None:
         px, py = point(float(robot["x"]), float(robot["y"]))
@@ -286,13 +349,20 @@ def _waypoint_payload(waypoint: dict[str, Any], *, frame_id: str) -> dict[str, A
         payload["reachability_status"] = _public_reachability_status(
             str(waypoint["reachability_status"])
         )
+    if isinstance(waypoint.get("candidate_provenance"), dict):
+        payload["candidate_provenance"] = waypoint["candidate_provenance"]
     return payload
 
 
 def _robot_pose(context: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
     pose = _dict(context.get("robot_pose"))
     if _number_or_none(pose.get("x")) is None or _number_or_none(pose.get("y")) is None:
-        waypoint = _list(context.get("inspection_waypoints"))[0]
+        waypoints = (
+            generated_exploration_candidates(context)
+            if _minimal_context_mode(context)
+            else _list(context.get("inspection_waypoints"))
+        )
+        waypoint = waypoints[0]
         pose = {"x": waypoint["x"], "y": waypoint["y"], "yaw": waypoint["yaw"]}
     return {
         "frame_id": frame_id,
@@ -301,16 +371,27 @@ def _robot_pose(context: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
         "yaw": float(pose.get("yaw", 0.0)),
         "room_id": str(pose.get("room_id") or ""),
         "waypoint_id": str(pose.get("waypoint_id") or ""),
-        "pose_source": "operator_recorded_pose",
+        "pose_source": "generated_exploration_candidate"
+        if _minimal_context_mode(context)
+        else "operator_recorded_pose",
     }
 
 
 def _coordinate_bounds(context: dict[str, Any]) -> dict[str, float]:
     xs: list[float] = []
     ys: list[float] = []
+    for waypoint in generated_exploration_candidates(context):
+        xs.append(float(waypoint["x"]))
+        ys.append(float(waypoint["y"]))
     for waypoint in _list(context.get("inspection_waypoints")):
         xs.append(float(waypoint["x"]))
         ys.append(float(waypoint["y"]))
+    for point in _list(_dict(context.get("safety_bounds")).get("polygon")):
+        x = _number_or_none(point.get("x"))
+        y = _number_or_none(point.get("y"))
+        if x is not None and y is not None:
+            xs.append(x)
+            ys.append(y)
     for fixture in _list(context.get("fixtures")):
         pose = _dict(fixture.get("pose"))
         x = _number_or_none(pose.get("x"))
@@ -360,6 +441,70 @@ def _copy_capture_images(context: dict[str, Any], output_dir: Path, *, source_ro
                 copied.add(src)
                 images_dir.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src, images_dir / src.name)
+
+
+def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, Any]]:
+    explicit = _list(context.get("generated_exploration_candidates")) or _list(
+        context.get("exploration_candidates")
+    )
+    source_candidates = explicit or _list(context.get("free_space_samples"))
+    frame_id = str(context.get("frame_id") or "map")
+    generated = []
+    for index, source in enumerate(source_candidates, start=1):
+        if not isinstance(source, dict):
+            continue
+        x = _number_or_none(source.get("x"))
+        y = _number_or_none(source.get("y"))
+        if x is None or y is None:
+            continue
+        waypoint_id = str(source.get("waypoint_id") or f"generated_exploration_{index:03d}")
+        generated.append(
+            {
+                "waypoint_id": waypoint_id,
+                "frame_id": str(source.get("frame_id") or frame_id),
+                "x": x,
+                "y": y,
+                "yaw": _number_or_none(source.get("yaw")) or 0.0,
+                "room_id": str(source.get("room_id") or "generated_area"),
+                "fixture_id": str(source.get("fixture_id") or ""),
+                "label": str(source.get("label") or f"Generated exploration candidate {index}"),
+                "purpose": "minimal_map_exploration",
+                "waypoint_source": "generated_exploration_candidate",
+                "visited": bool(source.get("visited", False)),
+                "reachability_status": str(source.get("reachability_status") or "unverified"),
+                "coverage_estimate": source.get(
+                    "coverage_estimate", round(1.0 / max(len(source_candidates), 1), 6)
+                ),
+                "candidate_provenance": {
+                    "source": str(source.get("source") or "public_free_space_sample"),
+                    "candidate_index": index,
+                    "source_pose": str(source.get("source_pose") or "free_space_sample"),
+                    "source_room_hidden": True,
+                    "source_fixtures_hidden": True,
+                    "source_waypoint_hidden": True,
+                },
+            }
+        )
+    return generated
+
+
+def _minimal_context_mode(context: dict[str, Any]) -> bool:
+    return (
+        not _list(context.get("rooms"))
+        and not _list(context.get("fixtures"))
+        and not _list(context.get("inspection_waypoints"))
+    )
+
+
+def _public_safety_bounds(context: dict[str, Any]) -> dict[str, Any]:
+    bounds = _dict(context.get("safety_bounds"))
+    return {
+        "frame_id": str(bounds.get("frame_id") or context.get("frame_id") or "map"),
+        "polygon": _list(bounds.get("polygon")),
+        "max_linear_speed_mps": bounds.get("max_linear_speed_mps"),
+        "max_angular_speed_radps": bounds.get("max_angular_speed_radps"),
+        "operator_approved": bool(bounds.get("operator_approved", False)),
+    }
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -423,7 +568,9 @@ def _public_reachability_status(status: str) -> str:
     normalized = status.strip().lower()
     if normalized == "verified":
         return "verified"
-    if "blocked" in normalized or "failed" in normalized or "timeout" in normalized:
+    if "timeout" in normalized:
+        return "timeout"
+    if "blocked" in normalized or "failed" in normalized:
         return "blocked"
     if not normalized:
         return "unverified"

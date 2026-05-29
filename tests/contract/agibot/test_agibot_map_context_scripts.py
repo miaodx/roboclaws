@@ -42,6 +42,45 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     assert (output_dir / "semantic_preview.png").is_file()
 
 
+def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None:
+    generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_minimal_context")
+    context_path = tmp_path / "agibot_map_context.minimal.json"
+    output_dir = tmp_path / "generated"
+    context_path.write_text(json.dumps(_minimal_context()), encoding="utf-8")
+
+    generator.main([str(context_path), "--output-dir", str(output_dir)])
+
+    metric_map = json.loads((output_dir / "metric_map.json").read_text(encoding="utf-8"))
+    fixture_hints = json.loads((output_dir / "fixture_hints.json").read_text(encoding="utf-8"))
+    agent_view = json.loads((output_dir / "agent_view.json").read_text(encoding="utf-8"))
+    first_waypoint = metric_map["inspection_waypoints"][0]
+    payload_text = json.dumps(agent_view).lower()
+
+    assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert metric_map["mode"] == "minimal"
+    assert metric_map["rooms"] == []
+    assert metric_map["minimal_map"]["source_rooms_hidden"] is True
+    assert metric_map["minimal_map"]["source_fixtures_hidden"] is True
+    assert metric_map["minimal_map"]["generated_candidate_count"] == 3
+    assert metric_map["safety_bounds"]["polygon"]
+    assert len(metric_map["inspection_waypoints"]) == 3
+    assert len(metric_map["generated_exploration_candidates"]) == 3
+    assert first_waypoint["waypoint_id"] == "generated_exploration_001"
+    assert first_waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert first_waypoint["purpose"] == "minimal_map_exploration"
+    assert first_waypoint["reachability_status"] == "verified"
+    assert first_waypoint["candidate_provenance"]["source"] == "public_free_space_sample"
+    assert "verification" not in first_waypoint
+    assert fixture_hints["mode"] == "minimal"
+    assert fixture_hints["fixture_hint_mode"] == "minimal_map_no_fixtures"
+    assert fixture_hints["rooms"] == []
+    assert "agibot_gdk" not in payload_text
+    assert "map_source" not in payload_text
+    assert "verification" not in payload_text
+    assert "pnc" not in payload_text
+    assert (output_dir / "semantic_preview.png").is_file()
+
+
 def test_reachability_unverified_does_not_pass_as_verified(tmp_path: Path) -> None:
     generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_context_unverified")
     context = _completed_context()
@@ -207,6 +246,50 @@ def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> N
     assert navigate_result["tool_response"]["primitive_provenance"] == "blocked_capability"
 
 
+def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_map_context.minimal.json"
+    context_path.write_text(json.dumps(_minimal_context()), encoding="utf-8")
+    root = tmp_path / "sdk-runner"
+    agent_view_dir = root / "01-agent-view"
+    navigate_dir = root / "03-navigate"
+
+    _run_sdk(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(agent_view_dir),
+    )
+    _run_sdk(
+        "navigate-waypoint",
+        "--agent-view-json",
+        str(agent_view_dir / "agent_view.json"),
+        "--output-dir",
+        str(navigate_dir),
+        "--waypoint-id",
+        "generated_exploration_001",
+    )
+
+    agent_view = json.loads((agent_view_dir / "agent_view.json").read_text(encoding="utf-8"))
+    run_result = json.loads((agent_view_dir / "run_result.json").read_text(encoding="utf-8"))
+    navigate_result = json.loads((navigate_dir / "run_result.json").read_text(encoding="utf-8"))
+    payload_text = json.dumps(agent_view).lower()
+    waypoint = agent_view["metric_map"]["inspection_waypoints"][0]
+
+    assert agent_view["metric_map"]["mode"] == "minimal"
+    assert agent_view["metric_map"]["rooms"] == []
+    assert waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert waypoint["reachability_status"] == "verified"
+    assert agent_view["fixture_hints"]["fixture_hint_mode"] == "minimal_map_no_fixtures"
+    assert run_result["summary"]["generated_exploration_candidates"] == 3
+    assert run_result["privacy_check"]["ok"] is True
+    assert "agibot_gdk" not in payload_text
+    assert "map_source" not in payload_text
+    assert "verification" not in payload_text
+    assert navigate_result["tool_response"]["navigation_status"] == "dry_run_not_executed"
+    assert navigate_result["tool_response"]["waypoint_id"] == "generated_exploration_001"
+
+
 def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_path: Path) -> None:
     context = _completed_context()
     context["inspection_waypoints"][0]["reachability_status"] = "unverified"
@@ -243,6 +326,46 @@ def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_pat
 
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
+
+
+def _minimal_context() -> dict:
+    return {
+        "schema": "agibot_gdk_map_context_authoring_v1",
+        "environment_id": "agibot-minimal-office",
+        "map_version": "minimal-navigation-map-v1",
+        "frame_id": "map",
+        "map_source": {
+            "type": "agibot_gdk_map_context",
+            "map_id": 7,
+            "map_name": "minimal_office",
+            "is_curr_map": True,
+        },
+        "robot_pose": {
+            "pose_source": "agibot_gdk_slam_get_curr_pose",
+            "x": 0.0,
+            "y": 0.0,
+            "yaw": 0.0,
+        },
+        "safety_bounds": {
+            "frame_id": "map",
+            "polygon": [
+                {"x": -1.0, "y": -1.0},
+                {"x": 3.0, "y": -1.0},
+                {"x": 3.0, "y": 3.0},
+                {"x": -1.0, "y": 3.0},
+            ],
+            "max_linear_speed_mps": 0.25,
+        },
+        "free_space_samples": [
+            {"x": 0.5, "y": 0.0, "yaw": 0.0, "reachability_status": "verified"},
+            {"x": 1.5, "y": 0.8, "yaw": 1.57, "reachability_status": "verified"},
+            {"x": 2.2, "y": 2.0, "yaw": 3.14, "reachability_status": "verified"},
+        ],
+        "rooms": [],
+        "fixtures": [],
+        "inspection_waypoints": [],
+        "driveable_ways": [],
+    }
 
 
 def _capture_manifest(waypoint_id: str, *, x: float, y: float) -> dict:

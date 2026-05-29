@@ -294,6 +294,26 @@ movement gate, not physical PNC execution.
   for map-bundle runs so scene-index receptacles can route cleanup without
   leaking private target truth.
 
+2026-05-29 Agibot minimal-map context gap closure:
+
+- Updated `scripts/agibot/generate_metric_map_from_context.py` so an Agibot
+  context with safety bounds and generated/free-space exploration samples can
+  emit `metric_map.json`, `fixture_hints.json`, `agent_view.json`, and a preview
+  without hand-authored rooms, fixtures, or semantic waypoints.
+- Mirrored the same minimal projection in the vendored SDK runner
+  `agent-view` export. Generated exploration candidates are projected as public
+  `inspection_waypoints` with `waypoint_source=generated_exploration_candidate`
+  and `purpose=minimal_map_exploration`, preserving the existing
+  `navigate_to_waypoint` tool path.
+- Minimal Agibot Agent View now marks `mode=minimal`, leaves `rooms` and
+  `fixture_hints.rooms` empty before runtime observations, carries public
+  safety bounds and candidate provenance, and still excludes Agibot map source,
+  raw GDK/PNC evidence, and verification payloads.
+- Focused mock verification now covers direct generator output, SDK-runner
+  agent-view export, dry-run navigation to a generated candidate, existing rich
+  context behavior, unverified-waypoint blocking, and physical pilot adapter
+  regressions.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
