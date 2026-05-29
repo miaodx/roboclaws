@@ -9,6 +9,7 @@ def apply_camera_color_profile(
     np: Any,
     profile: dict[str, Any] | None,
     backend: str | None = None,
+    view_id: str | None = None,
 ) -> tuple[Any, dict[str, Any]]:
     """Apply the display color profile carried by a camera-control request."""
 
@@ -21,11 +22,16 @@ def apply_camera_color_profile(
             np=np,
             profile=profile,
             backend=backend,
+            view_id=view_id,
         )
         adjusted = _soft_highlight_compress(adjusted, np=np, profile=profile)
     else:
         adjusted = array
-        calibration = _backend_luminance_gain_diagnostics(profile=profile, backend=backend)
+        calibration = _backend_luminance_gain_diagnostics(
+            profile=profile,
+            backend=backend,
+            view_id=view_id,
+        )
     adjusted = np.clip(adjusted, 0, 255).astype("uint8")
     after = image_luminance_metrics(adjusted, np=np)
     return adjusted, {
@@ -33,6 +39,7 @@ def apply_camera_color_profile(
         "profile": profile,
         "status": "applied" if profile else "missing_profile",
         "backend": backend,
+        "view_id": view_id,
         "backend_luminance_gain": calibration,
         "before": before,
         "after": after,
@@ -82,10 +89,15 @@ def _apply_backend_luminance_gain(
     np: Any,
     profile: dict[str, Any],
     backend: str | None,
+    view_id: str | None,
 ) -> tuple[Any, dict[str, Any]]:
-    diagnostics = _backend_luminance_gain_diagnostics(profile=profile, backend=backend)
+    diagnostics = _backend_luminance_gain_diagnostics(
+        profile=profile,
+        backend=backend,
+        view_id=view_id,
+    )
     gain = diagnostics.get("gain")
-    if diagnostics["status"] != "applied" or gain is None:
+    if diagnostics["status"] not in {"applied", "applied_view_gain"} or gain is None:
         return np.asarray(image).astype("float32"), diagnostics
     adjusted = np.asarray(image).astype("float32") * float(gain)
     return adjusted, diagnostics
@@ -95,21 +107,49 @@ def _backend_luminance_gain_diagnostics(
     *,
     profile: dict[str, Any],
     backend: str | None,
+    view_id: str | None,
 ) -> dict[str, Any]:
+    view_gains = profile.get("backend_view_luminance_gain")
+    if isinstance(view_gains, dict) and backend and view_id:
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            try:
+                gain = float(backend_view_gains[view_id])
+            except (TypeError, ValueError):
+                return {
+                    "status": "invalid_view_gain",
+                    "backend": backend,
+                    "view_id": view_id,
+                    "gain": None,
+                }
+            return {
+                "status": "applied_view_gain",
+                "backend": backend,
+                "view_id": view_id,
+                "gain": gain,
+                "source": profile.get("backend_view_luminance_gain_source")
+                or profile.get("backend_luminance_gain_source"),
+            }
     gains = profile.get("backend_luminance_gain")
     if not isinstance(gains, dict):
-        return {"status": "not_configured", "backend": backend, "gain": None}
+        return {"status": "not_configured", "backend": backend, "view_id": view_id, "gain": None}
     if not backend:
-        return {"status": "missing_backend", "backend": backend, "gain": None}
+        return {"status": "missing_backend", "backend": backend, "view_id": view_id, "gain": None}
     if backend not in gains:
-        return {"status": "backend_not_configured", "backend": backend, "gain": None}
+        return {
+            "status": "backend_not_configured",
+            "backend": backend,
+            "view_id": view_id,
+            "gain": None,
+        }
     try:
         gain = float(gains[backend])
     except (TypeError, ValueError):
-        return {"status": "invalid_gain", "backend": backend, "gain": None}
+        return {"status": "invalid_gain", "backend": backend, "view_id": view_id, "gain": None}
     return {
         "status": "applied",
         "backend": backend,
+        "view_id": view_id,
         "gain": gain,
         "source": profile.get("backend_luminance_gain_source"),
     }

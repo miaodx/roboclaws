@@ -44,6 +44,7 @@ DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
     "backend_luminance_gain_source": (
         "output/molmo/scene-camera-comparison/0530_0009/comparison_manifest.json"
     ),
+    "backend_view_luminance_gain": {},
 }
 
 
@@ -294,6 +295,18 @@ def _color_profile(value: Any) -> dict[str, Any]:
     )
     if backend_luminance_gain_source:
         profile["backend_luminance_gain_source"] = str(backend_luminance_gain_source)
+    backend_view_luminance_gain = _nested_float_mapping(
+        raw.get(
+            "backend_view_luminance_gain",
+            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_luminance_gain"),
+        )
+    )
+    if backend_view_luminance_gain:
+        profile["backend_view_luminance_gain"] = backend_view_luminance_gain
+    if raw.get("backend_view_luminance_gain_source"):
+        profile["backend_view_luminance_gain_source"] = str(
+            raw["backend_view_luminance_gain_source"]
+        )
     return profile
 
 
@@ -306,6 +319,17 @@ def _float_mapping(value: Any) -> dict[str, float]:
             parsed[str(key)] = float(raw_item)
         except (TypeError, ValueError):
             continue
+    return parsed
+
+
+def _nested_float_mapping(value: Any) -> dict[str, dict[str, float]]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, dict[str, float]] = {}
+    for key, raw_item in value.items():
+        item = _float_mapping(raw_item)
+        if item:
+            parsed[str(key)] = item
     return parsed
 
 

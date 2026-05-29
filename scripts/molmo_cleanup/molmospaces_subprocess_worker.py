@@ -847,6 +847,7 @@ def _render_camera_views_with_model_data(
                 np=np,
                 profile=color_profile,
                 backend="molmospaces-mujoco",
+                view_id=str(spec["view_id"]),
             )
             output_path = output_dir / f"{spec['view_id']}.png"
             Image.fromarray(frame).save(output_path)

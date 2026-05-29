@@ -1693,12 +1693,14 @@ def _offline_color_profile_replay(
         np=np,
         color_profile=color_profile,
         backend=MOLMOSPACES_LANE_ID,
+        view_id=view_id,
     )
     isaac_replay_path = _color_profile_replay_image(
         isaac_path,
         np=np,
         color_profile=color_profile,
         backend=ISAAC_LANE_ID,
+        view_id=view_id,
     )
     molmo_metrics = _image_visual_metrics(molmo_replay_path)
     isaac_metrics = _image_visual_metrics(isaac_replay_path)
@@ -1735,17 +1737,35 @@ def _color_profile_replay_image(
     np: Any,
     color_profile: dict[str, Any],
     backend: str,
+    view_id: str,
 ) -> Path:
     with Image.open(path).convert("RGB") as image:
         array = np.asarray(image)
-    gain = _color_profile_backend_luminance_gain(color_profile, backend=backend)
+    gain = _color_profile_backend_luminance_gain(
+        color_profile,
+        backend=backend,
+        view_id=view_id,
+    )
     adjusted = np.clip(array.astype("float32") * gain, 0, 255).astype("uint8")
     replay_path = path.with_name(f"{path.stem}.color_profile_replay.png")
     Image.fromarray(adjusted).save(replay_path)
     return replay_path
 
 
-def _color_profile_backend_luminance_gain(color_profile: dict[str, Any], *, backend: str) -> float:
+def _color_profile_backend_luminance_gain(
+    color_profile: dict[str, Any],
+    *,
+    backend: str,
+    view_id: str,
+) -> float:
+    view_gains = color_profile.get("backend_view_luminance_gain")
+    if isinstance(view_gains, dict):
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            try:
+                return float(backend_view_gains[view_id])
+            except (TypeError, ValueError):
+                return 1.0
     gains = color_profile.get("backend_luminance_gain")
     if not isinstance(gains, dict) or backend not in gains:
         return 1.0
