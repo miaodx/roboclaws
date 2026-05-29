@@ -1295,6 +1295,11 @@ def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path
         assert verify.get("canonical_camera_control") is True, step
         assert fpv.get("eye") and fpv.get("target"), step
         assert verify.get("eye") and verify.get("target"), step
+        robot_pose = contract.get("robot_pose") or step.get("robot_pose") or {}
+        assert robot_pose.get("schema") == "cleanup_robot_pose_result_v1", step
+        pose_request = robot_pose.get("pose_request") or {}
+        assert pose_request.get("schema") == "cleanup_robot_pose_request_v1", step
+        assert pose_request.get("resolver") == "roboclaws.cleanup_robot_pose.near_target_v1", step
         views = step.get("views") or {}
         _assert_nonblank_image(
             _resolve_path(report_path.parent, str(views.get("fpv") or "")),

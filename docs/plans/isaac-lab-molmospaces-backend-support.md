@@ -945,6 +945,43 @@ just agent::harness molmo-isaac-prepared-cleanup-smoke \
   scene_index=1
 ```
 
+The render-only camera parity check for `val_1`, run on 2026-05-29, wrote
+`output/molmo/scene-camera-comparison-debug/0529_2243/` using the prepared
+semantic USD from
+`output/isaaclab/prepared-cleanup-smoke/0529_val1_prepared_wrapper_cleanup_singleapp/scene_semantic.usda`.
+Both lanes succeeded. The comparison manifest reports
+`camera_pose_contract.status=same_backend_pose_within_threshold`,
+`max_pose_delta_m=0.0`, `camera_intrinsics_contract.status=intrinsics_consistent`,
+`projection_diagnostics.max_pixel_delta=0.0`, and
+`room_scale_contract.status=room_outline_mesh_bounds`. The remaining image-level
+differences are renderer/material/lighting/exposure differences
+(`visual_diagnostics.max_mean_absolute_pixel_delta≈74.96`,
+`max_abs_mean_luminance_delta≈68.57`, `max_overexposed_fraction≈0.454`), not a
+same-camera pose/FOV/room-scale mismatch. A follow-up code slice moved cleanup
+robot-view pose generation onto `cleanup_robot_pose_request_v1` /
+`cleanup_robot_pose_result_v1`: MuJoCo and Isaac now both call the shared
+`roboclaws.cleanup_robot_pose.near_target_v1` scene-frame resolver before
+building the canonical eye/target camera request. Isaac USD indexing also
+extracts `room_*_visual_*` mesh world bounds into `room_outlines`, so the shared
+resolver can use the same room-scale input instead of deriving a backend-local
+support pose from receptacle bounds alone.
+
+The follow-up real prepared-cleanup run passed at
+`output/isaaclab/cleanup-smoke/0529_val1_shared_pose_cleanup/`. Its
+`run_result.json` reports
+`robot_view_camera_control.status=all_robot_views_use_canonical_camera_control`,
+`step_count=6`, `canonical_contract_count=6`,
+`backend_local_contract_count=0`, `same_pose_api=true`, and all robot-view
+poses use `pose_source=roboclaws_shared_scene_frame_support_pose`,
+`schema=cleanup_robot_pose_result_v1`, and
+`resolver=roboclaws.cleanup_robot_pose.near_target_v1`. The strict cleanup
+checker passed with `--require-canonical-robot-view-camera-control`,
+`--require-isaac-robot-view-provenance`, and the other real Isaac runtime gates.
+This closes the pose/camera-control proof gap for the current `val_1` prepared
+scene. The remaining visible mismatch is Isaac/MuJoCo render-domain difference
+such as exposure, lighting, material, and tone mapping; it is no longer explained
+by room scale, camera eye/target, FOV, or backend-local robot-view placement.
+
 For lower-level diagnosis, the two steps remain available separately:
 
 ```bash

@@ -910,6 +910,38 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["views"][0]["target"] == [3.0, 2.0, 0.8]
 
 
+def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    state = {
+        "receptacles": {
+            "sink_01": {
+                "receptacle_id": "sink_01",
+                "position": [2.5, 5.5, 0.75],
+                "room_area": "room_2",
+            }
+        },
+        "objects": {},
+        "room_outlines": [
+            {
+                "room_id": "room_2",
+                "center": [2.99, 4.983],
+                "half_extents": [2.99, 4.983],
+            }
+        ],
+    }
+
+    pose = worker._robot_pose_near_receptacle(state, state["receptacles"]["sink_01"])
+
+    assert pose["schema"] == "cleanup_robot_pose_result_v1"
+    assert pose["pose_source"] == "roboclaws_shared_scene_frame_support_pose"
+    assert pose["pose_request"]["schema"] == "cleanup_robot_pose_request_v1"
+    assert pose["pose_request"]["resolver"] == "roboclaws.cleanup_robot_pose.near_target_v1"
+    assert pose["target_receptacle_id"] == "sink_01"
+    assert pose["target_room_id"] == "room_2"
+    assert pose["same_room_as_target"] is True
+
+
 def test_worker_robot_views_prefers_canonical_camera_control(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -968,7 +1000,7 @@ def test_worker_robot_views_prefers_canonical_camera_control(
     result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
 
     assert result["ok"] is True
-    assert state["tool_event_counts"] == {"robot_views": 1}
+    assert state["tool_event_counts"] == {"robot_views:request": 1}
     assert result["camera_control_contract"]["same_pose_api"] is True
     assert result["camera_control_contract"]["camera_model"] == "canonical_eye_target_camera_v1"
     assert result["camera_control_contract"]["agent_facing_fpv"]["canonical_camera_control"] is True

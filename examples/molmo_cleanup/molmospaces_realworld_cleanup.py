@@ -87,6 +87,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
     SEMANTIC_LOOP_VARIANT,
     primitive_provenance_counts,
     record_robot_view_step,
+    robot_view_camera_control_summary,
     robot_view_capture_for_tool,
     semantic_substeps,
 )
@@ -260,6 +261,7 @@ def run_realworld_cleanup(
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
+    molmospaces_python: str | Path | None = None,
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
     scene_source: str = "procthor-10k-val",
@@ -280,6 +282,7 @@ def run_realworld_cleanup(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    run_metadata_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     visual_backend_names = {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}
@@ -313,6 +316,7 @@ def run_realworld_cleanup(
         backend_instance = MolmoSpacesSubprocessBackend(
             run_dir=output_dir,
             seed=seed,
+            python_executable=Path(molmospaces_python) if molmospaces_python else None,
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
@@ -515,6 +519,25 @@ def run_realworld_cleanup(
             else contract.done(f"{policy_name} complete")
         ),
     )
+    if "score" not in done:
+        base_done = base_contract.done(reason=f"{policy_name} incomplete")
+        score = dict(base_done.get("score") or {})
+        final_locations = dict(
+            base_done.get("final_locations") or base_contract.backend.object_locations()
+        )
+        if score:
+            metrics = contract._realworld_metrics(score, final_locations)  # noqa: SLF001
+            score.update(metrics)
+        else:
+            score = _failed_score(contract)
+        done = {
+            **done,
+            "cleanup_status": "failed",
+            "score": score,
+            "final_locations": final_locations,
+            "final_containment": base_done.get("final_containment", {}),
+            "tool_event_counts": base_done.get("tool_event_counts", {}),
+        }
 
     after_snapshot = _write_snapshot(
         backend=backend,
@@ -751,6 +774,9 @@ def run_realworld_cleanup(
             else ROBOT_VIEW_VARIANT
         )
         run_result["robot_view_steps"] = robot_view_steps
+        run_result["robot_view_camera_control"] = robot_view_camera_control_summary(
+            robot_view_steps
+        )
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     if planner_proof_evidence is not None:
         run_result["planner_backed_manipulation_proof"] = planner_proof_evidence
@@ -759,6 +785,8 @@ def run_realworld_cleanup(
             cleanup_primitive_evidence=cleanup_primitive_evidence,
         )
         run_result["artifacts"]["planner_proof_views"] = str(output_dir / "planner_proof")
+    if run_metadata_overrides:
+        run_result = _merge_run_metadata(run_result, run_metadata_overrides)
 
     report_path = render_cleanup_report(
         run_dir=output_dir,
@@ -780,6 +808,44 @@ def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
         return None
     prior_path = Path(path)
     return json.loads(prior_path.read_text(encoding="utf-8"))
+
+
+def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:
+    total_targets = len(contract.scenario.private_manifest.targets)
+    return {
+        "status": "failed",
+        "restored_count": 0,
+        "total_targets": total_targets,
+        "success_threshold": contract.scenario.private_manifest.success_threshold,
+        "restored_object_ids": [],
+        "missed_object_ids": [
+            target.object_id for target in contract.scenario.private_manifest.targets
+        ],
+        "object_results": [],
+        "mess_restoration_rate": 0.0,
+        "sweep_coverage_rate": 0.0,
+        "disturbance_count": 0,
+        "completion_status": "failed",
+        "semantic_acceptability": {
+            "accepted_count": 0,
+            "total_targets": total_targets,
+            "rate": 0.0,
+            "status": "failed",
+        },
+    }
+
+
+def _merge_run_metadata(
+    run_result: dict[str, Any],
+    overrides: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(run_result)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
 
 
 def _semantic_sweep_done(
@@ -1200,6 +1266,7 @@ def main(argv: list[str] | None = None) -> int:
         perception_mode=args.perception_mode,
         include_robot=args.include_robot,
         robot_name=args.robot_name,
+        molmospaces_python=None,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
         scene_source=args.scene_source,

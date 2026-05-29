@@ -3034,6 +3034,19 @@ def _add_isaac_robot_view_step(
     ]
     for step in data["robot_view_steps"]:
         provenance = {key: f"{capture_method}:{key}" for key in views}
+        robot_pose = {
+            "schema": "cleanup_robot_pose_result_v1",
+            "pose_source": "roboclaws_shared_scene_frame_support_pose",
+            "x": 1.0,
+            "y": 2.0,
+            "z": 0.0,
+            "theta": 0.0,
+            "pose_request": {
+                "schema": "cleanup_robot_pose_request_v1",
+                "resolver": "roboclaws.cleanup_robot_pose.near_target_v1",
+            },
+        }
+        step["robot_pose"] = robot_pose
         if canonical_camera_control:
             provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
             provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
@@ -3048,6 +3061,7 @@ def _add_isaac_robot_view_step(
                 "camera_control_api": "roboclaws.camera_control.render_views",
                 "camera_model": "canonical_eye_target_camera_v1",
                 "same_pose_api": True,
+                "robot_pose": robot_pose,
                 "agent_facing_fpv": {
                     "source": "canonical_eye_target_robot_pose",
                     "canonical_camera_control": True,
