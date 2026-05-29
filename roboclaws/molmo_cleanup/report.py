@@ -6537,17 +6537,35 @@ def _isaac_static_robot_view_notice(enabled: bool) -> str:
 
 
 def _robot_view_provenance_summary(step: dict[str, Any]) -> str:
-    if not _step_uses_static_isaac_capture(step):
-        return ""
     provenance = (
         step.get("view_provenance") if isinstance(step.get("view_provenance"), dict) else {}
     )
+    if not provenance:
+        return ""
     note = str(provenance.get("evidence_note") or "")
-    badges = _badge("Isaac view", "static report-only")
-    badges += _badge("Step render", "not refreshed")
+    if _step_uses_static_isaac_capture(step):
+        badges = _badge("Isaac view", "static report-only")
+        badges += _badge("Step render", "not refreshed")
+    elif _step_uses_refreshed_isaac_semantic_pose_capture(step):
+        badges = _badge("Isaac view", "semantic pose rerender")
+        badges += _badge("Step render", "refreshed")
+    else:
+        return ""
     if note:
         badges += _badge("Evidence note", note)
     return '<div class="semantic-badges robot-view-provenance">' + badges + "</div>"
+
+
+def _step_uses_refreshed_isaac_semantic_pose_capture(step: dict[str, Any]) -> bool:
+    provenance = step.get("view_provenance")
+    if not isinstance(provenance, dict):
+        return False
+    if provenance.get("semantic_pose_state_refreshed") is True:
+        return True
+    return "isaac_lab_camera_rgb_semantic_pose_robot_views" in json.dumps(
+        provenance,
+        sort_keys=True,
+    )
 
 
 def _write_fpv_bbox_verification(

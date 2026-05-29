@@ -65,6 +65,7 @@ ISAAC_OFFICIAL_BLOCK_ASSETS = (
 MAX_SEGMENTATION_CANDIDATES = 24
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
+REAL_ROBOT_VIEW_RERENDER_METHOD = "isaac_lab_camera_rgb_semantic_pose_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
 _DEFERRED_SIMULATION_APP: Any | None = None
 
@@ -480,6 +481,35 @@ def real_runtime_smoke(
         "receptacle_index": scene_index_diagnostics["receptacle_index"],
         "segmentation": segmentation,
     }
+
+
+def capture_semantic_pose_robot_views(
+    *,
+    state: dict[str, Any],
+    scene_usd: Path,
+    view_paths: dict[str, Path],
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    _require_isaac_import()
+    from isaaclab.app import AppLauncher
+
+    launcher_args = _isaac_app_launcher_args(AppLauncher)
+    app_launcher = AppLauncher(launcher_args)
+    simulation_app = app_launcher.app
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
+    try:
+        return _capture_isaac_lab_camera_views(
+            scene_usd=scene_usd,
+            view_paths=view_paths,
+            width=width,
+            height=height,
+            simulation_app=simulation_app,
+            semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        )
+    finally:
+        _close_deferred_simulation_app()
 
 
 def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
@@ -1372,6 +1402,7 @@ def _capture_isaac_lab_camera_views(
     segmentation_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
     semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
+    semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1384,6 +1415,10 @@ def _capture_isaac_lab_camera_views(
         raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
     _wait_for_stage_load(stage_utils, simulation_app)
     _load_current_stage_payloads(stage_utils)
+    pose_apply = _apply_semantic_pose_state_to_stage(
+        stage_utils=stage_utils,
+        semantic_pose_state=semantic_pose_state,
+    )
     scene_bounds = _current_stage_bounds(stage_utils)
     _ensure_capture_lighting(stage_utils)
     semantic_label_application = (
@@ -1458,6 +1493,7 @@ def _capture_isaac_lab_camera_views(
         "render_steps": total_render_steps,
         "robot_view_images": saved,
         "scene_bounds": scene_bounds,
+        "semantic_pose_stage_application": pose_apply,
         "segmentation": _camera_segmentation_capture_diagnostics(
             segmentation_views,
             requested_data_types=segmentation_data_types,
@@ -1467,6 +1503,90 @@ def _capture_isaac_lab_camera_views(
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
     }
+
+
+def _apply_semantic_pose_state_to_stage(
+    *,
+    stage_utils: Any,
+    semantic_pose_state: dict[str, Any] | None,
+) -> dict[str, Any]:
+    pose_state = _dict(semantic_pose_state)
+    if not pose_state:
+        return {
+            "schema": "isaac_semantic_pose_stage_application_v1",
+            "status": "not_requested",
+            "applied_object_count": 0,
+            "failed_object_count": 0,
+            "rendered_to_usd": False,
+        }
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        raise RuntimeError("Isaac stage utils do not expose get_current_stage")
+    stage = get_current_stage()
+    if stage is None:
+        raise RuntimeError("Isaac semantic-pose rerender has no current USD stage")
+    from pxr import Gf, UsdGeom
+
+    object_poses = _dict(pose_state.get("object_poses"))
+    receptacle_index = _dict(pose_state.get("receptacle_index"))
+    applied: list[dict[str, Any]] = []
+    failed: list[dict[str, Any]] = []
+    for object_id, raw_pose in object_poses.items():
+        pose = _dict(raw_pose)
+        object_prim_path = str(pose.get("usd_prim_path") or "")
+        support_id = str(pose.get("support_receptacle_id") or "")
+        if not object_prim_path or pose.get("attached_to_robot") is True:
+            continue
+        object_prim = stage.GetPrimAtPath(object_prim_path)
+        if not object_prim or not object_prim.IsValid():
+            failed.append({"object_id": str(object_id), "reason": "missing_object_prim"})
+            continue
+        target = _semantic_pose_target_position(
+            support_id=support_id,
+            receptacle_index=receptacle_index,
+            fallback_pose=_dict(pose),
+        )
+        if target is None:
+            failed.append({"object_id": str(object_id), "reason": "missing_target_pose"})
+            continue
+        UsdGeom.XformCommonAPI(object_prim).SetTranslate(Gf.Vec3d(*target))
+        applied.append(
+            {
+                "object_id": str(object_id),
+                "object_usd_prim_path": object_prim_path,
+                "support_receptacle_id": support_id,
+                "target_position": list(target),
+            }
+        )
+    return {
+        "schema": "isaac_semantic_pose_stage_application_v1",
+        "status": "applied" if applied and not failed else ("partial" if applied else "blocked"),
+        "applied_object_count": len(applied),
+        "failed_object_count": len(failed),
+        "applied_objects": applied,
+        "failed_objects": failed,
+        "rendered_to_usd": bool(applied),
+    }
+
+
+def _semantic_pose_target_position(
+    *,
+    support_id: str,
+    receptacle_index: dict[str, Any],
+    fallback_pose: dict[str, Any],
+) -> tuple[float, float, float] | None:
+    support = _dict(receptacle_index.get(support_id))
+    pose = _dict(support.get("support_pose")) or fallback_pose
+    try:
+        x = float(pose.get("x"))
+        y = float(pose.get("y"))
+    except (TypeError, ValueError):
+        return None
+    try:
+        z = float(pose.get("z") or 0.0)
+    except (TypeError, ValueError):
+        z = 0.0
+    return (x, y, z + 0.18)
 
 
 def _load_current_stage_payloads(stage_utils: Any) -> None:
@@ -3043,7 +3163,15 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         "map": args.output_dir / f"{safe_label}.map.png",
         "verify": args.output_dir / f"{safe_label}.verify.png",
     }
-    real_views = _real_robot_view_images(state)
+    real_views = _real_semantic_pose_robot_view_images(
+        state,
+        views,
+        width=args.render_width,
+        height=args.render_height,
+    )
+    semantic_pose_state_refreshed = bool(real_views)
+    if not real_views:
+        real_views = _real_robot_view_images(state)
     shapes: dict[str, list[int]] = {}
     if real_views:
         try:
@@ -3086,7 +3214,10 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         "robot_views",
         output_dir=str(args.output_dir),
         view_variant=ISAACLAB_ROBOT_VIEW_VARIANT,
-        view_provenance=state.get("robot_view_provenance", {}),
+        view_provenance=_robot_view_command_provenance(
+            state,
+            semantic_pose_state_refreshed=semantic_pose_state_refreshed,
+        ),
         robot_pose=_pose_near(str(state.get("current_receptacle_id") or "floor_01")),
         robot_trajectory=[_pose_near(str(state.get("current_receptacle_id") or "floor_01"))],
         room_outline_count=len(state.get("receptacle_index") or {}),
@@ -3098,6 +3229,59 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         shapes=shapes,
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
+
+
+def _real_semantic_pose_robot_view_images(
+    state: dict[str, Any],
+    target_images: dict[str, Path],
+    *,
+    width: int,
+    height: int,
+) -> dict[str, str]:
+    runtime = _dict(state.get("runtime"))
+    scene_usd = str(state.get("scene_usd") or "")
+    if runtime.get("runtime_mode") != "real" or not scene_usd or not Path(scene_usd).is_file():
+        return {}
+    try:
+        capture = capture_semantic_pose_robot_views(
+            state=state,
+            scene_usd=Path(scene_usd),
+            view_paths=target_images,
+            width=width,
+            height=height,
+        )
+    except Exception as exc:
+        state.setdefault("mapping_gaps", []).append(
+            {
+                "area": "semantic_pose_robot_view_rerender",
+                "status": "blocked_capability",
+                "source": scene_usd,
+                "detail": str(exc),
+            }
+        )
+        return {}
+    images = {
+        key: str(value)
+        for key, value in _dict(capture.get("robot_view_images")).items()
+        if key in ROBOT_VIEW_KEYS and value
+    }
+    if not _has_required_robot_view_images(images):
+        return {}
+    state["robot_view_images"] = images
+    state["robot_view_provenance"] = _semantic_pose_robot_view_provenance()
+    state["semantic_pose_view_capture"] = {
+        "schema": "isaac_semantic_pose_robot_view_capture_v1",
+        "capture_method": REAL_ROBOT_VIEW_RERENDER_METHOD,
+        "scene_usd": scene_usd,
+        "rendered_to_usd": True,
+        "render_steps": int(capture.get("render_steps") or 0),
+    }
+    semantic_pose_state = _dict(state.get("semantic_pose_state"))
+    semantic_pose_state["rendered_to_usd"] = True
+    semantic_pose_state["semantic_pose_view_capture"] = dict(state["semantic_pose_view_capture"])
+    state["semantic_pose_state"] = semantic_pose_state
+    write_state_from_state_arg(state)
+    return images
 
 
 def _focus_payload(
@@ -3258,6 +3442,27 @@ def _robot_view_provenance(
             "semantic_pose_state_refreshed": False,
             "evidence_note": "CI fake mode writes deterministic placeholder robot-view images.",
         }
+    )
+    return provenance
+
+
+def _robot_view_command_provenance(
+    state: dict[str, Any],
+    *,
+    semantic_pose_state_refreshed: bool,
+) -> dict[str, Any]:
+    if semantic_pose_state_refreshed:
+        return _semantic_pose_robot_view_provenance()
+    return _dict(state.get("robot_view_provenance"))
+
+
+def _semantic_pose_robot_view_provenance() -> dict[str, Any]:
+    provenance = {key: f"{REAL_ROBOT_VIEW_RERENDER_METHOD}:{key}" for key in ROBOT_VIEW_KEYS}
+    provenance["semantic_pose_state_refreshed"] = True
+    provenance["evidence_note"] = (
+        "Robot-view images were recaptured from the loaded USD scene after applying "
+        "backend semantic pose state. This is still semantic pose rendering, not "
+        "planner-backed or physics-backed manipulation."
     )
     return provenance
 
