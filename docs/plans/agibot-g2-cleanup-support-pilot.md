@@ -34,14 +34,14 @@ Nav2-backed robots:
   `fixture_hints`, `observe`, `navigate_to_waypoint`, `navigate_to_room`,
   `navigate_to_receptacle`, `navigate_to_object`,
   `navigate_to_visual_candidate`, and blocked manipulation tools.
-- Generate Agibot agent map context from an operator-authored Agibot GDK Map
-  Context, not from a required Nav2 map bundle.
+- Generate Agibot agent map context from a minimal Agibot GDK map context, not
+  from a required Nav2 map bundle or hand-authored semantic map.
 - Support a minimal-map path from Agibot occupancy/free-space artifacts where
   semantic-map-build enriches rooms, fixtures, and observation targets through
   public robot-local evidence.
-- Let operators capture robot views and fill or review public map semantics
-  when needed, without making complete manual semantics the long-term
-  prerequisite for map-build pilots.
+- Let operators choose maps, relocalize, set safety bounds, and approve run
+  gates, while `semantic-map-build` creates public map semantics automatically
+  from robot-local observations.
 - Verify public or generated navigation targets through GDK PNC before treating
   them as hardware-ready.
 - Execute existing navigation tools through Agibot GDK PNC without adding
@@ -49,6 +49,9 @@ Nav2-backed robots:
 - Preserve honest evidence in reports: map/localization gates, waypoint
   verification, backend/provenance labels, local nudge substeps, and failure
   handoff.
+- Use the existing public task grammar for hardware runs, e.g.
+  `semantic-map-build` with `driver=codex` and `backend=agibot_gdk`; do not add
+  an Agibot-only public task taxonomy.
 
 ## Decisions Locked
 
@@ -57,19 +60,21 @@ Nav2-backed robots:
 - `real_robot_cleanup_v1` should describe a shared physical robot cleanup pilot
   boundary, with metadata equivalent to `backend=physical_robot` and a backend
   variant set such as `nav2_ros2` and `agibot_gdk`.
+- Agibot G2 is selected as a backend variant such as `backend=agibot_gdk` under
+  the existing `just task::run <task> <driver> ...` command grammar. It is not
+  a separate public task name.
 - `metric_map()` is backend-agnostic agent input. In rich-map mode it may
   contain public rooms, fixtures, waypoints, driveable links, reachability
   status, and preview artifacts. In minimal-map mode it may start from
   occupancy/free-space geometry, pose/frame metadata, safety bounds, and
   generated exploration candidates. It must not expose backend variant metadata,
   Agibot map ids/names, current-map evidence, raw GDK map data, or PNC internals.
-- Agibot G2 uses an Agibot GDK Map Context plus Cleanup Map Semantics as its
-  Navigation Map Artifact. A Nav2 Map Artifact is not required unless a real
-  Agibot-to-Nav2 bridge is later proven.
-- Operator-Recorded Waypoints remain the safest first-pilot navigation source,
-  but minimal-map rehearsals should add system-generated exploration candidates
-  derived from public free-space geometry. The agent may select or order those
-  candidates; it may not invent arbitrary physical coordinates.
+- Agibot G2 uses an Agibot Minimal Map Context as its Navigation Map Artifact.
+  A Nav2 Map Artifact and a hand-authored cleanup semantic map are not required
+  unless explicitly selected for a comparison run.
+- System-generated exploration candidates derived from public free-space
+  geometry are the first-pilot navigation source. The agent may select or order
+  those candidates; it may not invent arbitrary physical coordinates.
 - A waypoint or generated exploration candidate is hardware-ready only after
   PNC verification or an equivalent backend reachability gate. Verification is
   an operator/backend preparation action, not an agent-facing cleanup tool.
@@ -86,14 +91,18 @@ Nav2-backed robots:
   selected map, G02 Pad relocalization, and localization readiness.
 - Before autonomous motion starts, an Operator Run Enablement Gate must confirm
   that the robot may run within the allowed tool boundary. This is a run-level
-  gate, not per-action human approval.
+  gate, not per-action human approval. After the gate, Codex should control
+  task-level tool choice and print or record its reasoning/progress; humans
+  remain safety supervisors through robot-side obstacle stop and manual
+  emergency stop.
 - Manipulation remains blocked: `pick`, `place`, `place_inside`,
   `open_receptacle`, and `close_receptacle` return structured
   `blocked_capability`.
 - Navigation failure, local-motion failure, map mismatch, or missing
-  localization enters Human Takeover Stop. The first pilot should not try hidden
-  fallback waypoints, unverified goals, map switching, relocalization, arbitrary
-  coordinates, or extra local nudges.
+  localization enters Human Takeover Stop. Robot-side obstacle stops and human
+  emergency stops also enter Human Takeover Stop. The first pilot should not try
+  hidden fallback waypoints, unverified goals, map switching, relocalization,
+  arbitrary coordinates, or extra local nudges.
 - Bounded Local Nudge is backend-internal only. It is not a new agent-facing
   tool and should not replace waypoint navigation as the primary route
   mechanism.
@@ -127,7 +136,8 @@ Agent-facing `metric_map()` output:
 - `schema="real_robot_map_bundle_v1"` for shared real-robot map projection
   compatibility.
 - Rich-map mode: public rooms, fixture ids/labels/categories, public inspection
-  waypoints, and optional driveable links.
+  waypoints, and optional driveable links, only for explicit comparison/dev
+  runs.
 - Minimal-map mode: occupancy/free-space metadata, current pose/frame context,
   safety bounds, and generated exploration candidates. Runtime rooms, fixture
   candidates, and observed objects are added only from public observation
@@ -180,27 +190,30 @@ Tool behavior:
    `vendors/agibot/` so implementation decisions can cite local source
    material. Keep these files vendored evidence, not runtime package code.
 
-2. **Map Context Capture Script**
-   Add or harden a script that runs on the Agibot GDK machine, records current
-   map evidence, SLAM pose, and camera images, and creates or updates an
-   `agibot_gdk_map_context_authoring_v1` JSON file. The script should support
-   repeated captures so an operator can mark multiple waypoints.
+2. **Minimal Map Context Capture Script**
+   Replace the old human semantic authoring flow with a script that runs on the
+   Agibot GDK machine and records current map evidence, occupancy/free-space
+   artifacts, frame/origin/resolution metadata, robot pose/localization
+   evidence, camera images for report review, and operator safety bounds. The
+   output is an Agibot Minimal Map Context and must not require hand-authored
+   rooms, fixtures, fixture labels, or manually tagged semantic waypoints.
 
 2A. **Minimal Map Context Path**
-   Add a sparse context path that can start from Agibot occupancy/free-space
-   artifacts, current pose, frame metadata, and operator safety bounds without
-   requiring complete room/fixture semantics. This path is for
-   `semantic-map-build` pilots, not physical cleanup.
+   Generate safe exploration candidates from Agibot occupancy/free-space
+   artifacts, current pose, frame metadata, and operator safety bounds. Project
+   those candidates as generated waypoint entries for `navigate_to_waypoint`.
 
-3. **Human Semantic Authoring Path**
-   Define the operator-filled fields for rooms, fixtures, fixture categories,
-   fixture footprints or poses, waypoint labels, waypoint purposes, and optional
-   capture links. Treat incomplete TODO fields as invalid for generation.
+3. **Remove Human Semantic Authoring Path**
+   Remove the Agibot runtime path that requires operators to fill rooms,
+   fixtures, fixture categories, fixture footprints, and manually tagged
+   semantic waypoints. Do not preserve the old Agibot rich semantic authoring
+   route for backward compatibility.
 
 4. **Metric Map Projection Generator**
-   Convert completed Agibot context JSON into `metric_map.json`,
-   `fixture_hints.json`, `agent_view.json`, and a semantic preview image.
-   The generated agent view must remain backend-agnostic and must not include
+   Convert an Agibot Minimal Map Context into `metric_map.json`,
+   `fixture_hints.json`, `agent_view.json`, and map preview artifacts.
+   `fixture_hints` may be empty before observation-derived anchors exist. The
+   generated agent view must remain backend-agnostic and must not include
    Agibot map source or PNC verification internals.
 
 5. **Waypoint PNC Verification Script**
@@ -221,9 +234,9 @@ Tool behavior:
 
 8. **Observation And Report Integration**
    Wire Agibot `observe()` to the `head_color` policy camera and include
-   captured authoring images, runtime observations, waypoint verification, and
-   backend provenance in the cleanup report. Debug cameras should stay report
-   artifacts, not policy inputs.
+   runtime observations, waypoint verification, visual-grounding evidence or
+   visible visual-grounding failure evidence, and backend provenance in the
+   report. Debug cameras should stay report artifacts, not policy inputs.
 
 9. **Profile And Checker Alignment**
    Update `real_robot_cleanup_v1` metadata and contract tests so physical robot
@@ -231,12 +244,12 @@ Tool behavior:
    `nav2_action`-only provenance. The profile should allow both `nav2_ros2` and
    `agibot_gdk` backend variants while preserving the same public tool list.
 
-10. **Physical Pilot Runbook**
-    Document the Agibot operator workflow: relocalize on G02 Pad, capture
-    context views, fill missing semantics, verify waypoints with PNC, generate
-    agent map projection, run the navigation + perception pilot, and review the
-    report. Include real-hardware warnings and note that scripts are unvalidated
-    until exercised on a G2.
+10. **Codex-Driven Physical Pilot Runbook**
+    Document the Agibot operator workflow: relocalize on G02 Pad, capture a
+    minimal map context, set safety bounds, generate and approve exploration
+    candidates, run the Codex-driven navigation + perception pilot, and review
+    the report. Include real-hardware warnings and note that physical
+    manipulation remains blocked.
 
 ## Implementation Evidence
 
@@ -336,6 +349,10 @@ movement gate, not physical PNC execution.
 - Do not expose `relative_move`, `move_chassis`, map switching, map removal, or
   relocalization as agent-facing cleanup tools.
 - Do not require Agibot G2 to export or import Nav2 maps for the first pilot.
+- Do not require human-authored Agibot room, fixture, fixture-label, or semantic
+  waypoint tagging for the mainline hardware path.
+- Do not keep the previous Agibot human semantic-map tagging implementation for
+  backward compatibility.
 - Do not put Agibot map ids, current-map evidence, or raw GDK map data in the
   agent-facing `metric_map()`.
 - Do not use unverified waypoints in runtime navigation unless an explicit
@@ -347,23 +364,31 @@ movement gate, not physical PNC execution.
 
 - Agibot GDK docs/examples are mirrored under `vendors/agibot/` for local
   reference.
-- An operator can capture Agibot map context views and append multiple
-  waypoints to one context JSON.
-- The metric map generator rejects incomplete TODO context and emits
-  backend-agnostic `metric_map.json`, `fixture_hints.json`, `agent_view.json`,
-  and a semantic preview.
+- An operator can capture an Agibot Minimal Map Context without hand-tagging
+  rooms, fixtures, or semantic waypoints.
+- The metric map generator emits backend-agnostic `metric_map.json`,
+  `fixture_hints.json`, `agent_view.json`, and preview artifacts from the
+  minimal context; pre-observation `fixture_hints` may be empty.
 - Agent-facing Agibot metric map output contains no backend labels, no Agibot
   map source, and no PNC verification payload.
-- A waypoint verification script records normalized statuses and canonical
-  backend/provenance labels after `Pnc.normal_navi` checks.
+- Generated exploration candidates are accepted, blocked, or timed out through
+  normalized GDK PNC reachability evidence with canonical backend/provenance
+  labels.
 - Agibot runtime navigation blocks missing, unverified, blocked, unresolved, or
   map-mismatched goals.
-- Existing public navigation tools resolve to verified waypoints and execute via
-  GDK PNC without exposing new Agibot agent tools.
+- Existing public navigation tools resolve to verified generated waypoints and
+  execute via GDK PNC without exposing new Agibot agent tools.
 - `observe()` uses `head_color` as the policy observation camera.
 - First G2 map-build runs use robot-local `head_color` / RAW_FPV evidence with
   `camera-labels` plus real External Visual Grounding Service output as the
   primary perception lane; `camera-raw` remains a comparison/fallback lane.
+- The first Codex-driven hardware target is `semantic-map-build`. The code
+  should support both `semantic-map-build` and a cleanup-shaped
+  `household-cleanup` path for Agibot, but the cleanup-shaped path keeps
+  manipulation blocked and does not claim physical cleanup success. Full
+  `household-cleanup` is not the first hardware acceptance gate.
+- The pilot report captures Codex-driven tool choices and progress/reasoning so
+  the operator can review why each generated waypoint was visited or skipped.
 - `world-labels` and `visual_grounding=sim` remain simulator/control evidence,
   not G2 readiness evidence.
 - Manipulation tools remain blocked and report that physical cleanup is not
@@ -375,12 +400,13 @@ movement gate, not physical PNC execution.
 - Real Agibot hardware validation remains explicitly marked unrun until tested
   on a G2.
 
-## Open Implementation Choices
+## Implementation Defaults
 
-- Exact runtime packaging and command recipe for the Agibot pilot.
-- Whether the Agibot backend adapter is integrated directly into the existing
-  Molmo cleanup MCP server first or introduced as a separate physical pilot
-  runner with the same contract.
+- Runtime packaging and command recipe should reuse the existing public
+  `just task::run <task> <driver> [lane] key=value...` facade with
+  `backend=agibot_gdk`.
+- The Agibot backend adapter should integrate into the existing cleanup MCP
+  server while keeping the same public tool contract.
 - The maximum distance, yaw, and timeout limits for Bounded Local Nudge and
   Toward-Object Nudge. Defaults should be conservative and operator-configured.
 - The minimum localization confidence/state values accepted by the Operator
