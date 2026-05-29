@@ -39,6 +39,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--runner-script", type=Path)
     parser.add_argument("--agibot-map-artifact-dir", type=Path)
     parser.add_argument("--real-movement-enabled", action="store_true")
+    parser.add_argument(
+        "--evidence-lane",
+        choices=("smoke", "world-labels", "camera-raw", "camera-labels"),
+        default="camera-labels",
+    )
+    parser.add_argument("--visual-grounding", default="grounding-dino")
     return parser.parse_args(argv)
 
 
@@ -61,6 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         runner_script=args.runner_script,
         agibot_map_artifact_dir=args.agibot_map_artifact_dir,
         real_movement_enabled=args.real_movement_enabled,
+        evidence_lane=args.evidence_lane,
+        visual_grounding_pipeline_id=args.visual_grounding,
     )
     url = f"http://{args.host}:{args.port}/mcp"
     print("\nAgibot semantic-map-build MCP server is ready.")

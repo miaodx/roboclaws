@@ -474,6 +474,7 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "run_dir=output/agibot/map-build-codex/test-run",
         "policy=codex_agibot_semantic_map_build_pilot",
+        "visual_grounding=grounding-dino",
     )
 
     assert route[:3] == [
@@ -487,6 +488,10 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     assert "output/agibot/map-build-codex/test-run" in route
     assert "--server-arg=--context-json" in route
     assert "--server-arg=tests/fixtures/agibot_map_context.completed.json" in route
+    assert "--server-arg=--evidence-lane" in route
+    assert "--server-arg=camera-labels" in route
+    assert "--server-arg=--visual-grounding" in route
+    assert "--server-arg=grounding-dino" in route
     assert "--backend" in route
     assert "agibot_gdk" in route
     assert "--policy" in route

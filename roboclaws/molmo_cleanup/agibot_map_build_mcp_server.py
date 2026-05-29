@@ -16,10 +16,20 @@ from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     AgibotSDKRunnerAdapter,
 )
 from roboclaws.molmo_cleanup.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
-from roboclaws.molmo_cleanup.realworld_contract import REALWORLD_CONTRACT
+from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    RAW_FPV_ONLY_MODE,
+    REALWORLD_CONTRACT,
+    VISIBLE_OBJECT_DETECTIONS_MODE,
+)
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.types import CleanupScenario
+from roboclaws.molmo_cleanup.visual_grounding import (
+    EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    VISUAL_GROUNDING_PIPELINE_SCHEMA,
+)
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 18788
@@ -28,6 +38,9 @@ MCP_SERVER_NAME = "agibot_semantic_map_build"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
+AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(
+    {"smoke", "world-labels", "camera-raw", "camera-labels"}
+)
 AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
     "metric_map",
     "fixture_hints",
@@ -55,6 +68,8 @@ def make_agibot_semantic_map_build_mcp(
     runner_python: str | Path | None = None,
     real_movement_enabled: bool = False,
     agibot_map_artifact_dir: Path | None = None,
+    evidence_lane: str = "camera-labels",
+    visual_grounding_pipeline_id: str = "grounding-dino",
     scenario: CleanupScenario | None = None,
 ) -> "AgibotSemanticMapBuildMCPServer":
     return AgibotSemanticMapBuildMCPServer(
@@ -68,6 +83,8 @@ def make_agibot_semantic_map_build_mcp(
         runner_python=runner_python,
         real_movement_enabled=real_movement_enabled,
         agibot_map_artifact_dir=agibot_map_artifact_dir,
+        evidence_lane=evidence_lane,
+        visual_grounding_pipeline_id=visual_grounding_pipeline_id,
         scenario=scenario,
     )
 
@@ -88,6 +105,8 @@ class AgibotSemanticMapBuildMCPServer:
         runner_python: str | Path | None = None,
         real_movement_enabled: bool = False,
         agibot_map_artifact_dir: Path | None = None,
+        evidence_lane: str = "camera-labels",
+        visual_grounding_pipeline_id: str = "grounding-dino",
         scenario: CleanupScenario | None = None,
     ) -> None:
         self.run_dir = Path(run_dir).resolve()
@@ -97,6 +116,12 @@ class AgibotSemanticMapBuildMCPServer:
         self.port = port
         self.policy = policy
         self.task_prompt = task_prompt
+        self.evidence_lane = _normalized_evidence_lane(evidence_lane)
+        self.perception_mode = _perception_mode_for_lane(self.evidence_lane)
+        self.visual_grounding_pipeline_id = _normalized_visual_grounding_pipeline(
+            visual_grounding_pipeline_id,
+            evidence_lane=self.evidence_lane,
+        )
         self.real_movement_enabled = bool(real_movement_enabled)
         self.scenario = scenario or build_cleanup_scenario(seed=7)
         self.adapter = AgibotSDKRunnerAdapter(
@@ -130,6 +155,9 @@ class AgibotSemanticMapBuildMCPServer:
             policy=self.policy,
             backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
             real_movement_enabled=self.real_movement_enabled,
+            evidence_lane=self.evidence_lane,
+            perception_mode=self.perception_mode,
+            visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
         )
 
     def _register_tools(self) -> None:
@@ -331,6 +359,16 @@ class AgibotSemanticMapBuildMCPServer:
             fixture_hints=fixture_hints,
             real_movement_enabled=self.real_movement_enabled,
         )
+        raw_observations = _raw_fpv_observations_from_trace(
+            trace_events,
+            perception_mode=self.perception_mode,
+        )
+        camera_model_policy_evidence = _camera_model_policy_evidence(
+            trace_events,
+            perception_mode=self.perception_mode,
+            visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
+            raw_observations=raw_observations,
+        )
         run_result = {
             "schema": AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
             "contract": REALWORLD_CONTRACT,
@@ -344,6 +382,9 @@ class AgibotSemanticMapBuildMCPServer:
             "scenario_id": self.scenario.scenario_id,
             "task_prompt": self.task_prompt,
             "seed": self.scenario.seed,
+            "evidence_lane": self.evidence_lane,
+            "perception_mode": self.perception_mode,
+            "visual_grounding_pipeline_id": self.visual_grounding_pipeline_id,
             "cleanup_status": readiness["status"],
             "completion_status": readiness["status"],
             "terminate_reason": reason,
@@ -368,13 +409,17 @@ class AgibotSemanticMapBuildMCPServer:
                 "metric_map": metric_map,
                 "fixture_hints": fixture_hints,
                 "observed_objects": [],
-                "raw_fpv_observations": [],
-                "perception_mode": "robot_policy_camera",
+                "raw_fpv_observations": raw_observations,
+                "perception_mode": self.perception_mode,
+                "structured_detections_available": False,
+                "camera_model_policy_evidence": camera_model_policy_evidence,
                 "policy_view": {"policy_observation_camera": "head_color"},
                 "cleanup_worklist": {"schema": "cleanup_worklist_v1", "objects": []},
                 "forbidden_private_fields_absent": True,
                 "public_tool_names": list(AGIBOT_SEMANTIC_MAP_BUILD_TOOLS),
             },
+            "raw_fpv_observations": raw_observations,
+            "camera_model_policy_evidence": camera_model_policy_evidence,
             "runtime_metric_map": {
                 "schema": "runtime_metric_map_v1",
                 "source": "agibot_semantic_map_build_mcp",
@@ -753,6 +798,160 @@ def _readiness_from_trace(
         "public_contract_note": (
             "Agibot semantic-map-build keeps real_robot_cleanup_v1 public tools stable "
             "while the SDK runner owns GDK map, camera, and PNC evidence."
+        ),
+    }
+
+
+def _normalized_evidence_lane(value: str) -> str:
+    lane = str(value or "camera-labels").strip() or "camera-labels"
+    if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
+        raise ValueError(
+            f"unsupported Agibot semantic-map-build evidence lane {lane!r}; "
+            "expected smoke|world-labels|camera-raw|camera-labels"
+        )
+    return lane
+
+
+def _perception_mode_for_lane(evidence_lane: str) -> str:
+    if evidence_lane == "camera-raw":
+        return RAW_FPV_ONLY_MODE
+    if evidence_lane == "camera-labels":
+        return CAMERA_MODEL_POLICY_MODE
+    return VISIBLE_OBJECT_DETECTIONS_MODE
+
+
+def _normalized_visual_grounding_pipeline(
+    value: str,
+    *,
+    evidence_lane: str,
+) -> str:
+    selected = str(value or "").strip()
+    if selected:
+        return selected
+    if evidence_lane == "camera-labels":
+        return "grounding-dino"
+    return SIM_VISUAL_GROUNDING_PIPELINE_ID
+
+
+def _raw_fpv_observations_from_trace(
+    trace_events: list[dict[str, Any]],
+    *,
+    perception_mode: str,
+) -> list[dict[str, Any]]:
+    if perception_mode not in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
+        return []
+    observations = []
+    observe_index = 0
+    for event in trace_events:
+        if event.get("tool") != "observe" or event.get("event") != "response":
+            continue
+        response = event.get("response")
+        if not isinstance(response, dict):
+            continue
+        observe_index += 1
+        observation_id = str(
+            response.get("observation_id")
+            or response.get("observation_label")
+            or f"agibot_head_color_{observe_index:03d}"
+        )
+        observations.append(
+            {
+                "schema": "raw_fpv_observation_v1",
+                "observation_id": observation_id,
+                "source": "agibot_g2_policy_camera",
+                "camera": response.get("policy_observation_camera")
+                or response.get("would_capture_camera")
+                or "head_color",
+                "perception_mode": perception_mode,
+                "status": response.get("status", ""),
+                "ok": bool(response.get("ok")),
+                "primitive_provenance": response.get(
+                    "primitive_provenance",
+                    BLOCKED_CAPABILITY_PROVENANCE,
+                ),
+                "image_artifacts": {},
+                "public_contract_note": (
+                    "Agibot map-build records robot-local head_color observation "
+                    "intent. Dry-run runs do not include live camera pixels."
+                ),
+            }
+        )
+    return observations
+
+
+def _camera_model_policy_evidence(
+    trace_events: list[dict[str, Any]],
+    *,
+    perception_mode: str,
+    visual_grounding_pipeline_id: str,
+    raw_observations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if perception_mode != CAMERA_MODEL_POLICY_MODE:
+        return {
+            "schema": "camera_model_policy_v1",
+            "enabled": False,
+            "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
+            "event_count": 0,
+            "candidate_count": 0,
+            "visual_grounding_failure_count": 0,
+            "private_truth_included": False,
+        }
+    observe_failures = [
+        event.get("response") or {}
+        for event in trace_events
+        if event.get("tool") == "observe"
+        and event.get("event") == "response"
+        and isinstance(event.get("response"), dict)
+        and not (event.get("response") or {}).get("ok")
+    ]
+    events = []
+    for index, raw in enumerate(raw_observations, start=1):
+        failure = observe_failures[index - 1] if index <= len(observe_failures) else {}
+        failure_reason = str(failure.get("failure_type") or "no_live_camera_pixels")
+        events.append(
+            {
+                "observation_id": raw["observation_id"],
+                "room_id": "",
+                "candidate_count": 0,
+                "registered_observed_handles": [],
+                "visual_grounding_pipeline": {
+                    "schema": VISUAL_GROUNDING_PIPELINE_SCHEMA,
+                    "pipeline_id": visual_grounding_pipeline_id,
+                    "status": "failed",
+                    "failure_reason": failure_reason,
+                    "stages": [
+                        {
+                            "stage": "agibot_head_color_capture",
+                            "producer_id": "agibot_g2_policy_camera",
+                            "status": str(failure.get("status") or raw.get("status") or "blocked"),
+                        },
+                        {
+                            "stage": "external_visual_grounding_not_invoked",
+                            "producer_id": visual_grounding_pipeline_id,
+                            "status": "blocked",
+                        },
+                    ],
+                },
+            }
+        )
+    event_count = len(events)
+    failure_count = event_count if event_count else 1
+    return {
+        "schema": "camera_model_policy_v1",
+        "enabled": True,
+        "event_count": event_count,
+        "candidate_count": 0,
+        "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
+        "visual_grounding_pipeline_ids": [visual_grounding_pipeline_id],
+        "visual_grounding_failure_count": failure_count,
+        "model_provenance": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+        "private_truth_included": False,
+        "duplicate_rate": 0.0,
+        "events": events,
+        "policy_note": (
+            "Agibot camera-labels requests external visual grounding over robot-local "
+            "head_color evidence. This dry-run artifact records the requested "
+            "pipeline and explicit no-live-camera failure instead of fabricating labels."
         ),
     }
 

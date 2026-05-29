@@ -400,6 +400,11 @@ movement gate, not physical PNC execution.
   `runtime_metric_map.json`, and `report.html` with
   `agent_driven=true`, `mcp_server=agibot_semantic_map_build`, and
   `backend_variant=agibot_gdk`.
+- The Agibot MCP artifact now carries the public evidence lane through the
+  server. `camera-labels` records `perception_mode=camera_model_policy`, the
+  requested visual-grounding pipeline, robot-local `head_color` RAW_FPV intent,
+  and explicit no-live-camera/no-external-label failure evidence instead of
+  implying camera labels existed in dry-run.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
   `./.venv/bin/ruff check roboclaws/devtools/commands.py roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,

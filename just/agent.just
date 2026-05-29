@@ -357,6 +357,8 @@ run task driver mode="" *overrides:
               --context-json "$context_json"
               --policy "$policy"
               --task "$prompt"
+              --evidence-lane "$profile"
+              --visual-grounding "$visual_grounding"
             )
             runner_python="$(get runner_python "")"
             if [[ -n "$runner_python" ]]; then
