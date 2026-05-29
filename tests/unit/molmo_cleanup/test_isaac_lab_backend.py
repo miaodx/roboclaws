@@ -531,6 +531,27 @@ def test_isaac_worker_infers_scene_index_from_local_val_path() -> None:
     assert isaac_lab_backend_worker._effective_scene_index(args) == 12
 
 
+def test_isaac_worker_infers_scene_index_from_prepared_val_path() -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            "state.json",
+            "init",
+            "--run-dir",
+            "run",
+            "--scene-index",
+            "0",
+            "--scene-usd-path",
+            (
+                "output/isaaclab/flattened-semantic-usd/"
+                "0529_val1_flattened_semantic_scene/scene_semantic.usda"
+            ),
+        ]
+    )
+
+    assert isaac_lab_backend_worker._effective_scene_index(args) == 1
+
+
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

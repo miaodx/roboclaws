@@ -3432,7 +3432,7 @@ def _scene_index_from_usd_path(path: Any) -> int | None:
     if path is None:
         return None
     for part in reversed(Path(path).parts):
-        match = re.fullmatch(r"val_(\d+)", part)
+        match = re.search(r"(?:^|_)val_?(\d+)(?:_|$)", part)
         if match:
             return int(match.group(1))
     return None

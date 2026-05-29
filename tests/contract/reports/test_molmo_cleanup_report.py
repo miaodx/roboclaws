@@ -209,6 +209,14 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
             {
                 "action": "before",
                 "robot_pose": {"x": 0.0, "y": 0.0, "theta": 0.0},
+                "view_provenance": {
+                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
+                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
+                    "semantic_pose_state_refreshed": False,
+                    "evidence_note": (
+                        "Robot-view images are static captures from the loaded USD scene."
+                    ),
+                },
                 "views": {
                     "fpv": "robot_views/step.fpv.png",
                     "chase": "robot_views/step.chase.png",
@@ -232,6 +240,14 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
             {
                 "action": "goto sink",
                 "semantic_phase": "navigate_to_receptacle",
+                "view_provenance": {
+                    "fpv": "isaac_lab_camera_rgb_static_robot_views:fpv",
+                    "map": "isaac_lab_camera_rgb_static_robot_views:map",
+                    "semantic_pose_state_refreshed": False,
+                    "evidence_note": (
+                        "Robot-view images are static captures from the loaded USD scene."
+                    ),
+                },
                 "robot_pose": {
                     "x": 1.0,
                     "y": 2.0,
@@ -334,6 +350,10 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html
+    assert "Isaac report-only view caveat" in html
+    assert "static report-only" in html
+    assert "Step render: <strong>not refreshed</strong>" in html
+    assert "backend JSON as isaac_semantic_pose" in html
     assert "diagnostic-view" not in html
     assert "decision-card" not in html
 
