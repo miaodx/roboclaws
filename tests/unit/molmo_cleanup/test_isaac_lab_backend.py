@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -326,6 +327,65 @@ def test_isaac_camera_lens_derives_horizontal_aperture_from_vertical_fov() -> No
     )
 
     assert aperture == pytest.approx(29.82337649)
+
+
+def test_isaac_scene_camera_spec_records_usd_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _FakePrim:
+        def IsValid(self) -> bool:
+            return True
+
+    class _FakeStage:
+        def GetPrimAtPath(self, _path: str) -> _FakePrim:
+            return _FakePrim()
+
+    class _StageUtils:
+        @staticmethod
+        def get_current_stage() -> _FakeStage:
+            return _FakeStage()
+
+    class _FakeAlignedBox:
+        def GetMin(self) -> list[float]:
+            return [2.0, 5.0, 0.3]
+
+        def GetMax(self) -> list[float]:
+            return [3.0, 6.0, 1.2]
+
+    class _FakeWorldBound:
+        def ComputeAlignedBox(self) -> _FakeAlignedBox:
+            return _FakeAlignedBox()
+
+    class _FakeBBoxCache:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def ComputeWorldBound(self, _prim: _FakePrim) -> _FakeWorldBound:
+            return _FakeWorldBound()
+
+    fake_pxr = types.SimpleNamespace(
+        Usd=types.SimpleNamespace(TimeCode=types.SimpleNamespace(Default=lambda: object())),
+        UsdGeom=types.SimpleNamespace(
+            BBoxCache=_FakeBBoxCache,
+            Tokens=types.SimpleNamespace(default_="default", render="render", proxy="proxy"),
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+
+    spec = isaac_lab_backend_worker._isaac_scene_camera_view_spec(
+        {
+            "view_id": "view 01/table",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "eye": [1.0, 2.0, 3.0],
+            "target": [2.7, 5.9, 1.0],
+            "usd_prim_path": "/val_1/Geometry/table_01",
+        },
+        index=1,
+        stage_utils=_StageUtils(),
+    )
+
+    assert spec["usd_bounds_target"] == pytest.approx([2.5, 5.5, 0.75])
+    assert spec["usd_bounds"]["min"] == pytest.approx([2.0, 5.0, 0.3])
+    assert spec["usd_bounds"]["max"] == pytest.approx([3.0, 6.0, 1.2])
+    assert spec["usd_bounds"]["center"] == pytest.approx([2.5, 5.5, 0.75])
 
 
 def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:

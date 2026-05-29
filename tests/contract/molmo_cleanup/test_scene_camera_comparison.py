@@ -611,7 +611,7 @@ def test_room_camera_control_views_use_same_canonical_pose_contract() -> None:
     assert "lane_camera_orbits" not in views[0]
 
 
-def test_scene_frame_transform_from_capture_uses_usd_bounds_residuals() -> None:
+def test_scene_frame_transform_from_capture_uses_usd_bounds_distance() -> None:
     transform = _scene_frame_transform_from_capture(
         canonical_views=[
             {
@@ -625,7 +625,12 @@ def test_scene_frame_transform_from_capture_uses_usd_bounds_residuals() -> None:
             "views": [
                 {
                     "view_id": "view_01_table",
-                    "usd_bounds_target": [2.72, 5.94, 1.0],
+                    "usd_bounds_target": [2.72, 5.94, 0.6],
+                    "usd_bounds": {
+                        "min": [2.0, 5.0, 0.3],
+                        "max": [3.0, 6.0, 1.2],
+                        "center": [2.5, 5.5, 0.75],
+                    },
                 }
             ]
         },
@@ -633,10 +638,82 @@ def test_scene_frame_transform_from_capture_uses_usd_bounds_residuals() -> None:
 
     assert transform["status"] == "identity_checked_against_usd_bounds"
     assert transform["diagnostic_kind"] == "camera_target_vs_isaac_usd_bounds"
-    assert transform["target_residual_status"] == "target_matches_usd_bounds_within_threshold"
-    assert transform["max_residual_m"] == pytest.approx(0.044721, rel=1e-4)
+    assert (
+        transform["target_residual_status"]
+        == "target_inside_or_near_usd_bounds_with_surface_aim_allowance"
+    )
+    assert transform["max_residual_m"] == pytest.approx(0.402492, rel=1e-4)
     assert transform["max_xy_residual_m"] == pytest.approx(0.044721, rel=1e-4)
-    assert transform["max_z_residual_m"] == pytest.approx(0.0)
+    assert transform["max_z_residual_m"] == pytest.approx(0.4)
+    assert transform["max_distance_to_usd_bounds_m"] == pytest.approx(0.0)
+    assert transform["max_surface_aim_distance_to_usd_bounds_m"] == pytest.approx(0.0)
+    assert transform["target_inside_usd_xy_bounds_count"] == 1
+    assert transform["target_inside_usd_xyz_bounds_count"] == 1
+
+
+def test_scene_frame_transform_from_capture_flags_targets_outside_usd_bounds() -> None:
+    transform = _scene_frame_transform_from_capture(
+        canonical_views=[
+            {
+                "view_id": "view_01_table",
+                "anchor_id": "table_01",
+                "category": "DiningTable",
+                "target": [4.0, 5.9, 1.0],
+            }
+        ],
+        isaac_lane={
+            "views": [
+                {
+                    "view_id": "view_01_table",
+                    "usd_bounds_target": [2.72, 5.94, 0.6],
+                    "usd_bounds": {
+                        "min": [2.0, 5.0, 0.3],
+                        "max": [3.0, 6.0, 1.2],
+                        "center": [2.5, 5.5, 0.75],
+                    },
+                }
+            ]
+        },
+    )
+
+    assert transform["target_residual_status"] == "target_definition_residual_high"
+    assert transform["max_distance_to_usd_bounds_m"] == pytest.approx(1.0)
+    assert transform["target_inside_usd_xy_bounds_count"] == 0
+
+
+def test_scene_frame_transform_from_capture_accepts_surface_aim_above_usd_bounds() -> None:
+    transform = _scene_frame_transform_from_capture(
+        canonical_views=[
+            {
+                "view_id": "view_01_table",
+                "anchor_id": "table_01",
+                "category": "DiningTable",
+                "target": [2.7, 5.9, 1.0],
+            }
+        ],
+        isaac_lane={
+            "views": [
+                {
+                    "view_id": "view_01_table",
+                    "usd_bounds_target": [2.72, 5.94, 0.6],
+                    "usd_bounds": {
+                        "min": [2.0, 5.0, 0.3],
+                        "max": [3.0, 6.0, 0.75],
+                        "center": [2.5, 5.5, 0.525],
+                    },
+                }
+            ]
+        },
+    )
+
+    assert (
+        transform["target_residual_status"]
+        == "target_inside_or_near_usd_bounds_with_surface_aim_allowance"
+    )
+    assert transform["max_distance_to_usd_bounds_m"] == pytest.approx(0.25)
+    assert transform["max_surface_aim_distance_to_usd_bounds_m"] == pytest.approx(0.0)
+    assert transform["target_inside_usd_xy_bounds_count"] == 1
+    assert transform["target_inside_usd_xyz_bounds_count"] == 0
 
 
 def test_camera_pose_contract_from_capture_checks_backend_pose_delta() -> None:

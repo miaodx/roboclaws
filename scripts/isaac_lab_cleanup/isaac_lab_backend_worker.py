@@ -2417,11 +2417,12 @@ def _isaac_scene_camera_view_spec(
     view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
     safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
     usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
-    usd_bounds_target = _target_from_usd_prim_path(
+    usd_bounds = _bounds_from_usd_prim_path(
         stage_utils=stage_utils,
         usd_prim_path=usd_prim_path,
         min_target_z=float(raw_spec.get("min_target_z", 0.6)),
     )
+    usd_bounds_target = usd_bounds.get("target") if isinstance(usd_bounds, dict) else None
     target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
     if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
         target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
@@ -2462,6 +2463,7 @@ def _isaac_scene_camera_view_spec(
         "backend_eye": eye,
         "backend_target": target,
         "usd_bounds_target": usd_bounds_target,
+        "usd_bounds": usd_bounds,
         "target_source": target_source,
         "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
         "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
@@ -2522,12 +2524,12 @@ def _horizontal_aperture_from_lens(
     return float(lens.get("horizontal_aperture_mm", 20.955))
 
 
-def _target_from_usd_prim_path(
+def _bounds_from_usd_prim_path(
     *,
     stage_utils: Any | None,
     usd_prim_path: str,
     min_target_z: float,
-) -> list[float] | None:
+) -> dict[str, Any] | None:
     if stage_utils is None or not usd_prim_path:
         return None
     from pxr import Usd, UsdGeom
@@ -2554,8 +2556,16 @@ def _target_from_usd_prim_path(
     if max(size) <= 0:
         return None
     center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
-    center[2] = max(center[2], min_target_z)
-    return center
+    target = list(center)
+    target[2] = max(target[2], min_target_z)
+    return {
+        "min": min_point,
+        "max": max_point,
+        "size": size,
+        "center": center,
+        "target": target,
+        "target_z_floor": min_target_z,
+    }
 
 
 def _eye_from_lookat_spec(

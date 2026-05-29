@@ -36,6 +36,7 @@ DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
 CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
+SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
 ROOM_CAMERA_INSET_FRACTION = 0.35
 
@@ -738,15 +739,31 @@ def _scene_frame_transform_from_capture(
         view_id = str(request_view.get("view_id") or "")
         captured = views.get(view_id, {})
         target = captured.get("usd_bounds_target")
+        bounds = captured.get("usd_bounds") if isinstance(captured.get("usd_bounds"), dict) else {}
         source = request_view.get("target")
         if not _is_vec3(source) or not _is_vec3(target):
             continue
+        bounds_distance = _distance_to_axis_aligned_bounds(source, bounds)
+        inside_xy = _point_inside_xy_bounds(source, bounds)
+        inside_xyz = _point_inside_xyz_bounds(source, bounds)
+        surface_aim_distance = _surface_aim_distance_to_bounds(
+            source,
+            bounds,
+            allowance_m=SURFACE_AIM_HEIGHT_ALLOWANCE_M,
+        )
         pairs.append(
             {
                 "anchor_id": request_view.get("anchor_id"),
                 "category": request_view.get("category"),
                 "source": [float(value) for value in source[:3]],
                 "target": [float(value) for value in target[:3]],
+                "usd_bounds_min": _bounds_vec(bounds, "min"),
+                "usd_bounds_max": _bounds_vec(bounds, "max"),
+                "usd_bounds_center": _bounds_vec(bounds, "center"),
+                "distance_to_usd_bounds_m": bounds_distance,
+                "surface_aim_distance_to_usd_bounds_m": surface_aim_distance,
+                "target_inside_usd_xy_bounds": inside_xy,
+                "target_inside_usd_xyz_bounds": inside_xyz,
             }
         )
     if not pairs:
@@ -780,14 +797,46 @@ def _scene_frame_transform_from_capture(
     residual_values = [float(item["residual_m"]) for item in residuals]
     xy_residual_values = [float(item["xy_residual_m"]) for item in residuals]
     z_residual_values = [float(item["z_residual_m"]) for item in residuals]
+    bounds_distance_values = [
+        float(item["distance_to_usd_bounds_m"])
+        for item in residuals
+        if item.get("distance_to_usd_bounds_m") is not None
+    ]
+    surface_aim_distance_values = [
+        float(item["surface_aim_distance_to_usd_bounds_m"])
+        for item in residuals
+        if item.get("surface_aim_distance_to_usd_bounds_m") is not None
+    ]
+    xy_inside_count = sum(1 for item in residuals if item.get("target_inside_usd_xy_bounds"))
+    xyz_inside_count = sum(1 for item in residuals if item.get("target_inside_usd_xyz_bounds"))
     max_residual = max(residual_values)
     mean_residual = sum(residual_values) / len(residual_values)
     max_xy_residual = max(xy_residual_values)
     mean_xy_residual = sum(xy_residual_values) / len(xy_residual_values)
     max_z_residual = max(z_residual_values)
     mean_z_residual = sum(z_residual_values) / len(z_residual_values)
+    max_bounds_distance = max(bounds_distance_values) if bounds_distance_values else None
+    mean_bounds_distance = (
+        sum(bounds_distance_values) / len(bounds_distance_values)
+        if bounds_distance_values
+        else None
+    )
+    max_surface_aim_distance = (
+        max(surface_aim_distance_values) if surface_aim_distance_values else None
+    )
+    mean_surface_aim_distance = (
+        sum(surface_aim_distance_values) / len(surface_aim_distance_values)
+        if surface_aim_distance_values
+        else None
+    )
     target_residual_status = (
-        "target_matches_usd_bounds_within_threshold"
+        "target_inside_or_near_usd_bounds_with_surface_aim_allowance"
+        if max_surface_aim_distance is not None
+        and max_surface_aim_distance <= CANONICAL_POSE_PARITY_THRESHOLD_M
+        else "target_inside_or_near_usd_bounds"
+        if max_bounds_distance is not None
+        and max_bounds_distance <= CANONICAL_POSE_PARITY_THRESHOLD_M
+        else "target_matches_usd_bounds_center_within_threshold"
         if max_residual <= CANONICAL_POSE_PARITY_THRESHOLD_M
         else "target_definition_residual_high"
     )
@@ -800,9 +849,11 @@ def _scene_frame_transform_from_capture(
         "parity_status": target_residual_status,
         "target_residual_status": target_residual_status,
         "interpretation": (
-            "This residual compares the requested canonical camera target with the center of "
-            "the matched Isaac USD prim bounds. It is a target-definition/geometry diagnostic, "
-            "not a backend camera-pose residual."
+            "This diagnostic compares the requested canonical camera target with the matched "
+            "Isaac USD prim bounds. Distance-to-bounds is the primary geometry check because "
+            "large receptacles often use a surface aim point, not the object bounding-box "
+            "center. Center residuals are retained as context and are not backend camera-pose "
+            "residuals."
         ),
         "pair_count": len(pairs),
         "xy_scale": 1.0,
@@ -815,6 +866,13 @@ def _scene_frame_transform_from_capture(
         "max_xy_residual_m": max_xy_residual,
         "mean_z_residual_m": mean_z_residual,
         "max_z_residual_m": max_z_residual,
+        "mean_distance_to_usd_bounds_m": mean_bounds_distance,
+        "max_distance_to_usd_bounds_m": max_bounds_distance,
+        "mean_surface_aim_distance_to_usd_bounds_m": mean_surface_aim_distance,
+        "max_surface_aim_distance_to_usd_bounds_m": max_surface_aim_distance,
+        "surface_aim_height_allowance_m": SURFACE_AIM_HEIGHT_ALLOWANCE_M,
+        "target_inside_usd_xy_bounds_count": xy_inside_count,
+        "target_inside_usd_xyz_bounds_count": xyz_inside_count,
         "pairs": residuals,
     }
 
@@ -1157,6 +1215,78 @@ def _backend_vec(view: dict[str, Any], key: str) -> list[float] | None:
     backend_value = view.get(f"backend_{key}")
     value = backend_value if _is_vec3(backend_value) else view.get(key)
     return [float(item) for item in value[:3]] if _is_vec3(value) else None
+
+
+def _bounds_vec(bounds: dict[str, Any], key: str) -> list[float] | None:
+    value = bounds.get(key)
+    return [float(item) for item in value[:3]] if _is_vec3(value) else None
+
+
+def _point_inside_xy_bounds(point: list[float], bounds: dict[str, Any]) -> bool | None:
+    minimum = _bounds_vec(bounds, "min")
+    maximum = _bounds_vec(bounds, "max")
+    if minimum is None or maximum is None:
+        return None
+    return (
+        minimum[0] <= float(point[0]) <= maximum[0] and minimum[1] <= float(point[1]) <= maximum[1]
+    )
+
+
+def _point_inside_xyz_bounds(point: list[float], bounds: dict[str, Any]) -> bool | None:
+    minimum = _bounds_vec(bounds, "min")
+    maximum = _bounds_vec(bounds, "max")
+    if minimum is None or maximum is None:
+        return None
+    return (
+        minimum[0] <= float(point[0]) <= maximum[0]
+        and minimum[1] <= float(point[1]) <= maximum[1]
+        and minimum[2] <= float(point[2]) <= maximum[2]
+    )
+
+
+def _distance_to_axis_aligned_bounds(point: list[float], bounds: dict[str, Any]) -> float | None:
+    minimum = _bounds_vec(bounds, "min")
+    maximum = _bounds_vec(bounds, "max")
+    if minimum is None or maximum is None:
+        return None
+    squared = 0.0
+    for index in range(3):
+        value = float(point[index])
+        if value < minimum[index]:
+            squared += (minimum[index] - value) ** 2
+        elif value > maximum[index]:
+            squared += (value - maximum[index]) ** 2
+    return math.sqrt(squared)
+
+
+def _surface_aim_distance_to_bounds(
+    point: list[float],
+    bounds: dict[str, Any],
+    *,
+    allowance_m: float,
+) -> float | None:
+    minimum = _bounds_vec(bounds, "min")
+    maximum = _bounds_vec(bounds, "max")
+    if minimum is None or maximum is None:
+        return None
+    adjusted_maximum = list(maximum)
+    adjusted_maximum[2] += max(0.0, float(allowance_m))
+    return _distance_to_explicit_axis_aligned_bounds(point, minimum, adjusted_maximum)
+
+
+def _distance_to_explicit_axis_aligned_bounds(
+    point: list[float],
+    minimum: list[float],
+    maximum: list[float],
+) -> float:
+    squared = 0.0
+    for index in range(3):
+        value = float(point[index])
+        if value < minimum[index]:
+            squared += (minimum[index] - value) ** 2
+        elif value > maximum[index]:
+            squared += (value - maximum[index]) ** 2
+    return math.sqrt(squared)
 
 
 def _support_pose_position(value: Any) -> list[float] | None:
@@ -1747,6 +1877,10 @@ def _transform_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(_meters_text(item.get('residual_m')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('xy_residual_m')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('z_residual_m')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('distance_to_usd_bounds_m')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('surface_aim_distance_to_usd_bounds_m')))}</td>"
+            f"<td>{html.escape(str(item.get('target_inside_usd_xy_bounds')))}</td>"
+            f"<td>{html.escape(str(item.get('target_inside_usd_xyz_bounds')))}</td>"
             "</tr>"
         )
     headers = "".join(
@@ -1759,6 +1893,10 @@ def _transform_section(manifest: dict[str, Any]) -> str:
             "Residual",
             "XY residual",
             "Z residual",
+            "Distance to USD bounds",
+            "Surface-aim distance",
+            "Inside XY bounds",
+            "Inside XYZ bounds",
         )
     )
     note = (
@@ -1767,7 +1905,14 @@ def _transform_section(manifest: dict[str, Any]) -> str:
         f"mean={_meters_text(transform.get('mean_residual_m'))}; "
         f"max={_meters_text(transform.get('max_residual_m'))}; "
         f"max_xy={_meters_text(transform.get('max_xy_residual_m'))}; "
-        f"max_z={_meters_text(transform.get('max_z_residual_m'))}. "
+        f"max_z={_meters_text(transform.get('max_z_residual_m'))}; "
+        f"max_distance_to_bounds={_meters_text(transform.get('max_distance_to_usd_bounds_m'))}; "
+        f"max_surface_aim_distance="
+        f"{_meters_text(transform.get('max_surface_aim_distance_to_usd_bounds_m'))}; "
+        f"inside_xy={transform.get('target_inside_usd_xy_bounds_count')}/"
+        f"{transform.get('pair_count')}; "
+        f"inside_xyz={transform.get('target_inside_usd_xyz_bounds_count')}/"
+        f"{transform.get('pair_count')}. "
         f"{transform.get('interpretation') or ''}"
     )
     return f"""

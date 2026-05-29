@@ -574,11 +574,13 @@ residuals separately. MuJoCo canonical views convert the explicit
 `eye`/`target` request into MuJoCo's free-camera azimuth/elevation convention
 before rendering; the manifest records the backend pose used for the parity
 check. Isaac uses the prepared USD's scene lights by default and reports the
-existing light count instead of adding extra fill lights. A passing camera-pose
-contract means the two backends accepted the same render-camera API pose; high
-USD-bounds residuals, material differences, or renderer lighting differences
-still mean the artifact is not yet proof of full backend-swappable visual
-parity.
+existing light count instead of adding extra fill lights. Target-vs-USD
+diagnostics are bounds-aware: large receptacles may aim the camera above a
+surface, so the report treats a target inside the USD XY footprint and within
+the configured surface-aim height allowance separately from a true target/scene
+frame mismatch. A passing camera-pose contract means the two backends accepted
+the same render-camera API pose; material differences or renderer lighting
+differences can still prevent full visual identity.
 
 Real visual MCP smoke:
 
