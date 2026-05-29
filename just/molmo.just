@@ -492,7 +492,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
-            ROBOCLAWS_CODEX_MAX_CONTINUATIONS
+            ROBOCLAWS_CODEX_MAX_CONTINUATIONS \
+            ROBOCLAWS_REPORT_RERUN_COMMAND
           do
             if [[ -n "${!env_name:-}" ]]; then
               tmux_env_args+=(-e "${env_name}=${!env_name}")

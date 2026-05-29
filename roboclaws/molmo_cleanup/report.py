@@ -12,7 +12,6 @@ from roboclaws.core.rerun import (
     render_rerun_panel,
     report_rerun_command_from_env,
     rerun_panel_css,
-    shell_join,
 )
 from roboclaws.molmo_cleanup.planner_proof_quality import (
     format_quality_tier_counts,
@@ -108,7 +107,11 @@ def render_cleanup_report(
             robot_view_steps=robot_view_steps or [],
         )
     )
-    rerun_command = report_rerun_command_from_env() or _cleanup_local_rerun_command(run_result)
+    rerun_command = (
+        str(run_result.get("rerun_command") or "").strip() or report_rerun_command_from_env()
+    )
+    if rerun_command:
+        run_result["rerun_command"] = rerun_command
     report_title = str(run_result.get("report_title") or "MolmoSpaces Cleanup Pilot")
     report_path.write_text(
         _wrap_html(body, rerun_command=rerun_command, title=report_title),
@@ -6976,57 +6979,6 @@ def _extract_moves(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if isinstance(response, dict) and response.get("ok"):
             moves.append(response)
     return moves
-
-
-def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
-    if run_result.get("schema") == "molmospaces_agibot_contract_rehearsal_v1":
-        command = [
-            ".venv/bin/python",
-            "scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py",
-            "--runtime",
-            str(run_result.get("runtime") or "fixture"),
-            "--rehearsal-mode",
-            str(run_result.get("rehearsal_mode") or "contract"),
-            "--seed",
-            str(run_result.get("seed", 7)),
-            "--generated-mess-count",
-            str(
-                run_result.get(
-                    "requested_generated_mess_count",
-                    run_result.get("generated_mess_count", 5),
-                )
-            ),
-        ]
-        action_result = run_result.get("molmospaces_agibot_contract_rehearsal") or {}
-        cleanup_object_count = action_result.get("attempted_object_count")
-        if cleanup_object_count:
-            command.extend(["--cleanup-object-count", str(cleanup_object_count)])
-        if run_result.get("include_robot"):
-            command.append("--include-robot")
-        if run_result.get("record_robot_views"):
-            command.append("--record-robot-views")
-        robot_name = run_result.get("robot_name")
-        if robot_name:
-            command.extend(["--robot-name", str(robot_name)])
-        return shell_join(command)
-
-    seed = run_result.get("seed", 7)
-    generated_mess_count = run_result.get(
-        "requested_generated_mess_count",
-        run_result.get("generated_mess_count", 10),
-    )
-    profile = run_result.get("cleanup_profile") or "world-labels"
-    return shell_join(
-        [
-            "just",
-            "task::run",
-            "household-cleanup",
-            "direct",
-            profile,
-            f"seed={seed}",
-            f"generated_mess_count={generated_mess_count}",
-        ]
-    )
 
 
 def _image_lightbox_markup() -> str:

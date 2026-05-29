@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 import time
@@ -78,6 +79,7 @@ AGENT_POLICIES = {
     "claude_code_agent",
     "openclaw_agent",
 }
+REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 
 
 def make_molmo_realworld_cleanup_mcp(
@@ -103,6 +105,7 @@ def make_molmo_realworld_cleanup_mcp(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
         run_dir=run_dir,
@@ -126,6 +129,7 @@ def make_molmo_realworld_cleanup_mcp(
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
+        rerun_command=rerun_command,
     )
 
 
@@ -156,6 +160,7 @@ class RealWorldMolmoCleanupMCPServer:
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
+        rerun_command: str | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -195,6 +200,9 @@ class RealWorldMolmoCleanupMCPServer:
         self.record_robot_views = bool(record_robot_views)
         self.cleanup_profile = cleanup_profile
         self.planner_proof_run_result = planner_proof_run_result
+        self.rerun_command = (
+            str(rerun_command or "").strip() or os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip()
+        )
         if self.record_robot_views and not callable(
             getattr(self.base_contract.backend, "write_robot_views", None)
         ):
@@ -447,6 +455,7 @@ class RealWorldMolmoCleanupMCPServer:
             "backend_tool_event_counts": done_response["tool_event_counts"],
             "runtime_timing": runtime_timing,
             "agent_diagnostics": diagnostics,
+            "rerun_command": self.rerun_command,
             "artifacts": {
                 "agent_view": str(agent_view_path),
                 "runtime_metric_map": str(runtime_metric_map_path),

@@ -109,8 +109,8 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
 
     html = report_path.read_text(encoding="utf-8")
     assert "MolmoSpaces Cleanup Pilot" in html
-    assert "Rerun Locally" in html
-    assert "just task::run household-cleanup direct world-labels" in html
+    assert "Rerun Locally" not in html
+    assert "rerun_command" not in run_result
     assert "api_semantic" in html
     assert "Manipulation Provenance" in html
     assert "Cleanup Primitive Gate" in html
@@ -125,6 +125,57 @@ def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> No
     assert "valid_receptacle_ids" not in html
     assert before.is_file()
     assert after.is_file()
+
+
+def test_cleanup_report_prefers_recorded_rerun_command(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    command = (
+        "just task::run household-cleanup codex world-labels seed=7 "
+        "generated_mess_count=5 map_mode=minimal robot_views=on "
+        f"runtime_map_prior={prior} "
+        "output_dir=output/household/cleanup/codex-from-semantic-map-with-views"
+    )
+    monkeypatch.setenv(
+        "ROBOCLAWS_REPORT_RERUN_COMMAND",
+        "just task::run household-cleanup direct world-labels seed=7",
+    )
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+        "rerun_command": command,
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+    )
+
+    html = report_path.read_text(encoding="utf-8")
+    assert command in html
+    assert run_result["rerun_command"] == command
+    assert "household-cleanup direct world-labels" not in html
 
 
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
