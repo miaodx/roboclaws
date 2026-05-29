@@ -77,6 +77,8 @@ Key pieces:
 - `roboclaws/molmo_cleanup/realworld_mcp_server.py` exposes the cleanup MCP
   surface for coding agents and OpenClaw-style clients.
 - `roboclaws/molmo_cleanup/report.py` renders the shared report.
+- `roboclaws/molmo_cleanup/camera_control.py` owns the external render-camera
+  request schema used by MuJoCo/Isaac scene probes.
 - `roboclaws/molmo_cleanup/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.

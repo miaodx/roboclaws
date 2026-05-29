@@ -937,3 +937,57 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
       --focus-sample-count "$focus_sample_count" \
       --render-width "$render_width" \
       --render-height "$render_height"
+
+# Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
+scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda" render_width="960" render_height="640":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    seed="{{seed}}"
+    generated_mess_count="{{generated_mess_count}}"
+    output_dir="{{output_dir}}"
+    scene_source="{{scene_source}}"
+    scene_index="{{scene_index}}"
+    scene_usd_path="{{scene_usd_path}}"
+    render_width="{{render_width}}"
+    render_height="{{render_height}}"
+    seed="${seed#seed=}"
+    generated_mess_count="${generated_mess_count#generated_mess_count=}"
+    output_dir="${output_dir#output_dir=}"
+    scene_source="${scene_source#scene_source=}"
+    scene_index="${scene_index#scene_index=}"
+    scene_usd_path="${scene_usd_path#scene_usd_path=}"
+    render_width="${render_width#render_width=}"
+    render_height="${render_height#render_height=}"
+
+    molmospaces_python="${ROBOCLAWS_MOLMOSPACES_PYTHON:-.venv/bin/python}"
+    isaac_python="${ROBOCLAWS_ISAACLAB_PYTHON:-.venv-isaaclab/bin/python}"
+    if [[ ! -x "$molmospaces_python" ]]; then
+      echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
+      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      exit 1
+    fi
+    if [[ ! -x "$isaac_python" ]]; then
+      echo "error: missing Isaac Lab runtime: ${isaac_python}" >&2
+      echo "       create .venv-isaaclab/ or set ROBOCLAWS_ISAACLAB_PYTHON" >&2
+      exit 1
+    fi
+    if [[ ! -f "$scene_usd_path" ]]; then
+      echo "error: missing prepared scene USD: ${scene_usd_path}" >&2
+      echo "       prepare or pass scene_usd_path=..." >&2
+      exit 1
+    fi
+
+    stamp="$({{timestamp_cmd}})"
+    run_dir="${output_dir}/${stamp}"
+    OMNI_KIT_ACCEPT_EULA="${OMNI_KIT_ACCEPT_EULA:-YES}" \
+      .venv/bin/python scripts/molmo_cleanup/run_molmospaces_scene_camera_comparison.py \
+      --output-dir "$run_dir" \
+      --scene-usd-path "$scene_usd_path" \
+      --seed "$seed" \
+      --generated-mess-count "$generated_mess_count" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --molmospaces-python "$molmospaces_python" \
+      --isaac-python "$isaac_python" \
+      --render-width "$render_width" \
+      --render-height "$render_height"

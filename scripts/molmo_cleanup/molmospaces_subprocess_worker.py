@@ -20,6 +20,12 @@ if __package__ in {None, ""}:
 import mujoco
 from PIL import Image, ImageDraw
 
+from roboclaws.molmo_cleanup.camera_control import (
+    ANCHOR_ORBIT_CAMERA_MODEL,
+    CAMERA_CONTROL_API_NAME,
+    load_camera_control_request,
+    normalize_camera_control_request,
+)
 from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
@@ -218,6 +224,13 @@ def main(argv: list[str] | None = None) -> None:
     robot_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
     robot_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
 
+    camera_views = subparsers.add_parser("camera_views")
+    camera_views.add_argument("--output-dir", type=Path, required=True)
+    camera_views.add_argument("--view-specs-path", type=Path)
+    camera_views.add_argument("--camera-request-path", type=Path)
+    camera_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
+    camera_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
+
     navigate_object = subparsers.add_parser("navigate_to_object")
     navigate_object.add_argument("--object-id", required=True)
 
@@ -280,6 +293,20 @@ def main(argv: list[str] | None = None) -> None:
                 args.label,
                 focus_object_id=args.focus_object_id,
                 focus_receptacle_id=args.focus_receptacle_id,
+                width=args.render_width,
+                height=args.render_height,
+            )
+        elif args.command == "camera_views":
+            camera_request = _load_camera_request_from_args(
+                view_specs_path=args.view_specs_path,
+                camera_request_path=args.camera_request_path,
+                width=args.render_width,
+                height=args.render_height,
+            )
+            result = write_camera_views(
+                state,
+                args.output_dir,
+                camera_request,
                 width=args.render_width,
                 height=args.render_height,
             )
@@ -374,6 +401,19 @@ def run_state_command(
             str(kwargs["label"]),
             focus_object_id=_optional_str(kwargs.get("focus_object_id")),
             focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
+            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+        )
+    elif command == "camera_views":
+        camera_request = _load_camera_request_from_kwargs(
+            kwargs,
+            width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
+            height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
+        )
+        result = write_camera_views(
+            state,
+            Path(str(kwargs["output_dir"])),
+            camera_request,
             width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
             height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
         )
@@ -656,6 +696,61 @@ def write_robot_views(
             "verify": list(verify.shape),
             "map": [420, 620, 3],
         },
+        render_resolution={"width": width, "height": height},
+    )
+
+
+def write_camera_views(
+    state: dict[str, Any],
+    output_dir: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    *,
+    width: int = DEFAULT_RENDER_WIDTH,
+    height: int = DEFAULT_RENDER_HEIGHT,
+) -> dict[str, Any]:
+    _count(state, "camera_views")
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width, height = _render_dimensions(resolution["width"], resolution["height"])
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
+    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    model.vis.global_.fovy = float(lens.get("vertical_fov_deg", model.vis.global_.fovy))
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    saved: dict[str, str] = {}
+    shapes: dict[str, list[int]] = {}
+    views: list[dict[str, Any]] = []
+    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+        spec = _camera_view_spec(raw_spec, index=index)
+        camera = _camera_from_view_spec(state, spec)
+        frame = _render_free_camera(model, data, camera, width=width, height=height)
+        output_path = output_dir / f"{spec['view_id']}.png"
+        Image.fromarray(frame).save(output_path)
+        saved[str(spec["view_id"])] = str(output_path)
+        shapes[str(spec["view_id"])] = list(frame.shape)
+        views.append(
+            {
+                **spec,
+                "image_path": str(output_path),
+                "shape": list(frame.shape),
+            }
+        )
+    return _ok(
+        "camera_views",
+        backend=BACKEND,
+        camera_control_api=camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
+        camera_request_schema=camera_request.get("schema"),
+        calibration_status=camera_request.get("calibration_status"),
+        lighting_profile=camera_request.get("lighting_profile") or {},
+        lens=camera_request.get("lens") or {},
+        view_variant="molmospaces-anchor-orbit-camera-control-v1",
+        visual_artifact_provenance="mujoco_camera_control_anchor_orbit",
+        views=views,
+        images=saved,
+        shapes=shapes,
         render_resolution={"width": width, "height": height},
     )
 
@@ -2329,6 +2424,172 @@ def _render_free_camera(
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
+
+
+def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_views = payload.get("views") if isinstance(payload, dict) else payload
+    if not isinstance(raw_views, list):
+        raise ValueError("camera view spec must be a list or an object with a views list")
+    return [dict(item) for item in raw_views if isinstance(item, dict)]
+
+
+def _load_camera_request_from_args(
+    *,
+    view_specs_path: Path | None,
+    camera_request_path: Path | None,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    if camera_request_path is not None:
+        return load_camera_control_request(camera_request_path, width=width, height=height)
+    if view_specs_path is not None:
+        return normalize_camera_control_request(
+            _load_camera_view_specs(view_specs_path),
+            width=width,
+            height=height,
+        )
+    raise ValueError("camera_views requires --camera-request-path or --view-specs-path")
+
+
+def _load_camera_request_from_kwargs(
+    kwargs: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    camera_request_path = kwargs.get("camera_request_path")
+    if camera_request_path:
+        return load_camera_control_request(
+            Path(str(camera_request_path)), width=width, height=height
+        )
+    view_specs_path = kwargs.get("view_specs_path")
+    if view_specs_path:
+        return normalize_camera_control_request(
+            _load_camera_view_specs(Path(str(view_specs_path))),
+            width=width,
+            height=height,
+        )
+    raise ValueError("camera_views requires camera_request_path or view_specs_path")
+
+
+def _camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]:
+    view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
+    safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
+    lookat = _camera_vec3(raw_spec.get("lookat") or raw_spec.get("target"), default=[0, 0, 0])
+    camera_orbit = _lane_camera_orbit(raw_spec, "molmospaces-mujoco")
+    lens = raw_spec.get("lens") if isinstance(raw_spec.get("lens"), dict) else {}
+    if "eye" in raw_spec and raw_spec.get("eye") is not None:
+        eye = _camera_vec3(
+            raw_spec.get("eye"), default=[lookat[0], lookat[1] - 4.0, lookat[2] + 2.0]
+        )
+        dx = eye[0] - lookat[0]
+        dy = eye[1] - lookat[1]
+        dz = eye[2] - lookat[2]
+        distance = max(math.sqrt(dx * dx + dy * dy + dz * dz), 0.01)
+        azimuth = math.degrees(math.atan2(dx, dy))
+        elevation = math.degrees(math.asin(dz / distance))
+    else:
+        distance = float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0)))
+        azimuth = float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0)))
+        elevation = -abs(float(camera_orbit.get("elevation_deg", raw_spec.get("elevation", 35.0))))
+        eye = _eye_from_mujoco_free_camera(
+            lookat=lookat,
+            distance=distance,
+            azimuth=azimuth,
+            elevation=elevation,
+        )
+    return {
+        "view_id": safe_view_id,
+        "label": str(raw_spec.get("label") or view_id),
+        "anchor_id": str(raw_spec.get("anchor_id") or ""),
+        "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
+        "camera_mode": str(raw_spec.get("camera_mode") or "free_camera"),
+        "focus_receptacle_id": str(raw_spec.get("focus_receptacle_id") or ""),
+        "robot_pose": dict(raw_spec["robot_pose"])
+        if isinstance(raw_spec.get("robot_pose"), dict)
+        else {},
+        "lookat": lookat,
+        "eye": eye,
+        "distance": distance,
+        "azimuth": azimuth,
+        "elevation": elevation,
+        "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
+        "camera_orbit": dict(camera_orbit),
+        "lens": dict(lens),
+        "calibration_status": str(raw_spec.get("calibration_status") or ""),
+        "coordinate_convention": str(raw_spec.get("coordinate_convention") or ""),
+    }
+
+
+def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
+    lane_orbits = raw_spec.get("lane_camera_orbits")
+    if isinstance(lane_orbits, dict):
+        lane_orbit = lane_orbits.get(lane_id)
+        if isinstance(lane_orbit, dict):
+            return lane_orbit
+    camera_orbit = raw_spec.get("camera_orbit")
+    return camera_orbit if isinstance(camera_orbit, dict) else {}
+
+
+def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return [float(default[0]), float(default[1]), float(default[2])]
+    return [float(value[0]), float(value[1]), float(value[2])]
+
+
+def _eye_from_mujoco_free_camera(
+    *,
+    lookat: list[float],
+    distance: float,
+    azimuth: float,
+    elevation: float,
+) -> list[float]:
+    azimuth_rad = math.radians(azimuth)
+    elevation_rad = math.radians(elevation)
+    horizontal = math.cos(elevation_rad) * distance
+    return [
+        float(lookat[0]) + math.sin(azimuth_rad) * horizontal,
+        float(lookat[1]) + math.cos(azimuth_rad) * horizontal,
+        float(lookat[2]) + math.sin(elevation_rad) * distance,
+    ]
+
+
+def _free_camera_from_lookat_spec(spec: dict[str, Any]) -> mujoco.MjvCamera:
+    camera = mujoco.MjvCamera()
+    camera.type = mujoco.mjtCamera.mjCAMERA_FREE
+    camera.lookat[:] = spec["lookat"]
+    camera.distance = float(spec["distance"])
+    camera.azimuth = float(spec["azimuth"])
+    camera.elevation = float(spec["elevation"])
+    return camera
+
+
+def _camera_from_view_spec(state: dict[str, Any], spec: dict[str, Any]) -> mujoco.MjvCamera:
+    if spec.get("camera_mode") != "focus_receptacle":
+        return _free_camera_from_lookat_spec(spec)
+    focus_receptacle_id = str(spec.get("focus_receptacle_id") or spec.get("anchor_id") or "")
+    if spec.get("camera_model") == ANCHOR_ORBIT_CAMERA_MODEL:
+        spec["camera_mode"] = "anchor_orbit"
+        spec["focus_receptacle_id"] = focus_receptacle_id
+        return _free_camera_from_lookat_spec(spec)
+    state_for_camera = dict(state)
+    if isinstance(spec.get("robot_pose"), dict):
+        state_for_camera["robot_pose"] = dict(spec["robot_pose"])
+    focus = _focus_payload(
+        state_for_camera,
+        None,
+        focus_receptacle_id,
+    )
+    camera = _focus_camera(state_for_camera, focus)
+    spec["lookat"] = [float(value) for value in camera.lookat]
+    spec["distance"] = float(camera.distance)
+    spec["azimuth"] = float(camera.azimuth)
+    spec["elevation"] = float(camera.elevation)
+    spec["camera_model"] = "mujoco_focus_receptacle_camera"
+    if isinstance(spec.get("robot_pose"), dict):
+        spec["virtual_robot_pose"] = dict(spec["robot_pose"])
+    return camera
 
 
 def _annotate_focus_image(image: Image.Image, focus: dict[str, Any]) -> None:

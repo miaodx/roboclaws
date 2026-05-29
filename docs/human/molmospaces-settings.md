@@ -556,6 +556,18 @@ also pass the intermediate scene, robot, and focus-count arguments so values do
 not shift into earlier slots. The high-resolution path changes only comparison
 artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
 
+Render-only MuJoCo/Isaac scene camera comparison:
+
+```bash
+just molmo::scene-camera-comparison
+```
+
+This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
+prepared Isaac USD with one external camera request. It is for scene/camera
+review only: it does not run cleanup, pick/place, private scoring, or pickup
+box annotation. Per-lane orbit calibration is recorded when MuJoCo and prepared
+Isaac USD do not share a proven raw world camera convention.
+
 Real visual MCP smoke:
 
 ```bash

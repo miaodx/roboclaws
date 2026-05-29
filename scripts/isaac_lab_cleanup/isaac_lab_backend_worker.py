@@ -21,6 +21,12 @@ if __package__ in {None, ""}:
 from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.backend import HELD_LOCATION_ID
+from roboclaws.molmo_cleanup.camera_control import (
+    ANCHOR_ORBIT_CAMERA_MODEL,
+    CAMERA_CONTROL_API_NAME,
+    load_camera_control_request,
+    normalize_camera_control_request,
+)
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -142,6 +148,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     robot_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
     robot_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
 
+    camera_views = subparsers.add_parser("camera_views")
+    camera_views.add_argument("--output-dir", type=Path, required=True)
+    camera_views.add_argument("--view-specs-path", type=Path)
+    camera_views.add_argument("--camera-request-path", type=Path)
+    camera_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
+    camera_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
+
     object_cmds = ("navigate_to_object", "pick")
     for command in object_cmds:
         item = subparsers.add_parser(command)
@@ -187,6 +200,8 @@ def main(argv: list[str] | None = None) -> int:
             result = write_snapshot(args, state)
         elif args.command == "robot_views":
             result = write_robot_views(args, state)
+        elif args.command == "camera_views":
+            result = write_camera_views(args, state)
         elif args.command == "observe":
             result = observe(args, state)
         elif args.command == "navigate_to_object":
@@ -1503,6 +1518,130 @@ def _capture_isaac_lab_camera_views(
     }
 
 
+def capture_scene_camera_views(
+    *,
+    scene_usd: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    output_dir: Path,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    from isaaclab.app import AppLauncher
+
+    launcher_args = _isaac_app_launcher_args(AppLauncher)
+    app_launcher = AppLauncher(launcher_args)
+    simulation_app = app_launcher.app
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
+    return _capture_isaac_lab_scene_camera_views(
+        scene_usd=scene_usd,
+        camera_request=camera_request,
+        output_dir=output_dir,
+        width=width,
+        height=height,
+        simulation_app=simulation_app,
+    )
+
+
+def _capture_isaac_lab_scene_camera_views(
+    *,
+    scene_usd: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    output_dir: Path,
+    width: int,
+    height: int,
+    simulation_app: Any,
+) -> dict[str, Any]:
+    import isaaclab.sim as sim_utils
+    import isaacsim.core.utils.stage as stage_utils
+    import numpy as np
+    import torch
+    from isaaclab.sensors.camera import Camera, CameraCfg
+
+    opened = stage_utils.open_stage(str(scene_usd))
+    if opened is False:
+        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
+    _wait_for_stage_load(stage_utils, simulation_app)
+    _load_current_stage_payloads(stage_utils)
+    scene_bounds = _current_stage_bounds(stage_utils)
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width = int(resolution["width"])
+    height = int(resolution["height"])
+    _ensure_capture_lighting(stage_utils, profile=camera_request.get("lighting_profile"))
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
+    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    sim_utils.create_prim("/World/RoboclawsSceneProbeCameraRig", "Xform")
+    camera = Camera(
+        cfg=CameraCfg(
+            prim_path="/World/RoboclawsSceneProbeCameraRig/Camera",
+            update_period=0.0,
+            height=height,
+            width=width,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=float(lens.get("focal_length_mm", 24.0)),
+                focus_distance=4.0,
+                horizontal_aperture=float(lens.get("horizontal_aperture_mm", 20.955)),
+            ),
+        )
+    )
+    sim.reset()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved: dict[str, str] = {}
+    shapes: dict[str, list[int]] = {}
+    views: list[dict[str, Any]] = []
+    total_render_steps = 0
+    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+        spec = _isaac_scene_camera_view_spec(
+            raw_spec,
+            index=index,
+            stage_utils=stage_utils,
+        )
+        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
+        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
+        camera.set_world_poses_from_view(position, target)
+        rgb_image = None
+        for _ in range(24):
+            sim.step()
+            total_render_steps += 1
+            camera.update(dt=sim.get_physics_dt())
+            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+                break
+        if rgb_image is None:
+            raise RuntimeError(
+                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
+            )
+        if not _image_has_variance(rgb_image, np=np):
+            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        output_path = output_dir / f"{spec['view_id']}.png"
+        Image.fromarray(rgb_image, mode="RGB").save(output_path)
+        saved[str(spec["view_id"])] = str(output_path)
+        shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        views.append(
+            {
+                **spec,
+                "image_path": str(output_path),
+                "shape": list(rgb_image.shape),
+            }
+        )
+    return {
+        "schema": "isaac_scene_camera_views_v1",
+        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
+        "camera_request_schema": camera_request.get("schema"),
+        "calibration_status": camera_request.get("calibration_status"),
+        "lighting_profile": camera_request.get("lighting_profile") or {},
+        "lens": camera_request.get("lens") or {},
+        "render_steps": total_render_steps,
+        "scene_bounds": scene_bounds,
+        "views": views,
+        "images": saved,
+        "shapes": shapes,
+    }
+
+
 def _apply_semantic_pose_state_to_stage(
     *,
     stage_utils: Any,
@@ -2060,7 +2199,7 @@ def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
     return {"min": min_point, "max": max_point, "size": size, "center": center}
 
 
-def _ensure_capture_lighting(stage_utils: Any) -> None:
+def _ensure_capture_lighting(stage_utils: Any, profile: dict[str, Any] | None = None) -> None:
     from pxr import Gf, UsdGeom, UsdLux
 
     get_current_stage = getattr(stage_utils, "get_current_stage", None)
@@ -2069,11 +2208,19 @@ def _ensure_capture_lighting(stage_utils: Any) -> None:
     stage = get_current_stage()
     if stage is None:
         return
+    profile = profile if isinstance(profile, dict) else {}
+    dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
+    key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
+    key_rotation = profile.get("isaac_key_rotation_deg")
+    if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
+        key_rotation = [-55.0, 0.0, 35.0]
     dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
-    dome.CreateIntensityAttr(1500.0)
+    dome.CreateIntensityAttr(dome_intensity)
     key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
-    key.CreateIntensityAttr(7000.0)
-    UsdGeom.XformCommonAPI(key).SetRotate(Gf.Vec3f(-55.0, 0.0, 35.0))
+    key.CreateIntensityAttr(key_intensity)
+    UsdGeom.XformCommonAPI(key).SetRotate(
+        Gf.Vec3f(float(key_rotation[0]), float(key_rotation[1]), float(key_rotation[2]))
+    )
 
 
 def _isaac_camera_view_poses(
@@ -2150,6 +2297,152 @@ def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
         scale = 255.0 if float(array.max(initial=0.0)) <= 1.0 else 1.0
         array = array * scale
     return np.clip(array, 0, 255).astype("uint8")
+
+
+def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_views = payload.get("views") if isinstance(payload, dict) else payload
+    if not isinstance(raw_views, list):
+        raise ValueError("camera view spec must be a list or an object with a views list")
+    return [dict(item) for item in raw_views if isinstance(item, dict)]
+
+
+def _load_camera_request_from_args(
+    *,
+    view_specs_path: Path | None,
+    camera_request_path: Path | None,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    if camera_request_path is not None:
+        return load_camera_control_request(camera_request_path, width=width, height=height)
+    if view_specs_path is not None:
+        return normalize_camera_control_request(
+            _load_camera_view_specs(view_specs_path),
+            width=width,
+            height=height,
+        )
+    raise ValueError("camera_views requires --camera-request-path or --view-specs-path")
+
+
+def _isaac_scene_camera_view_spec(
+    raw_spec: dict[str, Any],
+    *,
+    index: int,
+    stage_utils: Any | None = None,
+) -> dict[str, Any]:
+    view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
+    safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
+    usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
+    target = _target_from_usd_prim_path(
+        stage_utils=stage_utils,
+        usd_prim_path=usd_prim_path,
+        min_target_z=float(raw_spec.get("min_target_z", 0.6)),
+    )
+    target_source = "usd_prim_world_bounds" if target is not None else ""
+    if target is None:
+        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target_source = "explicit_target_or_default"
+    if "eye" in raw_spec and raw_spec.get("eye") is not None:
+        eye = _camera_vec3(
+            raw_spec.get("eye"),
+            default=[target[0], target[1] - 4.0, target[2] + 2.0],
+        )
+    else:
+        camera_orbit = _lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")
+        eye = _eye_from_lookat_spec(
+            target=target,
+            distance=float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0))),
+            azimuth=float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0))),
+            elevation=abs(
+                float(camera_orbit.get("elevation_deg", raw_spec.get("elevation", 35.0)))
+            ),
+        )
+    return {
+        "view_id": safe_view_id,
+        "label": str(raw_spec.get("label") or view_id),
+        "anchor_id": str(raw_spec.get("anchor_id") or ""),
+        "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
+        "usd_prim_path": usd_prim_path,
+        "eye": eye,
+        "target": target,
+        "lookat": target,
+        "target_source": target_source,
+        "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
+        "camera_orbit": dict(_lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")),
+        "lens": dict(raw_spec.get("lens")) if isinstance(raw_spec.get("lens"), dict) else {},
+        "calibration_status": str(raw_spec.get("calibration_status") or ""),
+        "coordinate_convention": str(raw_spec.get("coordinate_convention") or ""),
+    }
+
+
+def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
+    lane_orbits = raw_spec.get("lane_camera_orbits")
+    if isinstance(lane_orbits, dict):
+        lane_orbit = lane_orbits.get(lane_id)
+        if isinstance(lane_orbit, dict):
+            return lane_orbit
+    camera_orbit = raw_spec.get("camera_orbit")
+    return camera_orbit if isinstance(camera_orbit, dict) else {}
+
+
+def _target_from_usd_prim_path(
+    *,
+    stage_utils: Any | None,
+    usd_prim_path: str,
+    min_target_z: float,
+) -> list[float] | None:
+    if stage_utils is None or not usd_prim_path:
+        return None
+    from pxr import Usd, UsdGeom
+
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return None
+    stage = get_current_stage()
+    if stage is None:
+        return None
+    prim = stage.GetPrimAtPath(usd_prim_path)
+    if not prim or not prim.IsValid():
+        return None
+    cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+    )
+    bbox = cache.ComputeWorldBound(prim).ComputeAlignedBox()
+    min_point = [float(value) for value in bbox.GetMin()]
+    max_point = [float(value) for value in bbox.GetMax()]
+    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
+    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
+        return None
+    if max(size) <= 0:
+        return None
+    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
+    center[2] = max(center[2], min_target_z)
+    return center
+
+
+def _eye_from_lookat_spec(
+    *,
+    target: list[float],
+    distance: float,
+    azimuth: float,
+    elevation: float,
+) -> list[float]:
+    azimuth_rad = math.radians(azimuth)
+    elevation_rad = math.radians(elevation)
+    horizontal = math.cos(elevation_rad) * distance
+    return [
+        float(target[0]) + math.sin(azimuth_rad) * horizontal,
+        float(target[1]) + math.cos(azimuth_rad) * horizontal,
+        float(target[2]) + math.sin(elevation_rad) * distance,
+    ]
+
+
+def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return [float(default[0]), float(default[1]), float(default[2])]
+    return [float(value[0]), float(value[1]), float(value[2])]
 
 
 def _image_has_variance(array: Any, *, np: Any) -> bool:
@@ -3225,6 +3518,54 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         ),
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
+        render_resolution={"width": args.render_width, "height": args.render_height},
+    )
+
+
+def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    _count(state, "camera_views")
+    runtime = _dict(state.get("runtime"))
+    scene_usd = str(state.get("scene_usd") or "")
+    if runtime.get("runtime_mode") != "real":
+        return _error("camera_views", "real_runtime_required")
+    if not scene_usd or not Path(scene_usd).is_file():
+        return _error("camera_views", "local_scene_usd_required", scene_usd=scene_usd)
+    camera_request = _load_camera_request_from_args(
+        view_specs_path=args.view_specs_path,
+        camera_request_path=args.camera_request_path,
+        width=args.render_width,
+        height=args.render_height,
+    )
+    capture = capture_scene_camera_views(
+        scene_usd=Path(scene_usd),
+        camera_request=camera_request,
+        output_dir=args.output_dir,
+        width=args.render_width,
+        height=args.render_height,
+    )
+    state["scene_camera_view_capture"] = {
+        "schema": "isaac_scene_camera_view_capture_v1",
+        "capture_method": "isaac_lab_camera_rgb_scene_probe",
+        "scene_usd": scene_usd,
+        "render_steps": int(capture.get("render_steps") or 0),
+        "view_count": len(capture.get("views") or []),
+    }
+    write_state_from_state_arg(state)
+    return _ok(
+        "camera_views",
+        camera_control_api=capture.get("camera_control_api") or CAMERA_CONTROL_API_NAME,
+        camera_request_schema=capture.get("camera_request_schema"),
+        calibration_status=capture.get("calibration_status"),
+        lighting_profile=capture.get("lighting_profile") or {},
+        lens=capture.get("lens") or {},
+        view_variant="isaaclab-anchor-orbit-camera-control-v1",
+        visual_artifact_provenance="isaac_lab_camera_rgb_anchor_orbit_scene_probe",
+        scene_usd=scene_usd,
+        views=capture.get("views") or [],
+        images=capture.get("images") or {},
+        shapes=capture.get("shapes") or {},
+        scene_bounds=capture.get("scene_bounds"),
+        render_steps=int(capture.get("render_steps") or 0),
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
 

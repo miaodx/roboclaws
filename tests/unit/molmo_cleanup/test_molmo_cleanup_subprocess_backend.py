@@ -227,6 +227,87 @@ def test_worker_kwargs_parse_render_resolution_args() -> None:
     assert kwargs["render_height"] == "720"
 
 
+def test_subprocess_backend_exposes_camera_control_request_api(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    backend = MolmoSpacesSubprocessBackend.__new__(MolmoSpacesSubprocessBackend)
+    backend.state_path = tmp_path / "state.json"
+    backend.python_executable = fake_python
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+    request_path = tmp_path / "camera_control_request.json"
+    request_path.write_text(
+        json.dumps({"render_resolution": {"width": 960, "height": 640}, "views": []}),
+        encoding="utf-8",
+    )
+
+    result = backend.render_camera_control_request(
+        tmp_path / "camera_views",
+        request_path=request_path,
+    )
+
+    assert result["ok"] is True
+    assert captured["command"] == "camera_views"
+    assert captured["args"] == (
+        "--output-dir",
+        str(tmp_path / "camera_views"),
+        "--camera-request-path",
+        str(request_path),
+        "--render-width",
+        "960",
+        "--render-height",
+        "640",
+    )
+
+
+def test_molmospaces_worker_normalizes_camera_control_request() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    request = worker.normalize_camera_control_request(
+        {
+            "camera_orbit": {"distance_m": 4.4, "azimuth_deg": 225.0, "elevation_deg": 28.0},
+            "lens": {"vertical_fov_deg": 45.0},
+            "views": [
+                {
+                    "view_id": "view 01/table",
+                    "lookat": [2.7, 5.9, 1.0],
+                    "camera_model": "anchor_orbit_lookat_camera_v1",
+                    "lane_camera_orbits": {
+                        "molmospaces-mujoco": {
+                            "distance_m": 4.4,
+                            "azimuth_deg": 90.0,
+                            "elevation_deg": 28.0,
+                        }
+                    },
+                    "calibration_status": "anchor_orbit_relative_calibrated_v1",
+                }
+            ],
+        },
+        width=960,
+        height=640,
+    )
+
+    spec = worker._camera_view_spec(request["views"][0], index=1)
+
+    assert spec["view_id"] == "view_01_table"
+    assert spec["camera_model"] == "anchor_orbit_lookat_camera_v1"
+    assert spec["calibration_status"] == "anchor_orbit_relative_calibrated_v1"
+    assert spec["distance"] == pytest.approx(4.4)
+    assert spec["azimuth"] == pytest.approx(90.0)
+    assert spec["elevation"] == pytest.approx(-28.0)
+    assert spec["lookat"] == pytest.approx([2.7, 5.9, 1.0])
+    assert spec["eye"][2] < spec["lookat"][2]
+
+
 class _FakeCFunc:
     def __init__(self, callback):
         self.callback = callback
