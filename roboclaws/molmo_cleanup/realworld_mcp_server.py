@@ -56,6 +56,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     cleanup_plan_from_semantic_substeps,
     primitive_provenance_counts,
     record_robot_view_step,
+    robot_view_camera_control_summary,
     robot_view_capture_for_tool,
     semantic_diagnostics,
     semantic_substeps,
@@ -496,6 +497,9 @@ class RealWorldMolmoCleanupMCPServer:
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT
             run_result["robot_view_steps"] = self.robot_view_steps
+            run_result["robot_view_camera_control"] = robot_view_camera_control_summary(
+                self.robot_view_steps
+            )
             run_result["artifacts"]["robot_views"] = str(self.run_dir / "robot_views")
         if self.planner_proof_run_result is not None:
             run_result["planner_backed_manipulation_proof"] = attach_planner_proof(

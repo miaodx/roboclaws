@@ -31,6 +31,11 @@ from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
 )
+from roboclaws.molmo_cleanup.robot_view_camera_control import (
+    backend_local_robot_view_camera_control_contract,
+    canonical_cleanup_robot_view_camera_request,
+    canonical_robot_view_camera_control_contract,
+)
 
 BACKEND = "molmospaces_subprocess"
 API_SEMANTIC_PROVENANCE = "api_semantic"
@@ -646,18 +651,82 @@ def write_robot_views(
     verify_path = output_dir / f"{safe_label}.verify.png"
 
     focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
-    fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
+    camera_request = canonical_cleanup_robot_view_camera_request(
+        label=safe_label,
+        robot_pose=state.get("robot_pose"),
+        focus=focus,
+        width=width,
+        height=height,
+        scene_focus_position=_scene_focus_position(state),
+    )
+    camera_control_contract: dict[str, Any]
+    fpv_camera: mujoco.MjvCamera | str
+    verify_camera: mujoco.MjvCamera | str
+    if camera_request is not None:
+        canonical_views = _render_camera_views_with_model_data(
+            model,
+            data,
+            state=state,
+            output_dir=output_dir / f"{safe_label}.canonical_camera_control",
+            camera_request=camera_request,
+            width=width,
+            height=height,
+        )
+        if canonical_views.get("ok") is not True:
+            return _error(
+                "robot_views",
+                "canonical_camera_control_failed",
+                reason=str(canonical_views),
+            )
+        fpv = _load_rendered_robot_view_image(
+            canonical_views,
+            role="fpv",
+        )
+        verify = _load_rendered_robot_view_image(
+            canonical_views,
+            role="verify",
+        )
+        fpv_camera = _camera_from_view_spec(
+            state,
+            _camera_view_spec(camera_request["views"][0], index=1),
+        )
+        verify_camera = _camera_from_view_spec(
+            state,
+            _camera_view_spec(camera_request["views"][1], index=2),
+        )
+        camera_control_contract = canonical_robot_view_camera_control_contract(
+            backend="molmospaces-mujoco",
+            pose_source="rby1m_robot_qpos_scene_frame",
+            request=camera_request,
+        )
+    else:
+        fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
+        verify_camera = _focus_camera(state, focus)
+        verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
+        fpv_camera = "robot_0/head_camera"
+        camera_control_contract = backend_local_robot_view_camera_control_contract(
+            backend="molmospaces-mujoco",
+            status="backend_local_robot_camera",
+            fpv_source="robot_0/head_camera",
+            verify_source="mujoco_focus_camera",
+            pose_source="rby1m_robot_qpos",
+            lens_source="mujoco_model_camera_defaults",
+        )
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
-    verify_camera = _focus_camera(state, focus)
-    verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
     focus["fpv_visibility"] = _focus_visibility(
         model,
         data,
-        "robot_0/head_camera",
+        fpv_camera,
         focus,
         frame=fpv,
     )
-    focus["visibility"] = _focus_visibility(model, data, verify_camera, focus, frame=verify)
+    focus["visibility"] = _focus_visibility(
+        model,
+        data,
+        verify_camera,
+        focus,
+        frame=verify,
+    )
     focus = _annotate_focus_visual_grounding(focus)
     if _should_use_fpv_as_verify_focus(focus):
         verify = fpv.copy()
@@ -683,14 +752,7 @@ def write_robot_views(
         robot_trajectory=state.get("robot_trajectory", []),
         view_variant="molmospaces-rby1m-fpv-map-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
-        camera_control_contract=_robot_view_camera_control_contract(
-            backend="molmospaces-mujoco",
-            status="backend_local_robot_camera",
-            fpv_source="robot_0/head_camera",
-            verify_source="mujoco_focus_camera",
-            pose_source="rby1m_robot_qpos",
-            lens_source="mujoco_model_camera_defaults",
-        ),
+        camera_control_contract=camera_control_contract,
         focus=focus,
         room_outline_count=len(state.get("room_outlines", [])),
         views={
@@ -725,28 +787,56 @@ def write_camera_views(
     _apply_qpos(data, state["qpos"])
     mujoco.mj_forward(model, data)
     _refresh_object_positions(model, data, state)
+    return _render_camera_views_with_model_data(
+        model,
+        data,
+        state=state,
+        output_dir=output_dir,
+        camera_request=camera_request,
+        width=width,
+        height=height,
+    )
+
+
+def _render_camera_views_with_model_data(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    state: dict[str, Any],
+    output_dir: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width, height = _render_dimensions(resolution["width"], resolution["height"])
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
-    model.vis.global_.fovy = float(lens.get("vertical_fov_deg", model.vis.global_.fovy))
+    previous_fovy = float(model.vis.global_.fovy)
+    model.vis.global_.fovy = float(lens.get("vertical_fov_deg", previous_fovy))
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    saved: dict[str, str] = {}
-    shapes: dict[str, list[int]] = {}
-    views: list[dict[str, Any]] = []
-    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
-        spec = _camera_view_spec(raw_spec, index=index)
-        camera = _camera_from_view_spec(state, spec)
-        frame = _render_free_camera(model, data, camera, width=width, height=height)
-        output_path = output_dir / f"{spec['view_id']}.png"
-        Image.fromarray(frame).save(output_path)
-        saved[str(spec["view_id"])] = str(output_path)
-        shapes[str(spec["view_id"])] = list(frame.shape)
-        views.append(
-            {
-                **spec,
-                "image_path": str(output_path),
-                "shape": list(frame.shape),
-            }
-        )
+    try:
+        saved: dict[str, str] = {}
+        shapes: dict[str, list[int]] = {}
+        views: list[dict[str, Any]] = []
+        for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+            spec = _camera_view_spec(raw_spec, index=index)
+            camera = _camera_from_view_spec(state, spec)
+            frame = _render_free_camera(model, data, camera, width=width, height=height)
+            output_path = output_dir / f"{spec['view_id']}.png"
+            Image.fromarray(frame).save(output_path)
+            saved[str(spec["view_id"])] = str(output_path)
+            shapes[str(spec["view_id"])] = list(frame.shape)
+            views.append(
+                {
+                    **spec,
+                    "image_path": str(output_path),
+                    "shape": list(frame.shape),
+                }
+            )
+    finally:
+        model.vis.global_.fovy = previous_fovy
     return _ok(
         "camera_views",
         backend=BACKEND,
@@ -2419,40 +2509,6 @@ def _focus_camera(state: dict[str, Any], focus: dict[str, Any]) -> mujoco.MjvCam
     return camera
 
 
-def _robot_view_camera_control_contract(
-    *,
-    backend: str,
-    status: str,
-    fpv_source: str,
-    verify_source: str,
-    pose_source: str,
-    lens_source: str,
-) -> dict[str, Any]:
-    return {
-        "schema": "robot_view_camera_control_contract_v1",
-        "backend": backend,
-        "status": status,
-        "camera_control_api": None,
-        "camera_model": "backend_local_robot_view",
-        "same_pose_api": False,
-        "agent_facing_fpv": {
-            "source": fpv_source,
-            "canonical_camera_control": False,
-        },
-        "report_verify_view": {
-            "source": verify_source,
-            "canonical_camera_control": False,
-        },
-        "pose_source": pose_source,
-        "lens_source": lens_source,
-        "evidence_note": (
-            "Cleanup robot views are generated by backend-local robot/report cameras, "
-            "not by roboclaws.camera_control.render_views. Scene-camera parity does "
-            "not by itself prove raw-FPV cleanup parity."
-        ),
-    }
-
-
 def _render_free_camera(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -2467,6 +2523,24 @@ def _render_free_camera(
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
+
+
+def _load_rendered_robot_view_image(camera_views: dict[str, Any], *, role: str) -> Any:
+    for item in camera_views.get("views") or []:
+        if not isinstance(item, dict) or item.get("robot_view_role") != role:
+            continue
+        image_path = Path(str(item.get("image_path") or ""))
+        if not image_path.is_file():
+            raise RuntimeError(f"missing rendered {role} camera-control image: {image_path}")
+        return _image_to_array(image_path)
+    raise RuntimeError(f"missing rendered {role} camera-control view")
+
+
+def _image_to_array(path: Path) -> Any:
+    import numpy as np
+
+    with Image.open(path) as image:
+        return np.asarray(image.convert("RGB")).copy()
 
 
 def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
@@ -2551,6 +2625,8 @@ def _camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]
         "label": str(raw_spec.get("label") or view_id),
         "anchor_id": str(raw_spec.get("anchor_id") or ""),
         "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
+        "robot_view_role": str(raw_spec.get("robot_view_role") or ""),
+        "camera_basis": str(raw_spec.get("camera_basis") or ""),
         "camera_mode": str(raw_spec.get("camera_mode") or "free_camera"),
         "focus_receptacle_id": str(raw_spec.get("focus_receptacle_id") or ""),
         "robot_pose": dict(raw_spec["robot_pose"])

@@ -465,11 +465,16 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
 
     assert done["cleanup_status"] in {"success", "partial_success"}
     assert run_result["view_variant"] == "molmospaces-rby1m-fpv-map-chase-verify"
+    assert run_result["robot_view_camera_control"]["schema"] == (
+        "robot_view_camera_control_summary_v1"
+    )
+    assert run_result["robot_view_camera_control"]["same_pose_api"] is False
     assert run_result["robot_view_steps"][0]["action"] == "before"
     assert any(
         step["semantic_phase"] == "navigate_to_object" for step in run_result["robot_view_steps"]
     )
     assert "Robot View Timeline" in report_text
+    assert "Robot-view camera" in report_text
 
 
 def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) -> None:

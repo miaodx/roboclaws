@@ -546,6 +546,7 @@ def _cleanup_summary_section(
           {_badge("MCP server", run_result.get("mcp_server", "none"))}
           {_confidence_layer_badges(run_result)}
           {_robot_badge(run_result)}
+          {_robot_view_camera_badges(run_result)}
         </div>
       </details>
     </section>
@@ -1327,6 +1328,15 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     if not robot_name:
         return ""
     return _badge("Robot", robot_name)
+
+
+def _robot_view_camera_badges(run_result: dict[str, Any]) -> str:
+    summary = run_result.get("robot_view_camera_control")
+    if not isinstance(summary, dict):
+        return ""
+    return _badge("Robot-view camera", summary.get("status", "unknown")) + _badge(
+        "Same-pose robot FPV", summary.get("same_pose_api", False)
+    )
 
 
 def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:

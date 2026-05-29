@@ -137,6 +137,37 @@ def record_robot_view_step(
     return index + 1
 
 
+def robot_view_camera_control_summary(steps: list[dict[str, Any]]) -> dict[str, Any]:
+    contracts = [
+        step.get("camera_control_contract")
+        for step in steps
+        if isinstance(step.get("camera_control_contract"), dict)
+    ]
+    if not contracts:
+        return {
+            "schema": "robot_view_camera_control_summary_v1",
+            "status": "missing_camera_control_contract",
+            "same_pose_api": False,
+            "step_count": len(steps),
+            "contract_count": 0,
+        }
+    canonical_count = sum(1 for item in contracts if item.get("same_pose_api") is True)
+    status = (
+        "all_robot_views_use_canonical_camera_control"
+        if canonical_count == len(contracts)
+        else "mixed_or_backend_local_robot_views"
+    )
+    return {
+        "schema": "robot_view_camera_control_summary_v1",
+        "status": status,
+        "same_pose_api": canonical_count == len(contracts),
+        "step_count": len(steps),
+        "contract_count": len(contracts),
+        "canonical_contract_count": canonical_count,
+        "backend_local_contract_count": len(contracts) - canonical_count,
+    }
+
+
 def robot_view_capture_for_tool(
     tool: str,
     request: dict[str, Any],

@@ -1215,6 +1215,11 @@ def _assert_robot_views(
     assert "Robot View Timeline" in report_text, report_text[:500]
     steps = data.get("robot_view_steps") or []
     assert len(steps) >= 2, data
+    camera_summary = data.get("robot_view_camera_control")
+    if camera_summary is not None:
+        assert isinstance(camera_summary, dict), data
+        assert camera_summary.get("schema") == "robot_view_camera_control_summary_v1", data
+        assert isinstance(camera_summary.get("same_pose_api"), bool), data
     focused_actions: set[str] = set()
     for step in steps:
         views = step.get("views") or {}
@@ -2014,6 +2019,11 @@ def _assert_raw_fpv_observations(
         assert not {"category", "name", "support_estimate", "target_receptacle_id"}.intersection(
             item
         ), item
+        camera_contract = item.get("camera_control_contract")
+        if camera_contract is not None:
+            assert isinstance(camera_contract, dict), item
+            assert camera_contract.get("schema") == "robot_view_camera_control_contract_v1", item
+            assert isinstance(camera_contract.get("same_pose_api"), bool), item
         image_artifacts = item.get("image_artifacts") or {}
         fpv = image_artifacts.get("fpv") or item.get("fpv_image")
         assert fpv, item
