@@ -53,7 +53,8 @@ REHEARSAL_MODE_CONTRACT = "contract"
 REHEARSAL_MODE_CLEANUP_ACTIONS = "cleanup-actions"
 NAVIGATION_PROVENANCE = "agibot_shaped_molmospaces_sim_normal_navi"
 OBSERVATION_PROVENANCE = "agibot_shaped_molmospaces_sim_policy_observation"
-AGIBOT_SHAPED_SIM_BACKEND = "agibot_shaped_molmospaces_sim_backend"
+AGIBOT_MOLMOSPACES_SIM_BACKEND = "agibot_molmospaces_sim"
+AGIBOT_SHAPED_SIM_BACKEND = AGIBOT_MOLMOSPACES_SIM_BACKEND
 
 
 def run_molmospaces_agibot_contract_rehearsal(
@@ -69,6 +70,8 @@ def run_molmospaces_agibot_contract_rehearsal(
     rehearsal_mode: str = REHEARSAL_MODE_CONTRACT,
     cleanup_object_count: int = 2,
     record_robot_views: bool = False,
+    context_json: Path | None = None,
+    agibot_map_artifact_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Run the Agibot-shaped cleanup contract against simulated MolmoSpaces semantics."""
 
@@ -147,6 +150,8 @@ def run_molmospaces_agibot_contract_rehearsal(
             seed=seed,
             generated_mess_count=generated_mess_count,
             backend_instance=backend_instance,
+            context_json=context_json,
+            agibot_map_artifact_dir=agibot_map_artifact_dir,
         )
         preflight_agent_view = _load_json(preflight["agent_view"])
         waypoint_sequence = _load_json(preflight["waypoint_sequence"])
@@ -426,6 +431,7 @@ def run_molmospaces_agibot_contract_rehearsal(
             backend_instance=backend_instance,
             scene_identity_path=preflight["scene_identity"],
             map_preview_path=preflight["map_preview"],
+            agibot_map_reference_path=preflight["agibot_map_reference"],
             rehearsal_mode=rehearsal_mode,
             record_robot_views=record_robot_views,
         )
@@ -498,6 +504,8 @@ def _write_preflight_artifacts(
     seed: int,
     generated_mess_count: int,
     backend_instance: MolmoSpacesSubprocessBackend | None,
+    context_json: Path | None,
+    agibot_map_artifact_dir: Path | None,
 ) -> dict[str, Path]:
     preflight_dir = run_dir / "preflight"
     preflight_dir.mkdir(parents=True, exist_ok=True)
@@ -507,6 +515,10 @@ def _write_preflight_artifacts(
         seed=seed,
         generated_mess_count=generated_mess_count,
         backend_instance=backend_instance,
+    )
+    agibot_map_reference = _agibot_map_reference(
+        context_json=context_json,
+        agibot_map_artifact_dir=agibot_map_artifact_dir,
     )
     map_preview = _write_metric_map_preview(
         output_path=preflight_dir / "molmospaces_metric_map.png",
@@ -528,6 +540,7 @@ def _write_preflight_artifacts(
         "simulated": True,
         "physical_robot": False,
         "execution_backend": EXECUTION_BACKEND,
+        "agibot_map_reference": agibot_map_reference,
     }
     waypoint_sequence = {
         "schema": "agibot_shaped_waypoint_sequence_v1",
@@ -574,6 +587,7 @@ def _write_preflight_artifacts(
             "This input is Agibot-shaped for runner-contract rehearsal, but it is "
             "not a real Agibot SDK task input and does not enable GDK movement."
         ),
+        "agibot_map_reference": agibot_map_reference,
     }
     paths = {
         "metric_map": preflight_dir / "metric_map.json",
@@ -583,6 +597,7 @@ def _write_preflight_artifacts(
         "map_preview": map_preview,
         "waypoint_sequence": preflight_dir / "waypoint_sequence.json",
         "runner_task_input": preflight_dir / "runner_task_input.json",
+        "agibot_map_reference": preflight_dir / "agibot_map_reference.json",
     }
     values = {
         "metric_map": metric_map,
@@ -591,12 +606,63 @@ def _write_preflight_artifacts(
         "scene_identity": scene_identity,
         "waypoint_sequence": waypoint_sequence,
         "runner_task_input": runner_task_input,
+        "agibot_map_reference": agibot_map_reference,
     }
     for key, path in paths.items():
         if key == "map_preview":
             continue
         path.write_text(json.dumps(values[key], indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return paths
+
+
+def _agibot_map_reference(
+    *,
+    context_json: Path | None,
+    agibot_map_artifact_dir: Path | None,
+) -> dict[str, Any]:
+    reference: dict[str, Any] = {
+        "schema": "agibot_map_reference_for_molmospaces_sim_v1",
+        "status": "not_supplied" if context_json is None else "referenced_for_contract_only",
+        "used_as_scene_source": False,
+        "used_for_navigation_execution": False,
+        "simulated": True,
+        "physical_robot": False,
+        "execution_backend": EXECUTION_BACKEND,
+        "public_contract_note": (
+            "MolmoSpaces remains the simulated scene/backend. Any Agibot context "
+            "or map artifact is recorded only as reference evidence for comparing "
+            "public contract shape; it is not used as a MolmoSpaces digital twin."
+        ),
+    }
+    if context_json is None:
+        return reference
+
+    context_path = Path(context_json)
+    context = _load_json(context_path)
+    reference.update(
+        {
+            "context_json": str(context_path),
+            "context_schema": str(context.get("schema") or ""),
+            "environment_id": str(context.get("environment_id") or ""),
+            "map_version": str(context.get("map_version") or ""),
+            "frame_id": str(context.get("frame_id") or ""),
+            "room_count": len(context.get("rooms") or []),
+            "fixture_count": len(context.get("fixtures") or []),
+            "inspection_waypoint_count": len(context.get("inspection_waypoints") or []),
+        }
+    )
+    map_source = context.get("map_source") or {}
+    if isinstance(map_source, dict):
+        reference["map_source"] = {
+            "type": str(map_source.get("type") or ""),
+            "id": str(map_source.get("id") or ""),
+            "name": str(map_source.get("name") or ""),
+        }
+    if agibot_map_artifact_dir is not None:
+        artifact_dir = Path(agibot_map_artifact_dir)
+        reference["agibot_map_artifact_dir"] = str(artifact_dir)
+        reference["agibot_map_artifact_present"] = artifact_dir.exists()
+    return reference
 
 
 def _scene_identity(
@@ -1380,6 +1446,7 @@ def _run_result(
     backend_instance: MolmoSpacesSubprocessBackend | None,
     scene_identity_path: Path,
     map_preview_path: Path,
+    agibot_map_reference_path: Path,
     rehearsal_mode: str,
     record_robot_views: bool,
 ) -> dict[str, Any]:
@@ -1543,6 +1610,7 @@ def _run_result(
             "agent_view_preflight": "preflight/agent_view.json",
             "scene_identity": _relpath(scene_identity_path, run_dir),
             "map_preview": _relpath(map_preview_path, run_dir),
+            "agibot_map_reference": _relpath(agibot_map_reference_path, run_dir),
             "waypoint_sequence": "preflight/waypoint_sequence.json",
             "runner_task_input": "preflight/runner_task_input.json",
             "runtime_export": "runtime/runtime_export.json",
@@ -1568,6 +1636,7 @@ def _run_result(
             "preflight": "preflight",
             "molmospaces_scene_identity": _relpath(scene_identity_path, run_dir),
             "molmospaces_metric_map_preview": _relpath(map_preview_path, run_dir),
+            "agibot_map_reference": _relpath(agibot_map_reference_path, run_dir),
             "runtime_export": "runtime/runtime_export.json",
             "agibot_shaped_subphases": "subphases",
             "report": "report.html",
@@ -1589,6 +1658,7 @@ def _run_result(
     if record_robot_views:
         run_result["record_robot_views"] = True
     run_result["molmospaces_scene"] = _load_json(scene_identity_path)
+    run_result["agibot_map_reference"] = _load_json(agibot_map_reference_path)
     if backend_instance is not None:
         run_result["molmospaces_runtime"] = {
             "python_executable": str(backend_instance.python_executable),

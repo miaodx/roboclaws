@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
         rehearsal_mode=args.rehearsal_mode,
         cleanup_object_count=args.cleanup_object_count,
         record_robot_views=args.record_robot_views,
+        context_json=args.context_json,
+        agibot_map_artifact_dir=args.agibot_map_artifact_dir,
     )
     print(
         json.dumps(
@@ -111,6 +113,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="When using molmospaces-subprocess, include the configured robot in the scene.",
     )
     parser.add_argument("--robot-name", default="rby1m")
+    parser.add_argument(
+        "--context-json",
+        type=Path,
+        help=(
+            "Optional completed Agibot map context to record as reference evidence. "
+            "It is not used as the MolmoSpaces scene source."
+        ),
+    )
+    parser.add_argument(
+        "--agibot-map-artifact-dir",
+        type=Path,
+        help=(
+            "Optional Agibot map artifact root to record alongside --context-json "
+            "for comparison-only evidence."
+        ),
+    )
     parser.add_argument(
         "--record-robot-views",
         action="store_true",

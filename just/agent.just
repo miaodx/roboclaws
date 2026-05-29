@@ -74,11 +74,13 @@ run task driver mode="" *overrides:
       case "$key" in
         agent_souls|agents|agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
         generated_mess_count|\
+        cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
-        profile|real_movement_enabled|run_dir|runner_python|runner_script|runtime_map_prior|\
+        profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
+        runtime|runtime_map_prior|molmospaces_python|\
         scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
@@ -323,9 +325,85 @@ run task driver mode="" *overrides:
         map_mode="$(get map_mode rich)"
         runtime_map_prior="$(get runtime_map_prior "")"
         backend="$(get backend auto)"
+        if [[ "$backend" == "agibot_molmospaces_sim" && ! -v "kv[seeds]" && ! -v "kv[seed]" ]]; then
+          seeds="7"
+        fi
         if [[ "$task" == "semantic-map-build" && "$driver" == "codex" && "$backend" != "agibot_gdk" ]]; then
           echo "error: semantic-map-build codex currently requires backend=agibot_gdk" >&2
           exit 1
+        fi
+        if [[ "$backend" == "agibot_molmospaces_sim" ]]; then
+          if [[ "$driver" != "direct" ]]; then
+            echo "error: backend=agibot_molmospaces_sim currently supports direct driver only" >&2
+            exit 1
+          fi
+          rehearsal_mode="$(get rehearsal_mode contract)"
+          case "$rehearsal_mode" in
+            contract|cleanup-actions)
+              ;;
+            *)
+              echo "error: unsupported rehearsal_mode '$rehearsal_mode' (expected contract|cleanup-actions)" >&2
+              exit 1
+              ;;
+          esac
+          runtime="$(get runtime fixture)"
+          case "$runtime" in
+            fixture|molmospaces-subprocess)
+              ;;
+            *)
+              echo "error: unsupported runtime '$runtime' (expected fixture|molmospaces-subprocess)" >&2
+              exit 1
+              ;;
+          esac
+          seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
+          if [[ "$seed_count" != "1" ]]; then
+            echo "error: backend=agibot_molmospaces_sim accepts exactly one seed per run" >&2
+            exit 1
+          fi
+          cleanup_object_count="$(get cleanup_object_count 2)"
+          sim_args=(.venv/bin/python scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py
+            --output-dir "$output_dir"
+            --seed "$seeds"
+            --generated-mess-count "$generated_mess_count"
+            --runtime "$runtime"
+            --rehearsal-mode "$rehearsal_mode"
+            --cleanup-object-count "$cleanup_object_count")
+          molmospaces_python="$(get molmospaces_python "")"
+          if [[ -n "$molmospaces_python" ]]; then
+            sim_args+=(--molmospaces-python "$molmospaces_python")
+          fi
+          robot_name="$(get robot_name "")"
+          if [[ -n "$robot_name" ]]; then
+            sim_args+=(--robot-name "$robot_name")
+          fi
+          waypoint_id="$(get waypoint_id "")"
+          if [[ -n "$waypoint_id" ]]; then
+            sim_args+=(--waypoint-id "$waypoint_id")
+          fi
+          run_dir="$(get run_dir "")"
+          if [[ -n "$run_dir" ]]; then
+            sim_args+=(--run-dir "$run_dir")
+          fi
+          context_json="$(get context_json "")"
+          if [[ -n "$context_json" ]]; then
+            sim_args+=(--context-json "$context_json")
+          fi
+          agibot_map_artifact_dir="$(get agibot_map_artifact_dir "")"
+          if [[ -n "$agibot_map_artifact_dir" ]]; then
+            sim_args+=(--agibot-map-artifact-dir "$agibot_map_artifact_dir")
+          fi
+          case "$robot_views" in
+            on|true|1|yes)
+              sim_args+=(--include-robot --record-robot-views)
+              ;;
+            off|false|0|no|auto|"")
+              ;;
+            *)
+              echo "error: unsupported robot_views '$robot_views' (expected auto|on|off)" >&2
+              exit 1
+              ;;
+          esac
+          run_cmd "${sim_args[@]}"
         fi
         if [[ "$backend" == "agibot_gdk" ]]; then
           context_json="$(get context_json "")"

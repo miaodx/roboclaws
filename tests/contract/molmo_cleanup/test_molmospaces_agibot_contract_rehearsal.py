@@ -18,6 +18,8 @@ from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "molmo_cleanup" / ("run_molmospaces_agibot_contract_rehearsal.py")
+ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
+ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 
 
 def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
@@ -139,6 +141,41 @@ def test_molmospaces_agibot_contract_rehearsal_cli_runs_without_gdk(
     assert run_result["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
     assert run_result["execution_backend"] == EXECUTION_BACKEND
     assert "agibot_gdk_normal_navi" not in json.dumps(run_result, sort_keys=True)
+
+
+def test_molmospaces_agibot_backend_records_old_map_as_reference_only(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "robot-map-9-reference"
+
+    result = run_molmospaces_agibot_contract_rehearsal(
+        run_dir=run_dir,
+        context_json=ROBOT_MAP_9_CONTEXT,
+        agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
+    )
+
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    reference = json.loads(
+        (run_dir / "preflight" / "agibot_map_reference.json").read_text(encoding="utf-8")
+    )
+
+    assert result["backend"] == "agibot_molmospaces_sim"
+    assert run_result["backend"] == "agibot_molmospaces_sim"
+    assert run_result["backend_variant"] == EXECUTION_BACKEND
+    assert run_result["simulated"] is True
+    assert run_result["physical_robot"] is False
+    assert reference["status"] == "referenced_for_contract_only"
+    assert reference["context_json"] == str(ROBOT_MAP_9_CONTEXT)
+    assert reference["environment_id"] == "agibot-robot-map-9"
+    assert reference["agibot_map_artifact_dir"] == str(ROBOT_MAP_9_ARTIFACT)
+    assert reference["agibot_map_artifact_present"] is True
+    assert reference["used_as_scene_source"] is False
+    assert reference["used_for_navigation_execution"] is False
+    assert run_result["agibot_map_reference"] == reference
+    assert run_result["molmospaces_scene"]["scene_source"] == "deterministic_fixture_projection"
+    assert run_result["molmospaces_agibot_contract_rehearsal"]["agibot_map_reference"] == (
+        "preflight/agibot_map_reference.json"
+    )
 
 
 def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
