@@ -402,11 +402,18 @@ movement gate, not physical PNC execution.
   remains disabled/backend-internal, reports conservative default limits
   (`max_distance_m=0.25`, `max_yaw_rad=0.35`, `timeout_s=3.0`), and records
   `operator_config_required=true` before any future `relative_move` enablement.
+- Extended the Operator Localization Gate evidence to enforce optional
+  operator-configured `min_localization_confidence` and
+  `accepted_localization_states` fields when a real G2 context supplies them.
+  If those fields are omitted, the gate continues to require selected-map,
+  G02-Pad relocalization, and localization-ready confirmation without
+  inventing hardware confidence defaults.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
   `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
   `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
   `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_resolves_public_navigation_tool_family -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_localization_gate_enforces_optional_thresholds tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
   `./.venv/bin/ruff check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
   `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
   `./.venv/bin/ruff check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,

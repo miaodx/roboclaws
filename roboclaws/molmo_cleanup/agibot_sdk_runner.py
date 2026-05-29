@@ -929,7 +929,24 @@ def _operator_localization_gate(context: dict[str, Any]) -> dict[str, Any]:
         or gate.get("relocalized")
     )
     localization_ready = bool(gate.get("localization_ready") or gate.get("ready"))
-    ok = selected_map_confirmed and g02_pad_relocalized and localization_ready
+    min_confidence_configured = gate.get("min_localization_confidence") not in (None, "")
+    min_confidence = _optional_float(gate.get("min_localization_confidence"))
+    confidence = _optional_float(gate.get("localization_confidence"))
+    confidence_ok = (
+        not min_confidence_configured
+        if min_confidence is None
+        else confidence is not None and confidence >= min_confidence
+    )
+    accepted_states = _accepted_localization_states(gate.get("accepted_localization_states"))
+    localization_state = str(gate.get("localization_state") or "")
+    state_ok = not accepted_states or localization_state in accepted_states
+    ok = (
+        selected_map_confirmed
+        and g02_pad_relocalized
+        and localization_ready
+        and confidence_ok
+        and state_ok
+    )
     return {
         "schema": "operator_localization_gate_v1",
         "ok": ok,
@@ -937,11 +954,20 @@ def _operator_localization_gate(context: dict[str, Any]) -> dict[str, Any]:
         "selected_map_confirmed": selected_map_confirmed,
         "g02_pad_relocalized": g02_pad_relocalized,
         "localization_ready": localization_ready,
+        "localization_confidence": confidence,
+        "min_localization_confidence": min_confidence,
+        "localization_confidence_ok": confidence_ok,
+        "localization_state": localization_state,
+        "accepted_localization_states": sorted(accepted_states),
+        "localization_state_ok": state_ok,
         "operator": str(gate.get("operator") or ""),
         "confirmed_at": str(gate.get("confirmed_at") or ""),
         "reason": ""
         if ok
-        else "selected map, G02 Pad relocalization, and localization ready are required.",
+        else (
+            "selected map, G02 Pad relocalization, localization ready, and any "
+            "operator-configured confidence/state thresholds are required."
+        ),
     }
 
 
@@ -985,6 +1011,23 @@ def _operator_run_enablement_gate(
         "confirmed_at": str(gate.get("confirmed_at") or ""),
         "reason": "" if enabled else "operator run enablement was not confirmed.",
     }
+
+
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _accepted_localization_states(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {item.strip() for item in value.split(",") if item.strip()}
+    if isinstance(value, list | tuple | set):
+        return {str(item).strip() for item in value if str(item).strip()}
+    return set()
 
 
 def _bounded_local_nudge_status(*, enabled: bool) -> dict[str, Any]:

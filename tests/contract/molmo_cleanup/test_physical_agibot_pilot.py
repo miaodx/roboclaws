@@ -12,6 +12,7 @@ from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
     _human_takeover_stop_required,
+    _operator_localization_gate,
     run_physical_agibot_cleanup_pilot,
 )
 from roboclaws.molmo_cleanup.artifact_report import (
@@ -301,6 +302,59 @@ def test_physical_agibot_human_takeover_stop_covers_runtime_navigation_failures(
         {},
         {"failure_type": "waypoint_not_pnc_verified"},
     )
+
+
+def test_physical_agibot_localization_gate_enforces_optional_thresholds() -> None:
+    confirmed = _operator_localization_gate(
+        {
+            "operator_localization_gate": {
+                "selected_map_confirmed": True,
+                "g02_pad_relocalized": True,
+                "localization_ready": True,
+                "localization_confidence": 0.92,
+                "min_localization_confidence": 0.9,
+                "localization_state": "localized",
+                "accepted_localization_states": ["localized", "tracking"],
+            }
+        }
+    )
+    low_confidence = _operator_localization_gate(
+        {
+            "operator_localization_gate": {
+                "selected_map_confirmed": True,
+                "g02_pad_relocalized": True,
+                "localization_ready": True,
+                "localization_confidence": 0.7,
+                "min_localization_confidence": 0.9,
+                "localization_state": "localized",
+                "accepted_localization_states": ["localized"],
+            }
+        }
+    )
+    wrong_state = _operator_localization_gate(
+        {
+            "operator_localization_gate": {
+                "selected_map_confirmed": True,
+                "g02_pad_relocalized": True,
+                "localization_ready": True,
+                "localization_confidence": 0.95,
+                "min_localization_confidence": 0.9,
+                "localization_state": "lost",
+                "accepted_localization_states": ["localized"],
+            }
+        }
+    )
+
+    assert confirmed["ok"] is True
+    assert confirmed["localization_confidence_ok"] is True
+    assert confirmed["localization_state_ok"] is True
+    assert confirmed["accepted_localization_states"] == ["localized", "tracking"]
+    assert low_confidence["ok"] is False
+    assert low_confidence["localization_confidence_ok"] is False
+    assert low_confidence["localization_state_ok"] is True
+    assert wrong_state["ok"] is False
+    assert wrong_state["localization_confidence_ok"] is True
+    assert wrong_state["localization_state_ok"] is False
 
 
 def _completed_context() -> dict:
