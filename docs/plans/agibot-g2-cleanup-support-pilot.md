@@ -515,6 +515,18 @@ movement gate, not physical PNC execution.
   and `./.venv/bin/ruff format --check` over the same touched files.
   This is still shared-MCP contract evidence, not real G2 hardware validation.
 
+2026-05-29 Agibot hardware visual-grounding gate tightening:
+
+- Tightened `--require-agibot-g2-hardware` so it rejects `sim` and `manual`
+  visual-grounding pipeline ids even when the rest of the artifact is promoted
+  into the hardware-shaped status. Final G2 acceptance now requires a real
+  External Visual Grounding Service pipeline, not a simulator/control placeholder.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation -q`,
+  the broader focused Agibot/checker route test set, and ruff check/format over
+  the checker and checker contract test.
+  This is still a hardware-gate tightening, not real G2 hardware validation.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

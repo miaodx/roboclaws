@@ -763,12 +763,23 @@ def _assert_agibot_g2_hardware_semantic_map_build(
     assert camera_policy.get("model_provenance") == EXTERNAL_VISUAL_GROUNDING_PROVENANCE, (
         camera_policy
     )
+    pipeline_id = str(camera_policy.get("visual_grounding_pipeline_id") or "")
+    pipeline_ids = [
+        str(item)
+        for item in (camera_policy.get("visual_grounding_pipeline_ids") or [pipeline_id])
+        if str(item)
+    ]
+    assert pipeline_ids, camera_policy
+    assert pipeline_id in pipeline_ids, camera_policy
+    assert not {"sim", "manual"}.intersection(pipeline_ids), camera_policy
     assert int(camera_policy.get("event_count") or 0) >= 1, camera_policy
     assert int(camera_policy.get("candidate_count") or 0) >= 1, camera_policy
     assert int(camera_policy.get("visual_grounding_failure_count") or 0) == 0, camera_policy
     for event in camera_policy.get("events") or []:
         pipeline = event.get("visual_grounding_pipeline") or {}
         assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
+        assert str(pipeline.get("pipeline_id") or "") in pipeline_ids, event
+        assert str(pipeline.get("pipeline_id") or "") not in {"sim", "manual"}, event
         assert pipeline.get("status") == "ok", event
         assert int(pipeline.get("candidate_count") or 0) >= 1, event
         stages = pipeline.get("stages") or []

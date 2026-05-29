@@ -167,6 +167,45 @@ def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
     )
 
 
+def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    _promote_agibot_fixture_to_hardware_shape(data, run_dir)
+
+    camera_policy = data["camera_model_policy_evidence"]
+    assert isinstance(camera_policy, dict)
+    camera_policy["visual_grounding_pipeline_id"] = "sim"
+    camera_policy["visual_grounding_pipeline_ids"] = ["sim"]
+    for event in camera_policy["events"]:
+        assert isinstance(event, dict)
+        pipeline = event["visual_grounding_pipeline"]
+        assert isinstance(pipeline, dict)
+        pipeline["pipeline_id"] = "sim"
+    agent_view = data["agent_view"]
+    assert isinstance(agent_view, dict)
+    agent_view["camera_model_policy_evidence"] = camera_policy
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            path.parent,
+            expect_task=None,
+            expect_backend="agibot_gdk",
+            expect_policy="semantic_sweep_baseline",
+            expect_mcp_server="agibot_semantic_map_build",
+            min_generated_mess_count=0,
+            require_agent_driven=True,
+            require_camera_model_policy=True,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_agibot_g2_hardware=True,
+            min_sweep_coverage=1.0,
+        )
+
+
 def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     tmp_path: Path,
 ) -> None:
