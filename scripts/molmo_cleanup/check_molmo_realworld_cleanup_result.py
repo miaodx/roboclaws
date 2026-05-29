@@ -162,6 +162,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
     parser.add_argument("--require-isaac-segmentation-evidence", action="store_true")
     parser.add_argument("--require-isaac-snapshot-provenance", action="store_true")
+    parser.add_argument(
+        "--require-canonical-robot-view-camera-control",
+        action="store_true",
+        help=(
+            "Require every cleanup robot FPV/verify view to use the canonical "
+            "Roboclaws same-pose camera-control API."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -240,6 +248,9 @@ def main() -> None:
             require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
             require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
             require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
+            require_canonical_robot_view_camera_control=(
+                args.require_canonical_robot_view_camera_control
+            ),
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -306,6 +317,7 @@ def _assert_result(
     require_isaac_robot_view_provenance: bool = False,
     require_isaac_segmentation_evidence: bool = False,
     require_isaac_snapshot_provenance: bool = False,
+    require_canonical_robot_view_camera_control: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     if data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA:
@@ -453,6 +465,8 @@ def _assert_result(
         _assert_clean_agent_run(data, min_complete_count=min_semantic_accepted_count)
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
+    if require_canonical_robot_view_camera_control:
+        _assert_canonical_robot_view_camera_control(data, base)
     if require_advisory_scoring:
         _assert_advisory_scoring(data, base, report_text)
     if require_raw_fpv_observations:
@@ -1255,6 +1269,41 @@ def _assert_robot_views(
             assert OPEN_RECEPTACLE_PHASE in focused_actions, data
             assert PLACE_INSIDE_PHASE in focused_actions, data
             assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
+
+
+def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path) -> None:
+    _assert_robot_views(data, base, require_complete_actions=False)
+    summary = data.get("robot_view_camera_control") or {}
+    assert summary.get("schema") == "robot_view_camera_control_summary_v1", data
+    assert summary.get("status") == "all_robot_views_use_canonical_camera_control", summary
+    assert summary.get("same_pose_api") is True, summary
+    steps = data.get("robot_view_steps") or []
+    assert steps, data
+    assert int(summary.get("contract_count") or 0) == len(steps), summary
+    assert int(summary.get("canonical_contract_count") or 0) == len(steps), summary
+    report_path = _resolve_path(base, (data.get("artifacts") or {}).get("report", ""))
+    for step in steps:
+        contract = step.get("camera_control_contract") or {}
+        assert contract.get("schema") == "robot_view_camera_control_contract_v1", step
+        assert contract.get("status") == "canonical_camera_control_robot_view", step
+        assert contract.get("camera_control_api") == CAMERA_CONTROL_API_NAME, step
+        assert contract.get("camera_model") == "canonical_eye_target_camera_v1", step
+        assert contract.get("same_pose_api") is True, step
+        fpv = contract.get("agent_facing_fpv") or {}
+        verify = contract.get("report_verify_view") or {}
+        assert fpv.get("canonical_camera_control") is True, step
+        assert verify.get("canonical_camera_control") is True, step
+        assert fpv.get("eye") and fpv.get("target"), step
+        assert verify.get("eye") and verify.get("target"), step
+        views = step.get("views") or {}
+        _assert_nonblank_image(
+            _resolve_path(report_path.parent, str(views.get("fpv") or "")),
+            "canonical robot FPV",
+        )
+        _assert_nonblank_image(
+            _resolve_path(report_path.parent, str(views.get("verify") or "")),
+            "canonical robot verify",
+        )
 
 
 def _assert_isaac_runtime(

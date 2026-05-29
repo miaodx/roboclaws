@@ -1098,6 +1098,61 @@ def test_checker_accepts_isaac_canonical_robot_view_camera_control(
     )
 
 
+def test_checker_requires_canonical_robot_view_camera_control(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    data = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    _add_isaac_robot_view_step(
+        data,  # type: ignore[arg-type]
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+        canonical_camera_control=True,
+    )
+    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+
+    checker._assert_result(
+        data,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=0,
+        allow_partial_cleanup=True,
+        require_canonical_robot_view_camera_control=True,
+    )
+
+
+def test_checker_rejects_backend_local_robot_view_when_canonical_required(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    data = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    _add_isaac_robot_view_step(
+        data,  # type: ignore[arg-type]
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+        canonical_camera_control=False,
+    )
+    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=0,
+            allow_partial_cleanup=True,
+            require_canonical_robot_view_camera_control=True,
+        )
+
+
 def test_checker_rejects_refreshed_isaac_semantic_pose_without_refreshed_views(
     tmp_path: Path,
 ) -> None:
@@ -2950,7 +3005,10 @@ def _add_isaac_robot_view_step(
             _write_nonblank_png(path)
         views[key] = str(path.relative_to(base))
     report = base / "report.html"
-    report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
+    if report.is_file():
+        _insert_robot_timeline_before_score(report)
+    else:
+        report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
     artifacts = data.setdefault("artifacts", {})
     assert isinstance(artifacts, dict)
     artifacts["robot_views"] = str(view_dir.relative_to(base))
@@ -2993,6 +3051,14 @@ def _add_isaac_robot_view_step(
                 "agent_facing_fpv": {
                     "source": "canonical_eye_target_robot_pose",
                     "canonical_camera_control": True,
+                    "eye": [1.0, 2.0, 1.55],
+                    "target": [2.5, 5.5, 0.6],
+                },
+                "report_verify_view": {
+                    "source": "canonical_eye_target_robot_verify",
+                    "canonical_camera_control": True,
+                    "eye": [1.2, 2.4, 2.3],
+                    "target": [2.5, 5.5, 0.6],
                 },
             }
         else:
@@ -3007,7 +3073,31 @@ def _add_isaac_robot_view_step(
                     "source": provenance["fpv"],
                     "canonical_camera_control": False,
                 },
+                "report_verify_view": {
+                    "source": provenance["verify"],
+                    "canonical_camera_control": False,
+                },
             }
+    if canonical_camera_control:
+        data["robot_view_camera_control"] = {
+            "schema": "robot_view_camera_control_summary_v1",
+            "status": "all_robot_views_use_canonical_camera_control",
+            "same_pose_api": True,
+            "step_count": len(data["robot_view_steps"]),
+            "contract_count": len(data["robot_view_steps"]),
+            "canonical_contract_count": len(data["robot_view_steps"]),
+            "backend_local_contract_count": 0,
+        }
+    else:
+        data["robot_view_camera_control"] = {
+            "schema": "robot_view_camera_control_summary_v1",
+            "status": "mixed_or_backend_local_robot_views",
+            "same_pose_api": False,
+            "step_count": len(data["robot_view_steps"]),
+            "contract_count": len(data["robot_view_steps"]),
+            "canonical_contract_count": 0,
+            "backend_local_contract_count": len(data["robot_view_steps"]),
+        }
 
 
 def _add_isaac_snapshot_artifacts(
