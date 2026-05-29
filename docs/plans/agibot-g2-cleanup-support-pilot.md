@@ -404,8 +404,15 @@ movement gate, not physical PNC execution.
   `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
   `./.venv/bin/ruff check roboclaws/devtools/commands.py roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
   and `./.venv/bin/ruff format --check` over the same touched files.
-  This is route/MCP contract evidence only; live Codex provider execution and
-  real G2 hardware validation remain unrun.
+- Live Codex fixture dry-run verification:
+  `just task::run semantic-map-build codex camera-labels backend=agibot_gdk context_json=tests/fixtures/agibot_map_context.completed.json output_dir=output/agibot/semantic-map-build-codex-live-validation policy=codex_agibot_semantic_map_build_pilot`
+  produced `output/agibot/semantic-map-build-codex-live-validation/0529_1834/seed-7/`
+  with `agent_driven=true`, `mcp_server=agibot_semantic_map_build`,
+  `backend_variant=agibot_gdk`, `cleanup_status=physical_agibot_semantic_map_build_rehearsal`,
+  `sweep_coverage_rate=1.0`, and Codex MCP calls to `metric_map`,
+  `fixture_hints`, `navigate_to_waypoint`, `observe`, and `done`. Movement was
+  disabled, so this is live-provider/fixture dry-run evidence; real G2 hardware
+  validation remains unrun.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 

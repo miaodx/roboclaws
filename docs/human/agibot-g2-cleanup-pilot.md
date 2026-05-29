@@ -100,9 +100,10 @@ just task::run semantic-map-build codex camera-labels \
 
 This route launches the Docker-backed Codex runtime against the
 `agibot_semantic_map_build` MCP server and writes `run_result.json`,
-`trace.jsonl`, `runtime_metric_map.json`, and `report.html`. The route exists
-and has mocked contract coverage; real Codex provider execution and real G2
-hardware validation are still separate unrun gates.
+`trace.jsonl`, `runtime_metric_map.json`, and `report.html`. The route exists,
+has mocked contract coverage, and has passed one live Codex fixture dry-run at
+`output/agibot/semantic-map-build-codex-live-validation/0529_1834/seed-7/`.
+Real G2 hardware validation is still a separate unrun gate.
 
 For a cleanup-shaped contract rehearsal, use the same backend route while
 keeping manipulation blocked:
