@@ -17,8 +17,10 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
+    _backend_swap_geometry_contract,
     _camera_intrinsics_contract_from_capture,
     _camera_pose_contract_from_capture,
+    _candidate_color_calibrations,
     _canonical_camera_control_views,
     _contact_sheet_entries,
     _image_pair_visual_delta,
@@ -241,8 +243,9 @@ def _manifest() -> dict[str, object]:
         },
         "room_scale_contract": {
             "schema": "room_scale_contract_v1",
-            "status": "room_outline_mesh_bounds",
+            "status": "same_room_outlines_within_threshold",
             "room_count": 1,
+            "matched_room_outline_count": 1,
             "room_outline_source": "molmospaces_room_outlines",
             "isaac_scene_bounds": {
                 "size": [9.976, 10.097, 3.154],
@@ -250,6 +253,10 @@ def _manifest() -> dict[str, object]:
             },
             "max_room_to_scene_width_ratio": 0.599,
             "max_room_to_scene_depth_ratio": 0.987,
+            "max_room_outline_center_delta_m": 0.0,
+            "max_room_outline_size_delta_m": 0.0,
+            "max_room_outline_half_extent_delta_m": 0.0,
+            "room_outline_threshold_m": 0.005,
             "interpretation": "Room-level camera poses are derived from room mesh world bounds.",
             "rooms": [
                 {
@@ -453,7 +460,20 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     manifest = _manifest()
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
         for image in lane["images"].values():  # type: ignore[index,union-attr]
-            _write_image(tmp_path / image["path"], color=(20, 80, 120))  # type: ignore[index]
+            path = str(image["path"])  # type: ignore[index]
+            if "molmospaces" in path and "room_01" in path:
+                color = (80, 80, 80)
+            elif "isaaclab" in path and "room_01" in path:
+                color = (180, 180, 180)
+            elif "molmospaces" in path and "view_01" in path:
+                color = (180, 180, 180)
+            elif "isaaclab" in path and "view_01" in path:
+                color = (80, 80, 80)
+            elif "molmospaces" in path:
+                color = (120, 70, 50)
+            else:
+                color = (200, 160, 120)
+            _write_image(tmp_path / path, color=color)
 
     report_path = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
     html = report_path.read_text(encoding="utf-8")
@@ -471,9 +491,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Camera Pose Contract" in html
     assert "Camera Intrinsics Contract" in html
     assert "Room Scale Contract" in html
+    assert "Backend Swap Geometry Contract" in html
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "geometry_swap_ready_render_domain_pending" in html
+    assert "render_domain_residual_high" in html
+    assert "same_explicit_eye_target_pose" in html
     assert "same_backend_pose_within_threshold" in html
     assert "same_projected_geometry_within_threshold" in html
     assert "intrinsics_consistent" in html
@@ -487,6 +511,8 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "backend eye=" in html
     assert "scene_probe_existing_usd_lights_v1" in html
     assert "using_existing_stage_lights" in html
+    assert "Candidate color calibrations" in html
+    assert "best=" in html
     assert MOLMOSPACES_LANE_ID in html
     assert ISAAC_LANE_ID in html
     assert "molmospaces/camera_views/view_01_bed.png" in html
@@ -635,6 +661,51 @@ def test_scene_camera_color_profile_replay_normalizes_rgb_gain() -> None:
     assert profile["backend_view_rgb_gain_source"] == "unit-rgb"
 
 
+def test_scene_camera_candidate_color_calibrations_compare_gain_strategies(
+    tmp_path: Path,
+) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 160, 120))
+    view_results = [
+        {
+            "view_id": "view_1",
+            "label": "View 1",
+            "lanes": {
+                MOLMOSPACES_LANE_ID: _image_visual_metrics(molmo),
+                ISAAC_LANE_ID: _image_visual_metrics(isaac),
+            },
+            "delta": _image_pair_visual_delta(molmo, isaac),
+        }
+    ]
+    summary = _candidate_color_calibrations(
+        view_results,
+        entries=[
+            {
+                "view_id": "view_1",
+                "label": "View 1",
+                "images": {MOLMOSPACES_LANE_ID: molmo, ISAAC_LANE_ID: isaac},
+            }
+        ],
+        base_color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_luminance_gain": {MOLMOSPACES_LANE_ID: 1.0, ISAAC_LANE_ID: 1.0},
+        },
+    )
+
+    candidates = {item["candidate_id"]: item for item in summary["candidates"]}
+    assert summary["best_candidate"] in candidates
+    assert candidates["current_profile"]["mean_absolute_pixel_delta"] > 0.0
+    assert candidates["ideal_per_view_luminance_gain"]["mean_absolute_pixel_delta"] > 0.0
+    assert candidates["ideal_per_view_rgb_gain"]["gain_delta"]["backend_view_rgb_gain"][
+        ISAAC_LANE_ID
+    ]["view_1"] == pytest.approx([0.5, 0.625, 0.8333333333333334])
+    assert candidates["ideal_per_view_rgb_gain"]["gain_delta"]["backend_view_luminance_gain"][
+        ISAAC_LANE_ID
+    ]["view_1"] == pytest.approx(1.0)
+
+
 def test_scene_camera_render_domain_calibration_detects_global_gain() -> None:
     calibration = _render_domain_calibration(
         [
@@ -673,6 +744,57 @@ def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() ->
     target = next(point for point in bed["points"] if point["label"] == "camera_target")
     assert target["molmospaces_pixel"] == pytest.approx(target["isaac_pixel"])
     assert target["inside_frame"] is True
+
+
+def test_backend_swap_geometry_contract_separates_camera_from_render_domain() -> None:
+    manifest = _manifest()
+    manifest["visual_diagnostics"] = {
+        "schema": "scene_camera_visual_diagnostics_v1",
+        "status": "computed",
+        "view_count": 2,
+        "mean_abs_mean_luminance_delta": 18.0,
+        "mean_absolute_pixel_delta": 42.0,
+        "render_domain_calibration": {
+            "schema": "scene_camera_render_domain_calibration_v1",
+            "status": "view_dependent_render_domain_delta",
+            "recommended_next_action": (
+                "A single global gain leaves large residuals; inspect per-room lights, "
+                "material albedo, indirect lighting, and tone response before changing "
+                "camera geometry."
+            ),
+        },
+    }
+
+    contract = _backend_swap_geometry_contract(manifest)
+
+    checks = {item["check"]: item for item in contract["required_checks"]}
+    assert contract["status"] == "geometry_swap_ready_render_domain_pending"
+    assert contract["geometry_contract_status"] == "pass"
+    assert contract["visual_residual_status"] == "render_domain_residual_high"
+    assert contract["same_api_agent_swap_claim"] is True
+    assert checks["same_camera_api"]["status"] == "pass"
+    assert checks["same_explicit_eye_target_pose"]["max_delta_m"] == pytest.approx(0.0)
+    assert checks["same_intrinsics"]["vertical_fov_deg"] == pytest.approx(45.0)
+    assert checks["same_room_scale"]["status"] == "pass"
+    assert checks["same_projected_geometry"]["max_pixel_delta"] == pytest.approx(0.0)
+    assert "material albedo" in contract["recommended_next_action"]
+
+
+def test_backend_swap_geometry_contract_blocks_room_scale_mismatch() -> None:
+    manifest = _manifest()
+    manifest["room_scale_contract"] = {
+        **manifest["room_scale_contract"],  # type: ignore[index]
+        "status": "room_outline_mismatch",
+        "max_room_outline_center_delta_m": 0.26,
+    }
+
+    contract = _backend_swap_geometry_contract(manifest)
+
+    checks = {item["check"]: item for item in contract["required_checks"]}
+    assert contract["status"] == "geometry_swap_not_ready"
+    assert contract["geometry_contract_status"] == "fail"
+    assert contract["same_api_agent_swap_claim"] is False
+    assert checks["same_room_scale"]["status"] == "fail"
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:

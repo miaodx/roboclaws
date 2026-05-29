@@ -189,6 +189,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
@@ -205,6 +206,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
+        manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
@@ -1674,7 +1677,196 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
         "max_underexposed_fraction": max_underexposed_fraction,
         "render_domain_calibration": _render_domain_calibration(view_results),
         "color_profile_replay": _color_profile_replay_summary(replay_results),
+        "candidate_color_calibrations": _candidate_color_calibrations(
+            view_results,
+            entries=entries,
+            base_color_profile=color_profile,
+        ),
         "views": view_results,
+    }
+
+
+def _candidate_color_calibrations(
+    view_results: list[dict[str, Any]],
+    *,
+    entries: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    if not view_results:
+        return {
+            "schema": "scene_camera_candidate_color_calibrations_v1",
+            "status": "missing_view_metrics",
+            "candidates": [],
+        }
+    entry_by_id = {str(item.get("view_id") or ""): item for item in entries}
+    candidates = [
+        _candidate_color_calibration(
+            "current_profile",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=base_color_profile,
+            interpretation="Current camera-control color profile replay.",
+        ),
+        _candidate_color_calibration(
+            "ideal_per_view_luminance_gain",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=_candidate_per_view_luminance_profile(view_results, base_color_profile),
+            interpretation=(
+                "Upper-bound diagnostic: per-view scalar gains match mean luminance. "
+                "Do not promote directly without broader scene validation."
+            ),
+        ),
+        _candidate_color_calibration(
+            "ideal_per_view_rgb_gain",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=_candidate_per_view_rgb_profile(view_results, base_color_profile),
+            interpretation=(
+                "Upper-bound diagnostic: per-view RGB channel gains match mean RGB. "
+                "Useful for separating color response from geometry/material residuals."
+            ),
+        ),
+    ]
+    best = min(
+        (item for item in candidates if item.get("status") == "computed"),
+        key=lambda item: float(item.get("mean_absolute_pixel_delta") or 1e12),
+        default=None,
+    )
+    return {
+        "schema": "scene_camera_candidate_color_calibrations_v1",
+        "status": "computed",
+        "interpretation": (
+            "Candidate calibrations replay existing PNGs with generated gain tables. They are "
+            "diagnostics for choosing the next renderer slice, not fresh backend renders."
+        ),
+        "candidate_count": len(candidates),
+        "best_candidate": best.get("candidate_id") if isinstance(best, dict) else None,
+        "candidates": candidates,
+    }
+
+
+def _candidate_color_calibration(
+    candidate_id: str,
+    view_results: list[dict[str, Any]],
+    *,
+    entry_by_id: dict[str, dict[str, Any]],
+    base_color_profile: dict[str, Any],
+    color_profile: dict[str, Any],
+    interpretation: str,
+) -> dict[str, Any]:
+    replay_results = []
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        entry = entry_by_id.get(view_id)
+        if not isinstance(entry, dict):
+            continue
+        molmo_path = entry["images"].get(MOLMOSPACES_LANE_ID)
+        isaac_path = entry["images"].get(ISAAC_LANE_ID)
+        if molmo_path is None or isaac_path is None:
+            continue
+        replay_results.append(
+            _offline_color_profile_replay(
+                view_id=view_id,
+                label=str(item.get("label") or ""),
+                molmo_path=molmo_path,
+                isaac_path=isaac_path,
+                color_profile=color_profile,
+            )
+        )
+    summary = _color_profile_replay_summary(replay_results)
+    return {
+        "candidate_id": candidate_id,
+        "status": summary.get("status"),
+        "interpretation": interpretation,
+        "gain_delta": _candidate_gain_delta(base_color_profile, color_profile),
+        "view_count": summary.get("view_count"),
+        "mean_abs_mean_luminance_delta": summary.get("mean_abs_mean_luminance_delta"),
+        "mean_absolute_pixel_delta": summary.get("mean_absolute_pixel_delta"),
+        "render_domain_calibration": summary.get("render_domain_calibration"),
+    }
+
+
+def _candidate_per_view_luminance_profile(
+    view_results: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    profile = json.loads(json.dumps(base_color_profile))
+    gains: dict[str, float] = {}
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes, dict) else {}
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes, dict) else {}
+        molmo_luminance = _optional_float(
+            molmo.get("mean_luminance") if isinstance(molmo, dict) else None
+        )
+        isaac_luminance = _optional_float(
+            isaac.get("mean_luminance") if isinstance(isaac, dict) else None
+        )
+        if not view_id or molmo_luminance is None or isaac_luminance is None:
+            continue
+        gains[view_id] = molmo_luminance / isaac_luminance if isaac_luminance > 0 else 1.0
+    if gains:
+        profile["backend_view_luminance_gain"] = {ISAAC_LANE_ID: gains}
+        profile["backend_view_luminance_gain_source"] = "candidate_from_current_view_metrics"
+    return profile
+
+
+def _candidate_per_view_rgb_profile(
+    view_results: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    profile = json.loads(json.dumps(base_color_profile))
+    gains: dict[str, list[float]] = {}
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes, dict) else {}
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes, dict) else {}
+        molmo_rgb = molmo.get("mean_rgb") if isinstance(molmo, dict) else None
+        isaac_rgb = isaac.get("mean_rgb") if isinstance(isaac, dict) else None
+        if not view_id or not isinstance(molmo_rgb, list) or not isinstance(isaac_rgb, list):
+            continue
+        channel_gains = []
+        for molmo_value, isaac_value in zip(molmo_rgb[:3], isaac_rgb[:3], strict=False):
+            molmo_float = _optional_float(molmo_value)
+            isaac_float = _optional_float(isaac_value)
+            if molmo_float is None or isaac_float is None or isaac_float <= 0:
+                channel_gains.append(1.0)
+            else:
+                channel_gains.append(molmo_float / isaac_float)
+        if len(channel_gains) == 3:
+            gains[view_id] = channel_gains
+    if gains:
+        profile["backend_view_rgb_gain"] = {ISAAC_LANE_ID: gains}
+        profile["backend_view_rgb_gain_source"] = "candidate_from_current_view_metrics"
+        profile["backend_view_luminance_gain"] = {
+            ISAAC_LANE_ID: {view_id: 1.0 for view_id in gains}
+        }
+        profile["backend_view_luminance_gain_source"] = (
+            "candidate_rgb_gain_already_includes_luminance"
+        )
+    return profile
+
+
+def _candidate_gain_delta(
+    base_color_profile: dict[str, Any],
+    color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    keys = (
+        "backend_view_luminance_gain",
+        "backend_view_rgb_gain",
+        "backend_luminance_gain",
+        "backend_rgb_gain",
+    )
+    return {
+        key: color_profile.get(key)
+        for key in keys
+        if color_profile.get(key) != base_color_profile.get(key)
     }
 
 
@@ -1923,6 +2115,135 @@ def _render_domain_calibration(view_results: list[dict[str, Any]]) -> dict[str, 
         "mean_luminance_delta_improvement_fraction": improvement_fraction,
         "recommended_next_action": next_action,
         "residuals": residuals,
+    }
+
+
+def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    camera = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    pose = (
+        manifest.get("camera_pose_contract")
+        if isinstance(manifest.get("camera_pose_contract"), dict)
+        else {}
+    )
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    room_scale = (
+        manifest.get("room_scale_contract")
+        if isinstance(manifest.get("room_scale_contract"), dict)
+        else {}
+    )
+    projection = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
+    transform = (
+        manifest.get("scene_frame_transform")
+        if isinstance(manifest.get("scene_frame_transform"), dict)
+        else {}
+    )
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    render_calibration = (
+        visual.get("render_domain_calibration")
+        if isinstance(visual.get("render_domain_calibration"), dict)
+        else {}
+    )
+    required_checks = [
+        {
+            "check": "same_camera_api",
+            "status": "pass" if camera.get("api_name") == CAMERA_CONTROL_API_NAME else "fail",
+            "value": camera.get("api_name"),
+            "expected": CAMERA_CONTROL_API_NAME,
+        },
+        {
+            "check": "same_explicit_eye_target_pose",
+            "status": "pass"
+            if pose.get("status") == "same_backend_pose_within_threshold"
+            else "fail",
+            "value": pose.get("status"),
+            "max_delta_m": pose.get("max_pose_delta_m"),
+            "threshold_m": pose.get("pose_threshold_m"),
+        },
+        {
+            "check": "same_intrinsics",
+            "status": "pass" if intrinsics.get("status") == "intrinsics_consistent" else "fail",
+            "value": intrinsics.get("status"),
+            "vertical_fov_deg": projection.get("vertical_fov_deg"),
+            "resolution": projection.get("resolution") or intrinsics.get("resolution"),
+        },
+        {
+            "check": "same_room_scale",
+            "status": "pass"
+            if room_scale.get("status") == "same_room_outlines_within_threshold"
+            else "fail",
+            "value": room_scale.get("status"),
+            "max_center_delta_m": room_scale.get("max_room_outline_center_delta_m"),
+            "max_size_delta_m": room_scale.get("max_room_outline_size_delta_m"),
+            "threshold_m": room_scale.get("room_outline_threshold_m"),
+        },
+        {
+            "check": "same_projected_geometry",
+            "status": "pass"
+            if projection.get("status") == "same_projected_geometry_within_threshold"
+            else "fail",
+            "value": projection.get("status"),
+            "max_pixel_delta": projection.get("max_pixel_delta"),
+            "threshold_px": projection.get("projection_threshold_px"),
+        },
+    ]
+    geometry_pass = all(item["status"] == "pass" for item in required_checks)
+    mean_pixel_delta = _optional_float(visual.get("mean_absolute_pixel_delta"))
+    mean_luminance_delta = _optional_float(visual.get("mean_abs_mean_luminance_delta"))
+    render_domain_status = str(render_calibration.get("status") or "")
+    visual_residual_status = (
+        "render_domain_residual_high"
+        if render_domain_status == "view_dependent_render_domain_delta"
+        else "render_domain_luminance_matched"
+        if render_domain_status == "already_luminance_matched"
+        else render_domain_status or "missing_visual_diagnostics"
+    )
+    status = (
+        "geometry_swap_ready_render_domain_pending"
+        if geometry_pass and visual_residual_status == "render_domain_residual_high"
+        else "geometry_swap_ready"
+        if geometry_pass
+        else "geometry_swap_not_ready"
+    )
+    return {
+        "schema": "backend_swap_geometry_contract_v1",
+        "status": status,
+        "geometry_contract_status": "pass" if geometry_pass else "fail",
+        "visual_residual_status": visual_residual_status,
+        "required_checks": required_checks,
+        "same_api_agent_swap_claim": geometry_pass,
+        "view_count": pose.get("pair_count") or projection.get("pair_count"),
+        "target_definition_status": transform.get("target_residual_status"),
+        "max_target_center_residual_m": transform.get("max_residual_m"),
+        "max_target_distance_to_usd_bounds_m": transform.get("max_distance_to_usd_bounds_m"),
+        "max_surface_aim_distance_to_usd_bounds_m": transform.get(
+            "max_surface_aim_distance_to_usd_bounds_m"
+        ),
+        "mean_absolute_pixel_delta": mean_pixel_delta,
+        "mean_abs_mean_luminance_delta": mean_luminance_delta,
+        "render_domain_status": render_domain_status,
+        "recommended_next_action": render_calibration.get("recommended_next_action"),
+        "interpretation": (
+            "This is the backend-swap contract for agent-facing camera control: the same "
+            "Roboclaws camera API, explicit eye/target pose, vertical FOV, room scale, and "
+            "pinhole projection must pass before an agent can treat MuJoCo and Isaac as "
+            "geometry-compatible backends. Visual residuals are tracked separately because "
+            "material, texture, light, shadow, and tone-response differences can still make "
+            "the images look different."
+        ),
     }
 
 
@@ -2245,6 +2566,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _pose_contract_section(manifest),
             _intrinsics_contract_section(manifest),
             _room_scale_section(manifest),
+            _backend_swap_geometry_section(manifest),
             _transform_section(manifest),
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
@@ -2637,6 +2959,67 @@ def _room_outline_pairs_table(contract: dict[str, Any]) -> str:
 """
 
 
+def _backend_swap_geometry_section(manifest: dict[str, Any]) -> str:
+    contract = (
+        manifest.get("backend_swap_geometry_contract")
+        if isinstance(manifest.get("backend_swap_geometry_contract"), dict)
+        else _backend_swap_geometry_contract(manifest)
+    )
+    if not contract:
+        return ""
+    rows = []
+    for item in contract.get("required_checks") or []:
+        if not isinstance(item, dict):
+            continue
+        detail_parts = []
+        for key in (
+            "value",
+            "expected",
+            "max_delta_m",
+            "threshold_m",
+            "max_center_delta_m",
+            "max_size_delta_m",
+            "vertical_fov_deg",
+            "resolution",
+            "max_pixel_delta",
+            "threshold_px",
+        ):
+            value = item.get(key)
+            if value is None or value == "":
+                continue
+            detail_parts.append(f"{key}={value}")
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('check', '')))}</td>"
+            f"<td>{html.escape(str(item.get('status', '')))}</td>"
+            f"<td>{html.escape('; '.join(detail_parts))}</td>"
+            "</tr>"
+        )
+    headers = "".join(f"<th>{html.escape(label)}</th>" for label in ("Check", "Status", "Evidence"))
+    note = (
+        f"status={contract.get('status')}; "
+        f"geometry={contract.get('geometry_contract_status')}; "
+        f"visual_residual={contract.get('visual_residual_status')}; "
+        f"target_definition={contract.get('target_definition_status')}; "
+        f"max_target_center_residual={_meters_text(contract.get('max_target_center_residual_m'))}; "
+        f"mean_pixel_delta={_float_text(contract.get('mean_absolute_pixel_delta'))}; "
+        f"mean_luminance_delta={_float_text(contract.get('mean_abs_mean_luminance_delta'))}. "
+        f"{contract.get('interpretation') or ''}"
+    )
+    next_action = str(contract.get("recommended_next_action") or "")
+    return f"""
+<section class="panel">
+  <h2>Backend Swap Geometry Contract</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(next_action)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _intrinsics_delta_text(contract: dict[str, Any]) -> str:
     value = _optional_float(contract.get("requested_vs_derived_horizontal_aperture_delta_mm"))
     return f"{value:.6g} mm" if value is not None else ""
@@ -2964,12 +3347,33 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
             f"residual_status={replay_calibration.get('status') or ''}. "
             f"{replay.get('interpretation') or ''}"
         )
+    candidates = (
+        diagnostics.get("candidate_color_calibrations")
+        if isinstance(diagnostics.get("candidate_color_calibrations"), dict)
+        else {}
+    )
+    candidate_note = ""
+    if candidates:
+        candidate_rows = []
+        for item in candidates.get("candidates") or []:
+            if not isinstance(item, dict):
+                continue
+            candidate_rows.append(
+                f"{item.get('candidate_id')}("
+                f"lum={_float_text(item.get('mean_abs_mean_luminance_delta'))}, "
+                f"px={_float_text(item.get('mean_absolute_pixel_delta'))})"
+            )
+        candidate_note = (
+            f"Candidate color calibrations: best={candidates.get('best_candidate')}; "
+            f"{'; '.join(candidate_rows)}. {candidates.get('interpretation') or ''}"
+        )
     return f"""
 <section class="panel">
   <h2>Visual Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
   <p class="note">{html.escape(calibration_note)}</p>
   <p class="note">{html.escape(replay_note)}</p>
+  <p class="note">{html.escape(candidate_note)}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
