@@ -35,6 +35,7 @@ DEFAULT_RENDER_WIDTH = 960
 DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
 CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
+CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX = 0.5
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
 SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
@@ -181,6 +182,8 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         canonical_views=canonical_views,
         isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
     )
+    manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
@@ -193,6 +196,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
 
 def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_dir: Path) -> Path:
     _write_contact_sheet(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("projection_diagnostics"), dict):
+        manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    if not isinstance(manifest.get("visual_diagnostics"), dict):
+        manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
@@ -1106,6 +1113,277 @@ def _room_scale_contract_from_capture(
     }
 
 
+def _projection_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    pose_contract = (
+        manifest.get("camera_pose_contract")
+        if isinstance(manifest.get("camera_pose_contract"), dict)
+        else {}
+    )
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    resolution = (
+        intrinsics.get("resolution") if isinstance(intrinsics.get("resolution"), dict) else {}
+    )
+    width = _optional_float(resolution.get("width"))
+    height = _optional_float(resolution.get("height"))
+    vertical_fov = _projection_vertical_fov(intrinsics)
+    if width is None or height is None or vertical_fov is None:
+        return {
+            "schema": "canonical_camera_projection_diagnostics_v1",
+            "status": "missing_intrinsics",
+            "projection_threshold_px": CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX,
+            "pair_count": 0,
+            "pairs": [],
+        }
+    pose_pairs = [item for item in pose_contract.get("pairs") or [] if isinstance(item, dict)]
+    canonical_views = {
+        str(item.get("view_id") or ""): item
+        for item in manifest.get("canonical_camera_views") or []
+        if isinstance(item, dict)
+    }
+    isaac_views = _views_by_id(
+        (manifest.get("lanes") or {}).get(ISAAC_LANE_ID)
+        if isinstance((manifest.get("lanes") or {}).get(ISAAC_LANE_ID), dict)
+        else {}
+    )
+    pairs: list[dict[str, Any]] = []
+    for item in pose_pairs:
+        view_id = str(item.get("view_id") or "")
+        sample_points = _projection_sample_points(
+            canonical_views.get(view_id, {}), isaac_views.get(view_id, {})
+        )
+        point_projections = []
+        for point in sample_points:
+            world = point.get("world")
+            if not _is_vec3(world):
+                continue
+            molmo_pixel = _project_world_point(
+                world,
+                eye=item.get("molmospaces_backend_eye"),
+                target=item.get("molmospaces_backend_target"),
+                width=width,
+                height=height,
+                vertical_fov_deg=vertical_fov,
+            )
+            isaac_pixel = _project_world_point(
+                world,
+                eye=item.get("isaac_backend_eye"),
+                target=item.get("isaac_backend_target"),
+                width=width,
+                height=height,
+                vertical_fov_deg=vertical_fov,
+            )
+            if molmo_pixel is None or isaac_pixel is None:
+                continue
+            delta_px = math.hypot(
+                float(molmo_pixel["pixel"][0]) - float(isaac_pixel["pixel"][0]),
+                float(molmo_pixel["pixel"][1]) - float(isaac_pixel["pixel"][1]),
+            )
+            point_projections.append(
+                {
+                    "label": point.get("label"),
+                    "world": [float(value) for value in world[:3]],
+                    "molmospaces_pixel": molmo_pixel["pixel"],
+                    "isaac_pixel": isaac_pixel["pixel"],
+                    "pixel_delta": delta_px,
+                    "depth_m": molmo_pixel["depth_m"],
+                    "inside_frame": bool(
+                        molmo_pixel["inside_frame"] and isaac_pixel["inside_frame"]
+                    ),
+                }
+            )
+        if point_projections:
+            max_delta = max(float(point["pixel_delta"]) for point in point_projections)
+            pairs.append(
+                {
+                    "view_id": view_id,
+                    "anchor_id": item.get("anchor_id"),
+                    "category": item.get("category"),
+                    "point_count": len(point_projections),
+                    "max_pixel_delta": max_delta,
+                    "all_points_inside_frame": all(
+                        bool(point["inside_frame"]) for point in point_projections
+                    ),
+                    "points": point_projections,
+                }
+            )
+    max_pixel_delta = max(float(item["max_pixel_delta"]) for item in pairs) if pairs else None
+    status = (
+        "same_projected_geometry_within_threshold"
+        if max_pixel_delta is not None
+        and max_pixel_delta <= CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX
+        else "missing_projection_pairs"
+        if max_pixel_delta is None
+        else "projected_geometry_mismatch"
+    )
+    return {
+        "schema": "canonical_camera_projection_diagnostics_v1",
+        "status": status,
+        "interpretation": (
+            "Projects the same canonical 3D sample points through the backend-reported "
+            "eye/target pose and shared vertical FOV. When this passes, apparent framing "
+            "differences are not explained by camera position, target, FOV, or room scale."
+        ),
+        "projection_threshold_px": CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX,
+        "resolution": {"width": int(width), "height": int(height)},
+        "vertical_fov_deg": vertical_fov,
+        "pair_count": len(pairs),
+        "max_pixel_delta": max_pixel_delta,
+        "pairs": pairs,
+    }
+
+
+def _projection_vertical_fov(intrinsics: dict[str, Any]) -> float | None:
+    requested = (
+        intrinsics.get("requested_lens")
+        if isinstance(intrinsics.get("requested_lens"), dict)
+        else {}
+    )
+    molmo = (
+        intrinsics.get("molmospaces_lens")
+        if isinstance(intrinsics.get("molmospaces_lens"), dict)
+        else {}
+    )
+    isaac = intrinsics.get("isaac_lens") if isinstance(intrinsics.get("isaac_lens"), dict) else {}
+    return (
+        _optional_float(requested.get("vertical_fov_deg"))
+        or _optional_float(molmo.get("vertical_fov_deg"))
+        or _optional_float(isaac.get("vertical_fov_deg"))
+    )
+
+
+def _projection_sample_points(
+    request_view: dict[str, Any],
+    isaac_view: dict[str, Any],
+) -> list[dict[str, Any]]:
+    points: list[dict[str, Any]] = []
+    target = request_view.get("target") or request_view.get("lookat") or isaac_view.get("target")
+    if _is_vec3(target):
+        points.append({"label": "camera_target", "world": [float(value) for value in target[:3]]})
+    room_outline = (
+        request_view.get("room_outline")
+        if isinstance(request_view.get("room_outline"), dict)
+        else {}
+    )
+    center = room_outline.get("center")
+    half_extents = room_outline.get("half_extents")
+    if (
+        isinstance(center, list)
+        and len(center) >= 2
+        and isinstance(half_extents, list)
+        and len(half_extents) >= 2
+    ):
+        z = float(target[2]) if _is_vec3(target) else ROOM_CAMERA_HEIGHT_M
+        cx = float(center[0])
+        cy = float(center[1])
+        hx = float(half_extents[0])
+        hy = float(half_extents[1])
+        for label, x_sign, y_sign in (
+            ("room_min_min", -1.0, -1.0),
+            ("room_min_max", -1.0, 1.0),
+            ("room_max_min", 1.0, -1.0),
+            ("room_max_max", 1.0, 1.0),
+        ):
+            points.append({"label": label, "world": [cx + x_sign * hx, cy + y_sign * hy, z]})
+    bounds = isaac_view.get("usd_bounds") if isinstance(isaac_view.get("usd_bounds"), dict) else {}
+    minimum = _bounds_vec(bounds, "min")
+    maximum = _bounds_vec(bounds, "max")
+    center3 = _bounds_vec(bounds, "center")
+    if center3 is not None:
+        points.append({"label": "usd_bounds_center", "world": center3})
+    if minimum is not None and maximum is not None:
+        for label, x, y, z in (
+            ("usd_bounds_min", minimum[0], minimum[1], minimum[2]),
+            ("usd_bounds_max", maximum[0], maximum[1], maximum[2]),
+        ):
+            points.append({"label": label, "world": [x, y, z]})
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, tuple[float, float, float]]] = set()
+    for point in points:
+        world = point.get("world")
+        if not _is_vec3(world):
+            continue
+        key = (
+            str(point.get("label") or ""),
+            (round(float(world[0]), 6), round(float(world[1]), 6), round(float(world[2]), 6)),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(point)
+    return deduped
+
+
+def _project_world_point(
+    point: list[float],
+    *,
+    eye: Any,
+    target: Any,
+    width: float,
+    height: float,
+    vertical_fov_deg: float,
+) -> dict[str, Any] | None:
+    if not _is_vec3(eye) or not _is_vec3(target):
+        return None
+    eye_vec = [float(value) for value in eye[:3]]
+    target_vec = [float(value) for value in target[:3]]
+    forward = _normalize_vec3(
+        [
+            target_vec[0] - eye_vec[0],
+            target_vec[1] - eye_vec[1],
+            target_vec[2] - eye_vec[2],
+        ]
+    )
+    if forward is None:
+        return None
+    world_up = [0.0, 0.0, 1.0]
+    right = _normalize_vec3(_cross(forward, world_up))
+    if right is None:
+        right = [1.0, 0.0, 0.0]
+    up = _cross(right, forward)
+    relative = [
+        float(point[0]) - eye_vec[0],
+        float(point[1]) - eye_vec[1],
+        float(point[2]) - eye_vec[2],
+    ]
+    depth = _dot(relative, forward)
+    if depth <= 1e-9:
+        return None
+    x_camera = _dot(relative, right)
+    y_camera = _dot(relative, up)
+    focal_y = (height * 0.5) / math.tan(math.radians(vertical_fov_deg) * 0.5)
+    focal_x = focal_y
+    pixel_x = width * 0.5 + x_camera * focal_x / depth
+    pixel_y = height * 0.5 - y_camera * focal_y / depth
+    return {
+        "pixel": [pixel_x, pixel_y],
+        "depth_m": depth,
+        "inside_frame": 0.0 <= pixel_x <= width and 0.0 <= pixel_y <= height,
+    }
+
+
+def _normalize_vec3(value: list[float]) -> list[float] | None:
+    norm = math.sqrt(value[0] * value[0] + value[1] * value[1] + value[2] * value[2])
+    if norm <= 1e-12:
+        return None
+    return [value[0] / norm, value[1] / norm, value[2] / norm]
+
+
+def _cross(left: list[float], right: list[float]) -> list[float]:
+    return [
+        left[1] * right[2] - left[2] * right[1],
+        left[2] * right[0] - left[0] * right[2],
+        left[0] * right[1] - left[1] * right[0],
+    ]
+
+
+def _dot(left: list[float], right: list[float]) -> float:
+    return left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+
+
 def _write_contact_sheet(manifest: dict[str, Any], *, output_dir: Path) -> Path | None:
     entries = _contact_sheet_entries(manifest, output_dir=output_dir)
     if not entries:
@@ -1201,6 +1479,144 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
                 }
             )
     return entries
+
+
+def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
+    entries = _contact_sheet_entries(manifest, output_dir=output_dir)
+    view_results = []
+    for entry in entries:
+        molmo_path = entry["images"].get(MOLMOSPACES_LANE_ID)
+        isaac_path = entry["images"].get(ISAAC_LANE_ID)
+        if molmo_path is None or isaac_path is None:
+            continue
+        molmo_metrics = _image_visual_metrics(molmo_path)
+        isaac_metrics = _image_visual_metrics(isaac_path)
+        diff_metrics = _image_pair_visual_delta(molmo_path, isaac_path)
+        view_results.append(
+            {
+                "view_id": entry["view_id"],
+                "label": entry.get("label") or "",
+                "lanes": {
+                    MOLMOSPACES_LANE_ID: molmo_metrics,
+                    ISAAC_LANE_ID: isaac_metrics,
+                },
+                "delta": {
+                    **diff_metrics,
+                    "mean_luminance_delta": (
+                        isaac_metrics["mean_luminance"] - molmo_metrics["mean_luminance"]
+                    ),
+                    "mean_rgb_abs_delta": [
+                        abs(
+                            float(isaac_metrics["mean_rgb"][index])
+                            - float(molmo_metrics["mean_rgb"][index])
+                        )
+                        for index in range(3)
+                    ],
+                },
+            }
+        )
+    luminance_deltas = [
+        abs(float(item["delta"]["mean_luminance_delta"]))
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    mae_values = [
+        float(item["delta"]["mean_absolute_pixel_delta"])
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    max_overexposed_fraction = 0.0
+    max_underexposed_fraction = 0.0
+    for item in view_results:
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        for metrics in lanes.values():
+            if not isinstance(metrics, dict):
+                continue
+            max_overexposed_fraction = max(
+                max_overexposed_fraction,
+                float(metrics.get("overexposed_fraction") or 0.0),
+            )
+            max_underexposed_fraction = max(
+                max_underexposed_fraction,
+                float(metrics.get("underexposed_fraction") or 0.0),
+            )
+    return {
+        "schema": "scene_camera_visual_diagnostics_v1",
+        "status": "computed" if view_results else "missing_view_images",
+        "interpretation": (
+            "These image-level metrics quantify renderer/material/lighting differences after "
+            "pose, intrinsics, room-scale, and target diagnostics pass. They are not a "
+            "camera-pose contract."
+        ),
+        "view_count": len(view_results),
+        "max_abs_mean_luminance_delta": max(luminance_deltas) if luminance_deltas else None,
+        "mean_abs_mean_luminance_delta": (
+            sum(luminance_deltas) / len(luminance_deltas) if luminance_deltas else None
+        ),
+        "max_mean_absolute_pixel_delta": max(mae_values) if mae_values else None,
+        "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
+        "max_overexposed_fraction": max_overexposed_fraction,
+        "max_underexposed_fraction": max_underexposed_fraction,
+        "views": view_results,
+    }
+
+
+def _image_visual_metrics(path: Path) -> dict[str, Any]:
+    with Image.open(path).convert("RGB") as image:
+        pixels = list(image.getdata())
+    count = max(len(pixels), 1)
+    sums = [0.0, 0.0, 0.0]
+    luminance_sum = 0.0
+    luminance_sq_sum = 0.0
+    overexposed_count = 0
+    underexposed_count = 0
+    for red, green, blue in pixels:
+        red_f = float(red)
+        green_f = float(green)
+        blue_f = float(blue)
+        sums[0] += red_f
+        sums[1] += green_f
+        sums[2] += blue_f
+        luminance = 0.2126 * red_f + 0.7152 * green_f + 0.0722 * blue_f
+        luminance_sum += luminance
+        luminance_sq_sum += luminance * luminance
+        if red >= 250 and green >= 250 and blue >= 250:
+            overexposed_count += 1
+        if red <= 5 and green <= 5 and blue <= 5:
+            underexposed_count += 1
+    mean_luminance = luminance_sum / count
+    variance = max(luminance_sq_sum / count - mean_luminance * mean_luminance, 0.0)
+    return {
+        "mean_rgb": [value / count for value in sums],
+        "mean_luminance": mean_luminance,
+        "std_luminance": math.sqrt(variance),
+        "overexposed_fraction": overexposed_count / count,
+        "underexposed_fraction": underexposed_count / count,
+    }
+
+
+def _image_pair_visual_delta(left_path: Path, right_path: Path) -> dict[str, Any]:
+    with Image.open(left_path).convert("RGB") as left_image:
+        with Image.open(right_path).convert("RGB") as right_image:
+            if left_image.size != right_image.size:
+                right_image = right_image.resize(left_image.size, Image.Resampling.BILINEAR)
+            left_pixels = list(left_image.getdata())
+            right_pixels = list(right_image.getdata())
+    count = max(len(left_pixels), 1)
+    absolute_sum = 0.0
+    rms_sum = 0.0
+    max_delta = 0.0
+    for left, right in zip(left_pixels, right_pixels, strict=True):
+        channel_deltas = [abs(float(left[index]) - float(right[index])) for index in range(3)]
+        pixel_delta = sum(channel_deltas) / 3.0
+        absolute_sum += pixel_delta
+        rms_sum += sum(delta * delta for delta in channel_deltas) / 3.0
+        max_delta = max(max_delta, max(channel_deltas))
+    return {
+        "mean_absolute_pixel_delta": absolute_sum / count,
+        "rms_pixel_delta": math.sqrt(rms_sum / count),
+        "max_channel_delta": max_delta,
+    }
 
 
 def _views_by_id(lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1461,6 +1877,8 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _intrinsics_contract_section(manifest),
             _room_scale_section(manifest),
             _transform_section(manifest),
+            _projection_diagnostics_section(manifest),
+            _visual_diagnostics_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
             _failure_section(manifest),
@@ -1613,6 +2031,11 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
         if isinstance(manifest.get("room_scale_contract"), dict)
         else {}
     )
+    projection = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
     return f"""
 <section class="summary">
   <p class="eyebrow">Render-only scene identity probe</p>
@@ -1639,7 +2062,9 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
                 ("intrinsics", intrinsics.get("status")),
                 ("room scale", room_scale.get("status")),
                 ("target vs USD", transform.get("target_residual_status")),
+                ("projection", projection.get("status")),
                 ("target residual", _meters_text(transform.get("max_residual_m"))),
+                ("max projection delta", _pixels_text(projection.get("max_pixel_delta"))),
                 ("FOV", f"{lens.get('vertical_fov_deg')} deg" if lens else ""),
                 ("lighting", lighting.get("profile_id") if lighting else ""),
             ]
@@ -1976,6 +2401,128 @@ def _anchor_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _projection_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("pairs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('point_count', '')))}</td>"
+            f"<td>{html.escape(_pixels_text(item.get('max_pixel_delta')))}</td>"
+            f"<td>{html.escape(str(item.get('all_points_inside_frame')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Handle",
+            "Projected points",
+            "Max pixel delta",
+            "All sampled points inside frame",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; views={diagnostics.get('pair_count')}; "
+        f"resolution={diagnostics.get('resolution')}; "
+        f"vertical_fov={_float_text(diagnostics.get('vertical_fov_deg'))} deg; "
+        f"max_pixel_delta={_pixels_text(diagnostics.get('max_pixel_delta'))}; "
+        f"threshold={_pixels_text(diagnostics.get('projection_threshold_px'))}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Projection Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("views") or []:
+        if not isinstance(item, dict):
+            continue
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = (
+            lanes.get(MOLMOSPACES_LANE_ID)
+            if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
+            else {}
+        )
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+        delta = item.get("delta") if isinstance(item.get("delta"), dict) else {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(_float_text(molmo.get('mean_luminance')))}</td>"
+            f"<td>{html.escape(_float_text(isaac.get('mean_luminance')))}</td>"
+            f"<td>{html.escape(_float_text(delta.get('mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(delta.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(_float_text(delta.get('rms_pixel_delta')))}</td>"
+            f"<td>{html.escape(_percent_text(molmo.get('overexposed_fraction')))}</td>"
+            f"<td>{html.escape(_percent_text(isaac.get('overexposed_fraction')))}</td>"
+            f"<td>{html.escape(_percent_text(molmo.get('underexposed_fraction')))}</td>"
+            f"<td>{html.escape(_percent_text(isaac.get('underexposed_fraction')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "MuJoCo luminance",
+            "Isaac luminance",
+            "Luminance delta",
+            "Mean pixel delta",
+            "RMS pixel delta",
+            "MuJoCo overexposed",
+            "Isaac overexposed",
+            "MuJoCo underexposed",
+            "Isaac underexposed",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"views={diagnostics.get('view_count')}; "
+        f"max_luminance_delta="
+        f"{_float_text(diagnostics.get('max_abs_mean_luminance_delta'))}; "
+        f"mean_pixel_delta={_float_text(diagnostics.get('mean_absolute_pixel_delta'))}; "
+        f"max_overexposed={_percent_text(diagnostics.get('max_overexposed_fraction'))}; "
+        f"max_underexposed={_percent_text(diagnostics.get('max_underexposed_fraction'))}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Visual Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _runtime_section(manifest: dict[str, Any]) -> str:
     rows = []
     for lane_id, lane in (manifest.get("lanes") or {}).items():
@@ -2199,6 +2746,33 @@ def _ratio_text(value: Any) -> str:
         return ""
     try:
         return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _float_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _percent_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value) * 100.0:.2f}%"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _pixels_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.3f} px"
     except (TypeError, ValueError):
         return str(value)
 

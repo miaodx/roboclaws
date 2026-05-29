@@ -158,6 +158,7 @@ def test_worker_registers_filament_resource_provider_when_assets_exist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("mujoco")
     worker = _load_worker_module()
     worker._FILAMENT_RESOURCE_PROVIDER = None
     assets_dir = tmp_path / "mujoco" / "filament" / "assets" / "data"
@@ -193,6 +194,7 @@ def test_worker_registers_filament_resource_provider_when_assets_exist(
 def test_worker_normalizes_filament_renderer_frame_orientation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("mujoco")
     worker = _load_worker_module()
     import numpy as np
 

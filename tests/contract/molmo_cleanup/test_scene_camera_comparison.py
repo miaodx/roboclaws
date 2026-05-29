@@ -18,8 +18,11 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _camera_pose_contract_from_capture,
     _canonical_camera_control_views,
     _contact_sheet_entries,
+    _image_pair_visual_delta,
+    _image_visual_metrics,
     _isaac_view_specs,
     _molmospaces_view_specs,
+    _projection_diagnostics,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -178,6 +181,37 @@ def _manifest() -> dict[str, object]:
             },
             "requested_vs_derived_horizontal_aperture_delta_mm": None,
             "interpretation": "The scene probe treats vertical_fov_deg as canonical.",
+        },
+        "projection_diagnostics": {
+            "schema": "canonical_camera_projection_diagnostics_v1",
+            "status": "same_projected_geometry_within_threshold",
+            "projection_threshold_px": 0.5,
+            "resolution": {"width": 960, "height": 640},
+            "vertical_fov_deg": 45.0,
+            "pair_count": 1,
+            "max_pixel_delta": 0.0,
+            "interpretation": "Projection geometry check.",
+            "pairs": [
+                {
+                    "view_id": "view_01_bed",
+                    "anchor_id": "bed_01",
+                    "category": "Bed",
+                    "point_count": 1,
+                    "max_pixel_delta": 0.0,
+                    "all_points_inside_frame": True,
+                    "points": [
+                        {
+                            "label": "camera_target",
+                            "world": [2.8, 9.0, 0.8],
+                            "molmospaces_pixel": [480.0, 320.0],
+                            "isaac_pixel": [480.0, 320.0],
+                            "pixel_delta": 0.0,
+                            "depth_m": 4.0,
+                            "inside_frame": True,
+                        }
+                    ],
+                }
+            ],
         },
         "room_scale_contract": {
             "schema": "room_scale_contract_v1",
@@ -410,7 +444,10 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Camera Intrinsics Contract" in html
     assert "Room Scale Contract" in html
     assert "Target Vs USD Bounds Diagnostics" in html
+    assert "Projection Diagnostics" in html
+    assert "Visual Diagnostics" in html
     assert "same_backend_pose_within_threshold" in html
+    assert "same_projected_geometry_within_threshold" in html
     assert "intrinsics_consistent" in html
     assert "mujoco_room_mesh_world_bounds" in html
     assert "room_center_inset_eye_target" in html
@@ -427,6 +464,36 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "molmospaces/camera_views/room_01_room_2.png" in html
     assert "isaaclab/camera_views/view_02_sink.png" in html
     assert "Pick up" not in html
+
+
+def test_scene_camera_visual_metrics_quantify_brightness_delta(tmp_path: Path) -> None:
+    dark = tmp_path / "dark.png"
+    bright = tmp_path / "bright.png"
+    _write_image(dark, color=(10, 20, 30))
+    _write_image(bright, color=(110, 120, 130))
+
+    dark_metrics = _image_visual_metrics(dark)
+    bright_metrics = _image_visual_metrics(bright)
+    delta = _image_pair_visual_delta(dark, bright)
+
+    assert dark_metrics["mean_rgb"] == pytest.approx([10.0, 20.0, 30.0])
+    assert bright_metrics["mean_luminance"] > dark_metrics["mean_luminance"]
+    assert dark_metrics["overexposed_fraction"] == 0.0
+    assert delta["mean_absolute_pixel_delta"] == pytest.approx(100.0)
+
+
+def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:
+    manifest = _manifest()
+    diagnostics = _projection_diagnostics(manifest)
+
+    assert diagnostics["status"] == "same_projected_geometry_within_threshold"
+    assert diagnostics["max_pixel_delta"] == pytest.approx(0.0)
+    assert diagnostics["vertical_fov_deg"] == pytest.approx(45.0)
+    assert diagnostics["resolution"] == {"width": 960, "height": 640}
+    bed = next(item for item in diagnostics["pairs"] if item["view_id"] == "view_01_bed")
+    target = next(point for point in bed["points"] if point["label"] == "camera_target")
+    assert target["molmospaces_pixel"] == pytest.approx(target["isaac_pixel"])
+    assert target["inside_frame"] is True
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
