@@ -196,6 +196,34 @@ def test_verify_helpers_select_map_check_and_record_status() -> None:
     assert selected[0]["verification"]["primitive_provenance"] == "agibot_gdk_normal_navi"
 
 
+def test_verify_waypoint_timeout_records_cancel_evidence(monkeypatch) -> None:
+    verifier = _load_module(VERIFY_PATH, "verify_waypoints_with_pnc_timeout")
+    waypoint = _completed_context()["inspection_waypoints"][0]
+    pnc = _TimeoutPnc()
+
+    monkeypatch.setattr(verifier.time, "sleep", lambda seconds: None)
+
+    result = verifier.verify_waypoint(
+        gdk=_FakeAgibotGDK(),
+        pnc=pnc,
+        waypoint=waypoint,
+        timeout_s=0.0,
+        poll_s=0.0,
+        map_check={"ok": True},
+    )
+
+    assert result["reachability_status"] == "timeout"
+    assert result["navigation_backend"] == "agibot_gdk"
+    assert result["cancel_attempted"] is True
+    assert result["cancel_task_id"] == 42
+    assert result["cancel_requested"] is True
+    assert result["cancel_error"] == ""
+    assert result["final_task_before_cancel"]["state_name"] == "running"
+    assert result["final_task_after_cancel"]["state_name"] == "canceled"
+    assert result["final_task"]["state_name"] == "canceled"
+    assert pnc.cancel_task_calls == [42]
+
+
 def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> None:
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
@@ -361,6 +389,46 @@ def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
     assert fake_gdk.gdk_release_calls == 1
 
 
+def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_timeout")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    fake_gdk = _FakeAgibotGDK(pnc=_TimeoutPnc())
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=0.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is False
+    assert response["status"] == "blocked_capability"
+    assert response["failure_type"] == "timeout"
+    assert response["navigation_status"] == "blocked"
+    assert response["final_task"]["state_name"] == "running"
+    assert response["final_task_after_cancel"]["state_name"] == "canceled"
+    assert response["cancel_attempted"] is True
+    assert response["cancel_task_id"] == 42
+    assert response["cancel_requested"] is True
+    assert response["cancel_error"] == ""
+    assert fake_gdk.pnc.normal_navi_calls == 1
+    assert fake_gdk.pnc.cancel_task_calls == [42]
+    assert fake_gdk.gdk_release_calls == 1
+
+
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
 
@@ -470,6 +538,29 @@ class _FakePnc:
         self.last_request = request
 
 
+class _TimeoutPnc:
+    def __init__(self) -> None:
+        self._canceled = False
+        self.normal_navi_calls = 0
+        self.cancel_task_calls: list[int] = []
+        self.last_request: object | None = None
+
+    def get_task_state(self) -> _FakeTask:
+        if self.normal_navi_calls == 0:
+            return _FakeTask(0, task_id=42, message="idle")
+        if self._canceled:
+            return _FakeTask(7, task_id=42, message="canceled")
+        return _FakeTask(2, task_id=42, message="running")
+
+    def normal_navi(self, request: object) -> None:
+        self.normal_navi_calls += 1
+        self.last_request = request
+
+    def cancel_task(self, task_id: int) -> None:
+        self.cancel_task_calls.append(task_id)
+        self._canceled = True
+
+
 class _FakeAgibotGDK:
     class GDKRes:
         kSuccess = 0
@@ -482,8 +573,8 @@ class _FakeAgibotGDK:
             )
             self.timestamp_ns = 0
 
-    def __init__(self) -> None:
-        self.pnc = _FakePnc()
+    def __init__(self, pnc: object | None = None) -> None:
+        self.pnc = pnc or _FakePnc()
         self.gdk_release_calls = 0
 
     def gdk_init(self) -> int:

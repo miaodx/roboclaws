@@ -379,10 +379,16 @@ movement gate, not physical PNC execution.
 - Corrected SDK-runner navigation request evidence so dry-run requests render
   `sent=false` / `not_sent=true`, while mocked successful execution renders
   `sent=true` / `not_sent=false`.
+- Added mocked timeout coverage for both the standalone waypoint verifier and
+  the SDK runner execute path. Timeout artifacts now record positive
+  cancellation evidence (`cancel_attempted`, `cancel_task_id`,
+  `cancel_requested`, `cancel_error`) and final task state after cancel; the SDK
+  runner calls `Pnc.cancel_task()` on timeout instead of only reporting the
+  timed-out `Pnc.normal_navi` state.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
-  `./.venv/bin/ruff check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`,
-  and `./.venv/bin/ruff format --check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`.
+  `./.venv/bin/ruff check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
+  and `./.venv/bin/ruff format --check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`.
   This is mocked SDK evidence, not real G2 hardware validation.
 
 2026-05-29 Codex Agibot semantic-map-build route slice:
