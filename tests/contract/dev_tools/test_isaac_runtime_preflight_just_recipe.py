@@ -150,6 +150,8 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-local-scene-usd" in harness_text
     assert "--require-isaac-selected-usd-bindings" in harness_text
     assert "--require-isaac-robot-view-provenance" in harness_text
+    assert "require_canonical_robot_view_camera_control" in harness_text
+    assert "--require-canonical-robot-view-camera-control" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text
     assert "--isaac-enable-segmentation" in harness_text
     assert "segmentation_data_types" in harness_text
