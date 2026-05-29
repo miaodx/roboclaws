@@ -1,7 +1,7 @@
 # MolmoSpaces cleanup operator commands.
 #
 # This module is the human-facing facade for the ADR-0003 cleanup matrix.
-# Use `driver` and `profile` to make the public run shape explicit.
+# Use `driver` and cleanup input/evidence lane to make the public run shape explicit.
 #
 # Drivers:
 # - direct          deterministic Python cleanup loop; no MCP server
@@ -11,11 +11,11 @@
 # - claude-live     live Claude Code connected to the cleanup MCP server
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
-# Profiles:
+# Cleanup input/evidence lanes:
 # - smoke           synthetic contract sanity with world labels and semantic report
-# - world-labels    MolmoSpaces/RBY1M report; agent receives structured world labels
-# - camera-raw      MolmoSpaces/RBY1M report; agent receives raw camera artifacts
-# - camera-labels   MolmoSpaces/RBY1M report; agent receives camera-derived labels
+# - world-labels    structured labels to the agent; robot-view images are report evidence
+# - camera-raw      raw camera artifacts to the agent
+# - camera-labels   camera-derived labels to the agent
 #
 # Preferred entrypoints:
 # - just molmo::quick-check
@@ -36,7 +36,8 @@ claude_full_permission_args := "--dangerously-skip-permissions --permission-mode
 default:
     @just --list molmo
 
-# Explicit profile runner.
+# Explicit cleanup lane runner. The parameter remains named `profile` for
+# command compatibility with existing artifacts and recipes.
 cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="rich":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -202,7 +203,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         ;;
       *)
-        echo "error: unsupported profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
         exit 1
         ;;
     esac
@@ -295,7 +296,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
 
     echo "==> Molmo cleanup matrix"
     echo "    driver   : ${driver}"
-    echo "    profile  : ${profile}"
+    echo "    lane     : ${profile}"
     echo "    backend  : ${backend}"
     echo "    input    : ${perception_mode}"
     echo "    map      : ${map_bundle_dir:-not required}"

@@ -76,7 +76,7 @@ Reports for non-Molmo tasks:
 - `visual` by default.
 - `minimal` for cheap semantic agent iteration.
 
-Molmo cleanup profiles:
+Household cleanup input/evidence lanes:
 
 - `world-labels` by default.
 - `robot_views=off` for local timing work that keeps the `world-labels` input
@@ -84,6 +84,10 @@ Molmo cleanup profiles:
 - `smoke` for cheap synthetic contract iteration.
 - `camera-raw` for raw camera input evidence.
 - `camera-labels` for camera-derived structured candidates.
+
+These lanes describe the agent input and report/evidence gates. They do not
+select online/offline map behavior; map projection is `map_mode`, and a prior
+map is passed with `runtime_map_prior=...`.
 
 `agent::*` public recipes:
 

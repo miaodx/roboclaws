@@ -286,10 +286,10 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
         (("household-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
         (
             ("household-cleanup", "codex", "world-labels-perf"),
-            "unsupported household profile",
+            "unsupported household cleanup lane",
         ),
-        (("household-cleanup", "codex", "minimal"), "unsupported household profile"),
-        (("household-cleanup", "codex", "visual"), "unsupported household profile"),
+        (("household-cleanup", "codex", "minimal"), "unsupported household cleanup lane"),
+        (("household-cleanup", "codex", "visual"), "unsupported household cleanup lane"),
         (
             ("household-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",

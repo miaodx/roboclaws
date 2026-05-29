@@ -317,14 +317,16 @@ The refactor should make these gaps visible and testable:
 | Test target | Purpose |
 | --- | --- |
 | `profile=smoke` | Cheap contract sanity still works. |
-| `profile=world-labels` | Current structured cleanup path still produces robot-view artifacts and does not imply image input. |
+| `profile=world-labels` | Current structured-label cleanup input lane still produces robot-view artifacts and does not imply image input or map build mode. |
 | `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
 | `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 
 The most important regression test is:
 
 ```text
-profile=world-labels must not be described as image reasoning.
+profile=world-labels must not be described as image reasoning, online mapping,
+or offline prior-map cleanup. Map behavior is selected by map_mode and
+runtime_map_prior.
 ```
 
 The second most important regression test is:

@@ -136,7 +136,7 @@ def test_molmo_axis_runner_distinguishes_smoke_from_live_agents() -> None:
     for expected in (
         'driver="${driver#driver=}"',
         'profile="${profile#profile=}"',
-        "unsupported profile",
+        "unsupported cleanup lane",
         "--cleanup-profile",
         "--expect-profile",
         "mcp-smoke/openclaw-smoke for deterministic substitutes",

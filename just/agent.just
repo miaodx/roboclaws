@@ -144,7 +144,7 @@ run task driver mode="" *overrides:
         smoke|world-labels|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported household profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac

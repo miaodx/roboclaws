@@ -45,7 +45,7 @@ for fast contract checks, but it has no robot camera timeline.
 | Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal deterministic producer mode behind the `camera-labels` profile, using the shared Model-Declared Observation schema. |
 | Visuals | `--include-robot --record-robot-views` | Capture RBY1M robot-view timeline. | Required for FPV/chase/map/verification report. |
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
-| Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup profiles. |
+| Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
 | Map bundle | `map_bundle=<path-or-assets-id>` | Operator override for a prepared environment bundle. | Fails before cleanup startup if missing or invalid. |
 | Fixture hints | `room_only` | Public room-level fixture hints. | Preferred ADR-0003 setting. |
 | Fixture hints | `exact_fixtures` | Easier exact fixture hints. | Fallback/debug only. |

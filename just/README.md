@@ -46,12 +46,18 @@ Reports for non-Molmo tasks:
   reviewable images, timelines, and metrics.
 - `minimal` is for cheaper semantic evidence during AI-agent iteration.
 
-Molmo cleanup profiles:
+Household cleanup input/evidence lanes:
 
 - `smoke` is the cheap synthetic contract sanity profile.
-- `world-labels` is the default structured-label MolmoSpaces/RBY1M report.
+- `world-labels` is the default structured-label lane: the agent receives
+  observed object handles and structured labels; robot-view images are report
+  evidence, not model input.
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
 - `camera-labels` registers structured candidates from camera observations.
+
+These lanes do not choose online/offline map behavior. Use `map_mode=minimal`
+or `map_mode=rich` for the map projection, and `runtime_map_prior=...` when a
+cleanup run should consume a prebuilt runtime map snapshot.
 
 For timing work that should skip per-tool robot-view capture, keep the normal
 `world-labels` profile and pass an explicit capture option such as
@@ -59,7 +65,7 @@ For timing work that should skip per-tool robot-view capture, keep the normal
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
 omitted and keeps the task default (`visual` for non-Molmo tasks,
-`world-labels` for Molmo cleanup).
+`world-labels` for household cleanup).
 
 ## Live Agent Launch Behavior
 

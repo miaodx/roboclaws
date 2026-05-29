@@ -1335,7 +1335,7 @@ def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
         return ""
     return "".join(
         (
-            _badge("Profile", metadata.get("profile", run_result.get("cleanup_profile", ""))),
+            _badge("Input lane", metadata.get("profile", run_result.get("cleanup_profile", ""))),
             _badge("Agent input", metadata.get("agent_input", "")),
             _badge("Input provenance", metadata.get("input_provenance", "")),
             _badge("Report", metadata.get("report", "")),
@@ -1397,7 +1397,10 @@ def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
     profile = metadata.get("profile", run_result.get("cleanup_profile", "unknown"))
     verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
     note = (
-        f"Cleanup profile {profile}: {metadata.get('summary', '')} "
+        f"Cleanup input/evidence lane {profile}: {metadata.get('summary', '')} "
+        "This lane selects what the agent receives and what evidence/report gates "
+        "the run produces; map shape and map priors are controlled separately by "
+        "map_mode and runtime_map_prior. "
         f"Agent input: {metadata.get('agent_input', 'unknown')}; "
         f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
         f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "

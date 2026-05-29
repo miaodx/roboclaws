@@ -552,6 +552,8 @@ def _assert_cleanup_profile(
     if profile.profile == WORLD_LABELS_PROFILE:
         assert "image reasoning" not in report_text.lower(), report_text[:500]
         assert "not model input" in report_text.lower(), report_text[:500]
+        assert "map_mode" in report_text, report_text[:500]
+        assert "runtime_map_prior" in report_text, report_text[:500]
 
 
 def _assert_clean_agent_run(
