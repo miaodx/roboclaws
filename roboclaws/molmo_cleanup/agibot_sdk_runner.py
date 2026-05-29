@@ -156,7 +156,9 @@ class AgibotSDKRunnerAdapter:
             waypoint_id,
         ]
         if self.real_movement_enabled:
-            args.extend(["--execute", "--arrival-observe"])
+            args.extend(
+                ["--execute", "--arrival-observe", "--context-json", str(self.context_json)]
+            )
         result = self._run_stage("03-navigate-waypoint", args)
         response = dict(result.get("tool_response") or {})
         response.setdefault("agibot_sdk_report", _relpath(result["report_path"], self.run_dir))

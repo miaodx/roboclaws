@@ -393,13 +393,21 @@ movement gate, not physical PNC execution.
   and bounded local nudge failure require takeover evidence, while dry-run
   movement-gate blocks and unverified-waypoint refusals remain ordinary blocked
   capability outcomes.
+- Added an execute-only current-map check to the SDK runner navigation path:
+  when real movement is enabled, Roboclaws passes the Agibot context JSON to
+  `navigate-waypoint`, the runner compares `Map.get_curr_map()` with
+  `map_source`, and a mismatch returns `failure_type=map_mismatch` before
+  `Pnc.normal_navi` is called.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
   `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
   `./.venv/bin/ruff check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
   `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  `./.venv/bin/ruff check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
   `./.venv/bin/ruff format --check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
-  and `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+  `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  and `./.venv/bin/ruff format --check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
   This is mocked SDK evidence, not real G2 hardware validation.
 
 2026-05-29 Codex Agibot semantic-map-build route slice:

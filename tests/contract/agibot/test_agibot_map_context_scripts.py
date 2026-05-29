@@ -369,6 +369,7 @@ def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
 
     response = runner._execute_waypoint_navigation(
         waypoint=waypoint,
+        context_json=None,
         output_dir=tmp_path,
         robot_host="127.0.0.1",
         init_wait_s=0.0,
@@ -405,6 +406,7 @@ def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
 
     response = runner._execute_waypoint_navigation(
         waypoint=waypoint,
+        context_json=None,
         output_dir=tmp_path,
         robot_host="127.0.0.1",
         init_wait_s=0.0,
@@ -426,6 +428,46 @@ def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
     assert response["cancel_error"] == ""
     assert fake_gdk.pnc.normal_navi_calls == 1
     assert fake_gdk.pnc.cancel_task_calls == [42]
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_sdk_runner_execute_blocks_current_map_mismatch_before_normal_navi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_map_mismatch")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    fake_gdk = _FakeAgibotGDK(map_item=SimpleNamespace(id=99, name="wrong_map", is_curr_map=True))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        context_json=context_path,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=1.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is False
+    assert response["status"] == "blocked_capability"
+    assert response["failure_type"] == "map_mismatch"
+    assert response["navigation_status"] == "blocked"
+    assert response["map_check"]["ok"] is False
+    assert response["map_check"]["expected_map_name"] == "office_floor_1"
+    assert response["map_check"]["current_map_name"] == "wrong_map"
+    assert fake_gdk.map_calls == 1
+    assert fake_gdk.pnc.normal_navi_calls == 0
     assert fake_gdk.gdk_release_calls == 1
 
 
@@ -573,8 +615,10 @@ class _FakeAgibotGDK:
             )
             self.timestamp_ns = 0
 
-    def __init__(self, pnc: object | None = None) -> None:
+    def __init__(self, pnc: object | None = None, map_item: object | None = None) -> None:
         self.pnc = pnc or _FakePnc()
+        self.map_item = map_item
+        self.map_calls = 0
         self.gdk_release_calls = 0
 
     def gdk_init(self) -> int:
@@ -585,6 +629,18 @@ class _FakeAgibotGDK:
 
     def Pnc(self) -> _FakePnc:
         return self.pnc
+
+    def Map(self) -> object:
+        self.map_calls += 1
+        return _FakeMap(self.map_item)
+
+
+class _FakeMap:
+    def __init__(self, item: object | None) -> None:
+        self.item = item
+
+    def get_curr_map(self) -> object | None:
+        return self.item
 
 
 def _run_sdk(*args: str) -> subprocess.CompletedProcess[str]:
