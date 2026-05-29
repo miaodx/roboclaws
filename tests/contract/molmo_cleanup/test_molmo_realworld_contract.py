@@ -355,6 +355,49 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(
+            CleanupScenario(
+                scenario_id="minimal-map-done-gate-test",
+                task="build minimal map",
+                seed=7,
+                objects=(),
+                receptacles=(
+                    CleanupReceptacle("sink_01", "Sink", "kitchen", category="Sink"),
+                    CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
+                ),
+                private_manifest=PrivateScoringManifest(
+                    scenario_id="minimal-map-done-gate-test",
+                    targets=(),
+                    success_threshold=0,
+                ),
+            )
+        ),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    for waypoint in waypoints[:-1]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    early_done = contract.done("almost finished minimal sweep")
+
+    assert early_done["ok"] is False
+    assert early_done["error_reason"] == "insufficient_sweep_coverage"
+    assert early_done["next_waypoint_id"] == waypoints[-1]["waypoint_id"]
+    assert early_done["observed_waypoint_count"] == len(waypoints) - 1
+    assert early_done["total_waypoints"] == len(waypoints)
+    assert all(item.startswith("generated_") for item in early_done["unvisited_waypoint_ids"])
+
+    contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
+    contract.observe()
+    done = contract.done("finished minimal sweep")
+
+    assert done["ok"] is True
+
+
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
     contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()

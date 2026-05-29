@@ -1257,10 +1257,11 @@ class RealWorldCleanupContract:
         )
 
     def _sweep_coverage(self) -> dict[str, Any]:
-        total_waypoints = len(self._waypoints)
+        waypoints = self._public_waypoints
+        total_waypoints = len(waypoints)
         unvisited = [
             str(item["waypoint_id"])
-            for item in self._waypoints
+            for item in waypoints
             if str(item["waypoint_id"]) not in self._observed_waypoint_ids
         ]
         observed_count = total_waypoints - len(unvisited)

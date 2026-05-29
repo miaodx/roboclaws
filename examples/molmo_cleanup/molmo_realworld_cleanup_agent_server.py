@@ -24,6 +24,8 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
+    REALWORLD_MAP_MODES,
+    RICH_MAP_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
@@ -83,6 +85,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--runtime-map-prior",
         type=Path,
         help="Prior runtime_metric_map.json snapshot to seed as non-actionable priors.",
+    )
+    parser.add_argument(
+        "--map-mode",
+        choices=tuple(sorted(REALWORLD_MAP_MODES)),
+        default=RICH_MAP_MODE,
+        help=(
+            "Agent-facing map projection: rich exposes authored public semantics; "
+            "minimal exposes occupancy geometry plus generated exploration candidates."
+        ),
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
@@ -198,6 +209,7 @@ def run_molmo_realworld_cleanup_agent_server(
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
     runtime_map_prior_path: str | Path | None = None,
+    map_mode: str = RICH_MAP_MODE,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -253,6 +265,7 @@ def run_molmo_realworld_cleanup_agent_server(
             cleanup_profile=cleanup_profile,
             runtime_map_prior=runtime_map_prior,
             runtime_map_prior_source=str(runtime_map_prior_path or ""),
+            map_mode=map_mode,
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -321,6 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             record_robot_views=args.record_robot_views,
             cleanup_profile=args.cleanup_profile,
             runtime_map_prior_path=args.runtime_map_prior,
+            map_mode=args.map_mode,
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
