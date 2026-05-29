@@ -1051,6 +1051,35 @@ def test_camera_color_profile_prefers_backend_view_luminance_gain() -> None:
     assert diagnostics["backend_luminance_gain"]["source"] == "unit-view"
 
 
+def test_camera_color_profile_prefers_backend_view_rgb_gain() -> None:
+    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+
+    frame = np.full((2, 2, 3), 100, dtype=np.uint8)
+
+    adjusted, diagnostics = apply_camera_color_profile(
+        frame,
+        np=np,
+        profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.5,
+            "gamma": 1.0,
+            "backend_rgb_gain": {"isaaclab-prepared-usd": [1.0, 1.0, 1.0]},
+            "backend_view_rgb_gain": {
+                "isaaclab-prepared-usd": {"room_02_room_3": [0.5, 0.25, 0.1]}
+            },
+            "backend_view_rgb_gain_source": "unit-view-rgb",
+        },
+        backend="isaaclab-prepared-usd",
+        view_id="room_02_room_3",
+    )
+
+    assert adjusted[0, 0].tolist() == [50, 25, 10]
+    assert diagnostics["backend_rgb_gain"]["status"] == "applied_view_gain"
+    assert diagnostics["backend_rgb_gain"]["gain"] == pytest.approx([0.5, 0.25, 0.1])
+    assert diagnostics["backend_rgb_gain"]["source"] == "unit-view-rgb"
+
+
 def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

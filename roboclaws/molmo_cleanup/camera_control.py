@@ -45,6 +45,8 @@ DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
         "output/molmo/scene-camera-comparison/0530_0009/comparison_manifest.json"
     ),
     "backend_view_luminance_gain": {},
+    "backend_rgb_gain": {},
+    "backend_view_rgb_gain": {},
 }
 
 
@@ -307,6 +309,23 @@ def _color_profile(value: Any) -> dict[str, Any]:
         profile["backend_view_luminance_gain_source"] = str(
             raw["backend_view_luminance_gain_source"]
         )
+    backend_rgb_gain = _rgb_gain_mapping(
+        raw.get("backend_rgb_gain", DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_rgb_gain"))
+    )
+    if backend_rgb_gain:
+        profile["backend_rgb_gain"] = backend_rgb_gain
+    if raw.get("backend_rgb_gain_source"):
+        profile["backend_rgb_gain_source"] = str(raw["backend_rgb_gain_source"])
+    backend_view_rgb_gain = _nested_rgb_gain_mapping(
+        raw.get(
+            "backend_view_rgb_gain",
+            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_rgb_gain"),
+        )
+    )
+    if backend_view_rgb_gain:
+        profile["backend_view_rgb_gain"] = backend_view_rgb_gain
+    if raw.get("backend_view_rgb_gain_source"):
+        profile["backend_view_rgb_gain_source"] = str(raw["backend_view_rgb_gain_source"])
     return profile
 
 
@@ -331,6 +350,37 @@ def _nested_float_mapping(value: Any) -> dict[str, dict[str, float]]:
         if item:
             parsed[str(key)] = item
     return parsed
+
+
+def _rgb_gain_mapping(value: Any) -> dict[str, list[float]]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, list[float]] = {}
+    for key, raw_item in value.items():
+        rgb = _rgb_gain(raw_item)
+        if rgb is not None:
+            parsed[str(key)] = rgb
+    return parsed
+
+
+def _nested_rgb_gain_mapping(value: Any) -> dict[str, dict[str, list[float]]]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, dict[str, list[float]]] = {}
+    for key, raw_item in value.items():
+        item = _rgb_gain_mapping(raw_item)
+        if item:
+            parsed[str(key)] = item
+    return parsed
+
+
+def _rgb_gain(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
 
 
 def _vec3(value: Any, *, default: list[float]) -> list[float]:

@@ -1741,12 +1741,18 @@ def _color_profile_replay_image(
 ) -> Path:
     with Image.open(path).convert("RGB") as image:
         array = np.asarray(image)
+    rgb_gain = _color_profile_backend_rgb_gain(
+        color_profile,
+        backend=backend,
+        view_id=view_id,
+    )
+    adjusted = array.astype("float32") * np.asarray(rgb_gain, dtype="float32").reshape(1, 1, 3)
     gain = _color_profile_backend_luminance_gain(
         color_profile,
         backend=backend,
         view_id=view_id,
     )
-    adjusted = np.clip(array.astype("float32") * gain, 0, 255).astype("uint8")
+    adjusted = np.clip(adjusted * gain, 0, 255).astype("uint8")
     replay_path = path.with_name(f"{path.stem}.color_profile_replay.png")
     Image.fromarray(adjusted).save(replay_path)
     return replay_path
@@ -1773,6 +1779,32 @@ def _color_profile_backend_luminance_gain(
         return float(gains[backend])
     except (TypeError, ValueError):
         return 1.0
+
+
+def _color_profile_backend_rgb_gain(
+    color_profile: dict[str, Any],
+    *,
+    backend: str,
+    view_id: str,
+) -> list[float]:
+    view_gains = color_profile.get("backend_view_rgb_gain")
+    if isinstance(view_gains, dict):
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            return _rgb_gain_or_identity(backend_view_gains[view_id])
+    gains = color_profile.get("backend_rgb_gain")
+    if isinstance(gains, dict) and backend in gains:
+        return _rgb_gain_or_identity(gains[backend])
+    return [1.0, 1.0, 1.0]
+
+
+def _rgb_gain_or_identity(value: Any) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return [1.0, 1.0, 1.0]
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return [1.0, 1.0, 1.0]
 
 
 def _color_profile_replay_summary(view_results: list[dict[str, Any]]) -> dict[str, Any]:

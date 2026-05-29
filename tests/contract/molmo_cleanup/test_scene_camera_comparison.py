@@ -565,6 +565,28 @@ def test_scene_camera_color_profile_replay_prefers_view_gain(tmp_path: Path) -> 
     assert replay["delta"]["mean_luminance_delta"] == pytest.approx(-50.0)
 
 
+def test_scene_camera_color_profile_replay_prefers_view_rgb_gain(tmp_path: Path) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 200, 200))
+
+    replay = _offline_color_profile_replay(
+        view_id="room_02_room_3",
+        label="Room 3",
+        molmo_path=molmo,
+        isaac_path=isaac,
+        color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_rgb_gain": {ISAAC_LANE_ID: [1.0, 1.0, 1.0]},
+            "backend_view_rgb_gain": {ISAAC_LANE_ID: {"room_02_room_3": [0.5, 0.25, 0.1]}},
+        },
+    )
+
+    assert replay["lanes"][ISAAC_LANE_ID]["mean_rgb"] == pytest.approx([100.0, 50.0, 20.0])
+    assert replay["delta"]["mean_absolute_pixel_delta"] == pytest.approx(43.333333333333336)
+
+
 def test_scene_camera_color_profile_replay_normalizes_legacy_profile() -> None:
     profile = _normalize_color_profile_for_replay({"profile_id": "display_srgb_soft_highlight_v1"})
 
@@ -588,6 +610,29 @@ def test_scene_camera_color_profile_replay_normalizes_view_gain() -> None:
     )
     assert "bad" not in profile["backend_view_luminance_gain"][ISAAC_LANE_ID]
     assert profile["backend_view_luminance_gain_source"] == "unit"
+
+
+def test_scene_camera_color_profile_replay_normalizes_rgb_gain() -> None:
+    profile = _normalize_color_profile_for_replay(
+        {
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_rgb_gain": {ISAAC_LANE_ID: ["0.5", "0.25", "0.1"]},
+            "backend_view_rgb_gain": {
+                ISAAC_LANE_ID: {
+                    "room_02_room_3": ["0.4", "0.3", "0.2"],
+                    "bad": ["not-a-float", "0.3", "0.2"],
+                }
+            },
+            "backend_view_rgb_gain_source": "unit-rgb",
+        }
+    )
+
+    assert profile["backend_rgb_gain"][ISAAC_LANE_ID] == pytest.approx([0.5, 0.25, 0.1])
+    assert profile["backend_view_rgb_gain"][ISAAC_LANE_ID]["room_02_room_3"] == pytest.approx(
+        [0.4, 0.3, 0.2]
+    )
+    assert "bad" not in profile["backend_view_rgb_gain"][ISAAC_LANE_ID]
+    assert profile["backend_view_rgb_gain_source"] == "unit-rgb"
 
 
 def test_scene_camera_render_domain_calibration_detects_global_gain() -> None:

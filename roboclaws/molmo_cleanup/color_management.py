@@ -17,8 +17,15 @@ def apply_camera_color_profile(
     array = np.asarray(image)
     before = image_luminance_metrics(array, np=np)
     if str(profile.get("profile_id") or "") == "display_srgb_soft_highlight_v1":
-        adjusted, calibration = _apply_backend_luminance_gain(
+        adjusted, rgb_calibration = _apply_backend_rgb_gain(
             array,
+            np=np,
+            profile=profile,
+            backend=backend,
+            view_id=view_id,
+        )
+        adjusted, calibration = _apply_backend_luminance_gain(
+            adjusted,
             np=np,
             profile=profile,
             backend=backend,
@@ -27,6 +34,11 @@ def apply_camera_color_profile(
         adjusted = _soft_highlight_compress(adjusted, np=np, profile=profile)
     else:
         adjusted = array
+        rgb_calibration = _backend_rgb_gain_diagnostics(
+            profile=profile,
+            backend=backend,
+            view_id=view_id,
+        )
         calibration = _backend_luminance_gain_diagnostics(
             profile=profile,
             backend=backend,
@@ -40,6 +52,7 @@ def apply_camera_color_profile(
         "status": "applied" if profile else "missing_profile",
         "backend": backend,
         "view_id": view_id,
+        "backend_rgb_gain": rgb_calibration,
         "backend_luminance_gain": calibration,
         "before": before,
         "after": after,
@@ -101,6 +114,87 @@ def _apply_backend_luminance_gain(
         return np.asarray(image).astype("float32"), diagnostics
     adjusted = np.asarray(image).astype("float32") * float(gain)
     return adjusted, diagnostics
+
+
+def _apply_backend_rgb_gain(
+    image: Any,
+    *,
+    np: Any,
+    profile: dict[str, Any],
+    backend: str | None,
+    view_id: str | None,
+) -> tuple[Any, dict[str, Any]]:
+    diagnostics = _backend_rgb_gain_diagnostics(
+        profile=profile,
+        backend=backend,
+        view_id=view_id,
+    )
+    gain = diagnostics.get("gain")
+    if diagnostics["status"] not in {"applied", "applied_view_gain"} or gain is None:
+        return np.asarray(image).astype("float32"), diagnostics
+    adjusted = np.asarray(image).astype("float32") * np.asarray(gain, dtype="float32").reshape(
+        1, 1, 3
+    )
+    return adjusted, diagnostics
+
+
+def _backend_rgb_gain_diagnostics(
+    *,
+    profile: dict[str, Any],
+    backend: str | None,
+    view_id: str | None,
+) -> dict[str, Any]:
+    view_gains = profile.get("backend_view_rgb_gain")
+    if isinstance(view_gains, dict) and backend and view_id:
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            gain = _rgb_gain(backend_view_gains[view_id])
+            if gain is None:
+                return {
+                    "status": "invalid_view_gain",
+                    "backend": backend,
+                    "view_id": view_id,
+                    "gain": None,
+                }
+            return {
+                "status": "applied_view_gain",
+                "backend": backend,
+                "view_id": view_id,
+                "gain": gain,
+                "source": profile.get("backend_view_rgb_gain_source")
+                or profile.get("backend_rgb_gain_source"),
+            }
+    gains = profile.get("backend_rgb_gain")
+    if not isinstance(gains, dict):
+        return {"status": "not_configured", "backend": backend, "view_id": view_id, "gain": None}
+    if not backend:
+        return {"status": "missing_backend", "backend": backend, "view_id": view_id, "gain": None}
+    if backend not in gains:
+        return {
+            "status": "backend_not_configured",
+            "backend": backend,
+            "view_id": view_id,
+            "gain": None,
+        }
+    gain = _rgb_gain(gains[backend])
+    if gain is None:
+        return {"status": "invalid_gain", "backend": backend, "view_id": view_id, "gain": None}
+    return {
+        "status": "applied",
+        "backend": backend,
+        "view_id": view_id,
+        "gain": gain,
+        "source": profile.get("backend_rgb_gain_source"),
+    }
+
+
+def _rgb_gain(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
 
 
 def _backend_luminance_gain_diagnostics(
