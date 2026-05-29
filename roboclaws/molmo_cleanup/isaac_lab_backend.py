@@ -57,6 +57,7 @@ class IsaacLabSubprocessBackend:
         scene_usd_path: Path | None = None,
         enable_segmentation: bool | None = None,
         segmentation_data_types: tuple[str, ...] | None = None,
+        segmentation_semantic_filter: tuple[str, ...] | None = None,
         runtime_mode: str | None = None,
     ) -> None:
         self.run_dir = run_dir
@@ -101,12 +102,24 @@ class IsaacLabSubprocessBackend:
             segmentation_data_types = tuple(
                 item.strip() for item in env_data_types.split(",") if item.strip()
             )
+        if segmentation_semantic_filter is None:
+            env_semantic_filter = os.environ.get(
+                "ROBOCLAWS_ISAACLAB_SEGMENTATION_SEMANTIC_FILTER",
+                "",
+            )
+            segmentation_semantic_filter = tuple(
+                item.strip() for item in env_semantic_filter.split(",") if item.strip()
+            )
         if segmentation_data_types:
+            enable_segmentation = True
+        if segmentation_semantic_filter:
             enable_segmentation = True
         if enable_segmentation:
             init_args.append("--enable-segmentation")
             for data_type in segmentation_data_types or ():
                 init_args.extend(["--segmentation-data-type", data_type])
+            for instance_name in segmentation_semantic_filter or ():
+                init_args.extend(["--segmentation-semantic-filter", instance_name])
         result = self._run_worker("init", *init_args)
         self.backend = ISAACLAB_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(

@@ -164,6 +164,41 @@ def test_isaac_lab_backend_can_request_segmentation(
     ]
 
 
+def test_isaac_lab_backend_can_request_segmentation_semantic_filter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_init_args: list[str] = []
+    original_run_worker = IsaacLabSubprocessBackend._run_worker
+
+    def wrapped_run_worker(
+        self: IsaacLabSubprocessBackend,
+        command: str,
+        *args: str,
+    ) -> dict[str, object]:
+        if command == "init":
+            captured_init_args.extend(args)
+        return original_run_worker(self, command, *args)
+
+    monkeypatch.setattr(IsaacLabSubprocessBackend, "_run_worker", wrapped_run_worker)
+
+    IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        segmentation_data_types=("semantic_segmentation",),
+        segmentation_semantic_filter=("usd_prim_path",),
+    )
+
+    assert "--enable-segmentation" in captured_init_args
+    assert [
+        "--segmentation-data-type",
+        "semantic_segmentation",
+        "--segmentation-semantic-filter",
+        "usd_prim_path",
+    ] == captured_init_args[-4:]
+
+
 def test_isaac_worker_can_request_semantic_filter_override(tmp_path: Path) -> None:
     args = isaac_lab_backend_worker.parse_args(
         [

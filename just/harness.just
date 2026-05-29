@@ -886,6 +886,7 @@ molmo-isaac-cleanup-smoke *overrides:
     require_robot_view_provenance="true"
     require_segmentation_evidence="false"
     segmentation_data_types=""
+    segmentation_semantic_filter=""
     require_snapshot_provenance="true"
     accept_nvidia_eula="true"
     for arg in "${args[@]}"; do
@@ -902,7 +903,7 @@ molmo-isaac-cleanup-smoke *overrides:
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
         require_real_runtime|require_scene_loaded|require_local_scene_usd|\
         require_selected_usd_bindings|require_robot_view_provenance|\
-        require_segmentation_evidence|segmentation_data_types|\
+        require_segmentation_evidence|segmentation_data_types|segmentation_semantic_filter|\
         require_snapshot_provenance|accept_nvidia_eula)
           ;;
         *)
@@ -954,6 +955,14 @@ molmo-isaac-cleanup-smoke *overrides:
         for data_type in "${segmentation_type_args[@]}"; do
           if [[ -n "$data_type" ]]; then
             run_cmd+=(--isaac-segmentation-data-type "$data_type")
+          fi
+        done
+      fi
+      if [[ -n "$segmentation_semantic_filter" ]]; then
+        IFS=', ' read -r -a semantic_filter_args <<< "$segmentation_semantic_filter"
+        for instance_name in "${semantic_filter_args[@]}"; do
+          if [[ -n "$instance_name" ]]; then
+            run_cmd+=(--isaac-segmentation-semantic-filter "$instance_name")
           fi
         done
       fi

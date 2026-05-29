@@ -107,16 +107,19 @@ for `usd_prim_path`.
 ## Expected Decision Delta
 
 Do not treat MolmoSpaces Isaac segmentation as globally unavailable anymore.
-Keep default cleanup segmentation disabled until the prep step is integrated
-into the normal local Isaac path, but use flattened semantic USD plus
-`segmentation_semantic_filter=usd_prim_path` as the next candidate route for
-selected-object segmentation evidence.
+Keep default cleanup segmentation disabled. The integration slice now treats
+the flattened semantic USD as an explicit pre-cleanup artifact, not as an
+implicit online cleanup mutation: prepare `scene_semantic.usda` plus
+`summary.json`, then run local Isaac runtime or cleanup smoke against that
+prepared scene with `segmentation_semantic_filter=usd_prim_path`.
 
 ## Next Command Or Artifact
 
-Next implementation work should integrate the flattened semantic USD prep step
-behind an explicit opt-in for local Isaac segmentation probes, then run cleanup
-smoke with segmentation required against the prepared scene.
+Prepared semantic USD handoff is wired behind explicit local-dev opt-ins for
+runtime smoke and cleanup smoke. Next local artifact should run cleanup smoke
+with segmentation required against the prepared scene. Do not expose this
+through the default public `household-cleanup` path until multiple scenes pass
+the prepared-artifact gate.
 
 ## Stop Condition
 
@@ -133,10 +136,12 @@ MolmoSpaces/Isaac evidence.
 - No broad Roboclaws refactor.
 - No broad cleanup behavior change until the flattened semantic USD prep route
   is explicitly selected.
+- No implicit online USD flatten/label mutation inside cleanup until prepared
+  artifact coverage is proven across multiple scenes.
 
 ## Parked Work
 
 - Broaden segmentation-off MolmoSpaces scene-index cleanup coverage beyond
   `val_0` and `val_1`.
-- Integrate flattened semantic USD prep into an explicit local Isaac
-  segmentation probe path.
+- Run prepared flattened semantic USD cleanup smoke with
+  `segmentation_semantic_filter=usd_prim_path` and record the local GPU result.

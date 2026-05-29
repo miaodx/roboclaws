@@ -207,6 +207,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--isaac-segmentation-semantic-filter",
+        action="append",
+        help=(
+            "Isaac camera semantic filter instance name for "
+            "backend=isaaclab_subprocess. Repeat to probe prepared USD labels "
+            "such as usd_prim_path."
+        ),
+    )
+    parser.add_argument(
         "--map-bundle-dir",
         type=Path,
         help=(
@@ -256,6 +265,7 @@ def run_realworld_cleanup(
     isaac_scene_usd_path: str | Path | None = None,
     isaac_enable_segmentation: bool = False,
     isaac_segmentation_data_types: tuple[str, ...] | None = None,
+    isaac_segmentation_semantic_filter: tuple[str, ...] | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
@@ -321,6 +331,7 @@ def run_realworld_cleanup(
             scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
             enable_segmentation=isaac_enable_segmentation,
             segmentation_data_types=isaac_segmentation_data_types,
+            segmentation_semantic_filter=isaac_segmentation_semantic_filter,
         )
         scenario = backend_instance.scenario
     else:
@@ -1126,6 +1137,7 @@ def main(argv: list[str] | None = None) -> int:
         isaac_scene_usd_path=args.isaac_scene_usd_path,
         isaac_enable_segmentation=args.isaac_enable_segmentation,
         isaac_segmentation_data_types=tuple(args.isaac_segmentation_data_type or ()),
+        isaac_segmentation_semantic_filter=tuple(args.isaac_segmentation_semantic_filter or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,

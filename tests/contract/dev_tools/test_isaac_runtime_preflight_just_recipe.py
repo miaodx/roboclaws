@@ -154,6 +154,8 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--isaac-enable-segmentation" in harness_text
     assert "segmentation_data_types" in harness_text
     assert "--isaac-segmentation-data-type" in harness_text
+    assert "segmentation_semantic_filter" in harness_text
+    assert "--isaac-segmentation-semantic-filter" in harness_text
     assert "--require-isaac-snapshot-provenance" in harness_text
     assert 'accept_nvidia_eula="true"' in harness_text
     assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
@@ -163,6 +165,7 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
         "output_dir=/tmp/roboclaws-isaac-cleanup",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "segmentation_semantic_filter=usd_prim_path",
         "accept_nvidia_eula=false",
     )
     assert route == [
@@ -171,5 +174,6 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
         "output_dir=/tmp/roboclaws-isaac-cleanup",
         "runtime_python=/tmp/isaac-python",
         "scene_usd_path=/tmp/molmospaces-scene.usd",
+        "segmentation_semantic_filter=usd_prim_path",
         "accept_nvidia_eula=false",
     ]
