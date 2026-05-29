@@ -452,6 +452,96 @@ def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe(
     assert trace["events"][-1]["role"] == "post_place_observe"
 
 
+def test_cleanup_policy_trace_treats_last_waypoint_discovery_as_interleaved() -> None:
+    trace = cleanup_policy_trace_from_events(
+        [
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response(
+                "observe",
+                {
+                    "ok": True,
+                    "waypoint_id": "room_1_scan_1",
+                    "visible_object_detections": [],
+                },
+            ),
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_2"}),
+            _trace_response(
+                "observe",
+                {
+                    "ok": True,
+                    "waypoint_id": "room_1_scan_2",
+                    "visible_object_detections": [
+                        {
+                            "object_id": "observed_001",
+                            "cleanup_recommended": True,
+                        }
+                    ],
+                },
+            ),
+            _trace_response("navigate_to_object", {"ok": True, "object_id": "observed_001"}),
+            _trace_response("pick", {"ok": True, "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_receptacle",
+                {"ok": True, "object_id": "observed_001", "fixture_id": "sink_01"},
+            ),
+            _trace_response(
+                "place",
+                {"ok": True, "object_id": "observed_001", "fixture_id": "sink_01"},
+            ),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_2"}),
+        ],
+        {
+            "metric_map": {
+                "inspection_waypoints": [
+                    {"waypoint_id": "room_1_scan_1"},
+                    {"waypoint_id": "room_1_scan_2"},
+                ]
+            }
+        },
+    )
+
+    assert trace["loop_style"] == "interleaved_cleanup_loop"
+    assert trace["first_cleanup_before_full_survey"] is False
+    assert trace["first_actionable_observation_index"] == 4
+    assert trace["first_cleanup_index"] == 5
+
+
+def test_cleanup_policy_trace_rejects_cached_cleanup_after_later_map_query() -> None:
+    trace = cleanup_policy_trace_from_events(
+        [
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response(
+                "observe",
+                {
+                    "ok": True,
+                    "waypoint_id": "room_1_scan_1",
+                    "visible_object_detections": [
+                        {
+                            "object_id": "observed_001",
+                            "cleanup_recommended": True,
+                        }
+                    ],
+                },
+            ),
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_2"}),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_2"}),
+            _trace_response("navigate_to_object", {"ok": True, "object_id": "observed_001"}),
+        ],
+        {
+            "metric_map": {
+                "inspection_waypoints": [
+                    {"waypoint_id": "room_1_scan_1"},
+                    {"waypoint_id": "room_1_scan_2"},
+                ]
+            }
+        },
+    )
+
+    assert trace["loop_style"] == "survey_first_cleanup_loop"
+    assert trace["first_actionable_observation_index"] == 2
+    assert trace["first_cleanup_index"] == 5
+
+
 def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -898,6 +988,56 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert "target_receptacle_id" not in str(agent_view["raw_fpv_observations"])
     _assert_no_forbidden_keys(observation)
     _assert_no_forbidden_keys(agent_view)
+
+
+def test_realworld_raw_fpv_done_gate_scales_to_small_generated_mess_count() -> None:
+    scenario = CleanupScenario(
+        scenario_id="small-raw-fpv-done-gate-test",
+        task="clean a small room",
+        seed=7,
+        objects=(
+            CleanupObject("mug_01", "mug", "dish", "sofa_01"),
+            CleanupObject("book_01", "book", "book", "floor_01"),
+            CleanupObject("apple_01", "apple", "food", "desk_01"),
+        ),
+        receptacles=(
+            CleanupReceptacle("sofa_01", "Sofa", "living"),
+            CleanupReceptacle("floor_01", "Floor", "living", kind="surface"),
+            CleanupReceptacle("desk_01", "Desk", "office", kind="surface"),
+            CleanupReceptacle("sink_01", "Sink", "kitchen"),
+            CleanupReceptacle("bookshelf_01", "Bookshelf", "living"),
+            CleanupReceptacle("fridge_01", "Fridge", "kitchen"),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="small-raw-fpv-done-gate-test",
+            targets=(
+                TargetRule("mug_01", ("sink_01",)),
+                TargetRule("book_01", ("bookshelf_01",)),
+                TargetRule("apple_01", ("fridge_01",)),
+            ),
+            success_threshold=2,
+        ),
+    )
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(scenario),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    for waypoint in waypoints:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    contract._model_declared_observations = [{}, {}]  # noqa: SLF001
+    shortfall = contract.done("small raw-fpv rehearsal shortfall")
+    contract._model_declared_observations.append({})  # noqa: SLF001
+    done = contract.done("small raw-fpv rehearsal complete")
+
+    assert shortfall["ok"] is False
+    assert shortfall["error_reason"] == "insufficient_model_declared_observations"
+    assert shortfall["required_model_declared_observations"] == 3
+    assert done["ok"] is True
+    assert done["cleanup_status"] == "failed"
 
 
 def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:

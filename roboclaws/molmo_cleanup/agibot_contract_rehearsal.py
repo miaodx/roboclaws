@@ -9,6 +9,10 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from examples.molmo_cleanup.molmospaces_realworld_cleanup import (
+    SYNTHETIC_BACKEND,
+    run_realworld_cleanup,
+)
 from roboclaws.molmo_cleanup.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
@@ -19,6 +23,9 @@ from roboclaws.molmo_cleanup.manipulation_provenance import api_semantic_manipul
 from roboclaws.molmo_cleanup.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.molmo_cleanup.profiles import MOLMOSPACES_SIM_BACKEND
 from roboclaws.molmo_cleanup.realworld_contract import (
+    CAMERA_MODEL_POLICY_MODE,
+    MINIMAL_MAP_MODE,
+    RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
@@ -55,6 +62,9 @@ NAVIGATION_PROVENANCE = "agibot_shaped_molmospaces_sim_normal_navi"
 OBSERVATION_PROVENANCE = "agibot_shaped_molmospaces_sim_policy_observation"
 AGIBOT_MOLMOSPACES_SIM_BACKEND = "agibot_molmospaces_sim"
 AGIBOT_SHAPED_SIM_BACKEND = AGIBOT_MOLMOSPACES_SIM_BACKEND
+REHEARSAL_TASK_SEMANTIC_MAP_BUILD = "semantic-map-build"
+REHEARSAL_TASK_HOUSEHOLD_CLEANUP = "household-cleanup"
+PRE_HARDWARE_CONFIDENCE_LAYER = "Agibot MolmoSpaces Minimal-Map Pre-Hardware Rehearsal"
 
 
 def run_molmospaces_agibot_contract_rehearsal(
@@ -454,6 +464,99 @@ def run_molmospaces_agibot_contract_rehearsal(
             backend_instance.close()
 
 
+def run_molmospaces_agibot_prehardware_rehearsal(
+    *,
+    run_dir: Path,
+    task_name: str,
+    profile: str,
+    seed: int = 7,
+    generated_mess_count: int = 5,
+    runtime: str = RUNTIME_FIXTURE,
+    molmospaces_python: Path | None = None,
+    include_robot: bool = False,
+    robot_name: str = "rby1m",
+    record_robot_views: bool = False,
+    cleanup_object_count: int = 2,
+    context_json: Path | None = None,
+    agibot_map_artifact_dir: Path | None = None,
+    visual_grounding: str = "grounding-dino",
+    visual_grounding_base_url: str | None = None,
+    visual_grounding_timeout_s: float | None = None,
+) -> dict[str, Any]:
+    """Run the Agibot/MolmoSpaces local rehearsal as a minimal-map robot-like flow."""
+
+    if task_name not in {REHEARSAL_TASK_SEMANTIC_MAP_BUILD, REHEARSAL_TASK_HOUSEHOLD_CLEANUP}:
+        expected = f"{REHEARSAL_TASK_SEMANTIC_MAP_BUILD}|{REHEARSAL_TASK_HOUSEHOLD_CLEANUP}"
+        raise ValueError(f"unsupported rehearsal task {task_name!r} (expected {expected})")
+    if runtime not in {RUNTIME_FIXTURE, RUNTIME_MOLMOSPACES_SUBPROCESS}:
+        expected = f"{RUNTIME_FIXTURE}|{RUNTIME_MOLMOSPACES_SUBPROCESS}"
+        raise ValueError(f"unsupported rehearsal runtime {runtime!r} (expected {expected})")
+    if cleanup_object_count < 1:
+        raise ValueError("cleanup_object_count must be >= 1")
+
+    run_dir = Path(run_dir).resolve()
+    run_dir.mkdir(parents=True, exist_ok=True)
+    is_semantic_map_build = task_name == REHEARSAL_TASK_SEMANTIC_MAP_BUILD
+    perception_mode = _prehardware_perception_mode(profile)
+    backend = SYNTHETIC_BACKEND if runtime == RUNTIME_FIXTURE else "molmospaces_subprocess"
+    if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and not include_robot:
+        include_robot = True
+    if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and profile in {"camera-raw", "camera-labels"}:
+        record_robot_views = True if record_robot_views is False else record_robot_views
+
+    preflight_dir = run_dir / "preflight"
+    preflight_dir.mkdir(parents=True, exist_ok=True)
+    agibot_map_reference = _agibot_map_reference(
+        context_json=context_json,
+        agibot_map_artifact_dir=agibot_map_artifact_dir,
+    )
+    agibot_map_reference_path = preflight_dir / "agibot_map_reference.json"
+    agibot_map_reference_path.write_text(
+        json.dumps(agibot_map_reference, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    metadata_overrides = _prehardware_metadata_overrides(
+        task_name=task_name,
+        profile=profile,
+        runtime=runtime,
+        visual_grounding=visual_grounding,
+        agibot_map_reference=agibot_map_reference,
+        cleanup_actions_disabled=is_semantic_map_build,
+    )
+    result = run_realworld_cleanup(
+        output_dir=run_dir,
+        seed=seed,
+        task_prompt=("帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"),
+        backend=backend,
+        fixture_hint_mode="room_only",
+        perception_mode=perception_mode,
+        include_robot=include_robot,
+        robot_name=robot_name,
+        molmospaces_python=molmospaces_python,
+        record_robot_views=record_robot_views,
+        generated_mess_count=generated_mess_count,
+        cleanup_profile=profile if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS else None,
+        semantic_sweep=is_semantic_map_build,
+        map_mode=MINIMAL_MAP_MODE,
+        visual_grounding=visual_grounding,
+        visual_grounding_base_url=visual_grounding_base_url,
+        visual_grounding_timeout_s=visual_grounding_timeout_s,
+        run_metadata_overrides=metadata_overrides,
+    )
+    _write_prehardware_runtime_export(
+        run_dir=run_dir,
+        result=result,
+        task_name=task_name,
+        runtime=runtime,
+        profile=profile,
+        visual_grounding=visual_grounding,
+        agibot_map_reference_path=agibot_map_reference_path,
+        cleanup_object_count=cleanup_object_count,
+    )
+    return result
+
+
 def _agibot_shaped_metric_map(metric_map: dict[str, Any], *, seed: int) -> dict[str, Any]:
     payload = copy.deepcopy(metric_map)
     payload["map_id"] = f"molmospaces-agibot-contract-rehearsal-{seed}"
@@ -478,6 +581,158 @@ def _agibot_shaped_metric_map(metric_map: dict[str, Any], *, seed: int) -> dict[
             "physical_robot": False,
         }
     return payload
+
+
+def _prehardware_perception_mode(profile: str) -> str:
+    if profile == "camera-raw":
+        return RAW_FPV_ONLY_MODE
+    if profile == "camera-labels":
+        return CAMERA_MODEL_POLICY_MODE
+    if profile == "world-labels":
+        return VISIBLE_OBJECT_DETECTIONS_MODE
+    raise ValueError(
+        f"unsupported Agibot MolmoSpaces pre-hardware lane {profile!r} "
+        "(expected world-labels|camera-raw|camera-labels)"
+    )
+
+
+def _prehardware_metadata_overrides(
+    *,
+    task_name: str,
+    profile: str,
+    runtime: str,
+    visual_grounding: str,
+    agibot_map_reference: dict[str, Any],
+    cleanup_actions_disabled: bool,
+) -> dict[str, Any]:
+    cleanup_run = task_name == REHEARSAL_TASK_HOUSEHOLD_CLEANUP
+    return {
+        "schema": REHEARSAL_SCHEMA,
+        "report_eyebrow": "Agibot-shaped pre-hardware rehearsal",
+        "report_title": (
+            "Agibot MolmoSpaces Semantic Map-Build Rehearsal"
+            if task_name == REHEARSAL_TASK_SEMANTIC_MAP_BUILD
+            else "Agibot MolmoSpaces Cleanup Rehearsal"
+        ),
+        "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
+        "confidence_layer_summary": (
+            "Runs the shared MolmoSpaces cleanup harness as an Agibot-shaped "
+            "pre-hardware rehearsal: minimal map first, generated exploration "
+            "candidates, online observations, Runtime Metric Map output, and "
+            "RAW_FPV/camera-labels perception evidence. It is simulated and not "
+            "Agibot GDK hardware proof."
+        ),
+        "next_confidence_layer": "Real Agibot G2 semantic-map-build hardware run",
+        "backend": AGIBOT_SHAPED_SIM_BACKEND,
+        "backend_variant": EXECUTION_BACKEND,
+        "execution_backend": EXECUTION_BACKEND,
+        "navigation_backend": NAVIGATION_BACKEND,
+        "runtime": runtime,
+        "mcp_server": "roboclaws_real_robot_cleanup_v1_agibot_molmospaces_prehardware",
+        "task_name": task_name,
+        "agibot_molmospaces_prehardware_rehearsal": {
+            "schema": "agibot_molmospaces_minimal_map_prehardware_rehearsal_v1",
+            "task_name": task_name,
+            "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
+            "runtime": runtime,
+            "profile": profile,
+            "perception_lane": profile,
+            "input_lane_note": (
+                "fixture runtime uses synthetic rendering for fast local rehearsal; "
+                "select runtime=molmospaces-subprocess for real MolmoSpaces RAW_FPV/"
+                "camera-label image artifacts."
+                if runtime == RUNTIME_FIXTURE
+                else "MolmoSpaces subprocess runtime supplies local simulator camera evidence."
+            ),
+            "visual_grounding_pipeline_id": visual_grounding,
+            "minimal_map_start": True,
+            "online_semantic_map_build": True,
+            "cleanup_actions_included": cleanup_run,
+            "cleanup_actions_disabled": cleanup_actions_disabled,
+            "source_map_mutation_allowed": False,
+            "simulated": True,
+            "physical_robot": False,
+            "execution_backend": EXECUTION_BACKEND,
+            "navigation_backend": NAVIGATION_BACKEND,
+            "agibot_map_reference": "preflight/agibot_map_reference.json",
+            "agibot_map_reference_summary": {
+                "status": agibot_map_reference.get("status", ""),
+                "used_as_scene_source": False,
+                "used_for_navigation_execution": False,
+            },
+            "acceptance_gates": [
+                "runtime_metric_map.json exists",
+                "runtime_metric_map.minimal_map_mode=true",
+                "generated exploration candidates are visited or reported unvisited",
+                "agent view does not contain private truth",
+                "RAW_FPV/camera-labels observations create public runtime evidence",
+            ],
+            "public_contract_note": (
+                "This is the local pre-hardware flow Roboclaws can run before a G2 "
+                "session. MolmoSpaces supplies simulated world and camera evidence; "
+                "Agibot map artifacts, when supplied, are reference-only."
+            ),
+        },
+        "agibot_map_reference": agibot_map_reference,
+        "simulated": True,
+        "physical_robot": False,
+    }
+
+
+def _write_prehardware_runtime_export(
+    *,
+    run_dir: Path,
+    result: dict[str, Any],
+    task_name: str,
+    runtime: str,
+    profile: str,
+    visual_grounding: str,
+    agibot_map_reference_path: Path,
+    cleanup_object_count: int,
+) -> None:
+    runtime_dir = run_dir / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    agent_view = result.get("agent_view") or {}
+    runtime_metric_map = (
+        result.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    )
+    payload = {
+        "schema": "agibot_molmospaces_minimal_map_prehardware_runtime_export_v1",
+        "task_name": task_name,
+        "runtime": runtime,
+        "profile": profile,
+        "visual_grounding_pipeline_id": visual_grounding,
+        "minimal_map_start": True,
+        "online_semantic_map_build": True,
+        "cleanup_actions_included": task_name == REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
+        "cleanup_object_count_limit": cleanup_object_count,
+        "simulated": True,
+        "physical_robot": False,
+        "execution_backend": EXECUTION_BACKEND,
+        "navigation_backend": NAVIGATION_BACKEND,
+        "runtime_metric_map": "runtime_metric_map.json",
+        "agent_view": "agent_view.json",
+        "agibot_map_reference": _relpath(agibot_map_reference_path, run_dir),
+        "runtime_metric_map_summary": {
+            "schema": runtime_metric_map.get("schema", ""),
+            "minimal_map_mode": runtime_metric_map.get("minimal_map_mode"),
+            "source_map_mutated": runtime_metric_map.get("source_map_mutated"),
+            "observed_object_count": len(runtime_metric_map.get("observed_objects") or []),
+            "public_semantic_anchor_count": len(
+                runtime_metric_map.get("public_semantic_anchors") or []
+            ),
+            "generated_exploration_candidate_count": len(
+                runtime_metric_map.get("generated_exploration_candidates") or []
+            ),
+        },
+        "raw_fpv_observation_count": len(result.get("raw_fpv_observations") or []),
+        "model_declared_observation_count": len(result.get("model_declared_observations") or []),
+        "semantic_substep_count": len(result.get("semantic_substeps") or []),
+    }
+    (runtime_dir / "runtime_export.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _agibot_shaped_fixture_hints(fixture_hints: dict[str, Any]) -> dict[str, Any]:

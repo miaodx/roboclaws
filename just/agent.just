@@ -337,7 +337,11 @@ run task driver mode="" *overrides:
             echo "error: backend=agibot_molmospaces_sim currently supports direct driver only" >&2
             exit 1
           fi
-          rehearsal_mode="$(get rehearsal_mode contract)"
+          default_rehearsal_mode="contract"
+          if [[ "$task" == "household-cleanup" ]]; then
+            default_rehearsal_mode="cleanup-actions"
+          fi
+          rehearsal_mode="$(get rehearsal_mode "$default_rehearsal_mode")"
           case "$rehearsal_mode" in
             contract|cleanup-actions)
               ;;
@@ -366,8 +370,17 @@ run task driver mode="" *overrides:
             --seed "$seeds"
             --generated-mess-count "$generated_mess_count"
             --runtime "$runtime"
+            --flow prehardware
+            --task-name "$task"
+            --profile "$profile"
             --rehearsal-mode "$rehearsal_mode"
             --cleanup-object-count "$cleanup_object_count")
+          if [[ "$profile" == "camera-labels" ]]; then
+            sim_args+=(--visual-grounding "$visual_grounding")
+            if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
+              sim_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
+            fi
+          fi
           molmospaces_python="$(get molmospaces_python "")"
           if [[ -n "$molmospaces_python" ]]; then
             sim_args+=(--molmospaces-python "$molmospaces_python")
@@ -396,7 +409,12 @@ run task driver mode="" *overrides:
             on|true|1|yes)
               sim_args+=(--include-robot --record-robot-views)
               ;;
-            off|false|0|no|auto|"")
+            auto|"")
+              if [[ "$runtime" == "molmospaces-subprocess" && "$profile" != "world-labels" ]]; then
+                sim_args+=(--include-robot --record-robot-views)
+              fi
+              ;;
+            off|false|0|no)
               ;;
             *)
               echo "error: unsupported robot_views '$robot_views' (expected auto|on|off)" >&2

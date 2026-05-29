@@ -11,9 +11,12 @@ from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (
     CONFIDENCE_LAYER,
     EXECUTION_BACKEND,
     NAVIGATION_PROVENANCE,
+    PRE_HARDWARE_CONFIDENCE_LAYER,
     REHEARSAL_MODE_CLEANUP_ACTIONS,
+    REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
     RUNTIME_FIXTURE,
     run_molmospaces_agibot_contract_rehearsal,
+    run_molmospaces_agibot_prehardware_rehearsal,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -234,3 +237,88 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
     assert "No semantic cleanup actions recorded" not in report_text
     assert "agibot_gdk_normal_navi" not in serialized
     assert "agibot_gdk_normal_navi" not in report_text
+
+
+def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_map(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "prehardware-map-build"
+
+    result = run_molmospaces_agibot_prehardware_rehearsal(
+        run_dir=run_dir,
+        task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
+        profile="camera-labels",
+        generated_mess_count=5,
+        visual_grounding="grounding-dino",
+        context_json=ROBOT_MAP_9_CONTEXT,
+        agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
+    )
+
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    runtime_metric_map = json.loads(
+        (run_dir / "runtime_metric_map.json").read_text(encoding="utf-8")
+    )
+    runtime_export = json.loads(
+        (run_dir / "runtime" / "runtime_export.json").read_text(encoding="utf-8")
+    )
+    agent_view = json.loads((run_dir / "agent_view.json").read_text(encoding="utf-8"))
+
+    assert result["backend"] == "agibot_molmospaces_sim"
+    assert run_result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
+    assert run_result["task_name"] == "semantic-map-build"
+    assert run_result["cleanup_actions_disabled"] is True
+    assert run_result["semantic_sweep_mode"] is True
+    assert run_result["map_mode"] == "minimal"
+    assert run_result["perception_mode"] == "camera_model_policy"
+    assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
+    assert run_result["simulated"] is True
+    assert run_result["physical_robot"] is False
+    assert runtime_metric_map["minimal_map_mode"] is True
+    assert runtime_metric_map["source_map_mutated"] is False
+    assert runtime_metric_map["generated_exploration_candidates"]
+    assert runtime_metric_map["public_semantic_anchors"]
+    assert agent_view["metric_map"]["rooms"] == []
+    assert agent_view["metric_map"]["inspection_waypoints"]
+    assert agent_view["forbidden_private_fields_absent"] is True
+    assert runtime_export["minimal_map_start"] is True
+    assert runtime_export["online_semantic_map_build"] is True
+    assert runtime_export["cleanup_actions_included"] is False
+    assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
+    assert runtime_export["runtime_metric_map_summary"]["source_map_mutated"] is False
+    reference = run_result["agibot_map_reference"]
+    assert reference["used_as_scene_source"] is False
+    assert reference["used_for_navigation_execution"] is False
+    assert (run_dir / "report.html").is_file()
+
+
+def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "prehardware-cleanup"
+
+    result = run_molmospaces_agibot_prehardware_rehearsal(
+        run_dir=run_dir,
+        task_name="household-cleanup",
+        profile="camera-raw",
+        generated_mess_count=5,
+    )
+
+    runtime_metric_map = json.loads(
+        (run_dir / "runtime_metric_map.json").read_text(encoding="utf-8")
+    )
+    runtime_export = json.loads(
+        (run_dir / "runtime" / "runtime_export.json").read_text(encoding="utf-8")
+    )
+
+    assert result["backend"] == "agibot_molmospaces_sim"
+    assert result["confidence_layer"] == PRE_HARDWARE_CONFIDENCE_LAYER
+    assert result["task_name"] == "household-cleanup"
+    assert result["cleanup_actions_disabled"] is False
+    assert result["semantic_sweep_mode"] is False
+    assert result["map_mode"] == "minimal"
+    assert result["perception_mode"] == "raw_fpv_only"
+    assert runtime_metric_map["minimal_map_mode"] is True
+    assert runtime_metric_map["source_map_mutated"] is False
+    assert runtime_export["cleanup_actions_included"] is True
+    assert runtime_export["runtime_metric_map_summary"]["minimal_map_mode"] is True
+    assert result["semantic_substeps"]

@@ -1326,13 +1326,14 @@ class RealWorldCleanupContract:
             )
         if self.perception_mode == RAW_FPV_ONLY_MODE:
             declaration_count = len(self._model_declared_observations)
-            if declaration_count < 7:
+            required_declaration_count = min(7, len(self.scenario.private_manifest.targets))
+            if declaration_count < required_declaration_count:
                 return self._error(
                     "done",
                     "insufficient_model_declared_observations",
                     model_declared_observations=declaration_count,
                     raw_fpv_observations=len(self._raw_fpv_observations),
-                    required_model_declared_observations=7,
+                    required_model_declared_observations=required_declaration_count,
                     recovery_hint=(
                         "Continue sweeping public waypoints and use "
                         "navigate_to_visual_candidate for plausible cleanup objects "
@@ -3813,6 +3814,7 @@ def cleanup_policy_trace_from_events(
     events = []
     previous_success_tool = ""
     first_cleanup_index: int | None = None
+    first_actionable_observation_index: int | None = None
     observed_waypoints_at_first_cleanup = 0
     scan_observe_count = 0
     post_place_observe_count = 0
@@ -3836,6 +3838,10 @@ def cleanup_policy_trace_from_events(
             visited_waypoints.add(waypoint_id)
         if role == "coverage_scan_observe":
             scan_observe_count += 1
+            if first_actionable_observation_index is None and _response_has_actionable_detection(
+                response
+            ):
+                first_actionable_observation_index = len(events)
         if role == "post_place_observe":
             post_place_observe_count += 1
             pending_post_place_observes = max(0, pending_post_place_observes - 1)
@@ -3860,7 +3866,10 @@ def cleanup_policy_trace_from_events(
         previous_success_tool = _terminal_policy_tool(tool, response)
     if cleanup_action_count == 0:
         loop_style = "scan_only"
-    elif observed_waypoints_at_first_cleanup < total_waypoints:
+    elif _cleanup_started_after_first_actionable_observation(
+        first_cleanup_index=first_cleanup_index,
+        first_actionable_observation_index=first_actionable_observation_index,
+    ):
         loop_style = "interleaved_cleanup_loop"
     else:
         loop_style = "survey_first_cleanup_loop"
@@ -3880,6 +3889,12 @@ def cleanup_policy_trace_from_events(
         "placed_object_count": placed_object_count,
         "post_place_observe_count": post_place_observe_count,
         "post_place_observe_complete": post_place_observe_count >= placed_object_count,
+        "first_actionable_observation_index": (
+            None
+            if first_actionable_observation_index is None
+            else first_actionable_observation_index + 1
+        ),
+        "first_cleanup_index": None if first_cleanup_index is None else first_cleanup_index + 1,
         "first_cleanup_before_full_survey": (
             cleanup_action_count > 0 and observed_waypoints_at_first_cleanup < total_waypoints
         ),
@@ -3889,6 +3904,26 @@ def cleanup_policy_trace_from_events(
             "observed_* handles discovered by observe or camera-model policy."
         ),
     }
+
+
+def _response_has_actionable_detection(response: dict[str, Any]) -> bool:
+    detections = [
+        *(response.get("visible_object_detections") or []),
+        *(response.get("camera_model_candidates") or []),
+    ]
+    return any(
+        isinstance(item, dict) and bool(item.get("cleanup_recommended")) for item in detections
+    )
+
+
+def _cleanup_started_after_first_actionable_observation(
+    *,
+    first_cleanup_index: int | None,
+    first_actionable_observation_index: int | None,
+) -> bool:
+    if first_cleanup_index is None or first_actionable_observation_index is None:
+        return False
+    return first_cleanup_index == first_actionable_observation_index + 1
 
 
 def real_robot_readiness_from_events(

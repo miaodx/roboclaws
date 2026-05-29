@@ -550,6 +550,12 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "output/agibot/molmospaces-sim/test-run" in route
     assert "--runtime" in route
     assert "fixture" in route
+    assert "--flow" in route
+    assert "prehardware" in route
+    assert "--task-name" in route
+    assert "household-cleanup" in route
+    assert "--profile" in route
+    assert "world-labels" in route
     assert "--rehearsal-mode" in route
     assert "cleanup-actions" in route
     assert "--context-json" in route
@@ -560,6 +566,37 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "7" in route
     assert "--cleanup-object-count" in route
     assert "1" in route
+
+
+def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "direct",
+        "camera-labels",
+        "backend=agibot_molmospaces_sim",
+        "run_dir=output/agibot/molmospaces-sim/map-build-test",
+        "runtime=molmospaces-subprocess",
+        "visual_grounding=grounding-dino",
+        "generated_mess_count=5",
+    )
+
+    assert route[:3] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py",
+    ]
+    assert "--flow" in route
+    assert "prehardware" in route
+    assert "--task-name" in route
+    assert "semantic-map-build" in route
+    assert "--profile" in route
+    assert "camera-labels" in route
+    assert "--visual-grounding" in route
+    assert "grounding-dino" in route
+    assert "--runtime" in route
+    assert "molmospaces-subprocess" in route
+    assert "--include-robot" in route
+    assert "--record-robot-views" in route
 
 
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
