@@ -41,8 +41,13 @@ root-cause probe now shows the raw MolmoSpaces composed scene is the failing
 layer for Isaac semantic AOV: flattening `val_1`, authoring semantic labels on
 637 final renderable Gprims including 408 Mesh prims, and requesting
 `semantic_filter=["usd_prim_path"]` produces selected Bowl/Sink segmentation
-matches and passes the strict Isaac runtime-smoke segmentation gate. Default
-segmentation-off cleanup still passes on `val_1`. The
+matches and passes the strict Isaac runtime-smoke segmentation gate. The same
+prepared-scene path now passes strict cleanup smoke at
+`output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/` with
+real Isaac runtime diagnostics, local scene USD loading, selected USD bindings,
+robot-view/snapshot provenance, `candidate_bbox_count=24`,
+`selected_usd_prim_match_count=2`, and `primitive_provenance=isaac_semantic_pose`.
+Default segmentation-off cleanup still passes on `val_1`. The
 visual-grounding GPU sidecar benchmark remains a separate active confidence
 layer; Grounding DINO base-recall is still the current default real
 `camera-labels` pipeline until a broader corpus changes that ranking.
@@ -59,10 +64,10 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Continue the Isaac segmentation/bbox candidate investigation and broaden
-scene-index cleanup coverage beyond the current `val_0`/`val_1` local GPU
-proofs. Keep Grounding DINO base-recall as the visual-grounding default until
-the broader corpus changes that ranking.
+Broaden prepared flattened-USD segmentation cleanup coverage beyond the current
+`val_1` local GPU proof, and broaden scene-index cleanup coverage beyond the
+current `val_0`/`val_1` local GPU proofs. Keep Grounding DINO base-recall as
+the visual-grounding default until the broader corpus changes that ranking.
 
 ## Current Blocker
 
@@ -76,8 +81,9 @@ MolmoSpaces USD RGB/robot-view and exact scene-index cleanup evidence passes
 for `val_0` and `val_1`; raw composed `val_1` semantic AOV still collapses or
 fails selected matching, but a flattened semantic USD with labels on final
 renderable descendants and `semantic_filter=["usd_prim_path"]` produces usable
-selected-prim segmentation evidence. Missing selected USD object references are
-no longer the active blocker for `val_1`; selected Bowl/Sink geometry now
+selected-prim segmentation evidence and passes strict cleanup smoke when used as
+an explicit prepared scene. Missing selected USD object references are no longer
+the active blocker for `val_1`; selected Bowl/Sink geometry now
 resolves as renderable.
 
 ## Human Review Surface

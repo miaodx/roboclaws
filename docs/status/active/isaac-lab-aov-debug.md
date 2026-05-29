@@ -25,6 +25,17 @@ semantic segmentation when the camera semantic filter is `usd_prim_path`.
 
 ## Last Proven Evidence
 
+- Flattened `usd_prim_path` cleanup smoke:
+  `output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/run_result.json`
+  - strict checker passed with real Isaac runtime, local prepared scene USD,
+    selected USD bindings, robot-view provenance, snapshot provenance,
+    segmentation evidence, and `isaac_semantic_pose`
+  - `semantic_filter=["usd_prim_path"]`
+  - `segmentation.status=available`
+  - `candidate_bbox_count=24`
+  - `selected_usd_prim_match_count=2`
+  - cleanup score status `success`, `accepted_count=1`,
+    `sweep_coverage_rate=1.0`
 - Flattened semantic USD prep artifact:
   `output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/summary.json`
   - `status=ready`
@@ -107,19 +118,21 @@ for `usd_prim_path`.
 ## Expected Decision Delta
 
 Do not treat MolmoSpaces Isaac segmentation as globally unavailable anymore.
-Keep default cleanup segmentation disabled. The integration slice now treats
-the flattened semantic USD as an explicit pre-cleanup artifact, not as an
-implicit online cleanup mutation: prepare `scene_semantic.usda` plus
-`summary.json`, then run local Isaac runtime or cleanup smoke against that
-prepared scene with `segmentation_semantic_filter=usd_prim_path`.
+Keep default cleanup segmentation disabled. The integration slice treats
+flattened semantic USD as an explicit pre-cleanup artifact, not as an implicit
+online cleanup mutation: prepare `scene_semantic.usda` plus `summary.json`,
+then run local Isaac runtime or cleanup smoke against that prepared scene with
+`segmentation_semantic_filter=usd_prim_path`. That path now passes on `val_1`;
+the next decision is whether the prepared-artifact gate generalizes to more
+MolmoSpaces scenes.
 
 ## Next Command Or Artifact
 
-Prepared semantic USD handoff is wired behind explicit local-dev opt-ins for
-runtime smoke and cleanup smoke. Next local artifact should run cleanup smoke
-with segmentation required against the prepared scene. Do not expose this
-through the default public `household-cleanup` path until multiple scenes pass
-the prepared-artifact gate.
+Prepared semantic USD handoff is wired and proven behind explicit local-dev
+opt-ins for runtime smoke and cleanup smoke on `val_1`. Next local artifact
+should prepare and run the same strict segmentation cleanup gate on another
+MolmoSpaces scene. Do not expose this through the default public
+`household-cleanup` path until multiple scenes pass the prepared-artifact gate.
 
 ## Stop Condition
 
@@ -143,5 +156,5 @@ MolmoSpaces/Isaac evidence.
 
 - Broaden segmentation-off MolmoSpaces scene-index cleanup coverage beyond
   `val_0` and `val_1`.
-- Run prepared flattened semantic USD cleanup smoke with
-  `segmentation_semantic_filter=usd_prim_path` and record the local GPU result.
+- Broaden prepared flattened semantic USD segmentation cleanup coverage beyond
+  `val_1`.
